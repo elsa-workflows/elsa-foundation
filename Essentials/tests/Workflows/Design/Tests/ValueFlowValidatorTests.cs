@@ -5,6 +5,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Validators;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -84,6 +86,16 @@ public sealed class ValueFlowValidatorTests
 
         var error = Assert.Single(errors, item => item.Type == "ValueFlow/UnavailableProducer");
         Assert.Equal("consumer/inputs/value", error.Path);
+    }
+
+    [Fact]
+    public async Task Optional_result_from_a_real_conditional_producer_keeps_its_existing_absence_semantics()
+    {
+        var flowchart = Flowchart("flow", [Activity("start"), Activity("producer"), Activity("bypass"),
+                Activity("consumer", ResultInput("value", "producer", "scope:root", isOptional: true))],
+            [("produce", "start", "producer"), ("skip", "start", "bypass"),
+                ("produced", "producer", "consumer"), ("bypassed", "bypass", "consumer")], "start");
+        Assert.Empty(await Validate(Sequence("root", flowchart)));
     }
 
     [Fact]
@@ -280,19 +292,16 @@ public sealed class ValueFlowValidatorTests
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root)
     {
         using var services = StructureProvider();
-        var validator = new ValueFlowValidator(services.GetRequiredService<IActivityStructureService>());
+        var validator = new ValueFlowValidator(services.GetRequiredService<IActivityStructureService>(), services.GetRequiredService<IActivityDataSelectionAnalyzer>());
         var draft = new StubDraft(new WorkflowDefinitionState([], root, [], [], null));
         return [.. await validator.Validate(draft, CancellationToken.None)];
     }
 
     private static ServiceProvider StructureProvider()
     {
-        var services = new ServiceCollection();
-        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
-        new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
-        new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
-        services.AddSingleton<IActivityStructureService, DefaultActivityStructureService>();
-        return services.BuildServiceProvider();
+        var catalog = new StubActivityCatalog().Add("test.activity@1").Add("elsa.sequence.structure@1")
+            .Add("elsa.parallel.structure@1").Add("elsa.flowchart.structure@1").Add("switch@1");
+        return ActivityDataSelectionTestSupport.Provider(catalog);
     }
 
     private static ActivityNode Activity(string nodeId, params ArgumentState[] inputs) =>

@@ -130,6 +130,40 @@ public sealed class ValidationsFeatureRegistrationTests
             await initializer.InitializeAsync();
     }
 
+    [Fact]
+    public void Source_analysis_has_one_scoped_authority()
+    {
+        using var provider = BuildProvider(_ => { });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var analyzer = Assert.Single(first.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>());
+        Assert.Same(analyzer, first.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+        Assert.NotSame(analyzer, second.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_second_source_authority_fails_activation_in_either_registration_order(bool registeredBefore)
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>(), registeredBefore);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_singleton_source_authority_fails_activation(bool replaceWithSingleton)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            services.RemoveAll<IActivityDataSelectionAnalyzer>();
+            if (replaceWithSingleton) services.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        });
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
     private static ServiceProvider BuildProvider(
         Action<WorkflowDesignValidationsFeature> configureFeature,
         Action<IServiceCollection>? hostRegistrations = null,
@@ -154,5 +188,12 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
             ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
+    }
+
+    private sealed class SecondAnalyzer : IActivityDataSelectionAnalyzer
+    {
+        public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityDataSelectionAnalysis(document.ContractRevision, null, [], []));
     }
 }

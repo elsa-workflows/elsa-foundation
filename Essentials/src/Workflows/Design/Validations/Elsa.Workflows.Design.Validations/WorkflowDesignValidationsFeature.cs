@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Internal;
+using Elsa.Workflows.Design.Validations.Services;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -55,6 +56,8 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScopedVariableAuthoring();
         services.AddScoped<ActivityTreeWalker>();
         services.AddScoped<CatalogVersionResolver>();
+        services.AddScoped<IActivityDataSelectionAnalyzer, ActivityDataSelectionAnalyzer>();
+        ActivityDataSelectionAnalyzerCompositionCheck.Register(services);
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
