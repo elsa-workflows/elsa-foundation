@@ -34,6 +34,10 @@ jobs:
           global-json-file: global.json
       - name: Verify and materialize pinned experiment sources
         run: python3 tools/experiments/runtime-architecture-cloud/runner.py --root "$RUNNER_TEMP/elsa-runtime-prototypes" materialize
+      - name: Verify Linux process ownership controls
+        run: |
+          set -o pipefail
+          python3 -m unittest discover -s tools/experiments/runtime-architecture-cloud/helpers -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/elsa-runtime-prototypes/evidence/linux-ownership-controls.log"
       - name: Compile baseline harness and preserve diagnostics
         timeout-minutes: 25
         run: python3 tools/experiments/runtime-architecture-cloud/runner.py --root "$RUNNER_TEMP/elsa-runtime-prototypes" build --variant baseline
