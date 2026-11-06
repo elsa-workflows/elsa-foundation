@@ -3,7 +3,7 @@
 Owner project: `Elsa.Agent.Specialists.Review.Api`
 Domain: `Elsa.Agent`
 
-Two NativeEndpoints endpoints over `IHumanReviews`, with capability `elsa.api.agent-reviews` v1:
+Two MinimalEndpoints endpoints over `IHumanReviews`, with capability `elsa.api.agent-reviews` v1:
 
 | Route | Permission |
 |---|---|

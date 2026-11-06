@@ -407,3 +407,5 @@ Elsa.Activities.Bpmn.Core.BpmnModelPublication.Deconstruct(out string! Publicati
 Elsa.Activities.Bpmn.Core.BpmnModelInputSource.Kind.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnModelInputSource.BpmnModelInputSource(string! kind, string? name = null, System.Text.Json.JsonElement? value = null) -> void
 static Elsa.Activities.Bpmn.Core.BpmnModelPublication.operator !=(Elsa.Activities.Bpmn.Core.BpmnModelPublication? left, Elsa.Activities.Bpmn.Core.BpmnModelPublication? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.init -> void

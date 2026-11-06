@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 

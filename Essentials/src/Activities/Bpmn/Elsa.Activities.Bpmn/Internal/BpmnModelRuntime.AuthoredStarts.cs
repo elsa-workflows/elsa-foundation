@@ -23,7 +23,7 @@ internal sealed partial class BpmnModelRuntime
         var supplied = submitted ?? new Dictionary<string, JsonElement>();
         var validation = inputValidator.Validate(material.Model!.InputContract, supplied);
         BpmnInputSupport.Check(validation);
-        var authority = new WorkflowExecutionAuthoritySnapshot("bpmn-runtime", caller.ActorId);
+        var authority = CaptureNewStartAuthority(caller);
         var decision = await startPolicy.EvaluateAsync(new(material.Identity, WorkflowExecutableStartAuthorityKind.LiveReference,
             authority.SystemIdentity, authority, WorkflowRunKind.PublishedRun, caller.TenantId, new(Scope(caller).Value)), cancellationToken);
         if (!decision.IsAllowed) throw new WorkflowExecutableStartRejectedException(WorkflowExecutableStartRejectionCategory.Policy,

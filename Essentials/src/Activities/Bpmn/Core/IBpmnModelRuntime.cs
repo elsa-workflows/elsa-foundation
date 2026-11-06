@@ -55,7 +55,12 @@ public interface IBpmnModelRuntime
 }
 
 /// <summary>Captured by the authenticated transport; execution authority is never bound from request JSON.</summary>
-public sealed record BpmnModelCaller(string ActorId, string? TenantId);
+public sealed record BpmnModelCaller(string ActorId, string? TenantId)
+{
+    /// <summary>Optional canonical persisted user captured by a trusted transport for new execution starts; never a saved grant.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutionSubjectId { get; init; }
+}
 
 public sealed record BpmnPublishedModel(WorkflowExecutableIdentity Executable, string IncarnationId,
     string SourceReferenceId, string Profile)

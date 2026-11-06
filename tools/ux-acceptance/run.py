@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 TRIGGER_PROJECTS = PROJECTS | {'compact-light', 'desktop-dim', 'desktop-high-contrast'}
 CAPTURES = {
+    'business decisions authoring and explanations': ['reference', 'decisions-list', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
@@ -52,10 +54,18 @@ class IncompleteAcceptanceError(ValueError):
     """Ordinary paths ran, but their evidence cannot establish the complete feature contract."""
 
 
-def inventory(suite):
+def inventory(suite, journeys=None):
+    if suite not in {'all', 'existing', 'standalone-triggers'}:
+        raise ValueError('Unknown acceptance suite')
     existing = {(project, journey) for project in PROJECTS for journey in JOURNEYS}
     triggers = {(project, journey) for project in TRIGGER_PROJECTS for journey in TRIGGER_CAPTURES}
-    return existing if suite == 'existing' else triggers if suite == 'standalone-triggers' else existing | triggers
+    expected = existing if suite == 'existing' else triggers if suite == 'standalone-triggers' else existing | triggers
+    if journeys is None:
+        return expected
+    selected = set(journeys)
+    if isinstance(journeys, str) or not selected or not selected <= {title for _, title in expected}:
+        raise ValueError('Unknown or empty journey inventory for this suite')
+    return {(project, title) for project, title in expected if title in selected}
 
 
 def stop_group(process):
@@ -88,8 +98,11 @@ def command(args, log, *, cwd=ROOT, env=None):
             stop_group(process)
 
 
-def verdict(report, artifacts, suite='existing', source_sha=None):
+def verdict(report, artifacts, journeys=None, source_sha=None, *, suite='existing'):
     """An exit code alone cannot certify that every intended journey actually ran."""
+    # Retain main's third-argument journey list and the feature runner's earlier positional suite calls.
+    if isinstance(journeys, str) and journeys in {'all', 'existing', 'standalone-triggers'}:
+        suite, journeys = journeys, None
     rows = []
     def walk(suites):
         for suite in suites:
@@ -98,7 +111,7 @@ def verdict(report, artifacts, suite='existing', source_sha=None):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    expected = inventory(suite)
+    expected = inventory(suite, journeys)
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -594,26 +607,32 @@ class OwnedBackend:
         self.stop()
 
 
-def run(output, suite='all'):
+def run(output, suite='all', journey=None):
     output.mkdir(parents=True, exist_ok=False)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
     report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty),
               'kind': 'composed-source', 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'suite': suite,
-              'expectedExecutions': len(inventory(suite)), 'visualApproval': 'requires independent review'}
+              'expectedExecutions': len(inventory(suite, [journey] if journey else None)), 'visualApproval': 'requires independent review',
+              'journeys': sorted({title for _, title in inventory(suite, [journey] if journey else None)}),
+              'completeSuite': journey is None, 'qualificationScope': 'selected journey' if journey else 'complete suite'}
     try:
+        # An existing --journey invocation keeps its ordinary four-project composition. A selected trigger
+        # journey uses all seven appearance projects; its report never certifies the other six journeys.
+        execution_suite = ('existing' if journey in JOURNEYS else 'standalone-triggers') if journey else suite
+        report['executionSuite'] = execution_suite
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'backend-build.log')
+        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         setup_dll = None
-        if suite != 'existing':
+        if execution_suite != 'existing':
             setup_project = ROOT / 'tools/ux-acceptance/setup/Elsa.UxAcceptance.Setup.csproj'
-            command(['dotnet', 'build', str(setup_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'access-setup-build.log')
+            command(['dotnet', 'build', str(setup_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'access-setup-build.log')
             setup_dll = setup_project.parent / 'bin/Debug/net10.0/Elsa.UxAcceptance.Setup.dll'
             command(['pnpm', 'exec', 'tsc', '--project', 'tests/acceptance/extensions/TriggerEditor/tsconfig.json'],
                     output / 'extension-consumer-types.log', cwd=ROOT / 'Studio')
@@ -621,7 +640,7 @@ def run(output, suite='all'):
             extension_feed.mkdir()
             for name, package in [('TriggerAuthoring', 'Acme.TriggerAuthoring'), ('TriggerEditor', 'Acme.TriggerEditor')]:
                 project = ROOT / f'Studio/tests/acceptance/extensions/{name}/{package}.csproj'
-                command(['dotnet', 'pack', str(project), '-p:RestoreLockedMode=true', '-o', str(extension_feed), '-v:q', '-nologo'], output / f'{name}-pack.log')
+                command(['dotnet', 'pack', str(project), '-p:RestoreLockedMode=true', '-o', str(extension_feed), '-v:q', '-nologo', '-m:1', '/nr:false'], output / f'{name}-pack.log')
             report['extensionConsumer'] = {'category': 'independent-source-consumer', 'publishedPackageCompatibility': False,
                 'sourceSha': sha, 'archives': [{'file': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
                                              for path in sorted(extension_feed.glob('*.nupkg'))]}
@@ -630,7 +649,7 @@ def run(output, suite='all'):
             backend, studio = data / 'workbench', data / 'studio'
             prepare_host(backend_project, backend)
             prepare_host(studio_project, studio)
-            if suite != 'existing':
+            if execution_suite != 'existing':
                 for directory, package in [(backend, 'Acme.TriggerAuthoring'), (studio, 'Acme.TriggerEditor')]:
                     (directory / 'packages').mkdir()
                     candidates = list(extension_feed.glob(f'{package}.*.nupkg'))
@@ -639,7 +658,7 @@ def run(output, suite='all'):
                     shutil.copy2(candidates[0], directory / 'packages' / candidates[0].name)
             backend_url = f'http://localhost:{free_port()}'
             studio_url = f'http://localhost:{free_port()}'
-            peer_url = f'http://localhost:{free_port()}' if suite != 'existing' else None
+            peer_url = f'http://localhost:{free_port()}' if execution_suite != 'existing' else None
             # Configure ordinary source features and local origins only in the owned private copies.
             settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
             settings['Cors']['AllowedOrigins'] = [studio_url]
@@ -647,7 +666,7 @@ def run(output, suite='all'):
             shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
-            if suite != 'existing':
+            if execution_suite != 'existing':
                 features = shells['CShells']['Shells']['default']['Features']
                 for name in ('StandaloneTriggersApi', 'StandaloneEventTriggerAuthoring', 'StandaloneHttpTriggerAuthoring',
                              'StandaloneScheduleTriggerAuthoring', 'StandaloneScheduleTriggers',
@@ -667,7 +686,7 @@ def run(output, suite='all'):
                 (studio / 'shells.json').write_text(json.dumps(studio_shells))
             (backend / 'shells.json').write_text(json.dumps(shells))
             scope_peer = None
-            if suite != 'existing':
+            if execution_suite != 'existing':
                 peer_directory = data / 'workbench-scope-peer'
                 prepare_host(backend_project, peer_directory)
                 shutil.copy2(backend / 'appsettings.json', peer_directory / 'appsettings.json')
@@ -690,9 +709,11 @@ def run(output, suite='all'):
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_HOST_CONTROL=str(owned_backend.mailbox), UX_HOST_CONTROL_TOKEN=owned_backend.token,
-                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_ACCEPTANCE_SUITE=suite)
-                    command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
-                            output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_ACCEPTANCE_SUITE=execution_suite)
+                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
+                    if journey:
+                        browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
+                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
                     playwright_report = json.loads((output / 'playwright.json').read_text())
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
@@ -700,7 +721,7 @@ def run(output, suite='all'):
             raise ValueError('Source changed during acceptance; rerun the exact committed revision')
         if dirty:
             raise ValueError('Dirty source run is preliminary evidence, not final acceptance')
-        report['executed'] = verdict(playwright_report, output, suite, sha)
+        report['executed'] = verdict(playwright_report, output, [journey] if journey else None, sha, suite=suite)
         report.update(status='passed', stage='complete')
     except IncompleteAcceptanceError as error:
         report.update(status='incomplete', error=str(error))
@@ -719,8 +740,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--suite', choices=['all', 'existing', 'standalone-triggers'], default='all',
                         help='Finite required inventory; a selected feature suite never certifies the other journeys')
+    parser.add_argument('--journey', choices=sorted(JOURNEYS | set(TRIGGER_CAPTURES)),
+                        help='Run one complete journey across its required projects; the report certifies only that selected journey')
     args = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.suite)
+    run(args.output.resolve(), args.suite, args.journey)

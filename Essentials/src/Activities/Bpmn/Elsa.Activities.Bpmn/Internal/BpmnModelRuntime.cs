@@ -127,8 +127,8 @@ internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore material
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var execution = "bpmn:" + BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "", caller.ActorId, requestId);
         var payload = JsonSerializer.SerializeToElement(new { inputs = inputs ?? new Dictionary<string, JsonElement>(), sourceReferenceId }, Web);
-        RuntimeModelExecutionCommand Command(WorkflowExecutableIdentity pin, string incarnation) =>
-            new(pin, incarnation, requestId, "start", payload, new("bpmn-runtime", caller.ActorId), caller.TenantId);
+        RuntimeModelExecutionCommand Command(WorkflowExecutableIdentity pin, string incarnation, WorkflowExecutionAuthoritySnapshot authority) =>
+            new(pin, incarnation, requestId, "start", payload, authority, caller.TenantId);
         // Check the queue before the receipt so consumption between these reads still finds
         // its committed outcome. Retirement prevents fresh admission, not accepted-work replay.
         if (await PendingAsync(execution, requestId, caller, cancellationToken) is { } pending)
@@ -138,7 +138,7 @@ internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore material
                 ValidateAuthoredReplay(pending, sourceReferenceId, inputs);
                 return await DispatchAsync(execution, pending, caller, cancellationToken);
             }
-            return await DispatchAsync(execution, Command(pending.Executable, pending.MaterialIncarnationId), caller, cancellationToken);
+            return await DispatchAsync(execution, Command(pending.Executable, pending.MaterialIncarnationId, pending.Authority), caller, cancellationToken);
         }
         if (await States.FindInputAsync(execution, requestId, cancellationToken) is not null)
         {
@@ -150,7 +150,7 @@ internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore material
                 ValidateAuthoredReplay(accepted, sourceReferenceId, inputs);
                 return await DispatchAsync(execution, accepted, caller, cancellationToken);
             }
-            return await DispatchAsync(execution, Command(retained.Executable, retained.MaterialIncarnationId), caller, cancellationToken);
+            return await DispatchAsync(execution, Command(retained.Executable, retained.MaterialIncarnationId, retained.Authority), caller, cancellationToken);
         }
         var source = await sources.FindAsync(sourceReferenceId, cancellationToken);
         if (source is null || source.SourceKind != SourceKind || source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow()))
@@ -163,8 +163,18 @@ internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore material
         if (material.Identity.DefinitionId != source.DefinitionId || material.Identity.DefinitionVersionId != source.DefinitionVersionId ||
             material.Identity.ArtifactVersion != source.ArtifactVersion)
             throw new BpmnModelValidationException("The selected source does not name available pinned model material.");
-        return await DispatchAsync(execution, Command(material.Identity, material.IncarnationId), caller, cancellationToken);
+        // Capture only a new start. Pending/consumed replay above retains its original authority,
+        // including legacy starts without a subject; current HTTP context never rewrites accepted work.
+        return await DispatchAsync(execution, Command(material.Identity, material.IncarnationId, CaptureNewStartAuthority(caller)), caller, cancellationToken);
     }
+
+    private static WorkflowExecutionAuthoritySnapshot CaptureNewStartAuthority(BpmnModelCaller caller) =>
+        new("bpmn-runtime", caller.ActorId,
+            string.IsNullOrWhiteSpace(caller.ExecutionSubjectId) ? null : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["elsa.identity.subject-kind"] = "persisted-user",
+                ["elsa.identity.subject-id"] = caller.ExecutionSubjectId
+            });
 
     public async ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
