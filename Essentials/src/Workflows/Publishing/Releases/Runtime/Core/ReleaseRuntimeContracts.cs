@@ -80,6 +80,12 @@ public interface IReleaseRuntimeSiteReader
 {
     ReleaseRuntimeNodeContext ReadNode(ReleaseSemanticSite site, IReleaseContentReader content);
     ReleaseRuntimeModel ReadModel(ReleaseSemanticSite site, IReleaseContentReader content);
+    /// <summary>Returns a cached captured view after exact member/codec validation, without an owner-hash verdict.</summary>
+    ReleaseRuntimeWorkflow ReadWorkflow(ReleaseMemberKey member, IReleaseContentReader content);
+    /// <summary>Returns neutral captured material only; model protocol/profile verification remains mandatory.</summary>
+    ReleaseRuntimeModel ReadModelMember(ReleaseMemberKey member, IReleaseContentReader content);
+    ReleaseRuntimeTemplate ReadTemplate(ReleaseMemberKey member, IReleaseContentReader content);
+    ReleaseActivityVersion ReadActivityVersion(ReleaseMemberKey member, IReleaseContentReader content);
 }
 
 public static class ReleaseRuntimeCodecs

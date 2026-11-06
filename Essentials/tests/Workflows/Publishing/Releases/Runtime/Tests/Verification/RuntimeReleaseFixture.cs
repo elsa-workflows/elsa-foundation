@@ -67,7 +67,8 @@ internal sealed class RuntimeReleaseFixture : IReleaseContentReader
         "original-activity-source", "DesignActivity", "original-activity-source-id");
     public static JsonElement Json(string value) { using var document = JsonDocument.Parse(value); return document.RootElement.Clone(); }
 
-    public async Task<IReleaseBundleTransport> Transport(IReleaseBundleCodec transport, ReleaseMemberKey selection, ReleaseMemberKey content)
+    public async Task<IReleaseBundleTransport> Transport(IReleaseBundleCodec transport, ReleaseMemberKey selection, ReleaseMemberKey content,
+        IReadOnlyList<ReleaseOccurrenceFacts>? occurrences = null)
     {
         var facts = new List<ReleaseSemanticFacts>(); foreach (var member in Members) facts.Add(await Verify(member));
         var manifest = new JsonObject
@@ -80,11 +81,11 @@ internal sealed class RuntimeReleaseFixture : IReleaseContentReader
                 ["ownerVersion"] = x.OwnerVersion is null ? null : new JsonObject { ["scheme"] = x.OwnerVersion.Scheme, ["value"] = x.OwnerVersion.TextValue },
                 ["payloadDigest"] = x.Descriptor.PayloadDigest, ["byteLength"] = x.Descriptor.ByteLength
             }).ToArray()),
-            ["edges"] = new JsonArray(facts.SelectMany(x => x.Edges).Select(x => (JsonNode)new JsonObject
+            ["edges"] = new JsonArray(facts.SelectMany(x => x.Edges).Concat((occurrences ?? []).SelectMany(x => x.Edges)).Select(x => (JsonNode)new JsonObject
             { ["from"] = Key(x.From), ["to"] = Key(x.To), ["relation"] = x.Relation == ReleaseEdgeRelation.Dependency ? "dependency" : "association", ["occurrence"] = x.Occurrence }).ToArray()),
-            ["prerequisites"] = new JsonArray(facts.SelectMany(x => x.Prerequisites).Select(x => (JsonNode)new JsonObject
+            ["prerequisites"] = new JsonArray(facts.SelectMany(x => x.Prerequisites).Concat((occurrences ?? []).SelectMany(x => x.Prerequisites)).Select(x => (JsonNode)new JsonObject
             { ["key"] = x.Key, ["member"] = Key(x.Member), ["kind"] = x.Kind, ["identity"] = x.Identity, ["scheme"] = x.Scheme, ["constraint"] = x.Constraint }).ToArray()),
-            ["resourceRequirements"] = new JsonArray(facts.SelectMany(x => x.Resources).Select(x => (JsonNode)new JsonObject
+            ["resourceRequirements"] = new JsonArray(facts.SelectMany(x => x.Resources).Concat((occurrences ?? []).SelectMany(x => x.Resources)).Select(x => (JsonNode)new JsonObject
             { ["key"] = new JsonObject { ["member"] = Key(x.Member), ["origin"] = new JsonArray(x.Origin.Select(y => (JsonNode)JsonValue.Create(y)!).ToArray()), ["reference"] = x.Reference, ["kind"] = x.Kind }, ["schemaVersion"] = x.SchemaVersion }).ToArray())
         };
         return transport.Validate(System.Text.Encoding.UTF8.GetBytes(manifest.ToJsonString()), _encoded.Values.ToDictionary(x => x.Descriptor.PayloadDigest, x => (ReadOnlyMemory<byte>)x.GetPayloadBytes()));

@@ -30,6 +30,7 @@ public sealed class RuntimeCapturedContentCacheTests
             Assert.Equal(childMember.Key, Assert.Single(facts.Edges).To);
             Assert.Equal(64, facts.Sites.Count);
             foreach (var site in facts.Sites) Assert.Equal(site.Node, sites.ReadNode(site, content).Node.ExecutableNodeId);
+            Assert.Equal(member.Key.Identity, sites.ReadWorkflow(member.Key, content).Executable.Identity.ArtifactId);
         }
         Assert.Equal(ReleaseSemanticStatus.Verified, (await verifier.VerifyAsync(childMember, fixture.GetPayload(childMember.Key), content)).Status);
         Assert.Equal(33, codec.WorkflowDecodes);
@@ -79,6 +80,32 @@ public sealed class RuntimeCapturedContentCacheTests
         Assert.Contains(facts.Diagnostics, x => x.Code == "captured_runtime_identity_conflict");
     }
 
+    [Fact]
+    public void Fixed_typed_member_reads_share_cache_and_refuse_cross_kind_or_missing_content_without_lookup_fallback()
+    {
+        var fixture = new RuntimeReleaseFixture(); var template = RuntimeReleaseFixture.Template();
+        var workflow = fixture.Add(fixture.Codec.EncodeWorkflow(new(RuntimeReleaseFixture.Scope, RuntimeReleaseFixture.Workflow())));
+        var model = fixture.Add(fixture.Codec.EncodeModel(new(RuntimeReleaseFixture.Scope, RuntimeReleaseFixture.Model())));
+        var templateMember = fixture.Add(fixture.Codec.EncodeTemplate(new(RuntimeReleaseFixture.Scope, template)));
+        var activity = fixture.Add(fixture.Codec.EncodeActivityVersion(RuntimeReleaseFixture.ActivityVersion(template)));
+        var content = new IndexedOnlyReader(fixture); var codec = new CountingCodec(fixture.Codec);
+        IReleaseRuntimeSiteReader reader = new ReleaseRuntimeSiteReader(new RuntimeCapturedContentCache(codec));
+        for (var index = 0; index < 32; index++)
+        {
+            Assert.Equal(workflow.Key.Identity, reader.ReadWorkflow(workflow.Key, content).Executable.Identity.ArtifactId);
+            Assert.Equal("fixture.protocol", reader.ReadModelMember(model.Key, content).Model.Protocol.Key); // Neutral read grants no protocol verdict.
+            Assert.Equal(templateMember.Key.Identity, reader.ReadTemplate(templateMember.Key, content).Template.TemplateId);
+            Assert.Equal(activity.Key.Identity, reader.ReadActivityVersion(activity.Key, content).VersionId);
+        }
+        Assert.Equal(1, codec.WorkflowDecodes); Assert.Equal(1, codec.ModelDecodes);
+        Assert.Equal(1, codec.TemplateDecodes); Assert.Equal(1, codec.ActivityVersionDecodes);
+        Assert.All(content.PayloadReads.Values, count => Assert.Equal(1, count));
+        Assert.Throws<ReleaseRuntimeArtifactException>(() => reader.ReadTemplate(workflow.Key, content));
+        Assert.Throws<ReleaseRuntimeArtifactException>(() => reader.ReadWorkflow(model.Key, content));
+        Assert.Throws<ReleaseRuntimeArtifactException>(() => reader.ReadModelMember(activity.Key, content));
+        Assert.Throws<ReleaseRuntimeArtifactException>(() => reader.ReadActivityVersion(new(ReleaseRuntimeCodecs.ActivityVersionKind, "absent"), content));
+    }
+
     private sealed class IndexedOnlyReader(IReleaseContentReader inner) : IReleaseContentReader
     {
         public ConcurrentDictionary<ReleaseMemberKey, int> PayloadReads { get; } = new();
@@ -90,12 +117,18 @@ public sealed class RuntimeCapturedContentCacheTests
     private sealed class CountingCodec(IReleaseRuntimeArtifactCodec inner) : IReleaseRuntimeArtifactCodec
     {
         private int _workflowDecodes;
+        private int _modelDecodes;
+        private int _templateDecodes;
+        private int _activityVersionDecodes;
         public int WorkflowDecodes => Volatile.Read(ref _workflowDecodes);
+        public int ModelDecodes => Volatile.Read(ref _modelDecodes);
+        public int TemplateDecodes => Volatile.Read(ref _templateDecodes);
+        public int ActivityVersionDecodes => Volatile.Read(ref _activityVersionDecodes);
         public ReleaseRuntimeWorkflow DecodeWorkflow(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) { Interlocked.Increment(ref _workflowDecodes); return inner.DecodeWorkflow(payload, limits); }
-        public ReleaseRuntimeTemplate DecodeTemplate(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => inner.DecodeTemplate(payload, limits);
-        public ReleaseRuntimeModel DecodeModel(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => inner.DecodeModel(payload, limits);
+        public ReleaseRuntimeTemplate DecodeTemplate(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) { Interlocked.Increment(ref _templateDecodes); return inner.DecodeTemplate(payload, limits); }
+        public ReleaseRuntimeModel DecodeModel(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) { Interlocked.Increment(ref _modelDecodes); return inner.DecodeModel(payload, limits); }
         public ReleaseWorkflowSelection DecodeWorkflowSelection(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => inner.DecodeWorkflowSelection(payload, limits);
-        public ReleaseActivityVersion DecodeActivityVersion(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => inner.DecodeActivityVersion(payload, limits);
+        public ReleaseActivityVersion DecodeActivityVersion(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) { Interlocked.Increment(ref _activityVersionDecodes); return inner.DecodeActivityVersion(payload, limits); }
         public ReleaseEncodedRuntimeMember EncodeWorkflow(ReleaseRuntimeWorkflow value, ReleaseBundleLimits? limits = null) => inner.EncodeWorkflow(value, limits);
         public ReleaseEncodedRuntimeMember EncodeTemplate(ReleaseRuntimeTemplate value, ReleaseBundleLimits? limits = null) => inner.EncodeTemplate(value, limits);
         public ReleaseEncodedRuntimeMember EncodeModel(ReleaseRuntimeModel value, ReleaseBundleLimits? limits = null) => inner.EncodeModel(value, limits);

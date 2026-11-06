@@ -1,4 +1,7 @@
 #nullable enable
+Elsa.Activities.Primitives.ActivitiesPrimitivesReleaseVerificationFeature
+Elsa.Activities.Primitives.ActivitiesPrimitivesReleaseVerificationFeature.ActivitiesPrimitivesReleaseVerificationFeature() -> void
+virtual Elsa.Activities.Primitives.ActivitiesPrimitivesReleaseVerificationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Activities.Primitives.Activation.ClrActivityActivator
 Elsa.Activities.Primitives.Activation.ClrActivityActivator.ActivateAsync(Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Contracts.ActivityActivationLease!>
 Elsa.Activities.Primitives.Activation.ClrActivityActivator.ClrActivityActivator(Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, Elsa.Serialization.Core.IWellKnownTypeRegistry! typeRegistry, Elsa.Serialization.Core.IPayloadSerializer! payloadSerializer, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! persistenceAccessContextAccessor) -> void
