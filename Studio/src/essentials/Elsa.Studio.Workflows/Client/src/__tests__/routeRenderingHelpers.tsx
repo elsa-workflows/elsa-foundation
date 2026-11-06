@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, vi } from "vitest";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
+import { createAgentRegistry, StudioWorkspaceTabProvider } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition, StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
@@ -96,9 +96,18 @@ export async function renderRegisteredRoute(
   }
 
   let visible = true;
+  let retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const workspaceTab: StudioWorkspaceTabHandle = {
+    id: "retained-route",
+    get active() { return visible; },
+    get location() { return retainedLocation; },
+    isActive: () => visible,
+    markPendingWork: vi.fn(),
+    setTitle: vi.fn()
+  };
   const rerender = () => flushSync(() => {
     const route = <RegisteredRouteHost />;
-    root.render(<QueryClientProvider client={queryClient}>{retained ? <React.Activity mode={visible ? "visible" : "hidden"}>{route}</React.Activity> : route}</QueryClientProvider>);
+    root.render(<QueryClientProvider client={queryClient}>{retained ? <React.Activity mode={visible ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={workspaceTab}>{route}</StudioWorkspaceTabProvider></React.Activity> : route}</QueryClientProvider>);
   });
   rerender();
 
@@ -110,7 +119,10 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, rerender, unmount, setVisible: (next: boolean) => { visible = next; rerender(); } };
+  return { api, container, rerender, unmount, setVisible: (next: boolean) => {
+    if (visible) retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    visible = next; rerender();
+  } };
 }
 
 function routeMatchesPath(routePath: string, path: string) {

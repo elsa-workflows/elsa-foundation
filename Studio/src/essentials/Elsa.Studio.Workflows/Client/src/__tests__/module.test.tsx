@@ -5192,7 +5192,7 @@ describe("workflows module", () => {
 
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
     await click(buttonByText(container, "Move"));
-    await waitForText(dialog(container), "Platform");
+    await waitForText(await waitForDialog(container), "Platform");
     const destinationRadio = dialog(container).querySelector<HTMLInputElement>("input[value='folder-destination']");
     await vi.waitFor(() => expect(destinationRadio?.disabled).toBe(false));
     await click(destinationRadio);

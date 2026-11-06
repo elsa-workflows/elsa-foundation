@@ -246,13 +246,21 @@ describe("secrets page", () => {
     const postJson = vi.fn().mockImplementationOnce(async () => {
       const result = await work; revoked = action === "Revoke"; return result;
     }).mockResolvedValue({ succeeded: true, code: "resolved" });
-    const { container, setVisible } = render({ postJson, getItems: () => [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
+    let holdList = false;
+    let finishList!: (items: unknown[]) => void;
+    const resumedList = new Promise<unknown[]>(resolve => { finishList = resolve; });
+    const { container, setVisible } = render({ postJson, getItems: () => holdList
+      ? resumedList : [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
     await waitForText(container, "Payments API");
     await clickSecretAction(container, "payments.api", action);
     await waitFor(() => postJson.mock.calls.length === 1);
+    holdList = true;
     setVisible(false); setVisible(true);
+    await waitForText(container, "Loading secrets…");
     finish({ succeeded: true, code: "resolved" }); await work; await Promise.resolve();
     expect(notifications.notify).not.toHaveBeenCalled();
+    finishList([paymentSecret({ status: action === "Revoke" ? "Revoked" : "Active" })]);
+    await waitFor(() => !container.textContent?.includes("Loading secrets…") && container.querySelector('[data-secret-open="payments.api"]') !== null);
     if (action === "Revoke") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
     await clickSecretAction(container, "payments.api", "Test");
     await waitFor(() => notifications.notify.mock.calls.length === 1);
@@ -294,7 +302,9 @@ describe("secrets page", () => {
     finish(true);
     await waitFor(() => mutation.mock.calls.length === 1);
     view.setVisible(true);
-    await waitFor(() => action === "Delete" ? view.container.querySelector("tr td") === null : view.container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    await waitFor(() => action === "Delete"
+      ? view.container.querySelector('[data-secret-open="payments.api"]') === null && view.container.textContent?.includes("No secrets yet") === true
+      : view.container.querySelector(".secrets-badge")?.textContent === "Revoked");
     expect(mutation).toHaveBeenCalledTimes(1);
     expect(notifications.notify).not.toHaveBeenCalled();
     view.unmount();
