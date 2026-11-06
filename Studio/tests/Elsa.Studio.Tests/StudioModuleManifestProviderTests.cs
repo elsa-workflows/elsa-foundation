@@ -163,14 +163,25 @@ public sealed class StudioModuleManifestProviderTests
     public async Task GetModules_RejectsInvalidStyleContractWithoutBreakingOtherModules(string contract)
     {
         const string directory = "_content/Elsa.Studio.Workflows/studio/modules/workflows";
-        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>(), fileContents: new Dictionary<string, string>
+        var webAssets = new Dictionary<string, string[]>();
+        var fileContents = new Dictionary<string, string>
         {
             [$"{directory}/entry-styles.json"] = contract,
             [$"{directory}/module-entryHash.css"] = "entry"
-        });
+        };
+        var response = await GetModulesAsync(webAssets: webAssets, fileContents: fileContents);
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Workflows" && x.Status == StudioModuleDiagnosticStatuses.Failed);
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
+
+        var registry = await GetRegistryAsync(webAssets: webAssets, fileContents: fileContents);
+        var failed = Assert.Single(registry.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal("Workflows", failed.DisplayName);
+        Assert.Equal(StudioModuleDiagnosticStatuses.Failed, failed.Status);
+        Assert.Contains(failed.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Failed);
+        Assert.DoesNotContain(failed.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+        Assert.Empty(failed.Manifest.Styles);
+        Assert.Contains(registry.Modules, x => x.Id == "Elsa.Studio.Dashboard" && x.Status == StudioModuleDiagnosticStatuses.Available);
     }
 
     [Fact]
@@ -321,9 +332,12 @@ public sealed class StudioModuleManifestProviderTests
         return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
     }
 
-    private static async Task<StudioModuleRegistryResponse> GetRegistryAsync(Action<StudioApiOptions>? configure = null)
+    private static async Task<StudioModuleRegistryResponse> GetRegistryAsync(
+        Action<StudioApiOptions>? configure = null,
+        IReadOnlyDictionary<string, string[]>? webAssets = null,
+        IReadOnlyDictionary<string, string>? fileContents = null)
     {
-        await using var provider = CreateProvider(configure);
+        await using var provider = CreateProvider(configure, webAssets: webAssets, fileContents: fileContents);
         return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
     }
 
