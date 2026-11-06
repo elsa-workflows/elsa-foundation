@@ -58,15 +58,17 @@ public sealed class ExecutableNodeCompiler(
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
-        IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IEnumerable<VariableDefinition>? workflowVariables,
+        IEnumerable<InputDefinition>? workflowInputs,
         ActivityStructureCompilationContext context)
     {
         // Validate complete authored content before a placed reusable can replace its node.
         // The cache also keeps each activity-owned lowering to one invocation.
         var structures = projection.Nodes.ToDictionary(node => node.NodeId,
             node => activityStructureService.CompileExecutableStructure(node, context), StringComparer.Ordinal);
-        return CompileNode(rootActivity, projection, activityRows, placedActivities, workflowVariables, workflowInputs,
+        return CompileNode(rootActivity, projection, activityRows, placedActivities,
+            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
+            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? [],
             compiledStructures: structures);
     }
 
