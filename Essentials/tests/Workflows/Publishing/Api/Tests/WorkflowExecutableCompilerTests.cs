@@ -72,7 +72,7 @@ public sealed class WorkflowExecutableCompilerTests
         var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService));
         var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
             TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
-        var request = NewRequest(DateTimeOffset.UtcNow());
+        var request = NewRequest(DateTimeOffset.UtcNow);
         var first = new WorkflowExecutableCompileSource("definition-1", "version-1", "1.0.0", version.State!,
             "WorkflowDraftSnapshot", "same-snapshot", "1.0.0");
         await compiler.CompileAsync(request with { Source = first });
@@ -90,7 +90,7 @@ public sealed class WorkflowExecutableCompilerTests
         var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService)) { ReplaceRevision = true };
         var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
             TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
-        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow())).AsTask());
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
         Assert.IsType<InvalidOperationException>(exception.InnerException);
         Assert.Contains("actual workflow candidate", exception.Message);
     }

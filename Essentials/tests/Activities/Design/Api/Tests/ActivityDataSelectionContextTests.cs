@@ -290,7 +290,7 @@ public sealed class ActivityDataSelectionContextTests
         using var provider = services.BuildServiceProvider();
         var sources = provider.GetServices<IApiCapabilitySource>().ToArray();
         var catalog = new ApiCapabilityCatalog(provider.GetServices<ApiCapabilityDeclaration>(), sources);
-        var activity = Assert.Single((await catalog.GetAsync()).Capabilities, x => x.CapabilityId == "elsa.api.activity-data-selection");
+        var activity = Assert.Single((await catalog.GetAsync()).Capabilities, x => x.Id == "elsa.api.activity-data-selection");
         Assert.Equal("1", activity.ContractVersion);
         Assert.Equal("activity-data-context", Assert.Single(activity.Links).Rel);
         var combined = new ApiCapabilityCatalog([], sources.Append(new OtherOwnerCapability()));

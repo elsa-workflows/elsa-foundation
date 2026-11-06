@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;

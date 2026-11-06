@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Net;
+using System.Text;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
-using Elsa.Workflows.Publishing.Api.Endpoints;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Models;
-using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -15,21 +17,28 @@ public sealed class ActivityDataSelectionPublicationProblemsTests
         var refusal = new ActivityDataSelectionRejectedException([new("consumer/inputs/CustomerId", "ValueFlow/UnavailableProducer", "The producer is unavailable.")])
         { ResourceKind = "ActivityDefinitionDraft", ResourceId = "actual-draft", ProviderKey = "elsa.graph" };
         var wrapped = new WorkflowExecutableCompilationException("definition", "version", refusal.Message, refusal);
-        Assert.True(ActivityDataSelectionPublicationProblems.TryFind(wrapped, out var found));
-        var context = new DefaultHttpContext();
-        context.Request.Path = "/publish";
-        context.Response.Body = new MemoryStream();
-        var problem = ActivityDataSelectionPublicationProblems.Create(found, context);
-        await ActivityPublishingProblems.WriteAsync(context.Response, problem, default);
-        context.Response.Body.Position = 0;
-        using var json = await JsonDocument.ParseAsync(context.Response.Body);
+        await using var host = await PublishingMinimalApiHost.StartAsync(_ => new ExceptionSender(wrapped));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/publishing/workflows/version/publish")
+        {
+            Content = new StringContent("{\"versionId\":\"version\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var diagnostic = Assert.Single(json.RootElement.GetProperty("diagnostics").EnumerateArray());
-        Assert.Equal(400, context.Response.StatusCode);
         Assert.Equal("actual-draft", diagnostic.GetProperty("subject").GetProperty("id").GetString());
         Assert.Equal("consumer/inputs/CustomerId", diagnostic.GetProperty("authoredPath").GetString());
         var location = diagnostic.GetProperty("location");
         Assert.Equal("elsa.graph", location.GetProperty("providerKey").GetString());
         Assert.Equal("CustomerId", location.GetProperty("referenceKey").GetString());
         Assert.Equal("consumer", Assert.Single(location.GetProperty("nodeOrigin").EnumerateArray()).GetProperty("id").GetString());
+    }
+
+    private sealed class ExceptionSender(Exception exception) : IRequestSender
+    {
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
+            Task.FromException<T>(exception);
     }
 }

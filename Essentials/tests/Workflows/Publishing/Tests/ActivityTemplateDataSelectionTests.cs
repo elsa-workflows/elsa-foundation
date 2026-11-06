@@ -275,6 +275,7 @@ public sealed class ActivityTemplateDataSelectionTests
 
     private sealed class StructureOwner(ActivityNode root, ActivityNode child) : IActivityStructureService
     {
+        public bool SupportsScopedVariables(ActivityNode activity) => activity.NodeId == root.NodeId;
         public bool Projected { get; private set; }
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => activity.NodeId == root.NodeId ? [new("body", [child])] : [];
         public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children) => activity;
