@@ -108,7 +108,7 @@ def run_focused_tests(runner, variant):
                 # Even a nonzero test process must retain its TRX outcomes and the remaining NOT_RUN entries.
                 for row in group['tests']:
                     row.update(read_trx(phase_output / (row['name'] + '.trx'), row['expectedPassed']))
-                group['status'] = 'PASSED' if all(row['status'] == 'PASSED' for row in group['tests']) else 'FAILED'
+                group['status'] = 'PASSED' if 'phaseReceipt' in group and all(row['status'] == 'PASSED' for row in group['tests']) else 'FAILED'
                 save(receipt_path, receipt)
             if group['status'] != 'PASSED':
                 raise RuntimeError('Focused test outcomes differ from the required executed cases')
