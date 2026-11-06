@@ -140,6 +140,7 @@ jobs:
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'
+          python3 -m unittest discover -s tools/ci -p 'test_browser_shards.py'
           python3 tools/ci/test_tiers.py --self-test
           python3 tools/ci/test_results.py --self-test
           python3 tools/ci/test_tiers.py check-workflows
@@ -1020,14 +1021,14 @@ jobs:
   studio-browser-tests:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio == 'true'
-    name: Studio browser tests (Chromium ${{ matrix.shard }}/2)
+    name: Studio browser tests (Chromium ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # Keep the complete inventory within the budget as it grows; no cases are omitted.
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1042,7 +1043,7 @@ jobs:
         working-directory: Studio
 
       - name: Run browser tests
-        run: pnpm test:browser --shard=${{ matrix.shard }}/2
+        run: pnpm test:browser --shard=${{ matrix.shard }}/4
         working-directory: Studio
 
   studio-ux-acceptance:
