@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
-public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable, IAsyncDisposable
+public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
     internal DrainControlContext? DrainControls { private get; init; }
     internal ILogger? Logger { private get; init; }
@@ -191,14 +191,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     }
 
     /// <summary>Cancels and joins detached re-drives. Standalone callers must await this before disposing their services.</summary>
-    public async ValueTask DisposeAsync()
-    {
-        await StopAsync(CancellationToken.None);
-        if (_ownsMeter)
-            _meter.Dispose();
-    }
-
-    internal Task StopAsync(CancellationToken cancellationToken)
+    /// <remarks>Cancellation ends the caller's wait; the shared cleanup continues. Disposal remains a non-joining emergency fallback.</remarks>
+    public Task StopAsync(CancellationToken cancellationToken = default)
     {
         TaskCompletionSource? completion = null;
         Task[] accepted = [];

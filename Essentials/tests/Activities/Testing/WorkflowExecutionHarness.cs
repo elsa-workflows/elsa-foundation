@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using CShells.Features;
 using Elsa.Activities.Primitives;
@@ -18,6 +19,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -81,7 +83,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// </summary>
     public void InitializeActivityTypes() => EnsureActivityTypesRegistered();
 
-    public ValueTask DisposeAsync() => _provider.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        // A bare DI provider has no host/shell stop phase; join while its persistence services remain usable.
+        Exception? stopFailure = null;
+        try { await _provider.GetRequiredService<InProcessWorkflowExecutionActorProvider>().StopAsync(); }
+        catch (Exception exception) { stopFailure = exception; }
+        try { await _provider.DisposeAsync(); }
+        catch (Exception exception) when (stopFailure is not null)
+        {
+            throw new AggregateException("Both runtime stop and service-provider disposal failed.", stopFailure, exception);
+        }
+        if (stopFailure is not null) ExceptionDispatchInfo.Capture(stopFailure).Throw();
+    }
 
     /// <summary>Starts configuring a harness. Register the activity feature(s), then call <see cref="Builder.Build"/>.</summary>
     public static Builder Create() => new();

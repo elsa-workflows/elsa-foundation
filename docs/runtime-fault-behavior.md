@@ -545,10 +545,10 @@ termination close that admission, cancel the provider lifetime and join accepted
 The shell terminator runs after recurring Tasks stop and before provider disposal. Both hosting paths share the same
 idempotent join; a caller cancelling its wait does not reopen admission or cancel the ownership-release cleanup.
 
-A standalone caller should await the concrete actor provider's `DisposeAsync` while its persistence services remain
-usable. A bare service-provider test harness must stop its runtime lifecycle before disposing the root provider;
-asynchronous singleton disposal by itself occurs too late to guarantee that other services remain usable. Synchronous
-disposal requests cancellation only. Emergency shell disposal or a host shutdown-timeout breach can interrupt graceful
+A standalone caller should await the concrete actor provider's `StopAsync` while its persistence services remain
+usable, then dispose it. A bare service-provider test harness must stop its runtime lifecycle before disposing the root
+provider; singleton disposal occurs too late to guarantee that other services remain usable. Disposal requests
+cancellation only. Emergency shell disposal or a host shutdown-timeout breach can interrupt graceful
 termination, so these paths do not promise that in-flight I/O has joined. Durable recovery and fencing remain necessary.
 
 The HTTP lifetime control holds the real re-drive's ownership release and checks that host stop cannot proceed past
