@@ -1,6 +1,6 @@
 # Research: scoped catalog admission and disclosure
 
-**State:** Phase 0 decisions selected for the owner-approved catalog unit; technical review and implementation remain outstanding.
+**State:** Phase 0 decisions selected for the owner-approved catalog unit; independent security/architecture contract review is clean at 6d8a45fe13c8db82b1767f6a53839ab2e03e26d8. Implementation and qualification remain outstanding.
 **Source:** 01bfb391886aeb60080d9afe186bcd29a0851a09. The [approval receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3923#issuecomment-6675758688) binds the boundary proposal at 1bf3d5955a42222a5b62e4b0d463e17c43eedd16.
 
 ## Decisions
@@ -43,4 +43,4 @@ Runtime owners now recognize the no-TriggerId embedded-wait requirement and the 
 
 Delivered Decisions supplies a current persisted-user authorization pattern; it does not supply autonomous workflow-to-source grants. Real source-use/workload policy, copied Runtime-schema disclosure, entity SDK, source credential lifecycle, events and projections remain separate. They are outside this catalog plan's Technical Context rather than unresolved assumptions used by its implementation.
 
-The source-cookie, actual machine-source/stock HTTP and synthetic public-extension witnesses remain feasibility evidence. None qualifies the catalog security unit. Phase 1 and C01–C12 still require review and observed implementation evidence.
+The source-cookie, actual machine-source/stock HTTP and synthetic public-extension witnesses remain feasibility evidence. None qualifies the catalog security unit. Phase 1 contract review is recorded in the plan; tasks and all C01–C12 implementation evidence remain required.

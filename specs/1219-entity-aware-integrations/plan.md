@@ -2,7 +2,7 @@
 
 **Branch:** agent/codex/3908-entity-integration-design | **Date:** 2026-11-06
 **Spec:** [spec.md](spec.md) | **Owning task:** [#3908](https://github.com/elsa-workflows/elsa-foundation/issues/3908)
-**Status:** Draft scoped plan for technical review. The owner approved this catalog boundary at 1bf3d5955a42222a5b62e4b0d463e17c43eedd16; [receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3923#issuecomment-6675758688).
+**Status:** Scoped technical plan reviewed at 6d8a45fe13c8db82b1767f6a53839ab2e03e26d8; implementation and qualification remain outstanding. The owner approved this catalog boundary at 1bf3d5955a42222a5b62e4b0d463e17c43eedd16; [receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3923#issuecomment-6675758688).
 **Inspected source:** 01bfb391886aeb60080d9afe186bcd29a0851a09, including main fd0fdb21eacabe690183ff761432746e9c7e680c.
 
 ## Summary and scope
@@ -32,6 +32,8 @@ The fresh-store choice follows [ADR 0078's pre-GA policy](../../docs/adr/0078-wo
 ## Constitution Check
 
 Loaded framework v6.1.0, Elsa v6.4.0, both Gate indexes and the [review checklist](../../docs/contributing/review-checklist.md). The following is a plan assessment; no implementation checks are claimed. Recheck after concrete contract review and every implementation batch.
+
+Elsa declares no test cadence gate (the current constitution records the owner's D9 decision). This unit uses risk-based tests alongside implementation, with red/green regression witnesses where existing behavior changes. The absence of a prescribed greenfield cadence does not waive framework §2.23's required behavior/composition evidence and creates no inferred TDD or permission gate.
 
 | Gate | Assessment and required evidence |
 |---|---|
@@ -105,6 +107,6 @@ C01–C12 qualify this catalog unit only. They do not substitute for full A01–
 
 ## Post-design review and complexity
 
-Technical contract/data-model review must pass before task generation. Re-evaluate the Constitution Check with that result and record the reviewed commit. New findings that alter the approved boundary return to its owner; normal implementation choices and required follow-through do not create repeated permission gates.
+Independent security and architecture review of the contract/data-model changes at 6d8a45fe13c8db82b1767f6a53839ab2e03e26d8 is clean. The earlier ownership cycle and ambiguous foreign receipt-format claims were corrected in that commit. Rechecking the Constitution Check after those corrections finds no selected exception: reconciliation-visible contracts stay in Core, foreign receipt families keep their existing serialized shapes, and the accepted pre-GA fresh-store policy applies. Task generation may cover this catalog unit; implementation evidence and full-feature agreement remain outstanding. New findings that alter the approved boundary return to its owner; normal implementation choices and required follow-through do not create repeated permission gates.
 
 The added Disclosure feature is a real independently composable catalog boundary. A generic grant store, second catalog, signed admission-token platform, generic persistence upgrade system and data reset are excluded. No violation waiver is requested.
