@@ -65,3 +65,8 @@ US1: T006 → T007 → T008 → T009; T010 can proceed independently after T005.
 Parallel examples: US1 selection work (T006) and admission readers (T010) touch different files; US2 Runtime completion (T012) and delegated canonical consumer repair (T013) touch different owner files. US3 T015→T016 stays sequential because its recovery proof needs the terminal implementation. No [P] marker authorizes concurrent heavy phases or edits to another owner's worktree.
 
 **First reviewable increment**: US1 exact durable retention plus zero effects, with both actual SQLite topologies. It is an incremental proof, not full feature delivery. Acceptance requires US2, US3 and their whole/native/process gates as well. Total: 20 tasks; shared foundation/setup 5, US1 6, US2 3, US3 2, final cross-cutting 4.
+
+
+## S1 scoped source continuation (6 November)
+
+The owner-approved [S1 contract](contracts/enrollment-settlement-s1.md) adds the durable acceptance/abort mechanism within T005/T015/T016. The initial EF-specific seam, checked immutable barrier and owned-transaction source are a partial implementation; no native provider/frame, durable prelaunch producer, schema mapping or Publishing cleanup integration is qualified. Existing task states remain unchanged. Complete the five contract gates and real causal controls before advertising S1 capability or accepting the journey.

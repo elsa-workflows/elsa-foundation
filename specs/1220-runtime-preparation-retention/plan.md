@@ -99,3 +99,8 @@ Held HEAD remains fd0. Reconcile verified newer #3912 PublicationScope/model/com
 ## Complexity Tracking
 
 R2 revises the R1 header/member-in-ordinary-reference design because template-only retention cannot honestly supply required native definition/provenance fields. One typed metadata table avoids fake fields, member-source aliases and terminal anchor dependencies. Closure paging is intentionally simple; an indexed membership optimization requires separate evidence/review. No owner policy or new material store is introduced.
+
+
+## Owner-approved S1 source increment (6 November)
+
+The [enrollment settlement contract](contracts/enrollment-settlement-s1.md) amends T005/T015/T016 with the approved permanent acceptance/abort protocol. Implement the EF-specific native seam, internal Runtime owner-session invocation and checked barrier mechanics first, then integrate the actual supported producer/writers/schema and Publishing cooperation. Keep Core Complete/token/session unchanged. This source increment leaves all five native/integration gates explicit and does not complete those tasks or add a dependency to #3804. No adapter-registration or SQLite lifecycle choice is implied.
