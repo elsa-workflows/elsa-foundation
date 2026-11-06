@@ -3,6 +3,8 @@ from copy import deepcopy
 import importlib.util
 from pathlib import Path
 import tempfile
+import subprocess
+import tarfile
 import unittest
 
 SPEC = importlib.util.spec_from_file_location("dashboard_probe", Path(__file__).with_name("qualify.py"))
@@ -21,6 +23,24 @@ def complete():
 
 
 class EvidenceControls(unittest.TestCase):
+    def test_source_archive_uses_the_committed_configuration_filename_casing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "NuGet.config").write_text("<configuration />")
+            (root / "VersionLines.props").write_text("<Project />")
+            subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=Dashboard test", "-c", "user.email=dashboard@example.invalid",
+                            "commit", "-qm", "Owned source inputs"], cwd=root, check=True, capture_output=True)
+            paths = [path.relative_to(root).as_posix() for path in PROBE.root_input_files(root, "HEAD")]
+            self.assertEqual({"NuGet.config", "VersionLines.props"}, set(paths))
+            archive = root / "source.tar"
+            subprocess.run(["git", "archive", "--format=tar", "--output=" + str(archive), "HEAD", *paths],
+                           cwd=root, check=True, capture_output=True)
+            with tarfile.open(archive) as source:
+                self.assertEqual(set(paths), set(source.getnames()))
+                self.assertEqual(b"<configuration />", source.extractfile("NuGet.config").read())
+
     def test_complete_native_inventory_is_admitted(self):
         PROBE.validate_complete(complete())
 

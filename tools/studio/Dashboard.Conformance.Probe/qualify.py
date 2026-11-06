@@ -70,6 +70,14 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + "\n")
 
 
+def root_input_files(repository, revision):
+    # Git paths are case-sensitive even when the checkout filesystem is not.
+    wanted = {name.casefold() for name in ("global.json", "VersionLines.props", "PackageVersioning.props",
+              "PackageRanges.targets", "NuGet.config")}
+    names = subprocess.check_output(["git", "ls-tree", "--name-only", "-z", revision], cwd=repository).decode().split("\0")
+    return [repository / name for name in names if name.casefold() in wanted]
+
+
 def identity(path):
     with zipfile.ZipFile(path) as archive:
         specs = [entry for entry in archive.namelist() if entry.endswith(".nuspec")]
@@ -161,8 +169,7 @@ class Probe:
                 if ancestor == REPO.parent: break
                 for name in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", ".editorconfig"):
                     if (ancestor / name).is_file(): files.add(ancestor / name)
-        for name in ("global.json", "VersionLines.props", "PackageVersioning.props", "PackageRanges.targets", "NuGet.Config", "Nuget.Config", "nuget.config"):
-            if (REPO / name).is_file(): files.add(REPO / name)
+        files.update(root_input_files(REPO, self.source))
         inputs = {}
         for path in sorted(files):
             require(path.is_relative_to(REPO), "A source input escaped the checkout")
