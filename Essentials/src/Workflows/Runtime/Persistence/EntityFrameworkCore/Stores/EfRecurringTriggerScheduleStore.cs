@@ -473,7 +473,7 @@ public sealed partial class EfRecurringTriggerScheduleStore(
             return false;
         var row = held.Row;
         var originalRevision = row.Revision;
-        Copy(row, held.Schedule with { NextOccurrence = nextOccurrence }, held.Scope, checked(row.Revision + 1));
+        Copy(row, held.Schedule with { NextOccurrence = nextOccurrence, FailureReason = null }, held.Scope, checked(row.Revision + 1));
         row.ClaimOwnerId = null;
         (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
         (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
@@ -481,12 +481,27 @@ public sealed partial class EfRecurringTriggerScheduleStore(
         return await TryWriteAsync(row, originalRevision, cancellationToken);
     }
 
-    public async ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default)
+    public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
+        ReleaseClaimAsync(claim, visibleAt, null, cancellationToken);
+
+    public ValueTask<bool> ReleaseClaimWithFailureAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason failureReason, CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(failureReason)) throw new ArgumentOutOfRangeException(nameof(failureReason));
+        ArgumentNullException.ThrowIfNull(claim);
+        if (claim.Schedule.Resource is null) throw new ArgumentException("An admission failure reason requires a resource-owned schedule.", nameof(claim));
+        return ReleaseClaimAsync(claim, visibleAt, failureReason, cancellationToken);
+    }
+
+    private async ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason? failureReason, CancellationToken cancellationToken)
     {
         if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
             return false;
         var row = held.Row;
         var originalRevision = row.Revision;
+        if (held.Schedule.FailureReason != failureReason)
+            Copy(row, held.Schedule with { FailureReason = failureReason }, held.Scope, row.Revision);
         row.ClaimOwnerId = null;
         (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
         (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
@@ -762,6 +777,8 @@ public sealed partial class EfRecurringTriggerScheduleStore(
     private static void Validate(RecurringTriggerSchedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
+        if (schedule.FailureReason is { } reason && (schedule.Resource is null || !Enum.IsDefined(reason)))
+            throw new ArgumentException("A schedule admission failure requires a defined resource-owned reason.", nameof(schedule));
         ValidateScheduleId(schedule.ScheduleId, nameof(schedule.ScheduleId));
         if (schedule.Resource is { } owner)
         {

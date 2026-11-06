@@ -6,7 +6,7 @@ import { verifyEmbeddedHttpRouteConflicts, verifyHttpTimeoutAndDisconnect } from
 import { verifyHttpAdmissionAndQueueFaults, verifyHttpWriteFailure } from "./standaloneTriggerFaultCases";
 import { verifyConcurrentNodeClaims } from "./standaloneTriggerConcurrentCases";
 import { verifyUnreadableScheduleAdmission } from "./standaloneTriggerFaultCases";
-import type { DeliveryView, TriggerView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/types";
+import type { DeliveryView, SubscriptionView, TriggerView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/types";
 
 const journeys = new WeakMap<Page, TriggerJourney>();
 const browserErrors = new WeakMap<Page, string[]>();
@@ -62,6 +62,50 @@ async function editPolicy(journey: TriggerJourney, id: string, policy: "RequireA
   await journey.open(id); await journey.page.getByRole("button", { name: "Edit configuration", exact: true }).click();
   await journey.page.getByLabel("HTTP admission policy", { exact: true }).selectOption(policy);
   await journey.page.getByRole("button", { name: "Review changes", exact: true }).click(); await journey.review();
+}
+async function workflowHttpSummary(journey: TriggerJourney, definitionId: string, trigger: TriggerView,
+  expected: { mode: "AsyncFanOut"; admissionPolicy: "RequireAll" | "AcceptAvailable" } | { mode: "WorkflowResponse" }, capture: string) {
+  const query = new URLSearchParams({ definitionId, limit: "100" });
+  const associations = await journey.api<{ items: SubscriptionView[] }>(`/runtime/standalone-trigger-subscriptions?${query}`);
+  const association = associations.items.find(item => item.triggerId === trigger.id);
+  expect(association, "Workflow-direction API contains the actual shared HTTP association").toBeTruthy();
+  const summary = association!.triggerSummary?.http;
+  expect({ mode: summary?.mode, admissionPolicy: summary?.admissionPolicy ?? null }).toEqual({ mode: expected.mode,
+    admissionPolicy: expected.mode === "AsyncFanOut" ? expected.admissionPolicy : null });
+  expect(Object.keys(summary!).every(key => key === "mode" || key === "admissionPolicy"), "The workflow summary contains only safe mode/policy metadata").toBe(true);
+  await journey.page.goto(definitionPath(definitionId));
+  await journey.page.getByRole("tab", { name: "Triggers", exact: true }).click();
+  const row = journey.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row").filter({ hasText: trigger.name });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(expected.mode === "WorkflowResponse" ? "Workflow-owned response"
+    : expected.admissionPolicy === "AcceptAvailable" ? "Async · Accept available" : "Async · Require all");
+  await journey.capture(capture);
+}
+async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView, recipientId: string, kind: "native" | "bpmn", capture: string) {
+  const recipient = delivery.recipients.find(item => item.id === recipientId)!;
+  expect(recipient.executionReference, "An actual execution observation supplies the inspection link").toBeTruthy();
+  const executionId = recipient.executionReference!.id;
+  const studioPath = kind === "bpmn" ? `/workflows/bpmn/runs/${encodeURIComponent(executionId)}` : `/workflows/instances/${encodeURIComponent(executionId)}`;
+  const apiPath = kind === "bpmn" ? `/bpmn/executions/${encodeURIComponent(executionId)}/inspection` : `/runtime/workflows/instances/${encodeURIComponent(executionId)}`;
+  expect(recipient.executionReference!.inspectionPath).toBe(studioPath);
+  await journey.inspectDelivery(delivery, `${capture}-delivery-link`);
+  const link = journey.page.getByRole("region", { name: `Recipient ${recipientId}`, exact: true }).getByRole("link", { name: "Inspect actual run", exact: true });
+  await expect(link).toHaveAttribute("href", `${studioPath}?backend=legacy`);
+  const backendUrl = new URL(`${journey.base}${apiPath}`);
+  const inspectionResponse = journey.page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === "GET" && url.origin === backendUrl.origin && url.pathname === backendUrl.pathname;
+  });
+  await link.click();
+  await expect(journey.page).toHaveURL(url => url.pathname === studioPath && url.searchParams.getAll("backend").join() === "legacy");
+  const response = await inspectionResponse;
+  expect(response.ok(), `Actual selected backend inspected ${executionId}`).toBe(true);
+  const inspection = await response.json();
+  expect(kind === "bpmn" ? inspection.execution.executionId : inspection.instance.workflowExecutionId).toBe(executionId);
+  await expect(journey.page.getByRole("heading", { name: kind === "bpmn" ? "BPMN run" : "Run", exact: true })).toBeVisible();
+  journey.requests.push({ kind: "actual-delivery-inspection-link", backend: "legacy", backendUrl: response.url(), studioUrl: journey.page.url(), executionId,
+    sourceDeliveryId: delivery.id, recipientId, status: response.status() });
+  await journey.capture(capture);
 }
 
 test("standalone trigger management", async ({ page }) => {
@@ -178,6 +222,7 @@ test("standalone HTTP modes", async ({ page }) => {
   const http = await j.create("http", "Asynchronous fan out");
   for (const target of [healthy, unavailable]) await j.add(http.id, target.authored.definition.id, [source("message", ["metadata", "method"]), configured("count", 7)]);
   await j.enable(http.id); await j.capture("http-fanout-mode");
+  await workflowHttpSummary(j, healthy.authored.definition.id, http, { mode: "AsyncFanOut", admissionPolicy: "RequireAll" }, "workflow-http-require-all");
   const accepted = await j.sourceRequest(http, { actual: "source request" }, 202);
   expect(accepted.body.admission).toBe("Accepted"); expect(accepted.body.acceptedCount).toBe(2);
   const delivery = await j.waitDelivery(http.id, new Set(), 2); await inspectRuns(j, delivery, [{ message: "POST", count: 7 }, { message: "POST", count: 7 }]);
@@ -190,6 +235,7 @@ test("standalone HTTP modes", async ({ page }) => {
   expect(refused.body.recipients).toEqual(expect.arrayContaining([expect.objectContaining({ admission: "NotAcceptedDueToPolicy" })]));
   await j.open(http.id); await j.capture("http-policy-refused");
   await editPolicy(j, http.id, "AcceptAvailable");
+  await workflowHttpSummary(j, healthy.authored.definition.id, http, { mode: "AsyncFanOut", admissionPolicy: "AcceptAvailable" }, "workflow-http-accept-available");
   const partial = await j.sourceRequest(http, { actual: "AcceptAvailable identifies partial admission" }, 202);
   expect(partial.body).toMatchObject({ admission: "PartiallyAccepted", admissionPolicy: "AcceptAvailable", acceptedCount: 1, refusedCount: 1 });
   await j.inspectDelivery(await j.api(`/runtime/standalone-trigger-deliveries/${partial.body.deliveryId}`), "http-partially-admitted");
@@ -207,6 +253,7 @@ test("standalone HTTP modes", async ({ page }) => {
   const owner = await j.submit("HTTP response owner", responseState); await j.publish(owner);
   const sync = await j.create("http", "Workflow response", { mode: "WorkflowResponse" });
   await j.add(sync.id, owner.definition.id, [configured("message", "workflow response source"), configured("count", 7)]); await j.enable(sync.id); await j.capture("http-workflow-response-mode");
+  await workflowHttpSummary(j, owner.definition.id, sync, { mode: "WorkflowResponse" }, "workflow-http-workflow-response");
   const response = await j.sourceRequest(sync, { actual: "workflow owns response" }, 201); expect(response.body.text).toBe("Response from the actual subscribed workflow");
   const ambiguous = await j.submit("Second HTTP response owner", responseState); await j.publish(ambiguous);
   await j.open(sync.id); await page.getByRole("button", { name: "Add workflow", exact: true }).click();
@@ -214,7 +261,7 @@ test("standalone HTTP modes", async ({ page }) => {
   for (const [name, value] of [["message", "second owner"], ["count", "7"]]) { await page.getByLabel(`Value source for ${name}`, { exact: true }).selectOption("Literal"); await page.getByLabel(`Configured value for ${name}`, { exact: true }).fill(value); }
   await page.getByRole("checkbox", { name: "Enable this subscription", exact: true }).check(); await page.getByRole("checkbox", { name: "Authorize this shared trigger to invoke the workflow", exact: true }).check();
   await page.getByRole("button", { name: "Review subscription", exact: true }).click(); await expect(page.getByRole("button", { name: "Apply reviewed change", exact: true })).toBeDisabled(); await j.capture("http-response-owner-error");
-  j.observed.push("Actual HTTP requests exercised both explicit response modes", "RequireAll refused complete mixed cohort; AcceptAvailable returned explicit partial 202; zero accepted failed", "Client received exact workflow-owned status and body", "Successful response write observation remained separate from run completion", "Malformed JSON and conflicting standalone endpoint were refused");
+  j.observed.push("Actual HTTP requests exercised both explicit response modes", "Workflow Triggers tab and its association API exposed RequireAll, edited AcceptAvailable and WorkflowResponse summaries", "RequireAll refused complete mixed cohort; AcceptAvailable returned explicit partial 202; zero accepted failed", "Client received exact workflow-owned status and body", "Successful response write observation remained separate from run completion", "Malformed JSON and conflicting standalone endpoint were refused");
   await verifyEmbeddedHttpRouteConflicts(j, http, healthy.authored.definition.id);
   await verifyHttpTimeoutAndDisconnect(j);
   await verifyHttpAdmissionAndQueueFaults(j);
@@ -227,6 +274,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
   await j.add(event.id, target.authored.definition.id, [source("message", ["metadata", "eventName"]), configured("count", 7)]); await j.enable(event.id);
   await j.event(String(event.configuration.eventName)); const initial = await j.waitDelivery(event.id);
   await j.inspectDelivery(initial, "delivery-admission"); const started = await j.started(initial); await j.inspectDelivery(started, "delivery-subscriber-outcomes");
+  await inspectActualRun(j, started, started.recipients[0].id, "native", "delivery-native-inspect-actual-run");
   const captured = initial.recipients[0].capturedVersion; expect(captured).toBeTruthy();
   await replace(j, target.authored, target.state); const before = new Set((await j.deliveries(event.id)).map(item => item.id));
   await j.event(String(event.configuration.eventName)); const later = await j.waitDelivery(event.id, before);
@@ -269,13 +317,62 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
       recipients: [{ recipientId: sealed.id, expectedRevision: sealed.revision }] });
     expect(committedCancellation.effects).toEqual(expect.arrayContaining([expect.objectContaining({ recipientId: sealed.id, outcome: "DispatchCommitted" })]));
     held = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${held.id}`);
-    await j.inspectDelivery(held, "delivery-held-cohort");
-    const pendingFrame = page.getByRole("region", { name: `Recipient ${pending.id}`, exact: true }).locator("..");
-    await pendingFrame.getByRole("button", { name: "Cancel pending recipient", exact: true }).click();
-    const cancelled = await j.review("pending-cancel-review");
-    expect(cancelled.effects).toEqual(expect.arrayContaining([expect.objectContaining({ recipientId: pending.id, outcome: "Cancelled" })]));
-    await expect(page.getByRole("region", { name: `Recipient ${pending.id}`, exact: true })).toContainText("Cancelled"); await j.capture("pending-cancelled");
+    const acceptedTriggerRevision = held.acceptedTriggerRevision;
+    expect(acceptedTriggerRevision).toBeGreaterThan(0);
     await pause(j, recoveryHttp.id);
+    await j.open(recoveryHttp.id); await page.getByRole("button", { name: "Delete trigger", exact: true }).click();
+    const deletion = await j.review("delivery-resource-delete-review");
+    expect(deletion.revision).toBeGreaterThan(acceptedTriggerRevision!);
+    await expect(page.getByRole("heading", { name: "Triggers", exact: true })).toBeVisible();
+    // Deleted live resources are absent from ordinary reads; retained delivery controls have their own authorized context.
+    const livePath = `/runtime/standalone-triggers/${encodeURIComponent(recoveryHttp.id)}`;
+    const deleted = await page.request.get(`${j.base}${livePath}`);
+    expect(deleted.status()).toBe(404);
+    j.requests.push({ kind: "actual-deleted-trigger-live-read", path: livePath, status: deleted.status(), triggerRevision: deletion.revision });
+    const cleanupIndex = j.triggers.indexOf(recoveryHttp.id); expect(cleanupIndex).toBeGreaterThanOrEqual(0); j.triggers.splice(cleanupIndex, 1);
+    held = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${held.id}`);
+    expect(held.triggerRevision).toBe(deletion.revision);
+    expect(held.acceptedTriggerRevision).toBe(acceptedTriggerRevision);
+    expect(held.recipients.find(item => item.id === sealed.id)).toMatchObject({ dispatch: "DispatchCommitted", plannedExecutionIdentity: boundary.plannedExecutionId });
+    expect(held.recipients.find(item => item.id === pending.id)?.dispatch).toBe("NotDispatched");
+    const unexpectedLiveReads: string[] = [];
+    const observeLiveRead = (request: { method(): string; url(): string }) => {
+      if (request.method() === "GET" && new URL(request.url()).pathname === new URL(`${j.base}${livePath}`).pathname) unexpectedLiveReads.push(request.url());
+    };
+    page.on("request", observeLiveRead);
+    try {
+      await j.inspectDelivery(held, "delivery-held-cohort");
+      const pendingFrame = page.getByRole("region", { name: `Recipient ${pending.id}`, exact: true }).locator("..");
+      await expect(pendingFrame.getByRole("button", { name: "Cancel pending recipient", exact: true })).toBeEnabled();
+      await pendingFrame.getByRole("button", { name: "Cancel pending recipient", exact: true }).click();
+      await expect(page.getByText(`${held.triggerName} · Current resource revision ${deletion.revision}`, { exact: true })).toBeVisible();
+      const cancelReload = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/changes/preview"));
+      await page.getByRole("button", { name: "Reload and review current state", exact: true }).click();
+      expect((await cancelReload).ok()).toBe(true);
+      const cancelled = await j.review("pending-cancel-review");
+      expect(cancelled.revision).toBe(deletion.revision);
+      expect(cancelled.effects).toEqual(expect.arrayContaining([expect.objectContaining({ recipientId: pending.id, outcome: "Cancelled" })]));
+      await expect(page.getByRole("region", { name: `Recipient ${pending.id}`, exact: true })).toContainText("Cancelled"); await j.capture("pending-cancelled");
+      await expect(pendingFrame.getByRole("button", { name: "Cancel pending recipient", exact: true })).toBeDisabled();
+      await expect(pendingFrame.getByRole("button", { name: "Retry owed recipient", exact: true })).toBeDisabled();
+      const retryFrame = page.getByRole("region", { name: `Recipient ${sealed.id}`, exact: true }).locator("..");
+      await expect(retryFrame.getByRole("button", { name: "Cancel pending recipient", exact: true })).toBeDisabled();
+      await expect(retryFrame.getByRole("button", { name: "Retry owed recipient", exact: true })).toBeEnabled();
+      await retryFrame.getByRole("button", { name: "Retry owed recipient", exact: true }).click();
+      const retryReload = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/changes/preview"));
+      await page.getByRole("button", { name: "Reload and review current state", exact: true }).click();
+      expect((await retryReload).ok()).toBe(true);
+      const retried = await j.review("deleted-trigger-retry-review");
+      expect(retried.revision).toBe(deletion.revision);
+      expect(retried.effects).toEqual(expect.arrayContaining([expect.objectContaining({ recipientId: sealed.id, outcome: "AlreadyRequested" })]));
+      held = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${held.id}`);
+      expect(held.triggerRevision).toBe(deletion.revision);
+      expect(held.recipients.find(item => item.id === sealed.id)).toMatchObject({ dispatch: "DispatchCommitted", plannedExecutionIdentity: boundary.plannedExecutionId });
+      expect(held.recipients.find(item => item.id === sealed.id)!.executionReference).toBeFalsy();
+      expect(held.recipients.find(item => item.id === pending.id)?.dispatch).toBe("Cancelled");
+      expect(unexpectedLiveReads, "Opening and reloading deleted-resource controls use retained delivery authority").toEqual([]);
+      await j.capture("deleted-trigger-delivery-controls");
+    } finally { page.off("request", observeLiveRead); }
     const replacementState = structuredClone(sealedTarget.state);
     (replacementState.rootActivity.structure!.payload.activities as { inputs: unknown[] }[])[0].inputs = [literal("name", "message"), literal("value", "replacement version two")];
     const replacement = await replace(j, sealedTarget.authored, replacementState);
@@ -323,7 +420,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     expect(peer.bootId).not.toBe(boundary.bootId); expect(peer.capturedTarget).toEqual(boundary.capturedTarget); expect(peer.acceptanceReceipt).toBeTruthy();
     expect(peer.claimOwnerId).not.toBe(boundary.claimOwnerId); expect(peer.claimFencingToken).toBeGreaterThan(boundary.claimFencingToken!);
     await j.inspectDelivery(recovered, "delivery-recovered");
-    j.observed.push("A real HTTP 202 durably accepted two native roots; the acceptance-only decorator verified the physical DispatchCommitted seal before enqueue", "Normal UI review cancelled only the unsealed recipient; a normal attempted committed cancellation returned DispatchCommitted, with no run link before actual target acceptance", "Pause, serving-slot replacement and unpublication preserved the captured original material and mapped inputs", "SIGKILL of owned process A followed by a distinct boot/node B over the same stores recovered after a full natural lease interval; original artifact, execution identity, one inspected root and checkpoint identities were retained; cancelled root remained absent");
+    j.observed.push("A real HTTP 202 durably accepted two native roots; the acceptance-only decorator verified the physical DispatchCommitted seal before enqueue", "UI deletion hid the live trigger while retained delivery reads carried current resource revision; opening/reloading Cancel and Retry reviews made no live trigger GET", "Normal UI review cancelled only the unsealed recipient after deletion; retry of the live claimed sealed recipient truthfully returned AlreadyRequested without changing the resource revision or inventing execution", "A normal attempted committed cancellation returned DispatchCommitted, with no run link before actual target acceptance", "Native Inspect actual run clicked through the selected backend to the exact actual execution", "Pause, deletion, serving-slot replacement and unpublication preserved the captured original material and mapped inputs", "SIGKILL of owned process A followed by a distinct boot/node B over the same stores recovered after a full natural lease interval; original artifact, execution identity, one inspected root and checkpoint identities were retained; cancelled root remained absent");
   } finally {
     if (recoveryPromise) await recoveryPromise;
     await j.host("restore-features");
@@ -376,10 +473,10 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   let inspection: { execution: { status: string }; attempts: { workerExecutionId: string; status: string }[] } | undefined;
   await expect.poll(async () => { inspection = await j.api(`/bpmn/executions/${executionId}/inspection`); return inspection!.attempts.length; }, { timeout: 45_000 }).toBe(1);
   await j.outputs(inspection!.attempts[0].workerExecutionId, { message: event.configuration.eventName, count: 7 });
-  await page.goto(`/workflows/bpmn/runs/${executionId}?backend=legacy`); await expect(page.getByRole("heading", { name: "BPMN run", exact: true })).toBeVisible(); await j.capture("bpmn-declared-input-run");
+  await inspectActualRun(j, delivery, recipient.id, "bpmn", "bpmn-declared-input-run");
   await expect.poll(async () => (await j.api<{ execution: { status: string } }>(`/bpmn/executions/${executionId}/inspection`)).execution.status, { timeout: 45_000 }).toBe("TerminalSettled");
   await page.reload(); await j.capture("bpmn-worker-input-consumed");
-  j.observed.push("Actual changed service-worker editor authored model-input and literal mappings", "Cancel returned focus; missing required mappings rejected", "Saved mappings survived editor reload", "Real authored direct BPMN publication started through standalone Event, worker consumed declared inputs, ordinary model continuation settled");
+  j.observed.push("Actual changed service-worker editor authored model-input and literal mappings", "Cancel returned focus; missing required mappings rejected", "Saved mappings survived editor reload", "Genuine BPMN delivery Inspect actual run clicked to the exact model run on the selected backend and loaded that backend's actual inspection", "Real authored direct BPMN publication started through standalone Event, worker consumed declared inputs, ordinary model continuation settled");
 });
 
 test("standalone access and availability", async ({ page, browser }) => {

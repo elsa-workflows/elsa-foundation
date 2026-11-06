@@ -42,12 +42,22 @@ public sealed class StandaloneRecurringPumpTests
 
         await pump.ExecuteAsync(default);
         Assert.Equal(schedule.NextOccurrence, (await store.FindAsync(schedule.ScheduleId))!.NextOccurrence);
+        var failed = (await store.ObserveAsync(schedule.ScheduleId))!;
+        Assert.Equal(unknown ? RecurringTriggerScheduleFailureReason.AdmissionUnavailable : RecurringTriggerScheduleFailureReason.NoEligibleSubscribers,
+            failed.FailureReason);
+        Assert.Equal(1, failed.FailureCount);
+        Assert.Equal(Now.AddSeconds(10), failed.RetryAt);
+        Assert.Equal(schedule.Resource, failed.Schedule.Resource);
+        Assert.Equal(schedule.BuildOccurrenceKey(), failed.Schedule.BuildOccurrenceKey());
         await pump.ExecuteAsync(default); Assert.Single(keys);
         clock.Advance(TimeSpan.FromSeconds(10));
         await pump.ExecuteAsync(default);
 
         Assert.Equal(2, keys.Count); Assert.Equal(keys[0], keys[1]);
         Assert.Equal(clock.GetUtcNow().AddMinutes(5), (await store.FindAsync(schedule.ScheduleId))!.NextOccurrence);
+        var recovered = (await store.ObserveAsync(schedule.ScheduleId))!;
+        Assert.Null(recovered.FailureReason); Assert.Null(recovered.Schedule.FailureReason);
+        Assert.Equal(0, recovered.FailureCount); Assert.Null(recovered.RetryAt);
         await pump.ExecuteAsync(default); Assert.Equal(2, keys.Count);
     }
 

@@ -12,7 +12,7 @@ internal sealed record TriggerTransportView(string State, int? StatusCode = null
 internal sealed record TriggerDeliveryView(string Id, long Revision, string TriggerId, string TriggerName,
     long? AcceptedTriggerRevision, string? SourceOccurrenceId, string Admission, string? AdmissionPolicy,
     int AcceptedCount, int RefusedCount, DateTimeOffset RecordedAt, DateTimeOffset? AcceptedAt,
-    IReadOnlyList<TriggerRecipientView> Recipients, IReadOnlyList<TriggerFinding> Findings, TriggerTransportView Transport);
+    IReadOnlyList<TriggerRecipientView> Recipients, IReadOnlyList<TriggerFinding> Findings, TriggerTransportView Transport, long TriggerRevision);
 internal sealed record TriggerDeliveryPreviewProof(string Actor, TriggerScope Scope, string TriggerId, long TriggerRevision,
     string SourceId, string SourceFingerprint, string SelectionFingerprint, string CommandFingerprint,
     long DeliveryRevision, IReadOnlyList<RuntimeIngressRecipientExpectation> Recipients, DateTimeOffset ExpiresAt);

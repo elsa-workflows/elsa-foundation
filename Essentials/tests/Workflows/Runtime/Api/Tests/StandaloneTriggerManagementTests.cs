@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
-public sealed class StandaloneTriggerManagementTests
+public sealed partial class StandaloneTriggerManagementTests
 {
     [Fact]
     public async Task Target_changed_during_prepare_refuses_the_reviewed_change_before_calling_the_committer()

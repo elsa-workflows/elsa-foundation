@@ -23,6 +23,8 @@ internal sealed partial class TriggerManagement
             var proposed = await PrepareAsync(aggregate, command, ct);
             impact.Add(new("Trigger state", aggregate.Trigger.DesiredState.ToString(), proposed.Trigger.DesiredState.ToString()));
             impact.Add(new("Associations", aggregate.Subscriptions.Count.ToString(), proposed.Subscriptions.Count.ToString()));
+            AddConfigurationImpact(aggregate.Trigger, proposed.Trigger, impact);
+            AddGrantImpact(aggregate, proposed, impact);
             foreach (var row in aggregate.Subscriptions.Concat(proposed.Subscriptions).DistinctBy(row => row.Id))
             {
                 impact.Add(await CanReadTargetAsync(row.DefinitionId, row.SlotName, ct)
@@ -90,8 +92,8 @@ internal sealed partial class TriggerManagement
             if (Fingerprint(configuration) != Fingerprint(trigger.Configuration))
             {
                 configurationRevision++;
-                rows = rows.Select(row => CopySubscription(row, grant: Revoke(row.Grant), replaceGrant: true)).ToList();
-                associationRevision++;
+                // Grants scope the immutable source type, target and mappings, not configuration revisions.
+                // Those scopes are unchanged here; explicit revocation and subscription edits own grant changes.
             }
         }
         else if (kind is "AddSubscription" or "SaveSubscription")
@@ -183,6 +185,86 @@ internal sealed partial class TriggerManagement
         await ValidateReservationChangeAsync(aggregate, result, ct);
         return result;
     }
+
+    private void AddConfigurationImpact(StandaloneTrigger current, StandaloneTrigger proposed, List<TriggerImpact> impact)
+    {
+        if (current.Name != proposed.Name) impact.Add(new("Name", current.Name, proposed.Name));
+        if (current.Description != proposed.Description) impact.Add(new("Description", current.Description, proposed.Description));
+        if (current.ConfigurationRevision == proposed.ConfigurationRevision) return;
+        var descriptor = types.Find(current.TypeKey);
+        var fields = (descriptor?.ConfigurationFields ?? []).GroupBy(field => field.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        if (current.TypeKey == "http")
+        {
+            fields.TryAdd("http.mode", new("http.mode", "HTTP response mode"));
+            fields.TryAdd("http.admissionPolicy", new("http.admissionPolicy", "HTTP admission policy"));
+        }
+        foreach (var field in fields.Values)
+        {
+            var before = ConfigurationValue(current.Configuration, field.Key);
+            var after = ConfigurationValue(proposed.Configuration, field.Key);
+            if (SameConfigurationValue(before, after)) continue;
+            var sensitive = fields.Values.Any(candidate => candidate.Sensitive &&
+                (candidate.Key == field.Key || field.Key.StartsWith(candidate.Key + ".", StringComparison.Ordinal)));
+            impact.Add(new(field.Label, ConfigurationValueText(before, sensitive), ConfigurationValueText(after, sensitive)));
+        }
+        var declared = fields.Keys.Select(key => key.Split('.')[0]).ToHashSet(StringComparer.Ordinal);
+        if (current.Configuration.EnumerateObject().Concat(proposed.Configuration.EnumerateObject())
+            .Select(property => property.Name).Distinct(StringComparer.Ordinal).Any(key => !declared.Contains(key) &&
+                !SameConfigurationValue(ConfigurationValue(current.Configuration, key), ConfigurationValue(proposed.Configuration, key))))
+            impact.Add(new("Other configuration", Description: "Additional configuration values changed; values without declared display metadata are not included in this preview."));
+        if (descriptor?.Family is "Timer" or "Cron")
+            impact.Add(new("Next firing", Description: proposed.DesiredState == TriggerDesiredState.Enabled
+                ? "The source recomputes the next firing when this reviewed change commits. Preview does not reserve a firing time."
+                : "The paused schedule retains its saved cursor. The source computes the next firing when enabled."));
+    }
+
+    private static JsonElement? ConfigurationValue(JsonElement configuration, string key)
+    {
+        if (configuration.TryGetProperty(key, out var direct)) return direct;
+        var value = configuration;
+        foreach (var segment in key.Split('.'))
+        {
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out var child)) return null;
+            value = child;
+        }
+        return value;
+    }
+
+    private static bool SameConfigurationValue(JsonElement? before, JsonElement? after) =>
+        before is { } value ? after is { } other && JsonElement.DeepEquals(value, other) : after is null;
+
+    private static string ConfigurationValueText(JsonElement? value, bool sensitive) => value is not { } configured
+        ? "Not configured" : sensitive ? "[Protected]" : configured.ValueKind switch
+        {
+            JsonValueKind.String => configured.GetString()!,
+            JsonValueKind.Object or JsonValueKind.Array => "[Structured value]",
+            _ => configured.GetRawText()
+        };
+
+    private static void AddGrantImpact(TriggerAggregate current, TriggerAggregate proposed, List<TriggerImpact> impact)
+    {
+        var retained = 0; var granted = 0; var revoked = 0; var cleared = 0; var removed = 0;
+        foreach (var id in current.Subscriptions.Concat(proposed.Subscriptions).Select(row => row.Id).Distinct(StringComparer.Ordinal))
+        {
+            var old = current.Subscriptions.SingleOrDefault(row => row.Id == id);
+            var next = proposed.Subscriptions.SingleOrDefault(row => row.Id == id);
+            if (old?.Grant is null && next?.Grant is null) continue;
+            if (next is null) removed++;
+            else if (Fingerprint(old?.Grant) == Fingerprint(next.Grant)) retained++;
+            else if (next.Grant is null) cleared++;
+            else if (next.Grant.Status == TriggerGrantStatus.Revoked) revoked++;
+            else granted++;
+        }
+        impact.Add(new("Invocation grants", GrantSummary(current), GrantSummary(proposed),
+            $"Retained: {retained}; granted or replaced: {granted}; revoked: {revoked}; cleared: {cleared}; removed with association: {removed}. " +
+            "Changes apply to fresh admissions. Accepted work keeps its captured authority."));
+    }
+
+    private static string GrantSummary(TriggerAggregate aggregate) =>
+        $"{aggregate.Subscriptions.Count(row => row.Grant?.Status == TriggerGrantStatus.Granted)} granted, " +
+        $"{aggregate.Subscriptions.Count(row => row.Grant?.Status == TriggerGrantStatus.Revoked)} revoked, " +
+        $"{aggregate.Subscriptions.Count(row => row.Grant is null)} without a grant";
 
     private async ValueTask AuthorizeCommandAsync(StandaloneTrigger trigger, JsonElement command, CancellationToken ct)
     {

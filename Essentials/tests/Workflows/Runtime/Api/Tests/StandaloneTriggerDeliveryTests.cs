@@ -54,6 +54,7 @@ public sealed class StandaloneTriggerDeliveryTests
         var fixture = new Fixture();
         fixture.Store.Rows["trigger-a"] = fixture.Store.Rows["trigger-a"] with { Trigger = Resource("trigger-a", 1, TriggerDesiredState.Deleted) };
         var view = await fixture.Operations.ReadAsync(TriggerDeliveryOperations.EncodeId(fixture.Port.Item.OutboxItemId, "trigger-a"), default);
+        Assert.Equal(1, view.TriggerRevision);
         var command = Command(view, "RetryRecipients", "recipient-a");
         var preview = await fixture.Management.PreviewAsync("trigger-a", Element(new { expectedRevision = 1, command }), default);
         var request = Element(new { requestId = "retry-once", expectedRevision = 1, command, previewId = preview.PreviewId });
@@ -65,6 +66,9 @@ public sealed class StandaloneTriggerDeliveryTests
         Assert.Equal(1, fixture.Store.Rows["trigger-a"].Trigger.Revision); Assert.Equal(0, fixture.Store.Writes);
         fixture.Clock.Now = fixture.Clock.Now.AddHours(1);
         fixture.Store.Rows["trigger-a"] = fixture.Store.Rows["trigger-a"] with { Trigger = Resource("trigger-a", 2, TriggerDesiredState.Deleted) };
+        var refreshed = await fixture.Operations.ReadAsync(view.Id, default);
+        Assert.Equal(2, refreshed.TriggerRevision);
+        Assert.Equal(1, refreshed.AcceptedTriggerRevision);
         var replay = await fixture.Management.ApplyAsync("trigger-a", request, default);
         Assert.Equal("AlreadyApplied", replay.Disposition); Assert.Equal(first.Revision, replay.Revision);
         Assert.Single(fixture.Port.Item.SubscriptionDelivery!.ControlFacts!.Receipts);

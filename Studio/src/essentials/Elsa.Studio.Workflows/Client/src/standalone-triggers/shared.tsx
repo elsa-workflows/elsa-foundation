@@ -13,6 +13,10 @@ export function actionReason(actions: readonly ActionAvailability[], action: str
 export function status(error: unknown) { return error instanceof StudioHttpError ? error.status : typeof error === "object" && error !== null && "status" in error ? Number(error.status) : undefined; }
 export function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The request could not be completed. Try again."; }
 export function Findings({ items }: { items?: readonly Finding[] }) { return items?.length ? <ul className="wf-trigger-findings">{items.map((item, index) => <li key={`${item.code}:${item.inputName ?? item.field ?? index}`}>{item.inputName ? <strong>{item.inputName}: </strong> : null}{item.message}</li>)}</ul> : null; }
+export function ScheduleFailure({ reason }: { reason?: string | null }) {
+  return reason === "NoEligibleSubscribers" ? <p>Waiting for eligible subscribers. The due occurrence is retained and will be retried.</p>
+    : reason === "AdmissionUnavailable" ? <p>Schedule admission is unavailable. The due occurrence is retained for retry.</p> : null;
+}
 export function RequestError({ error, retry, title = "Could not load triggers" }: { error: unknown; retry?(): void; title?: string }) {
   const denied = status(error) === 401 || status(error) === 403;
   return <StudioResultState tone={denied || error instanceof TriggerCapabilityError ? undefined : "danger"} title={denied ? "Trigger access unavailable" : error instanceof TriggerCapabilityError ? "Standalone triggers unavailable" : title}

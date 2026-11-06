@@ -148,12 +148,21 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   await j.enable(timer.id); const armed = await j.read(timer.id);
   await Promise.all(targets.map(target => j.api(`/publishing/workflows/${target.authored.definition.id}/slots/default`, "DELETE")));
   let overdue: TriggerView | undefined;
-  await expect.poll(async () => { overdue = await j.read(timer.id); return overdue.schedule?.isOverdue && (overdue.schedule?.failureCount ?? 0) > 0; }, { timeout: 45_000 }).toBe(true);
+  await expect.poll(async () => { overdue = await j.read(timer.id); return overdue.schedule?.isOverdue && (overdue.schedule?.failureCount ?? 0) > 0 && overdue.schedule?.failureReason === "NoEligibleSubscribers"; }, { timeout: 45_000 }).toBe(true);
+  const waitingReason = overdue!.findings.find(finding => finding.code === "ScheduleNoEligibleSubscribers");
+  const waitingMessage = "Waiting for eligible subscribers. The due occurrence is retained and will be retried.";
+  expect(waitingReason).toMatchObject({ code: "ScheduleNoEligibleSubscribers", message: waitingMessage });
+  expect(overdue!.findings.some(finding => finding.code === "ScheduleAdmissionUnavailable")).toBe(false);
   expect(overdue!.schedule?.nextDueUtc).toBe(armed.schedule?.nextDueUtc); expect(overdue!.schedule?.generation).toBe(armed.schedule?.generation);
   expect(overdue!.schedule?.nextRetryAt).toBeTruthy(); expect(Date.parse(overdue!.schedule!.nextRetryAt!)).toBeGreaterThan(Date.parse(armed.schedule!.nextDueUtc!));
   expect((await j.deliveries(timer.id)).filter(item => item.acceptedCount > 0)).toEqual([]);
-  await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText(/overdue|retained|retry/i);
-  j.requests.push({ kind: "actual-schedule-zero-eligibility-retains-one-overdue-cursor-with-backoff", triggerId: timer.id, armed: armed.schedule, observed: overdue!.schedule, acceptedDeliveryCount: 0 });
+  await j.page.reload();
+  const waitingSchedule = j.page.getByRole("region", { name: "Schedule", exact: true });
+  await expect(waitingSchedule).toContainText(/overdue|retained|retry/i);
+  await expect(waitingSchedule).toContainText(waitingMessage);
+  await expect(waitingSchedule).not.toContainText("Schedule admission is unavailable.");
+  await j.capture("schedule-no-eligible-subscribers");
+  j.requests.push({ kind: "actual-schedule-zero-eligibility-retains-one-overdue-cursor-with-backoff", triggerId: timer.id, armed: armed.schedule, observed: overdue!.schedule, finding: waitingReason, acceptedDeliveryCount: 0 });
   await j.api(`/publishing/workflows/${targets[0].authored.definition.id}/slots/default/restore`, "POST", {});
   const partial = await j.waitDelivery(timer.id);
   expect(partial).toMatchObject({ admission: "PartiallyAccepted", admissionPolicy: "Independent", acceptedCount: 1, refusedCount: 1 });
@@ -171,7 +180,7 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   expect(repaired.recipients.map(item => item.id)).toEqual(started.recipients.map(item => item.id));
   await j.open(timer.id); await j.page.reload(); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText("Paused");
   j.requests.push({ kind: "actual-old-due-consumed-then-one-future-cursor-and-frozen-independent-refusals", triggerId: timer.id, originalDueUtc: armed.schedule!.nextDueUtc, futureDueUtc: future.schedule!.nextDueUtc, original: started, afterTargetRepair: repaired });
-  j.observed.push("Actual Cron UI changed timezone and expression into a persisted future schedule generation", "With both serving targets unpublished, a real due timer retained one overdue cursor with failed-attempt backoff and no accepted delivery", "Restoring one target consumed the original due-time input and advanced to one future cursor; restoring the other after pause did not add a recipient to the already partially accepted Independent cohort");
+  j.observed.push("Actual Cron UI changed timezone and expression into a persisted future schedule generation", "With both serving targets unpublished, a real due timer retained one overdue cursor with failed-attempt backoff and no accepted delivery; API and Schedule UI explicitly reported waiting for eligible subscribers rather than admission unavailability", "Restoring one target consumed the original due-time input and advanced to one future cursor; restoring the other after pause did not add a recipient to the already partially accepted Independent cohort");
 }
 
 export async function verifyBpmnInputRefusals(j: TriggerJourney, authored: Authored, validVersionId: string, validState: WorkflowState) {

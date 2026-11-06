@@ -151,6 +151,13 @@ public interface IRecurringTriggerScheduleStore
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Releases the same fenced resource occurrence with a safe admission reason. Legacy providers retain an unknown reason.</summary>
+    ValueTask<bool> ReleaseClaimWithFailureAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason failureReason,
+        CancellationToken cancellationToken = default) => ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+
     /// <summary>Deletes every schedule owned by an artifact. Deleting for an unknown artifact is a no-op.</summary>
     ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
 

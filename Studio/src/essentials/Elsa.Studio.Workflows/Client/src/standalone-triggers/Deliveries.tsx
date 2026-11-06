@@ -23,6 +23,7 @@ export function safeExecutionPath(path: string | undefined, backendId?: string) 
   try {
     const url = new URL(path, window.location.origin);
     if (url.origin !== window.location.origin || !/^\/workflows\/(?:instances|bpmn\/runs)\//.test(url.pathname) || url.searchParams.has("backend") && url.searchParams.get("backend") !== backendId) return null;
+    if (backendId) url.searchParams.set("backend", backendId);
     return url.pathname + url.search + url.hash;
   } catch { return null; }
 }
@@ -40,15 +41,13 @@ export function RecipientEvidence({ recipient, backendId }: { recipient: Recipie
 
 export function DeliveryDetails({ api, client, deliveryId, navigate }: { api: ElsaStudioModuleApi; client: TriggerClient; deliveryId: string; navigate(path: string): void }) {
   const [generation, setGeneration] = useState(0);
-  const [review, setReview] = useState<{ trigger: TriggerView; command: TriggerCommand }>();
-  const [error, setError] = useState<unknown>();
+  const [review, setReview] = useState<{ trigger: Pick<TriggerView, "id" | "name" | "revision">; command: TriggerCommand }>();
   const { result, reload } = useTriggerLoad(signal => client.delivery(deliveryId, signal), `${deliveryId}:${generation}`);
-  async function control(delivery: DeliveryView, recipient: RecipientView, kind: "RetryRecipients" | "CancelPendingRecipients") {
-    try { const trigger = await client.read(delivery.triggerId); setReview({ trigger, command: { kind, deliveryId: delivery.id, expectedDeliveryRevision: delivery.revision, recipients: [{ recipientId: recipient.id, expectedRevision: recipient.revision }] } }); }
-    catch (caught) { setError(caught); }
+  function control(delivery: DeliveryView, recipient: RecipientView, kind: "RetryRecipients" | "CancelPendingRecipients") {
+    const trigger = { id: delivery.triggerId, name: delivery.triggerName || delivery.triggerId, revision: delivery.triggerRevision };
+    setReview({ trigger, command: { kind, deliveryId: delivery.id, expectedDeliveryRevision: delivery.revision, recipients: [{ recipientId: recipient.id, expectedRevision: recipient.revision }] } });
   }
   return <StudioPage className="wf-trigger-page" aria-label="Trigger delivery details"><StudioPageHeader title="Trigger delivery" description="Acceptance, dispatch, execution and transport are separate outcomes." actions={<><StudioButton onClick={() => navigate(result.state === "loaded" ? triggerPath(result.value.triggerId) : "/workflows/triggers")}>Back to trigger</StudioButton><StudioButton onClick={reload}>Refresh</StudioButton></>} />
-    {error ? <RequestError error={error} title="Could not prepare delivery control" retry={() => setError(undefined)} /> : null}
     {review ? <ChangeReview api={api} client={client} trigger={review.trigger} command={review.command} onCancel={() => setReview(undefined)} onApplied={() => { setReview(undefined); setGeneration(value => value + 1); }} /> : result.state === "loading" ? <Loading label="Loading trigger delivery" /> : result.state === "error" ? <RequestError error={result.error} title="Delivery evidence unavailable" retry={reload} /> : <>
       <CopyableIdentifier label="Delivery ID" value={result.value.id} />
       <dl className="wf-trigger-facts"><dt>Admission</dt><dd>{label(result.value.admission)} · {result.value.acceptedCount} accepted / {result.value.refusedCount} refused</dd><dt>Admission policy</dt><dd>{result.value.admissionPolicy ? label(result.value.admissionPolicy) : "Not applicable"}</dd><dt>Accepted trigger revision</dt><dd>{result.value.acceptedTriggerRevision ?? "Not accepted"}</dd><dt>Accepted at</dt><dd>{result.value.acceptedAt || "Not accepted"}</dd><dt>HTTP transport</dt><dd>{result.value.transport ? label(result.value.transport.state) : "Not recorded"}{result.value.transport?.statusCode ? ` · ${result.value.transport.statusCode}` : ""}</dd></dl>

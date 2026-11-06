@@ -6,12 +6,12 @@ import { StudioHttpError, type ElsaStudioModuleApi, type StudioEndpointContext, 
 import { triggerClient, type TriggerClient } from "../api";
 import { ChangeReview } from "../ChangeReview";
 import { ConfigurationForm } from "../ConfigurationForm";
-import { RecipientEvidence } from "../Deliveries";
+import { DeliveryDetails, RecipientEvidence } from "../Deliveries";
 import { mappingDrafts, realizeMappings } from "../MappingEditor";
 import { parseLiteralJson, parseTriggerResponse, serializeTriggerPayload } from "../json";
 import { SubscriptionsSection } from "../Subscriptions";
 import { TriggersRoute } from "../TriggersRoute";
-import type { ActorView, ChangePreview, InputMapping, RecipientView, SubscriptionView, TriggerTypeDescriptor, TriggerView } from "../types";
+import type { ActorView, ChangePreview, DeliveryView, InputMapping, RecipientView, SubscriptionView, TriggerTypeDescriptor, TriggerView } from "../types";
 
 const discovery = vi.hoisted(() => ({ document: { capabilities: [] as { id: string; contractVersion: string; links: { rel: string; href: string; templated?: boolean }[] }[] } }));
 vi.mock("@elsa-workflows/studio-sdk", async importOriginal => ({ ...await importOriginal<typeof import("@elsa-workflows/studio-sdk")>(), getBackendCapabilities: vi.fn(async () => discovery.document) }));
@@ -175,6 +175,28 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     expect(container.textContent).toContain("independently of this draft or historical graph");
     expect(client.subscriptions).toHaveBeenLastCalledWith({ definitionId: "reconcile", after: undefined }, expect.any(AbortSignal));
   });
+  it("reviews and reloads retained delivery controls using its current resource revision after deletion", async () => {
+    const recipient: RecipientView = { id: "recipient-1", revision: 2, admission: "Accepted", dispatch: "NotDispatched", findings: [], actions: [{ action: "CancelPendingRecipients", allowed: true }] };
+    const retained: DeliveryView = { id: "delivery-1", revision: 4, triggerId: "trigger-1", triggerName: "Deleted resource", triggerRevision: 7,
+      acceptedTriggerRevision: 2, admission: "Accepted", acceptedCount: 1, refusedCount: 0, recipients: [recipient], findings: [] };
+    const current = { ...retained, triggerRevision: 8, revision: 5, recipients: [{ ...recipient, revision: 3 }] };
+    const client = { delivery: vi.fn().mockResolvedValueOnce(retained).mockResolvedValue(current),
+      read: vi.fn(async () => { throw new StudioHttpError(404, "Resource deleted"); }), preview: vi.fn(async () => preview),
+      apply: vi.fn(async () => ({ requestId: "cancel", disposition: "Applied", revision: 8 })) } as unknown as TriggerClient;
+    const { container } = mount(<DeliveryDetails api={apiStub()} client={client} deliveryId="delivery-1" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(button(container, "Cancel pending recipient")?.disabled).toBe(false));
+    flushSync(() => button(container, "Cancel pending recipient").click());
+    await vi.waitFor(() => expect(client.preview).toHaveBeenCalledWith("trigger-1", 7,
+      { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 4, recipients: [{ recipientId: "recipient-1", expectedRevision: 2 }] }, expect.any(AbortSignal)));
+    flushSync(() => button(container, "Reload and review current state").click());
+    await vi.waitFor(() => expect(client.preview).toHaveBeenLastCalledWith("trigger-1", 8,
+      { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 5, recipients: [{ recipientId: "recipient-1", expectedRevision: 3 }] }, expect.any(AbortSignal)));
+    await vi.waitFor(() => expect(button(container, "Apply reviewed change")?.disabled).toBe(false));
+    flushSync(() => button(container, "Apply reviewed change").click());
+    await vi.waitFor(() => expect(client.apply).toHaveBeenCalledWith("trigger-1", 8,
+      { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 5, recipients: [{ recipientId: "recipient-1", expectedRevision: 3 }] }, "preview-1", expect.any(String)));
+    expect(client.read).not.toHaveBeenCalled();
+  });
   it("does not invent an actual-run link from a committed dispatch or planned identity", () => {
     const recipient: RecipientView = { id: "recipient-1", revision: 1, admission: "Accepted", dispatch: "DispatchCommitted", plannedExecutionIdentity: "planned-run", findings: [], actions: [] };
     const { container, render } = mount(<RecipientEvidence recipient={recipient} backendId="selected" />);
@@ -182,6 +204,7 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     expect(container.querySelector("a")).toBeNull();
     render(<RecipientEvidence recipient={{ ...recipient, executionReference: { id: "actual-run", kind: "Native", status: "Running", inspectionPath: "/workflows/instances/actual-run" } }} backendId="selected" />);
     expect(container.querySelector("a")?.textContent).toBe("Inspect actual run");
+    expect(container.querySelector("a")?.getAttribute("href")).toContain("backend=selected");
     render(<RecipientEvidence recipient={{ ...recipient, executionReference: { id: "actual-run", kind: "Native", inspectionPath: "/workflows/instances/actual-run?backend=foreign" } }} backendId="selected" />);
     expect(container.querySelector("a")).toBeNull();
   });

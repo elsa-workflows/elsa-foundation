@@ -11,7 +11,7 @@ internal sealed record TriggerActor(string SubjectId, bool CanRead, bool CanMana
 internal sealed record TriggerHttpView(string Mode, string? AdmissionPolicy, string ReservationState, string? ProposedEndpoint, string? ReservedEndpoint = null);
 internal sealed record TriggerScheduleView(long Generation, string Timezone, DateTimeOffset NextDueUtc, string? Offset,
     string MissedPolicy, string PausePolicy, bool IsActive, bool IsOverdue, int? FailureCount = null,
-    DateTimeOffset? NextRetryAt = null, bool? OccurrenceInFlight = null);
+    DateTimeOffset? NextRetryAt = null, bool? OccurrenceInFlight = null, string? FailureReason = null);
 internal sealed record TriggerView(string Id, string Name, string? Description, string TypeKey, string SchemaVersion,
     long Revision, JsonElement Configuration, TriggerManagementOrigin Origin, string DesiredState, string EffectiveState,
     int SubscriptionCount, int EligibleSubscriptionCount, IReadOnlyList<TriggerFinding> Findings,

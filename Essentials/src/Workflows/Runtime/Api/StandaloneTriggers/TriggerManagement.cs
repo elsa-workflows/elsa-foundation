@@ -198,7 +198,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                 [new("SaveSubscription", false, "TargetDetailsRestricted"), new("RemoveSubscription", manageHidden && stoppable && !subscription.Origin.ConfigurationReadOnly),
                  new("EnableSubscription", operateHidden && committer.CanActivateType(trigger.TypeKey, trigger.SchemaVersion) && await IsEligibleAsync(subscription, ct)), new("PauseSubscription", operateHidden && stoppable),
                  new("GrantInvocation", false, "TargetDetailsRestricted"), new("RevokeInvocation", authorizeHidden && stoppable && !subscription.Origin.ConfigurationReadOnly)],
-                new { trigger.Name, effectiveState = trigger.DesiredState.ToString() });
+                new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) });
         }
         var target = await TargetAsync(subscription.DefinitionId, subscription.SlotName, ct);
         var validation = target.InputContract is null ? null : mapper.ValidateMappings(target.InputContract, subscription.Mappings);
@@ -217,7 +217,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                  await access.HasAsync(TriggerPermissions.Authorize, trigger, ct) &&
                  await access.HasAsync("workflows/runtime:execute", new TriggerTargetResource(subscription.DefinitionId, subscription.SlotName), ct)),
              new("RevokeInvocation", stoppable && !subscription.Origin.ConfigurationReadOnly && await access.HasAsync(TriggerPermissions.Authorize, trigger, ct))],
-            new { trigger.Name, effectiveState = trigger.DesiredState.ToString() });
+            new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) });
     }
 
     private async ValueTask ValidateConfigurationAsync(string typeKey, int schema, JsonElement configuration, CancellationToken ct)

@@ -42,5 +42,9 @@
   <Folder Name="/tests/">
     <Project Path="tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/acceptance/extensions/">
+    <Project Path="tests/acceptance/extensions/TriggerAuthoring/Acme.TriggerAuthoring.csproj" />
+    <Project Path="tests/acceptance/extensions/TriggerEditor/Acme.TriggerEditor.csproj" />
+  </Folder>
   <Project Path="../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj" />
 </Solution>

@@ -6,7 +6,7 @@ import { ActionError, Findings, Loading, RequestError, label, useTriggerCompleti
 import type { ChangeResult, TriggerCommand, TriggerView } from "./types";
 
 export function ChangeReview({ api, client, trigger, command, onCancel, onApplied }: {
-  api: ElsaStudioModuleApi; client: TriggerClient; trigger: TriggerView; command: TriggerCommand; onCancel(): void; onApplied(result: ChangeResult): void;
+  api: ElsaStudioModuleApi; client: TriggerClient; trigger: Pick<TriggerView, "id" | "name" | "revision">; command: TriggerCommand; onCancel(): void; onApplied(result: ChangeResult): void;
 }) {
   const [base, setBase] = useState({ trigger, command, key: operationId() });
   const requestId = useRef(operationId());
@@ -21,16 +21,20 @@ export function ChangeReview({ api, client, trigger, command, onCancel, onApplie
     if (lock.current) return;
     lock.current = true; setBusy(true);
     try {
-      const current = await client.read(base.trigger.id);
+      let current: Pick<TriggerView, "id" | "name" | "revision">;
       let nextCommand = base.command;
+      if ("deliveryId" in nextCommand) {
+        const delivery = await client.delivery(nextCommand.deliveryId);
+        if (delivery.triggerId !== base.trigger.id) throw new Error("Delivery resource changed; reopen its current details.");
+        current = { id: delivery.triggerId, name: delivery.triggerName || delivery.triggerId, revision: delivery.triggerRevision };
+        const selected = new Set(nextCommand.recipients.map(item => item.recipientId));
+        nextCommand = { ...nextCommand, expectedDeliveryRevision: delivery.revision, recipients: delivery.recipients.filter(item => selected.has(item.id)).map(item => ({ recipientId: item.id, expectedRevision: item.revision })) };
+      } else {
+        current = await client.read(base.trigger.id);
+      }
       if ("subscriptionId" in nextCommand) {
         const subscription = await client.subscription(nextCommand.subscriptionId);
         nextCommand = { ...nextCommand, expectedSubscriptionRevision: subscription.revision, ...("expectedGrantRevision" in nextCommand ? { expectedGrantRevision: subscription.invocationGrant.revision ?? null } : {}) };
-      }
-      if ("deliveryId" in nextCommand) {
-        const delivery = await client.delivery(nextCommand.deliveryId);
-        const selected = new Set(nextCommand.recipients.map(item => item.recipientId));
-        nextCommand = { ...nextCommand, expectedDeliveryRevision: delivery.revision, recipients: delivery.recipients.filter(item => selected.has(item.id)).map(item => ({ recipientId: item.id, expectedRevision: item.revision })) };
       }
       complete(() => { requestId.current = operationId(); setError(undefined); setBase({ trigger: current, command: nextCommand, key: operationId() }); setBusy(false); });
     } catch (caught) { complete(() => { setError(caught); setBusy(false); }); }

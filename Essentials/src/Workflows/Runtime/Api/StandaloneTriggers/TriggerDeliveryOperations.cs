@@ -173,7 +173,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
             refused.Length > 0 ? accepted.Length > 0 ? "PartiallyAccepted" : "Refused" : "Accepted",
             source.StandaloneIngress?.AdmissionPolicy.ToString(), accepted.Length, refused.Length, source.RecordedAt,
             source.StandaloneIngress?.RecordedAt,
-            recipients, [], transport is null ? new("NotApplicable") : new(transport.State.ToString(), transport.StatusCode, transport.ObservedAt));
+            recipients, [], transport is null ? new("NotApplicable") : new(transport.State.ToString(), transport.StatusCode, transport.ObservedAt), trigger.Revision);
     }
 
     private async ValueTask<TriggerExecutionReference?> ExecutionAsync(RuntimePostCommitOutboxItem source, RuntimeSubscriptionRecipient recipient,
@@ -186,7 +186,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
             if (state is null || !await access.HasAsync("workflows/runtime:read", state, ct)) return null;
             NativeIngressTargetEvidence.ValidateState(new(source, recipient, progress.Seal), state);
             return new(state.WorkflowExecutionId, "Workflow", state.Status.ToString(), time.GetUtcNow(),
-                "runtime/workflows/instances/" + Uri.EscapeDataString(state.WorkflowExecutionId));
+                "/workflows/instances/" + Uri.EscapeDataString(state.WorkflowExecutionId));
         }
         var model = models is null ? null : await models.FindAsync(recipient.StartIdentity.WorkflowExecutionId, ct);
         if (model is null || model.Scope != access.Scope.Persistence || model.TenantId != access.Scope.TenantId ||
@@ -194,7 +194,8 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(model.Executable, recipient.Material) ||
             model.IngressOrigin?.IsEquivalentTo(NativeIngressTargetEvidence.Origin(source, recipient)) != true ||
             !await access.HasAsync("workflows/runtime:read", model, ct)) return null;
-        return new(model.ExecutionId, recipient.ModelKey, model.Lifecycle.ToString(), time.GetUtcNow());
+        return new(model.ExecutionId, recipient.ModelKey, model.Lifecycle.ToString(), time.GetUtcNow(),
+            recipient.ModelKey == "bpmn" ? "/workflows/bpmn/runs/" + Uri.EscapeDataString(model.ExecutionId) : null);
     }
 
     private async ValueTask<TriggerRecipientView> WaitViewAsync(RuntimeIngressWaitRecipient wait, RuntimeIngressWaitProgress progress, CancellationToken ct)
@@ -207,7 +208,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
             canRead ? wait.Expected.RegistrationCapture!.Executable.ArtifactVersion : null, null, "Accepted",
             progress.Phase switch { RuntimeIngressWaitPhase.Pending => "NotDispatched", RuntimeIngressWaitPhase.DispatchCommitted => "DispatchCommitted",
                 _ => progress.Receipt?.Kind == RuntimeIngressWaitAcceptanceKind.SchedulerCommand ? "Queued" : retired ? "NotDispatched" : "Started" },
-            null, canRead ? new(state!.WorkflowExecutionId, "Workflow", state.Status.ToString(), time.GetUtcNow(), "runtime/workflows/instances/" + Uri.EscapeDataString(state.WorkflowExecutionId)) : null,
+            null, canRead ? new(state!.WorkflowExecutionId, "Workflow", state.Status.ToString(), time.GetUtcNow(), "/workflows/instances/" + Uri.EscapeDataString(state.WorkflowExecutionId)) : null,
             [new(retired ? "RetiredOrdinaryWait" : "OrdinaryWait", "This saved ordinary wait retains its existing workflow execution and is read-only here.")],
             [new("RetryRecipients", false, "OrdinaryWait"), new("CancelPendingRecipients", false, "OrdinaryWait")], progress.RetryAt, progress.AttemptCount);
     }

@@ -4,4 +4,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <remarks>RetryAt is stored released-failure eligibility. OccurrenceInFlight means a stored owner exists,
 /// including an expired visibility window; it does not assert a currently live lease.</remarks>
 public sealed record RecurringTriggerScheduleObservation(RecurringTriggerSchedule Schedule, int FailureCount,
-    DateTimeOffset? RetryAt, bool OccurrenceInFlight);
+    DateTimeOffset? RetryAt, bool OccurrenceInFlight)
+{
+    /// <summary>Safe persisted reason for the occurrence's last failed admission; absent on older or unclassified failures.</summary>
+    public RecurringTriggerScheduleFailureReason? FailureReason => FailureCount > 0 ? Schedule.FailureReason : null;
+}

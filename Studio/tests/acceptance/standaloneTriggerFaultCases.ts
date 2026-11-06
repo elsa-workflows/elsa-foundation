@@ -120,12 +120,21 @@ export async function verifyUnreadableScheduleAdmission(j: TriggerJourney) {
     const refusal = await observedFault(j, "SourceWriteRefused");
     expect(refusal.physicalSourcePresent).toBe(false); expect(refusal.triggerId).toBe(timer.id);
     let failed: TriggerView | undefined;
-    await expect.poll(async () => { failed = await j.read(timer.id); return (failed.schedule?.failureCount ?? 0) > 0; }, { timeout: 45_000 }).toBe(true);
+    await expect.poll(async () => { failed = await j.read(timer.id); return (failed.schedule?.failureCount ?? 0) > 0 && failed.schedule?.failureReason === "AdmissionUnavailable"; }, { timeout: 45_000 }).toBe(true);
+    const unavailableReason = failed!.findings.find(finding => finding.code === "ScheduleAdmissionUnavailable");
+    const unavailableMessage = "Schedule admission is unavailable. The due occurrence is retained for retry.";
+    expect(unavailableReason).toMatchObject({ code: "ScheduleAdmissionUnavailable", message: unavailableMessage });
+    expect(failed!.findings.some(finding => finding.code === "ScheduleNoEligibleSubscribers")).toBe(false);
     expect(failed!.schedule?.nextDueUtc).toBe(armed.schedule?.nextDueUtc);
     expect(failed!.schedule?.generation).toBe(armed.schedule?.generation);
     expect(failed!.schedule?.nextRetryAt).toBeTruthy();
     expect(await j.deliveries(timer.id)).toEqual([]);
-    await j.open(timer.id); await expect(j.page.getByRole("region", { name: "Schedule", exact: true })).toContainText(/overdue|retry|retained/i);
+    await j.open(timer.id);
+    const unavailableSchedule = j.page.getByRole("region", { name: "Schedule", exact: true });
+    await expect(unavailableSchedule).toContainText(/overdue|retry|retained/i);
+    await expect(unavailableSchedule).toContainText(unavailableMessage);
+    await expect(unavailableSchedule).not.toContainText("Waiting for eligible subscribers.");
+    await j.capture("schedule-admission-unavailable");
     await j.host("release-trigger-fault");
     const accepted = await j.started(await j.waitDelivery(timer.id));
     expect(accepted.id).toBe(refusal.deliveryId);
@@ -134,8 +143,8 @@ export async function verifyUnreadableScheduleAdmission(j: TriggerJourney) {
     await pauseThroughUi(j, timer.id);
     expect((await j.deliveries(timer.id)).filter(item => item.acceptedCount > 0)).toHaveLength(1);
     j.requests.push({ kind: "actual-due-schedule-controlled-physical-write-unavailable-with-no-cursor-advance", armed: armed.schedule,
-      refusal, failed: failed!.schedule, accepted, outcome: "The original due occurrence recovered through ordinary admission; no known-zero-eligibility substitution." });
-    j.observed.push("A due schedule with a healthy target encountered a separate controlled physical-admission IOException, retained its due cursor with failed-attempt backoff and no accepted source, then accepted the original due identity after repair");
+      refusal, failed: failed!.schedule, finding: unavailableReason, accepted, outcome: "The original due occurrence recovered through ordinary admission; no known-zero-eligibility substitution." });
+    j.observed.push("A due schedule with a healthy target encountered a separate controlled physical-admission IOException, retained its due cursor with failed-attempt backoff and no accepted source, and explicitly reported admission unavailability in API and Schedule UI rather than waiting for eligible subscribers, then accepted the original due identity after repair");
   } finally { await j.host("restore-features"); }
 }
 

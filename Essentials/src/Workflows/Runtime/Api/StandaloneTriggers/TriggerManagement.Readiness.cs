@@ -119,10 +119,16 @@ internal sealed partial class TriggerManagement
         var overdue = schedule.IsActive && schedule.NextOccurrence <= time.GetUtcNow();
         if (overdue) findings.Add(new("ScheduleOverdue", "The persisted due occurrence is overdue and remains retained until accepted."));
         if (observation is { FailureCount: > 0 })
+        {
             findings.Add(new(observation.RetryAt > time.GetUtcNow() ? "ScheduleRetryBackoff" : "ScheduleRetryWaiting",
                 "The due occurrence has recorded failed attempts and remains retained for recovery."));
+            if (observation.FailureReason == RecurringTriggerScheduleFailureReason.NoEligibleSubscribers)
+                findings.Add(new("ScheduleNoEligibleSubscribers", "Waiting for eligible subscribers. The due occurrence is retained and will be retried."));
+            else if (observation.FailureReason == RecurringTriggerScheduleFailureReason.AdmissionUnavailable)
+                findings.Add(new("ScheduleAdmissionUnavailable", "Schedule admission is unavailable. The due occurrence is retained for retry."));
+        }
         return new(owner.Generation, owner.TimeZoneId, schedule.NextOccurrence.ToUniversalTime(), offset,
             "OneCatchUpThenFuture", "NextFutureOccurrence", schedule.IsActive, overdue,
-            observation?.FailureCount, observation?.RetryAt, observation?.OccurrenceInFlight);
+            observation?.FailureCount, observation?.RetryAt, observation?.OccurrenceInFlight, observation?.FailureReason?.ToString());
     }
 }

@@ -11986,3 +11986,10 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerIngress<TSource
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.SupportsSubscriptionDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind, string! deliveryKind, int protocolVersion) -> bool
 
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxProcessor.SupportsSubscriptionDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind, string! deliveryKind, int protocolVersion) -> bool
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason.NoEligibleSubscribers = 1 -> Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason.AdmissionUnavailable = 2 -> Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerSchedule.FailureReason.get -> Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason?
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerSchedule.FailureReason.init -> void
+Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleObservation.FailureReason.get -> Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason?
+Elsa.Workflows.Runtime.Core.Contracts.IRecurringTriggerScheduleStore.ReleaseClaimWithFailureAsync(Elsa.Workflows.Runtime.Core.Models.RecurringTriggerOccurrenceClaim! claim, System.DateTimeOffset visibleAt, Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason failureReason, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

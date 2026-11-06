@@ -68,6 +68,10 @@ public sealed record RecurringTriggerSchedule(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RecurringTriggerOwner? Resource { get; init; }
 
+    /// <summary>Last recorded admission failure for the held occurrence. Null means no recorded reason, including legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecurringTriggerScheduleFailureReason? FailureReason { get; init; }
+
     public static string BuildResourceId(PersistenceScope scope, string triggerId, string? tenantId)
     {
         ArgumentNullException.ThrowIfNull(scope);

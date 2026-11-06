@@ -312,7 +312,11 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                     "Recurring schedule '{ScheduleId}' start dispatch for occurrence {Occurrence} threw; the occurrence is kept and retried after backoff",
                     schedule.ScheduleId,
                     schedule.NextOccurrence);
-                await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
+                var failureReason = schedule.Resource is null ? (RecurringTriggerScheduleFailureReason?)null
+                    : run.Exception is StandaloneTriggerAdmissionRefusedException { Code: "no-eligible-subscribers" }
+                        ? RecurringTriggerScheduleFailureReason.NoEligibleSubscribers
+                        : RecurringTriggerScheduleFailureReason.AdmissionUnavailable;
+                await ReleaseAsync(store, run.Claim, options, now, cancellationToken, failureReason);
                 return false;
         }
 
@@ -421,10 +425,14 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         RecurringTriggerOccurrenceClaim claim,
         RecurringTriggerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RecurringTriggerScheduleFailureReason? failureReason = null)
     {
         var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, checked(claim.FailureCount + 1));
-        if (!await store.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken))
+        var released = failureReason is { } reason
+            ? await store.ReleaseClaimWithFailureAsync(claim, now.Add(delay), reason, cancellationToken)
+            : await store.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken);
+        if (!released)
             LogClaimLost(claim, "release", exception: null);
     }
 

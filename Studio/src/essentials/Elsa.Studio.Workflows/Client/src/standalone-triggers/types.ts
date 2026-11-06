@@ -9,7 +9,7 @@ export interface Origin { kind: "Studio" | "Provider"; sourceId?: string; config
 export type HttpMode = "WorkflowResponse" | "AsyncFanOut";
 export type AdmissionPolicy = "RequireAll" | "AcceptAvailable";
 export interface TriggerHttp { mode: HttpMode; admissionPolicy?: AdmissionPolicy; proposedEndpoint?: string; reservationState: "Unreserved" | "Reserved" | "Conflict" | "Unavailable"; reservedEndpoint?: string }
-export interface TriggerSchedule { generation?: number; timezone?: string; nextDueUtc?: string; offset?: string; missedPolicy?: string; pausePolicy?: string; isActive?: boolean; isOverdue?: boolean; failureCount?: number; nextRetryAt?: string; occurrenceInFlight?: boolean }
+export interface TriggerSchedule { generation?: number; timezone?: string; nextDueUtc?: string; offset?: string; missedPolicy?: string; pausePolicy?: string; isActive?: boolean; isOverdue?: boolean; failureCount?: number; nextRetryAt?: string; occurrenceInFlight?: boolean; failureReason?: "NoEligibleSubscribers" | "AdmissionUnavailable" | null }
 export interface TriggerView {
   id: string; name: string; description?: string; typeKey: string; schemaVersion: string; revision: Revision;
   configuration: Record<string, JsonValue>; origin: Origin;
@@ -36,7 +36,7 @@ export interface InvocationGrant { state: "Absent" | "Granted" | "Revoked" | "Un
 export interface SubscriptionView {
   id: string; triggerId: string; revision: Revision; enabled: boolean; origin: Origin; target: TargetSelector; mappings: InputMapping[];
   invocationGrant: InvocationGrant; compatibility: "Valid" | "ValidationPending" | "Blocked"; findings: Finding[]; serving?: ServingTarget;
-  triggerSummary?: { name?: string; effectiveState: string; http?: TriggerHttp }; actions: ActionAvailability[];
+  triggerSummary?: { name?: string; effectiveState: string; http?: Pick<TriggerHttp, "mode" | "admissionPolicy"> }; actions: ActionAvailability[];
 }
 export type TriggerCommand =
   | { kind: "SaveConfiguration"; name: string; description?: string; configuration: Record<string, JsonValue>; http?: { mode: HttpMode; admissionPolicy?: AdmissionPolicy } }
@@ -61,7 +61,7 @@ export interface RecipientView {
   findings: Finding[]; actions: ActionAvailability[]; nextRetryAt?: string; attemptCount?: number;
 }
 export interface DeliveryView {
-  id: string; revision: Revision; triggerId: string; triggerName?: string; acceptedTriggerRevision?: Revision; sourceOccurrenceId?: string;
+  id: string; revision: Revision; triggerId: string; triggerName?: string; triggerRevision: Revision; acceptedTriggerRevision?: Revision; sourceOccurrenceId?: string;
   admission: "Refused" | "Accepted" | "PartiallyAccepted"; admissionPolicy?: AdmissionPolicy; acceptedCount: number; refusedCount: number;
   recordedAt?: string; acceptedAt?: string; recipients: RecipientView[]; findings: Finding[];
   transport?: { state: "NotApplicable" | "AwaitingResponse" | "WriteCompleted" | "ClientDisconnected" | "TimedOut" | "WriteFailed" | "ReceiptUnknown"; statusCode?: number; observedAt?: string };
