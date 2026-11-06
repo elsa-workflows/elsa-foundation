@@ -19,7 +19,7 @@ internal sealed partial class EfJobStore
             if (row is not null)
             {
                 JobStoreCodec.Exact(row, request.Scope, "hold", gate.Key, request.HoldId);
-                var prior = JobStoreCodec.Read<JobHold>(row.HoldJson);
+                var prior = JobStoreCodec.ReadRetained<JobHold>(row.HoldJson);
                 result = new(prior.ReleasedAt is null && prior.Actor == request.Operation.Actor && prior.Reason == request.Operation.Reason
                     ? JobCommandStatus.Replayed : JobCommandStatus.Conflict, prior.Revision, null, null);
             }
@@ -50,7 +50,7 @@ internal sealed partial class EfJobStore
             else
             {
                 JobStoreCodec.Exact(row, request.Scope, "hold", gate.Key, request.HoldId);
-                var hold = JobStoreCodec.Read<JobHold>(row.HoldJson);
+                var hold = JobStoreCodec.ReadRetained<JobHold>(row.HoldJson);
                 if (hold.Revision != request.ExpectedRevision) result = new(JobCommandStatus.Conflict, hold.Revision, null, null);
                 else if (hold.ReleasedAt is not null) result = new(JobCommandStatus.Replayed, hold.Revision, null, null);
                 else

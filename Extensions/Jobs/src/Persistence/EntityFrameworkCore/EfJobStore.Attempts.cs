@@ -29,7 +29,7 @@ internal sealed partial class EfJobStore
                     JobStoreCodec.Exact(priorGrant, request.Scope, "claim-grant", request.Owner, request.RequestId);
                     if (priorGrant.RequestDigest != requestDigest) return new JobClaimResult(JobCommandStatus.Conflict, null);
                     // This acknowledges only the original permission. The worker must renew live authority before entry.
-                    return new JobClaimResult(JobCommandStatus.Replayed, JobStoreCodec.Read<JobAttemptLease>(priorGrant.LeaseJson));
+                    return new JobClaimResult(JobCommandStatus.Replayed, JobStoreCodec.ReadRetained<JobAttemptLease>(priorGrant.LeaseJson));
                 }
                 var cursorKey = JobStoreCodec.Key(request.Scope, "claim-cursor", request.Owner);
                 var cursor = await db.ClaimCursors.SingleOrDefaultAsync(x => x.Key == cursorKey, ct);
@@ -125,7 +125,7 @@ internal sealed partial class EfJobStore
                 var attempt = job is null ? null : await Attempt(db, lease.Scope, job, lease.AttemptId, ct);
                 if (job is not null && attempt is not null && attempt.LastRenewalDigest == requestDigest && attempt.LastRenewalLeaseJson is { } prior)
                 {
-                    var priorLease = JobStoreCodec.Read<JobAttemptLease>(prior);
+                    var priorLease = JobStoreCodec.ReadRetained<JobAttemptLease>(prior);
                     if (Owns(job, attempt, priorLease, now))
                     {
                         AuthorizeUntil(db, attempt.ExpiresAt);

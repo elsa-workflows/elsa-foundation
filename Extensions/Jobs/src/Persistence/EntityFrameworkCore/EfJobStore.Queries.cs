@@ -41,16 +41,16 @@ internal sealed partial class EfJobStore
         JobRequest? content = null; JobResult? result = null; JobProgress? progress = null; JobDiagnostic? unavailable = null;
         try
         {
-            if (job.UnavailableDiagnosticJson is { } diagnostic) unavailable = JobStoreCodec.Read<JobDiagnostic>(diagnostic);
+            if (job.UnavailableDiagnosticJson is { } diagnostic) unavailable = JobStoreCodec.ReadRetained<JobDiagnostic>(diagnostic);
             if (job.SchemaVersion != JobsEfModule.Version) throw new NotSupportedException("The Jobs record schema is unavailable.");
             content = Request(job);
             if (job.ResultJson is { } resultJson)
             {
-                result = JobStoreCodec.Read<JobResult>(resultJson);
+                result = JobStoreCodec.ReadRetained<JobResult>(resultJson);
                 if (result.Payload is { } resultPayload) JobStoreCodec.Payload(resultPayload);
                 if (result.JobId != job.JobId || result.PayloadSha256 != JobPayloadDigest.Compute(result.Payload)) throw new InvalidDataException("The retained Jobs result failed digest validation.");
             }
-            progress = job.ProgressJson is { } progressJson ? JobStoreCodec.Read<JobProgress>(progressJson) : null;
+            progress = job.ProgressJson is { } progressJson ? JobStoreCodec.ReadRetained<JobProgress>(progressJson) : null;
             if (progress?.Data is { } progressData) JobStoreCodec.Payload(progressData);
             if (progress is not null && System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(progress).Length > JobPayloadLimits.MaximumProgressBytes)
                 throw new InvalidDataException("The retained Jobs progress exceeds its durable envelope bound.");
@@ -121,7 +121,7 @@ internal sealed partial class EfJobStore
             {
                 JobStoreCodec.Exact(row, scope, "attempt", job.JobId, row.AttemptId);
                 return new JobAttemptSnapshot(Lease(scope, job, row), (JobAttemptState)row.State, row.PhysicalStartedAt is { } started ? JobStoreCodec.At(started) : null,
-                    row.PhysicalExitedAt is { } exited ? JobStoreCodec.At(exited) : null, row.DiagnosticJson is { } diagnostic ? JobStoreCodec.Read<JobDiagnostic>(diagnostic) : null);
+                    row.PhysicalExitedAt is { } exited ? JobStoreCodec.At(exited) : null, row.DiagnosticJson is { } diagnostic ? JobStoreCodec.ReadRetained<JobDiagnostic>(diagnostic) : null);
             }).ToArray();
             return Page(items, page.Limit, scope, "attempts", jobId, x => x.Lease.AttemptNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }, cancellationToken);
@@ -139,8 +139,7 @@ internal sealed partial class EfJobStore
             var rows = await query.OrderBy(x => x.Key).Take(page.Limit + 1).ToArrayAsync(ct);
             var items = rows.Take(page.Limit).Select(row =>
             {
-                var receipt = JobStoreCodec.Read<JobPhysicalReceipt>(row.ReceiptJson);
-                JobStoreCodec.Receipt(receipt);
+                var receipt = JobStoreCodec.ReadRetained<JobPhysicalReceipt>(row.ReceiptJson, JobStoreCodec.Receipt);
                 JobStoreCodec.Exact(row, scope, "receipt", receipt.ReceiptId);
                 if (JobStoreCodec.Hash(row.ReceiptJson) != row.ReceiptSha256 || JobPayloadDigest.Compute(receipt.Payload) != receipt.PayloadSha256) throw new InvalidDataException("The retained Jobs physical receipt failed digest validation.");
                 return receipt;
@@ -158,7 +157,7 @@ internal sealed partial class EfJobStore
             if (gate is not null) { JobStoreCodec.Gate(gate); var gateKey = JobStoreCodec.Key(scope, "gate", gate.Kind, gate.Name, gate.ModelKind); query = query.Where(x => x.GateKey == gateKey); }
             if (after is not null) query = query.Where(x => string.Compare(x.Key, after) > 0);
             var rows = await query.OrderBy(x => x.Key).Take(page.Limit + 1).ToArrayAsync(ct);
-            var items = rows.Take(page.Limit).Select(x => JobStoreCodec.Read<JobHold>(x.HoldJson)).ToArray();
+            var items = rows.Take(page.Limit).Select(x => JobStoreCodec.ReadRetained<JobHold>(x.HoldJson)).ToArray();
             return new JobPage<JobHold>(items, rows.Length > page.Limit ? CursorFor(scope, "holds", filter, rows[page.Limit - 1].Key) : null);
         }, cancellationToken);
     }
@@ -176,7 +175,7 @@ internal sealed partial class EfJobStore
         }, cancellationToken);
     }
 
-    private static JobScheduleSnapshot Schedule(JobScheduleRecord row) => new(JobStoreCodec.Read<JobScheduleDefinition>(row.DefinitionJson), row.Revision,
+    private static JobScheduleSnapshot Schedule(JobScheduleRecord row) => new(JobStoreCodec.ReadRetained<JobScheduleDefinition>(row.DefinitionJson), row.Revision,
         JobStoreCodec.At(row.NextOccurrence), row.Enabled, JobStoreCodec.At(row.CreatedAt), JobStoreCodec.At(row.UpdatedAt));
 
     public ValueTask<JobScheduleSnapshot?> FindScheduleAsync(JobScope scope, string scheduleId, CancellationToken cancellationToken = default) =>
@@ -213,7 +212,7 @@ internal sealed partial class EfJobStore
             {
                 var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.Key == row.JobKey, ct);
                 JobStoreCodec.Exact(job, scope, "job", job.JobId); JobStoreCodec.Exact(row, scope, "delivery", job.JobId);
-                items.Add(new(job.JobId, row.ResultId, JobStoreCodec.Read<JobAssociation>(row.AssociationJson), row.PermissionJson is { } json ? JobStoreCodec.Read<JobContinuationPermission>(json) : null));
+                items.Add(new(job.JobId, row.ResultId, JobStoreCodec.ReadRetained<JobAssociation>(row.AssociationJson), row.PermissionJson is { } json ? JobStoreCodec.ReadRetained<JobContinuationPermission>(json) : null));
             }
             return new JobPage<JobDeliverySnapshot>(items, rows.Length > page.Limit ? CursorFor(scope, "deliveries", "", rows[page.Limit - 1].Key) : null);
         }, cancellationToken);

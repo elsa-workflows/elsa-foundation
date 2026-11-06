@@ -49,6 +49,7 @@ class Witness:
         self.cases = []
         self.number = 0
         self.container = None
+        self.container_log = {'state': 'NOT APPLICABLE'}
         self.run_id = uuid.uuid4().hex
         self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql',
                      'scope': {'persistencePartition': 'package-' + self.run_id, 'tenantId': 'tenant-a'}}
@@ -74,7 +75,10 @@ class Witness:
             write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name})
             deadline = time.monotonic() + 45
             while True:
-                ready = subprocess.run(['docker', 'exec', self.container, 'pg_isready', '-U', 'jobs', '-d', 'jobs'],
+                # The official image starts a temporary socket-only server during
+                # initialization. Require TCP so that server cannot report readiness.
+                ready = subprocess.run(['docker', 'exec', self.container, 'pg_isready',
+                                        '-h', '127.0.0.1', '-p', '5432', '-U', 'jobs', '-d', 'jobs'],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
                 if ready.returncode == 0:
                     break
@@ -291,9 +295,22 @@ class Witness:
                 log.close()
         if self.container is not None:
             try:
-                self.docker(['rm', '--force', self.container])
-            except (OSError, subprocess.SubprocessError) as error:
-                errors.append(type(error).__name__)
+                path = self.evidence / 'owned-postgres.log'
+                self.container_log = {'state': 'UNAVAILABLE', 'path': str(path)}
+                try:
+                    with path.open('w') as output:
+                        result = subprocess.run(['docker', 'logs', self.container], stdout=output,
+                                                stderr=subprocess.STDOUT, timeout=10)
+                    self.container_log.update(state='PASSED' if result.returncode == 0 else 'FAILED',
+                                              exitCode=result.returncode)
+                except (OSError, subprocess.SubprocessError) as error:
+                    self.container_log['diagnostic'] = type(error).__name__
+            finally:
+                # Log capture is useful evidence but never owns resource cleanup.
+                try:
+                    self.docker(['rm', '--force', self.container])
+                except (OSError, subprocess.SubprocessError) as error:
+                    errors.append(type(error).__name__)
         if errors:
             raise RuntimeError('Owned resource cleanup failed: ' + ', '.join(errors))
 
@@ -338,6 +355,7 @@ def main():
         receipt['processes'] = witness.steps
         receipt['cases'] = witness.cases
         receipt['providerVersion'] = getattr(witness, 'provider_version', None)
+        receipt['ownedContainerLog'] = witness.container_log
         write_json(evidence / 'witness-receipt.json', receipt)
     return exit_code
 

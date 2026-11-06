@@ -4,7 +4,7 @@
 [data model](data-model.md), [lifecycle](contracts/job-lifecycle.md) and [acceptance matrix](acceptance-matrix.md).
 
 **Status**: M1 implementation underway after scoped domain adoption and clean independent design review.
-Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 60/60, with exact discovery/execution identity matches. Packaged public ABI and deployment/model guarantees still require qualification. Tests are risk-based; application TDD cadence is undeclared,
+Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 68/68, with exact discovery/execution identity matches. Packaged public ABI and deployment/model guarantees still require qualification. Tests are risk-based; application TDD cadence is undeclared,
 so the template does not invent it. Required behavioral red/green bite-proofs remain obligations.
 
 ## M0 — Setup and design gates

@@ -21,6 +21,17 @@ internal static class JobStoreCodec
     };
     internal static T Read<T>(string value) => JsonSerializer.Deserialize<T>(value)
         ?? throw new InvalidDataException("A Jobs persisted record is null.");
+    internal static T ReadRetained<T>(string value, Action<T>? validate = null)
+    {
+        try
+        {
+            var result = Read<T>(value);
+            validate?.Invoke(result);
+            return result;
+        }
+        catch (Exception error) when (error is ArgumentException || SerializationFailure(error))
+        { throw new InvalidDataException("The retained Jobs record has invalid fields.", error); }
+    }
     internal static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     internal static string Identity(params object?[] fields) => Json(fields);
     internal static string Scope(JobScope scope)
@@ -57,6 +68,7 @@ internal static class JobStoreCodec
     }
     internal static void Digest(string value)
     {
+        ArgumentNullException.ThrowIfNull(value);
         if (value.Length != 64 || value.Any(x => x is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
             throw new ArgumentException("A Jobs digest must be lowercase SHA-256 hexadecimal.");
     }
@@ -124,6 +136,7 @@ internal static class JobStoreCodec
     {
         if (diagnostic is null) return;
         Name(diagnostic.Code);
+        ArgumentNullException.ThrowIfNull(diagnostic.Summary);
         if (diagnostic.Summary.Length > 2048) throw new ArgumentException("The Jobs diagnostic exceeds its bounded size.");
     }
     internal static void Gate(JobGateKey gate)

@@ -113,7 +113,7 @@ internal sealed partial class EfJobStore
             foreach (var schedule in schedules)
             {
                 cursor.AfterKey = schedule.Key;
-                var definition = JobStoreCodec.Read<JobScheduleDefinition>(schedule.DefinitionJson);
+                var definition = JobStoreCodec.ReadRetained<JobScheduleDefinition>(schedule.DefinitionJson);
                 JobStoreCodec.Exact(schedule, request.Scope, "schedule", definition.ScheduleId);
                 var gates = await Gates(db, request.Scope, JobStoreCodec.Gates(definition.Template), ct);
                 if (await Availability(db, gates, now, permits: false, ct) is not null) continue;
@@ -169,7 +169,7 @@ internal sealed partial class EfJobStore
         if (existing is not null)
         {
             JobStoreCodec.Exact(existing, scope, "occurrence", occurrenceId);
-            return JobStoreCodec.Read<JobOccurrenceReceipt>(existing.ReceiptJson);
+            return JobStoreCodec.ReadRetained<JobOccurrenceReceipt>(existing.ReceiptJson);
         }
         var jobRequest = definition.Template with { NotBefore = JobStoreCodec.At(due) };
         var digest = JobRequestDigest.Compute(jobRequest);

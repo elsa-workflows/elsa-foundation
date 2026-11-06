@@ -19,6 +19,8 @@ own query implementation. Each authoritative write attempt uses a fresh factory 
 transaction. Retry never continues a partially failed transaction. Commands propagate caller cancellation
 and preserve provider failures behind `JobPersistenceException`; retained malformed content has a safe
 `JobException` code and preserved inner cause.
+Database-retained JSON uses a separate decoder that normalizes constructor validation failures;
+caller cursors and preflight snapshots keep their caller-error classification.
 
 Indexed keys are SHA-256 addresses over exact scope/identity framing, with residual identity checks.
 Strings use the shared provider ordinal collation. An admission recomputes the Core request digest;

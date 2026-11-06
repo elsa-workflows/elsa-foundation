@@ -52,7 +52,7 @@ internal sealed partial class EfJobStore(IDbContextFactory<JobsDbContext> contex
     private sealed class LeaseExpiredDuringWriteException : Exception { }
     private void AuthorizeUntil(JobsDbContext db, long expiresAt) => _leaseWindows.AddOrUpdate(db, new(expiresAt));
     private static JobTransition Transition(JobCommandStatus status, JobRecord? job = null) => new(status, job?.Revision, job?.JobId,
-        job?.ResultJson is { } json ? JobStoreCodec.Read<JobResult>(json).ResultId : null);
+        job?.ResultJson is { } json ? JobStoreCodec.ReadRetained<JobResult>(json).ResultId : null);
     private static JobAcceptance Acceptance(JobRecord job, long recognizeUntil) => new(job.JobId, JobStoreCodec.At(job.AcceptedAt), JobStoreCodec.At(recognizeUntil), job.Revision);
     private static JobAttemptLease Lease(JobScope scope, JobRecord job, JobAttemptRecord attempt) => new(scope, job.JobId,
         attempt.AttemptId, attempt.Number, attempt.Owner, attempt.Fence, attempt.OwnershipRevision,
@@ -63,7 +63,7 @@ internal sealed partial class EfJobStore(IDbContextFactory<JobsDbContext> contex
         {
             // Constructor validation can throw ArgumentException during deserialization itself.
             // This boundary reads retained data only; ordinary caller validation remains separate.
-            var request = JobStoreCodec.Read<JobRequest>(job.RequestJson);
+            var request = JobStoreCodec.ReadRetained<JobRequest>(job.RequestJson);
             JobStoreCodec.Request(request);
             if (JobRequestDigest.Compute(request) != job.RequestSha256) throw new InvalidDataException("The retained Jobs request digest does not match.");
             return request;
@@ -134,7 +134,7 @@ internal sealed partial class EfJobStore(IDbContextFactory<JobsDbContext> contex
         if (row is null) return null;
         JobStoreCodec.Exact(row, scope, "operation", operation.OperationId);
         if (row.Digest != digest) throw new JobException("jobs.operation.conflict", "The operation identity recognizes different immutable content.");
-        return JobStoreCodec.Read<T>(row.ResultJson);
+        return JobStoreCodec.ReadRetained<T>(row.ResultJson);
     }
     private static void Remember<T>(JobsDbContext db, JobScope scope, JobOperation operation, string digest, T result)
     {

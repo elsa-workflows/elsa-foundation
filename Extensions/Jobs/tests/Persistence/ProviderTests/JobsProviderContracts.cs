@@ -643,6 +643,92 @@ public sealed class JobsProviderContracts(JobsPostgreSqlFixture postgres)
         Assert.Single((await database.Queries.ListPhysicalReceiptsAsync(Scope, accepted.JobId, new(10, null))).Items);
     }
 
+    [SkippableTheory]
+    [InlineData("Sqlite", "receipt")]
+    [InlineData("PostgreSql", "receipt")]
+    [InlineData("Sqlite", "terminal-result")]
+    [InlineData("PostgreSql", "terminal-result")]
+    public async Task Null_schema_in_retained_receipt_or_terminal_result_has_a_safe_error_and_preserves_bytes(string provider, string kind)
+    {
+        await using var database = await Database(provider);
+        var accepted = (await database.Commands.AdmitAsync(Admission("retained-null-schema"))).Acceptance!;
+        var lease = (await database.Commands.ClaimAsync(Claim())).Lease!;
+        await database.Commands.CompleteAsync(lease, Receipt(lease));
+        string originalBytes; long revision;
+        await using (var db = await database.Contexts.CreateDbContextAsync())
+        {
+            var job = await db.Jobs.SingleAsync(x => x.JobId == accepted.JobId); revision = job.Revision;
+            if (kind == "receipt")
+            {
+                var row = await db.Receipts.SingleAsync(x => x.JobKey == job.Key);
+                var json = JsonNode.Parse(row.ReceiptJson)!.AsObject(); json["Payload"]!["Schema"] = null;
+                row.ReceiptJson = originalBytes = json.ToJsonString(); row.ReceiptSha256 = JobStoreCodec.Hash(originalBytes);
+            }
+            else
+            {
+                var json = JsonNode.Parse(job.ResultJson!)!.AsObject(); json["Payload"]!["Schema"] = null;
+                job.ResultJson = originalBytes = json.ToJsonString();
+            }
+            await db.SaveChangesAsync();
+        }
+        JobException error;
+        if (kind == "receipt")
+        {
+            error = await Assert.ThrowsAsync<JobException>(() => database.Queries.ListPhysicalReceiptsAsync(Scope, accepted.JobId, new(10, null)).AsTask());
+            var healthy = (await database.Queries.FindAsync(Scope, accepted.JobId))!;
+            Assert.NotNull(healthy.Request); Assert.Null(healthy.UnavailableDiagnostic); Assert.Equal(JobOutcome.Succeeded, healthy.Result!.Outcome);
+        }
+        else
+        {
+            var unavailable = (await database.Queries.FindAsync(Scope, accepted.JobId))!;
+            Assert.Equal(JobState.Terminal, unavailable.State); Assert.Null(unavailable.Request); Assert.Null(unavailable.Result); Assert.NotNull(unavailable.UnavailableDiagnostic);
+            error = await Assert.ThrowsAsync<JobException>(() => database.Commands.CancelAsync(new(Scope, accepted.JobId, Op())).AsTask());
+        }
+        Assert.Equal("jobs.persistence.invalid-record", error.Code);
+        var invalid = Assert.IsType<InvalidDataException>(error.InnerException); Assert.IsType<ArgumentNullException>(invalid.InnerException);
+        await using var check = await database.Contexts.CreateDbContextAsync();
+        var preserved = await check.Jobs.SingleAsync(x => x.JobId == accepted.JobId);
+        Assert.Equal(revision, preserved.Revision); Assert.Equal((int)JobState.Terminal, preserved.State); Assert.False(preserved.CancellationRequested);
+        if (kind == "receipt") Assert.Equal(originalBytes, (await check.Receipts.SingleAsync(x => x.JobKey == preserved.Key)).ReceiptJson);
+        else Assert.Equal(originalBytes, preserved.ResultJson);
+        Assert.Empty(await check.Operations.ToArrayAsync());
+    }
+
+    [SkippableTheory]
+    [InlineData("Sqlite", "payload-digest")]
+    [InlineData("PostgreSql", "payload-digest")]
+    [InlineData("Sqlite", "diagnostic-summary")]
+    [InlineData("PostgreSql", "diagnostic-summary")]
+    public async Task Null_retained_receipt_scalars_are_infrastructure_errors_and_matching_caller_values_are_arguments(string provider, string kind)
+    {
+        await using var database = await Database(provider);
+        var accepted = (await database.Commands.AdmitAsync(Admission("retained-null-scalar"))).Acceptance!;
+        var lease = (await database.Commands.ClaimAsync(Claim())).Lease!;
+        var original = Receipt(lease);
+        await database.Commands.CompleteAsync(lease, original);
+        string originalBytes;
+        await using (var db = await database.Contexts.CreateDbContextAsync())
+        {
+            var row = await db.Receipts.SingleAsync();
+            var json = JsonNode.Parse(row.ReceiptJson)!.AsObject();
+            if (kind == "payload-digest") json["PayloadSha256"] = null;
+            else json["Diagnostic"] = new JsonObject { ["Code"] = "provider-control", ["Summary"] = null };
+            row.ReceiptJson = originalBytes = json.ToJsonString(); row.ReceiptSha256 = JobStoreCodec.Hash(originalBytes);
+            await db.SaveChangesAsync();
+        }
+        var error = await Assert.ThrowsAsync<JobException>(() => database.Queries.ListPhysicalReceiptsAsync(Scope, accepted.JobId, new(10, null)).AsTask());
+        Assert.Equal("jobs.persistence.invalid-record", error.Code);
+        var invalid = Assert.IsType<InvalidDataException>(error.InnerException); Assert.IsType<ArgumentNullException>(invalid.InnerException);
+        var caller = kind == "payload-digest" ? original with { PayloadSha256 = null! }
+            : original with { Diagnostic = new("provider-control", null!) };
+        await Assert.ThrowsAsync<ArgumentNullException>(() => database.Commands.RecordPhysicalReceiptAsync(Scope, accepted.JobId, caller).AsTask());
+        var healthy = (await database.Queries.FindAsync(Scope, accepted.JobId))!;
+        Assert.NotNull(healthy.Request); Assert.Null(healthy.UnavailableDiagnostic); Assert.Equal(JobOutcome.Succeeded, healthy.Result!.Outcome);
+        await using var check = await database.Contexts.CreateDbContextAsync();
+        var preserved = await check.Receipts.SingleAsync(); Assert.Equal(originalBytes, preserved.ReceiptJson); Assert.Equal(JobStoreCodec.Hash(originalBytes), preserved.ReceiptSha256);
+        Assert.Empty(await check.Operations.ToArrayAsync());
+    }
+
     private sealed class LoseOneCommitReply : DbTransactionInterceptor
     {
         private int _remaining = 1;

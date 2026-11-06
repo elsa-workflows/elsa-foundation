@@ -19,7 +19,7 @@ internal sealed partial class EfJobStore
             if (delivery.Acknowledged) return new JobContinuationResult(JobCommandStatus.Terminal, null);
             if (delivery.PermissionJson is { } prior)
             {
-                var permission = JobStoreCodec.Read<JobContinuationPermission>(prior);
+                var permission = JobStoreCodec.ReadRetained<JobContinuationPermission>(prior);
                 return new JobContinuationResult(permission.ContinuationId == request.ContinuationId && permission.ModelInputId == request.ModelInputId
                     ? JobCommandStatus.Replayed : JobCommandStatus.Conflict, permission.ContinuationId == request.ContinuationId && permission.ModelInputId == request.ModelInputId ? permission : null);
             }
@@ -27,7 +27,7 @@ internal sealed partial class EfJobStore
             if (await Availability(db, gates, now, permits: false, ct) is { } status) return new JobContinuationResult(status, null);
             Touch(gates);
             var grant = new JobContinuationPermission(request.ContinuationId, job.JobId, delivery.ResultId, request.ModelInputId,
-                JobStoreCodec.Read<JobAssociation>(delivery.AssociationJson), JobStoreCodec.At(now));
+                JobStoreCodec.ReadRetained<JobAssociation>(delivery.AssociationJson), JobStoreCodec.At(now));
             delivery.PermissionJson = JobStoreCodec.Json(grant);
             return new JobContinuationResult(JobCommandStatus.Applied, grant);
         }, cancellationToken);
@@ -45,14 +45,14 @@ internal sealed partial class EfJobStore
             var delivery = await db.Deliveries.SingleOrDefaultAsync(x => x.JobKey == job.Key, ct);
             if (delivery is null) return Transition(JobCommandStatus.NotFound, job);
             JobStoreCodec.Exact(delivery, request.Scope, "delivery", job.JobId);
-            var result = job.ResultJson is { } json ? JobStoreCodec.Read<JobResult>(json) : throw new InvalidDataException("Jobs delivery lost its terminal result.");
+            var result = job.ResultJson is { } json ? JobStoreCodec.ReadRetained<JobResult>(json) : throw new InvalidDataException("Jobs delivery lost its terminal result.");
             if (result.ResultId != delivery.ResultId || result.PayloadSha256 != request.Proof.ResultSha256) return Transition(JobCommandStatus.Conflict, job);
             if (delivery.Acknowledged) return Transition(delivery.ProofJson == proof ? JobCommandStatus.Replayed : JobCommandStatus.Conflict, job);
             // The trusted owning model validates receipt meaning; the authority verifies exact retained result/input binding.
             if (request.Proof.Kind != JobDeliveryProofKind.ParentProvenTerminal)
             {
                 if (delivery.PermissionJson is not { } permissionJson) return Transition(JobCommandStatus.Conflict, job);
-                var permission = JobStoreCodec.Read<JobContinuationPermission>(permissionJson);
+                var permission = JobStoreCodec.ReadRetained<JobContinuationPermission>(permissionJson);
                 if (permission.ContinuationId != request.ContinuationId) return Transition(JobCommandStatus.Conflict, job);
             }
             delivery.Acknowledged = true; delivery.ProofJson = proof;

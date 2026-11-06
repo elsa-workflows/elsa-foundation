@@ -1,8 +1,35 @@
-# Jobs validation quickstart — planned, not runnable product documentation
+# Jobs validation quickstart
 
-No job package or API described by this spec is implemented yet. This is the required validation
-journey; final executable commands and package versions are added with the actual implementation.
-Do not present illustrative API names as installed capabilities.
+The standalone Core/runtime and SQLite/PostgreSQL EF authority are implemented; their complete first
+release is still in progress. The commands below run the actual qualification host. Scheduling defaults,
+native/BPMN adapters, operations API/Studio and complete failure/security qualification remain open.
+
+## Run the packaged standalone witness
+
+Commit the source and harness first, then freeze both input commits. From the repository root:
+
+```sh
+python3 tools/jobs/verify-packaged-jobs.py \
+  --source-ref "$(git rev-parse HEAD)" \
+  --publish-state-ref "$(git rev-parse origin/publish-state)" \
+  --evidence-dir /tmp/elsa-jobs-package-evidence \
+  --provider sqlite --stage execute
+```
+
+Repeat with `--provider postgresql` to use an owned PostgreSQL container. Both commands create an
+isolated clean source clone, compute and pack the eight-module standalone closure, restore/publish
+an external PackageReference application with a fresh cache, and launch separate producer, worker
+and inspector processes. The SQLite host explicitly carries the source's reviewed native bundle pin;
+it does not inherit ambient central package settings. The receipt records actual package versions,
+archive/assembly hashes, engine versions, commands, cases and cleanup. No package feed is published.
+
+The useful report result has two line items, five units and a subtotal of 52.00. The focused cases
+exercise equal/conflicting producer keys, deliberately discarded producer response, missing-handler
+preservation, result inspection across fresh processes, pause/start ordering, killed-worker recovery
+and stale completion. These cases do not establish every row below. A failed profile remains failed.
+See [the qualification host instructions](../../tools/jobs/PackageProbe/README.md) for exact proof limits.
+
+## Complete the remaining product journey
 
 1. Pack the changed packages locally through the repository's computed-version/build-slot route;
    create a clean temporary application and a separate worker using only PackageReference inputs.
