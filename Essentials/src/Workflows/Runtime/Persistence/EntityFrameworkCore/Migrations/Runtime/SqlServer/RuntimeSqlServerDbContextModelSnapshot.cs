@@ -1409,6 +1409,283 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeDeliveryWorkEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AuthorityPartitionKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("ClaimableAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ClaimableIsEligible")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ClaimedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CompletionOperationFingerprint")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompletionOperationId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentFingerprint")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("FencingToken")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FullDiscoveryIdentity")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FullDiscoveryIdentityHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("OperationProofJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("RecordedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RequiredParticipantVersion")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RunKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(684)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SourceFamily")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceFamilyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SourceHeaderFingerprint")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("SourceHeaderRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TenantId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TenantIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TestScopeId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TestScopeIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("VisibleAfterUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("WorkId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("WorkKind")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkKindHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "SourceFamilyHash", "SourceIdHash", "WorkIdHash");
+
+                    b.HasIndex("FullDiscoveryIdentityHash", "SourceFamilyHash", "WorkKindHash", "Role", "ClaimableIsEligible", "ClaimableAtUtcTicks");
+
+                    b.ToTable("elsa_runtime_delivery_work", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeIngressSourceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AcceptanceOperationFingerprint")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AcceptanceOperationId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AuthorityPartitionKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FullDiscoveryIdentity")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FullDiscoveryIdentityHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("HeaderFingerprint")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("HeaderRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("HeaderVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OperationProofJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("RecordedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RequiredParticipantVersion")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RunKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(684)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SourceFamily")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceFamilyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TenantId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TenantIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TestScopeId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TestScopeIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "SourceFamilyHash", "SourceIdHash");
+
+                    b.HasIndex("FullDiscoveryIdentityHash", "SourceFamilyHash", "Status", "RecordedAtUtcTicks");
+
+                    b.ToTable("elsa_runtime_ingress_source", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeModelExecutionEntity", b =>
                 {
                     b.Property<string>("Id")

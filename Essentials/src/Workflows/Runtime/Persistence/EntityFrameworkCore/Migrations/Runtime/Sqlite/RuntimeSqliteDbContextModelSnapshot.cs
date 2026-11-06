@@ -1402,6 +1402,283 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeDeliveryWorkEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorityPartitionKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ClaimableAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ClaimableIsEligible")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ClaimedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CompletionOperationFingerprint")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletionOperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FencingToken")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FullDiscoveryIdentity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FullDiscoveryIdentityHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationProofJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RecordedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RequiredParticipantVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RunKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(684)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceFamily")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceFamilyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceHeaderFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SourceHeaderRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestScopeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestScopeIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("VisibleAfterUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WorkId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkKind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkKindHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "SourceFamilyHash", "SourceIdHash", "WorkIdHash");
+
+                    b.HasIndex("FullDiscoveryIdentityHash", "SourceFamilyHash", "WorkKindHash", "Role", "ClaimableIsEligible", "ClaimableAtUtcTicks");
+
+                    b.ToTable("elsa_runtime_delivery_work", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeIngressSourceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcceptanceOperationFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcceptanceOperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorityPartitionKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FullDiscoveryIdentity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FullDiscoveryIdentityHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HeaderFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("HeaderRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("HeaderVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OperationProofJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RecordedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RequiredParticipantVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RunKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(684)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceFamily")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceFamilyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestScopeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestScopeIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "SourceFamilyHash", "SourceIdHash");
+
+                    b.HasIndex("FullDiscoveryIdentityHash", "SourceFamilyHash", "Status", "RecordedAtUtcTicks");
+
+                    b.ToTable("elsa_runtime_ingress_source", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeModelExecutionEntity", b =>
                 {
                     b.Property<string>("Id")
