@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Claims;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
+    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly HashSet<string> _requiredSourceKinds = new(StringComparer.Ordinal);
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
@@ -144,6 +146,19 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
 
+    internal RuntimePostCommitOutboxProcessor(IRuntimePostCommitOutboxStore outboxStore,
+        IRuntimePostCommitIntentDispatcher intentDispatcher, TimeProvider timeProvider, IRuntimeFaultCapturePolicy faultCapturePolicy,
+        IWorkflowDispatchStore? workflowDispatchStore, IEnumerable<IPostCommitFailureProjector> deliveryFailureProjectors,
+        ILogger<RuntimePostCommitOutboxProcessor>? logger, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IRuntimeAdmissionLoadSignal? loadSignal,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor)
+        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, deliveryFailureProjectors,
+            logger, liveDrainDeliveryAccessor, coalescingSessionAccessor, persistenceAccessContextAccessor, contributions, loadSignal)
+    {
+        _ownershipContextAccessor = ownershipContextAccessor;
+    }
+
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
         item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
         _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
@@ -264,10 +279,20 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             async dispatchCancellationToken =>
             {
                 using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
-                if (RequiresDurableSource(item))
-                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
-                else
-                    await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
+                // Required physical source validation still runs even when this drain already committed the effect.
+                var source = RequiresDurableSource(item)
+                    ? await OpenDurableSourceAsync(claim, dispatchCancellationToken)
+                    : null;
+                var intent = source?.Intent ?? item.Intent;
+                var alreadyCommitted = _coalescingSessionAccessor?.Current?.HasCommittedContinuation(item, intent,
+                    _outboxStore, _persistenceAccessContextAccessor?.Current, _ownershipContextAccessor?.Current) == true;
+                if (!alreadyCommitted)
+                {
+                    if (source is not null)
+                        await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
+                    else
+                        await _intentDispatcher.DispatchAsync(intent, dispatchCancellationToken);
+                }
                 return true;
             },
             cancellationToken);
@@ -420,6 +445,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
         }
+
+        if (_outboxStore is CoalescingRuntimePostCommitOutboxStore coalescingStore)
+            _coalescingSessionAccessor?.Current?.RememberDeliveredContinuation(item, coalescingStore,
+                _persistenceAccessContextAccessor?.Current, _ownershipContextAccessor?.Current);
 
         LogDelivered(item);
 

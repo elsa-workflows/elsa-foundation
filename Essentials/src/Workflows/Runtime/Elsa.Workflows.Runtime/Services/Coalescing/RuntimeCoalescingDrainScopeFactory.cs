@@ -111,6 +111,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         public ValueTask DisposeAsync()
         {
+            session.DiscardContinuationReceipts();
             session.DisableDurableValuePageReuse();
             scopeHandle.Dispose();
             return ValueTask.CompletedTask;
