@@ -1,0 +1,960 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+  "purpose": "M1 packaged standalone checkpoint; full Jobs delivery remains incomplete",
+  "fullProductState": "INCOMPLETE",
+  "profiles": [
+    {
+      "publishStateCommit": "7df2c9031a94086cbb8de8e50a4a26f76c154851",
+      "harnessSha256": "a12adc5629f9642d5691f5404f50eb5a1e73209868a2266626bd1d62b11eca50",
+      "consumerControllerSha256": "908b9e4a2694543c75dd5179520f003962fda860835af0081473726edf841560",
+      "packState": "PASSED",
+      "consumerPublishState": "PASSED",
+      "consumerExecutionState": "PASSED",
+      "standaloneSliceState": "PASSED",
+      "standaloneAcceptanceState": "INCOMPLETE",
+      "fullAcceptanceState": "NOT RUN",
+      "executedProviderVersion": {
+        "provider": "PostgreSql",
+        "version": "PostgreSQL 16.15 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit"
+      },
+      "sourceCleanAfterVerification": true,
+      "harnessUnchanged": true,
+      "provider": "postgresql",
+      "rawReceiptSha256": "715d3da95ea5d70275dc38b0a5b53428cde12bb3a82b6fb14429fd5a559d8b4c",
+      "witnessReceiptSha256": "2d94356d5f27de459493f7972784993385b99aae7b7de7ad50984667b32a764b",
+      "archiveCount": 8,
+      "successfulCommandCount": 12,
+      "appProcessCount": 37,
+      "uniqueAppProcesses": 37,
+      "workerProcessCount": 5,
+      "ownedResourcesCleaned": true,
+      "dependencyClosure": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "path": "Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "path": "Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
+          "version": "4.0.0-preview"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+          "version": "4.0.15-preview"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+          "version": "4.0.41-preview"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        }
+      ],
+      "archives": [
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:f8323cabcd928c3d27877891ef1cbe8f1859a5d0ac40f82117e470c4bc0a5458",
+          "archiveSha512": "5/5xszajgUCsXo5jLQB9wxzJi+pkqf6GUIFJfhBSZD7I4Cb7CP73hHSYxCEnMidl/w5ZMgieodWmySE7wN8sng==",
+          "archiveSha256": "f64730871a00e0ac8bd34d6f457345d5446c30ef4ad6388535136cbdf20bf11e"
+        },
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:4b1ef110559202e1488d8904a5ad137f1a03170534dd50bee660a12dc169b49b",
+          "archiveSha512": "tt3IqPdFi+KeBaBL5gOGuC3Jczj5sNagH0i3GKS4Cc160cfHGvtuOWSg0/8U9S94ov7NSJ371xKZlBbjVSnHYQ==",
+          "archiveSha256": "45beb7d770a4d7cc428c2b7409fc8fab2d47a1983af5d8223bafc736537adeff"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:bedd4731ca99eef0d96805eebcf7f56b36371c4cc227214e3da7a55d2654d473",
+          "archiveSha512": "AHWGtlOOetLMa7GaU07m1610oZY41hpM3zo6FIZZUMUpppt3aXZ+2Su4vrIFQsbC8cktupDl28vuJY2jwQIV7w==",
+          "archiveSha256": "fbfbd41ef3b924163c0107f118a37d4d1379999a39490441ccdd42dca04cbf19"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "version": "4.0.0-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:acda870c841420da34c1e721785dfed47d5f68c141b96cdb2fede32793b85369",
+          "archiveSha512": "rYB5E1DoGUPbLUYHfAsqtuHXYv+l95qGD5JZ2Gy1nLs0I0pL4wNyl1Bt5oMwQmOa6HFnE30GP5OqjMYUCbtBCQ==",
+          "archiveSha256": "c0e03321822514652a8ad5b887c92402a84dbce5753d8721de0092070a57ca0c"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "version": "4.0.41-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:665c0055c82af486b19d6f88b062fddcdae9c6da67ba78361d2760c725e0ca85",
+          "archiveSha512": "o84SXpul6UG0A+Ri9SQmPpMaDEZjiAZX6ReS9wEmWOh5ramXcFC0UUvLAxQJCIG047WsiqqKJTCmsCSfLnXGHQ==",
+          "archiveSha256": "20532bab75c4fce38037ceed91d9dd71d5957e491101564c9363e01c2ebeefd0"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "version": "4.0.15-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:a4fb8cdcfdefda88543f81554440a3493e183d9b37bd5d26a7d8a376478376f7",
+          "archiveSha512": "Ze4ReTdp7ubn5qoAg8pOC391hsTtJA6HHWHQlIRQzrIf0VsOJieQHOGM3wcrGaXqRqe62Pf7lajFXoIwQcQv3Q==",
+          "archiveSha256": "c47dd82e7fd77c74223ba3d031f253ed89c58a99989d5094969b60c7a1de0cff"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "version": "4.0.17-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:9c658d22bca5342349bd5bfc06b8756a69ccaf5118257bb48e3cf7feda38daa6",
+          "archiveSha512": "DBXXMQ1h/SJiPDKLsRDFPdDP8yNJGLrksOizqeeD7R+MoTjfhvJGsrSFJiXGjvodCzkYu+LGivD/GySQdZzyEA==",
+          "archiveSha256": "f510a21b7fc59daa3486a0b6dd942fe1317145e592dbf7d1346f48aa4c0eabed"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "version": "4.0.17-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:cf712db08e007f6d4cd7dbb9d0aedb5455729a78da4eb7be351095f8aee1bbda",
+          "archiveSha512": "ugInSfegVbRg2Uxj5frvQ8aid2mOfrfu+Kh9dNkuijmeq16t2Xw6hEd2HuWujvDVG4D0FSmIHgvK17vLFcJOxw==",
+          "archiveSha256": "9547a6d936540526c341376e0fbaf86ae7ae66162a3a00ed3169a6f58de5dc18"
+        }
+      ],
+      "consumer": {
+        "packageRoots": [
+          "Elsa.Jobs.Core",
+          "Elsa.Jobs",
+          "Elsa.Jobs.Persistence.EntityFrameworkCore"
+        ],
+        "references": {
+          "Elsa.Jobs.Core": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Elsa.Jobs": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Elsa.Jobs.Persistence.EntityFrameworkCore": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.0",
+          "Microsoft.Extensions.Hosting": "10.0.10"
+        },
+        "restoredProjectLibraries": 0,
+        "resolvedExternalPackages": [
+          {
+            "id": "CShells",
+            "version": "0.0.31",
+            "sha512": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ=="
+          },
+          {
+            "id": "CShells.Abstractions",
+            "version": "0.0.31",
+            "sha512": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g=="
+          },
+          {
+            "id": "JetBrains.Annotations",
+            "version": "2025.2.4",
+            "sha512": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore",
+            "version": "10.0.10",
+            "sha512": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Abstractions",
+            "version": "10.0.10",
+            "sha512": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Analyzers",
+            "version": "10.0.10",
+            "sha512": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Relational",
+            "version": "10.0.10",
+            "sha512": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g=="
+          },
+          {
+            "id": "Microsoft.Extensions.Caching.Abstractions",
+            "version": "10.0.12",
+            "sha512": "sI3A6MUAyZwccLnwq0cXuRmC3WBtXieimBWafXSfhRJ4jnM2uGVXrqImDDVyW27u4vVaTOGlJxNJd8d1FGvCNQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Caching.Memory",
+            "version": "10.0.10",
+            "sha512": "N1w5H7uK6gCTnCBZAWzE0/EQYSPysij/uYwDqntqBVvBa6bjMmBKitsnEFd6yh/SX3wLm67nO6+OnZ84K+gZWg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration",
+            "version": "10.0.10",
+            "sha512": "plJWK2zpWuuyxI8F8s2scx6Je7N1Ajjs6HvYUGKwRnDMWIVIz9FHwAkiT7ASgrvAOd10T0FPVlh9BzAJJME+jg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Abstractions",
+            "version": "10.0.10",
+            "sha512": "5Vnd2I75DmZCVEjSynIdJ/0EGafgnLQwgR3t2C2/fkjx/nRG+cLwxLLdInoHeCEpkD5K4Ov/g9ZCRYrl4TRsaA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Binder",
+            "version": "10.0.10",
+            "sha512": "GqmN2o1CkJvk7uWp+p4CwBYW0w/zfoEbvsiFDbO2G8l1Uz+mrDAbAcZiXhU2lufKPby1cjAUdd5GTWpebYOkOA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.CommandLine",
+            "version": "10.0.10",
+            "sha512": "33cBeR2HRbzHUTtmcmLdNOApneNGcymwwL4arHuotgVK9Frba8kcDTrvVTj7cSCmF1R9OiSbZH0KxNOwab3HUg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+            "version": "10.0.10",
+            "sha512": "KRfFSSCV58vEdU7mPED/YMzeovIWF5P0g8s9K8n9HEfy0/WzMq37SrPdXdFN5/dFT/rPMHpF7AvpoXHckbcBFg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.FileExtensions",
+            "version": "10.0.10",
+            "sha512": "ZOhZYwvbXGTgGVRwswIirofEMVHuWdxjdh0JeUZXwaF9cgcjXdz/t0ELtgaevw7ezTyv47yPNCgGreWtLkn3IQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Json",
+            "version": "10.0.10",
+            "sha512": "uvJ6sHwjgrkMEJOgiC76G0mcZGXerwyyWkwX34EOjCbxKG6TCtfAoqDKAMsCvEBf9HxjlGQEgqsSMOGCmGBf+A=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.UserSecrets",
+            "version": "10.0.10",
+            "sha512": "1s1sKFTk/Foam64JY6+m/diH8drL3Wx6V3gtSd5v1IEZtszZYyc1pW8uRnMblzpNiR0l0t8gGk7tXj3xHzFgdg=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyInjection",
+            "version": "10.0.10",
+            "sha512": "ANyvsgkNBRvcJh2XLgn8veGmajf+8m0AbKK+HPWdRL1yraSNVVSmQhFntLtdz/C795jxqqup+k05cs/3jZQPOA=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "version": "10.0.12",
+            "sha512": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyModel",
+            "version": "10.0.1",
+            "sha512": "IiWPd4j8JLNjSkyXl5hvJwX2ZENDVQVPDHYgZmYdw8+YkY2xp9iQt0vjdnAQZLpo/ipeW1xgOqfSBEnivKWPYQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Diagnostics",
+            "version": "10.0.10",
+            "sha512": "Kr/e7lUf4+N8tacbqJ2Ctwe/HarKdAc9ZkgKVVqvtJDBKbez+T/KnUwu82KSlnBp/SrpBcxc7u7xkE2oUZT/5Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+            "version": "10.0.10",
+            "sha512": "9uWiKpeOVac355STyChWR/pliFX/5CeLqChW9kKsaxyDH4EUTZxMkT4Jwp/J/peLm0GBFmSX5c0WCse3yCnq1Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileProviders.Abstractions",
+            "version": "10.0.10",
+            "sha512": "c5zqFCY9DiIpMovLd7/d/CTiEtrMOuQ639dhv3PABtKQIKNQikSHwQt8+N679uii9q+B55lgK28Uv64FOwEu8w=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileProviders.Physical",
+            "version": "10.0.10",
+            "sha512": "jhJAyo38kSrH3ARvWUk0h8itogVnQu2DCZuPo+s0Z+tXes0ugTxMPaHYzap85785eHQmPFqD9TYERqBbtGxn/w=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileSystemGlobbing",
+            "version": "10.0.10",
+            "sha512": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
+          },
+          {
+            "id": "Microsoft.Extensions.Hosting",
+            "version": "10.0.10",
+            "sha512": "tL9FkfV64GPUDSPvwrgyw42LVzsnVAnyrqJEuZVJbODgrQ3eL63zmzEcVWoCHzfgqUhWggzbgAyUCnz/zfI3Pg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Hosting.Abstractions",
+            "version": "10.0.10",
+            "sha512": "5LugpYGHk+mkn0a8IZgcyfBca8PCTAU9RQFoMrTdtOOidq88M2SI5f3px6ugnzgxC+eTkvYYJi8pzlUnG5xdAQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging",
+            "version": "10.0.10",
+            "sha512": "Tf6z5HsL0VDYRTfvsoNrTGHGheCwkTsZBA2FFh5ATJUbkAwug+FFNISJK2gjpUNemlAOoWllAK52HOWCjto3EQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Abstractions",
+            "version": "10.0.12",
+            "sha512": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Configuration",
+            "version": "10.0.10",
+            "sha512": "cLrqxkuEfcilZ8SjK+9KAnpLk9lOoMPaOokF+wRUYie+iUEcdX4/p/+gJkt0BYgWLthjpBUCkVTBI6Kxg0nsOw=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Console",
+            "version": "10.0.10",
+            "sha512": "VIlNzPwPS0GeQVSmCqqo36ugryX3LpE9ul6gEkks5VLET3weH/XMLeWmclwfoGn4Nxi2mwVibB+OZBVJ9tDqvg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Debug",
+            "version": "10.0.10",
+            "sha512": "8+TZBnV5fgBXoVNJ5ROSErUwYogk4hOgV7c2HWK1u5cqKGmiUTUn7+KqZ35iQu8e/B7Ykccyz5OTjdXcidNZ9g=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.EventLog",
+            "version": "10.0.10",
+            "sha512": "0RE4951AzQ+YD4gVrvbq0BhdsiBgSDo44yM7+QBZ2mrmMJeNjY+teCIYfUjqDPVYnKs0HR6SkkhgrX1YgXZq3Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.EventSource",
+            "version": "10.0.10",
+            "sha512": "85SAPwXhJtdBInzN2k7SChiFiBGh3KOWay5AfoY+GREF6P7oZA98+ST2p7Z9384iLKYjkZSKIZ/FqIO5aojtNw=="
+          },
+          {
+            "id": "Microsoft.Extensions.Options",
+            "version": "10.0.10",
+            "sha512": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+            "version": "10.0.10",
+            "sha512": "tnBmu/LwF25ZQK+HBNCu2xrwnkKoB/XEbJyooGGoYxHrhvxbSKi7eOFiJ4AXBy/QU4vtCvCJfoi8k9Ej72qzOQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Primitives",
+            "version": "10.0.12",
+            "sha512": "dYfCLR52UA+3DL7C4I/pvSaRPkNqxrUAQmbFL2u0zvYKKzqgrFCJl08Df+F1aYc8leu9JvpC9bsURUdpExcBXQ=="
+          },
+          {
+            "id": "Npgsql",
+            "version": "10.0.0",
+            "sha512": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA=="
+          },
+          {
+            "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "version": "10.0.0",
+            "sha512": "E2+uSWxSB8LdsUVwPaqRWOcGOP92biry2JEwc0KJMdLJF+aZdczeIdEXVwEyv4nSVMQJH0o8tLhyAMiR6VF0lw=="
+          },
+          {
+            "id": "System.Diagnostics.EventLog",
+            "version": "10.0.10",
+            "sha512": "OvGz3PrzuAI/Sj7LTcXcCe3FClRI1IyRMZjNONcZtFh+Ww7nAtSh4kh08r8KVe/xxkXJPjR0Y1jF7H+N42d4xQ=="
+          }
+        ],
+        "restoreDiagnostics": [],
+        "deployedJobsAssets": [
+          {
+            "id": "Elsa.Jobs.Core",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.Core.dll",
+            "sha256": "09644a36258588578388a556476995c88f9fe76c1020f27e9466c52dfec5e828"
+          },
+          {
+            "id": "Elsa.Jobs",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.dll",
+            "sha256": "433c6a9faf03c4894386eaa849ba72d0a39accfa82a49f5c5a48d783cb51e9e4"
+          },
+          {
+            "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.Persistence.EntityFrameworkCore.dll",
+            "sha256": "06078d5c5654f4155cca32af267cf6fd86d394eebc41c4c6fa7a2e4237152588"
+          }
+        ],
+        "assetsSha256": "941e289c16c073b5a329d6b79ecd16f751321b1f519ef53b4cd8977251d6c3e6",
+        "lockSha256": "f5201ba175d4cb33af3dfea7f086f438b9e85569d0522f3d17a5517aee1d0438",
+        "nugetConfigSha256": "7118fe461beabcceb622a36f03c72b25aa3c4c4456dabcce31dde68836423cbd",
+        "providerRuntimeAssetsSha256": {
+          "Npgsql.EntityFrameworkCore.PostgreSQL.dll": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf",
+          "Npgsql.dll": "9d8db086e9eda5ff20c4a7f83fa3eae7689198f57277ff9ceea1ee3526f5fcf8"
+        }
+      },
+      "cases": [
+        {
+          "name": "durable-admission-replay-conflict",
+          "state": "PASSED",
+          "jobId": "4db85768a6cf46f7a367ea4eb95c7ea1",
+          "responseLoss": "Producer deliberately discarded the successful acceptance response."
+        },
+        {
+          "name": "missing-handler-preserves-accepted-job",
+          "state": "PASSED",
+          "jobId": "4db85768a6cf46f7a367ea4eb95c7ea1"
+        },
+        {
+          "name": "useful-typed-result-and-restart-inspection",
+          "state": "PASSED",
+          "jobId": "4db85768a6cf46f7a367ea4eb95c7ea1",
+          "resultId": "dda22f534d1abd80c14b3ff8e80fee40a67fa010a56151cb880c590bb7e44c57",
+          "subtotal": 52.0
+        },
+        {
+          "name": "durable-pause-cutoff-and-accept-while-held",
+          "state": "PASSED",
+          "permittedJobId": "411b7e526ba0479db954d3dd32f2e085",
+          "laterJobId": "22313e8a277141519bd814d38d44e6bb",
+          "grantedAttemptId": "e19fe2dbca8946849f6a4513274d1a7a"
+        },
+        {
+          "name": "killed-worker-recovery-stale-fence-stable-effect-key",
+          "state": "PASSED",
+          "jobId": "caf6efc69a7b4cb78503e1b7d23904fc",
+          "resultId": "7d2bb44b47f2a11b22f935892f3ef647f4a55773d1a6a9c49accbb23494bd377",
+          "attempts": 2,
+          "oldAttemptId": "f26e15f7c78049faaf32c70370dc9764",
+          "physicalEffectDeduplication": "NOT RUN"
+        }
+      ]
+    },
+    {
+      "publishStateCommit": "7df2c9031a94086cbb8de8e50a4a26f76c154851",
+      "harnessSha256": "a12adc5629f9642d5691f5404f50eb5a1e73209868a2266626bd1d62b11eca50",
+      "consumerControllerSha256": "908b9e4a2694543c75dd5179520f003962fda860835af0081473726edf841560",
+      "packState": "PASSED",
+      "consumerPublishState": "PASSED",
+      "consumerExecutionState": "PASSED",
+      "standaloneSliceState": "PASSED",
+      "standaloneAcceptanceState": "INCOMPLETE",
+      "fullAcceptanceState": "NOT RUN",
+      "executedProviderVersion": {
+        "provider": "Sqlite",
+        "version": "3.50.4"
+      },
+      "sourceCleanAfterVerification": true,
+      "harnessUnchanged": true,
+      "provider": "sqlite",
+      "rawReceiptSha256": "9fb1ec7b0226d56a02ab2d5e3ae187ab6617403d55a803d7c9efc37357b93fb1",
+      "witnessReceiptSha256": "b269f676e7a1ef4fa50b707d7bef9eb84536959f3aea2407983091e098fee80e",
+      "archiveCount": 8,
+      "successfulCommandCount": 12,
+      "appProcessCount": 37,
+      "uniqueAppProcesses": 37,
+      "workerProcessCount": 5,
+      "ownedResourcesCleaned": true,
+      "dependencyClosure": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "path": "Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "path": "Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
+          "version": "4.0.0-preview"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+          "version": "4.0.15-preview"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+          "version": "4.0.41-preview"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        }
+      ],
+      "archives": [
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:f8323cabcd928c3d27877891ef1cbe8f1859a5d0ac40f82117e470c4bc0a5458",
+          "archiveSha512": "1sJUkZM5gBi16wf2SIkq2z99yvKdNW+e/7Kor5aW9dHcffszg0mL8+B1I809Dh5fVDKnN3wvS1o0mEQ3mCXA3Q==",
+          "archiveSha256": "df704bf905ff02c2ee1deba20f38f0e3283e52d60b77e35668fce6e7128ea23b"
+        },
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:4b1ef110559202e1488d8904a5ad137f1a03170534dd50bee660a12dc169b49b",
+          "archiveSha512": "htUZZ7WJrLduiVkzmozwhCpbOXOd+3euWqPLG4XoemlXgBN0ygbT/dgg+iawdb4AbiCqPD5v5tlyGViH3Y5lSw==",
+          "archiveSha256": "5b61a7137a81f38f3420ed2a4951e33034e7bb0f0aa2aa93876cb43e75eaa298"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:bedd4731ca99eef0d96805eebcf7f56b36371c4cc227214e3da7a55d2654d473",
+          "archiveSha512": "5FypeHagPyGG0NpXbKuv4H/rJAtQH1XjiIxmBd+tdSdvP7r1Mx9hhlWV/BsHXhyQcR07bJ9QEaYagxGwzMkohQ==",
+          "archiveSha256": "986efa8f709a3838fa37bad0c0d4469f5a52af609646227e044aa0d398bbb526"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "version": "4.0.0-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:acda870c841420da34c1e721785dfed47d5f68c141b96cdb2fede32793b85369",
+          "archiveSha512": "7UZF4sg0y2FhZ1oYTCa95MvsqwI1qrmsy4iCQVqgtDs+hOniZgn5hNNxS1OBJbv2t5kkBlkOLSMkEhpeH4yIzA==",
+          "archiveSha256": "ac6332baea2cc254d772020245829e483e8a27984b1af5a35bbf099e5afc0f52"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "version": "4.0.41-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:665c0055c82af486b19d6f88b062fddcdae9c6da67ba78361d2760c725e0ca85",
+          "archiveSha512": "EYt9pyDfrUo9n00Q0egPiG+RCET5YnhudbyczSQ0gRKqKP3FYHBfAYHhxx9dBIr1VEQxu9zBlIfjiNX5xvJg6w==",
+          "archiveSha256": "e13953f3d6d7646aa17c65da3b6ff5e1d97503bcbda20f226a106e8707c1426d"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "version": "4.0.15-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:a4fb8cdcfdefda88543f81554440a3493e183d9b37bd5d26a7d8a376478376f7",
+          "archiveSha512": "QEocmtVxx/0uh1axxr4egWMf1A4j7upjxeWz8m8NOAIZZAYFGJqKYtGqwHQJ11ih11JMcjME2zojn34v0dXJ9Q==",
+          "archiveSha256": "5160f24411c661a1be77ffadff9762fc4d8871dc2910b1413e2dd57ee662913a"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "version": "4.0.17-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:9c658d22bca5342349bd5bfc06b8756a69ccaf5118257bb48e3cf7feda38daa6",
+          "archiveSha512": "LTTpdltHmWBWEFhwJf6lADc6JZEvlFTVWZExll5t7cGYptiUrrVoKCujvFbTYxfUi9KdBDr9r16GPlO/ptTMBw==",
+          "archiveSha256": "ae8fea5b7ea610d780a18522e841eae8b3da2112dab0cd2ba4555dbfafbb8583"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "version": "4.0.17-preview",
+          "sourceCommit": "b706023ddd456f25a37e20d1d43d681c2d1597c5",
+          "fingerprint": "sha256:cf712db08e007f6d4cd7dbb9d0aedb5455729a78da4eb7be351095f8aee1bbda",
+          "archiveSha512": "80ZKbVB2T1Cvn6IXADM+8PA9W4s24KtQsLyxwsO7VZ6Qm+oWnzaAeGLY3f5ubF9t+wDtctpkHC2tZwGv4o24ZQ==",
+          "archiveSha256": "6816863d3abd6906d35bd45fef53e0353d6f5e31b39b91e146cbefe9aa769325"
+        }
+      ],
+      "consumer": {
+        "packageRoots": [
+          "Elsa.Jobs.Core",
+          "Elsa.Jobs",
+          "Elsa.Jobs.Persistence.EntityFrameworkCore"
+        ],
+        "references": {
+          "Elsa.Jobs.Core": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Elsa.Jobs": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Elsa.Jobs.Persistence.EntityFrameworkCore": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "Microsoft.EntityFrameworkCore.Sqlite": "10.0.10",
+          "SQLitePCLRaw.bundle_e_sqlite3": "3.0.3",
+          "Microsoft.Extensions.Hosting": "10.0.10"
+        },
+        "restoredProjectLibraries": 0,
+        "resolvedExternalPackages": [
+          {
+            "id": "CShells",
+            "version": "0.0.31",
+            "sha512": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ=="
+          },
+          {
+            "id": "CShells.Abstractions",
+            "version": "0.0.31",
+            "sha512": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g=="
+          },
+          {
+            "id": "JetBrains.Annotations",
+            "version": "2025.2.4",
+            "sha512": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
+          },
+          {
+            "id": "Microsoft.Data.Sqlite.Core",
+            "version": "10.0.10",
+            "sha512": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore",
+            "version": "10.0.10",
+            "sha512": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Abstractions",
+            "version": "10.0.10",
+            "sha512": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Analyzers",
+            "version": "10.0.10",
+            "sha512": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Relational",
+            "version": "10.0.10",
+            "sha512": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Sqlite",
+            "version": "10.0.10",
+            "sha512": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Sqlite.Core",
+            "version": "10.0.10",
+            "sha512": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A=="
+          },
+          {
+            "id": "Microsoft.Extensions.Caching.Abstractions",
+            "version": "10.0.12",
+            "sha512": "sI3A6MUAyZwccLnwq0cXuRmC3WBtXieimBWafXSfhRJ4jnM2uGVXrqImDDVyW27u4vVaTOGlJxNJd8d1FGvCNQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Caching.Memory",
+            "version": "10.0.10",
+            "sha512": "N1w5H7uK6gCTnCBZAWzE0/EQYSPysij/uYwDqntqBVvBa6bjMmBKitsnEFd6yh/SX3wLm67nO6+OnZ84K+gZWg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration",
+            "version": "10.0.10",
+            "sha512": "plJWK2zpWuuyxI8F8s2scx6Je7N1Ajjs6HvYUGKwRnDMWIVIz9FHwAkiT7ASgrvAOd10T0FPVlh9BzAJJME+jg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Abstractions",
+            "version": "10.0.10",
+            "sha512": "5Vnd2I75DmZCVEjSynIdJ/0EGafgnLQwgR3t2C2/fkjx/nRG+cLwxLLdInoHeCEpkD5K4Ov/g9ZCRYrl4TRsaA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Binder",
+            "version": "10.0.10",
+            "sha512": "GqmN2o1CkJvk7uWp+p4CwBYW0w/zfoEbvsiFDbO2G8l1Uz+mrDAbAcZiXhU2lufKPby1cjAUdd5GTWpebYOkOA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.CommandLine",
+            "version": "10.0.10",
+            "sha512": "33cBeR2HRbzHUTtmcmLdNOApneNGcymwwL4arHuotgVK9Frba8kcDTrvVTj7cSCmF1R9OiSbZH0KxNOwab3HUg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+            "version": "10.0.10",
+            "sha512": "KRfFSSCV58vEdU7mPED/YMzeovIWF5P0g8s9K8n9HEfy0/WzMq37SrPdXdFN5/dFT/rPMHpF7AvpoXHckbcBFg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.FileExtensions",
+            "version": "10.0.10",
+            "sha512": "ZOhZYwvbXGTgGVRwswIirofEMVHuWdxjdh0JeUZXwaF9cgcjXdz/t0ELtgaevw7ezTyv47yPNCgGreWtLkn3IQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.Json",
+            "version": "10.0.10",
+            "sha512": "uvJ6sHwjgrkMEJOgiC76G0mcZGXerwyyWkwX34EOjCbxKG6TCtfAoqDKAMsCvEBf9HxjlGQEgqsSMOGCmGBf+A=="
+          },
+          {
+            "id": "Microsoft.Extensions.Configuration.UserSecrets",
+            "version": "10.0.10",
+            "sha512": "1s1sKFTk/Foam64JY6+m/diH8drL3Wx6V3gtSd5v1IEZtszZYyc1pW8uRnMblzpNiR0l0t8gGk7tXj3xHzFgdg=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyInjection",
+            "version": "10.0.10",
+            "sha512": "ANyvsgkNBRvcJh2XLgn8veGmajf+8m0AbKK+HPWdRL1yraSNVVSmQhFntLtdz/C795jxqqup+k05cs/3jZQPOA=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "version": "10.0.12",
+            "sha512": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyModel",
+            "version": "10.0.10",
+            "sha512": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Diagnostics",
+            "version": "10.0.10",
+            "sha512": "Kr/e7lUf4+N8tacbqJ2Ctwe/HarKdAc9ZkgKVVqvtJDBKbez+T/KnUwu82KSlnBp/SrpBcxc7u7xkE2oUZT/5Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+            "version": "10.0.10",
+            "sha512": "9uWiKpeOVac355STyChWR/pliFX/5CeLqChW9kKsaxyDH4EUTZxMkT4Jwp/J/peLm0GBFmSX5c0WCse3yCnq1Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileProviders.Abstractions",
+            "version": "10.0.10",
+            "sha512": "c5zqFCY9DiIpMovLd7/d/CTiEtrMOuQ639dhv3PABtKQIKNQikSHwQt8+N679uii9q+B55lgK28Uv64FOwEu8w=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileProviders.Physical",
+            "version": "10.0.10",
+            "sha512": "jhJAyo38kSrH3ARvWUk0h8itogVnQu2DCZuPo+s0Z+tXes0ugTxMPaHYzap85785eHQmPFqD9TYERqBbtGxn/w=="
+          },
+          {
+            "id": "Microsoft.Extensions.FileSystemGlobbing",
+            "version": "10.0.10",
+            "sha512": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
+          },
+          {
+            "id": "Microsoft.Extensions.Hosting",
+            "version": "10.0.10",
+            "sha512": "tL9FkfV64GPUDSPvwrgyw42LVzsnVAnyrqJEuZVJbODgrQ3eL63zmzEcVWoCHzfgqUhWggzbgAyUCnz/zfI3Pg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Hosting.Abstractions",
+            "version": "10.0.10",
+            "sha512": "5LugpYGHk+mkn0a8IZgcyfBca8PCTAU9RQFoMrTdtOOidq88M2SI5f3px6ugnzgxC+eTkvYYJi8pzlUnG5xdAQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging",
+            "version": "10.0.10",
+            "sha512": "Tf6z5HsL0VDYRTfvsoNrTGHGheCwkTsZBA2FFh5ATJUbkAwug+FFNISJK2gjpUNemlAOoWllAK52HOWCjto3EQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Abstractions",
+            "version": "10.0.12",
+            "sha512": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Configuration",
+            "version": "10.0.10",
+            "sha512": "cLrqxkuEfcilZ8SjK+9KAnpLk9lOoMPaOokF+wRUYie+iUEcdX4/p/+gJkt0BYgWLthjpBUCkVTBI6Kxg0nsOw=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Console",
+            "version": "10.0.10",
+            "sha512": "VIlNzPwPS0GeQVSmCqqo36ugryX3LpE9ul6gEkks5VLET3weH/XMLeWmclwfoGn4Nxi2mwVibB+OZBVJ9tDqvg=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.Debug",
+            "version": "10.0.10",
+            "sha512": "8+TZBnV5fgBXoVNJ5ROSErUwYogk4hOgV7c2HWK1u5cqKGmiUTUn7+KqZ35iQu8e/B7Ykccyz5OTjdXcidNZ9g=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.EventLog",
+            "version": "10.0.10",
+            "sha512": "0RE4951AzQ+YD4gVrvbq0BhdsiBgSDo44yM7+QBZ2mrmMJeNjY+teCIYfUjqDPVYnKs0HR6SkkhgrX1YgXZq3Q=="
+          },
+          {
+            "id": "Microsoft.Extensions.Logging.EventSource",
+            "version": "10.0.10",
+            "sha512": "85SAPwXhJtdBInzN2k7SChiFiBGh3KOWay5AfoY+GREF6P7oZA98+ST2p7Z9384iLKYjkZSKIZ/FqIO5aojtNw=="
+          },
+          {
+            "id": "Microsoft.Extensions.Options",
+            "version": "10.0.10",
+            "sha512": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA=="
+          },
+          {
+            "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+            "version": "10.0.10",
+            "sha512": "tnBmu/LwF25ZQK+HBNCu2xrwnkKoB/XEbJyooGGoYxHrhvxbSKi7eOFiJ4AXBy/QU4vtCvCJfoi8k9Ej72qzOQ=="
+          },
+          {
+            "id": "Microsoft.Extensions.Primitives",
+            "version": "10.0.12",
+            "sha512": "dYfCLR52UA+3DL7C4I/pvSaRPkNqxrUAQmbFL2u0zvYKKzqgrFCJl08Df+F1aYc8leu9JvpC9bsURUdpExcBXQ=="
+          },
+          {
+            "id": "SQLitePCLRaw.bundle_e_sqlite3",
+            "version": "3.0.3",
+            "sha512": "Zt8jmSL5zcDWGk8rmzhWBJ6IRyLWh1yWS04Pg72+GIvo3Ba4E/rG4Y/4l7AWlSEogEbzyKRTCXUAs1v/O7Pkkg=="
+          },
+          {
+            "id": "SQLitePCLRaw.config.e_sqlite3",
+            "version": "3.0.3",
+            "sha512": "caP/ap0X2fyVmstCXu5ueOmcr2XWAxA2XyKghV7H4bOAFmq3nWcsGl9q44iY1HYG+i8Qr4G9XEqdfti0rV6/ZQ=="
+          },
+          {
+            "id": "SQLitePCLRaw.core",
+            "version": "3.0.3",
+            "sha512": "bjm6FY4lZyP+t7GmiuvSM0QXpFihAvyE0Y9O2yibm3g95AAWJPNnHOKVNJGyPTGIKuK7Pr4Wh8Rd8/aOtAclQw=="
+          },
+          {
+            "id": "SQLitePCLRaw.provider.e_sqlite3",
+            "version": "3.0.3",
+            "sha512": "wd+fGvZTrr3BJNe48opSczmC176Okd61ZgoZNQcdvZwkek6to978ccdpcFmNo5GHxCnk29KwT+f+lAZYgfLVZg=="
+          },
+          {
+            "id": "SourceGear.sqlite3",
+            "version": "3.50.4.5",
+            "sha512": "UtnipXhJYZKQOQIfpws/msLK7IRhMplE1CZCaZLIQXRnGD474QVpO/J9nMlQQY8NZueGz1aidjoxDRnrC1NT3Q=="
+          },
+          {
+            "id": "System.Diagnostics.EventLog",
+            "version": "10.0.10",
+            "sha512": "OvGz3PrzuAI/Sj7LTcXcCe3FClRI1IyRMZjNONcZtFh+Ww7nAtSh4kh08r8KVe/xxkXJPjR0Y1jF7H+N42d4xQ=="
+          }
+        ],
+        "restoreDiagnostics": [],
+        "deployedJobsAssets": [
+          {
+            "id": "Elsa.Jobs.Core",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.Core.dll",
+            "sha256": "5364622ad8eebf2408c78fa4f6d0f023bd162f72c7f68f840d3e2453911e7cd5"
+          },
+          {
+            "id": "Elsa.Jobs",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.dll",
+            "sha256": "e123f92c49dcb788a347e437b53a6728ea3426277bb60772f9b6389eb29a725a"
+          },
+          {
+            "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+            "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+            "asset": "lib/net10.0/Elsa.Jobs.Persistence.EntityFrameworkCore.dll",
+            "sha256": "cefd8a18f1279212bdd8815651c52c50d5e529decbe11640e4e3eb54eefba5c0"
+          }
+        ],
+        "assetsSha256": "ee6c7034e36c86611149d6b7f7e25a9cbe27d756c160b09dce9e43342abd06d8",
+        "lockSha256": "a21c6269132bd4237e92c6f78bfe49eee04295dce5db454f333ccf6fc5aa2cd3",
+        "nugetConfigSha256": "343d355765d6f422ab831a627f7956b1aac473de9abff601466608e55252a358",
+        "providerRuntimeAssetsSha256": {
+          "Microsoft.Data.Sqlite.dll": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088",
+          "Microsoft.EntityFrameworkCore.Sqlite.dll": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89",
+          "SQLitePCLRaw.batteries_v2.dll": "e83aed1d42d8ae806abeb02f0233a477275b82b5db92c92aa0c243255ab6a793",
+          "SQLitePCLRaw.core.dll": "1e18b89ea319bffb633ea5698d8958cdaae3de8c5ac855353c7c6ad292795403",
+          "SQLitePCLRaw.provider.e_sqlite3.dll": "64f5e6797a789e6f212cf619cc42af3888e64df3d2ac2b35b81304e5d0945b9d",
+          "runtimes/android-arm/native/libe_sqlite3.so": "1b74b20791081922fd00e001385815da007597709607eda9488322ff60996ee4",
+          "runtimes/android-arm64/native/libe_sqlite3.so": "8570990253a2143b4792af64314402a9b419c9366b69ba2ab5a668416ea4bad4",
+          "runtimes/android-x64/native/libe_sqlite3.so": "01b7c8739b22eb4b41e58cbe83b0f5f71a3fb1d9d4159ad1565d0db27a539520",
+          "runtimes/android-x86/native/libe_sqlite3.so": "f4b2193c775e8c103e200710087266a9dc24f928bd73842acdd5f10b66ffb9a0",
+          "runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a": "8ff5ac13b3f3e8e7efffded270b426dee52859c027c998a8091db9a6a8b2094d",
+          "runtimes/ios-arm/native/e_sqlite3.a": "55186237bf848884e095eed2babd4d0c61aa5f8282ffdba2287b02b20b325970",
+          "runtimes/ios-arm64/native/e_sqlite3.a": "55186237bf848884e095eed2babd4d0c61aa5f8282ffdba2287b02b20b325970",
+          "runtimes/iossimulator-arm64/native/e_sqlite3.a": "7a2eaea0948a04152a2e03346d25f70843d6135b33478bb4f812d8bb5919516b",
+          "runtimes/iossimulator-x64/native/e_sqlite3.a": "7a2eaea0948a04152a2e03346d25f70843d6135b33478bb4f812d8bb5919516b",
+          "runtimes/iossimulator-x86/native/e_sqlite3.a": "7a2eaea0948a04152a2e03346d25f70843d6135b33478bb4f812d8bb5919516b",
+          "runtimes/linux-arm/native/libe_sqlite3.so": "2d854f448fb938223535a57e721d3340139d38211f79d8a382f0fbe7b10143bc",
+          "runtimes/linux-arm64/native/libe_sqlite3.so": "1e3d72f01195cd8fc1e9f17a7d1e9a8fa589b390c08f81b4d3a7af721effe0eb",
+          "runtimes/linux-armel/native/libe_sqlite3.so": "3f03680395719e579d6057d5c1a6b983ed3aee104ca66cf008f4ac293120d4e6",
+          "runtimes/linux-mips64/native/libe_sqlite3.so": "efb1664a6d8c6f0317bf0befb30717073b6b61e1ac5c9c902df77e1561c64eab",
+          "runtimes/linux-musl-arm/native/libe_sqlite3.so": "12dc07f3d53f941048e34c6b89a85111b920078d88609196ce3205c20183f14a",
+          "runtimes/linux-musl-arm64/native/libe_sqlite3.so": "d881b6b8a258f5e3fe1419b46366fc1afd90e941818d30aa2d2cec650449fed0",
+          "runtimes/linux-musl-riscv64/native/libe_sqlite3.so": "c2c1068ebd1f84c6e4a2836d9a8bb2f560ca02fdb14bcd5128c5e8f99747156b",
+          "runtimes/linux-musl-s390x/native/libe_sqlite3.so": "1672540e0af343d62f5c9a8e1b66df267833a25de520552243dfd0f0a410914b",
+          "runtimes/linux-musl-x64/native/libe_sqlite3.so": "73b683c168b3cdc68f1fd005645da7fdedf17895378c2b41903172e296a990c2",
+          "runtimes/linux-ppc64le/native/libe_sqlite3.so": "11439415dedc32206271497acb9eb5d471ad4ed4d49a673736a9f86e74bae2c9",
+          "runtimes/linux-riscv64/native/libe_sqlite3.so": "88f772c63a08ea586020d40bb02e443ad7cf39e213d02fbb853646534307d0aa",
+          "runtimes/linux-s390x/native/libe_sqlite3.so": "f1d66857efe72dce75c280b1c3a60fbaf365d2445b40622056b0da93cf8cf58a",
+          "runtimes/linux-x64/native/libe_sqlite3.so": "a5e8aed525023e6c209d37d3e762e2e76ed3a830464569a419abfc3cf12d7a6c",
+          "runtimes/linux-x86/native/libe_sqlite3.so": "2bfc22ddf99e8e0d0aa8bb20818b99f164935547b1940d8700e3d1d3398a16a4",
+          "runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib": "5f7258e3d9ef0d863a223a0ece5dd7aa71903fe26a7b5f7f77a1b94c6eae8c4f",
+          "runtimes/maccatalyst-x64/native/libe_sqlite3.dylib": "292d34ba0fee9cc57fbc51866c9ef076cadee22cfb073e7e10695c5a9b4663d6",
+          "runtimes/osx-arm64/native/libe_sqlite3.dylib": "7b319cd32435ab28c97041fad74b892be218e6f0f74790802105309c1ec515a9",
+          "runtimes/osx-x64/native/libe_sqlite3.dylib": "68cbf7a2b78587bcfde9ec55f56a2d0f061260209daafd41bb3ac6f2650dfeae",
+          "runtimes/win-arm64/native/e_sqlite3.dll": "c2088aec5eeb223e810cea6745d257ce8e05f65b0665ad6325c660975a0feb40",
+          "runtimes/win-x64/native/e_sqlite3.dll": "aabf85d7a8b416fb15203cb754fcfc9858c8f1dd3bbc7eab82335f6c362ba0d6",
+          "runtimes/win-x86/native/e_sqlite3.dll": "61544338560ccf41a665bac6faba5a2270cd0088dcdf63f6906ab7ccf6b34e5e"
+        }
+      },
+      "cases": [
+        {
+          "name": "durable-admission-replay-conflict",
+          "state": "PASSED",
+          "jobId": "9c28c708e835410fbf05f608cf7a83f2",
+          "responseLoss": "Producer deliberately discarded the successful acceptance response."
+        },
+        {
+          "name": "missing-handler-preserves-accepted-job",
+          "state": "PASSED",
+          "jobId": "9c28c708e835410fbf05f608cf7a83f2"
+        },
+        {
+          "name": "useful-typed-result-and-restart-inspection",
+          "state": "PASSED",
+          "jobId": "9c28c708e835410fbf05f608cf7a83f2",
+          "resultId": "31d44e69af6b30fad69480171e050b62d0c19a19712b75d64da137a1f6e00113",
+          "subtotal": 52.0
+        },
+        {
+          "name": "durable-pause-cutoff-and-accept-while-held",
+          "state": "PASSED",
+          "permittedJobId": "c5761e94485a400f81c7f038f8345111",
+          "laterJobId": "0f8f9cf9f4ee423dbd5917960239dd7f",
+          "grantedAttemptId": "d7b7691c53ec4063902badd08633eb52"
+        },
+        {
+          "name": "killed-worker-recovery-stale-fence-stable-effect-key",
+          "state": "PASSED",
+          "jobId": "9c5ae88770024b068731549af7248825",
+          "resultId": "78cfcf8b4fec505c0edb44a8111b4d985383d4c24efa63fbbc83745bb7b63965",
+          "attempts": 2,
+          "oldAttemptId": "7db7dd4311304b2eb9607a186a71ffac",
+          "physicalEffectDeduplication": "NOT RUN"
+        }
+      ]
+    }
+  ],
+  "sourceSuites": [
+    {
+      "project": "Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj",
+      "discovered": 45,
+      "executed": 45,
+      "passed": 45,
+      "skipped": 0,
+      "warnings": 0,
+      "errors": 0,
+      "exactTestNamesMatch": true,
+      "trxSha256": "1c3dadf35575b75ca749cec645d340142e7078b98eac0dcea403c664a1e96726",
+      "discoverySha256": "9d1b2bbcce75946a8ebf6fe7d119d699378273f10d159015ddf955f0c9edef79"
+    },
+    {
+      "project": "Extensions/Jobs/tests/Persistence/ProviderTests/Elsa.Jobs.Persistence.ProviderTests.csproj",
+      "discovered": 68,
+      "executed": 68,
+      "passed": 68,
+      "skipped": 0,
+      "warnings": 0,
+      "errors": 0,
+      "exactTestNamesMatch": true,
+      "sqlite": 32,
+      "postgresql": 32,
+      "registration": 4,
+      "requiredPostgreSql": true,
+      "trxSha256": "1f65fcfe06a6ae424f52b146c424cb666f180bbb0b75b1a6b7be3ecf9e8c198c",
+      "discoverySha256": "767681e1322cf91b34fc0e42b499f532e4cfc1b98582ca5ffd3c88355a9451dc"
+    }
+  ],
+  "limits": [
+    "Producer deliberately discarded the successful admission response; database commit-ack fault injection is separate provider evidence.",
+    "Stable invocation effect keys do not prove downstream effect deduplication.",
+    "Five focused cases do not qualify the remaining schedule, complete failure, native/BPMN, tenant/secret, API/Studio, final review/CI/merge or resulting-main journeys.",
+    "Raw local logs and package archives remain in the owned evidence directories; this committed receipt retains redacted provenance and assertions."
+  ],
+  "architectureCheckpoint": {
+    "scope": "M1 Jobs source plus architecture harness wiring/minimum producer-only settings and hosting lock refresh attached to this receipt change",
+    "discoveredIdentities": 602,
+    "executions": 617,
+    "passed": 617,
+    "skipped": 0,
+    "allDiscoveredIdentitiesExecuted": true,
+    "runtimeEnumeratedTheories": {
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected": 6,
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration": 11
+    },
+    "lockedRestoreConfigurations": [
+      "Release",
+      "Debug"
+    ],
+    "wholeSolutionLockedRestorePassed": true,
+    "baselineRestoreAndAnalyzerWarningsObserved": true,
+    "mapsAndTiersPassed": true,
+    "orleansProbeReleaseBuildPassed": true,
+    "trxSha256": "d9665752f04443fac25bb6cc5d8ad7d1cef23b47834b22122e51534c1d698777"
+  }
+}

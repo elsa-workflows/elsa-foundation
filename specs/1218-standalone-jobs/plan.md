@@ -3,7 +3,7 @@
 **Branch**: `agent/codex/3586-background-jobs` | **Date**: 2026-11-06 | **Spec**: [spec.md](spec.md)
 
 **Status**: Reviewed implementation plan. ADR0096 domain admission was explicitly adopted by the owner
-on 6 November 2026; M1 begins with concrete contracts and packaged consumers. Runtime/provider proof remains open.
+on 6 November 2026. M1 packages and five standalone cases pass on both profiles at b706023ddd; [the receipt](evidence/m1-packaged-standalone.json) records exact scope. M2 and complete runtime/model/operations qualification remain open.
 
 ## Summary
 
@@ -51,7 +51,7 @@ owning versions on this branch are framework 6.1.0 and Elsa 6.4.0; the AGENTS su
 | Gate | Proposed treatment | State |
 |---|---|---|
 | Elsa §E2.1 and framework Governance | [ADR 0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) admits optional Jobs under explicit scoped owner adoption, propagated as Elsa6.4.0 | Passed for domain admission; reconcile concurrent version changes before merge |
-| §2.1–§2.4, §2.13–§2.20 | Core only contracts/abstractions; concrete provider/operations adapters; one verb-led purpose; no universal Execution umbrella | Design review pending; closure checks before code acceptance |
+| §2.1–§2.4, §2.13–§2.20 | Core only contracts/abstractions; concrete provider/operations adapters; one verb-led purpose; no universal Execution umbrella | Design review clean; M1 standalone closure passed; later adapters still require closure checks |
 | §2.5–§2.11 | Public inheritable features; scoped services, declared replacement kinds, diagnosed duplicate handlers and bounded CQS store transitions | Required in implementation |
 | §2.17 | Extract only demonstrated mechanics with concrete consumers; preserve existing workflow APIs through adapters | Review extraction before implementation |
 | §2.22–§2.23, §4 | Extension catalogs/public API, exception wrapping, risk tests, compatibility/version computation | Required in implementation |

@@ -36,13 +36,13 @@ feature/program rollup is needed. Claim ownership and state transitions remain o
 | Milestone | Outcome | State |
 |---|---|---|
 | M0 | Current-source/provider research, scoped domain admission, reviewed spec/plan/tasks and pre-code UX acceptance | Design reviewed; domain adopted 6 November; runtime contracts remain subject to concrete consumer proof |
-| M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | In progress |
+| M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | Checkpoint passed at b706023ddd; [two-profile receipt](../../specs/1218-standalone-jobs/evidence/m1-packaged-standalone.json) |
 | M2 | Immediate/delayed/recurring jobs, retry/cancel/timeout, all four pauses and distributed concurrency/recovery | Not started |
 | M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Not started |
 | M4 | Authorized API/Studio operations and integrator/operator documentation | Not started |
 | M5 | Complete packaged, multi-worker/provider and composed UX qualification; current-head review/checks/merge and resulting-main acceptance | Not started |
 
-M0 is not product completion. This record claims no production implementation or runtime acceptance.
+M1 qualifies the eight-module standalone package boundary and five focused separate-process cases on SQLite/PostgreSQL. Source whole suites pass 45 runtime/Core and 68 provider tests. This is a delivery checkpoint, not complete Jobs, model, operations/UX or resulting-main acceptance. The [matrix](../../specs/1218-standalone-jobs/acceptance-matrix.md) retains every outstanding criterion.
 
 ## Shared work and agreement
 

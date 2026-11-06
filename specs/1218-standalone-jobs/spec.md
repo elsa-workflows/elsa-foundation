@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: In progress — scoped domain admission adopted 6 November 2026; M1 implementation underway; qualification pending.
+**Status**: In progress — scoped domain admission adopted 6 November 2026; M1 packaged checkpoint verified; M2 scheduling and full qualification remain in progress.
 
 **Input**: [Canonical feature #3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586),
 owner-authorized end-to-end delivery on 5 November 2026, and this delivery chat's selected decisions.
