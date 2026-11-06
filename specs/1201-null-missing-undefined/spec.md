@@ -144,7 +144,9 @@ fails with `VF-ACT-004`; with the policy the input receives `0`.
 ### User Story 4 - `undefined` at the JavaScript boundary (Priority: P2)
 
 By default an `undefined` binding result stays an error, and an `undefined` object property is dropped **with a
-diagnostic**. A workflow may select the **undefined-as-null** policy, under which both become `null` (#3170, #3172).
+diagnostic**; an `undefined` array element or sparse hole instead becomes a `null` placeholder, under either policy,
+so positions never shift. A workflow may select the **undefined-as-null** policy, under which the result and object
+properties become `null` too (#3170, #3172).
 
 **Why this priority**: today the property is dropped silently, and Elsa 3 parity needs the policy, not a hidden marker.
 
@@ -156,13 +158,15 @@ diagnostic**. A workflow may select the **undefined-as-null** policy, under whic
 1. **Given** no policy, **When** a binding result is `undefined`, **Then** evaluation fails with the existing
    ADR 0083 guidance.
 2. **Given** no policy, **When** a result object has an `undefined` property at any depth, **Then** the property is
-   dropped and a warning names its path.
+   dropped and a warning names its path; an `undefined` array element or sparse hole instead becomes a `null`
+   placeholder with a path diagnostic, so later indices never shift.
 3. **Given** any policy, **When** a result contains `NaN` or `Infinity`, **Then** it becomes `null` and a warning names
    its path.
 4. **Given** the policy, **When** a binding result is `undefined`, **Then** it materializes as `null` (and US3 applies
    when the target is non-nullable).
 5. **Given** the policy, **When** a result object has an `undefined` property at any depth, **Then** it is kept as
-   `null`; array elements already become `null`.
+   `null`; an `undefined` array element or sparse hole likewise becomes a `null` placeholder, positions preserved, and
+   an element already `null` needs no diagnostic.
 6. **Given** the policy, **When** a script returns a string from `JSON.stringify`, **Then** that string is not
    rewritten.
 7. **Given** no policy and a script activity whose result is bound to a variable or output, **When** the script has no

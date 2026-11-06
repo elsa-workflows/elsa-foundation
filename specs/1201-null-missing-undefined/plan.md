@@ -74,7 +74,7 @@ admission.
 | D-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds D-10's completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
 | D-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; undefined policy also pinned on each JavaScript binding. |
 | D-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
-| D-7 | Jint replacer | R-7. Warnings `js-undefined-dropped`, `js-nonfinite-null`; policy turns `undefined` into `null`. |
+| D-7 | Jint replacer | R-7. Warnings `js-undefined-dropped`, `js-nonfinite-null`; an `undefined` array element or sparse hole becomes a `null` placeholder (a path diagnostic, not dropped) so positions hold under either policy; policy turns `undefined` into `null`. |
 | D-8 | Script activity without a return | R-8, Q3. Bound result: refused at publication without `return`, step faults at run time without a value; `null` under the policy. Unbound: nothing written. |
 | D-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | D-10 | Computed read miss | R-10. `undefined` plus `variable-not-found` warning; read set marks the name absent. |
