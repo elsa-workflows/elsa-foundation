@@ -31,6 +31,35 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("autosaves a presentation-only provider edit with the exact revision and retained implementation", async () => {
+    const capture: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null } = { current: null };
+    const initial = { ...fullDraft({ revision: 3, payload: { edit: 0 } }), activityPresentation: [{ nodeId: "root", displayName: "Original" }] };
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...initial, revision: 4, activityPresentation: (body as ActivityDefinitionDraftView).activityPresentation }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution(capture)],
+      putJson,
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    flushSync(() => capture.current!({ payload: initial.provider.payload, layout: initial.layout, activityPresentation: [{ nodeId: "root", displayName: "Renamed", description: "Context" }] }));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    click(buttonByText(rendered.container, "Save now"));
+    await waitForText(rendered.container, "Saved revision 4");
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
+      expectedRevision: 3,
+      activityPresentation: [{ nodeId: "root", displayName: "Renamed", description: "Context" }],
+      provider: expect.objectContaining({ payload: initial.provider.payload }),
+      layout: initial.layout
+    }));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await rendered.unmount();
+  });
+
   it("keeps ordinary autosave quiet while retaining the navigation guard", async () => {
     let resolveSave!: (value: ActivityDefinitionDraftView) => void;
     const putJson = vi.fn(() => new Promise<ActivityDefinitionDraftView>(resolve => { resolveSave = resolve; }));
@@ -586,7 +615,7 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")?.open).toBe(false);
+    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");
@@ -941,7 +970,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "Published baseline");
     showContractView(rendered.container);
-    openDetails(rendered.container.querySelector(".ad-contract-advanced")!);
+    click(buttonByText(rendered.container, "Presentation"));
     change(controlByLabel<HTMLInputElement>(rendered.container, "Display name"), "Friendly message");
     await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
     expect(rendered.container.textContent).not.toContain("Review breaking input change");
@@ -998,7 +1027,7 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    openDetails(pane.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")!);
+    click(buttonByText(pane, "Advanced"));
     change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
@@ -1498,6 +1527,8 @@ describe("Activity Definition authoring", () => {
     click(contractDiagnostic);
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
+    expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);
@@ -2474,7 +2505,7 @@ describe("Activity Definition publication", () => {
 
 describe("Activity Definition local recovery policy", () => {
   it("is disabled by default and expires within the configured identity scope", () => {
-    const draft = fullDraft({ revision: 3, payload: { edit: 1 } });
+    const draft = { ...fullDraft({ revision: 3, payload: { edit: 1 } }), activityPresentation: [{ nodeId: "root", displayName: "Local name", description: "Local context" }] };
     expect(createActivityDefinitionRecoveryStore(undefined, { tenantId: "tenant-1", subject: "author-1" })).toBeNull();
 
     vi.useFakeTimers();
@@ -2483,6 +2514,7 @@ describe("Activity Definition local recovery policy", () => {
     const otherAuthor = createActivityDefinitionRecoveryStore({ enabled: true, ttlMinutes: 1 }, { tenantId: "tenant-1", subject: "author-2" })!;
     author.write(draft);
     expect(author.read(draft)?.payload).toEqual({ edit: 1 });
+    expect(author.read(draft)?.activityPresentation).toEqual(draft.activityPresentation);
     expect(otherAuthor.read(draft)).toBeNull();
 
     vi.setSystemTime(new Date("2026-07-17T10:01:01Z"));
@@ -2819,7 +2851,7 @@ function managementDefinition() {
 }
 
 function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent?.includes(text));
+  const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
 }

@@ -19,6 +19,12 @@ public sealed class RuntimePostCommitOutboxEntity
     public long? DeliverableAtUtcTicks { get; set; }
     public long ClaimableAtUtcTicks { get; set; }
     public bool ClaimableIsEligible { get; set; }
+
+    /// <summary>
+    /// When a claim delivered the item (#3661): its delivery time once it is Delivered under a fencing token, otherwise
+    /// null. Null also on a row last written before the column existed.
+    /// </summary>
+    public long? ClaimDeliveredAtUtcTicks { get; set; }
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }

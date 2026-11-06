@@ -2,20 +2,20 @@
 
 The connection-backed contributors implement the existing [specialist model ports](../Core/EXTENSION_POINTS.md).
 `Elsa.Agent.Specialists.Connections` supplies their common operational boundary without a provider SDK,
-Design or Publishing dependency. Anthropic and Azure OpenAI remain separate optional packages.
+Design or Publishing dependency. Anthropic, OpenAI and Azure OpenAI remain separate optional packages.
 
 Enable `Connections` with the host's chosen metadata and Secrets backends, then enable
-`AnthropicSpecialists` and/or `AzureOpenAISpecialists`. Authoring-only hosts consume capabilities;
+`AnthropicSpecialists`, `OpenAISpecialists` and/or `AzureOpenAISpecialists`. Authoring-only hosts consume capabilities;
 runtime-only hosts consume client factories. These features do not activate Weaver or select its harness.
 The enclosing operation must already have an explicit ordinary persistence partition. Runtime native
 provenance must agree with that partition and any non-null tenant; a null tenant never grants global access.
 
-Create a connection of type `specialist-anthropic` or `specialist-azure-openai`, using the `api-key`
+Create a connection of type `specialist-anthropic`, `specialist-openai` or `specialist-azure-openai`, using the `api-key`
 authentication scheme. Put the provider credential in the existing `apiKey` secret field. Configure:
 
 | Setting | Meaning |
 |---|---|
-| `endpoint` | Explicit HTTPS origin, with no path, user info, query or fragment. Examples: `https://api.anthropic.com`, `https://my-resource.openai.azure.com`. |
+| `endpoint` | Explicit HTTPS origin, with no path, user info, query or fragment. Examples: `https://api.anthropic.com`, `https://api.openai.com`, `https://my-resource.openai.azure.com`. |
 | `allowedHosts` | Explicit comma-separated host policy, which must allow the endpoint. Unrestricted `any` policy is refused. |
 | `modelId` | Exact model ID or Azure deployment name bound to this connection. |
 | `maximumOutputTokens` | Declared positive output token ceiling, at most 1,000,000. |

@@ -37,7 +37,10 @@ internal static class InMemoryReconcilerHarness
     public static ActivityVersionReconciler BuildReconciler(
         CatalogStore store,
         IActivityReconciliationSource source,
-        DuplicateHandling duplicateHandling = DuplicateHandling.Skip)
+        DuplicateHandling duplicateHandling = DuplicateHandling.Skip,
+        IActivitySourceVersionPublisher? sourceVersionPublisher = null,
+        IActivityReconciliationDiagnosticStore? diagnosticStore = null,
+        Microsoft.Extensions.Logging.ILogger<ActivityVersionReconciler>? logger = null)
     {
         var identityGenerator = new TestIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
@@ -58,7 +61,7 @@ internal static class InMemoryReconcilerHarness
         var publisher = new DirectEventPublisher(handler);
 
         return new ActivityVersionReconciler(
-            NullLogger<ActivityVersionReconciler>.Instance,
+            logger ?? NullLogger<ActivityVersionReconciler>.Instance,
             hasher,
             publisher,
             Options.Create(new ActivityVersionReconcilerOptions { DuplicateHandling = duplicateHandling }),
@@ -66,7 +69,9 @@ internal static class InMemoryReconcilerHarness
             versionStore,
             new InMemoryAddActivityDefinitionCommand(store),
             new InMemoryAddVersionCommand(store),
-            new InMemoryRefreshVersionCommand(store));
+            new InMemoryRefreshVersionCommand(store),
+            sourceVersionPublisher is null ? null : [sourceVersionPublisher],
+            diagnosticStore);
     }
 
     public sealed class CatalogStore

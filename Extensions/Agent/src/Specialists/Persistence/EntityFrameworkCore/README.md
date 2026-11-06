@@ -126,3 +126,32 @@ no reverse migration or arbitrary binary rollback is supplied by Specialists.
 The [package compatibility witness](../../../../../../tools/agents/conformance/README.md) distinguishes
 a named unchanged-format bidirectional pair from an upgrade with an explicit schema rollback refusal.
 Neither outcome qualifies every host/store, power loss, live inference or a restored backup.
+
+## Agent source authoring
+
+`AgentSourcesEntityFrameworkCore` installs typed source storage without `SpecialistsRuntime`.
+Its settings match the journal feature. Direct composition uses
+`AddAgentSourcesEntityFrameworkCore(options)`. The combined `AddSpecialistsEntityFrameworkCore`
+registration also installs source ports; choose one built-in context configuration per shell.
+For an application-owned context, map `AddSourceRevisions("your_prefix", provider)` and register
+`AddAgentSourceStore<ApplicationDbContext>()`. Source writes use that scoped context and refuse
+pending unrelated changes; resolve a separate scope for concurrent operations.
+
+Normal module startup applies migrations and admits the schema write gate before source operations.
+The shared writer stamps new rows before that gate checks them and retains the verified shadow stamp
+when reattaching a copy. Applying migrations directly without module admission does not exercise this
+host boundary; composition qualification uses the ordinary module lifecycle.
+
+`IAgentSourceReader`/`IAgentSourceWriter` own typed instructions, model reference, business contract and
+policy. Tenant/partition/authority comes from trusted composition. The source API requires
+`agent/definitions:read` or `agent/definitions:manage`; generic activity permissions do not grant it.
+Saving returns its exact committed revision; capture/history/fork/discard use the shared engine.
+One Agent copy per source is the initial cardinality policy. Discard retains history and capture pins.
+
+This is unpublished source storage. The old activity-backed editor/provider remains the publication
+path until T066/T068 switch it together; the new API does not publish or run an Agent and does not
+mirror content into generic editable activity drafts. Workflow and Agent source migrations are a
+pre-GA break requiring coordinated clean-store deployment, never an automatic live reset. See
+[the delivery boundary](../../../../../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+
+Source reader/writer ports are paired replacement contracts. A competing context selection fails immediately; startup also refuses late duplicate or substituted registrations. The database is never selected by registration order.

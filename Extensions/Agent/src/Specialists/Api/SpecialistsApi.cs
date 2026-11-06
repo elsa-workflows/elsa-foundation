@@ -1,8 +1,11 @@
+using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Api.Endpoints;
+using Elsa.Persistence.Core;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Agent.Specialists.Api;
 
@@ -38,6 +41,20 @@ public sealed record SpecialistModelCapabilitiesView(JsonElement SettingsSchema,
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
+[JsonSerializable(typeof(AgentSourceCreate))]
+[JsonSerializable(typeof(AgentSourceSave))]
+[JsonSerializable(typeof(AgentSourceRead))]
+[JsonSerializable(typeof(AgentSourceHistory))]
+[JsonSerializable(typeof(AgentSourceRevisionRead))]
+[JsonSerializable(typeof(AgentSourceFork))]
+[JsonSerializable(typeof(AgentSourceList))]
+[JsonSerializable(typeof(AgentSourceCapture))]
+[JsonSerializable(typeof(AgentSourceDiscard))]
+[JsonSerializable(typeof(AgentSourceDraft))]
+[JsonSerializable(typeof(AgentSourcePage))]
+[JsonSerializable(typeof(AgentSourceRevision))]
+[JsonSerializable(typeof(IReadOnlyList<AgentSourceRevision>))]
+[JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(SpecialistModelProvidersResponse))]
 [JsonSerializable(typeof(SpecialistModelCapabilitiesRequest))]
 [JsonSerializable(typeof(SpecialistModelCapabilitiesView))]
@@ -62,8 +79,16 @@ internal sealed class SpecialistsApiFaultRenderer : IEndpointFaultRenderer
             await new Elsa.Api.AspNetCore.ElsaFallbackEndpointProblemWriter().WriteAsync(context, Elsa.Api.AspNetCore.SchemaWriteRefusalProblem.For(refusal));
             return true;
         }
+        if (exception is SourceRevisionException source)
+        {
+            var code = source.Code;
+            await Results.Problem(statusCode: code == "not-found" ? 404 : code is "storage-unavailable" or "outcome-unknown" ? 503 : 409,
+                title: "The Agent source operation was refused.", extensions: new Dictionary<string, object?> { ["code"] = code }).ExecuteAsync(context);
+            return true;
+        }
         var (status, title) = exception switch
         {
+            ArgumentException => (StatusCodes.Status422UnprocessableEntity, "The Agent source is invalid."),
             SpecialistModelUnavailableException => (StatusCodes.Status422UnprocessableEntity, "The selected model connection is unavailable for specialists."),
             _ => (StatusCodes.Status500InternalServerError, "The specialist operation failed.")
         };

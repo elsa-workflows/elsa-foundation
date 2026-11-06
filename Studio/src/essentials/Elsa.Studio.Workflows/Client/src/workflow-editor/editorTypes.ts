@@ -15,6 +15,8 @@ export interface CreateWorkflowDraft {
   starter?: "http";
   templateId?: string;
   templateContent?: WorkflowTemplateContent;
+  /** Local form intent; retained by Weaver prefill/revert and never sent in creation requests. */
+  metadataEdited?: { name: boolean; description: boolean };
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
@@ -28,7 +30,7 @@ export interface ActivityPaletteGroup {
   activities: ActivityCatalogItem[];
 }
 
-export type CanvasView = "designer" | "code" | "properties";
+export type CanvasView = "designer" | "code" | "properties" | "variables" | "inputs" | "outputs" | "versions";
 
 // A structured editor error so banners can surface ProblemDetails `detail`, a correlatable `traceId`,
 // and the HTTP status alongside the human-readable message. Plain strings are still accepted anywhere a
