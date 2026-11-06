@@ -153,9 +153,13 @@ public sealed class NativeHostingConsumptionGateTests : IDisposable
         using var cancellation = new CancellationTokenSource();
         var blocked = ownerScope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>()
             .AcquireAsync("execution", cancellation.Token).AsTask();
+        var acknowledged = WaitForAcknowledgementAsync(cancellation.Token);
         try
         {
-            await WaitForAcknowledgementAsync();
+            // Bypassing the real ownership decorator must fail immediately on backend completion, rather than
+            // merely exhausting an acknowledgement watchdog without proving which boundary was crossed.
+            Assert.Same(acknowledged, await Task.WhenAny(blocked, acknowledged).WaitAsync(HangGuard));
+            await acknowledged;
             Assert.False(blocked.IsCompleted);
             Assert.Equal(0, ownerBackend.AcquireCalls);
             var survivorOwnership = survivorScope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
@@ -169,6 +173,7 @@ public sealed class NativeHostingConsumptionGateTests : IDisposable
         finally
         {
             await CancelAndObserveAsync(cancellation, blocked);
+            await CancelAndObserveAsync(cancellation, acknowledged);
         }
     }
 
@@ -401,9 +406,10 @@ public sealed class NativeHostingConsumptionGateTests : IDisposable
         Assert.Equal(token, acknowledgement["HoldToken"]!.GetValue<string>());
     }
 
-    private async Task WaitForAcknowledgementAsync()
+    private async Task WaitForAcknowledgementAsync(CancellationToken cancellationToken)
     {
-        using var guard = new CancellationTokenSource(HangGuard);
+        using var guard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        guard.CancelAfter(HangGuard);
         while (!File.Exists(AcknowledgementPath))
             await Task.Delay(10, guard.Token);
     }
