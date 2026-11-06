@@ -41,6 +41,13 @@ interface BpmnCanvas {
   viewbox(box?: unknown): unknown;
 }
 
+interface CanvasBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface BpmnElementRegistry {
   get(id: string): unknown;
 }
@@ -75,6 +82,30 @@ interface Projection {
 
 function describeFailure(failure: unknown) {
   return failure instanceof Error ? failure.message : String(failure);
+}
+
+function fitInitialViewport(canvas: BpmnCanvas, container: HTMLDivElement | null) {
+  const viewport = canvas.viewbox() as { inner?: CanvasBounds; outer?: { width: number; height: number } };
+  const { inner, outer } = viewport;
+  if (!inner?.width || !inner.height || !outer?.width || !outer.height) {
+    canvas.zoom("fit-viewport");
+    return;
+  }
+  // Native fit-viewport aligns large diagrams to their top-left bounds and includes the space
+  // occupied by the palette. Fit into the unobstructed area with room for labels and attribution.
+  const containerBounds = container?.getBoundingClientRect();
+  const paletteBounds = container?.querySelector(".djs-palette")?.getBoundingClientRect();
+  const left = Math.max(24, paletteBounds && containerBounds ? paletteBounds.right - containerBounds.left + 24 : 24);
+  const top = 24;
+  const availableWidth = Math.max(1, outer.width - left - 24);
+  const availableHeight = Math.max(1, outer.height - top - 48);
+  const scale = Math.min(1, availableWidth / inner.width, availableHeight / inner.height);
+  canvas.viewbox({
+    x: inner.x - (left + (availableWidth - inner.width * scale) / 2) / scale,
+    y: inner.y - (top + (availableHeight - inner.height * scale) / 2) / scale,
+    width: outer.width / scale,
+    height: outer.height / scale
+  });
 }
 
 /** Experimental controlled canvas. Elsa's complete authoring document remains authoritative. */
@@ -153,7 +184,7 @@ export function BpmnJsCanvas(props: BpmnJsCanvasProps) {
             if (desiredRef.current?.id !== requested.id) continue;
             if (result.warnings.length) throw new Error(`The process could not be represented without warnings: ${result.warnings.map(warning => warning.message ?? String(warning)).join("; ")}`);
             if (sameScope && viewport) canvas.viewbox(viewport);
-            else canvas.zoom("fit-viewport");
+            else fitInitialViewport(canvas, hostRef.current);
             importedXmlRef.current = requested.xml;
             importedOwnerRef.current = requested.ownerNodeId;
             desiredRef.current = null;

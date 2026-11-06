@@ -345,6 +345,8 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
     {
         if (!StringComparer.Ordinal.Equals(processNode.Structure?.Kind, BpmnProcessActivity.StructureKind))
             throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' does not carry an '{BpmnProcessActivity.StructureKind}' structure.");
+        if (!StringComparer.Ordinal.Equals(processNode.Structure.SchemaVersion, BpmnProcessActivity.StructureSchemaVersion))
+            throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' has unsupported authoring schema '{processNode.Structure.SchemaVersion}'; legacy BPMN export requires '{BpmnProcessActivity.StructureSchemaVersion}'.");
 
         return processNode.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
                ?? throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' structure resolved to null.");

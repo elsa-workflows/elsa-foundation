@@ -20,6 +20,7 @@ STUDIO_PROJECT = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
 PLAYWRIGHT_CONFIG = 'tests/acceptance/playwright.bpmn-js.config.ts'
 DIRECTIONS = ('integrated', 'bpmn-js')
 CAPTURES = (
+    'alternate-initial-fit',
     'high-inline-binding-through-shared-inspector',
     'nested-sequence-through-shared-inspector',
     'alternate-shared-routing-and-attribution',

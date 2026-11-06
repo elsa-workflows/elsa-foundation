@@ -49,15 +49,16 @@ public sealed class ActivitiesBpmnFeatureTests
         feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         var handlers = provider.GetServices<IActivityStructureHandler>().ToArray();
-        Assert.Equal(2, handlers.Length);
+        Assert.Equal(3, handlers.Length);
         Assert.All(handlers, handler =>
         {
-            Assert.Equal(Activities.BpmnProcess.StructureKind, handler.Kind);
             Assert.True(handler.SupportsScopedVariables);
         });
-        var handler = Assert.Single(handlers, handler => handler.SchemaVersion == Activities.BpmnProcess.StructureSchemaVersion);
+        var handler = Assert.Single(handlers, handler => handler.Kind == Activities.BpmnProcess.StructureKind && handler.SchemaVersion == Activities.BpmnProcess.StructureSchemaVersion);
         Assert.Equal(typeof(Models.BpmnAuthoredStructure), handler.AuthoredPayloadType);
         Assert.Equal(typeof(Models.BpmnAuthoredDocument), Assert.Single(handlers, handler => handler.SchemaVersion == "2.0.0").AuthoredPayloadType);
+        Assert.Null(Assert.Single(handlers, handler => handler.Kind == Models.BpmnDocumentScopeView.Kind).AuthoredPayloadType);
+        Assert.Single(provider.GetServices<Elsa.Workflows.Design.Validations.Core.Contracts.IDraftValidator>());
         Assert.Single(services, service => service.ServiceType == typeof(IExecutableCompilationSource));
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
         Assert.DoesNotContain(typeof(ActivitiesBpmnDesignFeature).Assembly.GetReferencedAssemblies(),

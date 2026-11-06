@@ -46,6 +46,11 @@ function owner(source = xml): ActivityNode {
     ], futureMetadata: { retained: true } }
   } };
 }
+function dataDocument() {
+  return xml.replace('<bpmn:serviceTask id="Task"', '<bpmn:dataObject id="Data"/><bpmn:dataObjectReference id="DataRef" dataObjectRef="Data"/><bpmn:dataObjectReference id="DataRef2" dataObjectRef="Data"/><bpmn:serviceTask id="Task"')
+    .replace('</bpmn:serviceTask>', '<bpmn:ioSpecification><bpmn:dataInput id="Input"/><bpmn:dataInput id="Input2"/></bpmn:ioSpecification><bpmn:dataInputAssociation id="InputAssociation"><bpmn:sourceRef>DataRef</bpmn:sourceRef><bpmn:sourceRef>DataRef2</bpmn:sourceRef><bpmn:targetRef>Input</bpmn:targetRef><bpmn:transformation language="urn:expression">keepTransformation()</bpmn:transformation></bpmn:dataInputAssociation></bpmn:serviceTask>')
+    .replace('</bpmndi:BPMNPlane>', '<bpmndi:BPMNEdge id="InputEdge" bpmnElement="InputAssociation"><di:waypoint x="100" y="100"/><di:waypoint x="200" y="100"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane>');
+}
 function element(value: ActivityNode, id: string) { return readBpmnDocument(value).byId.get(id)!; }
 function command(value: BpmnDocumentCommand) { return applyBpmnDocumentCommands(owner(), [value]); }
 const address = (elementId: string) => ({ elementId });
@@ -105,6 +110,76 @@ describe("complete BPMN document authority", () => {
     expect(element(next, "OtherProcess").outerHTML).toBe(element(original, "OtherProcess").outerHTML);
   });
 
+  it("retains compact nested and independent scope headers with exact native bindings", () => {
+    const original = owner();
+    original.structure!.payload.scopeHeaders = [
+      { scopeElementId: "Nested", nodeId: "nested-scope", activityVersionId: "exact-process-version", inputs: [], outputs: [], variables: [], futureMetadata: { keep: true } },
+      { scopeElementId: "OtherProcess", nodeId: "other-scope", activityVersionId: "exact-process-version", inputs: [], outputs: [], variables: [] }
+    ];
+    (original.structure!.payload.activities as ActivityNode[]).push(
+      { nodeId: "nested-listener", activityVersionId: "exact-listener", inputs: [], outputs: [] },
+      { nodeId: "other-work", activityVersionId: "exact-receive", inputs: [], outputs: [] });
+    (original.structure!.payload.bindings as unknown[]).push({ elementId: "NestedStart", listenerNodeId: "nested-listener" }, { elementId: "OtherTask", childNodeId: "other-work" });
+    const next = applyBpmnDocumentCommands(original, [{ kind: "attribute", target: address("OtherTask"), name: "name", value: "Other process work" }]);
+    expect(next.structure!.payload.scopeHeaders).toBe(original.structure!.payload.scopeHeaders);
+    expect(next.structure!.payload.activities).toBe(original.structure!.payload.activities);
+    expect(readBpmnDocument(next).payload.bindings).toEqual(original.structure!.payload.bindings);
+    expect(element(next, "OtherTask").getAttribute("name")).toBe("Other process work");
+  });
+
+  it("requires complete native scope identities without persisting generated source views", () => {
+    const original = owner();
+    original.structure!.payload.scopeHeaders = [{ scopeElementId: "Nested", nodeId: "nested-scope", activityVersionId: "exact-process-version", inputs: [], outputs: [], variables: [], structure: { kind: "elsa.bpmn.scope-view" } }];
+    expect(() => readBpmnDocument(original)).toThrow("second structure");
+    const missing = owner();
+    (missing.structure!.payload.activities as ActivityNode[]).push({ nodeId: "nested-listener", activityVersionId: "exact-listener", inputs: [], outputs: [] });
+    (missing.structure!.payload.bindings as unknown[]).push({ elementId: "NestedStart", listenerNodeId: "nested-listener" });
+    expect(() => readBpmnDocument(missing)).toThrow("scope header chain");
+  });
+
+  it.each([false, true])("rejects actual physical derived structures, including native descendants (nested=%s)", nested => {
+    const original = owner();
+    const body = (original.structure!.payload.activities as ActivityNode[])[0];
+    const view = { nodeId: nested ? "leaf" : "body", activityVersionId: "exact-process", inputs: [], outputs: [],
+      structure: { kind: "elsa.bpmn.scope-view", schemaVersion: "1.0.0", payload: {} } };
+    if (nested) body.structure!.payload.activities = [view];
+    else (original.structure!.payload.activities as ActivityNode[])[0] = view;
+    const before = structuredClone(original);
+    expect(() => readBpmnDocument(original)).toThrow("projected scope");
+    expect(original).toEqual(before);
+  });
+
+  it("preserves reserved-looking literal inputs and native metadata without treating them as activity positions", () => {
+    const original = owner();
+    const body = (original.structure!.payload.activities as ActivityNode[])[0];
+    const opaque = { kind: "elsa.bpmn.scope-view", structure: { kind: "elsa.bpmn.scope-view" } };
+    body.inputs.push({ referenceKey: "literal", value: { expressionType: "Literal", value: opaque } });
+    body.moduleMetadata = opaque;
+    body.structure!.payload.opaque = opaque;
+    const next = applyBpmnDocumentCommands(original, [{ kind: "attribute", target: address("Task"), name: "name", value: "Edited" }]);
+    expect(next.structure!.payload.activities).toBe(original.structure!.payload.activities);
+  });
+
+  it.each(["vendor", "extension", "standard"])("rejects configured scope headers below %s wrappers while preserving unconfigured XML", wrapper => {
+    const hidden = '<bpmn:subProcess id="Hidden"><bpmn:task id="HiddenTask"/></bpmn:subProcess>';
+    const fragment = wrapper === "vendor" ? `<bpmn:extensionElements><vendor:opaque>${hidden}</vendor:opaque></bpmn:extensionElements>`
+      : wrapper === "extension" ? `<bpmn:extensionElements>${hidden}</bpmn:extensionElements>` : `<bpmn:dataObject id="OpaqueData">${hidden}</bpmn:dataObject>`;
+    const original = owner(xml.replace('<bpmn:startEvent id="Start">', `${fragment}<bpmn:startEvent id="Start">`));
+    expect(readBpmnDocument(original).payload.documentXml).toBe(original.structure!.payload.documentXml);
+    const unconfigured = applyBpmnDocumentCommands(original, [{ kind: "attribute", target: address("Task"), name: "name", value: "Edited" }]);
+    expect(element(unconfigured, "Hidden").outerHTML).toBe(element(original, "Hidden").outerHTML);
+    original.structure!.payload.scopeHeaders = [{ scopeElementId: "Hidden", nodeId: "hidden-scope", activityVersionId: "exact-process", inputs: [], outputs: [], variables: [] }];
+    (original.structure!.payload.activities as ActivityNode[]).push({ nodeId: "hidden-native", activityVersionId: "exact-work", inputs: [], outputs: [] });
+    (original.structure!.payload.bindings as unknown[]).push({ elementId: "HiddenTask", childNodeId: "hidden-native" });
+    expect(() => readBpmnDocument(original)).toThrow("standard scope chain");
+  });
+
+  it.each(["documentXml", "processId", "activities", "bindings", "scopeHeaders"])("rejects a second %s authority in compact scope configuration", field => {
+    const original = owner();
+    original.structure!.payload.scopeHeaders = [{ scopeElementId: "Nested", nodeId: "nested-scope", activityVersionId: "exact-process", inputs: [], outputs: [], variables: [], [field]: [] }];
+    expect(() => readBpmnDocument(original)).toThrow("second structure");
+  });
+
   it("addresses idless standard property text without duplicating semantic state", () => {
     const next = command({ kind: "text", target: { elementId: "Flow", path: [{ namespaceURI: bpmnNamespaces.model, localName: "conditionExpression" }] }, value: "amount > 500" });
     expect(element(next, "Flow").textContent).toBe("amount > 500");
@@ -129,6 +204,20 @@ describe("complete BPMN document authority", () => {
     expect(incoming.textContent).toBe("Flow");
     expect(incoming.getAttributeNS("urn:vendor", "note")).toBe("keep");
     expect(element(next, "Start").getElementsByTagNameNS(bpmnNamespaces.model, "outgoing")).toHaveLength(1);
+  });
+
+  it("creates new sequence references in the destination XML context instead of moving an orphan context", () => {
+    const source = xml.replace('<bpmn:process id="Process"', '<bpmn:process xml:base="https://example.test/model/" xml:lang="nl" xml:space="preserve" id="Process"')
+      .replace('<bpmn:outgoing>Flow</bpmn:outgoing>', '').replace('<bpmn:incoming vendor:note="keep">Flow</bpmn:incoming>', '');
+    const original = owner(source);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "Flow", sourceRef: "Start", targetRef: "Nested" }]);
+    for (const [id, name] of [["Start", "outgoing"], ["Nested", "incoming"]]) {
+      const reference = element(next, id).getElementsByTagNameNS(bpmnNamespaces.model, name)[0];
+      expect(reference.textContent).toBe("Flow");
+      for (const localName of ["base", "lang", "space"]) expect(reference.hasAttributeNS("http://www.w3.org/XML/1998/namespace", localName)).toBe(false);
+    }
+    expect(original.structure!.payload.documentXml).toBe(source);
+    expect(retainedXml(next)).toBe(retainedXml(original));
   });
 
   it("keeps cross-pool message flows distinct from sequence flows", () => {
@@ -213,14 +302,64 @@ describe("complete BPMN document authority", () => {
   });
 
   it("projects data-association child references and all semantic sources", () => {
-    const source = xml.replace('<bpmn:serviceTask id="Task"', '<bpmn:dataObject id="Data"/><bpmn:dataObjectReference id="DataRef" dataObjectRef="Data"/><bpmn:dataObjectReference id="DataRef2" dataObjectRef="Data"/><bpmn:serviceTask id="Task"')
-      .replace('</bpmn:serviceTask>', '<bpmn:ioSpecification><bpmn:dataInput id="Input"/></bpmn:ioSpecification><bpmn:dataInputAssociation id="InputAssociation"><bpmn:sourceRef>DataRef</bpmn:sourceRef><bpmn:sourceRef>DataRef2</bpmn:sourceRef><bpmn:targetRef>Input</bpmn:targetRef></bpmn:dataInputAssociation></bpmn:serviceTask>')
-      .replace('</bpmndi:BPMNPlane>', '<bpmndi:BPMNEdge id="InputEdge" bpmnElement="InputAssociation"><di:waypoint x="100" y="100"/><di:waypoint x="200" y="100"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane>');
-    const association = projectBpmnDocumentScene(owner(source), "Diagram").edges.find(edge => edge.elementId === "InputAssociation")!;
+    const association = projectBpmnDocumentScene(owner(dataDocument()), "Diagram").edges.find(edge => edge.elementId === "InputAssociation")!;
     expect(association.elementType).toBe("dataInputAssociation");
     expect(association.sourceRefs).toEqual(["DataRef", "DataRef2"]);
     expect(association.targetRefs).toEqual(["Input"]);
     expect(association.targetRef).toBe("Input");
+  });
+
+  it("edits every data-association source and the real I/O target while retaining transformations", () => {
+    const original = owner(dataDocument());
+    const next = applyBpmnDocumentCommands(original, [{ kind: "dataReferences", elementId: "InputAssociation", sourceRefs: ["DataRef2"], targetRef: "Input2" }]);
+    const association = projectBpmnDocumentScene(next, "Diagram").edges.find(edge => edge.elementId === "InputAssociation")!;
+    expect(association.sourceRefs).toEqual(["DataRef2"]);
+    expect(association.targetRefs).toEqual(["Input2"]);
+    expect(element(next, "InputAssociation").getElementsByTagNameNS(bpmnNamespaces.model, "transformation")[0].outerHTML)
+      .toBe(element(original, "InputAssociation").getElementsByTagNameNS(bpmnNamespaces.model, "transformation")[0].outerHTML);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "dataReferences", elementId: "InputAssociation", sourceRefs: ["DataRef"], targetRef: "Task" }])).toThrow("item-aware");
+    expect(applyBpmnDocumentCommands(original, [{ kind: "dataReferences", elementId: "InputAssociation", sourceRefs: ["DataRef", "DataRef2"], targetRef: "Input" }])).toBe(original);
+  });
+
+  it("moves and resets only label bounds while retaining label metadata and unrelated geometry", () => {
+    const source = xml.replace('<bpmndi:BPMNLabel>', '<bpmndi:BPMNLabel vendor:retained="label">');
+    const original = owner(source);
+    const next = applyBpmnDocumentCommands(original, [
+      { kind: "labelBounds", diId: "TaskShape", bounds: { x: 250, y: 300, width: 140, height: 30 } },
+      { kind: "labelBounds", diId: "FlowEdge", bounds: { x: 150, y: 90, width: 80, height: 20 } }
+    ]);
+    expect(projectBpmnDocumentScene(next, "Diagram").shapes[1].labelBounds).toEqual({ x: 250, y: 300, width: 140, height: 30 });
+    expect(element(next, "TaskShape").getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNLabel")[0].getAttributeNS("urn:vendor", "retained")).toBe("label");
+    expect(element(next, "FlowEdge").getElementsByTagNameNS(bpmnNamespaces.coordinates, "waypoint")[0].outerHTML)
+      .toBe(element(original, "FlowEdge").getElementsByTagNameNS(bpmnNamespaces.coordinates, "waypoint")[0].outerHTML);
+    const reset = applyBpmnDocumentCommands(next, [{ kind: "labelBounds", diId: "TaskShape", bounds: null }]);
+    expect(projectBpmnDocumentScene(reset, "Diagram").shapes[1].labelBounds).toBeUndefined();
+    expect(element(reset, "TaskShape").getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNLabel")[0].getAttributeNS("urn:vendor", "retained")).toBe("label");
+  });
+
+  it("inserts a standard property before its declared sibling without rebuilding other children", () => {
+    const next = command({ kind: "insert", parent: address("Task"), xml: `<bpmn:ioSpecification xmlns:bpmn="${bpmnNamespaces.model}" id="IO"/>`,
+      before: { elementId: "Task", path: [{ namespaceURI: bpmnNamespaces.model, localName: "multiInstanceLoopCharacteristics" }] } });
+    expect([...element(next, "Task").children].map(child => child.localName)).toEqual(["incoming", "ioSpecification", "multiInstanceLoopCharacteristics"]);
+    expect(() => command({ kind: "insert", parent: address("Nested"), xml: `<bpmn:task xmlns:bpmn="${bpmnNamespaces.model}" id="New"/>`, before: address("Task") })).toThrow("direct child");
+  });
+
+  it("carries inherited absolute XML base, language and whitespace context across reparenting", () => {
+    const source = xml.replace('<bpmn:process id="Process"', '<bpmn:process xml:base="https://source.example/models/" xml:lang="en" xml:space="preserve" id="Process"')
+      .replace('<bpmn:subProcess id="Nested"', '<bpmn:subProcess xml:base="nested/" id="Nested"')
+      .replace('<bpmn:process id="OtherProcess"', '<bpmn:process xml:base="https://other.example/" xml:lang="fr" id="OtherProcess"');
+    const next = applyBpmnDocumentCommands(owner(source), [{ kind: "reparent", target: address("NestedStart"), parent: address("OtherProcess") }]);
+    const moved = element(next, "NestedStart");
+    expect(moved.getAttributeNS("http://www.w3.org/XML/1998/namespace", "base")).toBe("https://source.example/models/nested/");
+    expect(moved.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang")).toBe("en");
+    expect(moved.getAttributeNS("http://www.w3.org/XML/1998/namespace", "space")).toBe("preserve");
+  });
+
+  it("refuses a move whose inherited relative base cannot be retained without a source URI", () => {
+    const original = owner(xml.replace('<bpmn:process id="OtherProcess"', '<bpmn:process xml:base="https://other.example/" id="OtherProcess"'));
+    const before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "reparent", target: address("NestedStart"), parent: address("OtherProcess") }])).toThrow("unresolved XML base");
+    expect(original).toEqual(before);
   });
 
   it("writes only selected geometry, preserving waypoint metadata and unrelated labels/routes", () => {
@@ -251,6 +390,22 @@ describe("complete BPMN document authority", () => {
   it.each(["elements", "sequenceFlows", "diagram", "messageFlows"])("rejects competing persisted %s authority", field => {
     const original = owner(); original.structure!.payload[field] = [];
     expect(() => readBpmnDocument(original)).toThrow("competing graph or diagram");
+  });
+
+  it.each(["A\u00b7B", "A\u203fB", "A\u2040B", "xmlns"])("retains valid NCName identity %s without renaming", id => {
+    const source = xml.replace('id="Note"', `id="${id}"`).replace('targetRef="Note"', `targetRef="${id}"`);
+    const original = owner(source);
+    expect(readBpmnDocument(original).byId.get(id)?.getAttribute("id")).toBe(id);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "attribute", target: address("Task"), name: "name", value: "Edited" }]);
+    expect(element(next, id).getAttribute("id")).toBe(id);
+    expect(element(next, "Association").getAttribute("targetRef")).toBe(id);
+    expect(original.structure!.payload.documentXml).toBe(source);
+  });
+
+  it.each(["bad:name", "bad name", "1invalid", "\u203fstart"])("rejects invalid NCName identity %s without mutation", id => {
+    const original = owner(xml.replace('id="Note"', `id="${id}"`)), before = structuredClone(original);
+    expect(() => readBpmnDocument(original)).toThrow("XML ID");
+    expect(original).toEqual(before);
   });
 
   it.each([
@@ -286,5 +441,23 @@ describe("complete BPMN document authority", () => {
     const next = applyBpmnDocumentCommands(owner(), ["AssociationEdge", "Association", "Note"].map(elementId => ({ kind: "remove", target: address(elementId) })));
     expect(readBpmnDocument(next).byId.has("Note")).toBe(false);
     expect(readBpmnDocument(next).byId.has("Association")).toBe(false);
+  });
+
+  it("does not mistake standard names or opaque vendor values for references when deleting an artifact", () => {
+    const source = xml.replace('name="Work"', 'name="Note" vendor:targetRef="Note"')
+      .replace('token="original"', 'token="Note"');
+    const original = owner(source);
+    const next = applyBpmnDocumentCommands(original, ["AssociationEdge", "Association", "Note"].map(elementId => ({ kind: "remove", target: address(elementId) })));
+    expect(readBpmnDocument(next).byId.has("Note")).toBe(false);
+    expect(element(next, "Task").getAttribute("name")).toBe("Note");
+    expect(element(next, "Task").getAttributeNS("urn:vendor", "targetRef")).toBe("Note");
+    expect(retainedXml(next)).toBe(retainedXml(original));
+  });
+
+  it("refuses deletion of a data input retained by a standard plural IDREF property", () => {
+    const source = xml.replace('</bpmn:serviceTask>', '<bpmn:ioSpecification><bpmn:dataInput id="LooseInput"/><bpmn:inputSet><bpmn:dataInputRefs>LooseInput</bpmn:dataInputRefs></bpmn:inputSet></bpmn:ioSpecification></bpmn:serviceTask>');
+    const original = owner(source);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("LooseInput") }])).toThrow("dataInputRefs");
+    expect(original.structure!.payload.documentXml).toBe(source);
   });
 });

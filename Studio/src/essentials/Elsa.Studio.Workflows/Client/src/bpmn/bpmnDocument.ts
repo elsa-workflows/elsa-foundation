@@ -1,4 +1,5 @@
 import type { ActivityNode, VariableDefinition } from "../workflowTypes";
+import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
@@ -14,6 +15,17 @@ export interface BpmnDocumentBinding {
   elementId: string;
   childNodeId?: string | null;
   listenerNodeId?: string | null;
+  [key: string]: unknown;
+}
+
+export interface BpmnScopeHeader extends Record<string, unknown> {
+  scopeElementId: string;
+  nodeId: string;
+  activityVersionId: string;
+  inputs: ActivityNode["inputs"];
+  outputs: ActivityNode["outputs"];
+  variables: VariableDefinition[];
+  executionPlacement?: "inline" | "background";
 }
 
 export interface BpmnDocumentPayload extends Record<string, unknown> {
@@ -22,12 +34,25 @@ export interface BpmnDocumentPayload extends Record<string, unknown> {
   activities: ActivityNode[];
   bindings: BpmnDocumentBinding[];
   variables: VariableDefinition[];
+  scopeHeaders?: BpmnScopeHeader[];
 }
 
 export interface BpmnXmlAddress {
   elementId: string;
   /** Addresses idless standard properties without inventing persisted element identities. */
   path?: { namespaceURI: string; localName: string; index?: number }[];
+}
+
+export interface BpmnScopeAddress {
+  documentOwnerNodeId: string;
+  diagramId: string;
+  scopeElementId: string;
+}
+
+export interface BpmnDocumentSelection {
+  elementId: string;
+  diId?: string;
+  property?: BpmnXmlAddress;
 }
 
 export interface BpmnBounds { x: number; y: number; width: number; height: number }
@@ -37,11 +62,14 @@ export type BpmnDocumentCommand =
   | { kind: "attribute"; target: BpmnXmlAddress; name: string; namespaceURI?: string; value: string | null }
   | { kind: "text"; target: BpmnXmlAddress; value: string }
   | { kind: "append"; parent: BpmnXmlAddress; xml: string }
+  | { kind: "insert"; parent: BpmnXmlAddress; xml: string; before?: BpmnXmlAddress }
   | { kind: "remove"; target: BpmnXmlAddress }
   | { kind: "reparent"; target: BpmnXmlAddress; parent: BpmnXmlAddress }
   | { kind: "replaceType"; target: BpmnXmlAddress; localName: string }
   | { kind: "reconnect"; elementId: string; sourceRef: string; targetRef: string }
   | { kind: "bounds"; shapeId: string; bounds: BpmnBounds }
+  | { kind: "labelBounds"; diId: string; bounds: BpmnBounds | null }
+  | { kind: "dataReferences"; elementId: string; sourceRefs: string[]; targetRef: string }
   | { kind: "waypoints"; edgeId: string; points: BpmnPoint[] };
 
 export interface ParsedBpmnDocument {
@@ -52,11 +80,11 @@ export interface ParsedBpmnDocument {
 }
 
 const identityNamespaces: ReadonlySet<string> = new Set(Object.values(bpmnNamespaces));
-const xmlName = /^[\p{L}_][\p{L}\p{N}\p{M}_.-]*$/u;
 const competingFields = ["elements", "sequenceFlows", "diagram", "pools", "lanes", "messageFlows", "isTransaction"];
 const bindableFlowNodeTypes = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTask", "businessRuleTask", "sendTask", "receiveTask",
   "callActivity", "subProcess", "adHocSubProcess", "transaction", "startEvent", "endEvent", "boundaryEvent", "intermediateCatchEvent", "intermediateThrowEvent",
   "exclusiveGateway", "inclusiveGateway", "parallelGateway", "eventBasedGateway", "complexGateway"]);
+const scopeTypes = new Set(["process", "subProcess", "adHocSubProcess", "transaction"]);
 
 function fail(message: string): never { throw new Error(`Cannot edit BPMN document: ${message}.`); }
 function object(value: unknown, name: string): Record<string, unknown> {
@@ -86,17 +114,51 @@ function parseXml(xml: string): XMLDocument {
     || document.documentElement.localName === "parsererror") fail("XML is malformed");
   return document;
 }
+function validNcName(document: XMLDocument, name: string): boolean {
+  if (name.includes(":")) return false;
+  // XML Name validation plus colon exclusion is NCName validation. Do not apply namespace
+  // usage constraints to ID values: "xmlns" is a valid ID, and Unicode extenders are legal.
+  try { document.createElement(name); return true; } catch { return false; }
+}
 function indexDocument(document: XMLDocument): Map<string, Element> {
   const byId = new Map<string, Element>();
   for (const element of [...document.getElementsByTagName("*")]) {
     if (!identityNamespaces.has(element.namespaceURI ?? "")) continue;
     const id = element.getAttribute("id");
     if (!id) continue;
-    if (!xmlName.test(id)) fail(`identity '${id}' is not an XML ID`);
+    if (!validNcName(document, id)) fail(`identity '${id}' is not an XML ID`);
     if (byId.has(id)) fail(`identity '${id}' is duplicated`);
     byId.set(id, element);
   }
   return byId;
+}
+function validateVariables(variables: VariableDefinition[]) {
+  const keys = new Set<string>();
+  for (const variable of variables) {
+    object(variable, "variable");
+    const key = requiredText(variable.referenceKey, "variable referenceKey");
+    object(variable.type, "variable type");
+    if (keys.has(key)) fail(`variable '${key}' is duplicated`);
+    keys.add(key);
+  }
+}
+
+function rejectPhysicalScopeViews(activities: ActivityNode[]) {
+  const pending = [...activities], visited = new Set<ActivityNode>();
+  while (pending.length) {
+    const activity = pending.pop()!;
+    if (visited.has(activity)) continue;
+    visited.add(activity);
+    if (activity.structure?.kind === "elsa.bpmn.scope-view") fail("projected scope structures cannot be physically authored");
+    // Use native ownership slots, never arbitrary input values or contributed metadata objects.
+    pending.push(...getChildSlots(activity).flatMap(slot => slot.activities));
+  }
+}
+
+function hasStandardScopeChain(element: Element, definitions: Element): boolean {
+  for (let current: Element | null = element; current?.namespaceURI === bpmnNamespaces.model && scopeTypes.has(current.localName); current = current.parentElement)
+    if (current.localName === "process") return current.parentElement === definitions;
+  return false;
 }
 
 /** Parse without rewriting bytes. Opening, switching or a no-op Save never migrates the source. */
@@ -125,14 +187,45 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     if (activityIds.has(nodeId) || nodeId === owner.nodeId) fail(`activity '${nodeId}' is duplicated`);
     activityIds.add(nodeId);
   }
+  rejectPhysicalScopeViews(activities);
+  const headers = raw.scopeHeaders === undefined ? [] : array(raw.scopeHeaders, "scopeHeaders")
+    .map(value => object(value, "scope header") as BpmnScopeHeader);
+  const headersByScope = new Map<string, BpmnScopeHeader>();
+  const configuredIds = new Set(activityIds);
+  for (const header of headers) {
+    const scopeId = requiredText(header.scopeElementId, "scopeElementId");
+    const scope = byId.get(scopeId);
+    if (!scope || scope.namespaceURI !== bpmnNamespaces.model || !scopeTypes.has(scope.localName) || scope === process)
+      fail(`scope header '${scopeId}' must address another standard process or body`);
+    if (!hasStandardScopeChain(scope, document.documentElement)) fail("configured descendants require a continuous standard scope chain");
+    if (headersByScope.has(scopeId)) fail(`scope '${scopeId}' has duplicate headers`);
+    const nodeId = requiredText(header.nodeId, "scope nodeId");
+    if (configuredIds.has(nodeId) || nodeId === owner.nodeId) fail(`native scope identity '${nodeId}' is duplicated`);
+    configuredIds.add(nodeId);
+    requiredText(header.activityVersionId, "scope activity version");
+    array(header.inputs, "scope inputs"); array(header.outputs, "scope outputs");
+    validateVariables(array(header.variables, "scope variables") as VariableDefinition[]);
+    if (header.executionPlacement !== undefined && !["inline", "background"].includes(header.executionPlacement)) fail("scope execution placement is invalid");
+    if ([...competingFields, "structure", "documentXml", "processId", "activities", "bindings", "scopeHeaders"].some(field => Object.hasOwn(header, field)))
+      fail("scope header must not persist a second structure or semantic document");
+    headersByScope.set(scopeId, header);
+  }
+  const requireScopeChain = (scope: Element | null) => {
+    for (let current = scope; current && current !== document.documentElement; current = current.parentElement) {
+      if (current.namespaceURI !== bpmnNamespaces.model || !scopeTypes.has(current.localName) || current === process) continue;
+      if (!headersByScope.has(current.getAttribute("id") ?? "")) fail("configured descendants require their complete standard scope header chain");
+    }
+  };
+  for (const header of headers) requireScopeChain(byId.get(header.scopeElementId)!.parentElement);
   const boundElements = new Set<string>();
   const boundActivities = new Set<string>();
   for (const binding of bindings) {
     const elementId = requiredText(binding.elementId, "binding elementId");
     const element = byId.get(elementId);
     if (!element || element.namespaceURI !== bpmnNamespaces.model) fail(`bound element '${elementId}' is unavailable`);
-    if (element.parentElement !== process || !bindableFlowNodeTypes.has(element.localName))
-      fail("native bindings currently require direct flow nodes of the selected process; nested standard-scope projection is not qualified");
+    if (!bindableFlowNodeTypes.has(element.localName) || element.parentElement?.namespaceURI !== bpmnNamespaces.model
+      || !scopeTypes.has(element.parentElement.localName)) fail("native bindings require a direct standard flow node");
+    requireScopeChain(element.parentElement);
     if (competingFields.some(field => Object.hasOwn(binding, field))) fail("binding has competing graph or diagram authorities");
     if (boundElements.has(elementId)) fail(`element '${elementId}' has duplicate binding entries`);
     boundElements.add(elementId);
@@ -148,15 +241,9 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     }
   }
   if (activities.some(activity => !boundActivities.has(activity.nodeId))) fail("native activity has no binding");
-  const variableKeys = new Set<string>();
-  for (const variable of variables) {
-    object(variable, "variable");
-    const referenceKey = requiredText(variable.referenceKey, "variable referenceKey");
-    object(variable.type, "variable type");
-    if (variableKeys.has(referenceKey)) fail(`variable '${referenceKey}' is duplicated`);
-    variableKeys.add(referenceKey);
-  }
-  return { payload: { ...raw, documentXml, processId, activities, bindings, variables }, document, byId, process };
+  validateVariables(variables);
+  return { payload: { ...raw, documentXml, processId, activities, bindings, variables,
+    ...(raw.scopeHeaders !== undefined ? { scopeHeaders: headers } : {}) }, document, byId, process };
 }
 
 /** QName references may qualify a local ID with the document's target namespace. */
@@ -194,7 +281,40 @@ function uniqueChild(parent: Element, namespaceURI: string, localName: string): 
   if (matches.length !== 1) fail(`'${parent.getAttribute("id")}' needs exactly one ${localName}`);
   return matches[0];
 }
-function preserveNamespaceContext(element: Element) {
+function xmlBaseChain(element: Element | null): string[] {
+  const values: string[] = [];
+  for (let current = element; current; current = current.parentElement) {
+    const value = current.getAttributeNS("http://www.w3.org/XML/1998/namespace", "base");
+    if (value !== null) values.unshift(value);
+  }
+  return values;
+}
+function preserveXmlContext(element: Element, destination: Element) {
+  const xmlNamespace = "http://www.w3.org/XML/1998/namespace";
+  if (JSON.stringify(xmlBaseChain(element.parentElement)) !== JSON.stringify(xmlBaseChain(destination))) {
+    let resolved: string | null = null;
+    for (const value of xmlBaseChain(element)) {
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value)) {
+        try { resolved = new URL(value).href; } catch { resolved = null; }
+      } else if (resolved) {
+        try { resolved = new URL(value, resolved).href; } catch { resolved = null; }
+      }
+    }
+    if (!resolved) fail("move changes an unresolved XML base; an explicit source-base transformation is required");
+    element.setAttributeNS(xmlNamespace, "xml:base", resolved);
+  }
+  for (const [name, fallback] of [["lang", ""], ["space", "default"]]) {
+    let value: string | null = null;
+    for (let current: Element | null = element; current && value === null; current = current.parentElement)
+      value = current.getAttributeNS(xmlNamespace, name);
+    let destinationValue: string | null = null;
+    for (let current: Element | null = destination; current && destinationValue === null; current = current.parentElement)
+      destinationValue = current.getAttributeNS(xmlNamespace, name);
+    if ((value ?? fallback) !== (destinationValue ?? fallback)) element.setAttributeNS(xmlNamespace, `xml:${name}`, value ?? fallback);
+  }
+}
+function preserveNamespaceContext(element: Element, destination: Element) {
+  preserveXmlContext(element, destination);
   const declarations = new Map<string, string>();
   for (let current: Element | null = element; current; current = current.parentElement) {
     for (const attribute of [...current.attributes]) {
@@ -223,8 +343,63 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
     const endpoint = parsed.byId.get(reference)!;
     const child = references.get(direction) ?? parsed.document.createElementNS(bpmnNamespaces.model, `bpmn:${direction}`);
     if (!references.has(direction)) child.textContent = id;
-    if (child.parentElement !== endpoint) { preserveNamespaceContext(child); endpoint.appendChild(child); }
+    if (child.parentElement !== endpoint) {
+      if (references.has(direction)) preserveNamespaceContext(child, endpoint);
+      endpoint.appendChild(child);
+    }
   }
+}
+
+// Reference paths from the BPMN 2.0 Semantic/BPMNDI schemas shipped with pinned bpmn-moddle.
+// Names, expressions, arbitrary attributes and extension payloads are not inferred ID references.
+const modelReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
+  association: ["sourceRef", "targetRef"], boundaryEvent: ["attachedToRef"], callActivity: ["calledElement"],
+  callChoreography: ["calledChoreographyRef", "initiatingParticipantRef"], callConversation: ["calledCollaborationRef"],
+  choreographyTask: ["initiatingParticipantRef"], subChoreography: ["initiatingParticipantRef"], globalChoreographyTask: ["initiatingParticipantRef"],
+  compensateEventDefinition: ["activityRef"], conversationAssociation: ["innerConversationNodeRef", "outerConversationNodeRef"],
+  conversationLink: ["sourceRef", "targetRef"], correlationProperty: ["type"], correlationPropertyBinding: ["correlationPropertyRef"],
+  correlationPropertyRetrievalExpression: ["messageRef"], correlationSubscription: ["correlationKeyRef"],
+  dataInput: ["itemSubjectRef"], dataOutput: ["itemSubjectRef"], dataObject: ["itemSubjectRef"], dataStore: ["itemSubjectRef"],
+  dataObjectReference: ["itemSubjectRef", "dataObjectRef"], dataStoreReference: ["itemSubjectRef", "dataStoreRef"],
+  error: ["structureRef"], errorEventDefinition: ["errorRef"], escalation: ["structureRef"], escalationEventDefinition: ["escalationRef"],
+  extension: ["definition"], group: ["categoryValueRef"], interface: ["implementationRef"],
+  inputOutputBinding: ["operationRef", "inputDataRef", "outputDataRef"], itemDefinition: ["structureRef"], lane: ["partitionElementRef"],
+  message: ["itemRef"], messageEventDefinition: ["messageRef"], messageFlow: ["sourceRef", "targetRef", "messageRef"],
+  messageFlowAssociation: ["innerMessageFlowRef", "outerMessageFlowRef"], multiInstanceLoopCharacteristics: ["oneBehaviorEventRef", "noneBehaviorEventRef"],
+  operation: ["implementationRef"], participant: ["processRef"], process: ["definitionalCollaborationRef"], property: ["itemSubjectRef"],
+  receiveTask: ["messageRef", "operationRef"], resourceParameter: ["type"], resourceParameterBinding: ["parameterRef"],
+  sendTask: ["messageRef", "operationRef"], sequenceFlow: ["sourceRef", "targetRef"], serviceTask: ["operationRef"],
+  signal: ["structureRef"], signalEventDefinition: ["signalRef"]
+};
+const defaultFlowOwners = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTask", "businessRuleTask", "sendTask", "receiveTask",
+  "callActivity", "subProcess", "adHocSubProcess", "transaction", "exclusiveGateway", "inclusiveGateway", "complexGateway"]);
+const diagramReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
+  BPMNPlane: ["bpmnElement"], BPMNShape: ["bpmnElement", "choreographyActivityShape"],
+  BPMNEdge: ["bpmnElement", "sourceElement", "targetElement"], BPMNLabel: ["labelStyle"]
+};
+const modelReferenceText = new Set(["categoryValueRef", "choreographyRef", "correlationPropertyRef", "dataInputRefs", "dataOutputRefs", "endPointRef",
+  "errorRef", "eventDefinitionRef", "flowNodeRef", "inMessageRef", "incoming", "innerParticipantRef", "inputSetRefs", "interfaceRef",
+  "loopDataInputRef", "loopDataOutputRef", "messageFlowRef", "operationRef", "optionalInputRefs", "optionalOutputRefs", "outMessageRef",
+  "outerParticipantRef", "outgoing", "outputSetRefs", "participantRef", "resourceRef", "source", "sourceRef", "supportedInterfaceRef",
+  "supports", "target", "targetRef", "whileExecutingInputRefs", "whileExecutingOutputRefs"]);
+
+function standardReferenceContext(element: Element) {
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    if (!identityNamespaces.has(current.namespaceURI ?? "")) return false;
+    if (current.namespaceURI === bpmnNamespaces.model && ["extensionElements", "documentation", "script"].includes(current.localName)) return false;
+  }
+  return true;
+}
+function standardReferenceAttribute(element: Element, attribute: Attr) {
+  if (attribute.namespaceURI) return false;
+  if (element.namespaceURI === bpmnNamespaces.diagram) return diagramReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
+  if (element.namespaceURI !== bpmnNamespaces.model) return false;
+  if (attribute.localName === "default" && defaultFlowOwners.has(element.localName)) return true;
+  if (attribute.localName === "evaluatesToTypeRef") {
+    const type = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")?.split(":");
+    if (type?.at(-1) === "tFormalExpression" && element.lookupNamespaceURI(type.length === 2 ? type[0] : null) === bpmnNamespaces.model) return true;
+  }
+  return modelReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
 }
 
 function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, nextIds: ReadonlyMap<string, Element>, document: XMLDocument) {
@@ -233,15 +408,14 @@ function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, next
   const removedReference = (element: Element, value: string) => removed.has(value)
     || value.includes(":") && element.lookupNamespaceURI(value.split(":")[0]) === document.documentElement.getAttribute("targetNamespace") && removed.has(value.split(":")[1]);
   for (const element of [...document.getElementsByTagName("*")]) {
+    if (!standardReferenceContext(element)) continue;
     for (const attribute of [...element.attributes]) {
-      if (attribute.localName === "id" || attribute.namespaceURI === "http://www.w3.org/2000/xmlns/") continue;
+      if (!standardReferenceAttribute(element, attribute)) continue;
       if (attribute.value.trim().split(/\s+/).some(value => removedReference(element, value)))
         fail(`deletion leaves reference '${attribute.name}' to removed content`);
     }
-    if (element.namespaceURI === bpmnNamespaces.model && element.localName.endsWith("Ref") && removedReference(element, element.textContent?.trim() ?? ""))
+    if (element.namespaceURI === bpmnNamespaces.model && modelReferenceText.has(element.localName) && removedReference(element, element.textContent?.trim() ?? ""))
       fail(`deletion leaves '${element.localName}' pointing to removed content`);
-    if (element.namespaceURI === bpmnNamespaces.model && ["incoming", "outgoing", "flowNodeRef"].includes(element.localName)
-      && removedReference(element, element.textContent?.trim() ?? "")) fail(`deletion leaves '${element.localName}' pointing to removed content`);
   }
 }
 
@@ -269,10 +443,13 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       if (target.textContent !== command.value) target.textContent = command.value;
       return;
     }
-    case "append": {
+    case "append":
+    case "insert": {
       const target = resolve(parsed, command.parent);
       const fragment = parseXml(command.xml).documentElement;
-      target.appendChild(parsed.document.importNode(fragment, true));
+      const before = command.kind === "insert" && command.before ? resolve(parsed, command.before) : null;
+      if (before && before.parentElement !== target) fail("insertion anchor must be a direct child of its parent");
+      target.insertBefore(parsed.document.importNode(fragment, true), before);
       return;
     }
     case "remove": {
@@ -289,13 +466,13 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const parent = resolve(parsed, command.parent);
       if (target === parsed.process || target === parsed.document.documentElement || target.contains(parent)) fail("containment would be cyclic or remove the selected process");
       if (target.parentElement === parent) return;
-      preserveNamespaceContext(target);
+      preserveNamespaceContext(target, parent);
       parent.appendChild(target);
       return;
     }
     case "replaceType": {
       const target = resolve(parsed, command.target);
-      if (target.namespaceURI !== bpmnNamespaces.model || !xmlName.test(command.localName)) fail("replacement type is invalid");
+      if (target.namespaceURI !== bpmnNamespaces.model || !validNcName(parsed.document, command.localName)) fail("replacement type is invalid");
       if (target.localName === command.localName) return;
       const replacement = parsed.document.createElementNS(bpmnNamespaces.model, target.prefix ? `${target.prefix}:${command.localName}` : command.localName);
       for (const attribute of [...target.attributes]) replacement.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value);
@@ -327,6 +504,58 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const shape = resolve(parsed, { elementId: command.shapeId });
       if (!is(shape, bpmnNamespaces.diagram, "BPMNShape")) fail("bounds target is not a BPMN shape");
       writeBounds(uniqueChild(shape, bpmnNamespaces.bounds, "Bounds"), command.bounds);
+      return;
+    }
+    case "labelBounds": {
+      const target = resolve(parsed, { elementId: command.diId });
+      if (target.namespaceURI !== bpmnNamespaces.diagram || !["BPMNShape", "BPMNEdge"].includes(target.localName)) fail("label owner must be a BPMN shape or edge");
+      const labels = children(target, bpmnNamespaces.diagram, "BPMNLabel");
+      if (labels.length > 1) fail("label owner has ambiguous labels");
+      const label = labels[0];
+      const previousBounds = label ? children(label, bpmnNamespaces.bounds, "Bounds") : [];
+      if (previousBounds.length > 1) fail("label has ambiguous bounds");
+      if (command.bounds === null) {
+        previousBounds[0]?.remove();
+        return;
+      }
+      const nextLabel = label ?? parsed.document.createElementNS(bpmnNamespaces.diagram, "bpmndi:BPMNLabel");
+      const nextBounds = previousBounds[0] ?? parsed.document.createElementNS(bpmnNamespaces.bounds, "dc:Bounds");
+      writeBounds(nextBounds, command.bounds);
+      if (!previousBounds.length) nextLabel.appendChild(nextBounds);
+      if (!label) target.appendChild(nextLabel);
+      return;
+    }
+    case "dataReferences": {
+      const association = resolve(parsed, { elementId: command.elementId });
+      if (association.namespaceURI !== bpmnNamespaces.model || !["dataInputAssociation", "dataOutputAssociation"].includes(association.localName)) fail("reference owner must be a data association");
+      const resolveItem = (reference: string) => {
+        const item = resolveBpmnDocumentReference(parsed, association, reference);
+        if (!item || item.namespaceURI !== bpmnNamespaces.model || !["dataInput", "dataOutput", "dataObject", "dataObjectReference", "dataStoreReference", "property"].includes(item.localName))
+          fail(`data reference '${reference}' must resolve to an item-aware element`);
+        return item.getAttribute("id")!;
+      };
+      const sources = command.sourceRefs.map(resolveItem);
+      const targetId = resolveItem(command.targetRef);
+      const oldSources = children(association, bpmnNamespaces.model, "sourceRef");
+      const targets = children(association, bpmnNamespaces.model, "targetRef");
+      if (targets.length > 1) fail("data association has ambiguous target references");
+      if (oldSources.length === sources.length && oldSources.every((reference, index) =>
+        resolveBpmnDocumentReference(parsed, reference, reference.textContent)?.getAttribute("id") === sources[index])
+        && targets[0] && resolveBpmnDocumentReference(parsed, targets[0], targets[0].textContent)?.getAttribute("id") === targetId) return;
+      const target = targets[0] ?? parsed.document.createElementNS(bpmnNamespaces.model, "bpmn:targetRef");
+      if (target.textContent !== targetId) target.textContent = targetId;
+      if (!targets.length) association.insertBefore(target, children(association, bpmnNamespaces.model, "transformation")[0]
+        ?? children(association, bpmnNamespaces.model, "assignment")[0] ?? null);
+      const retained = new Set<Element>();
+      for (const source of sources) {
+        const reference = oldSources.find(candidate => !retained.has(candidate)
+          && resolveBpmnDocumentReference(parsed, candidate, candidate.textContent)?.getAttribute("id") === source)
+          ?? parsed.document.createElementNS(bpmnNamespaces.model, "bpmn:sourceRef");
+        retained.add(reference);
+        if (!oldSources.includes(reference)) reference.textContent = source;
+        association.insertBefore(reference, target);
+      }
+      for (const reference of oldSources) if (!retained.has(reference)) reference.remove();
       return;
     }
     case "waypoints": {
@@ -403,15 +632,15 @@ function readNumber(element: Element, name: string): number {
   if (!Number.isFinite(value)) fail(`geometry '${name}' is invalid`);
   return value;
 }
-function readBounds(element: Element): BpmnBounds {
+function readBounds(element: Element, allowEmpty = false): BpmnBounds {
   const value = { x: readNumber(element, "x"), y: readNumber(element, "y"), width: readNumber(element, "width"), height: readNumber(element, "height") };
-  if (value.width <= 0 || value.height <= 0) fail("shape dimensions must be positive");
+  if (allowEmpty ? value.width < 0 || value.height < 0 : value.width <= 0 || value.height <= 0) fail("shape dimensions must be positive");
   return value;
 }
 function labelBounds(element: Element): BpmnBounds | undefined {
   const label = children(element, bpmnNamespaces.diagram, "BPMNLabel")[0];
   const bounds = label && children(label, bpmnNamespaces.bounds, "Bounds")[0];
-  return bounds ? readBounds(bounds) : undefined;
+  return bounds ? readBounds(bounds, true) : undefined;
 }
 function readBoolean(element: Element, name: string): boolean | undefined {
   const value = element.getAttribute(name);

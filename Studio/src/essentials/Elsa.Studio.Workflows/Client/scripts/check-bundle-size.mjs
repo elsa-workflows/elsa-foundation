@@ -299,6 +299,9 @@ const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTota
 
 const jsFiles = [...new Set(Object.values(manifest).map(entry => entry.file).filter(file => file.endsWith(".js")))];
 const allJavaScript = await readAssetText(jsFiles);
+if (allJavaScript.includes("__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE")) {
+  throw new Error("Workflows bundles a second ReactDOM runtime. Use the host import-map ReactDOM so synchronous document acknowledgements reach the host renderer.");
+}
 if (!allJavaScript.includes(testDriveSetupMarker)) {
   throw new Error("The Test Drive setup panel is missing from the Workflows bundle.");
 }

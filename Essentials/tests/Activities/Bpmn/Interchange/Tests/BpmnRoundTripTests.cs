@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -14,6 +15,29 @@ public sealed class BpmnRoundTripTests
 
     private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
+
+    [Theory]
+    [InlineData("2.0.0", false)]
+    [InlineData("99.0.0", false)]
+    [InlineData("2.0.0", true)]
+    [InlineData("99.0.0", true)]
+    public async Task Legacy_export_rejects_other_schemas_before_lossy_typed_read_including_nested_bodies(string schema, bool nested)
+    {
+        var raw = JsonSerializer.SerializeToElement(new
+        {
+            documentXml = "<definitions xmlns='http://www.omg.org/spec/BPMN/20100524/MODEL' targetNamespace='urn:test'><process id='p'><task id='retained-task'/></process></definitions>",
+            processId = "p", activities = Array.Empty<ActivityNode>(), bindings = Array.Empty<object>(), variables = Array.Empty<object>()
+        }, SerializerOptions);
+        var unsupported = new ActivityNode("raw-process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, schema, raw));
+        var process = nested ? ProcessNode(new BpmnAuthoredStructure(
+            activities: [unsupported], elements: [new BpmnElement("sub", BpmnElementTypes.SubProcess, childNodeId: unsupported.NodeId)])) : unsupported;
+
+        var synchronous = Assert.Throws<BpmnInterchangeException>(() => _exporter.Export(process));
+        var asynchronous = await Assert.ThrowsAsync<BpmnInterchangeException>(() => _exporter.ExportAsync(process));
+        Assert.Contains(schema, synchronous.Message, StringComparison.Ordinal);
+        Assert.Contains(schema, asynchronous.Message, StringComparison.Ordinal);
+        Assert.Equal(raw.GetRawText(), unsupported.Structure!.Payload.GetRawText());
+    }
 
     [Fact]
     public void Export_AcceptsStudioIntrinsicAndConversionStrings()

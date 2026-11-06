@@ -16,7 +16,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// </summary>
 internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
 {
-    private const string ModelNamespace = "http://www.omg.org/spec/BPMN/20100524/MODEL";
+    internal const string ModelNamespace = "http://www.omg.org/spec/BPMN/20100524/MODEL";
     private static readonly HashSet<string> IdentityNamespaces = new(StringComparer.Ordinal)
     {
         ModelNamespace, "http://www.omg.org/spec/BPMN/20100524/DI",
@@ -33,7 +33,11 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     {
         "elements", "sequenceFlows", "diagram", "pools", "lanes", "messageFlows", "isTransaction"
     };
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly HashSet<string> HeaderAuthorityFields = new(CompetingFields, StringComparer.Ordinal)
+    {
+        "structure", "documentXml", "processId", "activities", "bindings", "scopeHeaders"
+    };
+    internal static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = false,
         // The document/binding extension dictionaries preserve future metadata. Unknown typed
@@ -48,55 +52,13 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     public bool SupportsScopedVariables => true;
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
-        [new(BpmnActivityIdentities.ActivitiesSlotName, Read(activity).Activities)];
+        BpmnDocumentScopeProjection.Project(activity, Read(activity).ProcessId);
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => Read(activity).Variables;
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
-        var current = Read(activity);
-        if (childProjections.Count != 1 || childProjections.Single().Name != BpmnActivityIdentities.ActivitiesSlotName ||
-            childProjections.Single().Activities is null)
-            throw Invalid("exactly one Bpmn.Activities child slot is required");
-
-        var previous = current.Activities.ToArray();
-        var children = childProjections.Single().Activities.ToArray();
-        if (children.Length != previous.Length)
-            throw Invalid("adding or removing native ownership requires an explicit document/binding edit");
-        ValidateActivities(children, activity.NodeId);
-        var previousIds = previous.Select(child => child.NodeId).ToHashSet(StringComparer.Ordinal);
-        var nextIds = children.Select(child => child.NodeId).ToHashSet(StringComparer.Ordinal);
-        var remap = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!previousIds.SetEquals(nextIds))
-        {
-            // Generic subtree cloning replaces identities in projection order. Existing identities
-            // cannot move while others are renamed: that would ambiguously retarget native config.
-            for (var index = 0; index < previous.Length; index++)
-            {
-                if ((nextIds.Contains(previous[index].NodeId) || previousIds.Contains(children[index].NodeId)) &&
-                    previous[index].NodeId != children[index].NodeId)
-                    throw Invalid("simultaneous child reordering and identity replacement is ambiguous");
-                remap.Add(previous[index].NodeId, children[index].NodeId);
-            }
-        }
-
-        var updated = current with
-        {
-            Activities = children,
-            Bindings = current.Bindings.Select(binding => binding with
-            {
-                ChildNodeId = Remap(binding.ChildNodeId),
-                ListenerNodeId = Remap(binding.ListenerNodeId)
-            }).ToArray()
-        };
-        var result = activity with
-        {
-            Structure = new(Kind, SchemaVersion, JsonSerializer.SerializeToElement(updated, SerializerOptions))
-        };
-        Read(result); // Replacement is atomic, including the binding invariants.
-        return result;
-
-        string? Remap(string? id) => id is not null && remap.TryGetValue(id, out var replacement) ? replacement : id;
+        return BpmnDocumentScopeProjection.Replace(activity, Read(activity).ProcessId, childProjections);
     }
 
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
@@ -109,9 +71,9 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     public ActivityNodeStructure RemapExecutableStructure(ActivityNodeStructure structure, IReadOnlyDictionary<string, string> authoredToExecutableNodeIds) =>
         throw new NotSupportedException("Complete-document BPMN authoring is not an executable structure schema.");
 
-    private BpmnAuthoredDocument Read(ActivityNode activity)
+    internal static BpmnAuthoredDocument Read(ActivityNode activity)
     {
-        if (activity.Structure is not { } structure || structure.Kind != Kind || structure.SchemaVersion != SchemaVersion)
+        if (activity.Structure is not { } structure || structure.Kind != BpmnActivityIdentities.StructureKind || structure.SchemaVersion != BpmnAuthoredDocument.SchemaVersion)
             throw Invalid("the exact complete-document kind and schema version are required");
         if (structure.Payload.ValueKind != JsonValueKind.Object)
             throw Invalid("payload must be an object");
@@ -129,7 +91,7 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
 
         RejectCompetingFields(document.AdditionalProperties);
         if (string.IsNullOrWhiteSpace(document.DocumentXml) || string.IsNullOrWhiteSpace(document.ProcessId) ||
-            document.Activities is null || document.Bindings is null || document.Variables is null)
+            document.Activities is null || document.Bindings is null || document.Variables is null || document.ScopeHeaders is null)
             throw Invalid("documentXml, processId, activities, bindings and variables are required");
 
         var xml = ParseXml(document.DocumentXml);
@@ -150,7 +112,23 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
             throw Invalid("the selected process must be a direct BPMN definitions process");
 
         ValidateActivities(document.Activities, activity.NodeId);
+        foreach (var native in document.Activities)
+            BpmnDocumentScopeProjection.RejectPhysicalView(native);
         var activities = document.Activities.ToDictionary(child => child.NodeId, StringComparer.Ordinal);
+        var scopeHeaders = new Dictionary<string, BpmnDocumentScopeHeader>(StringComparer.Ordinal);
+        var nodeIds = activities.Keys.Append(activity.NodeId).ToHashSet(StringComparer.Ordinal);
+        foreach (var header in document.ScopeHeaders)
+        {
+            if (header is null || string.IsNullOrWhiteSpace(header.ScopeElementId) || string.IsNullOrWhiteSpace(header.NodeId) ||
+                string.IsNullOrWhiteSpace(header.ActivityVersionId) || header.Inputs is null || header.Outputs is null || header.Variables is null ||
+                !Enum.IsDefined(header.ExecutionPlacement) || !nodeIds.Add(header.NodeId) || !scopeHeaders.TryAdd(header.ScopeElementId, header) ||
+                header.ScopeElementId == document.ProcessId || !identities.TryGetValue(header.ScopeElementId, out var scopeElement) ||
+                !BpmnDocumentScopeProjection.HasStandardScopeChain(scopeElement, xml.Root))
+                throw Invalid("scope headers require distinct native identities, exact versions and standard XML scope addresses outside the physical root");
+            if (header.AdditionalProperties?.Keys.Any(HeaderAuthorityFields.Contains) == true)
+                throw Invalid("a physical scope header cannot persist an independent structure or semantic document");
+            ValidateVariables(header.Variables);
+        }
         var boundElements = new HashSet<string>(StringComparer.Ordinal);
         var boundActivities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in document.Bindings)
@@ -158,9 +136,12 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
             if (binding is null || string.IsNullOrWhiteSpace(binding.ElementId))
                 throw Invalid("a binding requires an elementId");
             RejectCompetingFields(binding.AdditionalProperties);
-            if (!identities.TryGetValue(binding.ElementId, out var element) || element.Parent != process ||
+            if (!identities.TryGetValue(binding.ElementId, out var element) || element.Parent is not { } parent || !BpmnDocumentScopeProjection.IsScope(parent) ||
                 element.Name.Namespace != model || !FlowNodeNames.Contains(element.Name.LocalName))
-                throw Invalid("native bindings currently require direct flow nodes of the selected process; standard nested-scope projection is not qualified");
+                throw Invalid("native bindings require direct flow nodes of a declared standard XML scope");
+            foreach (var ancestor in element.Ancestors().Where(BpmnDocumentScopeProjection.IsScope))
+                if ((string?)ancestor.Attribute("id") != document.ProcessId && !scopeHeaders.ContainsKey((string?)ancestor.Attribute("id") ?? ""))
+                    throw Invalid("every configured binding's standard scope ancestors require compact scope headers");
             if (!boundElements.Add(binding.ElementId))
                 throw Invalid("an element has duplicate binding entries");
             if (binding.ChildNodeId is null && binding.ListenerNodeId is null)
@@ -170,25 +151,30 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
                 if (!activities.TryGetValue(nodeId, out var child) || !boundActivities.Add(nodeId))
                     throw Invalid("each native child or listener must resolve exactly once");
                 if (element.Name.LocalName is "subProcess" or "adHocSubProcess" or "transaction" &&
-                    child.Structure?.Kind == Kind)
+                    child.Structure?.Kind == BpmnActivityIdentities.StructureKind)
                     throw Invalid("a standard subprocess body cannot also persist an independent BPMN activity body; scope projection is not qualified");
             }
         }
         if (boundActivities.Count != activities.Count)
             throw Invalid("a native activity has no binding");
-        var variableKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var variable in document.Variables)
+        ValidateVariables(document.Variables);
+        foreach (var header in document.ScopeHeaders)
         {
-            if (variable is null || string.IsNullOrWhiteSpace(variable.ReferenceKey) || variable.Type is null || !variableKeys.Add(variable.ReferenceKey))
-                throw Invalid("scoped variables require distinct reference keys and types");
+            var element = identities[header.ScopeElementId];
+            foreach (var ancestor in element.Ancestors().Where(BpmnDocumentScopeProjection.IsScope))
+                if ((string?)ancestor.Attribute("id") != document.ProcessId && !scopeHeaders.ContainsKey((string?)ancestor.Attribute("id") ?? ""))
+                    throw Invalid("a configured scope's standard ancestors require compact scope headers");
         }
         if (structure.Payload.TryGetProperty("bindings", out var rawBindings) && rawBindings.ValueKind == JsonValueKind.Array)
             foreach (var binding in rawBindings.EnumerateArray())
                 RejectDuplicateMembers(binding);
+        if (structure.Payload.TryGetProperty("scopeHeaders", out var rawHeaders) && rawHeaders.ValueKind == JsonValueKind.Array)
+            foreach (var header in rawHeaders.EnumerateArray())
+                RejectDuplicateMembers(header);
         return document;
     }
 
-    private static XDocument ParseXml(string source)
+    internal static XDocument ParseXml(string source)
     {
         try
         {
@@ -201,7 +187,7 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
         }
     }
 
-    private static void ValidateActivities(IEnumerable<ActivityNode> activities, string ownerId)
+    internal static void ValidateActivities(IEnumerable<ActivityNode> activities, string ownerId)
     {
         var identities = new HashSet<string>(StringComparer.Ordinal) { ownerId };
         foreach (var child in activities)
@@ -210,6 +196,14 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
                 child.Inputs is null || child.Outputs is null || !identities.Add(child.NodeId))
                 throw Invalid("native activities require distinct identities, versions, inputs and outputs");
         }
+    }
+
+    private static void ValidateVariables(IEnumerable<VariableDefinition> variables)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var variable in variables)
+            if (variable is null || string.IsNullOrWhiteSpace(variable.ReferenceKey) || variable.Type is null || !keys.Add(variable.ReferenceKey))
+                throw Invalid("scoped variables require distinct reference keys and types");
     }
 
     private static void RejectCompetingFields(Dictionary<string, JsonElement>? properties)

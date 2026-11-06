@@ -84,10 +84,14 @@
 }
 
 .wf-bpmn-js[data-read-only] .djs-palette,
-.wf-bpmn-js[data-read-only] .djs-context-pad,
+.wf-bpmn-js[data-read-only] .djs-context-pad {
+  display: none;
+}
+
 .wf-bpmn-js[data-bpmn-js-state="loading"] .djs-palette,
 .wf-bpmn-js[data-bpmn-js-state="loading"] .djs-context-pad {
-  display: none;
+  /* Retain measurable palette bounds for the first viewport fit while its tools are hidden. */
+  visibility: hidden;
 }
 
 .wf-bpmn-js:not([data-bpmn-js-state="ready"]) .wf-bpmn-js-modeler {

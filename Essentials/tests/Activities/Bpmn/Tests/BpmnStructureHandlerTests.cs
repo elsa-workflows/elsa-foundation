@@ -20,10 +20,25 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         var services = new ServiceCollection();
         new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
-        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), handler => handler.SchemaVersion == BpmnProcessActivity.StructureSchemaVersion);
+        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), handler => handler.Kind == BpmnProcessActivity.StructureKind && handler.SchemaVersion == BpmnProcessActivity.StructureSchemaVersion);
     }
 
     public void Dispose() => _provider.Dispose();
+
+    [Theory]
+    [InlineData("2.0.0")]
+    [InlineData("99.0.0")]
+    public void Legacy_handler_refuses_other_versions_before_typed_deserialization(string schema)
+    {
+        var payload = JsonSerializer.SerializeToElement(new { documentXml = "complete opaque source", processId = "p", activities = Array.Empty<ActivityNode>() });
+        var source = new ActivityNode("process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, schema, payload));
+        Assert.Throws<InvalidOperationException>(() => _handler.ProjectChildren(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.ProjectScopedVariables(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.ReplaceChildren(source, []));
+        Assert.Throws<InvalidOperationException>(() => _handler.CompileExecutableStructure(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.RemapExecutableStructure(source.Structure!, new Dictionary<string, string> { ["child"] = "copy" }));
+        Assert.Equal(payload.GetRawText(), source.Structure!.Payload.GetRawText());
+    }
 
     [Theory]
     [InlineData("\"set\"", "\"json\"")]

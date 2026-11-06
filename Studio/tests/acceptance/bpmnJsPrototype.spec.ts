@@ -45,6 +45,27 @@ async function chooseEditor(page: Page, editor: "integrated" | "bpmn-js") {
   else await expect(page.locator(".react-flow__node[data-id='gateway']")).toBeVisible();
 }
 
+async function expectNoRefusals(page: Page) {
+  expect(await page.evaluate(() => (window as unknown as { __elsaBpmnUnexpectedRefusals: string[] }).__elsaBpmnUnexpectedRefusals),
+    "Normal native edits must not enter refusal/recovery, including transient notices").toEqual([]);
+}
+
+async function captureInitialNativeFit(page: Page, info: TestInfo) {
+  const clipped = await alternate(page).evaluate(root => {
+    const canvas = root.querySelector(".djs-container")!.getBoundingClientRect();
+    const palette = root.querySelector(".djs-palette")!.getBoundingClientRect();
+    return [...root.querySelectorAll(".djs-shape .djs-visual")].flatMap(visual => {
+      const bounds = visual.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return [];
+      return bounds.left >= Math.max(canvas.left + 16, palette.right + 16) && bounds.right <= canvas.right - 16
+        && bounds.top >= canvas.top + 16 && bounds.bottom <= canvas.bottom - 24
+        ? [] : [visual.closest("[data-element-id]")!.getAttribute("data-element-id")];
+    });
+  });
+  expect(clipped, "Initial native shapes and labels fit inside the canvas clear of its palette").toEqual([]);
+  await capture(page, info, "alternate-initial-fit");
+}
+
 async function selectElement(page: Page, editor: "integrated" | "bpmn-js", id: string) {
   if (editor === "bpmn-js") {
     // A second click toggles an already-selected native shape. Always make this a new selection.
@@ -136,11 +157,33 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
   test(`owned-host prototype from ${firstEditor}: same process edits, publication, both runtime branches and inspection`, async ({ page }, info) => {
     info.annotations.push({ type: "evidence", description: "Embedded prototype in disposable real hosts; not final production adoption or full profile/UX acceptance." });
     const browserErrors: string[] = [];
+    let consoleErrorCount = 0;
     page.on("pageerror", error => browserErrors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") consoleErrorCount++; });
     await page.addInitScript(mode => {
       localStorage.removeItem("elsa-studio-theme");
       localStorage.setItem("elsa-studio-theme-mode", mode);
       localStorage.setItem("elsa-studio-workspace-style", "linen");
+      const observed = window as unknown as { __elsaBpmnUnexpectedRefusals: string[] };
+      observed.__elsaBpmnUnexpectedRefusals = [];
+      const inspect = () => {
+        for (const notice of document.querySelectorAll("[data-bpmn-js-canvas] [role='alert']")) {
+          if (notice.textContent?.includes("Change refused:")) observed.__elsaBpmnUnexpectedRefusals.push("Normal editing displayed a change-refused notice");
+        }
+      };
+      new MutationObserver(records => {
+        for (const record of records) {
+          if (record.type === "attributes" && (record.oldValue === "refused"
+            || (record.target as HTMLElement).getAttribute("data-bpmn-js-state") === "refused")) {
+            observed.__elsaBpmnUnexpectedRefusals.push("Normal editing entered refused state");
+          }
+          for (const node of record.addedNodes) {
+            if (node instanceof Element && node.matches(".wf-bpmn-js-notice") && node.textContent?.includes("Change refused:"))
+              observed.__elsaBpmnUnexpectedRefusals.push("Normal editing inserted a change-refused notice");
+          }
+        }
+        inspect();
+      }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-bpmn-js-state"], attributeOldValue: true });
     }, info.project.use.colorScheme ?? "light");
     await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
     const base = process.env.ELSA_WORKBENCH_URL!;
@@ -162,6 +205,7 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
     try {
       await page.goto(`/workflows/definitions?backend=legacy&definition=${submitted.definition.id}`);
       await chooseEditor(page, firstEditor);
+      if (firstEditor === "bpmn-js") await captureInitialNativeFit(page, info);
       await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
       const autosave = page.getByRole("menuitemcheckbox", { name: /^Autosave/ });
       if (await autosave.getAttribute("aria-checked") === "true") await autosave.click();
@@ -180,6 +224,7 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
         await routing(page).getByLabel("Name", { exact: true }).blur();
       }
       await chooseEditor(page, "bpmn-js");
+      if (firstEditor === "integrated") await captureInitialNativeFit(page, info);
       await selectElement(page, "bpmn-js", "gateway");
       await expect(routing(page).getByLabel("Name", { exact: true })).toHaveValue(beforeNativeRename);
       await expect(routing(page).getByLabel("Default flow to Nested low", { exact: true })).toBeChecked();
@@ -298,6 +343,7 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       expect(xml).toContain("BPMNShape");
       await info.attach("edited-process.bpmn", { path: xmlPath, contentType: "application/xml" });
       receipt.publicXmlContainsEditedInlineExpression = xml.includes("Edited high");
+      await expectNoRefusals(page);
 
       await page.reload();
       await chooseEditor(page, "bpmn-js");
@@ -307,6 +353,7 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toHaveValue("High");
       expect(await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`)).toEqual(saved);
       await capture(page, info, "alternate-after-real-save-reload");
+      await expectNoRefusals(page);
 
       // These are the production promotion/publication endpoints, applied to the exact saved draft.
       // This prototype does not claim the separate UI publication review journey has been qualified.
@@ -347,9 +394,11 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
         await capture(page, info, `actual-run-inspection-${route.toLowerCase()}`);
       }
       expect(browserErrors, "Uncaught real-host browser errors").toEqual([]);
+      await expectNoRefusals(page);
       receipt.state = "passed-prototype";
     } finally {
       receipt.browserErrors = browserErrors;
+      receipt.consoleErrorCount = consoleErrorCount;
       const receiptPath = info.outputPath("prototype-receipt.json");
       writeFileSync(receiptPath, JSON.stringify(receipt, null, 2));
       await info.attach("prototype-receipt.json", { path: receiptPath, contentType: "application/json" });

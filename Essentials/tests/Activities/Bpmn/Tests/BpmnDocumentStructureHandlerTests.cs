@@ -79,7 +79,7 @@ public sealed class BpmnDocumentStructureHandlerTests
         var service = new DefaultActivityStructureService(handlers);
         var document = Owner();
         Assert.True(service.HasHandler(document.Structure!));
-        Assert.Equal(2, handlers.Length);
+        Assert.Equal(3, handlers.Length);
         Assert.Equal("body", service.ProjectChildren(document).Single().Activities.First().NodeId);
 
         var graph = document with

@@ -66,6 +66,21 @@ async function expectDiagramContrast(page: Page) {
   expect(contrast.watermark, "bpmn.io attribution contrasts with the canvas").toBeGreaterThanOrEqual(4.5);
 }
 
+async function expectInitialFit(page: Page) {
+  const clipped = await processEditor(page).evaluate(root => {
+    const canvas = root.querySelector(".djs-container")!.getBoundingClientRect();
+    const palette = root.querySelector(".djs-palette")!.getBoundingClientRect();
+    return [...root.querySelectorAll(".djs-shape .djs-visual")].flatMap(visual => {
+      const box = visual.getBoundingClientRect();
+      if (!box.width || !box.height) return [];
+      const clear = box.left >= Math.max(canvas.left + 16, palette.right + 16) && box.right <= canvas.right - 16
+        && box.top >= canvas.top + 16 && box.bottom <= canvas.bottom - 24;
+      return clear ? [] : [visual.closest("[data-element-id]")!.getAttribute("data-element-id")];
+    });
+  });
+  expect(clipped, "initial BPMN shapes and labels fit inside the canvas clear of its native palette").toEqual([]);
+}
+
 async function savedProcess(page: Page) {
   return page.evaluate(() => {
     const key = Object.keys(sessionStorage).find(candidate => candidate.startsWith("adaptive-ports:"));
@@ -92,9 +107,26 @@ async function savedProcess(page: Page) {
 for (const firstEditor of ["integrated", "bpmn-js"] as const) {
   test(`same-process switching from ${firstEditor} preserves Decision edits, native movement and shared undo through fixture reload`, async ({ page }, testInfo) => {
     testInfo.annotations.push({ type: "evidence", description: "Isolated browser fixture; no real backend publication or execution claim." });
-    await page.setViewportSize({ width: 1500, height: 1000 });
+    await page.setViewportSize({ width: 1100, height: 1000 });
+    await page.addInitScript(() => {
+      const refusals: string[] = [];
+      (window as unknown as { bpmnCanvasRefusals: string[] }).bpmnCanvasRefusals = refusals;
+      new MutationObserver(records => {
+        if (refusals.length) return;
+        for (const record of records) {
+          const target = record.target as Element;
+          if (record.oldValue === "refused" || target.getAttribute?.("data-bpmn-js-state") === "refused"
+            || target.textContent?.includes("Change refused:")) {
+            refusals.push("Canvas refused a normal journey edit");
+            break;
+          }
+        }
+      }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true,
+        attributeOldValue: true, attributeFilter: ["data-bpmn-js-state"] });
+    });
     await page.goto(`${fixture}&theme=${firstEditor === "integrated" ? "light" : "dark"}`);
     await chooseEditor(page, firstEditor);
+    if (firstEditor === "bpmn-js") await expectInitialFit(page);
     await selectDecision(page, firstEditor);
 
     const expression = '2000 > 1000 ? "High" : "Low"';
@@ -106,6 +138,9 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
     await routing(page).getByLabel("Default flow to Low", { exact: true }).check();
 
     await chooseEditor(page, "bpmn-js");
+    await expectInitialFit(page);
+    await page.screenshot({ path: testInfo.outputPath("bpmn-js-initial-fit.png") });
+    await page.setViewportSize({ width: 1500, height: 1000 });
     await selectDecision(page, "bpmn-js");
     const shape = nativeDecision(page);
     const originalTransform = await shape.getAttribute("transform");
@@ -119,11 +154,15 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
     await page.mouse.up();
     await expect(shape).not.toHaveAttribute("transform", originalTransform!);
     await expect(processEditor(page)).toHaveAttribute("data-bpmn-js-state", "ready");
+    expect(await page.evaluate(() => (window as unknown as { bpmnCanvasRefusals: string[] }).bpmnCanvasRefusals)).toEqual([]);
 
     await selectDecision(page, "bpmn-js");
     const name = `Order routing from ${firstEditor}`;
-    await routing(page).getByLabel("Name", { exact: true }).fill(name);
-    await routing(page).getByLabel("Name", { exact: true }).blur();
+    await shape.locator(".djs-hit").dblclick();
+    const nativeLabel = page.locator(".djs-direct-editing-content[contenteditable='true']");
+    await nativeLabel.fill(name);
+    await nativeLabel.press("Enter");
+    expect(await page.evaluate(() => (window as unknown as { bpmnCanvasRefusals: string[] }).bpmnCanvasRefusals)).toEqual([]);
     await expectConfiguration(page, expression, name);
     // External labels are separate native diagram elements but configure their owning BPMN node.
     await processEditor(page).locator(".djs-shape[data-element-id='low-end'] .djs-hit").click();
