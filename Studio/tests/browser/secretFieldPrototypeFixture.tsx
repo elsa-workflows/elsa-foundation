@@ -49,7 +49,7 @@ function FieldStyleSwitch({ value, onChange }: { value: FieldStyle; onChange(val
 function StateSheet() {
   const [value, setValue] = useState("");
   return <section className="secrets-modal secret-prototype-states" aria-label="Representative field states">
-    <SecretFormField label="Empty field" value={value} hint="Focus to raise the label; enter a value to keep it raised.">
+    <SecretFormField label="Empty field" value={value} hint="Enter a value to compare the empty and populated states.">
       {attributes => <input {...attributes} value={value} placeholder=" " onChange={event => setValue(event.target.value)} />}
     </SecretFormField>
     <SecretFormField label="Populated field" value="Billing connection">

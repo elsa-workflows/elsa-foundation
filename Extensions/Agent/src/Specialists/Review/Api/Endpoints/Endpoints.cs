@@ -3,7 +3,7 @@ using Elsa.Agent.Specialists.Review.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Primitives.Exceptions;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Agent.Specialists.Review.Api.Endpoints;
 

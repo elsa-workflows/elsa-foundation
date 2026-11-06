@@ -1364,7 +1364,7 @@ function bookmarkSummary(bookmarkId: string): ActivityExecutionInspection["bookm
 }
 
 
-it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
+it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed", "disposed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
   api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
   const make = (id: string, node: string, authored: string, parent: string | null) => ({ ...activityExecution(), activityExecutionId: id,
     executableNodeId: node, authoredActivityId: authored, status: "Completed", incidentCount: 0, incidentIds: [],
@@ -1375,6 +1375,7 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   if (mode === "ambiguous") rows.push(make("write5b", "compiled-target", "target-node", "scope5"));
   api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
   let pending = deferred<ActivityExecutionInspection>();
+  const pendingChild = deferred<ActivityExecutionBrowsePage>();
   let delay = false;
   api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
     if (delay && id === "scope5") return pending.promise;
@@ -1382,6 +1383,7 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
     return activityInspection({ ...row, outcomeNames: [], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
   });
   api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (mode === "disposed" && request.ancestorActivityExecutionId === "scope5" && request.limit === 1) return pendingChild.promise;
     const matches = rows.filter(item => (!request.executableNodeId || item.executableNodeId === request.executableNodeId) &&
       (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId) &&
       (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId));
@@ -1395,7 +1397,7 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   const overview = container.querySelector(".wf-activity-overview")!;
   const details = container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
   details.open = true;
-  delay = true;
+  delay = mode !== "disposed";
   const chooser = container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence .wf-execution-choice")!;
   let control: HTMLButtonElement;
   if (mode === "chooser") {
@@ -1413,6 +1415,26 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   expect(overview.isConnected).toBe(true);
   expect(details.open).toBe(true);
   expect(window.location.search).toContain("write4");
+  if (mode === "disposed") {
+    await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.some(([, , request]) =>
+      request.ancestorActivityExecutionId === "scope5" && request.limit === 1)).toBe(true));
+    const childRequest = api.browseActivityExecutions.mock.calls.find(([, , request]) =>
+      request.ancestorActivityExecutionId === "scope5" && request.limit === 1)!;
+    flushSync(() => root.unmount());
+    root = createRoot(container);
+    expect(childRequest[3]?.aborted).toBe(true);
+    const inspectionCalls = api.getActivityExecutionInspection.mock.calls.length;
+    const browseCalls = api.browseActivityExecutions.mock.calls.length;
+    const payloadCalls = valueApi.getActivityExecutionValuePayload.mock.calls.length;
+    pendingChild.resolve({ items: [{ execution: rows[4], position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
+    await pendingChild.promise;
+    // The production React bundle has no act; settle the detached navigation's lazy import before checking calls.
+    await vi.dynamicImportSettled();
+    expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(inspectionCalls);
+    expect(api.browseActivityExecutions).toHaveBeenCalledTimes(browseCalls);
+    expect(valueApi.getActivityExecutionValuePayload).toHaveBeenCalledTimes(payloadCalls);
+    return;
+  }
   if (mode === "failed" || /^(denied|missing)/.test(mode)) {
     const denied = mode !== "failed";
     delay = false;

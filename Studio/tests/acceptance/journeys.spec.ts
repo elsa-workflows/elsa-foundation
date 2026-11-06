@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { capture } from "./capture";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { userTasksJourney } from "./userTasksJourney";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function signIn(page: Page) {
   await page.goto("/workflows/definitions");
@@ -17,6 +18,7 @@ const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
