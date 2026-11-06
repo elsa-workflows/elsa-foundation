@@ -96,14 +96,17 @@ public sealed partial class LongDrainCancellationTests
             lifetime.Release.TrySetResult();
             probe.Release.TrySetResult();
             probe.Stop.TrySetResult();
-            await timeout.CancelAsync();
+            // Let an already queued real Cancel consume the yield; withdrawing it here would strand it again.
+            if (cancel is null)
+                await timeout.CancelAsync();
             var cleanupFailures = new List<Exception>();
             foreach (var operation in new[] { start, cancel, stopping }.OfType<Task>())
             {
-                try { await operation; }
+                try { await operation.WaitAsync(timeout.Token); }
                 catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
                 catch (Exception exception) { cleanupFailures.Add(exception); }
             }
+            await timeout.CancelAsync();
             try { await fixture.DisposeAsync(); }
             catch (Exception exception) { cleanupFailures.Add(exception); }
             lifetime.Cancellation.Dispose();
