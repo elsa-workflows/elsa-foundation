@@ -1,9 +1,14 @@
 import type {
-  ElsaStudioModuleApi, StudioAgentRegistry, StudioContributionComposition,
+  ElsaStudioModuleApi, StudioAgentPromptDispatcher, StudioAgentRegistry, StudioContributionComposition,
   StudioContributionListOptions
 } from "../../sdk";
 
-type Registration = { moduleId?: string; status: "registering" | "loaded" | "failed" | "retired" };
+type Registration = {
+  moduleId?: string;
+  status: "registering" | "loaded" | "failed" | "retired";
+  pending: Set<() => void>;
+  cleanup: Set<() => void>;
+};
 type Registry = {
   add(value: unknown): void;
   list(options?: StudioContributionListOptions<unknown>): unknown[];
@@ -24,7 +29,7 @@ export function initializeAgentRegistryGeneration(agent: StudioAgentRegistry) {
   if (known) return known;
   const generation: Generation = { current: true, registrations: new Map(), origins: new WeakMap(), adds: new Map() };
   generations.set(agent, generation);
-  const direct: Registration = { status: "loaded" };
+  const direct: Registration = { status: "loaded", pending: new Set(), cleanup: new Set() };
   for (const value of Object.values(agent)) {
     if (!isRegistry(value) || generation.adds.has(value)) continue;
     const add = value.add; const list = value.list; const compose = value.compose;
@@ -48,12 +53,15 @@ export function initializeAgentRegistryGeneration(agent: StudioAgentRegistry) {
 export function beginAgentModuleRegistration(api: ElsaStudioModuleApi, moduleId: string) {
   const generation = initializeAgentRegistryGeneration(api.agent);
   const previous = generation.registrations.get(moduleId);
-  if (previous) previous.status = "retired";
-  const registration: Registration = { moduleId, status: generation.current ? "registering" : "retired" };
+  if (previous) withdraw(api, previous, "retired");
+  const registration: Registration = { moduleId, status: generation.current ? "registering" : "retired", pending: new Set(), cleanup: new Set() };
   generation.registrations.set(moduleId, registration);
   const scopedRegistries = new Map<Registry, Registry>();
+  const dispatcher = scopeDispatcher(api.agent, generation, registration);
+  const legacy = api.ai === api.agent ? dispatcher : scopeDispatcher(api.ai, generation, registration);
   const agent = new Proxy(api.agent, {
     get(target, key) {
+      if (key === "dispatchPrompt" || key === "onPrompt" || key === "publishPromptResult" || key === "onPromptResult") return dispatcher[key];
       const value: unknown = Reflect.get(target, key, target);
       if (!isRegistry(value)) return value;
       let scoped = scopedRegistries.get(value);
@@ -74,27 +82,29 @@ export function beginAgentModuleRegistration(api: ElsaStudioModuleApi, moduleId:
   });
   generations.set(agent, generation);
   return {
-    api: new Proxy(api, { get: (target, key) => key === "agent" ? agent : Reflect.get(target, key, target) }),
+    api: new Proxy(api, { get: (target, key) => key === "agent" ? agent : key === "ai" ? (api.ai === api.agent ? agent : legacy) : Reflect.get(target, key, target) }),
     pending() { return generation.current && registration.status === "registering"; },
     complete() {
       if (!generation.current || registration.status !== "registering") return false;
       registration.status = "loaded";
+      for (const activate of registration.pending) activate();
+      registration.pending.clear();
       return true;
     },
-    fail() { if (registration.status !== "retired") registration.status = "failed"; }
+    fail() { if (registration.status !== "retired") withdraw(api, registration, "failed"); }
   };
 }
 
 /** Explicit lifetime withdrawal only; a missing/incomplete inventory is not an instruction to retire. */
 export function retireAgentModuleRegistration(api: ElsaStudioModuleApi, moduleId: string) {
   const registration = generations.get(api.agent)?.registrations.get(moduleId);
-  if (registration) registration.status = "retired";
+  if (registration) withdraw(api, registration, "retired");
 }
 
 export function retireAgentRegistryGeneration(api: ElsaStudioModuleApi) {
   const generation = initializeAgentRegistryGeneration(api.agent);
   generation.current = false;
-  for (const registration of generation.registrations.values()) registration.status = "retired";
+  for (const registration of generation.registrations.values()) withdraw(api, registration, "retired");
 }
 
 export function isAgentRegistryCurrent(api: ElsaStudioModuleApi) {
@@ -104,6 +114,54 @@ export function isAgentRegistryCurrent(api: ElsaStudioModuleApi) {
 export function isAgentContributionCurrent(api: ElsaStudioModuleApi, contribution: unknown) {
   const generation = generations.get(api.agent);
   return !generation || available(generation, contribution);
+}
+
+function scopeDispatcher(dispatcher: StudioAgentPromptDispatcher, generation: Generation, registration: Registration): StudioAgentPromptDispatcher {
+  const current = () => generation.current && registration.status === "loaded";
+  return {
+    dispatchPrompt(request) {
+      if (current()) dispatcher.dispatchPrompt(request);
+      else if (request.requestId) dispatcher.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
+    },
+    onPrompt(listener) { return subscribe(registration, () => dispatcher.onPrompt(listener)); },
+    publishPromptResult(result) { if (current()) dispatcher.publishPromptResult(result); },
+    onPromptResult(listener) { return subscribe(registration, () => dispatcher.onPromptResult(listener)); }
+  };
+}
+
+/** Keep the original callback and SDK Set semantics; only its attachment lifetime belongs here. */
+function subscribe(registration: Registration, attach: () => () => void) {
+  if (registration.status !== "registering" && registration.status !== "loaded") return () => {};
+  let cancelled = false;
+  let unsubscribe: (() => void) | undefined;
+  const activate = () => { registration.pending.delete(activate); if (!cancelled) unsubscribe = attach(); };
+  const release = () => {
+    cancelled = true;
+    registration.pending.delete(activate);
+    registration.cleanup.delete(release);
+    // Repeated explicit calls retain the SDK's ordinary delete/re-add behavior. Removing the
+    // handle above prevents a later automatic withdrawal from repeating a manual unsubscribe.
+    unsubscribe?.();
+  };
+  registration.cleanup.add(release);
+  if (registration.status === "loaded") activate();
+  else registration.pending.add(activate);
+  return release;
+}
+
+function withdraw(api: ElsaStudioModuleApi, registration: Registration, status: "failed" | "retired") {
+  registration.status = status;
+  let cleanupFailed = false;
+  for (const release of registration.cleanup) {
+    try { release(); } catch { cleanupFailed = true; }
+  }
+  registration.pending.clear();
+  registration.cleanup.clear();
+  if (cleanupFailed) {
+    // A broken custom disposer must neither replace the primary registration/connection failure
+    // nor stop the remaining owned cleanup. The native SDK's disposers only delete from a Set.
+    try { api.diagnostics.add({ moduleId: registration.moduleId ?? "", status: "failed", reason: "Module prompt subscription cleanup could not complete." }); } catch { /* Preserve the primary failure. */ }
+  }
 }
 
 function record(generation: Generation, contribution: unknown, registration: Registration) {

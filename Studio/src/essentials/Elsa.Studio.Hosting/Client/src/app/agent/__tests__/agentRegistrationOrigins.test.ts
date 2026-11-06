@@ -3,12 +3,123 @@ import { createStudioRegistry } from "../../registry";
 import { loadStudioModules, registerStudioModuleInstances } from "../../loader";
 import { createAgentRegistry, createEndpointContext, presentsResourceModule, type ElsaStudioModuleApi, type StudioModuleInstance, type StudioModuleManifest } from "../../../sdk";
 import { collectAgentContext } from "../agentContext";
-import { retireAgentModuleRegistration, retireAgentRegistryGeneration, isAgentContributionCurrent } from "../agentRegistrationOrigins";
+import { beginAgentModuleRegistration, retireAgentModuleRegistration, retireAgentRegistryGeneration, isAgentContributionCurrent } from "../agentRegistrationOrigins";
 
 const modes = ["instances", "legacy"] as const;
 type Mode = typeof modes[number];
 
 describe("Weaver registration origin lifetime", () => {
+  it.each(modes)("detaches failed prompt/result subscriptions before healthy host delivery, including captured legacy functions (%s)", async mode => {
+    const api = registry(); const unavailable = vi.fn(() => { throw new Error("Unavailable module callback ran."); });
+    let captured!: ElsaStudioModuleApi;
+    await register(mode, api, [{ id: "Broken", instance: { register(scoped) {
+      captured = scoped;
+      scoped.agent.onPrompt(unavailable); scoped.ai.onPromptResult(unavailable);
+      throw new Error("Registration failed.");
+    } } }]);
+    const prompt = vi.fn(); const result = vi.fn(); api.agent.onPrompt(prompt); api.agent.onPromptResult(result);
+    expect(() => api.agent.dispatchPrompt({ message: "Healthy" })).not.toThrow();
+    expect(() => api.agent.publishPromptResult({ requestId: "healthy", status: "completed", text: "" })).not.toThrow();
+    const subscribe = captured.ai.onPrompt; const dispatch = captured.ai.dispatchPrompt; const publish = captured.agent.publishPromptResult;
+    subscribe(unavailable); captured.agent.onPromptResult(unavailable);
+    dispatch({ requestId: "refused", message: "Stale" }); publish({ requestId: "forged", status: "completed", text: "" });
+    expect(unavailable).not.toHaveBeenCalled(); expect(prompt).toHaveBeenCalledTimes(1);
+    expect(result.mock.calls.map(([value]) => value)).toEqual([{ requestId: "healthy", status: "completed", text: "" }, { requestId: "refused", status: "failed", text: "" }]);
+  });
+
+  it.each(modes.flatMap(mode => (["agent", "ai"] as const).map(facade => ({ mode, facade }))))(
+    "activates pending $facade subscriptions only after registration and never after withdrawal ($mode)", async ({ mode, facade }) => {
+      const api = registry(); const entered = deferred(); const release = deferred(); const prompt = vi.fn(); const result = vi.fn(); const cancelled = vi.fn();
+      let captured!: ElsaStudioModuleApi;
+      const operation = register(mode, api, [{ id: "Pending", instance: { async register(scoped) {
+        captured = scoped; scoped[facade].onPrompt(prompt); scoped[facade].onPromptResult(result);
+        const stop = scoped[facade].onPrompt(cancelled); stop(); entered.resolve(); await release.promise;
+      } } }]);
+      await entered.promise;
+      api.agent.dispatchPrompt({ message: "Before activation" }); api.agent.publishPromptResult({ requestId: "before", status: "completed", text: "" });
+      expect(prompt).not.toHaveBeenCalled(); expect(result).not.toHaveBeenCalled();
+      release.resolve(); await operation;
+      api.agent.dispatchPrompt({ message: "After activation" }); api.agent.publishPromptResult({ requestId: "after", status: "completed", text: "" });
+      expect(prompt).toHaveBeenCalledTimes(1); expect(result).toHaveBeenCalledTimes(1); expect(cancelled).not.toHaveBeenCalled();
+      retireAgentModuleRegistration(api, "Pending");
+      captured[facade].onPrompt(cancelled); captured[facade].onPromptResult(cancelled);
+      api.agent.dispatchPrompt({ message: "After withdrawal" }); api.agent.publishPromptResult({ requestId: "withdrawn", status: "completed", text: "" });
+      expect(prompt).toHaveBeenCalledTimes(1); expect(result).toHaveBeenCalledTimes(1); expect(cancelled).not.toHaveBeenCalled();
+    }
+  );
+
+  it("preserves original callback identity across canonical and legacy facades", () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Satellite"); const receive = vi.fn();
+    registration.api.agent.onPrompt(receive); const stop = registration.api.ai.onPrompt(receive); registration.complete();
+    api.agent.dispatchPrompt({ message: "One delivery" }); expect(receive).toHaveBeenCalledTimes(1);
+    stop(); api.agent.dispatchPrompt({ message: "Unsubscribed" }); expect(receive).toHaveBeenCalledTimes(1);
+  });
+
+  it("never attaches pending callbacks after whole-generation retirement or late completion", () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Pending"); const receive = vi.fn();
+    registration.api.agent.onPrompt(receive); registration.api.ai.onPromptResult(receive);
+    retireAgentRegistryGeneration(api); expect(registration.complete()).toBe(false);
+    registration.api.ai.onPrompt(receive); api.agent.dispatchPrompt({ message: "Late" });
+    api.agent.publishPromptResult({ requestId: "late", status: "cancelled", text: "" }); expect(receive).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat a manual unsubscribe during retirement and remove a later direct subscription", () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Satellite"); registration.complete(); const receive = vi.fn();
+    const stop = registration.api.agent.onPrompt(receive); stop(); api.agent.onPrompt(receive);
+    retireAgentModuleRegistration(api, "Satellite"); api.agent.dispatchPrompt({ message: "Direct host delivery" });
+    expect(receive).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains native repeated old-unsubscribe behavior after an explicit re-add", () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Satellite"); registration.complete(); const receive = vi.fn();
+    const stop = registration.api.agent.onPrompt(receive); stop(); registration.api.ai.onPrompt(receive); stop();
+    api.agent.dispatchPrompt({ message: "Removed by the old SDK handle" }); expect(receive).not.toHaveBeenCalled();
+  });
+
+  it("retains the SDK Set's single shared callback and cross-registration unsubscribe behavior", () => {
+    const api = registry(); const first = beginAgentModuleRegistration(api, "First"); const second = beginAgentModuleRegistration(api, "Second"); const receive = vi.fn();
+    first.api.agent.onPrompt(receive); second.api.ai.onPrompt(receive); first.complete(); second.complete();
+    api.agent.dispatchPrompt({ message: "Shared" }); expect(receive).toHaveBeenCalledTimes(1);
+    retireAgentModuleRegistration(api, "First"); api.agent.dispatchPrompt({ message: "Native Set removal" }); expect(receive).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes an unavailable listener before its turn in the SDK's live iteration", () => {
+    const api = registry(); const later = vi.fn(); const healthy = vi.fn();
+    api.agent.onPrompt(() => retireAgentModuleRegistration(api, "Satellite"));
+    const registration = beginAgentModuleRegistration(api, "Satellite"); registration.api.agent.onPrompt(later); registration.complete(); api.agent.onPrompt(healthy);
+    api.agent.dispatchPrompt({ message: "Withdraw before callback" }); expect(later).not.toHaveBeenCalled(); expect(healthy).toHaveBeenCalledTimes(1);
+  });
+
+  it("withdraws a loaded listener before a replacement registration fails", () => {
+    const api = registry(); const first = beginAgentModuleRegistration(api, "Satellite"); const old = vi.fn(); const replacement = vi.fn(); const healthy = vi.fn();
+    first.api.agent.onPrompt(old); first.complete(); api.agent.onPrompt(healthy);
+    const next = beginAgentModuleRegistration(api, "Satellite"); next.api.ai.onPrompt(replacement); next.fail();
+    api.agent.dispatchPrompt({ message: "Independent" }); expect(old).not.toHaveBeenCalled(); expect(replacement).not.toHaveBeenCalled(); expect(healthy).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves direct host terminal cancellation publication after generation retirement", () => {
+    const api = registry(); const registration = beginAgentModuleRegistration(api, "Satellite"); const unavailable = vi.fn(); const host = vi.fn();
+    registration.api.ai.onPromptResult(unavailable); registration.complete(); api.agent.onPromptResult(host);
+    retireAgentRegistryGeneration(api); api.agent.publishPromptResult({ requestId: "pending", status: "cancelled", text: "" });
+    expect(unavailable).not.toHaveBeenCalled(); expect(host).toHaveBeenCalledTimes(1); expect(host).toHaveBeenCalledWith({ requestId: "pending", status: "cancelled", text: "" });
+  });
+
+  it("preserves custom method receivers, plain listener receivers and primary failure during owned cleanup", () => {
+    const api = registry(); const original = api.agent.onPrompt; const healthy = vi.fn();
+    api.agent.onPrompt = function (listener) {
+      expect(this).toBe(api.agent); const stop = original.call(this, listener);
+      return () => { stop(); throw new Error("Private disposer failure."); };
+    };
+    const registration = beginAgentModuleRegistration(api, "Satellite");
+    const receive = vi.fn(function (this: unknown) { expect(this).toBeUndefined(); });
+    registration.api.agent.onPrompt(receive); registration.api.ai.onPromptResult(healthy); registration.complete();
+    api.agent.dispatchPrompt({ message: "Loaded" }); expect(receive).toHaveBeenCalledTimes(1);
+    expect(() => registration.fail()).not.toThrow();
+    api.agent.publishPromptResult({ requestId: "closed", status: "completed", text: "" }); expect(healthy).not.toHaveBeenCalled();
+    expect(api.diagnostics.list().at(-1)?.reason).toBe("Module prompt subscription cleanup could not complete.");
+    expect(JSON.stringify(api.diagnostics.list())).not.toContain("Private disposer failure.");
+  });
+
   it.each(modes)("hides partial failed registration before availability or collection, retaining independent sources (%s)", async mode => {
     const api = registry(); const broken = provider("broken"); const healthy = provider("healthy"); const direct = provider("direct");
     api.agent.contextProviders.add(direct);
