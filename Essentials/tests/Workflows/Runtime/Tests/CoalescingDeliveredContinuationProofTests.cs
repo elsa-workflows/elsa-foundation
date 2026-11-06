@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -93,39 +94,65 @@ public sealed class CoalescingDeliveredContinuationProofTests
     [InlineData("lost-completion")]
     public async Task A_matching_receipt_cannot_settle_a_successor_claim(string variant)
     {
-        await using var fixture = await Fixture.CreateAsync(variant);
+        // Contrast the suppressed receipt path with ordinary delivery through the same real claim transitions.
+        foreach (var useReceipt in new[] { true, false })
+        {
+            await using var fixture = await Fixture.CreateAsync(variant);
+            Assert.True(fixture.HasCommittedReceipt());
+            var result = await fixture.ProcessAsync(useReceipt);
+            var dispatched = variant == "lost-completion" && !useReceipt;
+            Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner, Assert.Single(result.Items).Outcome);
+            Assert.Equal(0, result.DeliveredCount);
+            Assert.Equal(dispatched ? 1 : 0, fixture.Dispatcher.Dispatches);
+            Assert.Equal([dispatched], fixture.Logger.ClaimLostDispatchFlags);
+            var retained = await fixture.Inner.FindAsync(fixture.PhysicalItem.OutboxItemId);
+            Assert.Equal("successor", retained?.DeliveringOwnerId);
+            Assert.Equal(3, retained?.DeliveryFencingToken);
+            Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, retained?.Status);
+            Assert.Equal(0, retained?.DeliveryAttemptCount);
+            Assert.Equal(variant == "lost-renewal" ? 0 : 1, fixture.Physical.CompletionCalls);
+        }
+    }
+
+    [Fact]
+    public async Task A_source_handler_that_loses_its_claim_after_invocation_reports_the_dispatch_attempt()
+    {
+        await using var fixture = await Fixture.CreateAsync("handler-stale-source");
         Assert.True(fixture.HasCommittedReceipt());
-        var result = await fixture.ProcessAsync();
+        var result = await fixture.ProcessAsync(useReceipt: false);
         Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner, Assert.Single(result.Items).Outcome);
         Assert.Equal(0, result.DeliveredCount);
-        Assert.Equal(0, fixture.Dispatcher.Dispatches);
+        Assert.Equal(1, fixture.Dispatcher.Dispatches);
+        Assert.Equal([true], fixture.Logger.ClaimLostDispatchFlags);
+        Assert.Equal(0, fixture.Physical.CompletionCalls);
         var retained = await fixture.Inner.FindAsync(fixture.PhysicalItem.OutboxItemId);
         Assert.Equal("successor", retained?.DeliveringOwnerId);
         Assert.Equal(3, retained?.DeliveryFencingToken);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, retained?.Status);
         Assert.Equal(0, retained?.DeliveryAttemptCount);
-        Assert.Equal(variant == "lost-renewal" ? 0 : 1, fixture.Physical.CompletionCalls);
     }
 
     private sealed class Fixture(ServiceProvider host, AsyncServiceScope scope, FakeTimeProvider clock,
         RuntimeCoalescingSession session, IRuntimeCoalescingSessionAccessor sessions,
         IRuntimeExecutionOwnershipContextAccessor owners, CoalescingRuntimePostCommitOutboxStore store,
         InMemoryRuntimeCheckpointCommitStore inner, RuntimePostCommitOutboxItem physicalItem,
-        RuntimeExecutionLease? currentLease, Access? access, RecordingDispatcher dispatcher, PhysicalFaults physical) : IAsyncDisposable
+        RuntimeExecutionLease? currentLease, Access? access, RecordingDispatcher dispatcher, PhysicalFaults physical,
+        RecordingLogger logger) : IAsyncDisposable
     {
         public InMemoryRuntimeCheckpointCommitStore Inner => inner;
         public RuntimePostCommitOutboxItem PhysicalItem => physicalItem;
         public RecordingDispatcher Dispatcher => dispatcher;
         public PhysicalFaults Physical => physical;
+        public RecordingLogger Logger => logger;
         public bool HasCommittedReceipt() => session.HasCommittedContinuation(physicalItem, physicalItem.Intent,
             store, access?.Current, currentLease);
 
-        public async Task<RuntimePostCommitOutboxProcessResult> ProcessAsync()
+        public async Task<RuntimePostCommitOutboxProcessResult> ProcessAsync(bool useReceipt = true)
         {
-            using var sessionScope = sessions.Push(session);
+            using var sessionScope = sessions.Push(useReceipt ? session : null);
             using var ownerScope = owners.Push(currentLease);
             var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, clock,
-                DefaultRuntimeFaultCapturePolicy.CreateDefault(), null, [], null, null, sessions, access, [], null, owners);
+                DefaultRuntimeFaultCapturePolicy.CreateDefault(), null, [], logger, null, sessions, access, [], null, owners);
             return await processor.ProcessAsync(new(1, physicalItem.Intent.WorkflowExecutionId));
         }
 
@@ -244,8 +271,16 @@ public sealed class CoalescingDeliveredContinuationProofTests
             };
             clock.Advance(TimeSpan.FromMinutes(2));
             physicalProvider.Armed = true;
+            var dispatcher = new RecordingDispatcher { RequiredSource = variant.EndsWith("-source", StringComparison.Ordinal) };
+            if (variant == "handler-stale-source")
+                dispatcher.BeforeSourceDispatch = async (source, token) =>
+                {
+                    await physicalProvider.StealAsync(source.SourceOutboxItemId, token);
+                    throw new RuntimePostCommitOutboxStaleClaimException(source.SourceOutboxItemId, source.Claim.OwnerId,
+                        source.Claim.FencingToken, "successor", 3, RuntimePostCommitOutboxStatus.Delivering);
+                };
             return new(host, scope, clock, session, sessions, owners, store, inner, physical, currentLease, selectedAccess,
-                new() { RequiredSource = variant.EndsWith("-source", StringComparison.Ordinal) }, physicalProvider);
+                dispatcher, physicalProvider, new());
         }
 
         public async ValueTask DisposeAsync()
@@ -284,11 +319,31 @@ public sealed class CoalescingDeliveredContinuationProofTests
     {
         public int Dispatches { get; private set; }
         public bool RequiredSource { get; init; }
+        public Func<PostCommitDeliveryContext, CancellationToken, ValueTask>? BeforeSourceDispatch { get; set; }
         public bool RequiresDurableSource(string kind) => RequiredSource;
         public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
         {
             Dispatches++;
             return ValueTask.CompletedTask;
+        }
+        public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        {
+            Dispatches++;
+            if (BeforeSourceDispatch is { } beforeDispatch)
+                await beforeDispatch(source, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger<RuntimePostCommitOutboxProcessor>
+    {
+        public List<bool> ClaimLostDispatchFlags { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (eventId.Id == 68113 && state is IEnumerable<KeyValuePair<string, object?>> properties)
+                ClaimLostDispatchFlags.Add(Assert.IsType<bool>(Assert.Single(properties, item => item.Key == "Dispatched").Value));
         }
     }
 
@@ -327,7 +382,7 @@ public sealed class CoalescingDeliveredContinuationProofTests
             return await inner.CompleteClaimAsync(completion, token);
         }
 
-        private async Task StealAsync(string id, CancellationToken token)
+        public async Task StealAsync(string id, CancellationToken token)
         {
             var item = (await inner.FindAsync(id, token))!;
             clock.SetUtcNow(item.DeliveryVisibleAfter!.Value.AddSeconds(1));

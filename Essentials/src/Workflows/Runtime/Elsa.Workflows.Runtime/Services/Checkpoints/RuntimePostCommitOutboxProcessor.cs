@@ -274,6 +274,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         CancellationToken cancellationToken)
     {
         var item = claim.Item;
+        var dispatched = false;
         var run = await _claimLease!.RunAsync(
             claim,
             async dispatchCancellationToken =>
@@ -288,6 +289,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                     _outboxStore, _persistenceAccessContextAccessor?.Current, _ownershipContextAccessor?.Current) == true;
                 if (!alreadyCommitted)
                 {
+                    dispatched = true;
                     if (source is not null)
                         await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
                     else
@@ -304,10 +306,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             sourceStale.OutboxItemId == claim.OutboxItemId && sourceStale.PresentedOwnerId == claim.OwnerId &&
             sourceStale.PresentedFencingToken == claim.FencingToken)
         {
-            // Nothing was dispatched: the claimant that holds the item now delivers it. Delivering is reported as the
-            // requested status because nothing was requested at all, and the superseded outcome keeps the item out of
-            // the delivered and failed counts.
-            LogClaimLost(item, dispatched: false, run.Exception);
+            // No completion is accepted: the current claimant owns delivery. A source-authorized handler can refuse
+            // its source after invocation, so log the actual dispatch attempt rather than assuming none occurred.
+            LogClaimLost(item, dispatched, run.Exception);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
                 item.Intent.IntentId,
@@ -329,10 +330,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (RuntimePostCommitOutboxStaleClaimException stale)
         {
-            // The dispatch outran the claim and a peer re-claimed the item, so this completion is refused and writes
-            // nothing (#1812). That is one item's broken lease, not a reason to abandon the rest of the batch: the peer
-            // records the item's real outcome, and the intent it dispatched again is idempotent.
-            LogClaimLost(item, dispatched: true, stale);
+            // A peer re-claimed the item before completion, so this writer records nothing (#1812). Dispatch may
+            // already have been committed by this drain and suppressed above; preserve that distinction in the log.
+            LogClaimLost(item, dispatched, stale);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
                 item.Intent.IntentId,
@@ -434,8 +434,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
         if (successOutcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
         {
-            // The dispatch above still happened, and the continuation queue's enqueue is idempotent, so the work is done
-            // exactly once. What this processor must NOT do is claim the delivery: the owning deliverer records the item's
+            // The effect was dispatched now or already committed by this drain. The continuation queue's enqueue is
+            // idempotent. This processor must not claim delivery: the owning deliverer records the item's
             // terminal state, and counting it as delivered here would keep the drain cycling on work it does not own.
             LogDeliverySuperseded(item);
             return new RuntimePostCommitOutboxProcessedItem(
