@@ -12,6 +12,7 @@ public static class RuntimeCheckpointCommitFingerprint
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly JsonSerializerOptions ExactBookmarkOptions = ExactOptions();
+    private static readonly JsonSerializerOptions IngressFingerprintOptions = CreateIngressFingerprintOptions();
 
     private static JsonSerializerOptions ExactOptions()
     {
@@ -97,6 +98,72 @@ public static class RuntimeCheckpointCommitFingerprint
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
         return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
+    /// <summary>Semantic request identity for canonical ingress retries; transport options and selection are absent.</summary>
+    public static string ComputeIngressRequest(StimulusIngressRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return ComputeIngressValue("elsa.stimulus-ingress.request.v1", request);
+    }
+
+    /// <summary>Immutable pre-effect manifest identity, preserving captured list order and explicit empty sets.</summary>
+    public static string ComputeIngressCohort(StimulusIngressCohort cohort)
+    {
+        ArgumentNullException.ThrowIfNull(cohort);
+        return ComputeIngressValue("elsa.stimulus-ingress.cohort.v1", cohort);
+    }
+
+    /// <summary>Exact committed source identity; grants no authority without a canonical provider read and live claim.</summary>
+    public static string ComputeIngressSource(StimulusIngressSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return ComputeIngressValue("elsa.stimulus-ingress.source.v1", source);
+    }
+
+    /// <summary>Exact origin identity, including nullable tenant/partition and immutable run/test facts.</summary>
+    public static string ComputeIngressOrigin(StimulusDeliveryScope origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        return ComputeIngressValue("elsa.stimulus-ingress.origin.v1", origin);
+    }
+
+    /// <summary>Bounded provider key over every immutable origin fact and the sender key.</summary>
+    public static string ComputeIngressKey(StimulusDeliveryScope origin, string clientKey)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientKey);
+        return ComputeIngressValue("elsa.stimulus-ingress.key.v1", new { Origin = origin, ClientKey = clientKey });
+    }
+
+    internal static string ComputeIngressStartKey(StimulusDeliveryScope origin, string kind, string key, string? artifactId) =>
+        ComputeIngressValue("elsa.stimulus-ingress.start.v3", new { Origin = origin, Kind = kind, Key = key, ArtifactId = artifactId });
+
+    internal static string ComputeIngressBindingStartKey(StimulusDeliveryScope origin, string sourceId, string triggerBindingId, string artifactId) =>
+        ComputeIngressValue("elsa.stimulus-ingress.start.v3", new { Origin = origin, Kind = "source-binding", Key = sourceId, TriggerBindingId = triggerBindingId, ArtifactId = artifactId });
+
+    private static string ComputeIngressValue<T>(string domain, T value)
+    {
+        // A new encoding only: historical intent/model/checkpoint fingerprints and their options are untouched.
+        var payload = JsonSerializer.SerializeToElement(new { Domain = domain, Value = value }, IngressFingerprintOptions);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
+    private static JsonSerializerOptions CreateIngressFingerprintOptions()
+    {
+        var options = ExactOptions();
+        options.Converters.Add(new IngressInstantWriter());
+        return options;
+    }
+
+    private sealed class IngressInstantWriter : JsonConverter<DateTimeOffset>
+    {
+        public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            throw new NotSupportedException("The ingress fingerprint encoding is write-only.");
+        public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options) =>
+            writer.WriteNumberValue(value.UtcTicks);
     }
 
     // Intent equivalence uses JsonElement.DeepEquals, including exact numeric equivalence. Keep this

@@ -254,7 +254,7 @@ public sealed partial class EfWorkflowExecutableStore(
                 var token = Token();
                 if (row is null)
                 {
-                    leaseContext.WorkflowExecutableRootWriteLeases.Add(ToLeaseEntity(scope, artifactId, leaseId, id, token, expiresAt, current.IncarnationId));
+                    leaseContext.WorkflowExecutableRootWriteLeases.Add(ToLeaseEntity(scope, artifactId, leaseId, id, token, expiresAt, current.IncarnationId, RuntimeArtifactWriteVersion.For(leaseContext)));
                 }
                 else
                 {
@@ -262,7 +262,7 @@ public sealed partial class EfWorkflowExecutableStore(
                     row.Token = token;
                     row.ExpiresAtUtcTicks = expiresAt.UtcTicks;
                     row.IncarnationId = current.IncarnationId;
-                    row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+                    row.SchemaVersion = RuntimeArtifactWriteVersion.For(leaseContext);
                     row.Revision++;
                 }
 
@@ -373,6 +373,7 @@ public sealed partial class EfWorkflowExecutableStore(
             var leases = LiveLeases(state, now);
             if (leases.Count != 0)
                 return null;
+            if (await IsIngressRetainedAsync(scope, artifactId, cancellationToken)) return null;
             if (state.Guard is { } existing && existing.ExpiresAt > now)
                 return existing.OperationId == operationId
                     ? new BegunDeletion(new WorkflowExecutableDeletionGuard(artifactId, operationId, existing.Token), row.IncarnationId, Created: false)
@@ -392,7 +393,8 @@ public sealed partial class EfWorkflowExecutableStore(
         // lease this fresh read observes was committed first: stand down.
         try
         {
-            if (await HasLiveLeasesAsync(context, scope, artifactId, begun.IncarnationId, now, cancellationToken))
+            if (await HasLiveLeasesAsync(context, scope, artifactId, begun.IncarnationId, now, cancellationToken) ||
+                await IsIngressRetainedAsync(scope, artifactId, cancellationToken))
             {
                 await CancelDeletionAsync(begun.Guard, cancellationToken);
                 return null;
@@ -512,7 +514,8 @@ public sealed partial class EfWorkflowExecutableStore(
                 var row = pair.Value.Coordination;
                 var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
                 if (!CanDelete(state, guard, now) || await HasLiveLeasesAsync(context, scope, guard.ArtifactId,
-                        row.IncarnationId, now, cancellationToken)) return false;
+                        row.IncarnationId, now, cancellationToken) ||
+                    await IsIngressRetainedAsync(scope, guard.ArtifactId, cancellationToken)) return false;
                 var id = row.Id; var revision = row.Revision; var incarnation = row.IncarnationId;
                 var changed = await write();
                 // An expired-guard acquirer must clear that guard by this same revision before accepting its lease.
@@ -580,6 +583,12 @@ public sealed partial class EfWorkflowExecutableStore(
                 {
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                         context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
+                    return false;
+                }
+
+                if (await IsIngressRetainedAsync(scope, artifactId, cancellationToken))
+                {
+                    await transaction.CommitAsync(cancellationToken);
                     return false;
                 }
 
@@ -710,7 +719,7 @@ public sealed partial class EfWorkflowExecutableStore(
     private async Task UpdateCoordination(WorkflowExecutableCoordinationEntity row, CoordinationState state, CancellationToken ct)
     {
         row.ContentJson = RuntimeArtifactJson.Serialize(state);
-        row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+        row.SchemaVersion = RuntimeArtifactWriteVersion.For(context);
         row.Revision++;
         try
         {
@@ -852,7 +861,7 @@ public sealed partial class EfWorkflowExecutableStore(
             if (GuardIsLive(state, now))
                 return false;
             row.ContentJson = RuntimeArtifactJson.Serialize(new CoordinationState(LiveLeases(state, now), null));
-            row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+            row.SchemaVersion = RuntimeArtifactWriteVersion.For(db);
             row.Revision++;
             await db.SaveChangesAsync(cancellationToken);
             return true;
@@ -962,7 +971,7 @@ public sealed partial class EfWorkflowExecutableStore(
         string id,
         string token,
         DateTimeOffset expiresAt,
-        string incarnationId) => new()
+        string incarnationId, string schemaVersion) => new()
         {
             Id = id,
             ScopeKey = Encode(scope),
@@ -974,10 +983,10 @@ public sealed partial class EfWorkflowExecutableStore(
             ExpiresAtUtcTicks = expiresAt.UtcTicks,
             IncarnationId = incarnationId,
             Revision = 1,
-            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion
+            SchemaVersion = schemaVersion
         };
 
-    private static WorkflowExecutableEntity ToEntity(
+    private WorkflowExecutableEntity ToEntity(
         WorkflowExecutable executable,
         string scope,
         string id,
@@ -992,11 +1001,11 @@ public sealed partial class EfWorkflowExecutableStore(
             ArtifactHash = executable.Identity.ArtifactHash,
             ArtifactIdOrderKey = OrderKey(executable.Identity.ArtifactId),
             ContentJson = json,
-            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
+            SchemaVersion = RuntimeArtifactWriteVersion.For(context),
             IncarnationId = incarnationId
         };
 
-    private static WorkflowExecutableCoordinationEntity ToCoordinationEntity(
+    private WorkflowExecutableCoordinationEntity ToCoordinationEntity(
         string artifactId,
         string scope,
         string id,
@@ -1008,7 +1017,7 @@ public sealed partial class EfWorkflowExecutableStore(
             ArtifactId = Encode(artifactId),
             ArtifactIdHash = Hash(artifactId),
             ContentJson = RuntimeArtifactJson.Serialize(CoordinationState.Empty),
-            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
+            SchemaVersion = RuntimeArtifactWriteVersion.For(context),
             Revision = 1,
             IncarnationId = incarnationId
         };

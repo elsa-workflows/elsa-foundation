@@ -310,18 +310,18 @@ public sealed partial class EfExecutableActivityTemplateStore(
     // Admits privileged maintenance of one partition, as every runtime artifact store does.
     private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 
-    private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
+    private ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {
         Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = Encode(template.TemplateId),
         TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateHashHash = Hash(template.TemplateHash), TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
+        SchemaVersion = RuntimeArtifactWriteVersion.For(context), Revision = 1, IncarnationId = incarnationId
     };
 
-    private static ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
+    private ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
     {
         Id = HashClaimId(identity.Scope, template.TemplateHash), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateHash = template.TemplateHash,
         TemplateHashHash = Hash(template.TemplateHash), TemplateId = Encode(template.TemplateId), ContentJson = RuntimeArtifactJson.Serialize(new HashClaim(template.TemplateHash, template.TemplateId)),
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
+        SchemaVersion = RuntimeArtifactWriteVersion.For(context), Revision = 1, IncarnationId = incarnationId
     };
 
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)

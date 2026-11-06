@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Persistence.EntityFramework;
@@ -175,6 +176,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
             UseEntityFrameworkActivationSwitch(services);
+            UseEntityFrameworkIngressSources(services);
 
             // Execution deletion is a capability of the complete, transactionally coupled EF family. Individual
             // EF store registrations intentionally do not advertise that the corresponding run-owned graph can be
@@ -218,6 +220,29 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.Remove(descriptor);
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IWorkflowActivationSwitch, EfWorkflowActivationSwitch>();
+    }
+
+    private static readonly Func<IServiceProvider, object> IngressFactory = CreateIngressSourceStore;
+
+    private static void UseEntityFrameworkIngressSources(IServiceCollection services)
+    {
+        var registrations = services.Where(descriptor => descriptor.ServiceType == typeof(IStimulusIngressSourceStore)).ToArray();
+        if (registrations.Length > 1 || registrations.Any(descriptor => !ReferenceEquals(descriptor.ImplementationFactory, IngressFactory)))
+            throw new InvalidOperationException("Runtime EF persistence refuses an independently selected ingress source store.");
+        if (registrations.Length == 0)
+            services.Add(ServiceDescriptor.Scoped(typeof(IStimulusIngressSourceStore), IngressFactory));
+    }
+
+    private static object CreateIngressSourceStore(IServiceProvider provider)
+    {
+        var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        var physical = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+            ? provider.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value : executions;
+        return new EfStimulusIngressSourceStore(provider.GetRequiredService<RuntimeDbContext>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<IWorkflowExecutionPartitionAccessor>(),
+            provider.GetRequiredService<IWorkflowExecutableStore>(), provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+            physical, provider.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>(), provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<EfWorkflowTestScopeStore>());
     }
 }
 

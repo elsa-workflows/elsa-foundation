@@ -462,6 +462,13 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     /// </summary>
     private async ValueTask<bool> TryRemoveValidatedRowAsync(WorkflowExecutableSourceReferenceEntity row, string sourceReferenceId, CancellationToken cancellationToken)
     {
+        var scope = RequireScope();
+        var current = Read(row, scope, sourceReferenceId);
+        if (await EfStimulusIngressSourceStore.IsMaterialRetainedAsync(context, access, scope, current.ArtifactId, cancellationToken))
+        {
+            context.ChangeTracker.Clear();
+            return false;
+        }
         context.Remove(row);
         try
         {
@@ -546,13 +553,13 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             access.Current.EnsureTenantScope(reference.TenantId);
         return scope;
     }
-    private static WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
+    private WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
     {
         var row = new WorkflowExecutableSourceReferenceEntity { Id = id, IncarnationId = NewIncarnationId() };
         Copy(row, value, scope);
         return row;
     }
-    private static void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
+    private void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
     {
         row.SourceReferenceId = Encode(value.SourceReferenceId);
         row.SourceReferenceIdHash = Hash(value.SourceReferenceId);
@@ -570,7 +577,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks;
         row.ContentJson = SerializeEnvelope(value);
-        row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+        row.SchemaVersion = RuntimeArtifactWriteVersion.For(context);
         if (row.Revision <= 0)
             row.Revision = 1;
         else

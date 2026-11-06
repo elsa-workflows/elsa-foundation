@@ -108,10 +108,11 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         Assert.Equal(record.DatabaseIdentity, finalization.DatabaseIdentity);
         Assert.Null(finalization.WritesRefusedReason);
 
-        await EfSchemaFinalizationTestSupport.FinalizeAsync(store, RuntimeArtifactEfModule.SchemaFamily, [RuntimeArtifactEfModule.SchemaVersion, "2.0.0"], "2.0.0");
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(store, RuntimeArtifactEfModule.SchemaFamily,
+            RuntimeArtifactEfModule.Chain.ReadableVersions.Append("99.0.0").ToArray(), "99.0.0");
         await migrator.Gate!.RefreshAsync(context);
 
-        Assert.Contains($"schema family '{RuntimeArtifactEfModule.SchemaFamily}' is finalized at '2.0.0'", finalization.WritesRefusedReason);
+        Assert.Contains($"schema family '{RuntimeArtifactEfModule.SchemaFamily}' is finalized at '99.0.0'", finalization.WritesRefusedReason);
         await migrator.StopAsync(CancellationToken.None);
     }
 

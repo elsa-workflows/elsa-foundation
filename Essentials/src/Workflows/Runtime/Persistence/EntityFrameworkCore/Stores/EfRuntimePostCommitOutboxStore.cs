@@ -331,7 +331,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
                                 throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
                             _ = facts.Source.InstallRecipientSnapshot(source, candidate, facts.Publisher, scope, timeProvider.GetUtcNow());
                             if (facts.Source.RecipientSnapshot is { } winner) { result = Verified(winner); return; }
-                            foreach (var id in dependencies) await FenceExecutionDependencyAsync(scope.Value, id, token);
+                            foreach (var id in dependencies) await StimulusSourceExecutionFences.FenceAsync(context, scope.Value, id, token);
                             // Re-read physical source/claim after all awaited fences. No workflow-root read occurs here.
                             var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: true, token) ??
                                 throw new InvalidDataException("The exact recipient source is missing.");
@@ -394,25 +394,6 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
                 EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
                 exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or WorkflowExecutableReferenceRejectedException));
         }
-    }
-
-    private async ValueTask FenceExecutionDependencyAsync(string scope, string workflowExecutionId, CancellationToken cancellationToken)
-    {
-        var row = await EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(row, scope, workflowExecutionId))
-            throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
-        if (row is null)
-        {
-            var state = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(workflowExecutionId), workflowExecutionId,
-                null, null, null, null, [], new Dictionary<string, string> { [RuntimeMetadataKeys.OwnershipFencingToken] = "0" });
-            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, scope, 1));
-            await context.SaveChangesAsync(cancellationToken); // Acquire the unique missing-owner fence before source CAS.
-            return;
-        }
-        var touched = await context.ExecutionLivenessStates.Where(candidate => candidate.Id == row.Id && candidate.Revision == row.Revision)
-            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
-        if (touched != 1) throw new DbUpdateConcurrencyException("Cohort execution ownership changed before acceptance.");
     }
 
     async ValueTask<PostCommitDeliveryContext> IStimulusDeliveryStore.ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
