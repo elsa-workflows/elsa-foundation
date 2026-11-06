@@ -286,7 +286,9 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
                 JsonSerializer.SerializeToElement(BpmnDocumentScopeProjection.ReadView(query) with { Owner = owner with
                 { Structure = new(Process.StructureKind, "1.0.0", owner.Structure!.Payload) } }, Json)) }
         };
-        Assert.Throws<InvalidOperationException>(() => _structures.ProjectChildren(query));
+        // The module validates its exact view format. Generic projection deliberately keeps
+        // unknown structure versions opaque rather than dispatching a different version's handler.
+        Assert.Throws<InvalidOperationException>(() => BpmnDocumentScopeProjection.ReadView(query));
     }
 
     [Fact]
@@ -300,6 +302,18 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
             new Dictionary<string, IReadOnlyCollection<ActivityChildProjection>>());
         Assert.Throws<NotSupportedException>(() => new BpmnDocumentScopeViewHandler().CompileExecutableStructure(query, context));
         Assert.Equal(Xml, Document(owner).DocumentXml);
+    }
+
+    [Fact]
+    public async Task Unknown_scope_view_version_remains_forbidden_physical_source_and_contextual_compilation()
+    {
+        var owner = Owner();
+        var view = BpmnDocumentScopeProjection.CreateProcessView(owner, "P1");
+        var unknown = view with { Structure = new(BpmnDocumentScopeView.Kind, "99", view.Structure!.Payload) };
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await new BpmnScopeViewSourceValidator(_provider.GetServices<IActivityStructureHandler>()).Validate(new Draft(unknown), default));
+        var context = new ActivityStructureCompilationContext(unknown, new Dictionary<string, ResolvedStructureInvocation>(),
+            new Dictionary<string, IReadOnlyCollection<ActivityChildProjection>>());
+        Assert.Throws<NotSupportedException>(() => _structures.CompileExecutableStructure(unknown, context));
     }
 
     [Theory]

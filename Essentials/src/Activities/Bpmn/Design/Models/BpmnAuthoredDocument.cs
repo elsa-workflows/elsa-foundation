@@ -43,6 +43,7 @@ internal sealed record BpmnDocumentScopeHeader(
 }
 
 /// <summary>Self-contained derived context, never a physically authored activity structure.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Skip)]
 internal sealed record BpmnDocumentScopeView(ActivityNode Owner, string ScopeElementId, IReadOnlyCollection<VariableDefinition> Variables)
 {
     internal const string Kind = "elsa.bpmn.scope-view";

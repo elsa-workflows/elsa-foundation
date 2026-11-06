@@ -57,8 +57,9 @@ public sealed class BpmnDocumentDraftSaveTests
         await connection.OpenAsync();
         await using var db = new WorkflowsDesignSqliteDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
         await db.Database.EnsureCreatedAsync();
-        db.Definitions.Add(new WorkflowDefinition { Id = "definition", Name = "Complete document" });
-        await db.SaveChangesAsync();
+        var writer = new EfDesignAtomicWriter(db, accessor);
+        await new EfMaterializeWorkflowDefinitionCommand(db, accessor, writer).Execute(new DesignOperationKey("complete-source-definition"),
+            new WorkflowDefinition { Id = "definition", Name = "Complete document" });
         var native = new ActivityNode("native", "exact-native-version", [], [], new("vendor.native", "7",
             JsonSerializer.SerializeToElement(new { privateSetting = "retained-native-configuration", nested = new { keep = true } })));
         var document = new BpmnAuthoredDocument(Xml, "P", [native], [new("Work", native.NodeId)], [])
@@ -66,7 +67,6 @@ public sealed class BpmnDocumentDraftSaveTests
         var owner = new ActivityNode("owner", "exact-process-version", [], [], new(BpmnActivityIdentities.StructureKind, BpmnAuthoredDocument.SchemaVersion,
             JsonSerializer.SerializeToElement(document, BpmnDocumentStructureHandler.SerializerOptions)));
         var state = new WorkflowDefinitionState([], owner, [], [], null);
-        var writer = new EfDesignAtomicWriter(db, accessor);
         var locks = new Locks();
         var id = await new EfCreateDraftCommand(db, accessor, writer, new Identities(), serializer, locks, inline, deferred)
             .Execute(new DesignOperationKey("complete-source-create"), "definition", state);
@@ -93,7 +93,10 @@ public sealed class BpmnDocumentDraftSaveTests
         Assert.Contains("After", BpmnDocumentStructureHandler.Read(updatedEvent.Draft.State.RootActivity!).DocumentXml, StringComparison.Ordinal);
     }
 
-    private sealed class Accessor : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Global; }
+    private sealed class Accessor : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new PersistenceScope("complete-source-test"));
+    }
     private sealed class Identities : IIdentityGenerator { private int _next; public string Generate() => "draft-" + Interlocked.Increment(ref _next); }
     private sealed class CapturedEvents : IDeferredEventPublisher
     {
