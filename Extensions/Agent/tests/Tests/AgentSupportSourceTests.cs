@@ -304,6 +304,105 @@ public sealed class AgentSupportSourceTests
         finally { release.TrySetResult(new(true, [])); }
     }
 
+    [Fact]
+    public async Task Cancelled_authority_does_not_call_the_host_or_owner()
+    {
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+        var host = new Authority();
+        var tool = new Tool();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AgentToolAccess.AuthorizeAsync(tool, host,
+            "actor", "tenant", null, stop.Token).AsTask());
+        Assert.Equal(0, host.Calls);
+        Assert.Equal(0, tool.AuthorityCalls);
+    }
+
+    [Fact]
+    public async Task A_late_host_allow_after_stop_never_enters_the_owning_module()
+    {
+        using var stop = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<AgentPolicyDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = new Authority { Decide = _ => { entered.SetResult(); return release.Task; } };
+        var tool = new Tool();
+        var pending = AgentToolAccess.AuthorizeAsync(tool, host, "actor", "tenant", null, stop.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            stop.Cancel();
+            release.SetResult(new(true, []));
+            // Drain the actual helper, not just the owner's release promise, before checking zero calls.
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(1, host.Calls);
+            Assert.Equal(0, tool.AuthorityCalls);
+            Assert.Equal(0, tool.PrepareCalls);
+            Assert.Equal(0, tool.ExecuteCalls);
+        }
+        finally { release.TrySetResult(new(true, [])); }
+    }
+
+    [Fact]
+    public async Task A_late_owner_allow_cannot_establish_authority_after_stop()
+    {
+        using var stop = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<AgentPolicyDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tool = new Tool { Authorize = _ => { entered.SetResult(); return release.Task; } };
+        var pending = AgentToolAccess.AuthorizeAsync(tool, new Authority(), "actor", "tenant", null, stop.Token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            stop.Cancel();
+            release.SetResult(new(true, []));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(1, tool.AuthorityCalls);
+            Assert.Equal(0, tool.PrepareCalls);
+            Assert.Equal(0, tool.ExecuteCalls);
+        }
+        finally { release.TrySetResult(new(true, [])); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Support_read_settles_before_an_uncooperative_host_is_released(bool callerStop)
+    {
+        var clock = new AgentContextCollectionBoundsTests.TriggeredTimeProvider();
+        using var stop = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<AgentPolicyDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = new Authority { Decide = _ => { entered.SetResult(); return release.Task; } };
+        var tool = new Tool();
+        using var root = Services(new(), tool, configure: services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => host));
+        });
+        using var scope = root.CreateScope();
+        var pending = scope.ServiceProvider.GetRequiredService<IAgentSupportSource>().ReadAsync("actor", "tenant", AgentPolicy.Default, stop.Token);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (callerStop)
+            {
+                stop.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(10)));
+            }
+            else
+            {
+                clock.FireNext();
+                var result = await pending.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal(AgentSupportCompleteness.Incomplete, result.Completeness);
+                Assert.Equal(AgentSupportStatus.Unknown, Assert.Single(result.Tools).Authority);
+            }
+            Assert.False(release.Task.IsCompleted);
+            Assert.Equal(0, tool.AuthorityCalls);
+            Assert.Equal(0, tool.PrepareCalls);
+            Assert.Equal(0, tool.ExecuteCalls);
+        }
+        finally { release.TrySetResult(new(true, [])); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -440,11 +539,13 @@ public sealed class AgentSupportSourceTests
 
     private sealed class Authority : IAgentToolAuthorizer
     {
+        public int Calls { get; private set; }
+        public Func<CancellationToken, Task<AgentPolicyDecision>>? Decide { get; init; }
         public string? ActorId { get; private set; }
         public string? TenantId { get; private set; }
         public Task<AgentPolicyDecision> AuthorizeAsync(AgentToolDescriptor descriptor, string actorId, string tenantId, AgentResourceTarget? target,
             CancellationToken cancellationToken = default)
-        { ActorId = actorId; TenantId = tenantId; return Task.FromResult(new AgentPolicyDecision(true, [])); }
+        { Calls++; ActorId = actorId; TenantId = tenantId; return Decide?.Invoke(cancellationToken) ?? Task.FromResult(new AgentPolicyDecision(true, [])); }
     }
 
     private sealed class Permissions(bool allowed) : IPermissionAuthorizationService

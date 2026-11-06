@@ -13,12 +13,17 @@ internal static class AgentToolAccess
     internal static async ValueTask<AgentPolicyDecision> AuthorizeAsync(IAgentTool tool, AgentToolDescriptor descriptor, IAgentToolAuthorizer host,
         string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         AgentModuleCodes.Validate(descriptor.ModuleCodes);
         // Only the owning tool's own decision may say its owner could not decide. A host denial stays a denial, and a
         // host's advisory violation can never turn an owner's plain denial into the unavailable outcome.
-        var admission = HostOnly(await host.AuthorizeAsync(descriptor, actorId, tenantId, target, cancellationToken));
+        var hostDecision = await host.AuthorizeAsync(descriptor, actorId, tenantId, target, cancellationToken);
+        // A host can ignore cancellation. Its late answer must not start an owning module's callback.
+        cancellationToken.ThrowIfCancellationRequested();
+        var admission = HostOnly(hostDecision);
         if (!admission.Allowed || tool is not IAgentToolAuthorization owner) return admission;
         var owned = await owner.AuthorizeAsync(actorId, tenantId, target, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         return new(owned.Allowed, admission.Violations.Concat(owned.Violations
             .Select(violation => AgentModuleCodes.Violation(violation, descriptor.ModuleCodes, ownerOrigin: true))).ToArray());
     }
