@@ -161,6 +161,7 @@ public sealed class RuntimeDeliverySourceReadClaimTests
         await using var fixture = await Fixture.CreateAsync(); await fixture.AddAsync("work");
         var claim = Assert.Single(await fixture.Store().ClaimAsync(Request(fixture.Owner.Partition)));
         var row = await fixture.SourceAsync("work"); var source = RuntimeArtifactJson.Deserialize<FixtureSource>(row.ContentJson);
+        fixture.Context.Attach(row);
         row.ContentJson = RuntimeArtifactJson.Serialize(source with { Status = 1 }); row.Status = 1; row.Revision++;
         fixture.Context.Update(row); await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
         Assert.NotNull(await fixture.Store().ReadAsync(Address("work"))); // Metadata remains readable.
@@ -232,6 +233,7 @@ public sealed class RuntimeDeliverySourceReadClaimTests
     public async Task Counter_overflow_refuses_and_rolls_back_prior_canonical_source_touch(string counter)
     {
         await using var fixture = await Fixture.CreateAsync(); await fixture.AddAsync("work"); var row = await fixture.WorkAsync("work");
+        fixture.Context.Attach(row);
         if (counter == "revision") row.Revision = long.MaxValue;
         else
         {
