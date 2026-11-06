@@ -8,7 +8,7 @@ using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Library;
 

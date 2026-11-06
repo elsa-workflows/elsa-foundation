@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Requests;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.PersistenceMode.Get;
 

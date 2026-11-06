@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature
+Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature.DecisionsWorkflowsApiFeature() -> void
+virtual Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -30,7 +30,7 @@ public sealed class SpecialistsApiFeatureRegistrationTests
             Assert.DoesNotContain('?', link.Href);
             Assert.DoesNotContain('{', link.Href);
         });
-        Assert.Single(services, x => x.ServiceType == typeof(NativeEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistsApi.OwnerId)
+        Assert.Single(services, x => x.ServiceType == typeof(MinimalEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistsApi.OwnerId)
             && x.KeyedImplementationType == typeof(SpecialistsApiFaultRenderer));
     }
 }
