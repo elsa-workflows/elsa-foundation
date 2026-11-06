@@ -89,7 +89,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const outputNode = page.locator(".react-flow__node").filter({ hasText: "Set Output" });
   const outputNodeId = await outputNode.getAttribute("data-id");
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
-  await expect(page.getByText("Add a workflow output in the Outputs tab, then select it here.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Add a workflow output in the editor's Outputs tab, then select it here.", { exact: true })).toBeVisible();
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   const outputSave = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/") && (response.request().postDataJSON().state?.outputs?.length ?? 0) > 0);
   await page.getByRole("button", { name: "Add output", exact: true }).click();
@@ -121,7 +121,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText(/This output is no longer defined. Add a workflow output in the Outputs tab/)).toBeVisible();
+  await expect(page.getByText(/This output is no longer defined. Add a workflow output in the editor's Outputs tab/)).toBeVisible();
   await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await page.getByRole("button", { name: "Add output", exact: true }).click();
