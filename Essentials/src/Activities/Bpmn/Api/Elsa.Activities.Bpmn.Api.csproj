@@ -5,7 +5,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
   </ItemGroup>

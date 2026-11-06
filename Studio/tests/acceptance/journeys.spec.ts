@@ -3,6 +3,7 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -27,6 +28,7 @@ const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
@@ -301,6 +303,54 @@ test("agent authoring and navigation", async ({ page }, info) => {
     }
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, info, "completed");
+});
+
+test("publication blockers explain how to correct agent settings", async ({ page }, info) => {
+  await page.goto("/agents");
+  await page.getByRole("button", { name: "New agent", exact: true }).click();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
+  await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
+  await page.getByRole("button", { name: "Create and edit", exact: true }).click();
+  const editor = page.getByTestId("specialist-editor");
+  const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
+  await instructions.fill("");
+  await instructions.press("Tab");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  const publish = page.locator(".ad-publication-toolbar-trigger");
+  await publish.click();
+  const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
+  const blockers = dialog.locator(".ad-publication-blockers");
+  await expect(blockers.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
+  await expect(blockers.getByText("Agent instructions are required.", { exact: true })).toBeVisible();
+  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
+  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
+  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
+  await expect(dialog.getByText("Review the provider documentation for this diagnostic code.", { exact: true })).toHaveCount(0);
+  await capture(page, info, "blocked");
+  await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(instructions).toBeFocused();
+  await capture(page, info, "instructions-focused");
+  await instructions.fill("Proofread the supplied text and return concise suggestions.");
+  await instructions.press("Tab");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  await publish.click();
+  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
+  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(0);
+  await capture(page, info, "model-blocked");
+  await blockers.getByRole("button", { name: "Choose model connection", exact: true }).press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeFocused();
+  await expect(editor.getByText(/There are no model connections you can use yet/)).toBeVisible();
+  await capture(page, info, "model-focused");
+  await publish.click();
+  await blockers.getByRole("button", { name: "Check again", exact: true }).click();
+  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toBeVisible();
+  await blockers.getByRole("button", { name: "Return to editor", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(publish).toBeFocused();
   await capture(page, info, "completed");
 });
 
