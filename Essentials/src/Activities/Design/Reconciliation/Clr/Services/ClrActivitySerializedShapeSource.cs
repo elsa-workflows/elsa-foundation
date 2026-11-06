@@ -82,9 +82,11 @@ internal sealed class ClrActivitySerializedShapeSource(
                 i.GetGenericTypeDefinition().FullName == typeof(IActivityResult<>).FullName)
                 .Select(i => i.GetGenericArguments()[0]).Distinct().ToArray();
             if (results.Length == 0)
-                return Answer(Unavailable(revision, "activity.shape.no-typed-result"));
+                return Answer(new ClrSerializedShapeReader(revision, limits, cancellationToken, metadataSeed)
+                    .UnavailableContract(activityType, "activity.shape.no-typed-result"));
             if (results.Length != 1)
-                return Answer(Unavailable(revision, "activity.shape.result-contract-ambiguous"));
+                return Answer(new ClrSerializedShapeReader(revision, limits, cancellationToken, metadataSeed)
+                    .UnavailableContract(activityType, "activity.shape.result-contract-ambiguous"));
             var resultType = results[0];
             var rootType = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
             var prefix = ImmutableArray<string>.Empty;

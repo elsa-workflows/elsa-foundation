@@ -24,6 +24,13 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
     internal Type? SelectedType { get; private set; }
     internal NullabilityInfo? SelectedNullability { get; private set; }
 
+    internal ActivitySerializedShape UnavailableContract(Type type, string reason)
+    {
+        Track(type);
+        return Finish(new(ActivitySerializedShapeState.Unavailable, ActivitySerializedValueKind.Unknown, null,
+            sourceRevision, ActivityValueJsonProfile.Revision, string.Empty) { ReasonCode = reason });
+    }
+
     internal ActivitySerializedShape Read(Type type, TypeReference rootType, ImmutableArray<string> path,
         bool? isNullable = null, ActivitySerializedPresence presence = ActivitySerializedPresence.Required,
         ValueRepresentation? representation = null, NullabilityInfo? rootNullability = null)

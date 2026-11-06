@@ -263,6 +263,7 @@ public sealed class ActivitySerializedShapeSourceTests
         var version = host.Version<UntypedActivity>();
         var absent = (await host.Source.DescribeResultAsync(version, "$result", [], new()))!;
         Assert.Equal("activity.shape.no-typed-result", absent.ReasonCode);
+        Assert.StartsWith("sha256:", absent.MetadataRevision);
         var unavailable = (await host.Source.DescribeResultAsync(version with { Hash = "stale" }, "$result", [], new()))!;
         Assert.Equal("activity.shape.source-contract-mismatch", unavailable.ReasonCode);
     }
