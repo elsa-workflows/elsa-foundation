@@ -227,6 +227,12 @@ describe("WeaverSurface", () => {
 
   it.each(["agent.context.contributor_failed", "agent.context.deadline", "agent.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
     const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
+    // This reset control needs a supported inventory contract, so the next request has no
+    // independent discovery limitation. Other fixtures retain the older-backend fallback.
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [
+      { moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"], admission: "availableHint" }
+    ] } } });
     api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
     const streams: ((event: AgentStreamEvent) => void)[] = [];
