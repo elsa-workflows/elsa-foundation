@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CShells;
 using CShells.Lifecycle;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -131,6 +134,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
     {
         await using var scope = shell.CreateAsyncScope();
         var services = scope.ServiceProvider;
+        await PrepareStandaloneHttpSchemaAsync(services);
         // EF activation switches both projection stores, including an intentionally empty schedule projection.
         // The ordinary scheduling decorator prepares that projection; direct fixture writes cannot substitute for it.
         Assert.IsType<RecurringTriggerScheduleIndexer>(services.GetRequiredService<IWorkflowTriggerIndexer>());
@@ -167,6 +171,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
             JsonSerializer.SerializeToElement(new { method = "POST", path = "physical-intake", sourceAccess = "Anonymous", http = new { mode = "AsyncFanOut", admissionPolicy = policy } }),
             1, 1, 1, TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), now, now, "operator");
         var committer = services.GetRequiredService<ITriggerManagementCommitter>();
+        await AssertStandaloneHttpSchemaReadyAsync(services);
         Assert.True(committer.CanActivateType("http", 1));
         await committer.CommitAsync(triggerScope, new("create-physical-http", "create-physical-http", "operator", null, trigger, subscriptions));
         if (second is not null)
@@ -177,5 +182,58 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         }
         await services.GetRequiredService<IHttpEndpointRouteTableSynchronizer>().RefreshAsync();
         return new(triggerScope, trigger, material.Identity);
+    }
+
+    private static readonly EfSchemaChain[] StandaloneHttpSchemaChains =
+    [
+        RuntimeArtifactEfModule.Chain,
+        RuntimeOperationalStateEfModule.Chain,
+        RuntimePostCommitOutboxEfModule.Chain,
+        RuntimeSchedulerWorkEfModule.Chain,
+        RuntimeWorkflowExecutionEfModule.Chain,
+        RuntimeModelStateEfModule.Chain
+    ];
+
+    private static async Task PrepareStandaloneHttpSchemaAsync(IServiceProvider services)
+    {
+        // This bounded host has one active reader and no fleet. Its normal gate retains predecessor formats until
+        // explicit finalization, as in SecretsPersistenceHostJourneyTests; only the standalone HTTP fixture advances.
+        Assert.Null(services.GetService<IEfSchemaFleet>());
+        var context = services.GetRequiredService<RuntimeDbContext>();
+        var store = new EfSchemaFinalizationStore(context);
+        var member = new SchemaFinalizationMember("owned-http-test-host", "test-incarnation");
+        foreach (var chain in StandaloneHttpSchemaChains)
+        {
+            var record = await store.FindAsync(chain.Family);
+            Assert.NotNull(record);
+            if (record.FinalizedVersion == chain.CurrentVersion) continue;
+            var intent = await store.RecordIntentAsync(chain.Family, record.Revision, chain.CurrentVersion, chain.ReadableVersions, member);
+            Assert.True(intent.Applied, $"HTTP fixture schema intent for {chain.Family} lost its compare-and-set.");
+            var finalized = await store.CommitIntentAsync(chain.Family, intent.Record.Revision, chain.ReadableVersions, member);
+            Assert.True(finalized.Applied, $"HTTP fixture schema finalization for {chain.Family} lost its compare-and-set.");
+        }
+        var gate = Assert.IsType<EfSchemaModuleGate>(services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType()));
+        await gate.RefreshAsync(context);
+        await AssertStandaloneHttpSchemaReadyAsync(services);
+    }
+
+    private static async Task AssertStandaloneHttpSchemaReadyAsync(IServiceProvider services)
+    {
+        var context = services.GetRequiredService<RuntimeDbContext>();
+        var store = new EfSchemaFinalizationStore(context);
+        var gate = Assert.IsType<EfSchemaModuleGate>(services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType()));
+        foreach (var chain in StandaloneHttpSchemaChains)
+        {
+            var record = await store.FindAsync(chain.Family);
+            Assert.NotNull(record);
+            Assert.Equal(chain.CurrentVersion, record.FinalizedVersion);
+            Assert.Null(record.Intent);
+            var state = gate.StateOf(chain.Family);
+            Assert.NotNull(state);
+            Assert.Equal(chain.CurrentVersion, state.WriteVersion);
+            Assert.False(state.WritesRefused, $"HTTP fixture schema writes refused for {chain.Family}.");
+        }
+        var ingress = Assert.IsType<EfRuntimeIngressDeliveryStore>(services.GetRequiredService<IRuntimeIngressDeliveryStore>());
+        Assert.True(ingress.SupportsAdmission, "The finalized HTTP fixture must prove actual coherent EF ingress admission before publication or resource writes.");
     }
 }
