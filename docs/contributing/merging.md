@@ -113,6 +113,11 @@ These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org
   architecture-agreement rule does not relax the normal Code Review approval and CI requirements on the exact head.
   A delivery PR that only advances an already agreed spec's lifecycle status follows the normal merge path without
   reopening its architectural agreement.
+- **Initiative branches.** A PR whose base is an `initiative/*` branch is an initiative proposal. It carries no required
+  CI checks, Code Review does not merge it, and the initiative's coordinator merges it after the agreement rule and the
+  [pre-merge gate](initiatives.md#the-pre-merge-gate), per the [org review and merge rules][org-agents-review]. Its
+  author runs the review loop on the draft as usual, then marks it ready and requests the approvers instead of Code
+  Review. The landing PR from an initiative branch to `main` follows every rule on this page.
 - When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself. Red checks on the base branch count only when they are required checks.
 
 ## Post-merge gates

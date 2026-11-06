@@ -76,8 +76,8 @@ The board states which phase the initiative is in.
    written as if the ADRs it applies were agreed, so its plan and tasks test whether those ADRs work in the code (see
    *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
    names the ADRs and decisions it needs.
-3. **Implementation.** Production implementation needs the approved spec and the decisions it applies. ADR and spec
-   PRs both follow the final-commit agreement rule below.
+3. **Implementation.** Production implementation needs the approved spec and the decisions it applies, landed on
+   `main` (see *Landing* below). ADR and spec PRs both follow the final-commit agreement rule below.
 
 An initiative may agree stricter rules; #3052, for example, agreed that all specs are defined before implementation
 starts. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
@@ -149,13 +149,14 @@ table that answers every point.
 3. An author includes anyone who committed to the PR, as the normal merge rules require. A human author named in
    the approval plan records their agreement in a PR comment naming the final commit, without self-approving.
    A bot's publishing identity or approval never substitutes for a human approver's agreement.
-4. The coordinator records the agreed commit on the board and marks the PR ready for the normal
-   [merge path](merging.md). Code Review still checks the final commit and its CI; it does not decide the architecture.
+4. The coordinator records the agreed commit on the board and marks the PR ready. The coordinator then runs the
+   [pre-merge gate](#the-pre-merge-gate) and merges the PR into the [initiative branch](#the-initiative-branch).
+   Agreement is not the merge: a PR can be agreed and still wait for a clean gate or a side track.
 
 **Material changes need renewed agreement.** An approval stays valid for a later commit unless a change could
 seriously alter that reviewer's standpoint or decision. Trivial, non-semantic edits — the status line, formatting, a
-typo fix, wording that does not change meaning — keep the existing approvals, as does a merge of `main` that only
-resolves a conflict elsewhere and leaves the PR's own files (the ADR or spec text, and the approval plan in its
+typo fix, wording that does not change meaning — keep the existing approvals, as does a merge of the PR's base (the
+initiative branch, or `main`) that only resolves a conflict elsewhere and leaves the PR's own files (the ADR or spec text, and the approval plan in its
 description) unchanged. The coordinator records which commits were compared. Re-review is requested only when a change
 could materially change a reviewer's position; when it is, the coordinator requesting it MUST state, in the request,
 (a) exactly what changed since that reviewer approved, and (b) what it means for the specific answers or decisions that
@@ -165,8 +166,8 @@ agreement is complete. If an already agreed PR changes materially, mark its boar
 work may use only the version actually agreed. Agreement and merge remain separate steps.
 
 **Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
-whoever writes it, including an architect working outside the board. Its PR is opened as a draft, says `Part of #N`,
-and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
+whoever writes it, including an architect working outside the board. Its PR is opened as a draft against the
+initiative branch, says `Part of #N`, and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
 PR closes. Missing a link does not exempt a board topic: add the link and apply the same gate. Bot review checks
 the change, never architectural agreement. A manual merge follows the same agreement rule.
 
@@ -174,7 +175,8 @@ The gate covers proposals and changes to ADR decisions or spec requirements. A d
 spec's lifecycle status links the already agreed spec and follows the normal merge path; it does not reopen the
 architectural agreement. If it also changes decisions or requirements, the agreement gate applies to those changes.
 
-**An ADR or spec that reached `main` without agreement** is not agreed, whatever its status line says. The coordinator:
+**An ADR or spec that reached `main` or the initiative branch without agreement** is not agreed, whatever its status
+line says. The coordinator:
 - shows it on the board as in review, not agreed;
 - opens a draft review PR that records in the ADR or spec that it is not yet agreed and links the PR, with any amendment
   the review proposes;
@@ -202,6 +204,9 @@ The source record stays visible before the next sync. The pointer looks like thi
 - it lists the ADR and spec changes merged since the last sync, distinguishes lifecycle-only delivery updates from
   changed decisions or requirements, and opens the required draft review PR for any in scope that needed agreement
   but merged without it (see *Scope*), keeping dependent work blocked;
+- it runs the first two steps of the [pre-merge gate](#the-pre-merge-gate) (merge `main` in, check main's changes),
+  so drift from `main` shows up even when no proposal is ready to merge;
+- it checks the state of every [side track](#side-tracks) and updates its row;
 - it sets the "Last synced" line on the board;
 - it reports who is blocking whom, and offers reminders and meeting topics, without sending them;
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
@@ -215,6 +220,104 @@ The source record stays visible before the next sync. The pointer looks like thi
 - the person's open review requests on PRs linked to the initiative (linked by the boundary rule above).
 
 A new task is therefore visible to the person who needs to act, even before the next sync.
+
+## The initiative branch
+
+Every initiative has one integration branch in this repository, `initiative/<n>-<slug>`, cut from `main` when the
+initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
+else: ADRs and ADR amendments; spec, plan and tasks; and the CONTEXT, glossary or constitution edits those decisions
+imply. It holds no production code. Because every proposal is checked against everything already on it, the branch is
+the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place.
+
+Work outside the initiative is unaffected. Every rule in this section applies only to PRs whose base is an
+`initiative/*` branch.
+
+- **Proposal PRs target the branch.** An ADR, amendment or spec PR in the initiative's scope uses the initiative branch
+  as its base from its first draft. A stacked PR keeps its parent's branch as its base. Authors cut their branch from
+  `origin/initiative/<n>-<slug>`, also before `speckit-specify`, so that the numbering script sees the initiative's
+  specs.
+- **No required CI.** Initiative PRs carry no required checks. Architecture is judged by agreement and the pre-merge
+  gate, not by builds and tests, which would only re-run unchanged code. The landing PR runs every required check on
+  `main`.
+- **The coordinator merges** into the initiative branch, by squash, after agreement and a clean pre-merge gate. Code
+  Review does not merge into initiative branches ([org review and merge rules][org-agents-review]). One commit per
+  accepted proposal makes the branch read as a decision log. The coordinator also pushes the merges of `main` into the
+  branch; nobody else pushes to it.
+- **Accepted text is amended in place.** Until it lands, an agreed ADR or spec that must change is edited on the branch
+  through an amendment PR that follows the agreement rule. No superseding ADR is written for something `main` has never
+  seen. After landing, the normal supersede rules apply.
+- **Numbers are reserved on the board.** When a proposal is drafted, the coordinator reserves the next free ADR or spec
+  number (across `main`, the initiative branch and open PRs) and records it on the proposal's board row. Proposal PRs
+  do not edit `docs/adr/README.md`; the coordinator updates the index in the merge. A collision with `main` that the
+  gate finds is renumbered on the initiative branch.
+- **`main` is merged in, never rebased.** Merging the updated initiative branch into a proposal PR that only resolves a
+  conflict elsewhere keeps that PR's approvals (see *Material changes need renewed agreement*).
+- **Protection.** A ruleset on `refs/heads/initiative/*` blocks deletion and force-pushes. The weekly branch sweep
+  never deletes an initiative branch ([repository hygiene](repository-hygiene.md)).
+
+An initiative started before this rule gets its branch at the coordinator's next sync, which retargets its open
+proposal PRs to it.
+
+### The pre-merge gate
+
+Text can conflict without any Git conflict: two ADRs can contradict each other, or a change on `main` can make an
+agreed decision ambiguous. The coordinator therefore runs this gate before every merge into the initiative branch and
+once more before landing. The [Initiative Coordination](../skills/catalog.md#initiative-coordination) skill carries it
+out.
+
+1. **Sync `main`.** Merge `origin/main` into the initiative branch, as a merge commit that only resolves conflicts, and
+   record the `main` commit on the board.
+2. **Check `main`'s changes.** Since the previous recorded `main` commit: every changed ADR, spec, CONTEXT, glossary and
+   constitution file, and code changes in the projects the initiative's plans name, summarised rather than reviewed.
+   Each is checked against the whole initiative branch.
+3. **Check the proposal.** The incoming PR is checked against everything already on the initiative branch, not only the
+   files it touches.
+4. **Run the deterministic checks:** `python tools/initiatives/check_decision_docs.py`. They find duplicate ADR or spec
+   numbers and malformed status lines, and show which ADR references do not resolve.
+5. **Review independently and verify.** Independent reviewers do steps 2 and 3 without seeing each other's output, and a
+   fresh reviewer verifies every finding against the text. A finding names both passages and the kind of problem:
+   *contradiction*, *ambiguity*, *overlap*, *stale reference* or *number collision*. Unverified findings are dropped.
+6. **Post one gate comment** on the proposal PR. It lists the verified findings and the commits compared: the
+   initiative branch head, the `main` commit and the PR head.
+7. **Decide.** Findings never block a merge by themselves; the coordinator triages them.
+   - A **contradiction**, or a collision with `main`, is an architecture call. The coordinator lays out the options,
+     such as revising the proposal or asking the author of the change on `main` to revise or revert it. The approvers
+     decide, and the coordinator follows up with whoever has to act. Nothing merges into the initiative branch while a
+     collision is open.
+   - A finding against an item **already on the branch** marks that item's board row *recheck*. Its approval stands. If
+     its text must change, that change is an amendment PR under the agreement rule.
+   - Smaller findings go back to the proposal's author as review comments.
+8. **Merge.** Once the gate is clean, squash-merge the PR, update the ADR index, and record the merge commit on the
+   proposal's board row.
+
+### Side tracks
+
+Sometimes a proposal depends on a fix that falls outside the initiative, such as a defect or an unrelated rule that the
+decision relies on. That fix is a **side track**:
+
+- It gets its own issue. The issue is not a sub-issue of the initiative and does not say `Part of #N`, because it is
+  outside the initiative's scope. It follows the normal rules and lands on `main`, usually through a separate
+  user-led session.
+- The board's **Side tracks** table lists the issue, the proposal it blocks, its owner and its state.
+- The proposal it blocks may still be agreed, but it is not merged into the initiative branch until the fix is on `main`
+  and has been merged into the initiative branch by a sync. The pre-merge gate confirms that.
+- Closing the issue through its PR is the report back. The coordinator's next sync picks it up.
+
+An ADR amendment on a topic on the board is never a side track: it goes through the initiative.
+
+### Landing
+
+The initiative branch lands on `main` in one PR, once every board row is agreed and the initiative is ready for
+implementation:
+
+- The coordinator runs the pre-merge gate against `main` one last time and posts the evidence on the landing PR:
+  every row agreed and merged, no open side track, no open collision, and the gate comment.
+- One approver approves the landing PR, attesting that it is the agreed set. This is not a fresh review of each
+  decision.
+- Code Review merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the
+  decision log. Every required check runs.
+- The coordinator then tags the branch `archive/initiative/<n>-<slug>`, deletes it, and moves the board to the
+  implementation phase.
 
 ## Size guard
 
@@ -242,6 +345,8 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 
 **Coordinator:** @<assignee>. Delegate: <none, or @person for what and until when>.
 
+**Branch:** `initiative/<n>-<slug>`. Main merged in at `<main commit>` on <date>.
+
 ## Goal
 <one paragraph: what the objective is and how we will know it is reached>
 
@@ -262,12 +367,22 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 |---|---|---|---|---|
 
 ## ADRs
-| ADR | Covers | PR and state | Drafting owner |
+| ADR (reserved number) | Covers | PR and state | Drafting owner |
 |---|---|---|---|
 
 ## Specs
-| Id | Spec | Issues | Needs (ADRs, decisions) | Can define now? |
+| Id | Spec (reserved number) | Issues | Needs (ADRs, decisions) | Can define now? |
 |---|---|---|---|---|
+
+## Side tracks
+| Issue | Blocks | Owner | State |
+|---|---|---|---|
+
+## Landing
+- [ ] Every decision, ADR and spec row agreed and merged into the branch
+- [ ] No open side track, collision or recheck
+- [ ] Final pre-merge gate against `main` clean
+- [ ] Landing PR approved and merged; branch archived
 
 <!-- Optional: intake notes per spec (checks to settle when it is defined; issues are created only when a spec is
 picked up), and a History list of links to meeting notes. -->
@@ -279,3 +394,9 @@ Status values for decisions:
 - **agreed**: the recorded ADR commit meets the agreement rule above;
 - **in review**: an ADR PR is open;
 - **in analysis**: an analysis is open and no ADR PR exists yet.
+
+ADR and spec rows add two states of their own:
+- **merged**: agreed and merged into the initiative branch, with the merge commit;
+- **recheck**: merged, but a later gate found something that may affect it (see *The pre-merge gate*).
+
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules

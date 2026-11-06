@@ -27,6 +27,10 @@ folder name when such a citation looks wrong.
 
 When two work units start at once, allocate both numbers up front rather than letting each pick.
 
+An initiative's specs take the number its coordinator reserves on the board, counted across `main`, the
+[initiative branch](../contributing/initiatives.md#the-initiative-branch) and open pull requests. A collision with
+`main` that the initiative's pre-merge gate finds is renumbered on the initiative branch before it lands.
+
 ## Status vocabulary
 
 A spec's `**Status**:` line MUST hold exactly one of these values, optionally followed by ` — ` and
