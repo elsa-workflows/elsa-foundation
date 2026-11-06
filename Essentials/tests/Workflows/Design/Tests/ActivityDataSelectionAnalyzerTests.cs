@@ -15,6 +15,49 @@ namespace Elsa.Workflows.Design.Tests;
 
 public sealed class ActivityDataSelectionAnalyzerTests
 {
+    [Theory]
+    [InlineData("Workflow", "PublicName", "stable-key")]
+    [InlineData("WorkflowDefinition", "PublicName", "stable-key")]
+    [InlineData("ActivityDefinition", "stable-key", "PublicName")]
+    public async Task Request_identity_uses_its_actual_boundary_stage_without_a_name_key_union(string resourceKind, string accepted, string rejected)
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer"))) with { ResourceKind = resourceKind,
+            Inputs = [new("stable-key", "PublicName", new("String"), null, "Public", null, true)] };
+        var query = new ActivityDataSelectionQuery { Source = new(JsonSerializer.SerializeToElement(new { memberKey = accepted }), "WorkflowRequest") };
+        var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
+        Assert.Empty(result.Findings);
+        var canonical = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding.Value);
+        Assert.Equal(accepted, canonical.GetProperty("memberKey").GetString());
+        var invalid = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
+            { Source = new(JsonSerializer.SerializeToElement(new { memberKey = rejected }), "WorkflowRequest") });
+        Assert.Contains(invalid.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+        var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
+            { Source = new(new VariableReference("stable-key"), "Input") });
+        Assert.Empty(stable.Findings);
+        var wrongStable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
+            { Source = new(new VariableReference("PublicName"), "Input") });
+        Assert.Contains(wrongStable.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+    }
+
+    [Fact]
+    public async Task Only_legacy_workflow_requests_are_open_when_no_input_contract_is_declared()
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer"))) with { ResourceKind = "Workflow" };
+        var query = new ActivityDataSelectionQuery { Source = new(JsonSerializer.SerializeToElement(new { memberKey = "legacy", path = "CustomerId" }), "WorkflowRequest") };
+        var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
+        Assert.Empty(result.Findings);
+        var source = Assert.Single(result.Sources);
+        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
+        Assert.Null(source.Shape.Type);
+        var closed = await Analyzer(provider).AnalyzeAsync(document with { ResourceKind = "ActivityDefinition" }, new("consumer", "CustomerId"), query);
+        Assert.Contains(closed.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+        var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
+            { Source = new(new VariableReference("legacy"), "Input") });
+        Assert.Contains(stable.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+    }
+
     [Fact]
     public async Task Untouched_target_comes_from_actual_catalog_and_metadata_absence_stays_unknown()
     {

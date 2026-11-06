@@ -19,7 +19,7 @@ public sealed class ActivityTreeProjector(IActivityStructureService activityStru
             new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal)
             {
                 [Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId] = state.Variables.Select(variable => variable.ReferenceKey).ToArray()
-            }, state.RootActivity, activityStructureService);
+            }, state.RootActivity, activityStructureService, outerRequestIsOpen: !state.Inputs.Any());
 
     /// <summary>
     /// Traverses <paramref name="rootActivity"/> once, projecting each node's children through

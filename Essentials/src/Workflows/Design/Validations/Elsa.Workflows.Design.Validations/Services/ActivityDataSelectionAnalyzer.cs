@@ -201,7 +201,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         }
         if (binding.Role is "Input" or "WorkflowRequest")
         {
-            var matches = context.Inputs.GetValueOrDefault(binding.Key) ?? [];
+            var requestRead = binding.Role == "WorkflowRequest";
+            var matches = (requestRead ? context.RequestInputs : context.Inputs).GetValueOrDefault(binding.Key) ?? [];
+            if (requestRead && context.OpenWorkflowRequest)
+                return new($"request:{binding.Key}", binding.Key, null,
+                    new(JsonSerializer.SerializeToElement(new { memberKey = binding.Key, path = binding.Path }), "WorkflowRequest"),
+                    ActivityChildResultAvailability.Definite, null, null, null, null, null, null, "OpenWorkflowRequest");
             if (matches.Length != 1)
             {
                 findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
@@ -210,7 +215,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var input = matches[0];
             var value = binding.Role == "Input"
                 ? new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
-                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = input.ReferenceKey, path = binding.Path }), "WorkflowRequest");
+                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = context.WorkflowBoundary ? input.Name : input.ReferenceKey, path = binding.Path }), "WorkflowRequest");
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
                 ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
                 binding.Path is null ? null : "LegacyRequestPath");
@@ -390,6 +395,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
         public Dictionary<string, InputDefinition[]> Inputs { get; } = document.Inputs
             .Where(input => !string.IsNullOrEmpty(input.ReferenceKey)).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        public bool WorkflowBoundary { get; } = document.ResourceKind is "Workflow" or "WorkflowDefinition";
+        // Empty workflow declarations compile to the legacy null/open InputContract. Activity definitions are closed.
+        public bool OpenWorkflowRequest { get; } = (document.ResourceKind is "Workflow" or "WorkflowDefinition") && document.Inputs.IsEmpty;
+        public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
+            .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         public Dictionary<string, bool> NoTypedResults { get; } = new(StringComparer.Ordinal);
     }

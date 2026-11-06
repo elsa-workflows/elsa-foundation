@@ -8,7 +8,8 @@ namespace Elsa.Workflows.Publishing.Services;
 internal sealed record ActivityTemplateDataSelectionFacts(
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> VariableDeclarations,
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> VisibleVariableScopesByConsumer,
-    IReadOnlyDictionary<string, IReadOnlyCollection<string>> RequestMembersByConsumer);
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> RequestMembersByConsumer,
+    IReadOnlySet<string>? OpenRequestConsumers = null);
 
 /// <summary>
 /// Checks typed reads in a provider's compiled native boundary without inspecting opaque descriptor JSON.
@@ -20,13 +21,14 @@ internal static class ActivityTemplateDataSelectionGuard
     {
         ArgumentNullException.ThrowIfNull(facts);
         Validate(root, [], hasSourceAnalysis, facts.VariableDeclarations, facts.RequestMembersByConsumer,
-            facts.VisibleVariableScopesByConsumer);
+            facts.VisibleVariableScopesByConsumer, facts.OpenRequestConsumers);
     }
 
     internal static void Validate(ExecutableNode root, IEnumerable<string> publicRequestMembers, bool hasSourceAnalysis,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? variableDeclarations = null,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? requestMembersByConsumer = null,
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? visibleVariableScopesByConsumer = null)
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? visibleVariableScopesByConsumer = null,
+        IReadOnlySet<string>? openRequestConsumers = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(publicRequestMembers);
@@ -71,6 +73,8 @@ internal static class ActivityTemplateDataSelectionGuard
 
         void Request(string key, string consumer, string path)
         {
+            // An open request belongs only to the explicitly marked workflow consumers.
+            if (openRequestConsumers?.Contains(consumer) == true) return;
             // The owner supplies runtime names or preplacement keys, never a guessed union of identities.
             var declared = requestMembersByConsumer is null ? members : requestMembersByConsumer.GetValueOrDefault(consumer, []);
             if (declared.Count(x => StringComparer.Ordinal.Equals(x, key)) != 1)
