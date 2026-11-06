@@ -24,6 +24,7 @@ public sealed class OutcomeHistoryCaptureTests
     [Trait("Feature", "RunHistory")]
     public async Task Actual_selected_outcome_is_unchanged_by_bounded_history_metadata(bool capture, string example)
     {
+        var recorder = new HistoryCheckpointRecorder();
         var outcome = example switch
         {
             "short" => "Done",
@@ -34,29 +35,45 @@ public sealed class OutcomeHistoryCaptureTests
         };
         await using var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
         {
+            services.AddSingleton<IRuntimeCheckpointCommitEnricher>(recorder);
             if (capture) services.AddRuntimeHistory();
             services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "outcome-history-capture-at-least32bytes");
         }).Build("outcome-owner");
 
-        var run = await host.RunAsync(WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode("node", [outcome])));
+        var published = await host.PublishAsync(WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode("node", [outcome])), "outcome-source");
+        await host.StartPublishedAsync(published, host.ExecutionId, partition: new(PersistenceScope.DefaultValue));
+        var run = new WorkflowExecutionRun(await host.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(host.ExecutionId),
+            await host.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(host.ExecutionId));
+        Assert.Empty(await host.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(new RuntimeSchedulerWorkQuery(host.ExecutionId)));
+        Assert.Equal(PersistenceScope.DefaultValue, host.Services.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope().Value);
+        Assert.Equal(PersistenceScope.DefaultValue, run.WorkflowState!.Partition!.Value);
 
         run.AssertWorkflowCompleted();
         var owner = run.AssertOutcomes("node", outcome);
         var writer = host.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
-        var completion = Assert.Single(writer.ListCommits(), record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted &&
-            record.Commit.StateChanges.ActivityExecutions.Any(change => change.StateId == owner.Execution.ActivityExecutionId &&
-                change.State.Status == ActivityExecutionStatus.Completed)).Commit;
+        var completion = Assert.Single(recorder.Commits, commit => commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted &&
+            commit.StateChanges.ActivityExecutions.Any(change => change.StateId == owner.Execution.ActivityExecutionId &&
+                change.State.Status == ActivityExecutionStatus.Completed));
         if (!capture)
         {
             Assert.Null(run.WorkflowState!.HistoryCapturePolicy);
+            Assert.False(run.WorkflowState.HistoryCaptureEnabledAtAdmission);
             Assert.Null(completion.HistoryBatches);
+            Assert.All(writer.ListCommits(), record => Assert.Null(record.Commit.HistoryBatches));
             return;
         }
 
+        Assert.NotNull(run.WorkflowState!.HistoryCapturePolicy);
+        Assert.True(run.WorkflowState.HistoryCapturePolicy.Required);
+        Assert.True(run.WorkflowState.HistoryCaptureEnabledAtAdmission);
         var fact = Assert.Single(completion.HistorySourceFacts!, item => item.Kind == RuntimeHistorySourceFactKind.ActivityContinuationCompleted);
         Assert.Equal(new[] { outcome }, fact.OutcomeNames);
         var batch = Assert.Single(completion.HistoryBatches!);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(completion with { HistoryBatches = null }), batch.SourceFingerprint);
+        var physical = Assert.Single(writer.ListCommits(), record => record.Commit.HistoryBatches?.Any(item => item.LogicalCheckpointId == batch.LogicalCheckpointId) == true).Commit;
+        var retainedBatch = Assert.Single(physical.HistoryBatches!, item => item.LogicalCheckpointId == batch.LogicalCheckpointId);
+        Assert.Equal(batch.SourceFingerprint, retainedBatch.SourceFingerprint);
+        Assert.Equal(batch.Candidates.Select(item => item.Event.HistoryEventId), retainedBatch.Candidates.Select(item => item.Event.HistoryEventId));
         var reader = host.Services.GetRequiredService<IRuntimeHistoryStore>();
         var page = await reader.ReadPageAsync(new(host.ExecutionId, 100));
         Assert.Null(page.NextContinuationToken);
@@ -65,7 +82,7 @@ public sealed class OutcomeHistoryCaptureTests
         Assert.Equal(completion.Checkpoint.CheckpointId, recorded.CheckpointId);
         Assert.Equal(fact.AttemptId, recorded.AttemptId);
         Assert.Equal(fact.Causation, recorded.Causation);
-        Assert.False(string.IsNullOrWhiteSpace(recorded.PhysicalCommitId));
+        Assert.Equal(physical.CommitId, recorded.PhysicalCommitId);
         Assert.Equal(recorded.PhysicalCommitId, Assert.Single(page.Items, item => item.Name == "ActivityCompleted").PhysicalCommitId);
         var serialized = JsonSerializer.Serialize(new[] { outcome });
         if (serialized.Length <= 2048)
@@ -84,7 +101,7 @@ public sealed class OutcomeHistoryCaptureTests
         var commitCount = writer.ListCommits().Count;
         var sequence = (await reader.FindHeadAsync(host.ExecutionId))!.LastSequence;
 
-        await writer.CommitAsync(completion, new(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(physical, new(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.Equal(commitCount, writer.ListCommits().Count);
         Assert.Equal(sequence, (await reader.FindHeadAsync(host.ExecutionId))!.LastSequence);
