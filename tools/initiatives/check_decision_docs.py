@@ -33,8 +33,8 @@ from pathlib import Path
 
 ADR_FILE = re.compile(r"^docs/adr/(?P<number>\d{4})-(?P<slug>[^/]+)\.md$")
 SPEC_DIR = re.compile(r"^specs/(?P<number>\d{3,4})-(?P<slug>[^/]+)/")
-ADR_STATUS_LINE = re.compile(r"^[\s>*-]*(?:\*\*)?status(?:\*\*)?\s*:(?:\*\*)?\s*\S", re.IGNORECASE | re.MULTILINE)
-ADR_STATUS_HEADING = re.compile(r"^#+\s*status\s*$\n+\s*\S", re.IGNORECASE | re.MULTILINE)
+ADR_STATUS_LINE = re.compile(r"^[ \t>*-]*(?:\*\*)?status(?:\*\*)?[ \t]*:(?:\*\*)?[ \t]*[^\s*]", re.IGNORECASE | re.MULTILINE)
+ADR_STATUS_HEADING = re.compile(r"^#+[ \t]*status[ \t]*\n(?:[ \t]*\n)*[ \t]*[^\s#]", re.IGNORECASE | re.MULTILINE)
 SPEC_STATUS = re.compile(r"^\*\*Status\*\*:\s*(?P<value>.+?)\s*$", re.MULTILINE)
 SPEC_STATUS_VALUE = re.compile(
     r"^(?:Draft|Approved|In progress|Implemented|Superseded|Abandoned)(?:\s+—\s+.*)?$", re.IGNORECASE)
@@ -155,6 +155,10 @@ def self_test() -> int:
         ("three-digit spec number", {"specs/095-a/spec.md": spec_ok, "specs/0095-b/spec.md": ""},
          {"specs/095-a/spec.md"}, ["specs/0095-b/spec.md"], 1, 1),
         ("missing adr status", {"docs/adr/0092-a.md": "# ADR\n\nNo status here.\n"}, {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("empty status line", {"docs/adr/0092-a.md": "# ADR\n\nStatus:\n\n## Context\n"}, {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("empty status heading", {"docs/adr/0092-a.md": "# ADR\n\n## Status\n\n## Context\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("bold status line", {"docs/adr/0092-a.md": "# ADR\n\n**Status:** Accepted\n"}, {"docs/adr/0092-a.md"}, [], 0, 0),
         ("bad spec status", {"specs/1208-x/spec.md": "**Status**: Pending\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("spec status prefix only", {"specs/1208-x/spec.md": "**Status**: Drafting\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("missing spec status", {"specs/1208-x/spec.md": "# Spec\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
