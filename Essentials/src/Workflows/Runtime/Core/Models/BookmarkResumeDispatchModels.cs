@@ -61,6 +61,10 @@ public sealed class BookmarkResumeDispatchRequest
         TestRunDelivery = testRunDelivery;
     }
 
+    /// <summary>Optional captured physical wait condition, enforced atomically on initial consumption.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedRecipient { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }

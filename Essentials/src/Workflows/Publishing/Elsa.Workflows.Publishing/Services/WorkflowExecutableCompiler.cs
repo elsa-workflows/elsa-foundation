@@ -136,6 +136,7 @@ public sealed class WorkflowExecutableCompiler(
             var placedNodeIds = new HashSet<string>(StringComparer.Ordinal);
             var placedStorageDriverRequirements = new HashSet<RuntimeStorageDriverRequirement>();
             var placedLayoutSegments = new List<ExecutableLayoutBoundarySegment>();
+            var placedPresentation = new List<WorkflowExecutableActivityPresentationRecord>();
             foreach (var activity in projection.Nodes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -186,6 +187,7 @@ public sealed class WorkflowExecutableCompiler(
                     BindBoundaryRootToAuthoredNode: !isWorkflowRoot), cancellationToken);
                 placedActivities.Add(activity.NodeId, placement.Root);
                 placedLayoutSegments.AddRange(placement.LayoutSidecar.BoundarySegments);
+                placedPresentation.AddRange(placement.ActivityPresentation);
                 foreach (var nodeId in placement.Root.DescendantsAndSelf().Select(x => x.ExecutableNodeId))
                     placedNodeIds.Add(nodeId);
                 foreach (var target in placement.ResumeTargets)
@@ -268,6 +270,7 @@ public sealed class WorkflowExecutableCompiler(
                 workflowVariables: workflowVariables,
                 incidentStrategy: incidentStrategy);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
+            placementSidecars?.SetPresentation(source.DefinitionVersionId, placedPresentation);
             return executable;
         }
         catch (Exception exception) when (

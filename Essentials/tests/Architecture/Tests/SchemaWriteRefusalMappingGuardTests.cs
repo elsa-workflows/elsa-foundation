@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -47,8 +47,11 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     private static readonly Type[] OwnersWithTheirOwnFailureServices =
     [
         typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature),
+        typeof(ActivitiesBpmnDirectPublishingFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
+        typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature),
+        typeof(Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature),
         typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),

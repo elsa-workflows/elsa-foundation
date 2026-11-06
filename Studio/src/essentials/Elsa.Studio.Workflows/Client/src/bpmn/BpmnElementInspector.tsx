@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
+import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnElementTypeLabel, isDecisionGatewayType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
+import { directBindingProperty, directHumanClaimPatch, directHumanClaimRequired, directHumanMode, directHumanPatch } from "./bpmnDirectBinding";
+import { BpmnServiceBindingEditor } from "./BpmnServiceBindingEditor";
 
 interface BpmnElementInspectorProps {
   element: BpmnElement;
@@ -9,6 +12,11 @@ interface BpmnElementInspectorProps {
   onSetDefaultFlow(sourceElementId: string, flowId: string | null): void;
   targetLabelFor(flow: BpmnSequenceFlow): string;
   readOnly?: boolean;
+  directHumanAvailable?: boolean;
+  /** The backend can publish claim-required human work. */
+  directHumanClaimsAvailable?: boolean;
+  directServiceSession?: StudioBackendSession;
+  directServiceDocumentId?: string;
   isDecision?: boolean;
   onAddDecision?(): void;
   conversionBlockedReason?: string;
@@ -40,9 +48,13 @@ export function BpmnElementInspector(props: BpmnElementInspectorProps) {
 // Shared with the activity inspector so bound gateways retain both expression and routing editors.
 export function BpmnElementConfiguration({
   element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
-  readOnly = false, isDecision = false, onAddDecision, conversionBlockedReason
+  readOnly = false, directHumanAvailable = false, directHumanClaimsAvailable = false, directServiceSession, directServiceDocumentId, isDecision = false, onAddDecision, conversionBlockedReason
 }: BpmnElementInspectorProps) {
   const gateway = isDecisionGatewayType(element.elementType);
+  const humanMode = directHumanMode(element);
+  const [serviceEditor, setServiceEditor] = useState<string | null>(null);
+  const directControl = ["task", "userTask", "serviceTask"].includes(element.elementType)
+    && (directHumanAvailable || element.properties?.[directBindingProperty] !== undefined);
   return (
     <section aria-label="BPMN routing">
       <label className="wf-form-field">
@@ -50,6 +62,46 @@ export function BpmnElementConfiguration({
         <input type="text" value={element.name ?? ""} placeholder={bpmnElementTypeLabel(element)}
           disabled={readOnly} onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })} />
       </label>
+      {directControl ? <>
+        <label className="wf-form-field">
+          <span>Task execution</span>
+          <select aria-label="Task execution" value={humanMode}
+            disabled={readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported"}
+            onChange={event => {
+              if (readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported") return;
+              const mode = event.target.value;
+              if (mode === "human" || mode === "unbound") { setServiceEditor(null); onChangeElement(element.elementId, directHumanPatch(element, mode)); }
+            }}>
+            <option value="unbound">Task (unbound)</option>
+            <option value="human">Human wait — direct BPMN</option>
+            {humanMode === "service" ? <option value="service">Published native service</option> : null}
+            {humanMode === "native" ? <option value="native">Native activity</option> : null}
+            {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
+          </select>
+        </label>
+        {humanMode === "human" && (directHumanClaimsAvailable || directHumanClaimRequired(element)) ? <label className="wf-bpmn-claim-choice">
+          <input type="checkbox" checked={directHumanClaimRequired(element)}
+            disabled={readOnly || !directHumanAvailable || !directHumanClaimsAvailable}
+            onChange={event => {
+              if (!readOnly && directHumanAvailable && directHumanClaimsAvailable) onChangeElement(element.elementId, directHumanClaimPatch(element, event.target.checked));
+            }} />
+          <span>Require a claim before completion</span>
+        </label> : null}
+        {humanMode === "human" && directHumanClaimRequired(element) && !directHumanClaimsAvailable
+          ? <p className="wf-muted" role="note">This backend cannot publish claim-required work. The setting is kept unchanged.</p> : null}
+        <p className="wf-muted" role="note">{humanMode === "unsupported"
+          ? "This binding is kept unchanged. Its settings need a compatible backend or correction before publication."
+          : humanMode === "native" ? "This task has a native activity binding. Unbind it before choosing direct work."
+            : humanMode === "service" ? "This task invokes the selected immutable native workflow publication."
+            : directHumanClaimRequired(element) ? "One authorized person claims this work in BPMN runs; only that person can complete it."
+            : "A human wait pauses the published BPMN process until an authorized person completes it from BPMN runs."}</p>
+        {directServiceSession && directServiceDocumentId && directHumanAvailable && humanMode !== "native" && humanMode !== "unsupported" ? <>
+          {humanMode === "service" || serviceEditor === element.elementId ? <BpmnServiceBindingEditor session={directServiceSession} documentId={directServiceDocumentId} element={element} readOnly={readOnly}
+            onChange={patch => { if (!readOnly) { onChangeElement(element.elementId, patch); setServiceEditor(null); } }} />
+            : <button type="button" disabled={readOnly} onClick={() => setServiceEditor(element.elementId)}>Bind a published service workflow</button>}
+          {serviceEditor === element.elementId && humanMode !== "service" ? <button type="button" disabled={readOnly} onClick={() => setServiceEditor(null)}>Cancel service selection</button> : null}
+        </> : null}
+      </> : null}
       {gateway || isDecision ? <>
         <label className="wf-form-field">
           <span>Gateway type</span>

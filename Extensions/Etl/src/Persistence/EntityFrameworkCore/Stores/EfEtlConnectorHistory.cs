@@ -50,6 +50,17 @@ internal sealed partial class EfEtlRuntimeStore
             row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes) ||
             row.AcceptedBatchCount < 0 || row.AcceptedRecords < 0 || row.RejectedRecords < 0 || row.FilteredRecords < 0)
             throw new InvalidDataException("The connector partition accounting is invalid.");
+        // Only a continuous shard has a poll generation or compacted history (spec 1196).
+        if (row.PollGeneration < 0 || row.CompactedPageCount < 0 || row.CompactedBatchCount < 0 ||
+            row.CompactedAcceptedRecords < 0 || row.CompactedRejectedRecords < 0 || row.CompactedFilteredRecords < 0 ||
+            row.CompactedMainEffects < 0 || row.CompactedErrorEffects < 0 ||
+            row.CompactedBatchCount > row.AcceptedBatchCount || row.CompactedPageCount > row.PageCount ||
+            row.CompactedAcceptedRecords > row.AcceptedRecords || row.CompactedRejectedRecords > row.RejectedRecords ||
+            row.CompactedFilteredRecords > row.FilteredRecords ||
+            pipeline.Continuous is null && (row.PollGeneration != 0 || row.CompactedPageCount != 0 || row.CompactedBatchCount != 0 ||
+                row.CompactedAcceptedRecords != 0 || row.CompactedRejectedRecords != 0 || row.CompactedFilteredRecords != 0 ||
+                row.CompactedMainEffects != 0 || row.CompactedErrorEffects != 0))
+            throw new InvalidDataException("The connector partition's compacted history is invalid.");
         if (auditHistory && (admission is null || prepared is null))
             throw new InvalidDataException("A full connector history audit requires its admission and prepared input.");
         if (position is not EtlConnectorHttpPosition http)
@@ -95,7 +106,10 @@ internal sealed partial class EfEtlRuntimeStore
             var sourceNotBefore = currentFetch?.Phase == EtlConnectorHttpSourceFetchPhase.Waiting
                 ? currentFetch.NotBefore?.UtcTicks
                 : null;
-            if (row.NotBeforeUtcTicks != sourceNotBefore)
+            // A continuous shard that caught up idles with a cleared journal and its next poll time (spec 1192).
+            var idle = pipeline.Continuous is not null && currentFetch is null && http.Page is null && !http.Exhausted &&
+                       row.NotBeforeUtcTicks > 0;
+            if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)
                 throw new InvalidDataException("The source-fetch retry eligibility differs from its request journal.");
         }
         var currentRow = await HttpPageRowAsync(row, http.PageSequence, cancellationToken);
@@ -141,8 +155,12 @@ internal sealed partial class EfEtlRuntimeStore
     private async ValueTask AuditHttpHistoryAsync(EtlConnectorPartitionRecord row, EtlConnectorHttpPosition http,
         EtlPipelineV2 pipeline, CancellationToken cancellationToken)
     {
-        long requestCount = 0, requestInputReservedBytes = 0,
-            metadataBytes = checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes), pageBytes = 0, sequence = 0;
+        // A compacted continuous shard starts at its base (spec 1196): rows below it were deleted, and the base request,
+        // whose predecessor pointer was cleared, heads the retained continuation chain.
+        var basePage = row.CompactedPageCount;
+        long requestCount = basePage, requestInputReservedBytes = 0,
+            metadataBytes = checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes), pageBytes = 0, sequence = basePage;
+        EtlHttpRequest? baseRequest = null;
         // Full audit at ownership acquisition and successful terminal settlement, including fresh
         // processes. No process-local cache is required for the normal bounded transition path.
         await foreach (var retained in Requests(row).OrderBy(request => request.PageSequence).AsAsyncEnumerable().WithCancellation(cancellationToken))
@@ -154,14 +172,20 @@ internal sealed partial class EfEtlRuntimeStore
             if (retained.PageSequence < http.PageSequence &&
                 (retained.InputReservationBytes != 0 || retained.SourceMetadataReserveBytes != 0))
                 throw new InvalidDataException("A historical HTTP request retains source reservation capacity.");
+            if ((retained.PreviousPageSequence is null) != (retained.PageSequence == 0 || retained.PageSequence == basePage))
+                throw new InvalidDataException("Only the first or base HTTP request may have no predecessor.");
+            baseRequest ??= request;
             requestInputReservedBytes = checked(requestInputReservedBytes + retained.InputReservationBytes);
             EtlConnectorRecordCodec.ValidateHttpPosition(new(retained.PageSequence, 0, request, null, false), pipeline.Http);
             requestCount++;
             metadataBytes = checked(metadataBytes + retained.MetadataBytes);
         }
         if (requestCount != http.PageSequence + 1) throw new InvalidDataException("The HTTP request history is incomplete.");
-        var expectedRequest = new EtlHttpRequest(http.Request.ShardId, null);
+        var expectedRequest = basePage == 0 ? new EtlHttpRequest(http.Request.ShardId, null) : baseRequest!;
         var visited = new HashSet<string>(StringComparer.Ordinal);
+        // Each page's accepted offset is checked against its settled batch ranges after this stream ends: a server engine
+        // runs one command per connection at a time, so no query may run while this reader is open.
+        var acceptedItemCounts = new Dictionary<long, int>();
         var pagesWithRequests =
             from page in Pages(row)
             join request in Requests(row)
@@ -184,9 +208,7 @@ internal sealed partial class EfEtlRuntimeStore
             ValidateRetainedPage(retained, page, expectedRequest, pipeline);
             if (page.NextContinuation is not null && visited.Contains(retained.NextRequestHash))
                 throw new InvalidDataException("The retained continuation repeats a visited request.");
-            var acceptedItemCount = await ReadAcceptedItemCountAsync(row, retained.PageSequence, cancellationToken);
-            if (acceptedItemCount != retained.AcceptedItemCount)
-                throw new InvalidDataException("The HTTP page accepted offset differs from its settled batch ranges.");
+            acceptedItemCounts[retained.PageSequence] = retained.AcceptedItemCount;
             if (sequence == http.PageSequence)
             {
                 if (expectedRequest != http.Request || http.Page is not null && page != http.Page ||
@@ -204,28 +226,38 @@ internal sealed partial class EfEtlRuntimeStore
             metadataBytes = checked(metadataBytes + retained.MetadataBytes);
             sequence++;
         }
+        await VerifyAcceptedItemCountsAsync(row, acceptedItemCounts, cancellationToken);
         if (sequence != row.PageCount || pageBytes != row.PageBytes || metadataBytes != row.MetadataBytes ||
             requestInputReservedBytes != row.SourceInputReservedBytes ||
             http.Page is null && !http.Exhausted && expectedRequest != http.Request)
             throw new InvalidDataException("The HTTP request history or retained accounting is inconsistent.");
     }
 
-    private async ValueTask<int> ReadAcceptedItemCountAsync(EtlConnectorPartitionRecord partition, long pageSequence,
+    /// <summary>
+    /// Checks each retained page's accepted offset against its settled batches, whose ranges must be contiguous from the
+    /// page's first item. One stream over the partition's settled HTTP batches, in page and batch order.
+    /// </summary>
+    private async ValueTask VerifyAcceptedItemCountsAsync(EtlConnectorPartitionRecord partition, IReadOnlyDictionary<long, int> expected,
         CancellationToken cancellationToken)
     {
-        var acceptedItemCount = 0;
+        var accepted = expected.Keys.ToDictionary(page => page, _ => 0);
         await foreach (var retained in db.ConnectorBatches.AsNoTracking().Where(batch => batch.ScopeKey == partition.ScopeKey &&
                 batch.RunKey == partition.RunKey && batch.PartitionOrdinal == partition.PartitionOrdinal &&
-                batch.HttpPageSequence == pageSequence && batch.Settled)
-            .OrderBy(batch => batch.BatchOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
+                batch.HttpPageSequence != null && batch.Settled)
+            .OrderBy(batch => batch.HttpPageSequence).ThenBy(batch => batch.BatchOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
+            var pageSequence = retained.HttpPageSequence!.Value;
+            if (!accepted.TryGetValue(pageSequence, out var acceptedItemCount))
+                continue;
             var descriptor = ReadConnectorBatch(retained);
             if (descriptor.Range is not EtlConnectorHttpBatchRange range || range.PageSequence != pageSequence ||
                 range.StartItem != acceptedItemCount || range.EndItemExclusive <= range.StartItem)
                 throw new InvalidDataException("The settled HTTP batch ranges are not contiguous within their page.");
-            acceptedItemCount = range.EndItemExclusive;
+            accepted[pageSequence] = range.EndItemExclusive;
         }
-        return acceptedItemCount;
+        foreach (var (pageSequence, acceptedItemCount) in expected)
+            if (accepted[pageSequence] != acceptedItemCount)
+                throw new InvalidDataException("The HTTP page accepted offset differs from its settled batch ranges.");
     }
 
     private static void ValidateRetainedPage(EtlConnectorHttpPageRecord row, EtlRetainedHttpPage page, EtlHttpRequest request, EtlPipelineV2 pipeline)
@@ -284,7 +316,10 @@ internal sealed partial class EfEtlRuntimeStore
         if (row.PageSequence < 0 || row.MetadataBytes != expectedMetadataBytes || row.RequestHash != EtlRuntimeIdentity.HttpRequestHash(request) ||
             (row.PageSequence == 0
                 ? request.Continuation is not null || row.PreviousPageSequence is not null || row.PreviousHasContinuation is not null
-                : string.IsNullOrEmpty(request.Continuation) || row.PreviousPageSequence != row.PageSequence - 1 || row.PreviousHasContinuation != true))
+                // A compacted shard's base request has no predecessor; the full audit allows that only on the base (spec 1196).
+                : string.IsNullOrEmpty(request.Continuation) ||
+                  (row.PreviousPageSequence is not null || row.PreviousHasContinuation is not null) &&
+                  (row.PreviousPageSequence != row.PageSequence - 1 || row.PreviousHasContinuation != true)))
             throw new InvalidDataException("The retained HTTP request metadata is inconsistent.");
         return (request, fetch);
     }

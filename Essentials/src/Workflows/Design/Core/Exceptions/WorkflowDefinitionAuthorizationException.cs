@@ -4,6 +4,9 @@ namespace Elsa.Workflows.Design.Core.Exceptions;
 /// <remarks>Infrastructure details remain in <see cref="Exception.InnerException"/>, never in the outer message.</remarks>
 public sealed class WorkflowDefinitionAuthorizationException : Exception
 {
+    /// <summary>The stable code every owner surface reports for this failure: unavailable, distinct from denied.</summary>
+    public const string UnavailableCode = "workflow.authorization.unavailable";
+
     /// <summary>Preserves a failed owner authorization operation without including its private cause in the message.</summary>
     /// <param name="definitionId">The definition whose current authority could not be established.</param>
     /// <param name="operation">The requested owner operation, such as read or manage.</param>

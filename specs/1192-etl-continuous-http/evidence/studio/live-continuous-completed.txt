@@ -1,0 +1,24 @@
+Captured page text (built-in browser, owned Studio 127.0.0.1:5394 against owned Workbench 127.0.0.1:5393), after Complete run was confirmed and the list refreshed.
+
+Run inspection
+
+Completion requested. The run settles once every shard has caught up.
+
+Run etl-634c4f0874fea698651d13650f56d0245ce2e6fd21e20e9e0e604ee179a08dc4
+
+Succeeded
+
+Accepted records 1 · Rejected records 0 · Filtered records 0 · Outstanding records 0 · Outstanding bytes 0
+Main output binding browser-output · Error output binding browser-errors
+
+Connector output progress
+Run mode Continuous
+Completion requested 2026-11-02T17:33:02.215013+00:00
+Source type HTTP JSON · Main output type JSON Lines · Error output type JSON Lines
+Main route bodies accepted 1 · Error route bodies accepted 0
+
+Settled at 2026-11-02T17:33:02.558142+00:00.
+
+Connector partition progress
+0  HTTP page 1, next item 0 of unknown count; source exhausted  Unclaimed  Retry phase: captured; attempt 1. Last HTTP status: 200.  None  Main: 1; errors: 0
+1  HTTP page 0, next item 0 of unknown count; source exhausted  Recorded claim 2026-11-02T17:33:32.534915+00:00  Retry phase: captured; attempt 1. Last HTTP status: 200.  None  Main: 0; errors: 0

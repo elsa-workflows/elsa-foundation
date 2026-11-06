@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
@@ -8,10 +8,11 @@ import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
+import type { AgentRecoveryMode, AgentSessionSummary } from "../agent/agentTypes";
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
-import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState } from "./useWeaverSession";
+import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState, type WeaverRecoveryNotice } from "./useWeaverSession";
 
 const AUTO_APPLY_LABELS = WEAVER_AUTO_APPLY_LABELS;
 
@@ -45,12 +46,14 @@ export function WeaverSurface({
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
+  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
   const lastPromptIdRef = useRef<string | null>(null);
   const autoApplyStatusId = useId();
   const autoApplyStatus = describeAutoApplyStatus(session.autoApplyState, session.pendingAutoApplyMode, session.autoApplyUnsupported, session.autoApplyNotice);
+  const recoveryScope = describeRecoveryScope(session.bootstrap?.recovery);
 
   // Memoize on the underlying state (not the per-render session object) to avoid an update loop.
   const indicatorSessions = useMemo(
@@ -118,23 +121,37 @@ export function WeaverSurface({
 
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
+      <WeaverRecovery session={session} />
+      {recoveryScope ? <p className="weaver-recovery-scope" role="note" data-recovery={session.bootstrap?.recovery}>{recoveryScope}</p> : null}
+
       <AgentContextChips attachments={session.attachments} />
       {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
       <AgentPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
 
       <div className="weaver-scroll">
-        <WeaverMessageList messages={session.messages} streaming={session.busy} onFeedback={session.submitFeedback} />
+        <WeaverMessageList
+          messages={session.messages}
+          streaming={session.busy}
+          onFeedback={session.submitFeedback}
+          canStart={session.sessionId !== null && session.chatState === "idle" && !session.autoApplyBlocked && !session.reopening}
+          pendingActionIds={session.pendingProposalIds}
+          onStart={session.startRecordedTurn}
+          onWithdraw={session.withdrawMessage}
+        />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
-        <AgentToolResults results={session.toolResults} renderers={resultRenderers} />
+        <AgentToolResults results={session.toolResults} renderers={resultRenderers} controls={resultControls} />
         <AgentProposalReview
           proposals={session.proposals}
           disabled={session.busy}
           pendingProposalIds={session.pendingProposalIds}
           resultRenderers={resultRenderers}
+          resultControls={resultControls}
           onApprove={session.approveProposal}
           onDeny={session.denyProposal}
           onExecute={session.executeProposal}
           onRetryConfirmation={session.retryConfirmation}
+          onResolve={session.resolveProposal}
+          resolveDisabled={session.autoApplyBlocked}
         />
       </div>
 
@@ -148,6 +165,91 @@ export function WeaverSurface({
       />
     </section>
   );
+}
+
+/**
+ * Preview (#3441): the owner's recent sessions and what reopening one found. Reopening reads the recorded state
+ * only; a prompt, decision or resolution always needs its own explicit action.
+ */
+function WeaverRecovery({ session }: { session: UseWeaverSession }) {
+  const notice = session.recoveryNotice;
+  const offered = session.sessionId === null && session.chatState === "idle" ? session.recentSessions : [];
+  if (!notice && offered.length === 0 && !session.reopening && (session.sessionId === null || session.chatState === "streaming")) return null;
+  return (
+    <section className="weaver-recovery" aria-label="Conversation recovery" data-reopening={session.reopening || undefined}>
+      {session.reopening ? <p role="status">Reading the conversation's recorded state…</p> : null}
+      {notice ? (
+        <div className="weaver-recovery-notice" role="status" data-kind={notice.kind} data-limit={notice.kind === "limit" ? notice.limit : undefined}>
+          <span>{describeRecoveryNotice(notice)}</span>
+          {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
+            // A reread waits while a mode change is unconfirmed, as prompts and recorded actions do.
+            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+          ) : null}
+          {notice.kind === "limit" ? (
+            <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>
+          ) : null}
+        </div>
+      ) : null}
+      {offered.length > 0 ? (
+        <div className="weaver-recent-sessions">
+          <strong><History size={13} aria-hidden="true" /> Recent conversations</strong>
+          <ul aria-label="Recent conversations">
+            {offered.map(item => (
+              <li key={item.id}>
+                <button type="button" disabled={session.reopening} data-session-id={item.id} onClick={() => session.reopenSession(item.id)}>
+                  {describeSessionSummary(item)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {session.sessionId !== null && session.chatState !== "streaming" ? (
+        <button type="button" className="weaver-new-conversation" onClick={session.startNewConversation}><Plus size={13} aria-hidden="true" /> New conversation</button>
+      ) : null}
+    </section>
+  );
+}
+
+/** Preview (#3441): a short note when this backend does not recover conversations across a server restart. */
+function describeRecoveryScope(recovery: AgentRecoveryMode | undefined): string | null {
+  switch (recovery) {
+    case "processLifetime":
+      return "Conversations survive a reload while this server runs; a server restart ends them.";
+    case "unsupported":
+      return "This server cannot recover conversations: a server restart ends them.";
+    default:
+      return null;
+  }
+}
+
+function describeSessionSummary(summary: AgentSessionSummary) {
+  const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
+  const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
+  const status = summary.status === "active" ? "" : ` · ${summary.status}`;
+  // Preview (#3441): a session at its documented limit is offered with that outcome, so reopening it is not a surprise.
+  const limited = summary.recoveryState?.startsWith("limit-reached:") ? " · session limit reached" : "";
+  return `${summary.title ?? "Conversation"} · ${updated}${reviews}${status}${limited}`;
+}
+
+function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
+  switch (notice.kind) {
+    case "owned-elsewhere":
+      return `Another Studio server process is working on this conversation, so it cannot be opened here yet.${notice.retryAfterSeconds !== undefined ? ` Try again in about ${notice.retryAfterSeconds} seconds.` : " Try again shortly."}`;
+    case "unavailable":
+      return `This conversation's recorded state is unavailable, so nothing was opened or changed. ${notice.message}`;
+    case "not-found":
+      return "This conversation is not available.";
+    case "closed":
+      return `This conversation has ended (${notice.status}). Its recorded history is shown; your next prompt starts a new conversation.`;
+    case "lost":
+      return `The conversation could not be read. Nothing was changed. ${notice.message}`;
+    case "action-refused":
+      return notice.message;
+    case "limit":
+      // The server's message names the bound it reached; Studio does not restate the limits.
+      return `${notice.message?.trim() || "Session limit reached: this conversation has no room left for more context."} It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
+  }
 }
 
 function WeaverAutoApplyMenu({

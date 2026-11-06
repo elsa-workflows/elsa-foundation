@@ -31,11 +31,18 @@ internal sealed partial class EtlRuntimeOperations
             SourceRecordCount = connector.Prepared?.File?.RecordCount,
             BindingAliases = new(bindings.Source.Revision.Alias, bindings.Lookup?.Revision.Alias,
                 bindings.Main.Revision.Alias, bindings.Errors.Revision.Alias),
-            SourceInput = bindings.Source.Kind == EtlConnectorKind.Csv
+            // A SQL (spec 1198) or RabbitMQ (spec 1201) source has no admission digest; its input identity is the retained snapshot.
+            SourceInput = bindings.Source.Kind is EtlConnectorKind.Csv or EtlConnectorKind.Jsonl or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq
                 ? InputIdentity(bindings.Source.Revision, connector.Prepared?.File?.Source) : null,
             LookupInput = InputIdentity(bindings.Lookup?.Revision, connector.Prepared?.Lookup),
             Connector = new(Kind(bindings.Source.Kind), Kind(bindings.Main.Kind), Kind(bindings.Errors.Kind),
                 inspection.AcceptedMainEffects, inspection.AcceptedErrorEffects)
+            {
+                Mode = inspection.Continuous ? "continuous" : "finite",
+                CompletionRequestedAt = inspection.Continuous ? inspection.CompletionRequestedAt
+                    : inspection.CompletionRequestedAt is null ? null : throw ProviderContractError()
+            }
         };
     }
 
@@ -45,14 +52,18 @@ internal sealed partial class EtlRuntimeOperations
             row.IsClaimed != (row.ClaimFence is > 0 && row.ClaimExpiresAt is not null) ||
             !row.IsClaimed && (row.ClaimFence is not null || row.ClaimExpiresAt is not null) ||
             row.File is { } range && (range.StartOrdinal < 0 || range.NextOrdinal < range.StartOrdinal || range.NextOrdinal > range.EndOrdinalExclusive) ||
-            row.Http is { } progress && (progress.PageSequence < 0 || progress.NextItem < 0 || progress.PageRecordCount < progress.NextItem || progress.PageRecordCount is null && progress.NextItem != 0))
+            row.Http is { } progress && (progress.PageSequence < 0 || progress.NextItem < 0 || progress.PageRecordCount < progress.NextItem || progress.PageRecordCount is null && progress.NextItem != 0) ||
+            // A next poll belongs only to an idle shard: HTTP progress with no page, journal or owed batch.
+            // Claim metadata may remain until release or the next claim, so an idle shard can still show a claim.
+            row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.OwedBatch is not null ||
+                row.Http is not { PageRecordCount: null, Exhausted: false, Fetch: null }))
             throw ProviderContractError();
         return new(row.PartitionOrdinal,
             row.File is { } file ? new(file.StartOrdinal, file.EndOrdinalExclusive, file.NextOrdinal) : null,
             row.Http is { } http ? new(http.PageSequence, http.NextItem, http.PageRecordCount, http.Exhausted, Retry(http.Fetch, source: true)) : null,
             row.IsClaimed, row.ClaimFence, row.ClaimExpiresAt, row.NotBefore,
             Owed(row.OwedBatch),
-            row.AcceptedMainEffects, row.AcceptedErrorEffects);
+            row.AcceptedMainEffects, row.AcceptedErrorEffects) { NextPollAt = row.NextPollAt };
     }
 
     private static EtlRunConnectorOwedView? Owed(EtlConnectorOwedInspection? owed)
@@ -70,10 +81,12 @@ internal sealed partial class EtlRuntimeOperations
     private static EtlRunEffectView? Effect(EtlConnectorEffectInspection? effect)
     {
         if (effect is null) return null;
-        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl) ||
+        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                EtlConnectorKind.RabbitMq) ||
             effect.State is not ("retained" or "acknowledged" or "published") ||
             effect.State == "acknowledged" && effect.Kind != EtlConnectorKind.Http ||
-            effect.State == "published" && effect.Kind != EtlConnectorKind.Jsonl ||
+            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                EtlConnectorKind.RabbitMq) ||
             effect.Kind != EtlConnectorKind.Http && effect.Retry is not null ||
             effect.Kind == EtlConnectorKind.Http &&
             ((effect.State == "acknowledged") != (effect.Retry?.Phase == "acknowledged")))

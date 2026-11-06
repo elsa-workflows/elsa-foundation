@@ -43,7 +43,7 @@ Spec 180's and spec 181's Terms apply. In addition:
   disabled dependency) into `AttentionItem`s, which Attention serves at `GET /_elsa/attention/items`.
   `AttentionSeverity` is `Critical`, `Warning` or `Info`. `Elsa.Attention.Core` carries a public API baseline.
 - **Capabilities.** `GET /capabilities` advertises declared API capabilities. The
-  [API Capabilities README](../../src/essentials/Api/Capabilities/README.md), "Declaration rules", says operationally
+  [API Capabilities README](../../src/essentials/Api/Capabilities/Elsa.Api.Capabilities/README.md), "Declaration rules", says operationally
   conditional capabilities belong in `IApiCapabilitySource` implementations, which are evaluated per document.
 - **Refusal conventions.** Each domain API renders its own problem envelope and maps typed exceptions to statuses.
   `ModularityFaultRenderer` maps `FeatureActivationRefusedException` to 409 ahead of its `InvalidOperationException`

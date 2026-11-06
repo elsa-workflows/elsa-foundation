@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Qualify independent Weaver distributions using real owned package consumers.
 
-This is the only complete package witness. One fresh run and host pair must observe the
-original 38 cases, the four current-authority cases and every #3440 autonomy case once on
-each actual adapter (evidence.witness_manifest()); only then is independentPackageWitness set.
+This is the only complete package witness. One fresh run must observe the original 38 cases,
+the four current-authority cases, every #3440 autonomy case once on each actual adapter and the
+#3441 restart inventory (ten restart cases once on each actual adapter, over the packaged durable
+store with the backend host restarted by this driver, plus its in-memory negative control;
+evidence.witness_manifest()); only then is independentPackageWitness set.
 qualify_autonomy.py remains a non-qualifying diagnostic.
 """
 from __future__ import annotations
@@ -34,16 +36,23 @@ def summarize(output):
     """Print the retained outcome against the complete manifest, including each failed autonomy cause."""
     from autonomy_journeys import MATRIX_QUALIFICATION
     from evidence import witness_gaps, witness_manifest
+    from restart_journeys import RESTART_QUALIFICATION
     path = output / "report.json"
     report = json.loads(path.read_text()) if path.is_file() else {}
     autonomy = report.get(MATRIX_QUALIFICATION, {}).get("cases", [])
+    restart = report.get(RESTART_QUALIFICATION) or {}
     print(json.dumps({"status": report.get("status"), "source": report.get("source"),
                       "independentPackageWitness": report.get("independentPackageWitness") is True,
                       "expectedCases": witness_manifest()["expectedCaseCount"],
                       "originalCases": len(report.get("cases", [])),
                       "currentAuthorityCases": len(report.get("contextDisclosureQualification", {}).get("records", [])),
+                      "workflowAuthorizationCases": len((report.get("workflowAuthorizationQualification") or {}).get("records", [])),
+                      "workflowTruthSeamCases": len((report.get("workflowTruthSeamQualification") or {}).get("records", [])),
                       "autonomyCases": len(autonomy), "autonomyPassed": sum(row.get("status") == "passed" for row in autonomy),
                       "autonomyFailed": {row.get("id"): row.get("cause") for row in autonomy if row.get("status") != "passed"},
+                      "restartCases": len(restart.get("cases", [])), "restartPassed": sum(row.get("status") == "passed" for row in restart.get("cases", [])),
+                      "restartControl": (restart.get("control") or {}).get("actual"),
+                      "restartFailed": {row.get("id"): row.get("cause") for row in restart.get("cases", []) if row.get("status") != "passed"},
                       "gaps": witness_gaps(report)[:20] if report else ["No report"], "report": str(path)}))
 
 

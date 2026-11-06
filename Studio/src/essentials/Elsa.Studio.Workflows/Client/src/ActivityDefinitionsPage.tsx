@@ -11,7 +11,7 @@ import type {
   StudioWorkflowDesignerPanelContribution,
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
@@ -73,7 +73,7 @@ export function ActivityDefinitionsPage({
   graphExtensions = () => ({ properties: [], expressions: [], panels: [] }),
   inputEditors = () => [],
   runtime = {},
-  navigateToStudioPath = defaultStudioPathNavigation
+  navigateToStudioPath: navigateToStudioPathNow = defaultStudioPathNavigation
 }: {
   context: StudioEndpointContext;
   activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
@@ -87,6 +87,10 @@ export function ActivityDefinitionsPage({
   navigateToStudioPath?(path: string): void;
 }) {
   const [route, setRoute] = useState(readRouteState);
+  // A create or upgrade can complete while this screen's workspace tab is in the background; its
+  // navigation then waits for the tab to return instead of taking over the active tab's address.
+  const whenActive = useStudioWorkspaceWhenActive();
+  const navigateToStudioPath = (path: string) => whenActive(() => navigateToStudioPathNow(path));
   const routeRef = useRef(route);
   const navigationBlockedRef = useRef(false);
   const routeCollectionContextRef = useRef(readActivityHistoryMetadata()?.collection ?? null);
@@ -164,12 +168,12 @@ export function ActivityDefinitionsPage({
     observeActivityDefinitions({ event: "route-view", surface: route.definitionId ? "workbench" : "collection" });
   }, [route.definitionId]);
 
-  const navigate = (next: RouteState, force = false) => {
+  const navigate = (next: RouteState, force = false) => whenActive(() => {
     if (navigationBlockedRef.current && !force) return;
     navigationBlockedRef.current = false;
     writeRouteState(next, "push", routeCollectionContextRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
-  };
+  });
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
@@ -378,12 +382,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       {query.isError && data && failure !== "expired" && !invalidCursor ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><button type="button" onClick={refresh}>Retry</button></div> : null}
       {!data && !authorizationInvalidating && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && !authorizationInvalidating && failure ? <ActivityDefinitionFailure kind={failure} cursorInvalid={invalidCursor} onRetry={failure === "expired" || invalidCursor ? restartPaging : refresh} /> : null}
-      {data && data.items.length === 0 ? <StudioResultState
+      {data && data.items.length === 0 ? <div className="studio-table-container"><StudioResultState
         icon={<Database size={24} aria-hidden />}
         title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
         description={defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
         actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
-      /> : null}
+      /></div> : null}
       {data && data.items.length > 0 ? <>
         <div className="studio-table-container studio-collection-table ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
           <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>

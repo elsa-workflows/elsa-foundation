@@ -235,6 +235,34 @@ public sealed class PublishingHttpContractTests
     }
 
     [Fact]
+    public async Task Draft_test_run_endpoint_binds_snapshot_layout_and_opaque_metadata()
+    {
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        var starter = host.App.Services.GetRequiredService<CaptureWorkflowTestRunStarter>();
+        using var response = await SendAsync(host, HttpMethod.Post,
+            "/publishing/workflows/drafts/test-runs",
+            """
+            {"definitionId":"definition-layout","snapshotId":"snapshot-layout","state":{"variables":[],"inputs":[],"outputs":[],"rootActivity":null},
+             "layout":[{"nodeId":"start-event","x":432,"y":156,"width":240,"height":100,"additionalProperties":{"LabelOffset":12,"opaqueCase":"Preserved"}}]}
+            """);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var request = Assert.IsType<StartWorkflowDraftTestRun>(starter.LastStartDraft);
+        var layout = Assert.Single(request.Layout);
+        Assert.Equal(("start-event", 432d, 156d, 240d, 100d),
+            (layout.NodeId, layout.X, layout.Y, layout.Width, layout.Height));
+        Assert.Equal("Preserved", layout.AdditionalProperties!.Value.GetProperty("opaqueCase").GetString());
+        Assert.Equal(12, layout.AdditionalProperties.Value.GetProperty("LabelOffset").GetInt32());
+
+        using var legacy = await SendAsync(host, HttpMethod.Post,
+            "/publishing/workflows/drafts/test-runs",
+            """
+            {"definitionId":"definition-layout","snapshotId":"legacy-snapshot","state":{"variables":[],"inputs":[],"outputs":[],"rootActivity":null}}
+            """);
+        Assert.Equal(HttpStatusCode.OK, legacy.StatusCode);
+        Assert.Empty(Assert.IsType<StartWorkflowDraftTestRun>(starter.LastStartDraft).Layout);
+    }
+
+    [Fact]
     public async Task Activity_test_run_endpoints_bind_every_route_identity_explicitly()
     {
         await using var host = await PublishingMinimalApiHost.StartAsync();

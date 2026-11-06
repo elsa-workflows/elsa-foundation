@@ -25,16 +25,19 @@ internal static class SecretNameReuseScenario
         var repository = new EfSecretRepository(context);
         var revisions = (IRevisionAwareSecretRepository)repository;
         var original = Secret("first", "second");
+        original.Name = "Reused.Name";
         Assert.True(await repository.TryAddAsync(original));
         var loaded = (await revisions.FindWithRevisionAsync(TenantId, Name))!;
         loaded.Secret.Status = SecretStatus.Deleted;
         Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
 
         var successor = Secret("successor");
+        successor.Name = "REUSED.name";
         Assert.True(await repository.TryAddAsync(successor));
         Assert.False(await repository.TryAddAsync(Secret("duplicate")));
         var holder = (await revisions.FindWithRevisionAsync(TenantId, Name))!;
         Assert.Equal(successor.Id, holder.Secret.Id);
+        Assert.Equal("REUSED.name", holder.Secret.Name);
         Assert.Equal("successor", Assert.Single(holder.Secret.Versions).Payload.Value);
         Assert.Equal(SecretRevisionSaveStatus.Conflict, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
         var deleted = Assert.Single((await repository.ListPageAsync(

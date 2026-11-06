@@ -41,10 +41,12 @@ public sealed class UsesEfModuleGuardTests
     private static readonly (string Feature, string[] Modules, bool DeclaresProvider)[] Inventory =
     [
         ("ActivitiesDesignEntityFrameworkCore", ["Activities.Design"], true),
+        ("AgentSourcesEntityFrameworkCore", ["Specialists"], true),
         ("ConnectionsEntityFrameworkCore", ["Connections"], true),
         ("DiagnosticsOpenTelemetryEntityFrameworkCore", ["Diagnostics.OpenTelemetry"], true),
         ("DiagnosticsStructuredLogsEntityFrameworkCore", ["Diagnostics.StructuredLogs"], true),
         ("Elsa3ImportActivitiesEntityFrameworkCore", ["Elsa3.Activities.Design.Import"], true),
+        ("FoundationAgentEntityFrameworkCore", ["Agent"], true),
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityIamEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityProviderConfigurationEntityFrameworkCore", ["Identity.ProviderConfiguration"], true),

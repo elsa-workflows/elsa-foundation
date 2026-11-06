@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -21,7 +22,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -41,6 +42,29 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private const string LayoutPath = ActivityPath + "/layout";
     private const string ValuePayloadPath = ActivityPath + "/value-evidence/value-1/payload";
     private const string ActivationSlotPath = "/runtime/workflows/activation-slots/definition-1/default";
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Persistence_mode_read_reports_the_configured_host_default(PersistenceMode mode)
+    {
+        await using var host = await StartAsync(_ => null, services =>
+            services.AddSingleton(new PersistenceModeOptions { Mode = mode }));
+        using var response = await host.Client.GetAsync("/runtime/workflows/persistence-mode");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(mode.ToString(), json.RootElement.GetProperty("persistenceMode").GetString());
+        var endpoint = host.FindEndpoint("runtime/workflows/persistence-mode");
+        var policy = Assert.Single(endpoint.Metadata.GetOrderedMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(policy.Policy!);
+        Assert.Equal(PermissionKey.Normalize(Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
+        var link = Assert.Single(Elsa.Workflows.Runtime.Api.Capabilities.RuntimeApiCapabilities.StaticDeclaration.Links,
+            item => item.Rel == "runtime-persistence-mode");
+        Assert.Equal("runtime/workflows/persistence-mode", link.Href);
+        Assert.False(link.Templated);
+    }
 
     [Fact]
     public async Task Activity_collection_pages_exact_matches_and_binds_cursor_to_query_and_access()
@@ -220,7 +244,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     /// gate as a bare 415, not as the 400 problem document every other required mode produces.
     /// <para>
     /// The coverage used to live in the in-tree framework's own suite, which went away when the
-    /// framework moved to NativeEndpoints. Without a test here, the five endpoints depend on a
+    /// framework moved to MinimalEndpoints. Without a test here, the five endpoints depend on a
     /// package behaviour that nothing in this repository checks, and a future package change could
     /// move them from 415 to 400 silently.
     /// </para>
@@ -267,6 +291,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     [Theory]
     [InlineData(typeof(WorkflowExecutableNotFoundException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(WorkflowExecutableReferenceRejectedException), HttpStatusCode.Conflict)]
+    [InlineData(typeof(WorkflowExecutableStartRejectedException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(ArgumentException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(InvalidOperationException), HttpStatusCode.InternalServerError)]
     public async Task Execute_maps_expected_failures_to_problem_details_without_disclosing_unexpected_errors(
@@ -278,6 +303,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
             ? new WorkflowExecutableNotFoundException("artifact-1")
             : exceptionType == typeof(WorkflowExecutableReferenceRejectedException)
                 ? new WorkflowExecutableReferenceRejectedException("artifact-1", WorkflowExecutableReferenceScope.Published, WorkflowExecutableReferenceRejectionReason.SelectionNotFound)
+                : exceptionType == typeof(WorkflowExecutableStartRejectedException)
+                    ? new WorkflowExecutableStartRejectedException(WorkflowExecutableStartRejectionCategory.Input, "runtime.input.missing-required", "Required workflow input 'count' was not supplied.")
                 : exceptionType == typeof(ArgumentException)
                     ? new ArgumentException("invalid execute request", "sourceReferenceId")
                     : new InvalidOperationException(secret);
@@ -291,6 +318,21 @@ public sealed class RuntimeMinimalApiBehaviorTests
             Assert.DoesNotContain(secret, body, StringComparison.Ordinal);
         else
             Assert.Contains("runtime-request", body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Input, HttpStatusCode.BadRequest)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Policy, HttpStatusCode.InternalServerError)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Authority, HttpStatusCode.InternalServerError)]
+    public async Task Execute_maps_only_an_input_contract_start_rejection_to_bad_request(
+        WorkflowExecutableStartRejectionCategory category,
+        HttpStatusCode expectedStatus)
+    {
+        await using var host = await StartAsync(_ => throw new WorkflowExecutableStartRejectedException(category, "reason", "Start refused."));
+
+        using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
+
+        Assert.Equal(expectedStatus, response.StatusCode);
     }
 
     [Theory]

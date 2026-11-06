@@ -140,7 +140,7 @@ export async function workflowDefinitionFolderMovePath(context: StudioEndpointCo
 
 async function optionalWorkflowFolderMutationPath(
   context: StudioEndpointContext,
-  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty",
+  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty" | "workflow-folder-deletion-preview" | "workflow-folder-delete",
   folderId: string
 ) {
   try {
@@ -153,12 +153,36 @@ async function optionalWorkflowFolderMutationPath(
 
 export async function getWorkflowFolderMutationSupport(context: StudioEndpointContext) {
   const probeId = "capability-check";
-  const [rename, move, deleteEmpty] = await Promise.all([
+  const [rename, move, deleteEmpty, deletionPreview, deleteContents] = await Promise.all([
     optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", probeId),
     optionalWorkflowFolderMutationPath(context, "workflow-folder-move", probeId),
-    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId)
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-deletion-preview", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete", probeId)
   ]);
-  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty };
+  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty, deleteContents: !!deletionPreview && !!deleteContents };
+}
+
+export interface FolderDeletionPreview {
+  folder: WorkflowFolder;
+  parent: WorkflowFolder | null;
+  workflowCount: number;
+  deletedWorkflowCount: number;
+  childFolderCount: number;
+  revision: string;
+}
+
+export async function previewWorkflowFolderDeletion(context: StudioEndpointContext, folderId: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-deletion-preview", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-deletion-preview");
+  return context.http.getJson<FolderDeletionPreview>(path);
+}
+
+export async function deleteWorkflowFolder(context: StudioEndpointContext, folderId: string,
+  request: { previewRevision: string; deleteWorkflows: boolean; operationKey: string }) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete");
+  await context.http.postJson<unknown>(path, request);
 }
 
 export interface WorkflowFolderPage {
@@ -424,22 +448,31 @@ export async function preflightDraftPromotion(
 export async function promoteDraft(
   context: StudioEndpointContext,
   draftId: string,
-  requestedVersion?: string
+  requestedVersion?: string,
+  operationKey?: string,
+  signal?: AbortSignal
 ) {
+  const init = operationKey || signal ? { ...(operationKey ? { retryOnUnauthorized: false } : {}), ...(signal ? { signal } : {}) } : undefined;
   if (requestedVersion !== undefined) {
     const path = await resolveCapabilityLink(
       context,
       capabilityIds.workflowDesign,
       promotionVersionRelations.exact,
       { draftId });
-    return context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
+    if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+    return init
+      ? context.http.postJson<PromoteDraftResponse>(path, { requestedVersion, ...(operationKey ? { operationKey } : {}) }, init)
+      : context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
   }
   const draftPath = await resolveCapabilityLink(
     context,
     capabilityIds.workflowDesign,
     "workflow-drafts",
     { draftId });
-  return context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
+  if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+  return init
+    ? context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, operationKey ? { operationKey } : {}, init)
+    : context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
 }
 
 export async function analyzeScopedVariables(

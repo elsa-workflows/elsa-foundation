@@ -8,7 +8,7 @@ namespace Elsa.Studio.Agent.Specialists;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Agent")]
-[StudioModule("agent-specialists", "Agents", "routes", "http")]
+[StudioModule("agent-specialists", "Agents", "navigation", "routes", "http", "activity-editors")]
 [ShellFeature(
     name: "AgentSpecialistsStudio",
     DisplayName = "Agents Studio module",

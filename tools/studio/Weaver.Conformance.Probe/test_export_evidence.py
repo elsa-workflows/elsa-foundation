@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from autonomy_journeys import MATRIX_QUALIFICATION
+from restart_journeys import RESTART_QUALIFICATION
 from export_evidence import export_evidence
 import test_qualification  # module import: do not collect its TestCase classes twice
 
@@ -109,7 +110,7 @@ class WitnessExportTests(unittest.TestCase):
     def test_complete_promoted_witness_exports_every_autonomy_reference(self):
         report = dict(self.complete, status="passed", independentPackageWitness=True)
         index = self.export(report)
-        self.assertEqual({"complete": True, "expectedCaseCount": 68, "gaps": []}, index["witnessCompleteness"])
+        self.assertEqual({"complete": True, "expectedCaseCount": 107, "gaps": []}, index["witnessCompleteness"])
         self.assertEqual("passed", index["qualificationStatus"]); self.assertFalse(index["qualificationStatusChanged"])
         root = self.base.root.resolve()
         for row in report[MATRIX_QUALIFICATION]["cases"]:
@@ -117,13 +118,21 @@ class WitnessExportTests(unittest.TestCase):
                 self.assertIn(Path(ref["path"]).resolve().relative_to(root).as_posix(), index["files"])
         for row in report["contextDisclosureQualification"]["records"]:
             self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
+        for row in report["workflowAuthorizationQualification"]["records"]:
+            self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
+        for row in report["workflowTruthSeamQualification"]["records"]:
+            self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
+        for row in report[RESTART_QUALIFICATION]["cases"]:
+            for ref in [row["ownerBefore"], row["ownerAfter"], row["correlation"]["restartReceipt"], *row["evidence"]]:
+                self.assertIn(Path(ref["path"]).resolve().relative_to(root).as_posix(), index["files"])
 
     def test_promoted_report_without_the_complete_inventory_is_refused(self):
         def missing_case(r): r[MATRIX_QUALIFICATION]["cases"].pop()
         def duplicate_case(r): r[MATRIX_QUALIFICATION]["cases"].append(r[MATRIX_QUALIFICATION]["cases"][0])
         def wrong_cause(r): next(row for row in r[MATRIX_QUALIFICATION]["cases"] if "outcome" in row)["outcome"].update(effects=2)
         def legacy(r): r.pop(MATRIX_QUALIFICATION); r.pop("witnessManifest")
-        for index, change in enumerate((missing_case, duplicate_case, wrong_cause, legacy)):
+        def without_restarts(r): r.pop(RESTART_QUALIFICATION)
+        for index, change in enumerate((missing_case, duplicate_case, wrong_cause, legacy, without_restarts)):
             with self.subTest(change=change.__name__):
                 report = json.loads(json.dumps(dict(self.complete, status="passed", independentPackageWitness=True)))
                 change(report)

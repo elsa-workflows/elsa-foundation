@@ -85,7 +85,7 @@ describe("Connections page", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("selects a created connection when its exact name appears in returned items", async () => {
+  it("returns to the refreshed collection without opening details when the created connection is present", async () => {
     const created = { ...connection, name: "customer-api" };
     let listCalls = 0;
     const { context } = endpointContext({
@@ -100,8 +100,9 @@ describe("Connections page", () => {
     await waitFor(() => listCalls === 1 && findButton(host, "Create connection")?.disabled === false);
     await createConnection(host, created.name);
 
-    await waitFor(() => host.querySelector('[role="dialog"] h2')?.textContent === "Customer API");
-    expect(host.querySelector('[role="dialog"] h2')?.textContent).toBe("Customer API");
+    await waitFor(() => detailsButton(host) !== null);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.textContent).toContain("Connection 'customer-api' created.");
   });
 
   it("shows a list error and retries the current search", async () => {

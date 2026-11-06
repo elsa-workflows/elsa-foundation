@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -165,8 +165,14 @@ public static class FoundationIdentityApi
         var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission)
             .Select(x => x.Value)
             .ToArray();
+        var canonicalUsers = normalizedPrincipal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
+        if (canonicalUsers.Length > 1 || canonicalUsers.Length == 1 && string.IsNullOrWhiteSpace(canonicalUsers[0]))
+        {
+            await Results.Unauthorized().ExecuteAsync(context);
+            return;
+        }
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions), context.RequestAborted);
+            .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions) { CanonicalUserId = canonicalUsers.SingleOrDefault() }, context.RequestAborted);
 
         await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }

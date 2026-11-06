@@ -18,6 +18,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     private HttpClient client = new(new HttpClientHandler { CookieContainer = new CookieContainer() });
     private Process? process;
     private bool designSharesRuntime;
+    private bool separateActivityDesign;
 
     private OwnedWorkbench(string root) => ContentRoot = root;
 
@@ -25,19 +26,25 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public int ProcessId => process?.Id ?? throw new InvalidOperationException("The owned Workbench is stopped.");
     public string RuntimeDatabase => Path.Combine(ContentRoot, "runtime.db");
     public string DesignDatabase => designSharesRuntime ? RuntimeDatabase : Path.Combine(ContentRoot, "design.db");
+    public string ActivityDesignDatabase => separateActivityDesign ? Path.Combine(ContentRoot, "activity-design.db") : DesignDatabase;
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
     internal string ReaderAssemblyPath => Metadata("BpmnHostingReaderAssembly");
     internal int? LastStoppedExitCode { get; private set; }
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
-        bool legacyCombinedStore = false, bool runtimeFlowchart = false)
+        bool legacyCombinedStore = false, bool runtimeFlowchart = false, bool authoredDirectPublication = false,
+        bool admitNewBpmnExecutions = true)
     {
         if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
             throw new ArgumentException("Select one actual legacy snapshot source.");
         if (legacyCombinedStore && (runtimeSnapshotPath is null || runtimeOnly))
             throw new ArgumentException("A combined legacy capture requires its whole Runtime/Design store and a combined host profile.");
-        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName) { designSharesRuntime = legacyCombinedStore };
+        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName)
+        {
+            designSharesRuntime = legacyCombinedStore,
+            separateActivityDesign = legacySnapshotDirectory is not null || legacyCombinedStore
+        };
         try
         {
             var source = Metadata("BpmnHostingWorkbenchSource");
@@ -56,16 +63,24 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                 features["WorkflowsRuntimeResumption"] = new JsonObject { ["SweepIntervalSeconds"] = interval };
             if (directBpmn)
             {
-                features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = true };
+                features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = admitNewBpmnExecutions };
                 features["ActivitiesBpmnHostingApi"] = new JsonObject();
                 // Qualify the built-in single-node profile first. Clustered model placement remains a separate gate.
                 foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
                     features.AsObject().Remove(name);
             }
+            if (authoredDirectPublication)
+            {
+                if (!directBpmn || runtimeOnly)
+                    throw new ArgumentException("Authored direct publication requires the composed Design and direct BPMN host.");
+                features["ActivitiesBpmnDirectPublishing"] = new JsonObject();
+            }
             if (runtimeOnly)
             {
+                features["ApiCapabilities"] = new JsonObject();
                 var allowed = new HashSet<string>(StringComparer.Ordinal)
                 {
+                    "ApiCapabilities",
                     "ActivitiesBpmnHosting", "ActivitiesBpmnHostingApi", "ActivitiesRuntime", "Events", "Expressions", "FileSystemDistributedLocking", "Primitives", "Serialization", "Tasks",
                     "WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeResumption",
                     "FoundationIdentityAbstractions", "FoundationIdentityApi", "FoundationIdentityAspNetCoreIdentity",
@@ -84,9 +99,17 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
-                if (features[name] is { } selected) selected["ConnectionString"] = legacyCombinedStore ? "Data Source=runtime.db" : "Data Source=design.db";
-            if ((legacySnapshotDirectory is not null || legacyCombinedStore) && features["ClrActivityReconciliation"] is JsonObject clr)
-                await host.RestoreClrSourceIdentityAsync(clr);
+                if (features[name] is { } selected)
+                {
+                    // ADR 0078 requires recreating this pre-GA module after its Initial is regenerated.
+                    // Keep the captured Runtime/Workflow Design stores and their recovery assertions intact.
+                    selected["ConnectionString"] = "Data Source=" + Path.GetFileName(
+                        name == "ActivitiesDesignEntityFrameworkCore" ? host.ActivityDesignDatabase : host.DesignDatabase);
+                }
+            if (host.separateActivityDesign)
+                // Recover captured executables without republishing a changed current-build CLR catalog
+                // under the captured immutable source identities. Fresh-store profiles still reconcile it.
+                features.AsObject().Remove("ClrActivityReconciliation");
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;
@@ -98,37 +121,41 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         }
     }
 
-    private async Task RestoreClrSourceIdentityAsync(JsonObject feature)
+    public async Task LoginAsync(string username = "admin")
     {
-        if (!File.Exists(DesignDatabase)) return;
-        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
-            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var arg in new[] { ReaderAssemblyPath, "--read-clr-source-identities", DesignDatabase }) info.ArgumentList.Add(arg);
-        using var reader = Process.Start(info) ?? throw Failure("The captured CLR source identity reader did not start.");
-        var output = reader.StandardOutput.ReadToEndAsync(); var error = reader.StandardError.ReadToEndAsync();
-        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try { await reader.WaitForExitAsync(limit.Token); }
-        catch { if (!reader.HasExited) { reader.Kill(entireProcessTree: true); await reader.WaitForExitAsync(); } throw; }
-        if (reader.ExitCode != 0) throw Failure("The captured CLR source identity could not be read: " + await error);
-        var identities = JsonNode.Parse(await output)!["sourceIds"]!.AsArray().Select(id => id!.GetValue<string>()).ToArray();
-        if (identities.Length == 0) return;
-        if (identities.Length != 1) throw Failure("Multiple captured CLR sources require an explicit source-to-folder binding.");
-        if (feature["Options"] is not JsonObject options)
-        {
-            options = new JsonObject(); feature["Options"] = options;
-        }
-        if (options["SourceId"] is { } configured && configured.GetValue<string>() != identities[0])
-            throw Failure("The configured CLR source identity differs from the captured catalog authority.");
-        // Preserve the logical authority without treating its path-shaped value as a filesystem location.
-        // FolderPath is independent and retains this host's normal current-build scan location.
-        options["SourceId"] = identities[0];
-    }
-
-    public async Task LoginAsync()
-    {
-        using var response = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" });
+        using var response = await client.PostAsJsonAsync("/_elsa/identity/login", new { username, password = "Password123!" });
         if (!response.IsSuccessStatusCode)
             throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}");
+    }
+
+    /// <summary>An independently signed-in session against the same owned host, for concurrent subjects.</summary>
+    internal async Task<HttpClient> SignInSessionAsync(string username)
+    {
+        var session = new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer() }) { BaseAddress = client.BaseAddress };
+        using var response = await session.PostAsJsonAsync("/_elsa/identity/login", new { username, password = "Password123!" });
+        if (!response.IsSuccessStatusCode) { session.Dispose(); throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}"); }
+        return session;
+    }
+
+    /// <summary>Changes new-execution admission at the next launch; accepted work stays operable.</summary>
+    internal async Task SetAdmissionAsync(bool admitNewExecutions)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before changing its admission");
+        var path = Path.Combine(ContentRoot, "shells.json");
+        var shells = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        shells["CShells"]!["Shells"]!["default"]!["Features"]!["ActivitiesBpmnHosting"]!["AdmitNewExecutions"] = admitNewExecutions;
+        await File.WriteAllTextAsync(path, shells.ToJsonString());
+    }
+
+    /// <summary>Seeds another development administrator at the next launch; earlier accounts and their subjects are kept.</summary>
+    internal async Task SeedAdministratorAsync(string username)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before changing its seeded account");
+        var path = Path.Combine(ContentRoot, "shells.json");
+        var shells = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        var seed = shells["CShells"]!["Shells"]!["default"]!["Features"]!["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"]!;
+        seed["SeedAdminUserName"] = username; seed["SeedAdminEmail"] = username + "@elsa.local";
+        await File.WriteAllTextAsync(path, shells.ToJsonString());
     }
 
     public async Task<JsonNode> GetAsync(string path, HttpStatusCode? expected = null)
@@ -151,6 +178,15 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await ReadAsync(response, path, expected);
     }
 
+    /// <summary>Posts a command whose winner is legitimately unordered and returns its actual status with the domain body.</summary>
+    internal async Task<(HttpStatusCode Status, JsonNode Body)> PostOutcomeAsync(string path, object value)
+    {
+        using var response = await client.PostAsJsonAsync(path, value);
+        if (response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Conflict))
+            throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        return (response.StatusCode, await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document"));
+    }
+
     public async Task RestartAsync(double? recoverySweepSeconds = null)
     {
         await StopAsync();
@@ -164,12 +200,13 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         await LaunchAsync();
     }
 
-    internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false)
+    internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false, bool includeBpmnAuthoring = false)
     {
         var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
             "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics",
             "Elsa.Workflows.Design.Core", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore", "Elsa.Persistence.EntityFramework" }
             .Concat(includePublishing ? new[] { "Elsa.Workflows.Publishing.Core", "Elsa.Workflows.Publishing" } : [])
+            .Concat(includeBpmnAuthoring ? new[] { "Elsa.Activities.Bpmn.Interchange", "Elsa.Api.Capabilities", "Elsa.Api.Capabilities.Core" } : [])
             .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
             .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
                 sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();
@@ -200,7 +237,20 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         if (directory is null) return null;
         if (subdirectory is not null) directory = Path.Combine(directory, subdirectory);
         Directory.CreateDirectory(directory);
-        var backup = Path.Combine(ContentRoot, "evidence-backup"); File.Delete(backup);
+        var backup = await BackupStoreAsync("evidence-backup", design);
+        var data = await File.ReadAllBytesAsync(backup);
+        var path = Path.Combine(directory, name);
+        await using (var file = File.Create(path))
+        await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
+        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
+            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
+    }
+
+    // A stopped process may retain committed WAL pages. Copy through SQLite, never copy only the base file.
+    internal async Task<string> BackupStoreAsync(string name, bool design = false)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before copying its store");
+        var backup = Path.Combine(ContentRoot, name); File.Delete(backup);
         await using (var source = new SqliteConnection($"Data Source={(design ? DesignDatabase : RuntimeDatabase)};Mode=ReadOnly;Pooling=False"))
         await using (var target = new SqliteConnection($"Data Source={backup};Pooling=False"))
         {
@@ -208,12 +258,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             await using var check = target.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
             if ((string)(await check.ExecuteScalarAsync())! != "ok") throw Failure("The owned Runtime backup failed its integrity check");
         }
-        var data = await File.ReadAllBytesAsync(backup);
-        var path = Path.Combine(directory, name);
-        await using (var file = File.Create(path))
-        await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
-        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
-            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
+        return backup;
     }
 
     public async Task StopAsync()

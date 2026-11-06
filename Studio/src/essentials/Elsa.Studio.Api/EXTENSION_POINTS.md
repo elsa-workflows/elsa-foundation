@@ -37,6 +37,22 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: return `shell` from `StudioModuleInstance`, or call `api.shell.add(contribution)` during registration. `registerStudioModuleInstances` aggregates instance contributions into each fresh registry.
 - Known implementations: Backends switcher, connection notice and recovery page (intra-domain, optional). Backend admission applies to normal contributions; recovery uses only original-host services and is available before a selected connection exists.
 
+### Workflow run related links (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
+- Signature: `StudioWorkflowRunRelatedLinkContribution { id, order?, activityTypes, anyActivityType?, viewKind, viewVersion, requiresBackend?, getLinks(context) }` returning `StudioWorkflowRunRelatedLink { id, label, path }`. `anyActivityType` matches every activity type, for user-defined activity families whose type keys are unknown in advance, so the view kind alone decides.
+- Register: call `api.workflowRunRelatedLinks?.add(contribution)` during registration; hosts without the slot show no links.
+- Consumer: `WorkflowRunRelatedLinks` in native run details and attached Test Run inspection. It reads the authorized activity state view matching `viewKind`/`viewVersion`, and keeps only same-origin Studio paths on the selected backend. The target route reauthorizes its own reads.
+- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)) and `agent-invocation` (`Elsa.Studio.Agent.Specialists`, cross-domain, `anyActivityType` over view `elsa.specialist.invocation/1`).
+- An any-type contribution shows nothing for an activity until a matching view yields a link. Its links appear under "Related" when no listed contribution matches that activity type, and alongside a listed contribution's links under "Related runs" when one does.
+
+### Frontend route workspace options (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional metadata on a route contribution.
+- Signature: `StudioRouteContribution.workspace?: { resourceKey?(location: URL): string | null | undefined }`, with `useStudioWorkspaceTitle(title, detail?)`, `useStudioRouteLocation()`, `useStudioWorkspaceWhenActive()` and `openStudioWorkspaceTab(path, { activate? })` for screens.
+- Register: set `workspace` on `api.routes.add(...)` or a feature-area route. Navigation guards read `StudioNavigationRequest.intent` (`navigate`, `close`, `probe`).
+- Known implementations: Workflows definitions, templates, Activity Definitions and upgrade plans (intra-domain). The workspace tab host itself is not replaceable. See spec [1188](../../../../specs/1188-studio-workspace-tabs/spec.md).
+
 ## Events
 
 | Event | Delivery | Meaning | Payload | Contributor | Publication site |

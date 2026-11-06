@@ -67,6 +67,7 @@
             "IsDevelopmentOrDemo": true
           },
           "FoundationWorkflowsAgent": {},
+          "FoundationWorkflowsRuntimeAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
@@ -168,6 +169,15 @@
           "SecretsEntityFrameworkCore": {},
           "SpecialistsReview": {},
           "SpecialistsReviewApi": {},
+          "SpecialistsDesign": {},
+          "SpecialistsApi": {},
+          "AnthropicSpecialists": {},
+          "AzureOpenAISpecialists": {},
+          "OpenAISpecialists": {},
+          "BackgroundActivities": {},
+          "SpecialistsRuntime": {},
+          "SpecialistsEntityFrameworkCore": {},
+          "SpecialistsInspectionApi": {},
           "Connections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

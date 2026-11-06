@@ -29,7 +29,12 @@ BACKEND_PACKAGES = [
     "Elsa.Workflows.Runtime.Resumption", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
     "Elsa.Agent", "Elsa.Agent.Api",
     "Elsa.Agent.Workflows", "Elsa.Agent.GitHubCopilot", "Elsa.Agent.Anthropic",
+    # Spec 1193 slice F: the Runtime-side Weaver workflows package (Executables; Runs in slice G).
+    "Elsa.Agent.Workflows.Runtime",
     "Elsa.Modularity.Api", "Elsa.Modularity.Nuplane", "Elsa.Cluster.Readability",
+    # #3441: the opt-in durable session store and the Secrets protector it depends on. Referenced at build time so the
+    # common published baseline is unchanged; the restart inventory enables them only through runtime configuration.
+    "Elsa.Agent.Persistence.EntityFrameworkCore", "Elsa.Secrets",
 ]
 STUDIO_PACKAGES = [
     "Elsa.Studio.Hosting", "Elsa.Studio.Hosting.Nuplane", "Elsa.Studio.Dashboard",

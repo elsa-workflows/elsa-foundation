@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -40,6 +40,27 @@ function redact(value) {
     .replace(/("(?:authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     .replace(/\b((?:access[_-]?token|refresh[_-]?token|client[_-]?secret|password|api[_-]?key)=)[^\s&#"']+/gi, "$1[redacted]") : value;
 }
+function safeFailureFrames(error) {
+  const frames = [], seen = new Set();
+  for (const line of typeof error?.stack === "string" ? error.stack.split("\n") : []) {
+    if (!/^\s+at /.test(line)) continue;
+    const match = line.trim().match(/[\\/]browser\.mjs:(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    const row = Number(match[1]), column = Number(match[2]), key = row + ":" + column;
+    if (![row, column].every(value => Number.isSafeInteger(value) && value > 0 && value <= 1000000) || seen.has(key)) continue;
+    seen.add(key);
+    frames.push({ file: "browser.mjs", line: row, column });
+    if (frames.length === 8) break;
+  }
+  return frames;
+}
+function retainFailureDiagnostic(error) {
+  const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
+  try {
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600, flag: "wx" });
+  } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
+  return diagnostic;
+}
 function diagnosticUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname; }
   catch { return "[unavailable URL]"; }
@@ -51,6 +72,7 @@ function retain(name, value) {
 }
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
+process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
 const browser = await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
@@ -82,7 +104,7 @@ page.on("request", request => {
     owningWrites.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
   }
   // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
-  if (lifecycle && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
+  if ((lifecycle || config.journey === "workflow-batch") && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
     publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
   if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
@@ -95,7 +117,51 @@ page.on("response", response => {
   pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
     .catch(error => { observation.error = error.message; }));
 });
+// Spec 1193 T012: the read-only actor holds exactly the grants its journey needs, so any refused backend read names a
+// missing grant precisely instead of surfacing later as a missing control.
+const refusedReads = [];
+if (config.journey === "workflow-read-only") page.on("response", response => {
+  const url = new URL(response.url());
+  if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
+    refusedReads.push({ path: url.pathname, status: response.status() });
+});
+// Spec 1193 T028: every exchange the page has with the agent API, raw and in memory only (never retained, so no redactor
+// rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
+// the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
+const agentTraffic = [], agentResponseReads = [];
+// Spec 1193 T045: the run journey searches the same raw agent traffic for its Run canary.
+if (["workflow-explain", "workflow-run"].includes(config.journey)) {
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
+      agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
+  });
+  page.on("response", response => {
+    const url = new URL(response.url());
+    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
+    agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
+      .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
+  });
+}
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
+// Spec 1193 T036: every write the page sends to the workflow design API (library, templates, definitions), so a journey can
+// prove which owner writes happened: none from a page working-state change, only the user's own Save of the template.
+const designWrites = [];
+if (["workflow-library", "workflow-templates"].includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && url.pathname.includes("/design/workflows/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() });
+});
+// Spec 1193 T041: the read-only inspection journeys may write nothing to the design, publishing or runtime APIs.
+// Spec 1193 T045: the run page's journey is read-only in the same way.
+const INSPECTION_JOURNEYS = ["workflow-version-history", "workflow-executable-inspector", "workflow-run"];
+if (INSPECTION_JOURNEYS.includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && /\/(design\/workflows|publishing|runtime\/workflows)\//.test(url.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method() });
+});
+// Reads the pages make by POST (preflights, options) are not effects; a change, promotion, publication, run or deletion is.
+const inspectionEffects = () => designWrites.filter(item => item.method !== "POST" || /\/(promote|publish|ingest|execute|test-runs|stop|cancel)$/.test(item.path));
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
@@ -1292,7 +1358,7 @@ async function consumedIntentRemount() {
     realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
   // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
@@ -1326,7 +1392,9 @@ async function consumedIntentRemount() {
   const appliedResponse = await applied;
   need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
   await expect.poll(() => moduleEvents.length).toBe(1);
-  await page.waitForURL(studioRoute("/"), { waitUntil: "domcontentloaded" });
+  // Workspace restoration can leave Home before a URL waiter observes it.
+  // The document epoch is the retirement boundary; route/backend checks follow below.
+  await page.waitForFunction(previous => performance.timeOrigin !== previous, timeOrigin);
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   // Apply retires its document, so Chromium may release the old response body.
   // Read the owning catalog after navigation; the serving generation is checked below.
@@ -1339,8 +1407,11 @@ async function consumedIntentRemount() {
     catalogRevisionBefore: catalog.revision, catalogRevisionAfter: catalogAfter.revision,
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
+  // Connection startup renders a temporary searchable shell. Its query is discarded
+  // when the connected AppContent mounts; the launcher exists only in that ready shell.
+  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
@@ -1396,6 +1467,702 @@ async function consumedIntentRemount() {
   await screenshot("native-remount-without-replay");
 }
 
+// The reads the read-only journey depends on: owner-link discovery, the definition and its draft validations, the
+// activity catalog and the expression descriptors the editor loads. Any other refused read (for example runtime
+// executables or publishing profiles the reader is not granted) is retained as evidence and does not fail the journey.
+function requireJourneyReads() {
+  const essential = refusedReads.filter(item => item.path === "/capabilities" || item.path === config.workflow.definitionPath
+    || item.path.startsWith("/design/activities/") || item.path.startsWith("/design/workflows/") || item.path.includes("expression"));
+  need(essential.length === 0, "The read-only actor was refused backend reads it needs: " + essential.map(item => item.status + " " + item.path).join(", "));
+}
+// Spec 1193 T012: a read-only actor (workflows/design:read and activities/design:read, never manage) explains the
+// workflow through the owning catalog and permissions, and is never offered the layout change: no proposal, no node
+// move, no owning write. The protocol commands are retained per command; the driver checks the adapter trace.
+async function workflowReadOnly() {
+  const { definitionId, activityId, definitionPath } = config.workflow ?? {};
+  need(definitionId && activityId && definitionPath, "The read-only journey needs exact owning IDs and the discovered readback path.");
+  owningDraftPath = config.workflow.draftPath;
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  const activity = page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(activityId) + "]");
+  await expect(activity).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  const position = await activity.getAttribute("style");
+  requireJourneyReads();
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const ask = async (toolName, args, name) => {
+    command(toolName, args);
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    return accepted(message, name + "-message");
+  };
+  const explained = await ask("workflow_read_graph", {}, "explain");
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = explained.value.data?.message?.context;
+  need(Array.isArray(admitted), "The accepted message carries no admitted context.");
+  const permissions = admitted.find(item => item.contentType === "workflow.permissions");
+  const catalog = admitted.find(item => item.contentType === "workflow.catalog");
+  expect(permissions?.content).toMatchObject({ workflowDefinitionId: definitionId, read: "allowed", manage: "denied",
+    tools: ["workflow_read_graph"], capabilities: ["workflow.explain"] });
+  expect(catalog?.content).toMatchObject({ status: "available" });
+  need(Array.isArray(catalog.content.entries) && catalog.content.entries.length > 0, "The reader's catalog has no entries.");
+  await expect(dock().locator(".agent-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
+  const answer = dock().locator('.weaver-message[data-role="assistant"]').last();
+  await expect(answer).toHaveAttribute("data-status", "completed");
+  await expect(answer).toContainText("Tool outcome received");
+  result.evidence.push(retain("explain-outcome", { status: await answer.getAttribute("data-status"), text: await answer.innerText() }));
+  await screenshot("read-only-explained");
+
+  // The layout tool is not offered to this actor, so the actual adapter cannot call it: the turn ends without a proposal.
+  const refused = await ask("workflow_set_designer_position", { activityId, x: 480, y: 320 }, "layout");
+  const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
+  await expect(ended).toBeVisible();
+  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
+  await expect(dock().locator(".agent-proposal")).toHaveCount(0);
+  await expect(activity).toHaveAttribute("style", position);
+  const after = await owner("owner-after", definitionPath);
+  result.ownerAfter = after.receipt;
+  expect(after.value.draft).toEqual(before.value.draft);
+  expect(owningWrites).toEqual([]);
+  need(!requests.some(item => /\/(approve|execute|acknowledgements)$/.test(new URL(item.url).pathname)), "A read-only actor reached a review or effect boundary.");
+  // Every refused read is retained; only a read this journey depends on fails it. Studio may degrade an optional one.
+  result.evidence.push(retain("refused-reads", refusedReads));
+  requireJourneyReads();
+  await screenshot("read-only-layout-not-offered");
+  result.observations = { permissionsDisclosed: { manage: "denied", tools: permissions.content.tools }, catalogAvailable: true,
+    explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
+}
+
+// Spec 1193 T022: one reviewed Operation Batch in the actual packaged editor. Four refused controls first, each with zero
+// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, seven
+// operations of six kinds with three in a nested flowchart and a hand edit in its base revision, observed through the designer's own
+// export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
+const BATCH_TOOL = "workflow_apply_operation_batch";
+const READ_TOOL = "workflow_read_graph";
+async function workflowBatch() {
+  const wf = config.workflow ?? {};
+  const { definitionId, definitionPath, nodes, batch, followUp } = wf;
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && nodes?.inner && batch?.operations && followUp?.operations,
+    "The batch journey needs exact owning IDs, node IDs and both prepared batches.");
+  owningDraftPath = wf.draftPath;
+  const editorUrl = studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId);
+  const node = (id, target = page) => target.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  const commands = {};
+  await page.goto(editorUrl);
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  await nativeValidation("validation-before");
+  const initial = await workingDraft("working-initial");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+
+  const select = async (id, name) => {
+    // The node header, clear of any slot-entry control in a container's body.
+    await node(id).click({ position: { x: 12, y: 12 } });
+    await expect(node(id)).toHaveClass(/\bselected\b/);
+    result.evidence.push(retain(name + "-interaction", { method: "pointer-click", nodeId: id }));
+  };
+  const drag = async (id, dx, dy, name) => {
+    const box = await node(id).boundingBox();
+    need(box, "The node to move by hand is not on the canvas: " + id);
+    const x = box.x + 12, y = box.y + 12;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 12 }); await page.mouse.up();
+    result.evidence.push(retain(name + "-interaction", { method: "pointer-drag", nodeId: id, dx, dy }));
+  };
+  const settled = () => expect(dock()).toHaveAttribute("aria-busy", "false");
+  // The tool's arguments are exactly the operations: the config's expectations (added id, version, literal, ...) stay
+  // here, since the strict batch schema refuses any other field.
+  const request = async (prepared, name) => {
+    await settled();
+    const args = { operations: prepared.operations };
+    const selected = command(BATCH_TOOL, args);
+    commands[name] = selected.commandId;
+    const cards = dock().locator(".agent-proposal"), before = await cards.count();
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: BATCH_TOOL, arguments: args }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // Wait on the turn itself, not a fixed delay: it ends with a new card awaiting review or settles without one, and
+    // then the dock's own text says why (a refusal at preparation, a provider error).
+    await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+    if (await cards.count() <= before) {
+      const text = (await dock().innerText()).slice(-800);
+      result.evidence.push(retain(name + "-no-proposal", { text }));
+      need(false, name + ": the batch turn ended without a proposal: " + text);
+    }
+    const proposal = cards.last();
+    await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+    await expect(proposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+    return { proposal, sent, commandId: selected.commandId };
+  };
+  const apply = async (proposal, name, target = page) => {
+    const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+    await proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    const delivery = await accepted(execute, name + "-execute");
+    need(delivery.response.status() === 202, name + ": the change was not delivered to a browser for application.");
+    const ack = await accepted(acknowledged, name + "-ack");
+    return { ack, sent: ack.response.request().postDataJSON() };
+  };
+  const refused = async (review, name, reason) => {
+    await approve(review.proposal, name);
+    const { ack, sent } = await apply(review.proposal, name);
+    expect(sent).toMatchObject({ outcome: "refused" });
+    need(typeof sent.summary === "string" && reason.test(sent.summary), name + ": refused for another reason: " + sent.summary);
+    need(sent.result == null && sent.after == null, name + ": a refused change reported an applied observation.");
+    expect(ack.value.data).toMatchObject({ executed: false, status: "refused" });
+    await expect(review.proposal).toHaveAttribute("data-status", "failed");
+    const working = await workingDraft(name + "-working");
+    need(!JSON.stringify(working.state).includes(batch.addedNodeId), name + ": refused batch content reached the working draft.");
+    result.evidence.push(retain(name + "-outcome", { summary: sent.summary, status: await review.proposal.getAttribute("data-status") }));
+    await settled();
+    return { summary: sent.summary, working };
+  };
+  // A hand edit's ordinary autosave: the owning write happened and the editor reports no save pending.
+  const settledAutosave = async (writesBefore, what) => {
+    await expect.poll(() => owningWrites.length, { timeout: 15000, message: "The " + what + " was never autosaved." }).toBeGreaterThan(writesBefore);
+    await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  };
+  const sameDraft = async (name, expected) => expect((await owner(name, definitionPath)).value.draft).toEqual(expected);
+
+  // Control 1: a hand edit after the proposal changes the working-state revision; the selection stays as reviewed.
+  await select(nodes.nested, "stale-select");
+  const stale = await request(batch, "staleEdit");
+  const writesBeforeStaleEdit = owningWrites.length;
+  await drag(nodes.nested, 60, 40, "stale-hand-edit");
+  await expect(node(nodes.nested)).toHaveClass(/\bselected\b/);
+  const staleOutcome = await refused(stale, "staleEdit", /revision changed after review, so this change is stale/);
+  need(JSON.stringify(staleOutcome.working.layout) !== JSON.stringify(initial.layout), "The hand edit after the proposal was not in the working state.");
+  // The hand edit is ordinary unsaved work until its debounced autosave lands; Studio rightly refuses to navigate away
+  // from unsaved work, so the remount below needs it settled. Wait on the editor's own write and save state.
+  await settledAutosave(writesBeforeStaleEdit, "stale hand edit");
+  expect((await owner("owner-after-stale-autosave", definitionPath)).value.draft.layout).toEqual(staleOutcome.working.layout);
+  // Control 2: a selection change rotates the editor binding before dispatch.
+  const selection = await request(batch, "selectionChange");
+  await select(nodes.a, "selection-change");
+  // The binding rotates, as on a remount: the editor reports its originating target gone before anything is dispatched.
+  await refused(selection, "selectionChange", /selection changed\. Nothing was applied/);
+  // Control 3: the editor remounts inside the same document; the dock and its proposal survive, the binding does not.
+  const remount = await request(batch, "remount");
+  // Nothing unsaved may be pending, or the native navigation guard keeps the editor (correctly) and nothing remounts.
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const writesBeforeRemount = owningWrites.length;
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
+  await expect(node(nodes.a), "Studio kept the editor open: its navigation guard refused to leave (unsaved or pending work), "
+    + "save status '" + (await page.locator(".wf-editor-save-status").innerText().catch(() => "")) + "'").toHaveCount(0);
+  need(owningWrites.length === writesBeforeRemount, "Leaving the editor for the remount wrote the owning draft.");
+  await page.goBack();
+  await expect(node(nodes.a)).toBeVisible();
+  need(await page.evaluate(() => performance.timeOrigin) === timeOrigin, "The remount control reloaded the document instead of remounting the editor.");
+  await refused(remount, "remount", /remounted.*Nothing was applied/);
+
+  // The batch. A hand edit just before the request is part of its base revision; its ordinary autosave settles first.
+  const writesBeforeHandEdit = owningWrites.length;
+  await drag(nodes.nested, 40, 30, "base-hand-edit");
+  await settledAutosave(writesBeforeHandEdit, "base hand edit");
+  const base = await workingDraft("working-before-batch");
+  const ownerBase = (await owner("owner-before-batch", definitionPath)).value.draft;
+  const nestedRow = rows => rows.find(row => row.nodeId === nodes.nested);
+  expect([nestedRow(ownerBase.layout)?.x, nestedRow(ownerBase.layout)?.y]).toEqual([nestedRow(base.layout)?.x, nestedRow(base.layout)?.y]);
+  const writesBeforeBatch = owningWrites.length;
+  const positive = await request(batch, "applied");
+  const reviewText = await positive.proposal.innerText();
+  need(/Destructive/.test(reviewText) && /Review required/.test(reviewText), "The review does not label each operation's risk.");
+  // The admitted context, as the accepted message records it; targets compare by identity, never by display name or route.
+  const admittedDraft = (positive.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflow.definition");
+  need(admittedDraft && admittedDraft.target?.moduleId === "Elsa.Studio.Workflows" && admittedDraft.target?.resourceType === "workflow-definition"
+    && admittedDraft.target?.resourceId === definitionId && /^sha256:[0-9a-f]{64}$/.test(admittedDraft.target?.revision ?? "")
+    && Array.isArray(admittedDraft.content?.structure?.containers), "The admitted working-state context lost its identity, SHA-256 revision or structure.");
+  await approve(positive.proposal, "applied");
+  const { ack, sent } = await apply(positive.proposal, "applied");
+  expect(sent).toMatchObject({ outcome: "applied", after: { resourceId: definitionId }, result: { typeId: "workflows.batch-result", schemaVersion: "1",
+    data: { observed: true, historyEntry: true, appliedCount: batch.operations.length, addedNodeIds: [batch.addedNodeId], baseRevision: admittedDraft.target.revision } } });
+  expect(ack.value.data?.toolResult?.receipt?.scope).toBe("clientWorkingState");
+  await expect(positive.proposal).toHaveAttribute("data-status", "executed");
+  await settled();
+  const applied = await workingDraft("working-applied");
+  const root = applied.state.rootActivity, children = root.structure.payload.activities;
+  const nested = children.find(child => child.nodeId === nodes.nested);
+  const greet = nested?.structure?.payload?.activities?.find(child => child.nodeId === batch.addedNodeId);
+  need(greet && greet.activityVersionId === batch.writeLineVersionId, "The added activity is not in the nested flowchart.");
+  const innerPairs = (nested.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId);
+  expect(innerPairs).toEqual([nodes.inner + ">" + batch.addedNodeId]);
+  need(JSON.stringify(greet).includes(batch.literal), "The added activity's declared input was not set.");
+  need((applied.activityPresentation ?? []).some(row => row.nodeId === nodes.a && row.displayName === batch.displayName), "The display name update is missing.");
+  const pairs = (root.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId).sort();
+  expect(pairs).toEqual([nodes.a + ">" + nodes.b, nodes.b + ">" + nodes.nested].sort());
+  const bRow = applied.layout.find(row => row.nodeId === nodes.b);
+  expect([bRow?.x, bRow?.y]).toEqual([batch.position.x, batch.position.y]);
+  await nativeValidation("validation-after-batch");
+  // Dirty: the working draft differs from the owner's, which still holds the base.
+  need(JSON.stringify(applied.state) !== JSON.stringify(ownerBase.state), "The applied batch did not leave the working draft dirty.");
+  await page.waitForTimeout(1600);
+  await sameDraft("owner-after-autosave-window", ownerBase);
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+  // One Undo restores exactly the base, hand edit included; the review card's Undo is designer-history Undo.
+  await positive.proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
+  expect(await workingDraft("working-after-undo")).toEqual(base);
+  await nativeValidation("validation-after-undo");
+  // Redo restores the whole batch and holds autosave again.
+  await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
+  expect(await workingDraft("working-after-redo")).toEqual(applied);
+  await page.waitForTimeout(1600);
+  await sameDraft("owner-after-redo-window", ownerBase);
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+
+  // Control 4: approving from a second tab of the same Studio. Its dock reopens the session, but the invocation belongs
+  // to the first tab's binding, so it is refused before anything is applied; the first tab's working draft is unchanged.
+  await request(followUp, "secondTab");
+  const second = await context.newPage();
+  try {
+    await second.goto(editorUrl);
+    await expect(node(nodes.a, second)).toBeVisible();
+    await second.getByRole("button", { name: /^Weaver/ }).click();
+    const otherDock = second.getByRole("region", { name: "Weaver assistant", exact: true });
+    const card = otherDock.locator(".agent-proposal").last();
+    await expect(card).toHaveAttribute("data-status", "awaiting-approval");
+    const approved = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/approve"));
+    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    need((await approved).ok(), "The second tab could not approve the proposal.");
+    const execute = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/execute"));
+    const acknowledged = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/acknowledgements"));
+    await card.getByRole("button", { name: "Apply", exact: true }).click();
+    need((await execute).status() === 202, "The second tab's approval was not delivered to a browser.");
+    const otherAck = (await acknowledged).request().postDataJSON();
+    result.evidence.push(retain("secondTab-ack", otherAck));
+    expect(otherAck).toMatchObject({ outcome: "refused", summary: "The originating Studio context is unavailable." });
+    need(otherAck.result == null && otherAck.after == null, "The second tab reported an applied observation.");
+    await expect(card).toHaveAttribute("data-status", "failed");
+  } finally { await second.close(); }
+  expect(await workingDraft("working-after-second-tab")).toEqual(applied);
+  await sameDraft("owner-after", ownerBase);
+  result.ownerAfter = (await owner("owner-after-final", definitionPath)).receipt;
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+  need(publishAttempts.length === 0, "The batch journey attempted to publish.");
+  await screenshot("workflow-batch-applied");
+  result.commands = commands;
+  result.observations = { staleEdit: "refused", selectionChange: "refused", remount: "refused", secondTab: "refused", applied: true,
+    operationCount: batch.operations.length, nestedScope: true, handEditInBase: true, validated: true, dirty: true, autosaveSuspended: true,
+    undoRestored: true, redoRestored: true, noSaveOrPublish: true };
+}
+
+// Spec 1193 T028: explaining the active draft in the actual packaged editor. With autosave off for this editor (component
+// state, not a stored preference), the reader selects the activity whose input the designer's own validation flags and
+// asks Weaver to read the draft: the admitted context names that input's expression type, the server's unavailable
+// interpretation and the designer's diagnostic for it. A hand edit then changes the unsaved working state, and the next
+// read is attributed to the new revision with the moved position, equal to the editor's own export. Nothing is saved.
+async function workflowExplain() {
+  const wf = config.workflow ?? {};
+  const { definitionId, definitionPath, nodes, explain } = wf;
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && explain?.property && explain?.moveNode,
+    "The explanation journey needs exact owning IDs, node IDs and the expected selected input.");
+  owningDraftPath = wf.draftPath;
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  // Wait on the editor's own state: the designer's structural checks render at once, the server's draft validations
+  // arrive later, and the snapshot discloses whatever the panel shows when the question is sent (observed natively on
+  // 04cd44f7c). The seeded unresolved variable is named in the panel only once the server's validations are in.
+  const panel = page.locator(".wf-validation");
+  need(typeof explain.diagnosticMarker === "string" && explain.diagnosticMarker, "The explanation journey needs the seeded diagnostic's marker.");
+  await expect(panel).toContainText(explain.diagnosticMarker, { timeout: 30000 });
+  result.evidence.push(retain("validation-panel", { text: await panel.innerText() }));
+  // Autosave off, through the editor's own menu; the hand edit below then stays in the unsaved working state.
+  await nativeEnter("autosave-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
+  const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
+  const autosave = menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ });
+  await expect(autosave).toBeFocused();
+  await expect(autosave).toHaveAttribute("aria-checked", "true");
+  await nativeEnter("autosave-off", autosave, "Autosave");
+  await expect(autosave).toHaveAttribute("aria-checked", "false");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const ask = async name => {
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    const selected = command(READ_TOOL, {});
+    commands[name] = selected.commandId;
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: READ_TOOL, arguments: {} }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+    const admitted = sent.value.data?.message?.context;
+    need(Array.isArray(admitted), name + ": the accepted message carries no admitted context.");
+    const drafts = admitted.filter(item => item.contentType === "workflow.definition");
+    need(drafts.length === 1 && drafts[0].target?.resourceId === definitionId, name + ": the message did not admit exactly the open working draft.");
+    // This turn's own answer, never an earlier turn's completed one.
+    await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+    const answer = answers.nth(earlier);
+    await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+    await expect(answer).toContainText("Tool outcome received");
+    result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), revision: drafts[0].target.revision }));
+    return drafts[0];
+  };
+
+  await node(nodes.b).click({ position: { x: 12, y: 12 } });
+  await expect(node(nodes.b)).toHaveClass(/\bselected\b/);
+  result.evidence.push(retain("select-interaction", { method: "pointer-click", nodeId: nodes.b }));
+  const first = await ask("before");
+  const content = first.content ?? {};
+  need(content.selectedNodeId === nodes.b && content.selectedActivity?.nodeId === nodes.b, "The admitted context does not describe the selected activity.");
+  const property = (content.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.property);
+  need(property?.value?.kind === "expression" && property.value.expressionType === explain.expressionType && property.value.interpretation === explain.interpretation,
+    "The selected input's expression was not disclosed by type, content and the unavailable interpretation: " + JSON.stringify(property ?? null));
+  const diagnostic = (content.diagnostics ?? []).find(item => item.nodeId === nodes.b && item.property === explain.property && item.type === explain.diagnosticType);
+  need(diagnostic, "The designer's diagnostic for the selected input was not disclosed.");
+  // The packaged consumer has no design-authored (graph) activity: its CLR activities, though recommendations give them
+  // definition identities, are never disclosed as graph activities.
+  need(!("graphActivities" in content), "A source-owned activity was disclosed as a graph activity.");
+
+  // A hand edit with autosave off: the working state changes and stays unsaved.
+  const writes = owningWrites.length;
+  const position = (content.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  const box = await node(explain.moveNode).boundingBox();
+  need(box && position, "The node to move by hand is not on the canvas or not in the admitted positions.");
+  await page.mouse.move(box.x + 12, box.y + 12); await page.mouse.down();
+  await page.mouse.move(box.x + 72, box.y + 52, { steps: 12 }); await page.mouse.up();
+  result.evidence.push(retain("move-interaction", { method: "pointer-drag", nodeId: explain.moveNode, dx: 60, dy: 40 }));
+  const second = await ask("after");
+  need(second.target.revision !== first.target.revision, "The read after the hand edit was attributed to the earlier revision.");
+  const moved = (second.content?.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  need(moved && (moved.x !== position.x || moved.y !== position.y), "The admitted position did not follow the hand edit.");
+  const working = await workingDraft("working-after");
+  const exported = (working.layout ?? []).find(item => item.nodeId === explain.moveNode);
+  need(exported && exported.x === moved.x && exported.y === moved.y, "The admitted position is not the editor's working state.");
+  need(owningWrites.length === writes, "The hand edit was saved although autosave was off.");
+
+  // A credential canary typed into the editor's own masked field of a password-hinted input, as an unsaved edit after the
+  // export above, so it exists only in Studio's working state. The read discloses the input only as withheld.
+  const canary = explain.canary;
+  need(typeof canary === "string" && canary.length >= 24 && explain.maskedNode && explain.maskedLabel && explain.maskedProperty,
+    "The explanation journey needs the masked input and its canary.");
+  // The dock shares the editor's width, so the inspector may be collapsed beside it: close the dock, select the activity
+  // and expand the inspector through its own control, type, then reopen the dock (the conversation is kept).
+  await dock().getByRole("button", { name: "Close assistant", exact: true }).click();
+  await expect(dock()).toBeHidden();
+  await node(explain.maskedNode).click({ position: { x: 12, y: 12 } });
+  await expect(node(explain.maskedNode)).toHaveClass(/\bselected\b/);
+  const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (await expand.count()) await nativeEnter("inspector-expand", expand, "Expand inspector panel");
+  const field = page.locator('input[type="password"][aria-label=' + JSON.stringify(explain.maskedLabel) + ']');
+  await expect(field).toHaveCount(1);
+  await field.fill(canary);
+  result.evidence.push(retain("masked-interaction", { method: "keyboard-fill", nodeId: explain.maskedNode, input: explain.maskedProperty, length: canary.length }));
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock()).toBeVisible();
+  const masked = await ask("masked");
+  const maskedContent = masked.content ?? {};
+  need(maskedContent.selectedNodeId === explain.maskedNode && maskedContent.selectedActivity?.nodeId === explain.maskedNode,
+    "The admitted context does not describe the masked activity.");
+  const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
+  need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
+    "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
+  // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
+  // response body it read, and no byte of any agent stream it received carries the canary.
+  await Promise.all(agentResponseReads);
+  // An empty body proves nothing: every captured stream must have been captured without error, and at least one must be
+  // an actual agent event stream whose bytes were read, before its absence of the canary counts.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free agent stream capture to search.");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
+  need(!JSON.stringify(agentTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
+    "The typed canary left the browser's working state.");
+  need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
+  const after = await owner("owner-after", definitionPath);
+  result.ownerAfter = after.receipt;
+  // A digest, never a diff: a failed comparison must not print the owning draft (or a leaked value in it) to stdout.
+  need(digest(JSON.stringify(after.value.draft)) === digest(JSON.stringify(before.value.draft)), "The explanation journey changed the owning draft.");
+  need(owningWrites.length === 0, "The explanation journey wrote the owning draft.");
+  await screenshot("explained");
+  result.commands = commands;
+  result.observations = { explainCompleted: true, selectedExpressionType: property.value.expressionType, interpretation: property.value.interpretation,
+    diagnosticOnSelectedInput: true, autosaveOff: true, revisionChanged: true, positionFollowed: true, maskedTyped: true, maskedWithheld: true,
+    canaryAbsentInPage: true, draftUnchanged: true, owningWrites: owningWrites.length };
+}
+
+// Spec 1193 T036: a reviewed Weaver tool on a library page, in the actual packaged Studio. The command is selected, the dock
+// sends it, and the turn ends with a card awaiting review (or the dock says why it did not).
+async function reviewedTool(toolName, args, name, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const cards = dock().locator(".agent-proposal"), before = await cards.count();
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-send", dock().getByRole("button", { name: "Send message", exact: true }), "Send message");
+  const sent = await accepted(message, name + "-message");
+  await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+  if (await cards.count() <= before) {
+    const text = (await dock().innerText()).slice(-800);
+    result.evidence.push(retain(name + "-no-proposal", { text }));
+    need(false, name + ": the turn ended without a proposal: " + text);
+  }
+  const proposal = cards.last();
+  await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+  result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+  return { proposal, sent };
+}
+// In these journeys the nonmodal dock overlaps page controls and an open page dialog overlaps the dock, so every control,
+// on the page and in the dock, is activated through the keyboard: the same native control, never a pointer that another
+// surface intercepts (as the witness on c58c9f149 observed for the list's Create workflow button).
+async function approveAndApply(proposal, name) {
+  const response = responseFor("/approve");
+  await nativeEnter(name + "-approve", proposal.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  await accepted(response, name + "-approve");
+  await expect(proposal).toHaveAttribute("data-status", "approved");
+  const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+  await nativeEnter(name + "-apply", proposal.getByRole("button", { name: "Apply", exact: true }), "Apply");
+  const delivery = await accepted(execute, name + "-execute");
+  need(delivery.response.status() === 202, name + ": the change was not delivered to the originating page.");
+  const ack = await accepted(acknowledged, name + "-ack");
+  await expect(proposal).toHaveAttribute("data-status", "executed");
+  return { ack, sent: ack.response.request().postDataJSON() };
+}
+
+// The library list page: a reviewed narrowing applied and reverted by the list page, and a reviewed prefill of the open create
+// dialog, whose Create is never pressed. No owner write follows either change.
+async function workflowLibrary() {
+  const wf = config.workflow ?? {};
+  const { library } = wf;
+  need(wf.definitionId && library?.search && library?.pagePath && library?.prefill?.name, "The library journey needs a seeded definition, its search and the page link.");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions");
+  const searchBox = page.getByPlaceholder("Search definitions", { exact: true });
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toBeVisible();
+  await expect(searchBox).toHaveValue("");
+  const before = await owner("owner-before", library.pagePath + "?pageSize=100");
+  result.ownerBefore = before.receipt;
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  // The list is reviewed only once it is settled: its rows current and its permissions read (aria-busy="false"). A page whose
+  // permissions arrive after the review moves its revision and refuses the reviewed change as stale (the 6231b4434 witness).
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  // Narrowing: the list page applies exactly the approved change and the user can revert it.
+  const narrow = await reviewedTool("workflow_library_set_list_state", { search: library.search }, "narrow", commands);
+  const listContext = (narrow.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.library");
+  need(listContext?.target?.resourceType === "workflow-library" && /^sha256:[0-9a-f]{64}$/.test(listContext?.target?.revision ?? ""),
+    "The admitted list context lost its identity or SHA-256 revision.");
+  const narrowed = await approveAndApply(narrow.proposal, "narrow");
+  expect(narrowed.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.list-state", schemaVersion: "1",
+    data: { observed: true, change: { search: library.search }, baseRevision: listContext.target.revision } } });
+  await expect(searchBox).toHaveValue(library.search);
+  await nativeEnter("narrow-revert", narrow.proposal.getByRole("button", { name: "Revert", exact: true }), "Revert");
+  await expect(searchBox).toHaveValue("");
+  result.evidence.push(retain("narrow-reverted", { search: await searchBox.inputValue() }));
+  // The create dialog: the prefill fills the open dialog only.
+  await nativeEnter("open-create-dialog", page.getByRole("button", { name: "Create workflow", exact: true }).first(), "Create workflow");
+  const nameField = page.locator('input[aria-label="Display name"]');
+  await expect(nameField).toBeVisible();
+  // Likewise the open dialog is reviewed only once it has read the saved templates it offers.
+  await expect(page.getByRole("combobox", { name: "Starting point", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  const prefill = await reviewedTool("workflow_create_dialog_prefill", { name: library.prefill.name }, "prefill", commands);
+  const filled = await approveAndApply(prefill.proposal, "prefill");
+  expect(filled.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.create-dialog-prefill", schemaVersion: "1",
+    data: { observed: true, change: { name: library.prefill.name } } } });
+  await expect(nameField).toHaveValue(library.prefill.name);
+  const after = await owner("owner-after", library.pagePath + "?pageSize=100");
+  result.ownerAfter = after.receipt;
+  need(after.value.totalCount === before.value.totalCount, "A workflow was created although Create was never pressed.");
+  need(designWrites.length === writesBefore, "A page working-state change wrote to the workflow design API.");
+  await screenshot("workflow-library-prefilled");
+  result.commands = commands;
+  result.observations = { listNarrowed: true, listReverted: true, dialogPrefilled: true, createNotPressed: true, noLibraryWrite: true };
+}
+
+// The template editor: an approved batch applied to the template's working state as one history step, autosave held, and
+// persisted only by the user's own Save with the template's expected revision. No workflow definition is written.
+async function workflowTemplates() {
+  const wf = config.workflow ?? {};
+  const { template, nodes, definitionPath } = wf;
+  need(template?.id && template?.revision && template?.path && template?.operations && nodes?.a && definitionPath, "The template journey needs the seeded template and nodes.");
+  const commands = {};
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  await page.goto(studio + "/workflows/templates?template=" + encodeURIComponent(template.id));
+  await expect(node(nodes.a)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", template.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.revision === template.revision, "The template changed before the journey.");
+  const definitionBefore = await owner("definition-before", definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  const batch = await reviewedTool("workflow_apply_operation_batch", { operations: template.operations }, "applied", commands);
+  const editor = (batch.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.template-editor");
+  need(editor?.target?.resourceType === "workflow-template" && editor?.target?.resourceId === template.id && editor?.content?.templateRevision === template.revision
+    && !("workflowDefinitionId" in (editor?.content ?? {})), "The admitted template context is not the template with its persisted revision.");
+  const applied = await approveAndApply(batch.proposal, "applied");
+  expect(applied.sent).toMatchObject({ outcome: "applied", after: { resourceType: "workflow-template", resourceId: template.id },
+    result: { typeId: "workflows.batch-result", schemaVersion: "1", data: { observed: true, historyEntry: true, appliedCount: template.operations.length } } });
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // Autosave is held while the batch is unsaved: beyond the autosave interval the owner still holds the persisted revision.
+  await page.waitForTimeout(1600);
+  need((await owner("owner-after-autosave-window", template.path)).value.revision === template.revision, "Autosave persisted the batch.");
+  need(designWrites.length === writesBefore, "The applied batch wrote to the design API before the user's Save.");
+  // One history step: the card's Undo removes the whole batch, Redo restores it.
+  await nativeEnter("batch-undo", batch.proposal.getByRole("button", { name: "Undo whole change", exact: true }), "Undo whole change");
+  await expect(node(nodes.a)).not.toContainText(template.displayName);
+  await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // The user's own Save, with the template's expected revision.
+  const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && new URL(response.url()).pathname === template.path && response.request().method() === "PUT");
+  // The toolbar's Save (accessible name "Save", title "Save workflow"), the designer's own explicit save.
+  await nativeEnter("template-save", page.locator("button.wf-save-button"), "Save workflow");
+  const response = await saved;
+  need(response.ok(), "The user's template Save failed: " + response.status());
+  const body = response.request().postDataJSON();
+  result.evidence.push(retain("template-save-request", body));
+  need(body?.expectedRevision === template.revision, "The template Save did not carry the template's expected revision.");
+  const after = await owner("owner-after", template.path);
+  result.ownerAfter = after.receipt;
+  need(after.value.revision !== template.revision && JSON.stringify(after.value.content).includes(template.displayName), "The saved template lacks the batch.");
+  const definitionAfter = await owner("definition-after", definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(designWrites.every(write => write.path === template.path), "A template journey wrote another design resource: " + JSON.stringify(designWrites.map(item => item.path)));
+  await screenshot("workflow-templates-saved");
+  result.commands = commands;
+  result.observations = { applied: true, templateTarget: true, oneHistoryStep: true, autosaveHeld: true, savedWithExpectedRevision: true, definitionUntouched: true };
+}
+// Spec 1193 T041: a read-only inspection page's own Explain action. The page contributes the exact resource it shows as
+// context; the Weaver Workflows prompt names the read tool; the selected command makes the actual adapter call it. The dock
+// overlaps page controls, so every control is activated through the keyboard, and each wait is on state, never on time.
+async function inspectionExplain(name, explainButton, toolName, args, kind, target, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-explain", explainButton, "Explain");
+  const sent = await accepted(message, name + "-message");
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = (sent.value.data?.message?.context ?? []).filter(item => item.contentType === kind);
+  need(admitted.length === 1 && ["authoritativeRead", "AuthoritativeRead"].includes(admitted[0].origin)
+    && admitted[0].target?.resourceType === target.resourceType && admitted[0].target?.resourceId === target.resourceId
+    && admitted[0].target?.revision === target.revision, name + ": the message did not admit the server's read of exactly the shown resource.");
+  await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+  const answer = answers.nth(earlier);
+  await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+  await expect(answer).toContainText("Tool outcome received");
+  result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), target: admitted[0].target }));
+  return admitted[0];
+}
+
+// The editor's version history: selecting a version discloses it, and its Explain action reads it with a comparison.
+async function workflowVersionHistory() {
+  const wf = config.workflow ?? {};
+  const version = wf.version ?? {};
+  need(wf.definitionId && wf.definitionPath && version.id && version.version && version.path && version.compareToVersionId,
+    "The version history journey needs the seeded definition and the exact versions.");
+  owningDraftPath = wf.draftPath;
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(wf.definitionId));
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", version.path);
+  result.ownerBefore = before.receipt;
+  const definitionBefore = await owner("definition-before", wf.definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  await nativeEnter("versions-tab", page.getByRole("tab", { name: "Versions", exact: true }), "Versions");
+  const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
+  await expect(select).toBeVisible();
+  await nativeEnter("select-version", select, "Select version");
+  await expect(select).toHaveAttribute("aria-pressed", "true");
+  const explain = page.getByRole("button", { name: "Explain version v" + version.version, exact: true });
+  await expect(explain).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_version", { compareToVersionId: version.compareToVersionId }, "workflows.version",
+    { resourceType: "workflow-version", resourceId: version.id, revision: version.id }, commands);
+  need(admitted.content?.versionId === version.id && admitted.content?.definitionId === wf.definitionId, "The admitted version is not the selected version.");
+  const after = await owner("owner-after", version.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value).toEqual(before.value);
+  const definitionAfter = await owner("definition-after", wf.definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(inspectionEffects().length === 0 && owningWrites.length === 0, "The version history journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-version-history-explained");
+  result.commands = commands;
+  result.observations = { versionSelected: true, versionContext: true, explainCompleted: true, readOnly: true };
+}
+
+// The Executable Inspector: the shown Executable, bound to its Artifact Hash, is disclosed and its Explain action reads it.
+async function workflowExecutableInspector() {
+  const executable = (config.workflow ?? {}).executable ?? {};
+  need(executable.artifactId && executable.artifactHash && executable.path, "The Executable Inspector journey needs the seeded Executable.");
+  const commands = {};
+  await page.goto(studio + "/workflows/executables/" + encodeURIComponent(executable.artifactId));
+  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
+  await expect(explain).toBeVisible({ timeout: 30000 });
+  const before = await owner("owner-before", executable.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.artifactHash === executable.artifactHash, "The seeded Executable changed before the journey.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_executable", {}, "workflows.executable",
+    { resourceType: "workflow-executable", resourceId: executable.artifactId, revision: executable.artifactHash }, commands);
+  need(admitted.content?.artifactHash === executable.artifactHash, "The admitted Executable is not bound to its Artifact Hash.");
+  const after = await owner("owner-after", executable.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.artifactHash).toEqual(before.value.artifactHash);
+  expect(after.value.references).toEqual(before.value.references);
+  need(inspectionEffects().length === 0, "The Executable Inspector journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-executable-inspector-explained");
+  result.commands = commands;
+  result.observations = { executableContext: true, hashBound: true, explainCompleted: true, readOnly: true };
+}
+// Spec 1193 T045: the run page discloses the exact Run and the activity execution selected on it; its Explain action reads it
+// with workflow_read_run. The page's own agent traffic (every request, every non-stream response) and every agent stream
+// byte are searched, raw, for the Run canary, which exists only in the seeded workflow's sensitive input.
+async function workflowRun() {
+  const run = (config.workflow ?? {}).run ?? {};
+  need(run.workflowExecutionId && run.path && run.activityExecutionId && typeof run.canary === "string" && run.canary.length >= 24,
+    "The Run journey needs the seeded Run, its selected activity execution and the canary.");
+  const commands = {};
+  await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
+  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
+  await expect(explain).toBeVisible({ timeout: 30000 });
+  // Wait on the page's settled state: the activity execution it discloses with the Run is the selected one.
+  await expect(explain).toHaveAttribute("data-run-selection", run.activityExecutionId, { timeout: 30000 });
+  const before = await owner("owner-before", run.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.instance?.workflowExecutionId === run.workflowExecutionId, "The seeded Run is not the run API's.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_run", {}, "workflows.run",
+    { resourceType: "workflow-run", resourceId: run.workflowExecutionId, revision: run.activityExecutionId }, commands);
+  need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,
+    "The admitted Run is not the shown Run and selection.");
+  await Promise.all(agentResponseReads);
+  // As in the explain journey: only complete, error-free captures with a real agent event stream make an absent canary count.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free agent stream capture to search.");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
+  need(!JSON.stringify(agentTraffic).includes(run.canary) && !captured.some(item => (item.rawBody ?? "").includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
+    "The Run canary left the run page.");
+  const after = await owner("owner-after", run.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.instance).toEqual(before.value.instance);
+  need(inspectionEffects().length === 0, "The Run journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-run-explained");
+  result.commands = commands;
+  result.observations = { runContext: true, selectionBound: true, explainCompleted: true, readOnly: true, canaryAbsentInPage: true };
+}
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1404,6 +2171,14 @@ try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
+  else if (config.journey === "workflow-read-only") await workflowReadOnly();
+  else if (config.journey === "workflow-batch") await workflowBatch();
+  else if (config.journey === "workflow-explain") await workflowExplain();
+  else if (config.journey === "workflow-library") await workflowLibrary();
+  else if (config.journey === "workflow-templates") await workflowTemplates();
+  else if (config.journey === "workflow-version-history") await workflowVersionHistory();
+  else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
+  else if (config.journey === "workflow-run") await workflowRun();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -1424,7 +2199,9 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
-  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
+  result.failureDiagnostic = retainFailureDiagnostic(error);
+  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}),
+    ...(config.journey === "workflow-read-only" && refusedReads.length ? { refusedReads: refusedReads.map(item => item.status + " " + item.path) } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
   try { await failureDom(); } catch (diagnosticError) {
@@ -1438,8 +2215,10 @@ try {
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
   result.evidence.push(retain("agent-requests", requests));
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
-  if (lifecycle) result.evidence.push(retain("publish-attempts", publishAttempts));
+  if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
+  if (["workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"].includes(config.journey))
+    result.evidence.push(retain("design-write-attempts", designWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);
   retain("observation", result);

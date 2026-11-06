@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Studio CI provenance and allocate a non-floating preview image tag."""
+"""Validate CI provenance and allocate a non-floating preview image tag."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Any, Callable
 from urllib import parse, request
 
 
-WORKFLOW_NAME = "Studio CI"
-WORKFLOW_PATH = ".github/workflows/studio-ci.yml"
+WORKFLOW_NAME = "CI"
+WORKFLOW_PATH = ".github/workflows/ci.yml"
 IMAGE = "elsaworkflows/elsa-studio"
 DOCKER_HUB_TAGS_URL = "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?page=1&page_size=100"
 DOCKER_HUB_TAGS_PATH = "/v2/repositories/elsaworkflows/elsa-studio/tags"
@@ -22,7 +22,7 @@ PREVIEW_TAG = re.compile(r"4\.0\.0-preview\.(\d+)\Z")
 
 
 def validate_ci_run(run: dict[str, Any], repository: str, expected_sha: str) -> dict[str, str]:
-    """Return safe outputs only for a successful same-repository Studio CI push to main."""
+    """Return safe outputs only for a successful same-repository CI push to main."""
     if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository):
         raise ValueError("Expected repository must be owner/name.")
     if not isinstance(expected_sha, str) or not FULL_SHA.fullmatch(expected_sha):
@@ -37,10 +37,10 @@ def validate_ci_run(run: dict[str, Any], repository: str, expected_sha: str) -> 
     run_id = run.get("id")
 
     checks = (
-        (run.get("name") == WORKFLOW_NAME, "Source run is not Studio CI."),
-        (path == WORKFLOW_PATH, "Source run is not the root Studio CI workflow."),
+        (run.get("name") == WORKFLOW_NAME, "Source run is not CI."),
+        (path == WORKFLOW_PATH, "Source run is not the root CI workflow."),
         (run.get("event") == "push", "Source run must come from a push."),
-        (run.get("status") == "completed" and run.get("conclusion") == "success", "Source Studio CI run must have completed successfully."),
+        (run.get("status") == "completed" and run.get("conclusion") == "success", "Source CI run must have completed successfully."),
         (head_repository_name == repository, "Source run must belong to this repository."),
         (run.get("head_branch") == "main", "Source run must be a push to main."),
         (isinstance(head_sha, str) and FULL_SHA.fullmatch(head_sha) is not None, "Source run must identify a full lowercase SHA-1."),
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
                 os.environ.get("EXPECTED_SHA", ""),
             )
             _append_outputs(values, output_path)
-            print(f"Admitted Studio CI run {values['source_run_id']} at {values['source_sha']}.")
+            print(f"Admitted CI run {values['source_run_id']} at {values['source_sha']}.")
             return 0
 
         if args == ["preview-version"]:

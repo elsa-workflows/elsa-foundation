@@ -283,3 +283,24 @@ it("omits ambient cookies on every anonymous backend request",async()=>{
     for (const call of request.mock.calls) expect(call[1]?.credentials).toBe("omit");
   } finally {selected.dispose();}
 });
+
+it("reports an unsaved backend profile to a workspace probe without prompting, and confirms on close",async()=>{
+  const {connections}=controller();
+  const {BackendsPage}=await import("../../../../Elsa.Studio.Backends/Client/src/BackendsPage");
+  const {createRoot}=await import("react-dom/client");
+  const {flushSync}=await import("react-dom");
+  const {requestStudioNavigation}=await import("../sdk");
+  const container=globalThis.document.createElement("div");globalThis.document.body.appendChild(container);
+  const root=createRoot(container);
+  flushSync(()=>root.render(<BackendsPage connections={connections} navigate={()=>undefined} path="/settings/backends/new"/>));
+  const input=container.querySelector<HTMLInputElement>("input")!;
+  const setValue=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!;
+  flushSync(()=>{setValue.call(input,"Staging");input.dispatchEvent(new Event("input",{bubbles:true}));});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  const confirm=vi.fn(()=>false);vi.stubGlobal("confirm",confirm);
+  expect(requestStudioNavigation("/settings/backends/new","/settings/backends/new","probe")).toBe(false);
+  expect(confirm).not.toHaveBeenCalled();
+  expect(requestStudioNavigation("/settings/backends/new","/","close")).toBe(false);
+  expect(confirm).toHaveBeenCalledTimes(1);
+  flushSync(()=>root.unmount());container.remove();
+});

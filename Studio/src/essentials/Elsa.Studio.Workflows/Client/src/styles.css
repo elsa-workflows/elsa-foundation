@@ -151,25 +151,35 @@
    and the sticky availability headers live in their own inner scroll container. */
 
 .wf-page--run-workbench {
-  display: grid;
+  display: flex;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  /* Header, toolbar, and optional run status/error stay auto. The workbench is
-     pinned to the last track so a status line cannot steal minmax(0, 1fr). */
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  flex-direction: column;
+  gap: 0;
   border: 0;
   border-radius: 0;
 }
 
+.wf-page--run-workbench > .studio-page-header {
+  flex: 0 0 auto;
+  padding: 16px 20px 0;
+}
+
+.wf-page--run-workbench > .wf-toolbar {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+}
+
 .wf-page--run-workbench > .wf-instance-detail-workbench {
-  grid-row: -2 / -1;
+  height: auto;
+  flex: 1 1 0;
 }
 
 .wf-page--run-workbench > .wf-lazy-state {
   min-height: 0;
-  grid-row: 2 / -1;
+  flex: 1 1 0;
   border: 0;
   border-radius: 0;
 }
@@ -384,10 +394,11 @@
   padding: 0 10px;
 }
 
-.wf-actions button:hover,
-.wf-toolbar button:hover,
-.wf-editor-actions button:hover,
-.wf-link-button:hover {
+/* Shared buttons own their hover recipe, including the primary foreground/background pair. */
+.wf-actions button:where(:not(.studio-button)):hover,
+.wf-toolbar button:where(:not(.studio-button)):hover,
+.wf-editor-actions button:where(:not(.studio-button)):hover,
+.wf-link-button:where(:not(.studio-button)):hover {
   background: var(--wf-panel-muted);
 }
 
@@ -460,8 +471,9 @@
 }
 
 .wf-run-filters {
-  border-bottom: 1px solid var(--wf-border);
-  background: var(--wf-panel);
+  display: grid;
+  gap: var(--studio-space-3);
+  min-width: 0;
 }
 
 .wf-run-filters .wf-toolbar {
@@ -480,7 +492,9 @@
 
 .wf-run-primary-controls {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
@@ -534,11 +548,12 @@
   min-height: 32px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-text);
+  background: var(--studio-surface);
+  color: var(--studio-text);
   font: inherit;
-  font-size: 13px;
-  padding: 0 9px;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  padding: 0 var(--studio-space-2);
 }
 
 .wf-workflow-picker-results {
@@ -655,11 +670,12 @@
   min-height: 32px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-text);
+  background: var(--studio-surface);
+  color: var(--studio-text);
   font: inherit;
-  font-size: 13px;
-  padding: 0 9px;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  padding: 0 var(--studio-space-2);
 }
 
 .wf-run-filter-actions {
@@ -954,30 +970,11 @@
   cursor: pointer;
 }
 
-.wf-page:has(.wf-executables-list) {
-  height: 100%;
-  min-height: 0;
-}
-
 .wf-executables-list {
   display: flex;
   flex-direction: column;
+  gap: var(--studio-page-gap);
   min-width: 0;
-  min-height: 0;
-  flex: 1;
-}
-
-.wf-executables-list .studio-table-container {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.wf-executables-list .studio-collection-footer {
-  flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  background: var(--studio-surface);
 }
 
 .wf-executable-table-scroll {
@@ -2088,10 +2085,9 @@
 
 .runtime-diagnostics-body {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   min-height: 0;
-  padding: 14px 18px 18px;
+  padding: 0;
 }
 
 .runtime-diagnostics-banner,
@@ -2148,33 +2144,11 @@
   line-height: 1.4;
 }
 
-.runtime-diagnostics-effective {
-  display: grid;
-  min-width: 180px;
-  gap: 2px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-muted-text);
-  padding: 8px 10px;
-}
-
-.runtime-diagnostics-effective span {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: var(--wf-label-tracking, 0);
-  text-transform: var(--wf-label-transform, uppercase);
-}
-
-.runtime-diagnostics-effective strong {
-  color: var(--wf-text);
-  font-size: 13px;
-}
-
-.runtime-diagnostics-effective small {
-  max-width: 260px;
-  font-size: 10px;
-  line-height: 1.35;
+.runtime-diagnostics-effective-note {
+  margin: 0;
+  max-width: 40ch;
+  color: var(--studio-text-muted);
+  line-height: 1.5;
 }
 
 .runtime-diagnostics-levels {
@@ -2185,7 +2159,7 @@
 
 .runtime-diagnostics-level-options {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   gap: 8px;
 }
 
@@ -2282,7 +2256,7 @@
 
 .runtime-diagnostics-subject {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
   gap: 12px;
   align-items: center;
   border-bottom: 1px solid var(--wf-border);
@@ -2301,11 +2275,9 @@
 }
 
 .runtime-diagnostics-subject strong {
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--wf-text);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .runtime-diagnostics-subject em {
@@ -2319,13 +2291,12 @@
   justify-items: end;
 }
 
-.runtime-diagnostics-subject-controls code {
+.runtime-diagnostics-subject-controls .runtime-diagnostics-applied {
   max-width: 100%;
-  overflow: hidden;
   color: var(--wf-muted-text);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--studio-label-size);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .runtime-diagnostics-subject select {
@@ -2347,10 +2318,10 @@
 }
 
 .runtime-diagnostics-policy span {
-  border: 1px solid color-mix(in srgb, var(--wf-warning) 32%, var(--wf-border));
-  border-radius: 999px;
-  background: var(--wf-warning-soft);
-  color: var(--wf-warning-text);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
   font-size: 11px;
   padding: 4px 8px;
 }
@@ -2359,14 +2330,6 @@
   .runtime-diagnostics-section-head {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .runtime-diagnostics-effective {
-    min-width: 0;
-  }
-
-  .runtime-diagnostics-level-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .runtime-diagnostics-subject {
@@ -3656,31 +3619,6 @@
   color: var(--studio-success-fg);
 }
 
-.wf-test-run-status {
-  position: relative;
-}
-
-.wf-editor-actions .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
-  background: var(--wf-success-soft);
-  color: var(--studio-success-fg);
-  font-weight: 700;
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-warning) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-warning-text);
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="accepted-with-incidents"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
-  color: var(--studio-warning-fg);
-}
-
 .wf-editor-body {
   display: grid;
   min-height: 0;
@@ -4105,6 +4043,12 @@
   font-size: 13px;
 }
 
+@media (max-width: 700px) {
+  .wf-properties-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .wf-properties-info dt {
   color: var(--wf-muted-text);
   font-weight: 700;
@@ -4232,6 +4176,24 @@
 
 .wf-properties-versions time {
   color: var(--wf-muted-text);
+}
+
+.wf-properties-version-select {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wf-properties-version-select[aria-pressed="true"] .wf-properties-version-tag {
+  color: var(--wf-accent);
+  text-decoration: underline;
+}
+
+.wf-properties-version-explain {
+  margin-top: 8px;
 }
 
 .wf-palette-version {
@@ -4836,11 +4798,12 @@
 
 .wf-runtime-card {
   display: grid;
-  gap: 12px;
-  border: 1px solid var(--wf-border);
+  min-width: 0;
+  gap: 16px;
+  border: 1px solid var(--studio-border);
   border-radius: var(--wf-radius-md);
-  background: var(--wf-panel-muted);
-  padding: 12px;
+  background: var(--studio-surface);
+  padding: 20px;
 }
 
 .wf-test-run-controls {
@@ -4923,50 +4886,35 @@
   gap: .6rem;
 }
 
-.wf-runtime-card[data-state="rejected"] {
-  border-color: color-mix(in srgb, var(--wf-warning) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-warning) 9%, transparent) 0 0),
-    var(--wf-panel);
-}
-
-.wf-runtime-card[data-state="accepted-with-incidents"] {
-  border-color: color-mix(in srgb, var(--studio-warning) 44%, var(--studio-border));
-}
-
-.wf-runtime-card header {
+.wf-runtime-heading {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.wf-runtime-card header div {
-  min-width: 0;
-}
-
-.wf-runtime-card header span:first-child,
-.wf-runtime-card dt {
-  color: var(--wf-muted-text);
-  font-size: 10px;
-  font-weight: var(--wf-label-weight, 600);
-  text-transform: var(--wf-label-transform, uppercase);
-  letter-spacing: var(--wf-label-tracking, 0);
-}
-
-.wf-runtime-card h3,
-.wf-runtime-card p {
+.wf-runtime-heading h3,
+.wf-runtime-card > p {
   margin: 0;
 }
 
-.wf-runtime-card h3 {
-  font-size: 14px;
+.wf-runtime-heading h3 {
+  color: var(--studio-text);
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.wf-runtime-card p,
+.wf-runtime-outcome {
+  color: var(--studio-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.wf-runtime-note,
 .wf-runtime-reason {
-  color: var(--wf-muted-text);
+  color: var(--studio-text-muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -4988,18 +4936,6 @@
   flex: 1 1 260px;
 }
 
-.wf-runtime-incident-warning button {
-  min-height: 30px;
-  border: 1px solid color-mix(in srgb, var(--studio-warning) 45%, var(--studio-border));
-  border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface);
-  color: var(--studio-text);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  padding: 0 9px;
-}
-
 .wf-runtime-reason {
   display: flex;
   flex-wrap: wrap;
@@ -5014,45 +4950,90 @@
 
 .wf-runtime-equivalence {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid color-mix(in srgb, var(--wf-success) 35%, var(--wf-border));
-  border-radius: var(--wf-radius-sm);
-  background: var(--wf-success-soft);
-  color: var(--wf-success);
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--studio-text-muted);
   font-size: 12px;
   line-height: 1.45;
-  padding: 6px 8px;
 }
 
-.wf-runtime-meta {
+.wf-runtime-equivalence svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.wf-runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.wf-runtime-artifact-link {
+  color: var(--studio-text);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.wf-runtime-identifiers {
   display: grid;
+  min-width: 0;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.wf-runtime-card .wf-runtime-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin: 0;
+  font-family: var(--studio-font-ui);
 }
 
-.wf-runtime-meta div {
+.wf-runtime-meta > div {
+  display: grid;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
   min-width: 0;
 }
 
-.wf-runtime-meta dd {
-  margin: 2px 0 0;
-  overflow: hidden;
-  color: var(--wf-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+.wf-runtime-meta dt {
+  color: var(--studio-text-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.wf-runtime-meta button {
-  border: 0;
-  background: transparent;
-  color: var(--wf-accent);
-  cursor: pointer;
-  font: inherit;
-  padding: 0;
-  text-decoration: underline;
+.wf-runtime-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.wf-runtime-heading .wf-status-badge[data-status="waiting"],
+.wf-runtime-heading .wf-status-badge[data-status="stopping"],
+.wf-runtime-heading .wf-status-badge[data-status="needs attention"] {
+  background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+}
+
+.wf-runtime-heading .wf-status-badge[data-status="rejected"] {
+  background: color-mix(in srgb, var(--studio-danger) 12%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+@media (max-width: 480px) {
+  .wf-runtime-card {
+    padding: 16px;
+  }
+
+  .wf-runtime-meta > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
 }
 
 .wf-artifacts-panel {
@@ -5186,6 +5167,10 @@
 }
 
 .wf-toolbar-checkbox input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  padding: 0;
   margin: 0;
   accent-color: var(--wf-accent);
 }
@@ -7472,6 +7457,14 @@ html[data-theme-material] .availability-search .wf-search {
   gap: 4px;
 }
 
+.wf-bpmn-claim-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 4px;
+  font-size: 13px;
+}
+
 /* --- Binding conversion controls (issue #449) ------------------------------------------------- */
 
 .wf-conversion-control {
@@ -7713,4 +7706,36 @@ html[data-theme-material] .availability-search .wf-search {
   height: 15px;
   display: block;
   object-fit: contain;
+}
+
+.runtime-diagnostics-page .wf-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--studio-space-2);
+}
+.runtime-diagnostics-page .wf-section-label svg { flex: 0 0 auto; }
+
+/* Keep the immutable designer usable beside its details, and stack inspection at compact widths. */
+.wf-executable-workbench .wf-instance-canvas-shell > header h3 {
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 800px) {
+  .wf-executable-workbench:not(.inspector-maximized) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(24rem, 1fr) auto;
+    gap: var(--studio-space-2, .5rem);
+    overflow-y: auto;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-instance-inspector {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: 18rem;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-handle,
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-spacer {
+    display: none;
+  }
 }

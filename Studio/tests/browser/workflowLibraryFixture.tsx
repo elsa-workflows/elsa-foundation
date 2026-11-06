@@ -1,3 +1,8 @@
+import { useEffect, useState } from "react";
+import { WorkflowTagsRoute } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage";
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
+import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -9,6 +14,8 @@ import type { WorkflowDefinitionSummary, WorkflowFolder } from "../../src/essent
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
+setDialogs(dialogs);
+
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const parameters = new URLSearchParams(window.location.search);
 if (parameters.get("palette") === "classic") {
@@ -19,7 +26,7 @@ if (parameters.get("palette") === "classic") {
   for (const token of themeTokenNames) document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
 }
 const readonly = parameters.get("permissions") === "read";
-const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly, canShareViews: !readonly };
+const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly && parameters.get("permissions") !== "assign", canShareViews: !readonly };
 const date = "2026-10-31T12:00:00Z";
 const folderLayout = parameters.get("folder-layout") === "1";
 const folderName = folderLayout ? "Customer operations and international support" : "Finance";
@@ -39,7 +46,7 @@ if (parameters.get("tags") === "empty") tags.splice(0);
 if (parameters.get("tags") === "many") tags.push(...Array.from({ length: 40 }, (_, index): WorkflowTag => ({ id: `extra-${index}`, name: `Additional classification ${index + 1}`, mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] })));
 if (parameters.has("long-folder")) folder.name = "Customer operations / European customer onboarding and retention / Payment collection and exception handling";
 const definitions: WorkflowDefinitionSummary[] = [
-  { id: "collect-payment", name: "Collect overdue payment", createdAt: date, lastModifiedAt: date, draftId: "draft-payment", latestVersionId: "version-payment", versionCount: 1, publicationState: "published", folderId: folder.id, folderBreadcrumb: [{ id: folder.id, name: folder.name }], tags: [{ tagId: "team", valueId: "value-billing" }], favorite: false },
+  { id: "collect-payment", name: "Collect overdue payment", createdAt: date, lastModifiedAt: date, draftId: "draft-payment", latestVersionId: "version-payment", latestVersion: "1.0.0", publishedVersion: "1.0.0", versionCount: 1, publicationState: "published", folderId: folder.id, folderBreadcrumb: [{ id: folder.id, name: folder.name }], tags: [{ tagId: "team", valueId: "value-billing" }], favorite: false },
   { id: "welcome", name: "Welcome new customer", createdAt: date, lastModifiedAt: date, draftId: "draft-welcome", versionCount: 0, folderId: null, folderBreadcrumb: [], tags: [], favorite: false }
 ];
 const organizations = new Map(definitions.map(definition => [definition.id, {
@@ -106,6 +113,11 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
     if (target.pathname === "/fixture/library/pages") {
       const query = target.searchParams;
       const paging = parameters.get("paging");
+      if (paging === "delete") {
+        const secondPage = query.has("continuationToken");
+        const selected = definitions[secondPage ? 1 : 0];
+        return { items: selected.deletedAt ? [] : [structuredClone(selected)], nextContinuationToken: secondPage ? null : "delete-page-two", totalCount: definitions.filter(item => !item.deletedAt).length, permissions };
+      }
       if (["history", "count-shrinks", "count-grows"].includes(paging ?? "")) {
         const cursor = query.get("continuationToken");
         const page = cursor === "tag-page-three" || cursor === "A100" ? 3 : cursor === "tag-page-two" || cursor === "A50" ? 2 : 1;
@@ -168,7 +180,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
   postJson: async (url: string, body: unknown) => {
     record("POST", url, structuredClone(body));
     if (readonly) throw new Error("Permission denied");
-    if (url.endsWith("/tags")) { const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
+    if (url.endsWith("/tags")) { if (parameters.get("tag-create") === "reject") throw new Error("A tag with this name already exists (409)"); const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
     if (url.endsWith("/views")) { const created: WorkflowLibraryView = { ...(body as WorkflowLibraryView), id: `view-${nextIdentity++}`, ownerId: "current-user", revision: "1", schemaVersion: 1, canEdit: true, canDelete: true }; views.push(created); return created; }
     if (url.endsWith("/bulk")) {
       const input = body as { targets: { definitionId: string; revision: string }[]; add: WorkflowTagAssignment[]; remove: WorkflowTagAssignment[] };
@@ -188,6 +200,11 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
   deleteJson: async (url: string) => {
     record("DELETE", url);
     const target = new URL(url, window.location.origin); const id = target.pathname.split("/").at(-1)!;
+    if (target.pathname.includes("/definitions/")) {
+      if (id === "welcome" && parameters.get("delete") === "partial") throw new Error("Permission denied for welcome");
+      definitions.find(definition => definition.id === id)!.deletedAt = date;
+      return {};
+    }
     if (target.pathname.includes("/favorites/")) { definitions.find(definition => definition.id === id)!.favorite = false; return {}; }
     if (target.pathname.includes("/views/")) { views.splice(views.findIndex(view => view.id === id), 1); return {}; }
     throw new Error(`Unexpected DELETE ${url}`);
@@ -197,7 +214,20 @@ const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined 
 
 function Library() {
   const session = useWorkflowDefinitionBrowseSession(context);
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const sync = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  if (path.includes("/workflows/tags")) {
+    const view = path.endsWith("/new") ? "create" : path.endsWith("/tags") ? "list" : "edit";
+    return <main style={{ height: "100vh", overflow: "auto", padding: 24 }}><WorkflowTagsRoute key={view} context={context} view={view} navigate={next => {
+      window.history.pushState({}, "", `${next}${window.location.search}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }} /></main>;
+  }
   if (parameters.get("organization-surface") === "properties") return <main className="wf-canvas-shell wf-tokens" style={{ height: "100vh" }}><WorkflowOrganizationButton context={context} definitionId="welcome" name="Welcome new customer" onSaved={() => undefined} /><div className="wf-properties-view"><section className="wf-properties-section"><h3>Information</h3><p>Welcome new customer</p></section></div></main>;
   return <main className="wf-page wf-page--definitions"><WorkflowDefinitions context={context} ai={ai} session={session} onOpen={() => undefined} /></main>;
 }
-export function WorkflowLibraryFixture() { return <QueryClientProvider client={queryClient}><Library /></QueryClientProvider>; }
+export function WorkflowLibraryFixture() { return <QueryClientProvider client={queryClient}><Library /><DialogHost /></QueryClientProvider>; }

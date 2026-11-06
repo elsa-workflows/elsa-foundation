@@ -56,7 +56,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolSource() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
+                { InputKinds = ["start", "complete-human", "claim-human", "complete-claimed-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
     }
 }
 

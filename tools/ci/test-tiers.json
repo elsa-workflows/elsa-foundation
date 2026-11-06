@@ -612,6 +612,17 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.05
+    },
+    {
       "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
@@ -624,6 +635,11 @@
     },
     {
       "project": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.02
+    },
+    {
+      "project": "Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
     },
@@ -681,6 +697,24 @@
     },
     {
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
       "medianMinutes": null
@@ -815,6 +849,7 @@
           "Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
           "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
           "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+          "Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj",
           "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Microsoft365/Tests/Elsa.Integrations.Connectors.Microsoft365.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
@@ -859,7 +894,8 @@
           "Essentials/tests/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj",
           "Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
           "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
-          "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj"
+          "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+          "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj"
         ]
       }
     ],
@@ -913,6 +949,7 @@
         "name": "ef-2",
         "suites": [
           "activities-design",
+          "agent-records",
           "command-cost",
           "identity",
           "secrets-ef-composition",
@@ -934,7 +971,10 @@
           "locking-database",
           "mysql-feasibility",
           "runtime",
-          "secrets-sqlserver"
+          "secrets-sqlserver",
+          "etl-sql",
+          "etl-rabbitmq",
+          "etl-ef"
         ]
       }
     ]
@@ -1066,9 +1106,29 @@
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
+      "suite": "etl-sql",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-rabbitmq",
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "require": "ELSA_ETL_RABBITMQ_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-ef",
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "require": "ELSA_ETL_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
       "suite": "connections",
       "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "agent-records",
+      "project": "Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     },
     {
       "suite": "specialist-journal",
@@ -1100,11 +1160,6 @@
     {
       "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
       "issue": 3260,
-      "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
-      "issue": 3261,
       "since": "2026-10-22"
     },
     {

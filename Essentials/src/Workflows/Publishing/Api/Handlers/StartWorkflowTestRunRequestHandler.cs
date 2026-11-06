@@ -480,7 +480,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             validation,
             request.AcknowledgeUnavailableExpressionValidation,
             request.Start,
-            cancellationToken);
+            cancellationToken,
+            draftLayout: request.Layout);
     }
 
     private static bool CanProceed(ExpressionDraftValidationResult validation, bool acknowledgeUnavailable) =>
@@ -660,7 +661,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         ExpressionDraftValidationResult? expressionValidation,
         bool unavailableValidationAcknowledged,
         WorkflowTestRunStartSelection? startSelection,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<WorkflowExecutableLayoutRecord>? draftLayout = null)
     {
         WorkflowExecutable executable;
         try
@@ -746,7 +748,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         await executableStore.SaveAsync(executable, cancellationToken);
 
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
-        var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, cancellationToken);
+        var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, draftLayout, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
             executable.Identity,
             $"test-run:{testRunId}",
@@ -1111,14 +1113,14 @@ public sealed class StartWorkflowTestRunRequestHandler(
         JsonElement? Data);
 
     // Builds the expiring TestRun reference. Source identity comes from the compile source when present (draft
-    // snapshot), else from the compiled identity (durable definition version). The layout sidecar is copied verbatim
-    // from the definition-version layout store when a version id resolves one, else empty — a draft
-    // snapshot with no persisted layout carries an empty sidecar.
+    // snapshot), else from the compiled identity (durable definition version). Draft coordinates travel with
+    // the snapshot; published versions use their stored layout. Geometry stays outside executable hashing.
     private async Task<WorkflowExecutableSourceReference> BuildTestRunReferenceAsync(
         WorkflowExecutable executable,
         WorkflowExecutableCompileSource? source,
         DateTimeOffset now,
         DateTimeOffset expiresAt,
+        IReadOnlyCollection<WorkflowExecutableLayoutRecord>? draftLayout,
         CancellationToken cancellationToken)
     {
         var identity = executable.Identity;
@@ -1146,14 +1148,15 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
-            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
+            Layout: draftLayout?.ToArray() ?? WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs,
             TenantId: accessContextAccessor?.Current.Scope?.Value,
             ActivityPresentation:
                 WorkflowExecutableActivityPresentationSidecar.CopyFrom(
                     activityPresentation,
-                    executable));
+                    executable,
+                    placementSidecars?.GetPresentation(identity.DefinitionVersionId)));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

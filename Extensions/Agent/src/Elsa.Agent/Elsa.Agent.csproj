@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
+    <InternalsVisibleTo Include="Elsa.Agent.Persistence.Tests" />
   </ItemGroup>
 
 </Project>

@@ -13,9 +13,12 @@ import type { WorkflowTestRunState } from "./editorTypes";
 import { readVisibleActivityExecutions } from "./scopedExecutionEvidence";
 import { isRejectedTestRun } from "./editorHelpers";
 import { isTerminalExecution, type TestRunObservation } from "./useTestRunObservation";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import { runtimeValueContextId } from "./RuntimeValueEvidence";
 
 interface RunCanvasEvidence {
   key: string;
+  identity: string;
   context: StudioEndpointContext;
   loading: boolean;
   error: string;
@@ -28,7 +31,8 @@ interface RunCanvasEvidence {
 }
 
 /** Adds observation to the existing canvas without changing its document, selection or viewport. */
-export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, edges = [], mode, selectedNodeId, onOpenIncident, ancestorId, selectedExecution, observation, snapshotView = false }: {
+export function useEditorRunCanvas({ context, definitionId, testRun, draftSignature, catalog, nodes, edges = [], mode, selectedNodeId, onOpenIncident, ancestorId, selectedExecution, observation, snapshotView = false, prepared }: {
+  prepared?: PreparedAttachedExecution["canvas"];
   context: StudioEndpointContext;
   definitionId: string;
   testRun: WorkflowTestRunState | null;
@@ -61,7 +65,13 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   const eligible = Boolean(snapshot && executionId && artifactId && testRun?.endpointContext === context && testRun && !isRejectedTestRun(testRun.view));
   const attached = eligible && (!stale || snapshotView) && dismissedRunId !== runId && authorized;
   const nodeKey = JSON.stringify([...new Set(nodes.map(node => node.data.runtimeNodeId ?? node.id))].sort());
-  const key = JSON.stringify([runId, executionId, artifactId, nodeKey, authorizationVersion, observation?.identity, ancestorId, selectedExecution?.activityExecutionId]);
+  const identity = JSON.stringify([runId, executionId, artifactId, nodeKey, authorizationVersion, observation?.identity]);
+  const key = JSON.stringify([identity, ancestorId, selectedExecution?.activityExecutionId]);
+  const preparedEvidence = prepared?.contextIdentity === runtimeValueContextId(context) && prepared?.workflowExecutionId === executionId
+    && prepared?.ancestorId === ancestorId && prepared?.selectedActivityExecutionId === selectedExecution?.activityExecutionId ? prepared?.evidence : undefined;
+  // The verified run graph is independent of occurrence selection. Prepared overlays commit with the inspector.
+  const preparedCanvas = useMemo(() => preparedEvidence && evidence?.context === context && evidence.identity === identity && evidence.key !== key
+    ? { ...evidence, key, loading: false, error: "", ...preparedEvidence } : null, [context, evidence, identity, key, preparedEvidence]);
   const refreshObservation = observation?.refresh;
   const refresh = useCallback(() => { setRevision(value => value + 1); refreshObservation?.(); }, [refreshObservation]);
 
@@ -87,10 +97,10 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
   useEffect(() => {
     if (!attached || !executionId || !artifactId) return;
     const controller = new AbortController();
-    const previous = previousEvidence.current;
+    const previous = preparedCanvas ?? previousEvidence.current;
     const next: RunCanvasEvidence = previous?.key === key && previous.context === context
       ? { ...previous, loading: true, error: "" }
-      : { key, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [], observations: [], observationRevision: 0 };
+      : { key, identity, context, loading: true, error: "", repeated: false, details: null, graph: null, activities: [], observations: [], observationRevision: 0 };
     setEvidence(next);
     const load = async () => {
       try {
@@ -130,7 +140,8 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ancestorId, artifactId, attached, authorizationVersion, catalog, context, executionId, key, nodeKey, observationRevision, revision, selectedExecution]);
 
-  const current = attached && evidence?.key === key && evidence.context === context ? evidence : null;
+  const current = !attached ? null : evidence?.key === key && evidence.context === context ? evidence
+    : preparedCanvas;
   const shownNodes = useMemo(() => {
     if (!current?.details || !current.graph) return nodes;
     const executionIds = new Set(current.activities.map(activity => activity.activityExecutionId));

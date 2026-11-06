@@ -11,6 +11,7 @@ public static class SpecialistsModelBuilderExtensions
     public static ModelBuilder AddSpecialistsModel(this ModelBuilder modelBuilder, string providerName)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
+        modelBuilder.AddSourceRevisions("elsa_agent_sources", providerName);
         modelBuilder.ApplyConfiguration(new SpecialistTurnRecordConfiguration());
         modelBuilder.ApplyConfiguration(new SpecialistConversationRecordConfiguration());
         modelBuilder.ApplyConfiguration(new SpecialistOperationRecordConfiguration());

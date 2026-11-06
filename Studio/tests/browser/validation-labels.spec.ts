@@ -43,7 +43,9 @@ for (const theme of ["light", "dark"]) {
     });
     await page.clock.install();
     await page.goto(`/?mode=validation-labels&theme=${theme}`);
-    await expect(page.getByRole("heading", { name: "Rejected by the server" })).toBeVisible();
+    const summary = page.getByRole("region", { name: "Test run summary", exact: true });
+    await expect(summary.getByRole("heading", { name: "Latest test run", exact: true })).toBeVisible();
+    await expect(summary.locator(".wf-status-badge")).toHaveText("Rejected");
     await expect(page.locator(".wf-runtime-reason")).toContainText("Say hello");
     await expect(page.getByRole("region", { name: "Test Run controls" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Reconnect execution" })).toHaveCount(0);

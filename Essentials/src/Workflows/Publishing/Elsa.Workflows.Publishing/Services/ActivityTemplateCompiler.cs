@@ -18,42 +18,6 @@ using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Services;
 
-public sealed record ActivityTemplateDependencyRequest(
-    string DefinitionVersionId,
-    string OccurrenceId,
-    IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
-    string? ParentOccurrenceId = null,
-    string ChildSlotName = "activity-graph",
-    int ChildIndex = 0,
-    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
-{
-    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
-}
-
-public sealed record ActivityTemplateCompilerRequest(
-    ActivityDefinition Definition,
-    ActivityDefinitionDraft Draft,
-    string CandidateDefinitionVersionId,
-    string CandidateVersion,
-    long LayoutBytes);
-
-public sealed record ActivityTemplateCompilerResult(
-    ExecutableActivityTemplate? Template,
-    ActivityResourceMeasurements Measurements,
-    IReadOnlyList<ActivityResolvedDependency> DirectDependencies,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics)
-{
-    public bool IsSuccessful => Template is not null && Diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
-    public IReadOnlyList<ActivityVersionChange> ProviderCompatibilityChanges { get; init; } = [];
-}
-
-public interface IActivityTemplateCompiler
-{
-    ValueTask<ActivityTemplateCompilerResult> CompileAsync(
-        ActivityTemplateCompilerRequest request,
-        CancellationToken cancellationToken = default);
-}
-
 /// <summary>
 /// Resolves exact immutable dependencies and turns a provider compilation into one closed,
 /// content-addressed Runtime template. Source identity, layout, timestamps, and the identity stamp
@@ -81,7 +45,7 @@ public sealed class ActivityTemplateCompiler(
         IActivityTemplateDependencyDiscoverer discoverer;
         try
         {
-            discoverer = dependencyDiscoverers.Resolve(request.Draft.State.Provider.ProviderKey, request.Draft.State.Provider.SchemaVersion);
+            discoverer = dependencyDiscoverers.Resolve(request.Candidate.Provider.ProviderKey, request.Candidate.Provider.SchemaVersion);
         }
         catch (InvalidOperationException)
         {
@@ -90,16 +54,16 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider has no dependency discovery strategy.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes);
         }
 
         var discovery = await discoverer.DiscoverDependenciesAsync(new(
             request.Definition.Id,
-            request.Draft.Id,
-            request.Draft.Revision,
-            request.Draft.State.Provider), cancellationToken);
+            request.Candidate.Id,
+            request.Candidate.Revision,
+            request.Candidate.Provider) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(discovery.Diagnostics);
         authoritativeDependencies = discovery.Dependencies.Select(x => new ActivityTemplateDependencyRequest(
             x.DefinitionVersionId,
@@ -225,7 +189,7 @@ public sealed class ActivityTemplateCompiler(
         IActivityTemplateProviderCompiler provider;
         try
         {
-            provider = providers.Resolve(request.Draft.State.Provider.ProviderKey, request.Draft.State.Provider.SchemaVersion);
+            provider = providers.Resolve(request.Candidate.Provider.ProviderKey, request.Candidate.Provider.SchemaVersion);
         }
         catch (InvalidOperationException)
         {
@@ -234,7 +198,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider or manifest schema is unavailable.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes);
         }
@@ -242,13 +206,13 @@ public sealed class ActivityTemplateCompiler(
         var compilation = await provider.CompileAsync(new(
             request.Definition.Id,
             request.Definition.ActivityTypeKey,
-            request.Draft.Id,
-            request.Draft.Revision,
+            request.Candidate.Id,
+            request.Candidate.Revision,
             request.CandidateVersion,
-            request.Draft.State.Contract,
-            request.Draft.State.Provider,
+            request.Candidate.Contract,
+            request.Candidate.Provider,
             resolved,
-            provider.CompilerFingerprint), cancellationToken);
+            provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
@@ -258,7 +222,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned a compiler fingerprint different from its registered fingerprint.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return the exact compiler fingerprint supplied by the Publishing coordinator.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -273,7 +237,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned direct dependencies that differ from the coordinator-resolved authoritative dependency set.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Provider compilers must echo the exact coordinator-resolved dependencies without adding, removing, or changing occurrences.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -306,7 +270,7 @@ public sealed class ActivityTemplateCompiler(
                     ActivityDiagnosticSeverity.Error,
                     "The activity provider's Runtime consumer requirements do not exactly match its executable nodes.",
                     subject,
-                    new(request.Draft.State.Provider.ProviderKey),
+                    new(request.Candidate.Provider.ProviderKey),
                     "Declare every and only the stable consumer/schema pairs used by the compiled executable nodes.",
                     new Dictionary<string, string>(StringComparer.Ordinal)));
             }
@@ -320,7 +284,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The activity provider returned one or more negative resource measurements.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return non-negative resource measurements for admission-policy evaluation.",
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -358,7 +322,7 @@ public sealed class ActivityTemplateCompiler(
                     ? $"The activity provider returned duplicate placement content for occurrence '{duplicateOccurrence}'."
                     : "The activity provider's placement content does not exactly match the resolved dependency occurrences.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return at most one placement-content record for every resolved occurrence, without adding or omitting occurrences.",
                 new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
@@ -435,7 +399,7 @@ public sealed class ActivityTemplateCompiler(
                 ActivityDiagnosticSeverity.Error,
                 "The closed activity resource measurements exceed the supported numeric range.",
                 subject,
-                new(request.Draft.State.Provider.ProviderKey),
+                new(request.Candidate.Provider.ProviderKey),
                 "Return bounded local measurements and review the compiled dependency closure.",
                 new Dictionary<string, string>(StringComparer.Ordinal)));
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
@@ -761,10 +725,10 @@ public sealed class ActivityTemplateCompiler(
         });
 
     private static ActivityDiagnosticSubject Subject(ActivityTemplateCompilerRequest request) => new(
-        "ActivityDraft",
-        request.Draft.Id,
+        request.Candidate.SubjectKind,
+        request.Candidate.Id,
         request.Definition.Id,
-        Revision: request.Draft.Revision);
+        Revision: request.Candidate.Revision);
 
     private static bool IsError(ActivityDiagnostic diagnostic) => diagnostic.Severity == ActivityDiagnosticSeverity.Error;
 

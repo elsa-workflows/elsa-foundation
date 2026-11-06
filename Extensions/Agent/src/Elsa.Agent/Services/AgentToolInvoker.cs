@@ -50,7 +50,8 @@ internal sealed class DefaultAgentToolInvoker(
 
         // A mutation's approval basis is the claim's snapshot, read after acquisition and held until a
         // proposal claim covers the work. The caller-supplied policy can only tighten it.
-        var preparationClaim = descriptor.Mutability == AgentToolMutability.Mutating ? _owner?.Acquire(session.Id, AgentSessionClaimKind.Preparation) : null;
+        var preparationClaim = descriptor.Mutability == AgentToolMutability.Mutating && _owner is not null
+            ? await _owner.AcquireAsync(session.Id, AgentSessionClaimKind.Preparation, cancellationToken) : null;
         var approvalBasis = preparationClaim?.State.Policy ?? session.Policy;
         try
         {
@@ -78,7 +79,10 @@ internal sealed class DefaultAgentToolInvoker(
                     var existing = await proposals.FindAsync(existingId, cancellationToken);
                     if (existing?.PreparedInvocation is not { } original)
                         return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                    if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
+                    var replayAdmission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
+                    if (AgentToolAccess.OwnerUnavailable(replayAdmission) is { } replayUnavailable)
+                        return await DeniedAsync(replayUnavailable.Code, replayUnavailable.Message, replayUnavailable.StatusCode);
+                    if (!replayAdmission.Allowed)
                         return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                     if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
                         return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
@@ -118,6 +122,8 @@ internal sealed class DefaultAgentToolInvoker(
                         return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
                 }
                 var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
+                if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
+                    return await DeniedAsync(unavailable.Code, unavailable.Message, unavailable.StatusCode);
                 if (!admission.Allowed)
                     return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 
@@ -172,10 +178,23 @@ internal sealed class DefaultAgentToolInvoker(
                     prepared.RequiresApproval ? null : session.ActorId, prepared.RequiresApproval ? null : now, now, now)
                 { PreparedInvocation = prepared, ResultRendererId = descriptor.ResultRendererId, PolicyRevision = preparationClaim?.State.Revision };
                 var turnKey = AgentInvocationIntegrity.Digest(new { invocation.SessionId, invocation.TurnId });
-                if (proposalStore.TurnMutations.GetOrAdd(turnKey, callKey) != callKey)
-                    return await DeniedAsync("agent.tool.turn_mutation_limit", "Complete the current change before requesting another change.", 409);
-                proposal = await proposals.AddAsync(proposal, cancellationToken);
-                proposalStore.CallInputs.TryAdd(callKey, inputDigest);
+                if (proposals is InMemoryAgentProposalService defaults && defaults.Uses(proposalStore))
+                {
+                    // The turn mutation, call, invocation and call-input keys are recorded with the proposal as one
+                    // insert, so a failure can never leave a call registered without its input.
+                    var insertion = await defaults.InsertAsync(proposal, new(turnKey, callKey, inputDigest), cancellationToken);
+                    if (insertion.Proposal is null)
+                        return await DeniedAsync("agent.tool.turn_mutation_limit", "Complete the current change before requesting another change.", 409);
+                    proposal = insertion.Proposal;
+                }
+                else
+                {
+                    // A replaced proposal service owns its own insertion; only the process-local keys are kept here.
+                    if (proposalStore.TurnMutations.GetOrAdd(turnKey, callKey) != callKey)
+                        return await DeniedAsync("agent.tool.turn_mutation_limit", "Complete the current change before requesting another change.", 409);
+                    proposal = await proposals.AddAsync(proposal, cancellationToken);
+                    proposalStore.CallInputs.TryAdd(callKey, inputDigest);
+                }
                 if (proposal.RequiresApproval && proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited)
                 {
                     await AuditAsync(invocation, "proposal-created", cancellationToken);

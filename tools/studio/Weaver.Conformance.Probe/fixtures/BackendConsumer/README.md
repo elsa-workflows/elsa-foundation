@@ -30,3 +30,60 @@ Private `Qualification:GrantProfiles` maps predeclared profile names to arrays o
 The optional `Qualification:DiagnosticGateDirectory` pauses immediately before startup and on a startup exception, before application disposal. It must be a fresh absolute directory below the owned content root. Each stage writes `<stage>.ready.json` and waits for `<stage>.release`, for at most 60 seconds. It records a typed admission failure without touching native locks; backend enrollment observation is absent for this ordinary profile. `configure_runtime` clears this setting; ordinary qualification runs with the gate off.
 
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
+
+The application also discovers `FoundationAgentEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
+does not select them. For the #3441 restart inventory, `consumers.enable_durable_agent_store(run, database, key)` adds both to
+the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
+root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
+starts a new generation of the same published application through `runtime.RestartableServer`.
+
+`QualificationWorkflowAuthority.cs` is a test-only host feature for the spec 1193 workflow-authorization-unavailable
+inventory. No baseline shell selects it. `authorization_journeys.py` selects it through the ordinary native feature
+apply with a private absolute `ModeFile`, and deselects it before anything later runs. It replaces the single
+`IWorkflowDefinitionAuthorizer` registration with a wrapper that reads that file on every decision: `native` delegates to
+the host's actual authorizer, `deny` refuses, and `throw` raises `WorkflowDefinitionAuthorizationException` with the
+file's private `cause` canary as its inner cause. A missing, malformed or unknown mode is a fixture error, never a
+decision. The seam supplies no other service and changes no product code.
+
+`QualificationTenantActivity.cs` is a test-only host feature for the spec 1193 workflow-truth-seams inventory. No
+baseline shell selects it. `truth_seam_journeys.py` selects it through the ordinary native feature apply with one
+`Tenant`, and deselects it afterwards. The host's CLR-reconciled catalog is tenant-agnostic, so the seam replaces the
+single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's actual `ActivityAuthoringCatalogReader`
+that adds one activity, first, for requests whose principal is in that tenant. The designer's catalog GET and Weaver's
+`IActivityAuthoringCatalog` both read through it, so the driver compares each tenant's two answers. The seam supplies no
+other service and changes no product code.
+
+`QualificationBatchCatalog.cs` is a test-only host feature for the spec 1193 workflow-batch and workflow-explain
+inventories. No baseline shell selects it. `batch_journeys.py` and `explain_journeys.py` each select it through the
+ordinary native feature apply and deselect it afterwards. The
+host's CLR-reconciled catalog has no credential input, no password-hinted input and no activity its availability policy
+excludes, so the seam replaces the single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's
+actual `ActivityAuthoringCatalogReader` that adds activities first: one with a credential input (`apiKey`), one with a
+password-hinted input (`passphrase`, neither sensitive nor a credential, which the designer masks only for its hint;
+named so that no probe redactor rewrites it), and,
+only when every entry is requested, one that is listed but not addable. The designer's catalog GET and Weaver's
+`IActivityAuthoringCatalog` both read through it. The seam supplies no other service and changes no product code.
+
+`QualificationLibraryResponses.cs` is a test-only host feature for the spec 1193 workflow-library inventory (SC-008). No
+baseline shell selects it. `library_journeys.py` selects it through the ordinary native feature apply with a private
+absolute `ModeFile` and `LogFile`, and deselects it afterwards. It replaces the single `IWorkflowLibraryCommands`
+registration with a wrapper over the host's actual commands. With the mode `{"drop":"create-tag"}` (or `"save-view"`) a
+keyed tag (or view) creation is committed by the actual library, then its response is lost once per operation key: the
+wrapper appends `{kind, operationKey, committedId}` to the log and throws. The Weaver tool must then resolve the outcome by
+rereading the key, and the driver proves exactly one tag (or view) exists with the logged identity. `{"drop":"none"}`
+delegates every call unchanged. Only Weaver's library writes reach it: the HTTP library endpoints keep the built-in
+decisions whatever `IWorkflowLibraryCommands` is installed, so the driver's own owner writes and reads never pass through
+the seam. The seam changes no product code.
+
+Spec 1193 slice F adds `Elsa.Agent.Workflows.Runtime` to the packaged references and selects its shell feature
+`FoundationWorkflowsRuntimeAgent` in the baseline shell, beside `FoundationWorkflowsAgent`; its assembly is listed with the
+other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
+native feature apply, for its deployment-shape control and selects it again.
+
+`QualificationRunCapture.cs` is a test-only host feature for the spec 1193 workflow-run inventory (T045). No baseline shell
+selects it. `run_journeys.py` selects it through the ordinary native feature apply before seeding its Runs, and deselects it
+afterwards. The runtime's default `IRuntimePayloadCapturePolicy` never captures a sensitive payload, so a canary authored
+into a sensitive input would never reach execution evidence. The seam replaces the single capture policy registration with
+a wrapper over the host's actual policy that captures sensitive activity inputs as full payloads and delegates every other
+decision unchanged; the canary is then in the run's value evidence, and Weaver's withholding of it is a real control. The
+seam changes no product code.

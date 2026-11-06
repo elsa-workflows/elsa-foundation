@@ -16,8 +16,10 @@ All file refs are {path,sha256} under the owned root. No pending data qualifies.
 validate_complete_witness(report, root, allowed_controls) is the final gate for
 independentPackageWitness: validate_report plus the declared current manifest, the four
 passed current-authority records, every #3440 autonomy case exactly once per actual adapter
-with its expected cause and retained owner/correlation evidence, and each manifest-named
-matrix stage exactly once. witness_gaps(report) is its file-free structural reader.
+with its expected cause and retained owner/correlation evidence, each manifest-named
+matrix stage exactly once, and the #3441 restart inventory (each restart case once per actual
+adapter over the packaged durable store, plus its observed in-memory negative control).
+witness_gaps(report) is its file-free structural reader.
 """
 from __future__ import annotations
 
@@ -181,16 +183,33 @@ def _retained_ref(root, value):
 
 
 def witness_manifest():
-    """The complete witness inventory: original38 + four current-authority + 13 cases per actual adapter.
+    """The complete witness inventory: original38 + four current-authority + one workflow-authorization-unavailable
+    and one workflow-truth-seams, one workflow-batch, one workflow-explain, two workflow-library and two workflow-inspection
+    (versions, Executables) cases per actual adapter (spec 1193) + 13 cases per actual adapter
+    + the #3441 restart inventory (ten restart cases per actual adapter and one negative control).
 
     Stage expectations are only the matrix's own named browser stages. No total stage count
     (the original run's 135) is part of the contract; production/author stages may change.
     """
     from autonomy_journeys import EXPECTED_CASES as AUTONOMY_CASES, autonomy_stages
     from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
+    from restart_journeys import CONTROL_ID as RESTART_CONTROL, EXPECTED_CASES as RESTART_CASES
+    from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASES
+    from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES
+    from batch_journeys import EXPECTED_CASES as BATCH_CASES
+    from explain_journeys import EXPECTED_CASES as EXPLAIN_CASES
+    from library_journeys import EXPECTED_CASES as LIBRARY_CASES
+    from inspection_journeys import EXPECTED_CASES as INSPECTION_CASES
+    from run_journeys import EXPECTED_CASES as RUN_CASES
     return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
+            "workflowAuthorizationCases": sorted(WORKFLOW_AUTHORIZATION_CASES), "workflowTruthSeamCases": sorted(TRUTH_SEAM_CASES),
+            "workflowBatchCases": sorted(BATCH_CASES), "workflowExplainCases": sorted(EXPLAIN_CASES),
+            "workflowLibraryCases": sorted(LIBRARY_CASES), "workflowInspectionCases": sorted(INSPECTION_CASES), "workflowRunCases": sorted(RUN_CASES),
             "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
-            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(AUTONOMY_CASES)}
+            "restartCases": sorted(RESTART_CASES), "restartControls": [RESTART_CONTROL],
+            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(WORKFLOW_AUTHORIZATION_CASES) + len(TRUTH_SEAM_CASES)
+                                 + len(BATCH_CASES) + len(EXPLAIN_CASES) + len(LIBRARY_CASES) + len(INSPECTION_CASES) + len(RUN_CASES) + len(AUTONOMY_CASES)
+                                 + len(RESTART_CASES) + 1}
 
 
 def witness_gaps(report):
@@ -215,9 +234,25 @@ def witness_gaps(report):
             or [row.get("id") if isinstance(row, dict) else None for row in records] != authority
             or not all(isinstance(row, dict) and row.get("status") == "passed" and isinstance(row.get("record"), dict) for row in records)):
         gaps.append("The four current-authority cases were not each observed passed exactly once")
+    from authorization_journeys import SECTION as AUTHORIZATION_SECTION, authorization_manifest_gaps
+    gaps += authorization_manifest_gaps(report.get(AUTHORIZATION_SECTION), report.get("source"))
+    from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, truth_seam_manifest_gaps
+    gaps += truth_seam_manifest_gaps(report.get(TRUTH_SEAM_SECTION), report.get("source"))
+    from batch_journeys import SECTION as BATCH_SECTION, batch_manifest_gaps
+    gaps += batch_manifest_gaps(report.get(BATCH_SECTION), report.get("source"))
+    from explain_journeys import SECTION as EXPLAIN_SECTION, explain_manifest_gaps
+    gaps += explain_manifest_gaps(report.get(EXPLAIN_SECTION), report.get("source"))
+    from library_journeys import SECTION as LIBRARY_SECTION, library_manifest_gaps
+    gaps += library_manifest_gaps(report.get(LIBRARY_SECTION), report.get("source"))
+    from inspection_journeys import SECTION as INSPECTION_SECTION, inspection_manifest_gaps
+    gaps += inspection_manifest_gaps(report.get(INSPECTION_SECTION), report.get("source"))
+    from run_journeys import SECTION as RUN_SECTION, run_manifest_gaps
+    gaps += run_manifest_gaps(report.get(RUN_SECTION), report.get("source"))
     if MODE_QUALIFICATION in report:
         gaps.append("A diagnostic mode section cannot stand in for the complete matrix")
     gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
+    from restart_journeys import RESTART_QUALIFICATION, restart_manifest_gaps
+    gaps += restart_manifest_gaps(report.get(RESTART_QUALIFICATION), report.get("source"))
     stages = report.get("stages") if isinstance(report.get("stages"), list) else []
     names = [stage.get("name") if isinstance(stage, dict) else None for stage in stages]
     gaps += [f"Matrix stage {name} ran {names.count(name)} times" for name in manifest["autonomyStages"] if names.count(name) != 1]
@@ -235,8 +270,24 @@ def validate_complete_witness(report, root, allowed_controls):
         for row in report["contextDisclosureQualification"]["records"]:
             observed = json.loads(_retained_ref(root, row["record"]).read_text())
             _need(observed.get("id") == row["id"] and observed.get("status") == "passed", "Current-authority record differs: " + row["id"])
+        from authorization_journeys import SECTION as AUTHORIZATION_SECTION, require_workflow_authorization
+        require_workflow_authorization(report[AUTHORIZATION_SECTION], root, source=report["source"])
+        from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, require_workflow_truth_seams
+        require_workflow_truth_seams(report[TRUTH_SEAM_SECTION], root, source=report["source"])
+        from batch_journeys import SECTION as BATCH_SECTION, require_workflow_batch
+        require_workflow_batch(report[BATCH_SECTION], root, source=report["source"])
+        from explain_journeys import SECTION as EXPLAIN_SECTION, require_workflow_explain
+        require_workflow_explain(report[EXPLAIN_SECTION], root, source=report["source"])
+        from library_journeys import SECTION as LIBRARY_SECTION, require_workflow_library
+        require_workflow_library(report[LIBRARY_SECTION], root, source=report["source"])
+        from inspection_journeys import SECTION as INSPECTION_SECTION, require_workflow_inspection
+        require_workflow_inspection(report[INSPECTION_SECTION], root, source=report["source"])
+        from run_journeys import SECTION as RUN_SECTION, require_workflow_run
+        require_workflow_run(report[RUN_SECTION], root, source=report["source"])
         from autonomy_journeys import MATRIX_QUALIFICATION, require_complete_autonomy
         require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
+        from restart_journeys import RESTART_QUALIFICATION, require_restart_inventory
+        require_restart_inventory(report[RESTART_QUALIFICATION], root, source=report["source"])
     except EvidenceError:
         raise
     except (RuntimeError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:

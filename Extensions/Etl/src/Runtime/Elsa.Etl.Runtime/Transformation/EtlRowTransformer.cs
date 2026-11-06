@@ -345,6 +345,9 @@ internal sealed class EtlRowTransformer
         {
             EtlCsvSource csv => ToTransformFields(csv.Schema, nameof(pipeline)),
             EtlHttpJsonSource http => ToTransformFields(http.Fields, nameof(pipeline)),
+            EtlJsonlSource jsonl => ToTransformFields(jsonl.Fields, nameof(pipeline)),
+            EtlSqlSource sql => ToTransformFields(sql.Columns, nameof(pipeline)),
+            EtlRabbitMqSource queue => ToTransformFields(queue.Fields, nameof(pipeline)),
             _ => throw new ArgumentException("The connector source kind is not supported by the transformer.", nameof(pipeline))
         };
         var lookupFields = pipeline.Lookup is null

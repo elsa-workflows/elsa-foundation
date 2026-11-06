@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
-import { studioNavigationRequestedEvent, type StudioApiCapabilityDocument, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
+import { studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
 import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
@@ -38,7 +38,10 @@ export function BackendConnectionNotice({connections}:{connections:BackendConnec
   </div>;
 }
 
-export function BackendsPage({connections,navigate,path=window.location.pathname,featureManagementAvailable=false}:{connections:BackendConnections;navigate:(path:string)=>void;path?:string;featureManagementAvailable?:boolean}) {
+export function BackendsPage({connections,navigate,path:explicitPath,featureManagementAvailable=false}:{connections:BackendConnections;navigate:(path:string)=>void;path?:string;featureManagementAvailable?:boolean}) {
+  // A background workspace tab can re-render on a connection change while another tab owns the address bar.
+  const routeLocation = useStudioRouteLocation();
+  const path = explicitPath ?? routeLocation.pathname;
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   const segment = path.slice("/settings/backends".length).split("/").filter(Boolean);
   const create = segment[0] === "new";
@@ -111,7 +114,12 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
   const saved = useRef(false);
   const dirty = name !== (profile?.name ?? "") || baseUrl !== (profile?.baseUrl ?? "") || environment !== (profile?.environment ?? "Development") || authenticationProfile !== (profile?.authenticationProfile ?? "");
   useEffect(() => {
-    const guard = (event:Event) => { if (!saved.current && (saving || dirty && !window.confirm("Discard the unsaved backend profile?"))) event.preventDefault(); };
+    const guard = (event:Event) => {
+      if (saved.current) return;
+      // A probe only asks whether unsaved work exists; it must not prompt.
+      if ((event as CustomEvent<StudioNavigationRequest>).detail?.intent === "probe") {if (saving || dirty) event.preventDefault();return;}
+      if (saving || dirty && !window.confirm("Discard the unsaved backend profile?")) event.preventDefault();
+    };
     const unload = (event:BeforeUnloadEvent) => {if (saving || dirty && !saved.current) event.preventDefault();};
     window.addEventListener(studioNavigationRequestedEvent,guard);window.addEventListener("beforeunload",unload);
     return () => {window.removeEventListener(studioNavigationRequestedEvent,guard);window.removeEventListener("beforeunload",unload);};

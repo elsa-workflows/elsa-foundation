@@ -33,7 +33,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />

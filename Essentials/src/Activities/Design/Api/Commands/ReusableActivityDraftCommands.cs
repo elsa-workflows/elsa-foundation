@@ -13,7 +13,10 @@ public sealed record CreateReusableActivityDefinition(
     ActivityProviderManifest Provider,
     ActivityContractView Contract,
     IReadOnlyList<ActivityLayoutRecord> Layout,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>;
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
 
 public sealed record PreviewReusableActivityFork(
     [property: JsonIgnore] string DefinitionId,
@@ -45,11 +48,14 @@ public sealed record CreateReusableActivityDraft(
     ActivityProviderManifest? Provider = null,
     ActivityContractView? Contract = null,
     IReadOnlyList<ActivityLayoutRecord>? Layout = null,
-    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
 
 /// <summary>
 /// The wire request for cloning or creating a reusable activity draft.
-/// <see cref="Layout"/> is wrapped so NativeEndpoints treats an omitted body array as absent rather
+/// <see cref="Layout"/> is wrapped so MinimalEndpoints treats an omitted body array as absent rather
 /// than falling through to an empty query collection.
 /// </summary>
 public sealed record CreateReusableActivityDraftRequest(
@@ -58,10 +64,34 @@ public sealed record CreateReusableActivityDraftRequest(
     ActivityProviderManifest? Provider = null,
     ActivityContractView? Contract = null,
     ActivityLayoutRecordsPayload? Layout = null,
-    string? PresentationLabel = null);
+    string? PresentationLabel = null)
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
 
 [JsonConverter(typeof(ActivityLayoutRecordsPayloadJsonConverter))]
 public sealed record ActivityLayoutRecordsPayload(IReadOnlyList<ActivityLayoutRecord> Records);
+
+/// <summary>Preserves omitted versus explicit-empty arrays through endpoint body binding.</summary>
+[JsonConverter(typeof(ActivityPresentationPayloadConverter))]
+public sealed record ActivityNodePresentationPayload(IReadOnlyList<ActivityNodePresentationRecord> Records);
+
+internal sealed class ActivityPresentationPayloadConverter : JsonConverter<ActivityNodePresentationPayload>
+{
+    public override ActivityNodePresentationPayload Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        try
+        {
+            var records = JsonSerializer.Deserialize<ActivityNodePresentationRecord[]>(ref reader, options)
+                ?? throw new JsonException("Activity presentation must be an array.");
+            return new(ActivityNodePresentationRecord.NormalizeCollection(records));
+        }
+        catch (ArgumentException exception) { throw new JsonException(exception.Message, exception); }
+    }
+
+    public override void Write(Utf8JsonWriter writer, ActivityNodePresentationPayload value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, value.Records, options);
+}
 
 internal sealed class ActivityLayoutRecordsPayloadJsonConverter : JsonConverter<ActivityLayoutRecordsPayload>
 {
@@ -98,7 +128,10 @@ public sealed record CreateReusableActivityDraftConflictCopy(
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityLayoutRecord> Layout,
-    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
 
 public sealed record ReplaceReusableActivityDraft(
     [property: JsonIgnore] string DraftId,
@@ -106,7 +139,10 @@ public sealed record ReplaceReusableActivityDraft(
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityLayoutRecord> Layout,
-    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
 
 public sealed record DiscardReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand;
 

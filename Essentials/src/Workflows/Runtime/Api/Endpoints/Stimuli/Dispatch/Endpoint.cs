@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Stimuli.Dispatch;
@@ -33,6 +33,11 @@ public sealed class Endpoint(IStimulusDispatchService stimuli) : ApiEndpointWith
             HttpContext.Response.Headers.RetryAfter = Math.Max(1, response.RetryAfterSeconds ?? 1).ToString(CultureInfo.InvariantCulture);
             return EndpointResult.Status(StatusCodes.Status429TooManyRequests, response);
         }
+
+        // Every matched start was refused by its workflow's input contract (#3728) and nothing was resumed: the same
+        // request would be refused again, so it is a client error. The body names each refusal's reason code.
+        if (response.RefusedStartCount > 0 && response.RefusedStartCount == response.Starts.Count && response.ResumedCount == 0)
+            return EndpointResult.Status(StatusCodes.Status400BadRequest, response);
 
         return EndpointResult.Status(StatusCodes.Status200OK, response);
     }
