@@ -1331,6 +1331,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    if (tab === activeInspectorTab) return;
     beginEvidenceNavigation();
     setActiveInspectorTab(tab);
   };

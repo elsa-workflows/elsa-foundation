@@ -214,6 +214,26 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-activity-overview")).toBeNull();
   });
 
+  it("keeps pending exact-execution ancestry when the active Activity tab is activated again", async () => {
+    api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+    api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
+    const pending = deferred<ActivityExecutionInspection>();
+    api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
+      : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+    renderWorkbench("activity", "execution-target");
+    await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
+    const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']");
+    expect(activeTab?.getAttribute("aria-selected")).toBe("true");
+    click(activeTab);
+    expect(container.textContent).toContain("Resolving execution scope");
+    expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
+    pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")).toBeTruthy());
+    expect(container.textContent).not.toContain("interrupted");
+    expect(container.textContent).not.toContain("Resolving execution scope");
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+  });
+
   it.each(["Timeline", "Collapse run details panel", "Restore run details panel", "Back to workflow run canvas"])("makes pending ancestry retryable after %s", async action => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
