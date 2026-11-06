@@ -14632,6 +14632,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"
         },
