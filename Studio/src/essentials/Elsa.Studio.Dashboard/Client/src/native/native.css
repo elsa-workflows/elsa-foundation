@@ -1,4 +1,5 @@
 .named-workspace { min-width: 0; color: var(--studio-text); }
+.named-workspace .studio-page-header :is(h1, h2) { min-width: 0; overflow-wrap: anywhere; }
 .named-editor-content { display: grid; gap: 1rem; min-width: 0; }
 .named-workspace label, .named-dialog label { display: grid; gap: .35rem; min-width: 0; font-weight: 550; }
 .named-workspace input:not([type="checkbox"]), .named-workspace select, .named-workspace textarea, .named-dialog input:not([type="checkbox"]), .named-dialog select { min-width: 0; max-width: 100%; padding: .5rem .65rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); font: inherit; }
@@ -60,8 +61,11 @@
 .named-danger-actions { margin-block-start: 1rem; padding-block-start: 1rem; border-top: 1px solid var(--studio-border); }
 .named-announcement:empty { margin: 0; }
 .named-dialog-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--studio-bg) 75%, transparent); }
-.named-dialog { display: grid; gap: 1rem; width: min(44rem, 100%); min-width: 0; max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.25rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); box-shadow: var(--studio-shadow-sm); }
-.named-dialog-heading { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.named-dialog { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; width: min(44rem, 100%); min-width: 0; max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.25rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); box-shadow: var(--studio-shadow-sm); overflow-wrap: anywhere; }
+.named-dialog > * { min-width: 0; }
+.named-dialog-heading { display: flex; min-width: 0; justify-content: space-between; align-items: start; gap: 1rem; }
+.named-dialog-heading h3 { min-width: 0; overflow-wrap: anywhere; }
+.named-dialog-heading > button { flex-shrink: 0; }
 .named-dialog-heading h3, .named-dialog p { margin: 0; }
 .named-dialog form { display: grid; gap: .75rem; }
 .named-picker-list { display: grid; gap: .75rem; list-style: none; padding: 0; margin: 0; }

@@ -2,7 +2,7 @@
 
 **Status:** Active dependency-ordered delivery plan after owner resume. Native and Weaver implementation is in progress; Copilot/options configuration is selected, usable live access remains unqualified. Completed code tasks are not feature acceptance.
 
-**Checkpoint:** Frozen 23058692a passed Architecture 618/618 and package 005 with 20 archives / 19 native cases. T011/T012 include the local R2 tier/catalog corrections; T042 is supported by that package witness. The R2 frontend passed177/177; subsequent R3 corrections passed182/182. Query/Workflow/Acme suites after R3 passed42/42,39/39,31/31. These checkmarks do not claim a final correction commit, generator/current CI pass, composed UX or live-provider acceptance; native 004 remains failed with its checkbox fix underway. See the [evidence index](evidence/README.md) and [R2 checkpoint](evidence/2026-11-06-review-r2-checkpoint.md).
+**Checkpoint:** Frozen9f62f2782 passed Architecture618/618, maps/tier checks and package006 with20archives/19native cases. Query/Workflow/Acme passed42/42,39/39,31/31; Resource62/62 and Authoring57/57 passed after R3; Dashboard182/182 and rendered browser10/10 pass. Native005 and preliminary diagnostic failures are retained; final committed composed/independent UX, usable live Copilot, current CI/merge/resulting-main gates remain open. See the [evidence index](evidence/README.md).
 
 **Cadence:** ADR 0080 risk-based behavior tests apply. The constitutions do not mandate greenfield TDD; use test-after or test-first where useful, and retain red/green bite-proof for behavior claims before completion. Do not add mirror tests or unrelated runtime runs for this docs checkpoint.
 
@@ -82,7 +82,7 @@
 
 ## Phase 8 — Documentation, review, merge and resulting main
 
-- [ ] T044 Write user/integrator docs for datasets/questions/metrics/sharing/access/coverage/limits/recovery and update owning README/EXTENSION_POINTS.md catalogs.
+- [x] T044 Write user/integrator docs for datasets/questions/metrics/sharing/access/coverage/limits/recovery and update owning README/EXTENSION_POINTS.md catalogs.
 - [ ] T045 Run whole affected suites plus required architecture/map checks and locked restore after graph changes; record counts and bite-proof evidence on the PR.
 - [ ] T046 Run committed actual-host journeys and publish current-head downloadable screenshots/traces via the existing UX evidence path; obtain independent UX acceptance.
 - [ ] T047 Complete independent correctness/standards/spec reviews against the exact PR base/head; fix concrete findings in new commits and repeat under the current review rules.

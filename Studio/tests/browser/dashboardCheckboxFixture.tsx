@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { QueryControls } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
-import { TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
+import { ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
 import type { DashboardApi } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/api";
 import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
@@ -36,4 +37,21 @@ function Fixture() {
     {showTile ? <TileOptionsDialog api={api} tile={tile} onClose={() => setShowTile(false)} onApply={value => { setTile(value); setShowTile(false); }} /> : null}
   </main>;
 }
-createRoot(document.getElementById("root")!).render(<ThemeProvider><Fixture /></ThemeProvider>);
+function LongNameFixture() {
+  const [showShare, setShowShare] = useState(false);
+  const params = new URLSearchParams(window.location.search);
+  const name = params.has("shortName") ? "Operations" : `Metric${"A".repeat(164)}`;
+  const dashboard: DashboardResource = { id: "dashboard", kind: "dashboard", revision: "1", name, description: "A legal dashboard name", ownerId: "viewer", tiles: [],
+    capabilities: { canRead: true, canEdit: true, canCopy: true, canDelete: true, canShare: true }, createdAt: "", updatedAt: "" };
+  const api = { get: async () => dashboard, audience: async () => ({ items: [] }), candidates: async () => ({ items: [] }), share: async () => dashboard } as unknown as DashboardApi;
+  return <main style={{ padding: 24 }}><StudioPage className="named-workspace"><div className="named-editor-content">
+    <StudioPageHeader headingLevel={2} title={name} description="Revision 1" actions={<>
+      <StudioButton variant="primary">Save layout</StudioButton><StudioButton>Copy saved version</StudioButton>
+      <StudioButton onClick={() => setShowShare(true)}>Share</StudioButton><StudioButton>History</StudioButton><StudioButton>Back to dashboards</StudioButton>
+    </>} />
+    <div className="named-definition-meta"><label>Name<input value={name} readOnly /></label><label>Description<textarea value={dashboard.description} readOnly /></label></div>
+    {showShare ? <ShareDialog api={api} resource={dashboard} onClose={() => setShowShare(false)} onSaved={() => setShowShare(false)} /> : null}
+  </div></StudioPage></main>;
+}
+const params = new URLSearchParams(window.location.search);
+createRoot(document.getElementById("root")!).render(<ThemeProvider>{params.has("longName") ? <LongNameFixture /> : <Fixture />}</ThemeProvider>);

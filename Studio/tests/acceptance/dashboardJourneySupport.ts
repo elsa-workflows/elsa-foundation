@@ -97,5 +97,5 @@ export async function signInDashboardReader(page: Page, info: TestInfo) {
   await form.getByLabel(/username/i).fill("dashboard-reader");
   await form.getByLabel(/password/i).fill("Password123!");
   await form.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByRole("heading", { name: "Questions", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Questions", level: 2, exact: true })).toBeVisible({ timeout: 60_000 });
 }

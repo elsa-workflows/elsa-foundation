@@ -192,20 +192,21 @@ async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backe
     await capture(page, info, "live-applied-draft");
   });
   const saved = await monitor.native("explicit-save", async () => {
+    const backendSelection = new URL(page.url()).searchParams.get("backend");
     const pending = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/questions$/.test(response.url()));
     await page.getByRole("button", { name: "Save question", exact: true }).press("Enter");
     const response = await pending; expect(response.ok()).toBe(true);
     const value = await response.json() as Resource;
     expect(value.definition).toEqual(definition); expect(value.ownerId).not.toBe("dashboard-qa-reader");
     expect(response.headers().etag).toBe(`"${value.revision}"`);
-    await expect(page).toHaveURL(new RegExp(`/questions/${value.id}$`));
+    await expect(page).toHaveURL(url => url.pathname === `/questions/${value.id}` && url.searchParams.get("backend") === backendSelection);
     expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${value.id}/audience`)).items).toEqual([]);
     await capture(page, info, "live-saved"); return value;
   });
   expect(monitor.writes).toEqual([{ method: "POST", path: "/_elsa/studio/questions" }]);
   const readback = await monitor.native("reopen-saved-definition", async () => {
     await page.reload();
-    await expect(page.getByRole("heading", { name: saved.name, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: saved.name, level: 2, exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toHaveValue("bar");
     const value = await backend.api<Resource>(`/_elsa/studio/questions/${saved.id}`);
     expect(value.revision).toBe(saved.revision); expect(value.definition).toEqual(definition);
@@ -231,7 +232,7 @@ async function savedAppearances(page: Page, info: TestInfo, capture: Capture, ba
     for (const mode of ["light", "dark"] as const) {
       await page.evaluate(value => { localStorage.setItem("elsa-studio-theme-mode", value); }, mode);
       await page.reload();
-      await expect(page.getByRole("heading", { name: question.name, exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: question.name, level: 2, exact: true })).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
       await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toHaveValue("bar");
       for (const narrow of [false, true]) {
