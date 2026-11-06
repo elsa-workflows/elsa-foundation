@@ -18,6 +18,8 @@ Persist requirements, not permission grants. Current decisions and authorization
 
 ## Core values
 
+All values below, including admission origins/candidates and the reconciliation wrapper, belong to Activities.Design.Core. Generic admission/owner ports live there too. Persistence.Core consumes them for store-backed authorization/CQS; the Core event must never reference Persistence.Core.
+
 | Value | Fields / invariants |
 |---|---|
 | `CatalogDisclosureRequirement` | Representation version, explicit kind, immutable policy list. Public has zero policies; Protected has a nonempty bounded conjunction. Missing/unknown/malformed values are unavailable. |
@@ -88,11 +90,17 @@ Snapshot 2 must be owner-produced and bound by the normal recorded disclosure pr
 
 The initial bound is **256 non-public or undecidable resources per read**; exceeding it returns unavailable, never truncated successful totals. Public resources do not consume the bound. Cursor binding includes trusted current authority, snapshot/filter and exact allowed-resource/owner-revision fingerprint; access changes invalidate the continuation. No positive authorization cache spans requests or assistant passes. A pass ends at the next write, model/provider call or tool execution, following [existing semantics](../../Extensions/Agent/src/Elsa.Agent/Services/AgentDisclosureHistory.cs#L192).
 
+## Foreign receipt families
+
+ActivitiesDesign format-2 atomic/fork material is distinct from publication receipts in PublishingLedger. ActivityPublicationReceipt retains its existing JSON members/stamp "1"; PublishingSnapshotReview stays flat/unchanged. Use existing opaque hash fields with an explicitly domain-separated security-bound preimage; update generation, all early replay paths, direct receipt reads and authoritative recomputation together. No foreign-family migration or old standalone ledger-refusal claim follows from the catalog stamp.
+
+Applied receipts point to exact Outcome definition/version IDs for current canonical requirement/union authorization. Non-applied diagnostics require the original exact draft/revision/head/review-bound dependency material; missing/changed material is unavailable rather than authorized against a newer draft. Old-token/hash mismatches conflict without writes/fallback.
+
 ## Fresh-store boundary
 
 ActivitiesDesign format **2.0.0 is mandatory**. Under accepted [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md#L254), regenerate **only the four ActivitiesDesign Initial migrations/snapshots** using the normal module-context filter. Preserve old stores unchanged; use new owned stores for qualification.
 
-No in-place or rolling preview-store upgrade, v1 receipt/import compatibility, finalization bypass or CAS override is included. Old schema/receipt formats fail closed. Within a supported 2.0 store, known Public classification requires exact trusted producer/inventory evidence; unknown/custom material stays Unspecified. Existing global/code-owned compatibility is qualified by explicit inventory on fresh stores, not by trusting null tenant or source strings.
+No in-place or rolling preview-store upgrade, ActivitiesDesign-v1 receipt/import compatibility, finalization bypass or CAS override is included. Unsupported ActivitiesDesign schema/atomic-receipt formats fail closed; unchanged foreign receipt families retain their own current format and still require current projection authorization. Within a supported 2.0 store, known Public classification requires exact trusted producer/inventory evidence; unknown/custom material stays Unspecified. Existing global/code-owned compatibility is qualified by explicit inventory on fresh stores, not by trusting null tenant or source strings.
 
 ## Required model witnesses
 
@@ -101,4 +109,5 @@ No in-place or rolling preview-store upgrade, v1 receipt/import compatibility, f
 - Two scopes/two aliases of one producer type cannot exchange origins; unsupported transient composition refuses.
 - Public version 1 plus private version 2/header remains private through all header-bearing routes; a new Public provider wrapper of a private child inherits protection without requiring a fork.
 - Long protected ID sharing a 256-character prefix with a Public ID cannot alias; uncertified legacy history refuses even if its prefix resolves.
+- Applied and non-applied publication receipts reauthorize exact original material; changed/deleted drafts and old review tokens cannot expose stale private diagnostics.
 - Fresh SQLite reopen retains requirement/lineage; four providers use format 2.0; old stores/receipts refuse without mutation.
