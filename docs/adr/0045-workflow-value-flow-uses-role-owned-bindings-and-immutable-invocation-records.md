@@ -2,6 +2,11 @@
 
 Status: accepted (2026-07-16; ratified through an architect grilling session)
 
+**D-2 amendment proposed (2026-11-05; initiative [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)).**
+The [proposed execution contract](#proposed-d-2-execution-contract) below refines §3–§6. Its status is **proposed**,
+separately from the accepted decision above. It records Sipke's directions for review, not collective agreement or
+implementation.
+
 Elsa's canonical workflow and activity model will not use `IMemoryBlock`,
 `IMemoryBlockReference`, a memory register, or a universal runtime value-reference interface.
 Workflow requests, activity inputs, activity results, variables, private activity state, and resume
@@ -305,6 +310,193 @@ No obsolete forwarding shim remains in canonical packages. If an Elsa 3 construc
 the importer emits a precise migration diagnostic. Any unavoidable temporary execution adapter lives
 in an explicitly named compatibility module with a retirement plan, consistent with constitution
 §E2.7.
+
+## Proposed D-2 execution contract
+
+**Status: proposed (2026-11-05).** If accepted, this section supersedes conflicting execution/recovery wording in
+§3–§6, including the issue #977 assertion that re-materializing inputs on redelivery is deterministic. It does not
+choose the script completion API or adopt the other open ADR amendments. Their authors must reconcile shared text
+before final agreement.
+
+### Basis and scope
+
+The source directions are Sipke's [25 October follow-ups, points 1–3 and 6](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6393239500),
+his [consolidated execution and lifecycle positions](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6503893983),
+the [confirmed link between the effect-boundary guarantee and this mechanism](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6503654162),
+and his [retained optional effect metadata](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6643430548).
+The [explicit input-binding interop direction](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6643396876)
+also requires covering host-exposed properties, methods and adapters, not only registered functions.
+
+D-3 supplies the evaluation transaction. Variable versions, conflicts and resolution remain in
+[ADR 0092's proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3411); background capability admission
+remains in [ADR 0093's proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3412). Outcome selection remains
+subject to the [route-by-return reframe](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464).
+These dependencies are not accepted by being referenced here.
+
+### 1. Recover durable progress; distinguish retry from new work
+
+Recovery continues from the latest durably committed state. It does not reconstruct a run by replaying all its
+history, and never runs a durably completed invocation again because continuation scheduling was interrupted.
+Code in an unflushed segment may run again under the selected persistence mode. Its time, randomness and other
+unrecorded results need not be identical. A logical transition in memory is not yet a durable recovery point.
+
+| Action | Identity and values |
+|---|---|
+| Recover/redeliver unfinished work | Retain recorded logical invocation/evaluation identities. Reuse successfully committed evaluation results; an unfinished evaluation may run again. |
+| Retry the same invocation | Retain `InvocationId`, applicable operation keys and committed inputs. Create a fresh `AttemptId`, activity object and DI scope. |
+| Deliberate re-execution | Create a new invocation and evaluate fresh inputs, including when starting midway. Preserve earlier history and record the relationship. |
+| Resume a suspended invocation | Retain committed inputs, private state and read dependencies. Supply the separately identified trigger to a new resume evaluation with a fresh activity object and scope. |
+
+An action called retry must not silently mean re-execution with current values. Replacing committed inputs requires
+an explicit refresh contract recording the old/new snapshot relationship, new evaluation identity, dependencies and
+effect/idempotency consequences. "The body has not run yet" is insufficient: input evaluation may already have
+external effects. Recovery does not reacquire a recorded input merely to obtain a newer value.
+
+Objects, services and open resources remain local to an attempt. Restore supported data under its pinned contract,
+reacquire services and reopen resources from recoverable references. This preserves neither CLR instance identity
+nor a snapshot of a resource that reloads current external state. Explicit transient execution keeps its own
+restrictions; using .NET interop alone does not make the workflow transient.
+
+Recorded snapshots and retained completions preserve protection metadata. Secret references resolve at activation
+under their declared contract; moving execution to a worker must not turn secret material into an ordinary persisted
+snapshot. Optional inspection-value retention is separate from data required for recovery.
+
+### 2. Identify and record each input-materialization pass
+
+An input-materialization pass is the recovery unit, rather than each host call. Its record identifies the workflow
+execution, logical invocation, evaluation kind and cause, and applicable pinned binding/conversion contracts.
+A later loop check or distinct resume/notification is a new logical evaluation. Redelivery of the same cause retains
+the identity; a timestamp, process-local counter or fresh random value is not its recovery key. The record layout
+and identity encoding belong to the implementing specs, not a new public API selected here.
+
+Expose the stable logical evaluation identity to authorized host code for idempotency support. Multiple operations
+within a pass need distinguishable, repeatable operation keys through the host/author contract. An attempt ID can
+identify physical execution in diagnostics, but is not the stable key for deduplicating a logical operation.
+
+For an evaluation that may have external effects:
+
+1. Durably record its logical identity and owning cause, with enough state to rediscover unfinished work, **before**
+   entering potentially effectful evaluation code.
+2. Evaluate and validate the bindings. Record actual Elsa value reads, versions and protection requirements. Input
+   bindings cannot stage Elsa workflow-state writes; external method effects remain possible.
+3. Durably record the successful input snapshot and read/protection dependencies **before** activation or another
+   phase consumes that result. Reuse it on recovery. Failure/cancellation records the applicable recovery fact,
+   without publishing a partially materialized successful snapshot.
+
+The before/after commits bracket the whole possibly effectful evaluation, not every call inside it. There is no
+per-call journal or partial-call replay. An effect can succeed before a crash prevents the result commit; recovery
+may repeat the unfinished pass and its calls. Elsa cannot promise exactly-once external effects, roll back a shared
+host object, or preserve locally generated GUIDs/payloads from an unrecorded pass. Stable identity supports an
+external idempotency contract; it does not establish one by itself.
+
+### 3. Resolve durability for the whole evaluation
+
+Retain optional host-declared effect metadata for diagnostics/durability. Missing or unknown metadata means possibly
+effectful. Resolve the effective classification and its versioned contract for the applicable evaluation; neither
+read-only Elsa access nor the activity body's `ReplaySafe` marker proves that its inputs are repeatable. Getters,
+constructors, adapters, registered functions and opted-in .NET methods can have effects. An unclassified call path
+takes the conservative boundary.
+
+A declared repeatable evaluation may be batched under the selected persistence mode. The declaration covers its
+whole phase and is a host/author responsibility, not proof generated by Elsa. Time/randomness alone do not require
+identical unrecorded results. Effect metadata never prohibits, skips or deduplicates calls; ordinary capability,
+access and value-contract validation still applies.
+
+Input evaluation and activity activation/body are separate assessments. A body marker cannot waive input boundaries.
+A repeatable input pass may share its successful-input commit with the mandatory claim before an external activity
+activation. A successful input commit can also establish the next phase's before boundary when it records the
+required identity/recovery state. Sharing a physical commit removes redundant I/O, not a recovery guarantee.
+
+Apply the before/after rule to a possibly effectful activity evaluation too: persist identity and inputs before
+activation/user code, then persist the successful transition before advancing dependent work. Fault/cancellation
+persists its applicable recovery record instead. Effectful constructors/hydration belong inside that activation
+boundary. Other evaluations may defer logical transitions under
+[ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment).
+Do not hold a database transaction open while user code runs. Fencing guards workflow-state acceptance; it cannot
+prevent an obsolete worker's external effects.
+
+### 4. Record structural evaluations rather than assuming deterministic re-reads
+
+Each invoke, resume or structural child-notification evaluation has its own variable session and logical state
+transaction. A successful child-fault handler may commit recovery work: receiving a fault notification does not
+itself mean the handler failed. Fault/cancellation discards the evaluation's pending successful changes; earlier
+committed evaluations and child work remain intact.
+
+A loop/composite may opt into re-materializing inputs for a **new** evaluation to observe committed body changes.
+Keep the invocation's entry snapshot immutable. Associate each new snapshot/dependencies with its evaluation
+identity and triggering child completion/fault, notification or resume cause. Recovery reuses that evaluation's
+recorded snapshot instead of reading whatever frame is now current. Before its result is recorded, the classification
+and durability rules above apply.
+
+This replaces #977's premise that transient re-reads reproduce the same value on redelivery. Clock, randomness,
+host calls and intervening writes invalidate that premise. Hydrating a fresh CLR object from a snapshot must not
+secretly evaluate bindings again. Publication/validation probes must not execute effectful bindings; a runtime probe
+must not construct a throwaway activity just to discover a contract flag. Audit all evaluation sites, including
+structural reactivation and inline execution, for duplicate evaluation/activation. This draft does not claim that
+audit or fixes are complete.
+
+### 5. Accept one complete transition
+
+A successful evaluation atomically applies its permitted engine-owned changes: variables, workflow outputs,
+correlation ID, instance name, private state, result and routing selection, with associated continuation work.
+Apply step writes before captures, so captures win on overlap. Validate contracts, protection, versions, scope and
+fencing before applying any change. Fault/cancellation discards pending successful changes; its incident/cancellation
+record is a separate recovery fact. External effects are outside the transaction. Correlation changes do not rebind
+existing bookmarks.
+
+Record unspecified, explicitly empty and named outcome selections distinctly, including multiple names where the
+node permits them. Record the complete selection with the result; ordinary business data never selects a route.
+The completion API and routing/join rules belong to S-3.
+
+For inline execution, remove scheduler-created interleaving between input materialization, body execution and
+transition acceptance for that evaluation. Preserve claim, fencing and required durability boundaries without a
+database transaction around user code. Background concurrency still uses guarded acceptance and the same read/write
+rules.
+
+An unaccepted result is not a committed completion. If a body succeeded but finalization conflicted, ADR 0092's
+proposed resolution may accept its retained completion without rerunning the body: revalidate and apply the complete
+transition atomically and duplicate-safely, preserving conflict/resolution history. While resolution is available,
+retain the necessary write intents, captures, output/routing/private-state changes and dependencies under their
+protection rules. Optional history-value capture must not delete required operational data. A body that faulted
+halfway through is not eligible merely because it produced some data.
+
+### 6. Publish background admissions with preceding state
+
+Use [ADR 0020's admission rule](0020-runtime-checkpoint-commit-post-commit-work.md#proposed-d-2-amendment) for atomic
+visibility and [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment) for
+bounded flushing. A worker cannot claim work ahead of its required durable state and pinned inputs. Lost wake-up
+notifications cannot lose committed work. This is not a frozen view of every variable at admission: later worker
+reads may observe later eligible commits, with stale read-modify-write checks still applied. Use the same causal and
+queue-precedence rules across providers. Independent workers may finish in different orders; the coordinator
+establishes durable commit order rather than promising a winner among unordered branches.
+
+### Required evidence and remaining design work
+
+This proposal adds no runtime implementation or acceptance evidence. Implementing specs must cover these cases with
+crash/redelivery tests and provider proofs appropriate to each path:
+
+| Case | Required observation |
+|---|---|
+| Crash before/after effectful inputs | No call before identity commit; repetition retains the logical key before result commit; no re-evaluation after result commit. |
+| Two external operations in one pass | Distinct stable operation keys; no implied per-call skipping or exactly-once effects. |
+| Repeatable body, effectful/unknown input | Body marker cannot remove input boundaries; missing metadata takes the conservative path. |
+| Retry, re-execution, refresh and resume | Stable versus new identities/snapshots remain explicit; earlier dependencies and history are retained. |
+| Structural redelivery and later iteration | Same cause reuses its recorded snapshot; new evaluation gets a new identity and eligible current values; no duplicate probe. |
+| Fault/cancel after earlier successful evaluations | Discard only current pending successful changes, not earlier progress or external effects. |
+| Completion committed, continuation interrupted | Recover/deduplicate continuation without rerunning the completed body. |
+| Body succeeded, finalization conflicted | No partial state; explicit guarded acceptance of retained completion without body rerun, subject to ADR 0092 agreement. |
+| Staged background work, lost notification | No pre-commit claim; atomic state/admission publication; committed work remains discoverable. |
+| Long drain or wait for background results | Enforce a configured finite dispatch bound and flush before waiting without weakening atomicity. |
+| Persistence modes and protection | Mandatory effect boundaries survive every mode; pure segments may repeat; recovery data preserves protection and secret-reference contracts. |
+
+S-1 must audit expression/inline evaluation sites and the input boundary. S-7/S-10 must align evaluation transactions,
+dependencies, retry/refresh and retained-completion resolution. S-11 must align admission/claim visibility and provider
+precedence. Concrete record layouts, operation-key API, finite dispatch bound and checkpoint integration belong to
+those specs. Return gaps to this ADR. #3052's all-specs-defined-before-implementation agreement still applies.
+
+Optional effect metadata remains Sipke's position and still differs from the no-metadata-for-now proposal on
+#3384/#3390. This draft does not settle that disagreement. Reconcile input-binding interop, route-by-return and the
+pending ADR 0092/0093 text before marking shared clauses agreed. No new constitutional gate or exception is proposed.
 
 ## Reconciliation with existing work units
 

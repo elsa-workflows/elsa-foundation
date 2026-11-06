@@ -4,6 +4,41 @@
 
 Status: accepted (2026-07-20; ratified with orchestrator approval. Resolves all in-ADR open questions — R1 contract-level SideEffectProfile with fail-safe External default, R2 marker-conditional pre-activation flush (spec-095 FR-019 amendment ships with WU-marker), R3 cadence/inspection-granularity read-model projection, R4 ActivityCancelled confirmed mandatory, R5 per-workflow authored cadence over host default — see Ratification resolutions and the sequenced Follow-up.)
 
+## Proposed D-2 amendment
+
+**Status: proposed (2026-11-05), part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052).**
+If accepted, this refines the recovery and R1/R2 boundary wording below. The canonical execution contract is
+[ADR 0045's proposed D-2 amendment](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#proposed-d-2-execution-contract).
+The accepted status above does not ratify this proposal.
+
+- Recovery continues from durable state. Unflushed work may execute again; a durably completed invocation does not.
+  The historical phrases "durable-once" and "idempotency keys make the redelivered span safe" do not guarantee
+  exactly-once external effects. A call can succeed before its result is committed and may then repeat.
+- Assess input materialization separately from activity activation/body. A body's `ReplaySafe` declaration does not
+  classify its inputs, adapters or opted-in host calls. Before a possibly effectful evaluation, flush its logical
+  identity and recovery cause. Flush successful results/read dependencies before advancing; on fault/cancellation
+  persist the applicable recovery record. The before/after boundaries for a possibly effectful activity evaluation
+  are mandatory too. No persistence mode can defer or skip those boundaries.
+- Retain optional effect metadata for diagnostics/durability, with unknown effects conservative and calls never
+  prohibited, skipped or deduplicated on that basis. Declared repeatable evaluations may be batched. Adjacent
+  boundaries may share a physical commit that establishes every required recovery fact. A logical evaluation
+  transaction does not itself require one physical flush per callback.
+- Mode names/default remain [ADR 0080 D2's](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default)
+  `Durable`, `Balanced` (default) and `Ephemeral`. This proposal extends mandatory-boundary handling, not the historical
+  `Immediate`/`Coalesced` configuration. An effect boundary can create a durable record in an otherwise ephemeral
+  run; the no-record terminal exception still requires that the run has never been persisted.
+- Background admissions may be staged with preceding state and batched, but become claimable only after atomic
+  durable publication under [ADR 0020](0020-runtime-checkpoint-commit-post-commit-work.md#proposed-d-2-amendment).
+  Flush before waiting for their results and enforce a configured finite dispatch delay in long drains. A boundary
+  required for an effect or another mandatory reason still flushes immediately. Batching does not weaken those
+  boundaries or permit a visible enqueue before state commit.
+
+Implementing specs must reconcile effective evaluation classification with the existing activity marker, pin its
+applicable contract, define the finite admission delay and prove crash behavior across persistence modes. This is
+documentation only; current policy/handler behavior is not claimed to meet this proposal.
+
+## Earlier decision and ratification history
+
 Runtime checkpoint durability will be **policy-driven, not per-activity-mandatory**. Checkpoints stay *mandatory* only at **semantic boundaries** — suspend/bookmark, external side-effect, workflow finish/fault/cancel, and the recovery and inspection-integrity points — and become **relaxable** between those boundaries, where a configurable cadence ("commit every N activities / every T milliseconds") decides whether an intermediate checkpoint is flushed immediately, deferred, or skipped. Recovery is replay from the last committed checkpoint; the existing per-work-item idempotency keys make the redelivered span safe. Cadence is **configurable per workflow (or per section)**, because for long-running human-in-the-loop workflows per-activity durability is often the right default, while hot loops and compute pipelines want a relaxed cadence. This is the second of two independent dials on the runtime's per-activity cost; the first is burst execution ([ADR 0031](0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md)). It extends the checkpoint-commit contract ([ADR 0020](0020-runtime-checkpoint-commit-post-commit-work.md)) and is orthogonal to the pipeline spine ([ADR 0029](0029-runtime-execution-flows-through-the-pipelines.md)).
 
 **The problem this fixes.** The checkpoint model is already designed for policy-driven cadence — `RuntimeCheckpoint`'s own summary reads "Named runtime boundary describing what changed. **Persistence policy decides when it is flushed**" (`src/essentials/Workflows/Runtime/Core/Models/RuntimeCheckpoint.cs`), and the decision type already carries three modes: `RuntimeCheckpointPersistenceMode.{Immediate, Deferred, Skip}`. But the *only* registered policy is `ImmediateRuntimeCheckpointPersistencePolicy`, whose `DecideAsync` returns `Immediate` unconditionally. So in practice every checkpoint flushes immediately, and the handlers reinforce this by stamping their completion checkpoints `CheckpointRequirement = Mandatory` (the commit builders in `WorkflowInvokeActivitySchedulerWorkHandler` and `WorkflowParentActivityCompletionSchedulerWorkHandler`, and `ActivityFaultIncidentRecorder`). `RuntimeCheckpointCommitter.CommitAsync` then enforces that a `Mandatory` checkpoint *cannot* be skipped (`IsMandatoryCheckpoint` → `throw`). The net effect: the `Deferred` mode is defined but unreachable, and durability cadence is hard-wired to per-activity-immediate. That is the correct default for durability-critical workflows and a large, unavoidable cost for hot loops — the same cost [ADR 0031](0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) quantifies (1–3 mandatory commits per activity). Cadence and burst are complementary: burst removes the *hop* cost, cadence removes the *commit* cost; neither subsumes the other.
