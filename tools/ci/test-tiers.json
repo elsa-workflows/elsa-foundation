@@ -829,7 +829,8 @@
           "Essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
           "Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
           "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
-          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj"
+          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
+          "Essentials/tests/Workflows/Testing/Tests/Elsa.Workflows.Testing.Tests.csproj"
         ]
       },
       {
