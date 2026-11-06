@@ -7,6 +7,7 @@
     <Project Path="Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
     <Project Path="Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+    <Project Path="Extensions/Agent/src/Dashboard/Elsa.Agent.Dashboard.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/src/Persistence/">
     <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
@@ -878,7 +879,7 @@
   <Folder Name="/Extensions/Examples/src/Acme.Processing/">
     <Project Path="Extensions/Examples/src/Acme.Processing/Core/Acme.Processing.Core.csproj" />
   </Folder>
-  <Folder Name="/Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/">
+  <Folder Name="/Essentials/tests/Studio/Dashboard/Persistence/">
     <Project Path="Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Examples/src/Acme.Processing/Module/">
@@ -886,9 +887,6 @@
   </Folder>
   <Folder Name="/Extensions/Examples/tests/">
     <Project Path="Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Extensions/Agent/src/Dashboard/">
-    <Project Path="Extensions/Agent/src/Dashboard/Elsa.Agent.Dashboard.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/Dashboard/">
     <Project Path="Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj" />

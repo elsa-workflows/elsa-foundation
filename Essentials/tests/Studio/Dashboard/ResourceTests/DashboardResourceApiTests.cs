@@ -126,6 +126,36 @@ public sealed class DashboardResourceApiTests
     }
 
     [Fact]
+    public async Task Membership_only_role_audience_uses_current_active_tenant_membership()
+    {
+        await using var host = await DashboardResourceApiHost.CreateAsync();
+        var question = await host.CreateQuestionAsync();
+        using (var shared = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/questions/{question.Id}/audience", "owner",
+            new DashboardAudiencePage([new("role", "operators", "viewer")]), question.Revision))
+            shared.EnsureSuccessStatusCode();
+        var users = (IUserStore)host.Directory;
+        var viewer = (await users.FindAsync("tenant-a", "viewer"))!;
+        await users.SaveAsync(viewer with { RoleIds = new HashSet<string>() });
+        var membership = new TenantMembershipRecord("tenant-a", "viewer", TenantMembershipStatus.Active,
+            new HashSet<string>(["operators"], StringComparer.Ordinal), new HashSet<string>());
+        await host.Directory.SaveAsync(membership);
+        using (var allowed = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer"))
+            allowed.EnsureSuccessStatusCode();
+        await host.Directory.SaveAsync(membership with { Status = TenantMembershipStatus.Suspended });
+        using (var suspended = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer"))
+            Assert.Equal(HttpStatusCode.NotFound, suspended.StatusCode);
+        await host.Directory.SaveAsync(membership);
+        host.Directory.RemoveMembership("tenant-a", "viewer");
+        // A role claim in the existing normalized fixture cannot revive a removed membership.
+        using (var removed = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer"))
+            Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
+        await host.Directory.SaveAsync(membership);
+        host.Directory.RemoveRole("tenant-a", "operators");
+        using var missingRole = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer");
+        Assert.Equal(HttpStatusCode.NotFound, missingRole.StatusCode);
+    }
+
+    [Fact]
     public async Task Read_only_viewer_cannot_edit_share_or_delete_and_copy_requires_create_permission()
     {
         await using var host = await DashboardResourceApiHost.CreateAsync();
@@ -311,6 +341,7 @@ internal sealed class DashboardResourceApiHost : IAsyncDisposable
                 services.AddFoundationIdentityAbstractions(options =>
                     options.NormalizedAuthenticationTypes = new HashSet<string>([DashboardAuthenticationFixture.SchemeName], StringComparer.Ordinal));
                 services.AddSingleton<IUserStore>(directory); services.AddSingleton<IRoleStore>(directory);
+                services.AddSingleton<ITenantMembershipStore>(directory);
                 services.AddSingleton<IPagedUserStore>(directory); services.AddSingleton<IPagedRoleStore>(directory);
                 services.AddScoped<IPermissionResourceHandler, DashboardResourceDenyFixture>();
                 services.AddSingleton<IDashboardDefinitionValidator>(validator);
@@ -433,10 +464,11 @@ internal sealed class DashboardResourceDenyFixture(IHttpContextAccessor accessor
             ? PermissionEvaluationResult.Denied("Fixture denied current resource access.") : null);
 }
 
-internal sealed class DashboardIdentityFixture : IUserStore, IRoleStore, IPagedUserStore, IPagedRoleStore
+internal sealed class DashboardIdentityFixture : IUserStore, IRoleStore, ITenantMembershipStore, IPagedUserStore, IPagedRoleStore
 {
     private readonly ConcurrentDictionary<(string Tenant, string Id), UserRecord> users = new();
     private readonly ConcurrentDictionary<(string Tenant, string Id), RoleRecord> roles = new();
+    private readonly ConcurrentDictionary<(string Tenant, string Id), TenantMembershipRecord> memberships = new();
     public DashboardIdentityFixture()
     {
         foreach (var tenant in new[] { "tenant-a", "tenant-b" })
@@ -447,6 +479,11 @@ internal sealed class DashboardIdentityFixture : IUserStore, IRoleStore, IPagedU
         }
     }
     public void RemoveRole(string tenant, string id) => roles.TryRemove((tenant, id), out _);
+    public void RemoveMembership(string tenant, string id) => memberships.TryRemove((tenant, id), out _);
+    ValueTask<TenantMembershipRecord?> ITenantMembershipStore.FindAsync(string tenantId, string userId, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(memberships.GetValueOrDefault((tenantId, userId)));
+    public ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default)
+    { memberships[(membership.TenantId, membership.UserId)] = membership; return ValueTask.CompletedTask; }
     public void SeedCandidates()
     {
         for (var index = 0; index < 205; index++)

@@ -1,6 +1,6 @@
 # Dashboard and saved-question resource contract
 
-**Status: DRAFT — design proposal, not an implemented API, architecture agreement or qualification evidence.** This contract serves [#3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604) and the [feature specification](../spec.md). Names, paths and proposed bounds require design review. The owner confirmed separate Dashboards with Mine and Shared with me alongside unchanged Home on 6 November 2026. AI-provider selection is unresolved and does not govern ordinary resource persistence.
+**Status:** Resource requirements for the implementation under review in #3913; final qualification and delivery acceptance remain open. This contract serves [#3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604) and the [feature specification](../spec.md). Source/public API files define implemented names and bounds. The owner confirmed separate Dashboards with Mine and Shared with me alongside unchanged Home on 6 November 2026. The owner selected the existing Copilot SDK adapter through backend options/configuration; ordinary resource persistence and refresh are native operations.
 
 ## Ownership and existing boundaries
 

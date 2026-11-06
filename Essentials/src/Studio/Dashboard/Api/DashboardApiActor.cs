@@ -32,8 +32,13 @@ internal static class DashboardApiActor
             var user = await users.FindAsync(tenant, userId, context.RequestAborted);
             if (user is null || user.Id != userId || user.TenantId != tenant || user.Status != UserStatus.Active)
                 throw new DashboardResourceException("denied", "The current user is unavailable or inactive.");
+            var roleIds = new HashSet<string>(user.RoleIds, StringComparer.Ordinal);
+            if (context.RequestServices.GetService<ITenantMembershipStore>() is { } memberships &&
+                await memberships.FindAsync(tenant, userId, context.RequestAborted) is { Status: TenantMembershipStatus.Active } membership &&
+                membership.TenantId == tenant && membership.UserId == userId)
+                roleIds.UnionWith(membership.RoleIds);
             if (context.RequestServices.GetService<IRoleStore>() is { } roleStore)
-                foreach (var roleId in user.RoleIds)
+                foreach (var roleId in roleIds)
                 {
                     var role = await roleStore.FindAsync(tenant, roleId, context.RequestAborted);
                     if (role?.Id == roleId && role.TenantId == tenant) roles.Add(roleId);

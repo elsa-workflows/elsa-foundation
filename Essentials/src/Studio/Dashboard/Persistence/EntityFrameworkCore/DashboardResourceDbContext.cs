@@ -37,6 +37,7 @@ public sealed class DashboardResourceScopeRow
 {
     public string Id { get; set; } = "";
     public string Revision { get; set; } = "";
+    public string SchemaVersion { get; set; } = DashboardResourcesEfModule.SchemaVersion;
 }
 
 public sealed class DashboardResourceOperationRow
@@ -44,6 +45,7 @@ public sealed class DashboardResourceOperationRow
     public string Id { get; set; } = "";
     public string ResourceKey { get; set; } = "";
     public string Fingerprint { get; set; } = "";
+    public string SchemaVersion { get; set; } = DashboardResourcesEfModule.SchemaVersion;
 }
 
 public sealed class DashboardResourcesSqliteDbContext(DbContextOptions<DashboardResourcesSqliteDbContext> options) : DashboardResourceDbContext(options)

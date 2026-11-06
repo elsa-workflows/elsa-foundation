@@ -106,7 +106,14 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.Dashb
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_studio_dashboard_operations", (string)null);
                 });
@@ -173,7 +180,14 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.Dashb
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_studio_dashboard_scopes", (string)null);
                 });

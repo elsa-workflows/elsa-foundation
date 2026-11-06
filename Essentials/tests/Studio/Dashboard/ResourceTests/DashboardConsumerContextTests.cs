@@ -207,17 +207,20 @@ public sealed class UnconfiguredConsumerContext(DbContextOptions<UnconfiguredCon
 // An application can instead scaffold the combined installed model with ordinary EF tooling.
 [DbContext(typeof(DashboardConsumerContext))]
 [Migration("20261106120000_ConsumerDashboard")]
-public sealed class ConsumerDashboardMigration : Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial
+public sealed class ConsumerDashboardMigration : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        base.Up(migrationBuilder);
+        foreach (var operation in new Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial { ActiveProvider = ActiveProvider ?? EfProviderNames.Sqlite }.UpOperations)
+            migrationBuilder.Operations.Add(operation);
         migrationBuilder.CreateTable("consumer_notes", table => new {
-            Id = table.Column<string>(nullable: false), Text = table.Column<string>(nullable: false), SchemaVersion = table.Column<string>(nullable: false)
+            Id = table.Column<string>(type: "TEXT", nullable: false), Text = table.Column<string>(type: "TEXT", nullable: false), SchemaVersion = table.Column<string>(type: "TEXT", nullable: false)
         }, constraints: table => table.PrimaryKey("PK_consumer_notes", row => row.Id));
     }
     protected override void Down(MigrationBuilder migrationBuilder)
-    { migrationBuilder.DropTable("consumer_notes"); base.Down(migrationBuilder); }
-    protected override void BuildTargetModel(ModelBuilder modelBuilder)
-    { base.BuildTargetModel(modelBuilder); DashboardConsumerContext.OwnModel(modelBuilder); }
+    {
+        migrationBuilder.DropTable("consumer_notes");
+        foreach (var operation in new Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial { ActiveProvider = ActiveProvider ?? EfProviderNames.Sqlite }.DownOperations)
+            migrationBuilder.Operations.Add(operation);
+    }
 }

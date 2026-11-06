@@ -1,6 +1,6 @@
 # Query and module contribution contract
 
-**Status:** Concrete draft for architecture/spec review; no implementation, approved API names or qualification is claimed. All new contract/type/event names in this document are proposals. [The specification](../spec.md) governs product requirements; [the data inventory](../research-data.md) records existing source limitations.
+**Status:** Query requirements and design rationale for the implementation under review in #3913. The source and public API files define the implemented names; proposed future seams below are not runtime contracts. Native, live-provider and composed Studio qualification remain separate evidence. [The specification](../spec.md) governs product requirements; [the data inventory](../research-data.md) records existing source limitations.
 
 ## Ownership and dispatch
 
@@ -137,7 +137,7 @@ The existing history store's date filter uses effective update/completion/start/
 
 ## Authorization seam and evaluation order
 
-The current record-inspection contract `IActivityInspectionContextAsync` lives in the Runtime API implementation project. A new Dashboard satellite must not reference that implementation project or copy its permission checks. A necessary proposal for review is a minimal Runtime-owned `.Core` authorization seam/lift preserving the current request-scoped fail-closed semantics, separate structure/value/payload grants, canonical permission evaluation, trusted subject/tenant and cancellation. Its exact public type/package name and migration are intentionally unapproved. The existing HTTP adapter remains the semantic owner, and existing inspection/denial tests must continue to prove the same behavior. No allow-all development adapter becomes a production fallback.
+The record-inspection contract `IActivityInspectionContextAsync` is now in the Runtime-owned `Elsa.Workflows.Runtime.Inspection.Core` package. The Dashboard satellite references that contract without copying Runtime API permission checks. The lift preserves request-scoped fail-closed semantics, separate structure/value/payload grants, canonical permission evaluation, trusted subject/tenant and cancellation. The existing HTTP adapter remains the semantic owner, and existing inspection/denial tests must continue to prove the same behavior. No allow-all development adapter becomes a production fallback.
 
 Design already exposes `IWorkflowDefinitionAuthorizer.CanReadAsync` in `Elsa.Workflows.Design.Core`; its documented scope includes the owning organization. Current-folder enrichment can combine this with `IWorkflowLibraryStore` through owning `.Core` contracts. A known denial/unavailable resource is not an infrastructure success; an authorization infrastructure failure remains a retriable failure wrapped in the owning domain exception. No Runtime → Design reference is introduced.
 
@@ -176,17 +176,15 @@ Drill rechecks definition/source access and compatibility, reapplies the origina
 
 Exports are unavailable unless the source declares a separately bounded implementation with the same current record/field/aggregate authorization. No browser export of privileged author results, unbounded “all records” fallback or undeclared spreadsheet/script query is implied.
 
-## Retained evidence admission to Weaver
+## Result disclosure and Weaver context
 
-A proposed opaque, bounded evidence handle identifies originating viewer/tenant, exact question/query and source/schema/metric revisions, resolved periods, observed time and the fields/facts actually disclosed. It is disclosure provenance, not a transferable capability or query cache. Possessing the handle never authorizes replay.
+The implemented authoring profile sends currently admitted dataset declarations and declarative definitions/proposals to Weaver. It sends no query rows, computed aggregates or result previews to the provider. The preview tool validates a proposal; Studio executes and renders its protected preview through the native query API. Retained proposals with a non-null preview are rejected. See the [implemented Weaver contract](weaver.md#provider-disclosure-profile).
 
-An optional future/implemented owner verification path can use proposed named Sequential event `DashboardQueryEvidenceReadmitting`, single aggregator `ReadmitDashboardQueryEvidence` and `IDashboardQueryEvidenceReadmissionExtension`. The owner must establish that **the original disclosed facts** remain admissible under current record/field/aggregate authority, or return denied/unavailable. A narrower fresh execution authorizes only its new facts; it cannot bless the old transcript. The initial fail-closed policy may refuse every retained handle outside its originating fresh request rather than promise a historical proof it cannot provide.
-
-When prior evidence cannot be admitted, withhold it and recover through a fresh Weaver provider session containing only currently admitted definition/draft context and freshly authorized query evidence. Requerying in the same provider session is insufficient if that session retains old text. This does not claim provider-side erasure or replay an accepted save effect. Definite denial and temporarily unavailable verification remain distinct; unavailable verification is retriable without disclosing the old evidence.
+A future feature that sends protected result facts to a model would require a reviewed original-evidence provenance and readmission contract. Fresh execution of a narrower query cannot authorize older broader values already retained in a transcript. Evidence handles, a readmission event and an extension interface remain future design ideas, not implemented extension points or current acceptance claims.
 
 ## Independent contribution witness
 
-The proposed separately packaged reference fixture/module is **`Acme.Processing`**, not a native Runtime field set. It owns persisted processing records, normal record creation/read capability, record/field authorization, explicit `customerCategory` exposure and a versioned elapsed-processing metric. It contributes through the same discovery, semantic validation, execution, rendering/drill and evidence rules; shared assistant/query orchestration contains no Acme branch.
+The separately packaged reference module is **`Acme.Processing`**. It owns ordinary processing records, normal record creation/read capability, record/field authorization, explicit `customerCategory` exposure and a versioned elapsed-processing metric. Its reference business-record store is in-memory and ephemeral; saved question/dashboard definitions use durable resource storage. This witness does not claim business-record durability. It contributes through the same discovery, semantic validation, execution, rendering/drill and evidence rules; shared assistant/query orchestration contains no Acme branch.
 
 An illustrative numeric witness uses tenant A records `a1: retail, 60 seconds`, `a2: retail, 180 seconds`, `a3: enterprise, 300 seconds`, plus tenant B record `b1: retail, 900 seconds`. Tenant A's fully authorized viewer obtains retail mean 120 seconds/count 2 and enterprise mean 300 seconds/count 1. A viewer allowed only `a1` and `a3` obtains retail mean 60/count 1 and enterprise mean 300/count 1. Tenant B's record never contributes. A viewer lacking category-field or grouped-aggregate permission receives an unavailable/denied question, not a grouped answer influenced by the protected category.
 

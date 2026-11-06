@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -54,7 +54,8 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.Dashb
                 {
                     Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
                     ResourceKey = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
-                    Fingerprint = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false)
+                    Fingerprint = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -86,7 +87,8 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.Dashb
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
-                    Revision = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false)
+                    Revision = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -118,6 +120,16 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.Dashb
                 name: "IX_elsa_studio_dashboard_resources_ScopeId_OwnerKey_Kind_Deleted",
                 table: "elsa_studio_dashboard_resources",
                 columns: new[] { "ScopeId", "OwnerKey", "Kind", "Deleted" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_studio_dashboard_operations_SchemaVersion",
+                table: "elsa_studio_dashboard_operations",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_studio_dashboard_scopes_SchemaVersion",
+                table: "elsa_studio_dashboard_scopes",
+                column: "SchemaVersion");
         }
 
         /// <inheritdoc />

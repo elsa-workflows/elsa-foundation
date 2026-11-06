@@ -1,6 +1,6 @@
 # Dashboard data model
 
-**Status:** Draft design; no schema or runtime implementation exists yet.
+**Status:** Data-model requirements for the implementation under review in #3913. Resource schema and runtime behavior are implemented; final qualification, review, merge and resulting-main acceptance remain open.
 
 | Entity | Essential fields | Invariants |
 |---|---|---|
@@ -36,7 +36,7 @@ A dashboard copy is private and retains explicitly identified question reference
 
 Availability, coverage and refresh are distinct. A successful result may have unknown/incomplete coverage. No matching records differs from observed zero or a ratio without an eligible denominator. Failed refresh may retain clearly marked prior content only while current access still authorizes it. Identity/tenant/access changes clear protected prior results; definition changes mark them outdated.
 
-Retained evidence redisclosure to Weaver requires current admission for that exact evidence, not merely permission to run a new narrower query. Without reliable admission, withhold old results and require fresh evidence/session through the existing Weaver recovery path.
+The implemented Weaver authoring profile contains declarations and declarative proposals only. Protected result rows and aggregates remain in native viewer-scoped execution and are never included in provider context; retained proposals with a result preview are rejected. Any future result disclosure requires a reviewed original-evidence readmission design.
 
 ## Persistence boundary
 

@@ -28,5 +28,13 @@ public sealed class DashboardMigrationTests
         Assert.Contains("elsa_studio_dashboard_operations", script, StringComparison.Ordinal);
         Assert.Contains("elsa_studio_dashboard_scopes", script, StringComparison.Ordinal);
         Assert.False(context.Database.HasPendingModelChanges());
+        foreach (var type in new[] { typeof(DashboardResourceRow), typeof(DashboardResourceScopeRow), typeof(DashboardResourceOperationRow) })
+        {
+            var entity = context.Model.FindEntityType(type)!;
+            var stamp = entity.FindProperty("SchemaVersion")!;
+            Assert.False(stamp.IsNullable); Assert.Equal(32, stamp.GetMaxLength());
+            var index = entity.FindIndex(stamp)!;
+            Assert.False(index.IsUnique); Assert.Single(index.Properties);
+        }
     }
 }

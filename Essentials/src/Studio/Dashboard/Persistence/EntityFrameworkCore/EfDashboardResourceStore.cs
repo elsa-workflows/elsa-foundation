@@ -50,6 +50,7 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
             var key = Hash(tenantId, actorId, kind, operationKey);
             var operation = await context.Set<DashboardResourceOperationRow>().AsNoTracking().SingleOrDefaultAsync(row => row.Id == key, cancellationToken);
             if (operation is null) return null;
+            EnsureCurrentMetadata(operation.SchemaVersion);
             if (operation.Fingerprint != fingerprint) throw new DashboardResourceException("conflict", "This operation key was already used for a different request.");
             var row = await context.Set<DashboardResourceRow>().AsNoTracking().SingleOrDefaultAsync(item => item.Id == operation.ResourceKey, cancellationToken);
             if (row is null || row.Deleted) throw new DashboardResourceException("notFound", "The resource created by this operation is unavailable.");
@@ -74,8 +75,13 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
                 await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
                 var scopeKey = Hash(document.TenantId);
                 var scope = await context.Set<DashboardResourceScopeRow>().SingleOrDefaultAsync(row => row.Id == scopeKey, cancellationToken);
-                if (scope is null) context.Set<DashboardResourceScopeRow>().Add(scope = new() { Id = scopeKey, Revision = Guid.NewGuid().ToString("N") });
-                else scope.Revision = Guid.NewGuid().ToString("N");
+                if (scope is null) context.Set<DashboardResourceScopeRow>().Add(scope = new() { Id = scopeKey, Revision = Guid.NewGuid().ToString("N"),
+                    SchemaVersion = DashboardResourcesEfModule.Chain.CurrentVersion });
+                else
+                {
+                    EnsureCurrentMetadata(scope.SchemaVersion);
+                    scope.Revision = Guid.NewGuid().ToString("N");
+                }
                 var key = Hash(document.TenantId, document.Kind, document.Id);
                 var row = await context.Set<DashboardResourceRow>().SingleOrDefaultAsync(item => item.Id == key, cancellationToken);
                 if (write.ExpectedRevision is null)
@@ -98,10 +104,11 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
                 }
                 row.Revision = write.Delete ? $"deleted-{Guid.NewGuid():N}" : document.Revision;
                 row.DocumentJson = JsonSerializer.Serialize(document, Json);
+                row.SchemaVersion = DashboardResourcesEfModule.Chain.CurrentVersion;
                 row.Deleted = write.Delete;
                 if (write.OperationKey is { } operationKey)
                     context.Set<DashboardResourceOperationRow>().Add(new() { Id = Hash(document.TenantId, document.OwnerId, document.Kind, operationKey), ResourceKey = key,
-                        Fingerprint = write.OperationFingerprint! });
+                        Fingerprint = write.OperationFingerprint!, SchemaVersion = DashboardResourcesEfModule.Chain.CurrentVersion });
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return new("saved", document);
@@ -149,6 +156,13 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
         }
         catch (Exception error) when (error is InvalidOperationException or ArgumentException)
         { throw Unavailable(error); }
+    }
+
+    private static void EnsureCurrentMetadata(string? version)
+    {
+        try { EfSchemaVersion.EnsureCurrent(DashboardResourcesEfModule.Chain, version); }
+        catch (EfSchemaVersionSkewException error)
+        { throw new DashboardResourceException("schemaIncompatible", "Stored Dashboard operation or quota metadata uses a schema this backend cannot read. Run a compatible backend before retrying.", error); }
     }
 
     private static DashboardResourceDocument Read(DashboardResourceRow row, string tenantId, string kind, string? id)

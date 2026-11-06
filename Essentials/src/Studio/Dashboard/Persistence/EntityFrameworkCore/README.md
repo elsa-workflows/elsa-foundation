@@ -12,6 +12,8 @@ Store operations construct fresh owned context instances using the registered co
 
 Lookup keys hash exact tenant/resource and owner identities. Reads verify the original document scope/revision and its declared schema before using content. Operation fingerprints canonicalize object-member ordering while preserving array order and typed query meaning.
 
+Resources, keyed-create outcomes and quota fences each carry a required indexed schema stamp. Resource content uses its declared readable chain; scalar operation/fence metadata must match the current declared schema before its fingerprint, reference or fence revision is used. Unknown or future metadata is refused without restamping it or changing another row. New writes explicitly stamp the current version.
+
 Content and audience writes use one optimistic resource revision, so stale content cannot restore an earlier grant. A tenant fence and serializable transaction protect quotas and keyed-create races. Content/history, revision and operation-key association commit atomically. Deleted resources retain a protected tombstone and cannot be recreated by keyed retry.
 
 History records each revision's actual modifier. An old edited document lacking that fact reports unknown, rather than attributing it to the owner. Restore creates another validated revision and preserves current ownership/grants.

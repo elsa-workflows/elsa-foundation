@@ -32,12 +32,16 @@ public static class DashboardResourceModelBuilderExtensions
             entity.ToTable("elsa_studio_dashboard_scopes"); entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).HasMaxLength(64);
             entity.Property(row => row.Revision).HasMaxLength(64).IsConcurrencyToken();
+            entity.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
+            entity.HasIndex(row => row.SchemaVersion);
         });
         modelBuilder.Entity<DashboardResourceOperationRow>(entity => {
             entity.ToTable("elsa_studio_dashboard_operations"); entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).HasMaxLength(64);
             entity.Property(row => row.ResourceKey).HasMaxLength(64).IsRequired();
             entity.Property(row => row.Fingerprint).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
+            entity.HasIndex(row => row.SchemaVersion);
         });
         return modelBuilder;
     }
