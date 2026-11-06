@@ -83,6 +83,10 @@ as amended for D-10 and D-11, adds a visible workflow policy, pinned in the exec
   It never changes which form is selected, the source, or how JavaScript evaluates.
 - **Both forms behave the same** under it: an expression whose value is `undefined`, and a statement body that
   returns `undefined` or ends with an `undefined` completion value.
+- **Array positions are preserved under either policy.** An `undefined` array element or sparse hole becomes a
+  `null` placeholder with a path diagnostic, never dropped, so later indices never shift; an element already `null`
+  needs no diagnostic. This holds whether or not the policy is selected, because an array's positions can never shift
+  ([ADR 0045 §2](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings)).
 
 *Left to the implementing specs* (S-1 and S-2 on the epic):
 - **renaming the profile constant** and removing the replay justification that `Inline` derives from
