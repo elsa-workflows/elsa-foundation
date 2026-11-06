@@ -6,6 +6,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { classifyLocation, limits, observeEditor } from "./diagnostics.mjs";
+import { creationLimits, observeWorkflowCreation, projectCreationState, selectFlowchartRoot } from "./creation.mjs";
 
 const origin = "http://localhost:14000";
 const secret = "PRIVATE_DO_NOT_RETAIN_58a2";
@@ -88,10 +89,10 @@ class FakePage extends EventEmitter {
   }
 }
 
-async function fixture(t, { page = new FakePage(), captureMs, observe = observeEditor } = {}) {
+async function fixture(t, { page = new FakePage(), captureMs, observe = observeEditor, creationState } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pair-diagnostics-test-"));
   const outputDir = path.join(root, "diagnostics");
-  const observer = observe(page, { studioOrigin: origin, outputDir, captureMs });
+  const observer = observe(page, { studioOrigin: origin, outputDir, captureMs, creationState });
   t.after(async () => {
     observer.dispose();
     await fs.rm(root, { recursive: true, force: true });
@@ -325,8 +326,9 @@ async function observerWithFilesystem(overrides) {
   const executable = source
     .replace(/import \{([^}]+)\} from "node:fs\/promises";/, "const {$1} = injectedFs;")
     .replace('import path from "node:path";', "")
+    .replace('import { projectCreationState } from "./creation.mjs";', "")
     .replace(/\bexport /g, "");
-  return new AsyncFunction("injectedFs", "path", `${executable}\nreturn observeEditor;`)({ ...fs, ...overrides }, path);
+  return new AsyncFunction("injectedFs", "path", "projectCreationState", `${executable}\nreturn observeEditor;`)({ ...fs, ...overrides }, path, projectCreationState);
 }
 
 for (const delayedFile of ["viewport.png", "diagnostic.json"]) {
@@ -360,7 +362,7 @@ for (const delayedFile of ["viewport.png", "diagnostic.json"]) {
 
 // Execute run.mjs's real outer try/catch/finally with fakes, without importing
 // Playwright or invoking its Docker/HTTP/browser entrypoint.
-async function runOuterTail({ failure, capture, dispose, cleanupFailure, browserFailure } = {}) {
+async function runOuterTail({ failure, capture, dispose, cleanupFailure, browserFailure, creationDispose } = {}) {
   const start = runSource.lastIndexOf("\ntry {\n  await main();");
   assert.ok(start > 0, "could not locate the runner entrypoint");
   const classifierStart = runSource.indexOf("function safeFailureClass(");
@@ -379,6 +381,7 @@ async function runOuterTail({ failure, capture, dispose, cleanupFailure, browser
       captureFailure: async (...args) => { calls.push(["capture", ...args]); return capture?.(...args) ?? "capture-timeout"; },
       dispose: () => { calls.push("dispose"); return dispose?.(); }
     },
+    creationDiagnostics: creationDispose ? { dispose: () => { calls.push("creation-dispose"); return creationDispose(); } } : undefined,
     browser: { close: async () => { calls.push("browser"); if (browserFailure) throw browserFailure; } },
     cleanupOwnedResources: async () => { calls.push("resources"); if (cleanupFailure) throw cleanupFailure; },
     ownershipApproved: true,
@@ -386,7 +389,7 @@ async function runOuterTail({ failure, capture, dispose, cleanupFailure, browser
     rm: async (...args) => { calls.push(["rm", ...args]); }
   };
   await new AsyncFunction("injected", `
-    const { stage, process, console, log, main, editorDiagnostics, browser,
+    const { stage, process, console, log, main, editorDiagnostics, creationDiagnostics, browser,
       cleanupOwnedResources, ownershipApproved, tempDir, rm } = injected;
     let cleanupError;
     ${runSource.slice(classifierStart, classifierEnd)}
@@ -476,4 +479,223 @@ test("the journey keeps its strict selector, visibility wait, original click and
   page.getByRole = () => ({ waitFor: async () => { throw new Error("wait failed"); }, click: async () => calls.push("click") });
   await assert.rejects(new AsyncFunction("page", `let stage; ${runSource.slice(start, end)}`)(page), /wait failed/);
   assert.deepEqual(calls, []);
+});
+
+function creationFixture({ enabled = true, checked = true, count = 1, version = secret, clickError } = {}) {
+  const actions = [];
+  const radio = {
+    waitFor: async options => { assert.deepEqual(options, { state: "visible" }); actions.push("visible"); },
+    count: async () => count,
+    click: async (...args) => {
+      assert.deepEqual(args, []); actions.push("radio-click");
+      if (clickError) throw clickError;
+      if (!enabled) throw Object.assign(new Error("disabled choice"), { name: "TimeoutError" });
+    },
+    isEnabled: async () => enabled, isChecked: async () => checked, inputValue: async () => version
+  };
+  const dialog = {
+    getByLabel: (name, options) => {
+      assert.equal(name, "Display name"); assert.deepEqual(options, { exact: true });
+      return { fill: async () => actions.push("name") };
+    },
+    getByRole: (role, options) => {
+      if (role === "radio") { assert.deepEqual(options, { name: "Flowchart", exact: true }); return radio; }
+      assert.equal(role, "button"); assert.deepEqual(options, { name: "Create", exact: true });
+      return { click: async () => actions.push("create") };
+    }
+  };
+  const page = {
+    locator: selector => {
+      assert.equal(selector, 'button[title="Create workflow"]');
+      return { waitFor: async () => {}, click: async () => actions.push("open") };
+    },
+    getByRole: (role, options) => { assert.equal(role, "dialog"); assert.deepEqual(options, { name: "Create Workflow" }); return dialog; },
+    waitForFunction: async () => {}, evaluate: async () => "created-definition"
+  };
+  const observation = { select: value => { assert.equal(value, version); actions.push("observed-choice"); }, bindEditor: () => actions.push("bound-editor") };
+  return { dialog, page, observation, actions };
+}
+
+async function actualCreationBlock(f) {
+  const start = runSource.indexOf('  stage = "workflow-create";', runSource.indexOf("async function runBrowserJourney()"));
+  const end = runSource.indexOf('  stage = "activity-picker-trigger-visible";', start);
+  assert.ok(start > 0 && end > start);
+  await new AsyncFunction("page", "workflowName", "selectFlowchartRoot", "creationDiagnostics", "assert", "log",
+    `let stage; ${runSource.slice(start, end)}`)(f.page, "owned fixture", selectFlowchartRoot, f.observation, assert, () => {});
+}
+
+test("actual creation path explicitly clicks the unique enabled selected Flowchart before Create", async () => {
+  const f = creationFixture();
+  await actualCreationBlock(f);
+  assert.deepEqual(f.actions, ["open", "name", "visible", "radio-click", "observed-choice", "create", "bound-editor"]);
+});
+
+test("a default-checked but disabled Flowchart cannot reach the actual Create action", async () => {
+  const f = creationFixture({ enabled: false, checked: true });
+  await assert.rejects(actualCreationBlock(f), { name: "TimeoutError" });
+  assert.ok(!f.actions.includes("create"));
+});
+
+for (const options of [{ count: 0 }, { count: 2 }, { checked: false }, { version: "" }]) {
+  test(`the root choice refuses an invalid prerequisite ${JSON.stringify(options)}`, async () => {
+    const f = creationFixture(options);
+    await assert.rejects(actualCreationBlock(f));
+    assert.ok(!f.actions.includes("create"));
+  });
+}
+
+test("a root choice actionability failure preserves the original error", async () => {
+  const original = Object.assign(new Error(secret), { name: "TimeoutError" });
+  const f = creationFixture({ clickError: original });
+  await assert.rejects(actualCreationBlock(f), error => error === original);
+  assert.ok(!f.actions.includes("create"));
+});
+
+const backendOrigin = "http://localhost:13000";
+const definitionRoute = "/design/workflows/definitions";
+const catalogRoute = "/design/activities/catalog";
+const rootedState = { rootActivity: { activityVersionId: secret, inputs: { password: secret } } };
+const definitionDetails = root => ({ definition: { id: secret, name: secret }, draft: { state: root }, password: secret });
+const request = (method, route, payload, requestOrigin = backendOrigin) => ({
+  method: () => method, url: () => `${requestOrigin}${route}`, postData: () => JSON.stringify(payload)
+});
+const response = (req, payload, ok = true) => ({ request: () => req, ok: () => ok, text: async () => JSON.stringify(payload) });
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+async function observedCreation(t, { template = {}, initial = rootedState, createdRoot = rootedState, readRoot = rootedState } = {}) {
+  const page = new EventEmitter();
+  const observer = observeWorkflowCreation(page, { backendOrigin });
+  t.after(() => observer.dispose());
+  const catalog = request("GET", catalogRoute);
+  page.emit("request", catalog);
+  page.emit("response", response(catalog, { activities: [{ activityVersionId: secret, authoringTemplate: template, password: secret }] }));
+  await tick();
+  observer.select(secret);
+  const create = request("POST", definitionRoute, { initialState: initial, name: secret, password: secret });
+  page.emit("request", create);
+  page.emit("response", response(create, definitionDetails(createdRoot)));
+  page.emit("response", response(request("GET", `${definitionRoute}/${secret}`), definitionDetails(readRoot)));
+  await tick();
+  observer.bindEditor(secret);
+  return { page, observer };
+}
+
+test("correlated creation evidence retains only root/template flags, never private bodies or IDs", async t => {
+  const { observer } = await observedCreation(t);
+  const value = observer.snapshot();
+  assert.equal(value.fixture, "explicit-flowchart"); assert.equal(value.defaultCreate, "unverified");
+  for (const key of ["candidatePresent", "templatePresent", "candidateAtCreate", "templateAtCreate", "choiceEnabled", "choiceSelected",
+    "requestRoot", "requestRootMatchesChoice", "createRoot", "createMatchesEditor", "editorRoot", "readMatchesEditor"]) assert.equal(value[key], true, key);
+  for (const key of ["catalog", "catalogAtCreate", "createResponse", "editorRead"]) assert.equal(value[key], "received", key);
+  assert.equal(value.createRequests, 1);
+  assert.ok(!JSON.stringify(value).includes(secret));
+});
+
+test("missing templates and absent wire/response/read roots remain visible instead of becoming success", async t => {
+  const { observer } = await observedCreation(t, { template: null, initial: null, createdRoot: { rootActivity: null }, readRoot: {} });
+  const value = observer.snapshot();
+  assert.equal(value.candidateAtCreate, true); assert.equal(value.templateAtCreate, false);
+  for (const key of ["requestRoot", "requestRootMatchesChoice", "createRoot", "editorRoot"]) assert.equal(value[key], false, key);
+  assert.equal(value.defaultCreate, "unverified");
+});
+
+test("a later ready editor catalog cannot rewrite the catalog observed at Create", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const catalog = request("GET", catalogRoute); page.emit("request", catalog); observer.select(secret);
+  page.emit("request", request("POST", definitionRoute, { initialState: null }));
+  page.emit("response", response(catalog, { activities: [{ activityVersionId: secret, authoringTemplate: {} }] }));
+  await tick(); const value = observer.snapshot();
+  assert.equal(value.catalog, "received"); assert.equal(value.templatePresent, true);
+  assert.equal(value.catalogAtCreate, "requested"); assert.equal(value.candidateAtCreate, null); assert.equal(value.templateAtCreate, null);
+  assert.equal(value.requestRoot, false);
+});
+
+test("unrelated or mismatched definitions never attest to the editor's root", async t => {
+  const { page, observer } = await observedCreation(t);
+  observer.bindEditor("different-editor");
+  assert.equal(observer.snapshot().editorRoot, null); assert.equal(observer.snapshot().createMatchesEditor, false);
+  page.emit("response", response(request("GET", `${definitionRoute}/different-editor`), definitionDetails(rootedState)));
+  await tick(); assert.equal(observer.snapshot().editorRoot, null); assert.equal(observer.snapshot().readMatchesEditor, false);
+});
+
+test("late reloads and later create responses cannot overwrite the first correlated root evidence", async t => {
+  const { page, observer } = await observedCreation(t, { createdRoot: {}, readRoot: {} });
+  page.emit("response", response(request("POST", definitionRoute), definitionDetails(rootedState)));
+  page.emit("response", response(request("GET", `${definitionRoute}/${secret}`), definitionDetails(rootedState)));
+  await tick(); assert.equal(observer.snapshot().createRoot, false); assert.equal(observer.snapshot().editorRoot, false);
+});
+
+test("a different Create request cannot supply the first request's response evidence", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const first = request("POST", definitionRoute, { initialState: null }); page.emit("request", first);
+  const other = request("POST", definitionRoute, { initialState: rootedState }); page.emit("request", other);
+  page.emit("response", response(other, definitionDetails(rootedState))); await tick();
+  assert.equal(observer.snapshot().createResponse, "unobserved");
+  page.emit("response", response(first, definitionDetails({}))); await tick();
+  assert.equal(observer.snapshot().createRoot, false); assert.equal(observer.snapshot().createRequests, 2);
+});
+
+test("malformed roots remain unknown rather than certifying absence or presence", async t => {
+  const { observer } = await observedCreation(t, { initial: { rootActivity: secret }, createdRoot: { rootActivity: [] }, readRoot: 42 });
+  for (const key of ["requestRoot", "createRoot", "editorRoot"]) assert.equal(observer.snapshot()[key], null, key);
+});
+
+test("a stalled response expires without late evidence or an unhandled rejection", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const gate = deferred(); const create = request("POST", definitionRoute); page.emit("request", create);
+  page.emit("response", { request: () => create, ok: () => true, text: () => gate.promise });
+  await delay(creationLimits.responseMs + 50);
+  assert.equal(observer.snapshot().createResponse, "unavailable");
+  gate.resolve(JSON.stringify(definitionDetails(rootedState))); await tick();
+  assert.equal(observer.snapshot().createRoot, null);
+});
+
+test("unknown routes/origins and auth responses are ignored without reading their bodies", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const forbidden = () => { throw new Error("private body read"); };
+  for (const req of [request("GET", "/_elsa/identity/login"), request("GET", catalogRoute, null, "https://foreign.example"), request("GET", `${definitionRoute}/id/draft`)]) {
+    page.emit("response", { request: () => req, ok: forbidden, text: forbidden });
+  }
+  await tick(); assert.equal(observer.snapshot().catalog, "unobserved"); assert.equal(observer.snapshot().editorRead, "unobserved");
+});
+
+test("malformed, oversized, failed and late payloads stay unavailable and disposal removes listeners", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const create = request("POST", definitionRoute); page.emit("request", create);
+  page.emit("response", { request: () => create, ok: () => true, text: async () => "invalid json" });
+  page.emit("response", { request: () => request("GET", catalogRoute), ok: () => true, text: async () => "x".repeat(creationLimits.bytes + 1) });
+  await tick(); assert.equal(observer.snapshot().createResponse, "unavailable"); assert.equal(observer.snapshot().catalog, "unavailable");
+  const gate = deferred(); page.emit("response", { request: () => request("GET", `${definitionRoute}/late`), ok: () => true, text: () => gate.promise });
+  observer.dispose(); const before = observer.snapshot(); gate.resolve(JSON.stringify(definitionDetails(rootedState))); await tick();
+  assert.deepEqual(observer.snapshot(), before); assert.equal(page.listenerCount("response"), 0); assert.equal(page.listenerCount("request"), 0);
+});
+
+test("failed HTTP and a bounded response-read budget never certify roots", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose()); let reads = 0;
+  const req = request("GET", catalogRoute);
+  page.emit("response", { request: () => req, ok: () => false, text: () => { throw new Error("must not read failed body"); } });
+  assert.equal(observer.snapshot().catalog, "http-error");
+  for (let i = 0; i < 20; i++) page.emit("response", { request: () => req, ok: () => true, text: async () => { reads++; return "{}"; } });
+  await tick(); assert.ok(reads <= creationLimits.responseReads); assert.equal(observer.snapshot().catalog, "unavailable");
+});
+
+test("creation receipt projection discards arbitrary keys, statuses and nonboolean private strings", () => {
+  const safe = projectCreationState({ catalog: secret, candidatePresent: secret, createRequests: 999, editorRoot: secret, raw: secret, password: secret });
+  assert.equal(safe.catalog, "unavailable"); assert.equal(safe.candidatePresent, null); assert.equal(safe.createRequests, 2); assert.equal(safe.editorRoot, null);
+  assert.ok(!JSON.stringify(safe).includes(secret));
+});
+
+test("a safe non-login Create-stage failure retains projected root evidence while its screenshot stays suppressed", async t => {
+  const page = new FakePage({ states: [editorState({ url: `${origin}/workflows/definitions` })] });
+  const f = await fixture(t, { page, creationState: () => ({ catalog: "received", templateAtCreate: false, raw: secret }) });
+  await f.observer.captureFailure("workflow-root-selection", "timeout");
+  assert.equal((await f.receipt()).creation.templateAtCreate, false); assert.equal((await f.receipt()).screenshot, "suppressed");
+});
+
+test("login/navigation/auth states suppress creation evidence too, and optional failures preserve cleanup", async t => {
+  const f = await fixture(t, { page: new FakePage({ states: [editorState({ sensitiveForms: 1 })] }), creationState: () => ({ requestRoot: true }) });
+  await f.observer.captureFailure(visibleStage, "timeout"); assert.equal((await f.receipt()).creation, undefined);
+  const result = await runOuterTail({ failure: Object.assign(new Error(secret), { name: "TimeoutError" }), creationDispose: () => { throw new Error(secret); } });
+  assert.equal(result.exitCode, 1); assert.ok(result.calls.includes("creation-dispose")); assert.ok(result.calls.includes("resources"));
+  assert.deepEqual(result.errors, [`[published-pair] failed during ${clickStage} (timeout)`]);
 });

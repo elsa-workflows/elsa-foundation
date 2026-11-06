@@ -1,8 +1,9 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { projectCreationState } from "./creation.mjs";
 
 export const limits = Object.freeze({ captureMs: 3_000, events: 20, buttons: 3, jsonBytes: 16 * 1024, pngBytes: 2 * 1024 * 1024 });
-const stages = new Set(["activity-picker-trigger-visible", "activity-picker-trigger-click"]);
+const stages = new Set(["workflow-create", "workflow-root-selection", "activity-picker-trigger-visible", "activity-picker-trigger-click"]);
 const failureClasses = new Set(["timeout", "assertion", "ambiguous-locator", "navigation-interrupted", "error", "other"]);
 const resourceTypes = new Set(["document", "stylesheet", "image", "media", "font", "script", "texttrack", "xhr", "fetch", "eventsource", "websocket", "manifest"]);
 
@@ -81,7 +82,7 @@ function safeEditor(state, studioOrigin) {
 
 // This observer never reads console text/arguments, error messages, request bodies,
 // headers, cookies or storage. Every retained field is a fixed category or number.
-export function observeEditor(page, { studioOrigin, outputDir, captureMs = limits.captureMs }) {
+export function observeEditor(page, { studioOrigin, outputDir, captureMs = limits.captureMs, creationState }) {
   const events = [];
   const listeners = [];
   let navigation = 0;
@@ -143,6 +144,11 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
       const before = await inspectPage(page);
       if (!active()) return "capture-timeout";
       const receipt = { schema: 1, stage, failure: failureClasses.has(failureClass) ? failureClass : "other", events: events.slice(), screenshot: "suppressed" };
+      const location = classifyLocation(before.url, studioOrigin);
+      if (typeof creationState === "function" && before.sensitiveForms === 0 && before.frames === 0 && before.authFallback === 0
+        && (location.editor || location.location === `${studioOrigin}/workflows/definitions`)) {
+        try { receipt.creation = projectCreationState(creationState()); } catch { receipt.creation = projectCreationState(null); }
+      }
       if (!safeEditor(before, studioOrigin)) {
         receipt.capture = "suppressed-unsafe-page";
       } else {
