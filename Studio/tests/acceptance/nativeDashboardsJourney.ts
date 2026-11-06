@@ -141,7 +141,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "View matching records for result 1", exact: true }).click();
       const drill = page.getByRole("dialog", { name: "Matching source records", exact: true });
       for (const id of seeded.executionIds) await expect(drill.getByRole("cell", { name: id, exact: true })).toBeVisible();
-      await capture(page, info, "question-drill"); await drill.getByRole("button", { name: "Close Matching source records", exact: true }).press("Escape");
+      await capture(page, info, "question-drill");
+      await captureReadableDrillValues(page, info, capture, "question-drill-values", drill);
+      await drill.getByRole("button", { name: "Close Matching source records", exact: true }).press("Escape");
       const savedResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/questions$/.test(response.url()));
       await page.getByRole("button", { name: "Save question", exact: true }).click();
       const saved = await (await savedResponse).json() as Resource; questionId = saved.id; resources.push({ kind: "questions", id: saved.id });
@@ -193,7 +195,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const currentDrillReply = await afterSaveDrill; expect(currentDrillReply.ok()).toBe(true);
       expect(currentDrillReply.request().headers()["if-match"]).toBe(tag(updatedQuestion.revision)["If-Match"]);
       await expect(drill.getByRole("cell", { name: seeded.executionIds[0], exact: true })).toBeVisible();
-      await capture(page, info, "question-saved-refresh-drill"); await drill.press("Escape");
+      await capture(page, info, "question-saved-refresh-drill");
+      await captureReadableDrillValues(page, info, capture, "question-saved-refresh-drill-values", drill);
+      await drill.press("Escape");
       await page.getByRole("button", { name: "History", exact: true }).click();
       const history = page.getByRole("dialog", { name: "Definition history", exact: true });
       await expect(history.getByRole("button", { name: /^Inspect revision / })).toHaveCount(2);
@@ -347,7 +351,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const tileDrill = page.waitForResponse(response => response.url().includes(`/dashboards/${dashboard.id}/tiles/`) && response.url().endsWith("/drill"));
       await page.locator(".named-tile").first().getByRole("button", { name: "View matching records for result 1", exact: true }).click();
       expect((await tileDrill).ok()).toBe(true); await expect(drill.getByRole("cell", { name: seeded.executionIds[0], exact: true })).toBeVisible();
-      await capture(page, info, "dashboard-drill"); await drill.press("Escape");
+      await capture(page, info, "dashboard-drill");
+      await captureReadableDrillValues(page, info, capture, "dashboard-drill-values", drill);
+      await drill.press("Escape");
       await page.getByRole("button", { name: "Copy saved version", exact: true }).click();
       const dependencyReview = page.getByRole("dialog", { name: "Review dashboard copy dependencies", exact: true });
       const dependencies = dependencyReview.getByRole("region", { name: "Included question access review", exact: true });
@@ -582,6 +588,19 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await readerContext.close();
     }
   } finally { await readerBrowser.close(); }
+}
+
+async function captureReadableDrillValues(page: Page, info: TestInfo, capture: Capture, name: string, dialog: Locator) {
+  for (const value of [/^completed$/i, /^publishedRun$/i]) {
+    const word = dialog.getByRole("cell", { name: value }).first();
+    await expect(word).toBeVisible();
+    await expect.poll(() => word.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      return range.getClientRects().length;
+    })).toBe(1);
+    await word.scrollIntoViewIfNeeded();
+  }
+  await capture(page, info, name);
 }
 
 /** Studio scrolls inside its workspace/dialogs. Full-page browser screenshots alone miss their

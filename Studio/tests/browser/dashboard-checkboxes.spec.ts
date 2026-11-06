@@ -101,3 +101,48 @@ test("normal native dashboard headings retain their desktop action row", async (
   if (!title || !action) throw new Error("The title and primary action must have visible boxes.");
   expect(Math.abs(title.y - action.y)).toBeLessThanOrEqual(1);
 });
+
+
+for (const width of [320, 360, 1280]) {
+  test(`source-record drill tables keep words readable and scroll inside the modal at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/dashboard-checkboxes.html?sourceRecords");
+    const open = page.getByRole("button", { name: "View matching records", exact: true });
+    await open.click();
+    const dialog = page.getByRole("dialog", { name: "Matching source records", exact: true });
+    const region = dialog.getByRole("region", { name: "Exact result values", exact: true });
+    const close = dialog.getByRole("button", { name: "Close Matching source records", exact: true });
+    await expect(region.getByRole("cell", { name: "publishedRun", exact: true })).toBeVisible();
+    await info.attach(`dashboard-source-records-${width}px`, { body: await page.screenshot({ path: info.outputPath(`dashboard-source-records-${width}px.png`) }), contentType: "image/png" });
+    for (const value of ["completed", "publishedRun"]) {
+      const lines = await region.getByRole("cell", { name: value, exact: true }).evaluate(element => {
+        const range = document.createRange(); range.selectNodeContents(element);
+        return new Set([...range.getClientRects()].map(rect => rect.top.toFixed(1))).size;
+      });
+      expect(lines, `${value} must remain a single readable word`).toBe(1);
+    }
+    const headersReadable = await region.getByRole("columnheader").evaluateAll(elements => elements.every(element => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        for (const word of (node.textContent ?? "").matchAll(/\S+/g)) {
+          const range = document.createRange(); range.setStart(node, word.index!); range.setEnd(node, word.index! + word[0].length);
+          if (new Set([...range.getClientRects()].map(rect => rect.top.toFixed(1))).size > 1) return false;
+        }
+      }
+      return true;
+    }));
+    expect(headersReadable).toBe(true);
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await region.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    await expect(close).toBeInViewport();
+    await region.focus(); await page.keyboard.press("ArrowRight");
+    await expect.poll(() => region.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    await region.getByRole("cell", { name: "publishedRun", exact: true }).scrollIntoViewIfNeeded();
+    await region.getByRole("cell", { name: "completed", exact: true }).scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(element => element.scrollLeft)).toBe(0);
+    await info.attach(`dashboard-source-records-scrolled-${width}px`, { body: await page.screenshot({ path: info.outputPath(`dashboard-source-records-scrolled-${width}px.png`) }), contentType: "image/png" });
+    await page.keyboard.press("Tab"); await expect(close).toBeFocused();
+    await close.press("Escape"); await expect(dialog).toHaveCount(0); await expect(open).toBeFocused();
+  });
+}

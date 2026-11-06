@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { QueryControls } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
-import { ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
+import { NativeDialog, ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
+import { ResultView } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResultView";
 import type { DashboardApi } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/api";
-import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/native.css";
 
@@ -53,5 +54,32 @@ function LongNameFixture() {
     {showShare ? <ShareDialog api={api} resource={dashboard} onClose={() => setShowShare(false)} onSaved={() => setShowShare(false)} /> : null}
   </div></StudioPage></main>;
 }
+function SourceRecordsFixture() {
+  const [showRecords, setShowRecords] = useState(false);
+  const result: QueryResult = {
+    outcome: "succeeded", interpretation: "Current retained, authorized workflow runs.", coverage: { status: "unknown", description: "Collection and retention completeness is unknown." },
+    columns: [
+      { id: "executionId", label: "Run", type: "string" },
+      { id: "definitionId", label: "Workflow definition", type: "string" },
+      { id: "status", label: "Current status", type: "string" },
+      { id: "runKind", label: "Run kind", type: "string" },
+      { id: "startedAt", label: "Started at", type: "instant" },
+      { id: "completedAt", label: "Completed at", type: "instant" },
+      { id: "durationMs", label: "Elapsed terminal duration", type: "decimal", unit: "milliseconds" }
+    ],
+    rows: [{ key: "run-a", values: {
+      executionId: { type: "string", value: "87c7d7039f5e4f1f81818a8923a83d28" },
+      definitionId: { type: "string", value: "customer-onboarding-approval" },
+      status: { type: "string", value: "completed" }, runKind: { type: "string", value: "publishedRun" },
+      startedAt: { type: "instant", value: "2026-11-06T08:10:00.000Z" },
+      completedAt: { type: "instant", value: "2026-11-06T08:11:30.000Z" },
+      durationMs: { type: "decimal", value: "90000" }
+    } }]
+  };
+  return <main className="named-workspace" style={{ padding: 24 }}>
+    <StudioButton onClick={() => setShowRecords(true)}>View matching records</StudioButton>
+    {showRecords ? <NativeDialog title="Matching source records" onClose={() => setShowRecords(false)}><ResultView result={result} visualization={{ kind: "table", y: [] }} /></NativeDialog> : null}
+  </main>;
+}
 const params = new URLSearchParams(window.location.search);
-createRoot(document.getElementById("root")!).render(<ThemeProvider>{params.has("longName") ? <LongNameFixture /> : <Fixture />}</ThemeProvider>);
+createRoot(document.getElementById("root")!).render(<ThemeProvider>{params.has("sourceRecords") ? <SourceRecordsFixture /> : params.has("longName") ? <LongNameFixture /> : <Fixture />}</ThemeProvider>);
