@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 
 // Deterministic component evidence; real composed hosts provide product acceptance.
 const category = "Company.Fulfillment.WorkflowProcessing.Services.Diagnostics.OperationCompletionLogger";
@@ -74,7 +74,7 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
         expect(copied).toContain(category);
         expect(copied).toContain(message);
         const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download visible", exact: true }).click()]);
-        const exported = readFileSync((await download.path())!, "utf8").trim().split(/\r?\n/).map(line => JSON.parse(line));
+        const exported = (await readFile((await download.path())!)).toString("utf8").trim().split(/\r?\n/).map(line => JSON.parse(line));
         expect(exported).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: source, category, message })]));
         await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
         const sourceFilter = page.getByRole("combobox", { name: "Structured log source", exact: true });
