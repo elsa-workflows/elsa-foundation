@@ -83,7 +83,7 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     const details = titleRow.getByRole("button", { name: "Technical details for Title", exact: true });
     await expect(details).toHaveAttribute("aria-expanded", "false");
     await expect(titleRow.getByRole("region", { name: "Title technical details", exact: true })).toBeHidden();
-    await inspector.getByRole("heading", { name: /^Inputs/ }).scrollIntoViewIfNeeded();
+    await titleRow.scrollIntoViewIfNeeded();
     await capture(page, info, "compact-values");
     const valueReadsBeforeDetails = valueRequests.length;
 
@@ -96,9 +96,12 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     await expect(technical.getByRole("heading", { name: "Authored source", exact: true })).toBeVisible();
     await expect(technical).toContainText(title);
     await expect(titleRow.locator(".wf-input-inspection-value")).toHaveText(title);
+    // Focus the existing details control so the scrollable inspector exposes its real content.
+    await technical.locator("summary").first().focus();
+    await expect(technical.getByRole("heading", { name: "Authored source", exact: true })).toBeInViewport();
+    await expect(technical.getByRole("heading", { name: "Capture details", exact: true })).toBeInViewport();
     await capture(page, info, "technical-details");
     expect(valueRequests, "Opening presentation-only technical details does not re-read captured value evidence").toHaveLength(valueReadsBeforeDetails);
-    await technical.locator("summary").first().focus();
     await page.keyboard.press("Escape");
     await expect(technical).toBeHidden();
     await expect(details).toBeFocused();
@@ -131,10 +134,13 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     await details.focus();
     await details.press("Enter");
     await expect(technical).toBeVisible();
+    await technical.locator("summary").first().focus();
+    await expect(technical.getByRole("heading", { name: "Authored source", exact: true })).toBeInViewport();
+    await expect(technical.getByRole("heading", { name: "Capture details", exact: true })).toBeInViewport();
     expect(await titleRow.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     await capture(page, info, "technical-details-320");
-    await details.press("Escape");
+    await page.keyboard.press("Escape");
     await expect(technical).toBeHidden();
     await expect(details).toBeFocused();
     await capture(page, info, "compact-values-320");
