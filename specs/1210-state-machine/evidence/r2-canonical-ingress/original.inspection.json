@@ -1,0 +1,61 @@
+{
+  "status": "FAILED_EF_COMPILATION",
+  "inspectedAt": "2026-11-06T02:24:16.774643+00:00",
+  "packetSha256": "ec97ee4a8bb818a178da4f3edb561f0b6e05b4c3d5bc066baaf8b65a936b3d72",
+  "archive": {
+    "bytes": 32900,
+    "sha256": "36285a0e5dc287d5721ffdddc42189356063d3a958abd7e847e25ed0f634dbde"
+  },
+  "files": {
+    "collection-receipt.json": "855dd274876a191e2820bebafb1b195bc047752fb0a494c60c19b5e3b5b54a6f",
+    "controller.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "controller.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/ef-ingress.result.json": "4bbb960a8b568cbc2c5e73d2d1736c05f830a54daa565c49dd6a127df2f072f8",
+    "evidence/ef-ingress.started.json": "e3f521b5ee4d946cfb9657970d99c2164bcc70932960db782e92b5a70ffced39",
+    "evidence/ef-ingress.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/ef-ingress.stdout.log": "df7227cf0656b74d818a0412280083dc3891c2267dd59044ed763f90278cbaf4",
+    "evidence/launcher-result.json": "de369825bff14db242a9aa82d1b559c8aad66e49119c844125e6c34b38f8423c",
+    "evidence/preflight.json": "0c4404eafc9aa71673409309244521bb60d4d5649bd2dd0604a3fe5f735c3840",
+    "evidence/runtime-ingress/runtime-ingress.trx": "5f4002094dc5089039d6b0941253c2123656ac6c4280957423e3be478dfbce70",
+    "evidence/runtime-ingress.result.json": "f1b572327830bbc1f850714e4fa5f36d3a1248ea2f6f4dcb270b9c8faf555944",
+    "evidence/runtime-ingress.started.json": "e9064073b1d5ab80738e9dedd931be4644f59c9896bf15f947e065280dd34167",
+    "evidence/runtime-ingress.stderr.log": "bc7222d26f978e58125d519345a6ea7887b78917aaf84c65995808d185f77b55",
+    "evidence/runtime-ingress.stdout.log": "dc3e3ef9b21485d82e3b08f942c8a719a9ed53b6d8823201aad7c186b9d6f304",
+    "evidence/runtime-ingress.trx-summary.json": "241b77443504d1eda39c0cbc0de44f1b7c77faae52a37fa513edba99dd950af2",
+    "inputs/packet/packet.json": "ec97ee4a8bb818a178da4f3edb561f0b6e05b4c3d5bc066baaf8b65a936b3d72",
+    "inputs/packet/run.py": "1be924018ef6412b155744285cfadc23379992b273f42cdb804fb99ce0591f85",
+    "inputs/packet/runtime.runsettings": "fd929a6a6cfb4879b43a1c21eb042cb12e24533c2ebfb5ea1ffde65c125e0025",
+    "inputs/packet/source-manifest.json": "4a5acc24274790434e8c5786c14b63e1266d86336a02b37a5d8973473dd10ea0",
+    "launch-receipt.json": "997e630311b60f7d56eb13afa6793a0e45ab73c579146468d897d18a6e2161ac",
+    "run-unit.sh": "00941989470b96f5b80472176b17c68fd081eeb653f7d09b9654b15a8accbabc",
+    "setup-receipt.json": "3f3bebc46d76847a3cdecb87bbbe4fd01a466cd46180ced99b854852baf974c9",
+    "unit-command-terminal.json": "36d47961dbe3ab84998731eaf712cf3b5f87c3728e2a5c310c46292775df00d9",
+    "unit.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "unit.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "phases": {
+    "Runtime": {
+      "passed": 38,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "5f4002094dc5089039d6b0941253c2123656ac6c4280957423e3be478dfbce70",
+      "elapsedSeconds": 146.71193609299996
+    },
+    "EF": {
+      "compilation": "FAILED_CS0103",
+      "tests": "NOT_RUN",
+      "errors": [
+        "/srv/elsa-qualification/statemachine/r2-ec97-01/source/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/StimulusSourceExecutionFences.cs(42,52): error CS0103: The name 'RuntimeExecutionOwnershipStateId' does not exist in the current context [/srv/elsa-qualification/statemachine/r2-ec97-01/source/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj]"
+      ],
+      "elapsedSeconds": 163.56686125300007
+    },
+    "regressions": "NOT_RUN"
+  },
+  "cleanup": {
+    "allOwnedGroupsEmpty": true,
+    "systemdControlGroup": "",
+    "unitActiveState": "failed",
+    "timedOut": false
+  },
+  "next": "One-line namespace correction frozen source2c63de7e... pendingreview/next73case execution; original outcome retained"
+}

@@ -1,0 +1,51 @@
+{
+  "status": "FAILED_DISCOVERY_CONTROLLER_WHOLE_SUITE_NOT_RUN",
+  "at": "2026-11-06T04:04:31.525877+00:00",
+  "rawArchiveSha256": "1e7cae0ba6e21969d23c2cf68bba26b0f963169b216332cc024b71d180d364e4",
+  "terminal": {
+    "status": "EXITED",
+    "exitCode": 1,
+    "endedAt": "2026-11-06T03:57:33.877852+00:00",
+    "scope": "Whole affected EF project with discovery inventory; actual TRX, per-phase result and cleanup evidence still require inspection"
+  },
+  "discoveryPhase": {
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "-m:1",
+      "-nr:false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--settings",
+      "/srv/elsa-qualification/statemachine/r2-whole-ef-01/inputs/packet/runtime.runsettings",
+      "--list-tests"
+    ],
+    "pid": 29400,
+    "exception": null,
+    "exitCode": 0,
+    "timedOut": false,
+    "elapsedSeconds": 2.5536484800004473,
+    "observedProcessRows": [
+      "29400   29375   29400 Fri Nov  6 03:57:30 2026 dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release --no-build --no-restore -m:1 -nr:false -p:UseSharedCompilation=false -p:RestoreLockedMode=true --nologo --settings /srv/elsa-qualification/statemachine/r2-whole-ef-01/inputs/packet/runtime.runsettings --list-tests",
+      "29422   29400   29400 Fri Nov  6 03:57:31 2026 /opt/elsa-tools/dotnet-10.0.300/dotnet exec /opt/elsa-tools/dotnet-10.0.300/sdk/10.0.300/vstest.console.dll --settings:/srv/elsa-qualification/statemachine/r2-whole-ef-01/inputs/packet/runtime.runsettings --testAdapterPath:/home/codex/.nuget/packages/coverlet.collector/6.0.2/build/netstandard2.0/ --framework:.NETCoreApp,Version=v10.0 --listTests /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll --logger:Console;Verbosity=minimal --testAdapterPath:/home/codex/.nuget/packages/microsoft.codecoverage/18.0.0/build/netstandard2.0/ --nologo --artifactsProcessingMode-collect --testSessionCorrelationId:29400_ead10c7c-c87d-409e-a51e-7289ed90c9f1",
+      "29436   29422   29400 Fri Nov  6 03:57:31 2026 /opt/elsa-tools/dotnet-10.0.300/dotnet exec --runtimeconfig /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.runtimeconfig.json --depsfile /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.deps.json /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/testhost.dll --port 40583 --endpoint 127.0.0.1:040583 --role client --parentprocessid 29422 --telemetryoptedin false"
+    ],
+    "ownedGroupRowsBeforeCleanup": [],
+    "remainingOwnedGroupRows": []
+  },
+  "launcher": {
+    "passed": false,
+    "stoppedAt": "discovery",
+    "exception": "RuntimeError('Expected nonempty unique discovery names.')"
+  },
+  "actualDiscoveryRows": 1911,
+  "uniqueDisplays": 1909,
+  "cause": "Two pairs of different theory arguments truncate to same xUnit displayname; uniqueness requirement invalid. Corrected parser preserves allrows/counts.",
+  "wholeSuiteProductExecution": false
+}

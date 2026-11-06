@@ -111,9 +111,16 @@ public static class RuntimeCheckpointCommitFingerprint
         if (semanticContent.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Invocation input semantics must be an object.", nameof(semanticContent));
         RequireUniqueProperties(semanticContent);
-        var payload = JsonSerializer.SerializeToElement(new { Format = "elsa.invocation.input.v1", Content = semanticContent });
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            // Canonical field order, without imposing JsonSerializer's default depth on the extra envelope.
+            writer.WriteStartObject();
+            writer.WritePropertyName("Content");
+            WriteIntentCanonical(semanticContent, writer);
+            writer.WriteString("Format", "elsa.invocation.input.v1");
+            writer.WriteEndObject();
+        }
         return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
     }
 

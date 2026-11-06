@@ -1,0 +1,33 @@
+{
+  "status": "WHOLE_EF_1911_PASSED",
+  "at": "2026-11-06T04:33:20.065249+00:00",
+  "sourceManifestSha256": "b928d2226ce51038c994f3bbe73715928293584b91b6bb3ed61ab5a781edf47b",
+  "rawArchiveSha256": "e7be72e45dc1dd4ec56e7a76eda6362dc240acbf9e5d94cf6ac5127c140d1320",
+  "trxSha256": "05473751d6a8013852f0e8a2fbd51d0e7fe143a2c6684d97b9cb6e989e0e8f04",
+  "counters": {
+    "total": "1911",
+    "executed": "1911",
+    "passed": "1911",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "discoveryRows": 1911,
+  "methodDefinitions": 973,
+  "allMethodCaseCountsEqual": true,
+  "uniqueTrxTestIds": 1911,
+  "uniqueTrxExecutionIds": 1911,
+  "elapsedSeconds": 883.8237130409989,
+  "cleanup": "Originalunitinactive, result success, ownedgroups empty",
+  "scope": "Whole EF project on originalR2source53b928; not currentdd36 execution, live nonSQLite engines, commontypedparticipation, native/StateMachine/Studio."
+}

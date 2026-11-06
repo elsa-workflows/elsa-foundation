@@ -1,0 +1,95 @@
+{
+  "status": "BINDING_CONTROL_PASSED",
+  "at": "2026-11-06T04:14:50.263077+00:00",
+  "rawArchiveSha256": "550df3978a8367c8f27db010589415a4f85d58f2191ab160db7c3adbb89fef0a",
+  "phases": {
+    "binding-baseline-green": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "elapsedSeconds": 145.84616994200042,
+      "trxSha256": "ee7adccf1c2c2fbd49c218d12fe136a229efc90a377df1a1fa872d31f02001e7",
+      "failures": []
+    },
+    "binding-red": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "elapsedSeconds": 24.856702837999364,
+      "trxSha256": "f898059cfa315f869ad9cf844636a571e53b2c3d5157051bde5f6c06ad515227",
+      "failures": [
+        {
+          "name": "Elsa.Workflows.Runtime.Tests.StimulusIngressFingerprintTests.Unkeyed_sources_start_each_binding_while_published_caller_keys_keep_per_artifact_identity(keyed: False)",
+          "message": "Assert.NotEqual() Failure: Strings are equal\nExpected: Not \"wfexec:start:v3:fc195b5223477dd0fbc12eeec39fd5084a\"\u00b7\u00b7\u00b7\nActual:       \"wfexec:start:v3:fc195b5223477dd0fbc12eeec39fd5084a\"\u00b7\u00b7\u00b7"
+        }
+      ]
+    },
+    "binding-restored-green": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "elapsedSeconds": 23.765399784999317,
+      "trxSha256": "2df88ad8c031da9da146547aab2de08e83cd0dd6dc635cf5b40054362a98a6a2",
+      "failures": []
+    }
+  },
+  "terminal": {
+    "status": "EXITED",
+    "exitCode": 0,
+    "endedAt": "2026-11-06T04:05:45.863197+00:00",
+    "scope": "Per-binding identity negative-control packet; actual TRX, per-phase result and cleanup evidence still require inspection"
+  },
+  "launcher": {
+    "passed": true,
+    "negativeControlValidated": true,
+    "sequence": "2green -> 1intendedfailure/1pass -> 2green",
+    "sourceRestored": true,
+    "scope": "Per-binding generated start identity only; no native/provider/full-feature proof"
+  },
+  "scope": "Only per-binding generated source start identity; not fullRuntime/provider/native/StateMachine acceptance"
+}

@@ -1,0 +1,89 @@
+{
+  "scope": "Canonical source/retention components only; incomplete StateMachineM0/program. Original rawarchives retainedbyteforbyte including failures.",
+  "sourceBase": "d9678af6f859cefa5f307f22f2a806857bf94a0e",
+  "finalSourceManifestSha256": "b928d2226ce51038c994f3bbe73715928293584b91b6bb3ed61ab5a781edf47b",
+  "publishedSource": "3b54b8ab7ec3cc8ef1bc749ea0f03e06767273a9",
+  "laterPublishedInputComponent": "dd36c153d78ff9484a1cd49e15d6370b6b8b4e26",
+  "laterInput32": "Separate initialdd36 run FAILED: Runtime21passed; pin target9distinctcases8pass1failure instead of11. See ../r3-input-initial. Corrected57source UNRUN.",
+  "archives": [
+    {
+      "name": "original",
+      "archive": "original.tar.gz",
+      "bytes": 32900,
+      "sha256": "36285a0e5dc287d5721ffdddc42189356063d3a958abd7e847e25ed0f634dbde",
+      "result": "Runtime38passed; EFcompilefailed, no EFexecution",
+      "inspection": "original.inspection.json",
+      "inspectionSha256": "bfae3d96ce5dcb03812ab6df22057c9c418b559bbbf57e72328b96556ce966d4"
+    },
+    {
+      "name": "controls73",
+      "archive": "controls73.tar.gz",
+      "bytes": 37409,
+      "sha256": "f9fb4c00f22b77a38b9eb86290cfa0e19872b32d327abdf8117f363efedaeafc",
+      "result": "Runtime54passed; EFbuildmissing genuineignoredfixture, no EFexecution",
+      "inspection": "controls73.inspection.json",
+      "inspectionSha256": "4065ef77b9281b66e75f75cd34ca6ef76b2261f4db8cc387a17b7e0032c3314e"
+    },
+    {
+      "name": "ef-first",
+      "archive": "ef-first.tar.gz",
+      "bytes": 21590,
+      "sha256": "4e5a3928f0b190e6299bb76cce96928a268453a056722c4d4cd3efc7378a40c2",
+      "result": "EF19executed:14passed5failed, stale coordinationCAS",
+      "inspection": "ef-first.inspection.json",
+      "inspectionSha256": "9fdf3e9a7b2c774f8b6911b69d504809dfdc1bbc42a393fd984de55ceae95f05"
+    },
+    {
+      "name": "migrations",
+      "archive": "migrations.tar.gz",
+      "bytes": 87037,
+      "sha256": "b2a51909020db3db47b93f676aabeddd11b2dba45bcaa4fd67aafad3b265c9e7",
+      "result": "Normal four-provider incremental generation exited0"
+    },
+    {
+      "name": "ef-corrected",
+      "archive": "ef-corrected.tar.gz",
+      "bytes": 23794,
+      "sha256": "1563516b64ed8ac60a001b5c78ab5f05d8084630180d0cd418427bd829ab347e",
+      "result": "EF19allpassed; schema4executed3passed1failed outdatedfixture",
+      "inspection": "ef-corrected.inspection.json",
+      "inspectionSha256": "66bd77ca46ea36a407f172057c014c79c84ce274c225d612ccb2f043a3e406ea"
+    },
+    {
+      "name": "schema-corrected",
+      "archive": "schema-corrected.tar.gz",
+      "bytes": 15517,
+      "sha256": "3f9c094e3c7e444c1905cac68010d0f7e42b1aa58d7571f25ccf807a38b45b21",
+      "result": "Schema/legacy4allpassed",
+      "inspection": "schema-corrected.inspection.json",
+      "inspectionSha256": "93fcaa74f9618a7952d76b8861d95b3314d22363cee53db8b87257945d82bb0a"
+    },
+    {
+      "name": "whole-ef-discovery-failed",
+      "archive": "whole-ef-discovery-failed.tar.gz",
+      "bytes": 61741,
+      "sha256": "1e7cae0ba6e21969d23c2cf68bba26b0f963169b216332cc024b71d180d364e4",
+      "result": "Discovery exited0; controllerrejected truncateddisplayduplicates; whole suite NOT_RUN",
+      "inspection": "whole-ef-discovery-failed.inspection.json",
+      "inspectionSha256": "c4dc86ae74f0ea1a411130681c333d98752498cadb83aaa4a562ad2d08064295"
+    },
+    {
+      "name": "binding-control",
+      "archive": "binding-control.tar.gz",
+      "bytes": 31138,
+      "sha256": "550df3978a8367c8f27db010589415a4f85d58f2191ab160db7c3adbb89fef0a",
+      "result": "2green ->1intendedfailure/1pass ->2restoredgreen",
+      "inspection": "binding-control.inspection.json",
+      "inspectionSha256": "46b91225be3a5efcefd8138c3c7e0ffdb839f63dcf77f8dbca8bd7963e4c7ace"
+    },
+    {
+      "name": "whole-ef-passed",
+      "archive": "whole-ef-passed.tar.gz",
+      "bytes": 627558,
+      "sha256": "e7be72e45dc1dd4ec56e7a76eda6362dc240acbf9e5d94cf6ac5127c140d1320",
+      "result": "Unfiltered wholeEF1911allpassed; actualinventory matched",
+      "inspection": "whole-ef-passed.inspection.json",
+      "inspectionSha256": "a2056a152253220f863e4aa4aaa9e2722747467772de5701464296a89ce3c470"
+    }
+  ]
+}

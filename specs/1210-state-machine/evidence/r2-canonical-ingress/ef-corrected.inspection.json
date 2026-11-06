@@ -1,0 +1,62 @@
+{
+  "ef-ingress": {
+    "counters": {
+      "total": "19",
+      "executed": "19",
+      "passed": "19",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [],
+    "trxSha256": "3ab70d511da4b783e6d3ff8a992bdcf43804885dd6e204430437abe0da8fdd31"
+  },
+  "ef-regression": {
+    "counters": {
+      "total": "4",
+      "executed": "4",
+      "passed": "3",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeEntityFrameworkCoreFeatureTests.The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate",
+        "outcome": "Failed",
+        "message": "Elsa.Persistence.Schema.SchemaFinalization.SchemaFinalizationRefusedException : Schema family 'RuntimeArtifact': the finalized version '1.0.0' is not in this build's chain [2.0.0, 99.0.0], so it cannot be placed relative to the others.",
+        "stack": "   at Elsa.Persistence.Schema.SchemaFinalization.SchemaVersionChain.Require(String family, IReadOnlyList`1 chain, String version, String role) in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/src/Persistence/Schema/SchemaFinalization/SchemaFinalizationModels.cs:line 291\n   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationStore.EnsureForward(String family, IReadOnlyList`1 chain, String from, String to, String fromRole, String toRole) in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaFinalizationStore.cs:line 512\n   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationStore.<>c__DisplayClass16_0.<RecordIntentAsync>b__0(SchemaFinalizationRecord record, DateTimeOffset at) in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaFinalizationStore.cs:line 193\n   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationStore.ChangeAsync(String family, Int64 expectedRevision, Func`3 change, CancellationToken cancellationToken) in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaFinalizationStore.cs:line 491\n   at Elsa.Persistence.EntityFramework.Tests.EfSchemaFinalizationTestSupport.FinalizeAsync(EfSchemaFinalizationStore store, String family, IReadOnlyList`1 chain, String version, SchemaFinalizationMember member) in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs:line 38\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeEntityFrameworkCoreFeatureTests.The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate() in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/RuntimeEntityFrameworkCoreFeatureTests.cs:line 111\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeEntityFrameworkCoreFeatureTests.The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate() in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/RuntimeEntityFrameworkCoreFeatureTests.cs:line 115\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeEntityFrameworkCoreFeatureTests.The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate() in /srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/RuntimeEntityFrameworkCoreFeatureTests.cs:line 115\n--- End of stack trace from previous location ---"
+      }
+    ],
+    "trxSha256": "951a12eda8aa25368716738bbd724b599de1d6371687acea8f421d1547493f99"
+  },
+  "status": "EF19_PASSED_SCHEMA4_3PASSED_1FAILED_FIXTURE",
+  "inspectedAt": "2026-11-06T03:47:13.676622+00:00",
+  "rawArchiveSha256": "1563516b64ed8ac60a001b5c78ab5f05d8084630180d0cd418427bd829ab347e",
+  "sourceManifestSha256": "adb5d5a5ee288b080fca55c687be1afb1bc827456257bac2beeb64e6d1c3d589",
+  "cleanup": {
+    "allOwnedGroupsEmpty": true,
+    "timeout": false
+  },
+  "correction": "Test-only full readable chain+future99, sourceb928... all3lensesclean/unrun; productioncode+allEF19methods unchanged"
+}

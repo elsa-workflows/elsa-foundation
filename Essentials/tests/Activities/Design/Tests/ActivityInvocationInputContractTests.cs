@@ -74,11 +74,15 @@ public sealed class ActivityInvocationInputContractTests
     }
 
     [Theory]
-    [InlineData("receiver-\uD800")]
-    [InlineData("receiver-\uD801")]
-    [InlineData("receiver-\uDC00")]
-    public void Invalid_utf16_names_refuse_instead_of_colliding_in_json(string protocol) =>
+    [InlineData(0xD800)]
+    [InlineData(0xD801)]
+    [InlineData(0xDC00)]
+    public void Invalid_utf16_names_refuse_instead_of_colliding_in_json(int codeUnit)
+    {
+        // Attribute string decoding can replace invalid UTF-8 before the test receives it.
+        var protocol = "receiver-" + (char)codeUnit;
         Assert.Throws<ArgumentException>(() => new ActivityInvocationInputCapability(protocol, 1));
+    }
 
     [Fact]
     public void Valid_supplementary_unicode_is_preserved_on_the_pin()
