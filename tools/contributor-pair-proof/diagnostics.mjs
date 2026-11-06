@@ -123,6 +123,7 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
   async function collect(stage, failureClass, active, signal) {
     let directoryCreated = false;
     const generation = navigation;
+    let creationRejected = false;
     // Incomplete writes are never among the two files CI uploads. Abort is best
     // effort, so recheck the deadline after IO and remove any late publication.
     async function retain(name, contents, admissible = async () => true, unchanged = () => true) {
@@ -180,6 +181,7 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
         if (!active()) return "capture-timeout";
         const preImage = await inspectPage(page);
         if (generation !== navigation || preImage.url !== before.url || !safeEditor(preImage, studioOrigin)) {
+          creationRejected = true;
           receipt.capture = "suppressed-navigation-or-page-change";
         } else {
           try {
@@ -187,6 +189,7 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
             if (!active()) return "capture-timeout";
             const after = await inspectPage(page);
             if (generation !== navigation || after.url !== before.url || !safeEditor(after, studioOrigin)) {
+              creationRejected = true;
               receipt.capture = "suppressed-navigation-or-page-change";
             } else if (!Buffer.isBuffer(png) || png.length > limits.pngBytes || !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
               receipt.capture = "screenshot-over-limit";
@@ -202,8 +205,8 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
         }
       }
       if (!active()) return "capture-timeout";
-      let creationRejected = false;
       const admissibleCreation = async () => {
+        if (creationRejected) return false;
         try {
           const current = await inspectPage(page);
           if (generation === navigation && current.url === before.url && safeCreationPage(current)) return true;
@@ -212,7 +215,7 @@ export function observeEditor(page, { studioOrigin, outputDir, captureMs = limit
         return false;
       };
       const creationUnmoved = () => {
-        if (generation === navigation) return true;
+        if (!creationRejected && generation === navigation) return true;
         creationRejected = true;
         return false;
       };

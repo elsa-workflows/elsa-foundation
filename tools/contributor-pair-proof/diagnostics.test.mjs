@@ -241,6 +241,31 @@ test("a page change before the image prevents screenshot invocation", async t =>
   assert.ok(!f.page.calls.some(call => call[0] === "screenshot"));
 });
 
+for (const [name, unsafe] of [
+  ["password", { sensitiveForms: 1 }], ["frame", { frames: 1 }], ["authentication fallback", { authFallback: 1 }]
+]) {
+  for (const phase of ["pre-image", "post-image"]) {
+    test(`R3 creation rejection survives same-URL ${name} recovery after ${phase}`, async t => {
+      const states = [editorState(), ...(phase === "post-image" ? [editorState()] : []), editorState(unsafe), editorState()];
+      const page = new FakePage({ states });
+      const f = await fixture(t, { page, creationState: () => ({ requestRoot: true }) });
+      assert.equal(await f.observer.captureFailure(clickStage, "timeout"), "suppressed-navigation-or-page-change");
+      const receipt = await f.receipt();
+      assert.equal(receipt.creation, undefined); assert.equal(receipt.screenshot, "suppressed");
+      assert.deepEqual(await f.files(), ["diagnostic.json"]);
+      assert.equal(page.calls.some(call => call[0] === "screenshot"), phase === "post-image");
+    });
+  }
+}
+
+test("R3 a safe busy-state recovery still retains admissible creation evidence", async t => {
+  const page = new FakePage({ states: [editorState(), editorState({ busyElements: 1 }), editorState(), editorState()] });
+  const f = await fixture(t, { page, creationState: () => ({ requestRoot: true }) });
+  assert.equal(await f.observer.captureFailure(clickStage, "timeout"), "retained");
+  assert.equal((await f.receipt()).creation.requestRoot, true);
+  assert.equal((await f.receipt()).screenshot, "viewport.png");
+});
+
 for (const route of [editorUrl, `${origin}/workflows/definitions`]) {
   test(`R2 creation evidence is suppressed after navigation during the first inspection at ${route === editorUrl ? "editor" : "list"}`, async t => {
     const page = new FakePage({ states: [editorState({ url: route })] });
