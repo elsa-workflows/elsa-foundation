@@ -144,7 +144,7 @@ internal sealed class DefaultConnectionManager(
         {
             await ValidateOwnedSecretWriteTargetsAsync(tenantId, name, request.SecretFields, previous: null, cancellationToken);
             await WriteSecretFieldsAsync(tenantId, name, request.SecretFields, document.Definition.SecretFields, createdOwnedSecrets, cancellationToken);
-            await repository.SaveAsync(document, cancellationToken);
+            await SaveDocumentAsync(document, cancellationToken);
         }
         catch
         {
@@ -311,7 +311,7 @@ internal sealed class DefaultConnectionManager(
             }
 
             document.State.UpdatedAt = timeProvider.GetUtcNow();
-            await repository.SaveAsync(document, cancellationToken);
+            await SaveDocumentAsync(document, cancellationToken);
         }
         catch
         {
@@ -371,7 +371,7 @@ internal sealed class DefaultConnectionManager(
 
             var result = await type.TestAsync(resolved, cancellationToken);
             document.State.LastTestedAt = timeProvider.GetUtcNow();
-            await repository.SaveAsync(document, cancellationToken);
+            await SaveDocumentAsync(document, cancellationToken);
             return result;
         }
         catch (ConnectionUnavailableException exception)
@@ -389,7 +389,7 @@ internal sealed class DefaultConnectionManager(
 
         document.State.Status = ConnectionStatuses.Revoked;
         document.State.UpdatedAt = timeProvider.GetUtcNow();
-        await repository.SaveAsync(document, cancellationToken);
+        await SaveDocumentAsync(document, cancellationToken);
         return ToMetadata(document);
     }
 
@@ -894,8 +894,18 @@ internal sealed class DefaultConnectionManager(
             throw new ArgumentException($"Only owner '{ConnectionOwners.Tenant}' is valid in v1.", nameof(owner));
     }
 
+    private async ValueTask SaveDocumentAsync(ConnectionDocument document, CancellationToken cancellationToken)
+    {
+        // Providers may leave the caller's revision unchanged; the successful CAS always stores exactly +1.
+        var savedVersion = checked(document.State.Version + 1);
+        await repository.SaveAsync(document, cancellationToken);
+        document.State.Version = savedVersion;
+    }
+
     private static ConnectionMetadata ToMetadata(ConnectionDocument document) => new()
     {
+        IncarnationId = string.IsNullOrWhiteSpace(document.Definition.IncarnationId) ? null : document.Definition.IncarnationId,
+        Version = document.State.Version,
         TenantId = document.Definition.TenantId,
         Name = document.Definition.Name,
         DisplayName = document.Definition.DisplayName,

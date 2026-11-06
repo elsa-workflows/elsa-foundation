@@ -100,6 +100,8 @@ internal sealed class HttpConnectionApplicator(
         public string AuthScheme => inner.AuthScheme;
         public string Owner => inner.Owner;
         public string Status => inner.Status;
+        public int Version => inner.Version;
+        public string? IncarnationId => inner.IncarnationId;
         public IReadOnlyDictionary<string, string> Settings => inner.Settings;
         public AllowedHostsPolicy Hosts => inner.Hosts;
 

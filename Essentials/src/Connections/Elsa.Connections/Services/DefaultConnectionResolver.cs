@@ -14,6 +14,10 @@ internal sealed class DefaultConnectionResolver(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.TenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
+        if (request.ExpectedIncarnationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(request.ExpectedIncarnationId);
+        if (request.ExpectedVersion is <= 0)
+            throw new ArgumentOutOfRangeException(nameof(request.ExpectedVersion));
 
         if (!string.Equals(request.Owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase))
         {
@@ -31,6 +35,19 @@ internal sealed class DefaultConnectionResolver(
                 name,
                 ConnectionFaultCodes.Unavailable,
                 $"Connection '{name}' was not found in this tenant.");
+        }
+
+        // Check the very document returned to the caller; a separate metadata lookup could race recreation.
+        if (request.ExpectedIncarnationId is not null &&
+            !string.Equals(request.ExpectedIncarnationId, document.Definition.IncarnationId, StringComparison.Ordinal))
+        {
+            throw new ConnectionUnavailableException(name, ConnectionFaultCodes.IdentityChanged,
+                "The connection creation identity no longer matches the selected mapping.");
+        }
+        if (request.ExpectedVersion is not null && request.ExpectedVersion != document.State.Version)
+        {
+            throw new ConnectionUnavailableException(name, ConnectionFaultCodes.RevisionChanged,
+                "The connection metadata revision no longer matches the required observation.");
         }
 
         if (request.RequiredType is { Length: > 0 } &&

@@ -46,6 +46,11 @@ Independent test: actual source plus two owned target hosts expose equivalent pr
 - [ ] T020 [US2] Add shared prepared target-session lifetime and mapping/change-preview Studio pages using `Studio/src/essentials/Elsa.Studio.Backends/`, `Hosting/` and Workflows, preserving source context and separate target authentication.
 - [ ] T021 [US2] Add packaged CLI import/inspect/preview calls, JSON/problem output and target-auth options in `Essentials/src/Cli/Elsa.Cli/`, testing the packed tool against actual target APIs.
 
+T017 prerequisite checkpoint: Connections exposes creation identity/revision observations and same-read guards, while
+store saves fence creation identity plus revision to prevent a stale save restoring a deleted incarnation. Local core/API
+and SQLite suites pass 175 and 50 cases; native relational-provider checks remain pending. Release mapping/context,
+Secrets and ETL owner integration remain open; this is not target-preview or retained-run acceptance.
+
 ## Phase 5 — US3: Durable activation, recovery and rollback (P1; M3)
 
 Independent test: interrupt real owner commits/callbacks, resume, rebind and roll back while native/BPMN/ETL executions continue on original pins/captures.

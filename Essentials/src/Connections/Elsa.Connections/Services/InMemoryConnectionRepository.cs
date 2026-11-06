@@ -75,17 +75,20 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
     public ValueTask<bool> TryAddAsync(ConnectionDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
-        Validate(document.Definition.TenantId, document.Definition.Name);
-        return new(_documents.TryAdd(Key(document.Definition.TenantId, document.Definition.Name), Clone(document)!));
+        var snapshot = Clone(document)!;
+        Validate(snapshot.Definition.TenantId, snapshot.Definition.Name);
+        return new(_documents.TryAdd(Key(snapshot.Definition.TenantId, snapshot.Definition.Name), snapshot));
     }
 
     public ValueTask SaveAsync(ConnectionDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
-        Validate(document.Definition.TenantId, document.Definition.Name);
-        var key = Key(document.Definition.TenantId, document.Definition.Name);
         var next = Clone(document)!;
-        next.State.Version = document.State.Version + 1;
+        Validate(next.Definition.TenantId, next.Definition.Name);
+        var key = Key(next.Definition.TenantId, next.Definition.Name);
+        var expectedVersion = next.State.Version;
+        var expectedIncarnation = next.Definition.IncarnationId;
+        next.State.Version = checked(expectedVersion + 1);
         while (true)
         {
             if (!_documents.TryGetValue(key, out var current))
@@ -95,7 +98,8 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
                     $"Connection '{document.Definition.Name}' was changed by another request.");
             }
 
-            if (current.State.Version != document.State.Version)
+            if (current.State.Version != expectedVersion ||
+                !string.Equals(current.Definition.IncarnationId, expectedIncarnation, StringComparison.Ordinal))
             {
                 throw new ConnectionConflictException(
                     document.Definition.Name,
