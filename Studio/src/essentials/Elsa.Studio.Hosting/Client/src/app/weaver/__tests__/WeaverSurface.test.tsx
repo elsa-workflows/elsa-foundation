@@ -12,6 +12,42 @@ import { AgentContextChips } from "../../agent/AgentContextChips";
 import { beginAgentModuleRegistration, retireAgentModuleRegistration } from "../../agent/agentRegistrationOrigins";
 
 describe("WeaverSurface", () => {
+  it.each(["initial", "late"] as const)("refreshes an %s module's result presentation and excludes it after withdrawal", async timing => {
+    const api = readyApi(); const client = readyClient();
+    const supports = vi.fn(() => true);
+    const presentation = vi.fn(() => <p>Module-owned presentation</p>);
+    const control = vi.fn(() => <button type="button">Module-owned undo</button>);
+    const register = () => {
+      const registration = beginAgentModuleRegistration(api, "Sample.Satellite");
+      registration.api.agent.resultRenderers.add({ id: "sample-result", moduleId: "Sample.Satellite", resourceModuleIds: ["Sample"], displayName: "Sample result", supports, component: presentation });
+      registration.api.agent.resultControls!.add({ id: "sample-undo", moduleId: "Sample.Satellite", resourceModuleIds: ["Sample"], displayName: "Sample undo", resultTypes: ["sample.result"], component: control });
+      registration.complete();
+    };
+    if (timing === "initial") register();
+    let emit!: (event: AgentStreamEvent) => void;
+    const subscribeStream = ((_context, _url, receive) => { emit = receive; return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "presentation", message: "Inspect" }} />);
+    const target = preparedInvocation(api).target!;
+    const payload = { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } };
+    const result = { toolCallId: "sample-call", toolName: "sample_read", succeeded: true, content: "Observed sample", payload, receipt: { invocationId: "sample-invocation", before: target, after: target, scope: "clientWorkingState" as const, evidence: payload } };
+    try {
+      await flushPromises();
+      if (timing === "late") register();
+      flushSync(() => emit({ type: "module-result", messageId: "msg_1", result }));
+      expect(container.textContent).toContain("Module-owned presentation");
+      expect(container.textContent).toContain("Module-owned undo");
+      expect(supports).toHaveBeenCalled();
+      const calls = [supports.mock.calls.length, presentation.mock.calls.length, control.mock.calls.length];
+      retireAgentModuleRegistration(api, "Sample.Satellite");
+      flushSync(() => emit({ type: "module-result", messageId: "msg_1", result: { ...result, content: "Fresh observed sample" } }));
+      expect([supports.mock.calls.length, presentation.mock.calls.length, control.mock.calls.length]).toEqual(calls);
+      expect(container.textContent).not.toContain("Module-owned presentation");
+      expect(container.textContent).not.toContain("Module-owned undo");
+      expect(container.textContent).toContain("Fresh observed sample");
+      expect(container.querySelector('[aria-label="Module results"] pre')?.textContent).toContain('"value": 2');
+    } finally { unmount(); }
+  });
+
   it("refuses disclosure when a contributing module retires during session creation", async () => {
     const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
     api.agent.onPromptResult(result => results.push(result));

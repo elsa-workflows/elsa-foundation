@@ -46,8 +46,8 @@ export function WeaverSurface({
   onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
-  const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
-  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
+  const resultRenderers = api.agent.resultRenderers.list();
+  const resultControls = api.agent.resultControls?.list() ?? [];
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
