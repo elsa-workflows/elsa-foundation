@@ -1,0 +1,42 @@
+{
+  "declaredInputDeletionRefused": true,
+  "forwardWarnings": [],
+  "reverseWarnings": [],
+  "externalInitialWarnings": [],
+  "forwardRows": 3,
+  "reverseRows": 4,
+  "forwardIdsPreserved": true,
+  "reverseIdsPreserved": true,
+  "externalReimportIdsAndDiagramPreserved": true,
+  "diagramAndDocumentationPreserved": true,
+  "opaqueNativeSubtreePreserved": true,
+  "opaqueExternalSubtreePreserved": true,
+  "opaqueExternalWarnings": [],
+  "reverseOutput": "\"Studio approved\"",
+  "remainingModelers": 0,
+  "studioSourceSha256": "d8db1c360893f1f621d374d8b223d00d291fcc1256705bcbbce4ec2578583f2f",
+  "bundleSha256": "fb00a3e2d59de3ca4c133d7b764bcc3cf3568c0081874b2e9d4ccf172112e1ba",
+  "browserVersion": "156.0.8078.80",
+  "tools": {
+    "dmn-js": "18.0.1",
+    "dmn-moddle": "12.2.1",
+    "playwright": "1.56.1",
+    "esbuild": "0.25.11"
+  },
+  "files": {
+    "product.dmn": "fe69934b7ff07402345c37acfdbba23209770c40b65603b12555fd965b200b61",
+    "declaredRenamed.dmn": "75cdc3b79c4e54d4856eb464eb78a0dddc5488d57faee29083ce5d5700a90e53",
+    "declaredRetyped.dmn": "132ed58769f2b6103eb7d95259d72be15a5c3149dd7ac39a12441a827499f6b1",
+    "declaredOutputs.dmn": "d1b2521bb5f0db9c1f236baaebc7af5e936bdd653da16307859e86daf30e6855",
+    "declaredScalar.dmn": "e9d7b3678e1e77857730ee439141eb8d9193a1d3633e4fd36a00fa4b6c50b083",
+    "uniqueInput.dmn": "6521d351f9ecc74de884de6d891ea2b8f184a6a9088e6ef317b9a03365e9ba2d",
+    "forward.dmn": "d1478e02fae7e87a3a185c4f3a3b0d68b41f7fdbd77886a7cd504321f1b34fdd",
+    "external.dmn": "8cc87b91cc562048a2d1b3ca62d36390e8ec25e8eb42cabbe3a53beb52767709",
+    "externalEdited.dmn": "67a6e5f8f22e337e1a3092d2142c26d24f09dbe124f6a844eab770ecba0b8f77",
+    "nativeEdited.dmn": "a0099eeec3906ba2c1294b332625334a0770b5cd9fbff626489b3c1ff51a19cb",
+    "reverse.dmn": "5c0a2ebd67e7bbeea9407f65716dc103c88ff91debc7efbb2c487609248d0815",
+    "opaque.dmn": "00f444ef328d407630ee714d16405d35ec4eaaf449ed4d8391153adc2e14a7b4",
+    "opaqueEdited.dmn": "1c8c91bc7c416e3a7d03e87df434a0d4fc0dfc8201335f321309ae46b71818c4",
+    "opaqueExternal.dmn": "e6147cef6d941166a36670d8e9cbfa7e49afc7a82027979a3eb56d1d9d6575a9"
+  }
+}
