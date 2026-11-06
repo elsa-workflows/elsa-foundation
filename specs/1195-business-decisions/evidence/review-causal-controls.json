@@ -1,6 +1,6 @@
 {
   "productSource": "2c8925a2ac808db26c6cb1b051e534b3736afbfd",
-  "isolation": "Private detached clone; product files restored before complete green suites; primary checkout untouched.",
+  "isolation": "Composition/unsaved-edit mutations ran in a private detached clone, restored before complete green suites. History/column tests were run against pre-fix primary source and rerun after correction. No developer data or running host was targeted.",
   "controls": [
     {
       "name": "history",

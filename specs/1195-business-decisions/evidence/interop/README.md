@@ -10,7 +10,7 @@ The committed fixture demonstrates actual editing in both directions and 56 fini
 | dmn-moddle | 12.2.1, upstream commit [`75e2f759fa3e168a2a098358825ede2a0de02282`](https://github.com/bpmn-io/dmn-moddle/tree/75e2f759fa3e168a2a098358825ede2a0de02282) | External editor's DMN model/XML support, MIT. Full notice retained. |
 | ScratchyDisk.DmnEngine | NuGet 2.0.1, package repository commit [`67bae6927a28f77138aae98dcd35d93b1af39838`](https://github.com/Scratchydisk/ScratchyDisk.DmnEngine/tree/67bae6927a28f77138aae98dcd35d93b1af39838) | Independent .NET reference evaluator. Package declares MIT; source notice also attributes Common.DMN.Engine. Full notice in `licenses/ScratchyDisk.DmnEngine.txt`. Runtime dependencies pinned in the lock file: Antlr4.Runtime.Standard 4.13.1 and NLog 5.3.4. |
 | Playwright / esbuild | 1.56.1 / 0.25.11 | Browser driver / bundling the actual Studio utility. Apache-2.0 / MIT. Exact dependency tree and integrity hashes in `browser/package-lock.json`. |
-| Chromium | 149.0.7827.55 | Actual locally available browser used for capture; version is recorded, no browser binary vendored. |
+| Chromium | 156.0.8078.80 | Actual locally available browser used for capture; version is recorded, no browser binary vendored. |
 
 No Java runtime, server deployment or container was needed. No third-party implementation or binary is vendored here. Lock files record the executed dependency envelope; license notices are retained for the two important upstream components and model parser. This witness does not qualify the reference engine to execute untrusted documents or claim its broader FEEL grammar is bounded.
 
