@@ -141,13 +141,35 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
     for (const label of ["Run", "Current status", "Run kind"]) await columns.getByLabel(label, { exact: true }).check();
     await page.getByLabel("Visualization", { exact: true }).selectOption("table");
     await page.getByLabel("Value columns", { exact: true }).selectOption([]);
-    const recordsResponse = page.waitForResponse(response => response.url().endsWith("/dashboard-queries/preview"));
+    const recordsResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${copied.id}/preview`));
     await page.getByRole("button", { name: "Preview question", exact: true }).click();
-    const records = await (await recordsResponse).json() as Result;
+    const recordsReply = await recordsResponse;
+    expect(recordsReply.request().headers()["if-match"]).toBe(tag(copied.revision)["If-Match"]);
+    const records = await recordsReply.json() as Result;
     expect(records.rows).toHaveLength(4);
     expect(new Set(records.rows.map(row => row.values.executionId.value))).toEqual(new Set(seeded.executionIds));
     await capture(page, info, "question-records");
-    await page.goto("/dashboards/new");
+    const dashboardNavigation = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
+    const cancelPrompt = page.waitForEvent("dialog"); const cancelledNavigation = dashboardNavigation.click();
+    const discard = await cancelPrompt; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.dismiss(); await cancelledNavigation;
+    await expect(page).toHaveURL(new RegExp(`/questions/${copied.id}$`)); await expect(page.getByLabel("Query form", { exact: true })).toHaveValue("records");
+    await capture(page, info, "question-navigation-cancelled");
+    const tabs = page.getByRole("tablist", { name: "Open screens", exact: true });
+    const questionTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(questionTabId).toBeTruthy();
+    await dashboardNavigation.click({ modifiers: ["Alt"] }); await expect(page.getByRole("heading", { name: "Dashboards", exact: true })).toBeVisible();
+    const dashboardTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(dashboardTabId).not.toBe(questionTabId);
+    await tabs.locator(`[data-tab-id="${questionTabId}"]`).click();
+    await expect(page.getByLabel("Query form", { exact: true })).toHaveValue("records");
+    await expect(page.getByRole("group", { name: "Columns", exact: true }).getByLabel("Run", { exact: true })).toBeChecked();
+    await capture(page, info, "question-retained-tab");
+    // Close the clean parked collection so the next ordinary sidebar navigation replaces
+    // the dirty editor and must ask its guard, rather than switching to an existing tab.
+    await tabs.locator(`[data-tab-id="${dashboardTabId}"]`).press("Delete");
+    await expect(tabs.locator(`[data-tab-id="${dashboardTabId}"]`)).toHaveCount(0);
+    const confirmPrompt = page.waitForEvent("dialog"); const confirmedNavigation = dashboardNavigation.click();
+    const confirmedDiscard = await confirmPrompt; expect(confirmedDiscard.type()).toBe("confirm"); await confirmedDiscard.accept(); await confirmedNavigation;
+    await expect(page.getByRole("heading", { name: "Dashboards", exact: true })).toBeVisible(); await capture(page, info, "question-navigation-confirmed");
+    await page.getByRole("button", { name: "Create dashboard", exact: true }).first().click();
     await page.getByLabel("Name", { exact: true }).fill(`Private operations ${suffix}`);
     for (let index = 0; index < 2; index++) {
       await page.getByRole("button", { name: "Add saved question", exact: true }).click();

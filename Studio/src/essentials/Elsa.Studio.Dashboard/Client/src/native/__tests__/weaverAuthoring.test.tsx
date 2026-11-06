@@ -2,11 +2,13 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioAgentContextProviderContribution, StudioAgentResultRendererContribution, StudioAgentResultRendererProps, StudioAgentPromptRequest } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioAgentContextProviderContribution, type StudioAgentResultRendererContribution, type StudioAgentResultRendererProps, type StudioAgentPromptRequest } from "@elsa-workflows/studio-sdk";
 import { createDashboardAuthoringController, type DashboardAuthoringSnapshot, type DashboardAuthoringProposal } from "../authoring";
 import { DashboardAskWeaver, registerDashboardWeaver } from "../weaverAuthoring";
 import { initialDefinition, type QueryResult } from "../types";
 import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { NamedDashboardsRoute } from "../NamedDashboards";
+import type { DashboardResource } from "../types";
 
 function registry<T>() { const items: T[] = []; return { add(item: T) { items.push(item); }, list: () => items }; }
 function harness(supported = true) {
@@ -113,6 +115,78 @@ describe("native previews outside the conversation", () => {
     click(view, "Preview proposed question"); await waitUntil(() => post.mock.calls.length === 1);
     expect(post.mock.calls[0][0]).toBe("https://backend.example/_elsa/studio/questions/saved-question/preview");
     expect(post.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"saved-7"' } });
+  });
+
+  it("refines the explicitly selected card when two proposals share an unchanged editor binding", async () => {
+    const test = harness(); const origin = snapshot(); test.controller.publish(origin, vi.fn());
+    const first = proposed(origin); first.definition.query.limit = 10;
+    const second = proposed(origin); second.definition.query.limit = 20;
+    const Renderer = test.agent.resultRenderers.list().find(item => item.id === "dashboards.question-preview")!.component;
+    const firstView = render(<Renderer {...toolProps("dashboards.question-preview", first)} />);
+    const secondView = render(<Renderer {...toolProps("dashboards.question-preview", second)} />);
+    click(firstView, "Refine proposal"); await waitUntil(() => test.agent.dispatchPrompt.mock.calls.length === 1);
+    const selectedFirst = await test.source.collect({ surface: { route: "/questions/new" } });
+    if (Array.isArray(selectedFirst)) throw new Error("Expected typed context");
+    expect((selectedFirst.attachments[0].content as { definition: unknown }).definition).toEqual(first.definition);
+    expect((selectedFirst.attachments[0].content as { workingRevision: string }).workingRevision).toBe("0");
+    click(secondView, "Refine proposal"); await waitUntil(() => test.agent.dispatchPrompt.mock.calls.length === 2);
+    const selectedSecond = await test.source.collect({ surface: { route: "/questions/new" } });
+    if (Array.isArray(selectedSecond)) throw new Error("Expected typed context");
+    expect((selectedSecond.attachments[0].content as { definition: unknown }).definition).toEqual(second.definition);
+    expect(JSON.stringify(test.agent.dispatchPrompt.mock.calls)).not.toContain("987654321");
+  });
+
+  it.each([403, 404, "withheld"] as const)("invalidates the native origin and numerical preview when saved access is lost before Use (%s)", async refusal => {
+    window.history.replaceState({}, "", "/questions/saved-question");
+    const test = harness(); const sourceDraft = snapshot("source", "question"); let revoked = false;
+    const resource: DashboardResource = { id: "saved-question", kind: "question", revision: "saved-7", name: "Protected saved question", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: sourceDraft.definition, definitionState: "available", createdAt: "", updatedAt: "" };
+    test.api.backend.http.getJson = vi.fn(async (url: string) => {
+      if (url.includes("dashboard-datasets")) return { items: [] };
+      if (!revoked) return resource;
+      if (refusal === "withheld") return { ...resource, definition: undefined, definitionState: "withheld" };
+      throw Object.assign(new Error("Current saved question access is unavailable."), { status: refusal });
+    }) as typeof test.api.backend.http.getJson;
+    test.api.backend.http.postJson = vi.fn(async () => result()) as typeof test.api.backend.http.postJson;
+    const editor = render(<AnonymousAuthProvider><NamedDashboardsRoute api={test.api} kind="question" view="detail" authoring={test.controller} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await waitUntil(() => test.controller.snapshots.size === 1);
+    const origin = [...test.controller.snapshots.values()][0];
+    const Renderer = test.agent.resultRenderers.list().find(item => item.id === "dashboards.question-preview")!.component;
+    const view = render(<Renderer {...toolProps("dashboards.question-preview", proposed(origin))} />);
+    click(view, "Preview proposed question"); await waitUntil(() => view.textContent?.includes("987654321") === true);
+    revoked = true; click(view, "Use this question");
+    expect(view.textContent).not.toContain("987654321");
+    await waitUntil(() => test.controller.snapshots.size === 0);
+    expect(editor.querySelector(".named-query-controls")).toBeNull(); expect(editor.textContent).not.toContain("Protected saved question");
+    await waitUntil(() => view.textContent?.includes("Protected preview content has been cleared") === true);
+    expect(view.querySelector(".named-result")).toBeNull();
+    const context = await test.source.collect({ surface: { route: "/questions/saved-question" } });
+    expect(!Array.isArray(context) && context.attachments).toEqual([]);
+    expect(JSON.stringify(context)).not.toContain("987654321"); expect(test.agent.dispatchPrompt).not.toHaveBeenCalled();
+  });
+
+  it.each([422, 503])("withholds native proposal values after a refused Use and retains the safe editable draft (%s)", async status => {
+    window.history.replaceState({}, "", "/questions/saved-question");
+    const test = harness(); const sourceDraft = snapshot("source", "question"); let failValidation = false;
+    const resource: DashboardResource = { id: "saved-question", kind: "question", revision: "saved-7", name: "Safe local draft", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: sourceDraft.definition, definitionState: "available", createdAt: "", updatedAt: "" };
+    test.api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [] } : resource) as typeof test.api.backend.http.getJson;
+    test.api.backend.http.postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/validate")) { if (failValidation) throw Object.assign(new Error("Current proposal validation could not complete."), { status }); return { isValid: true, problems: [] }; }
+      return result();
+    }) as typeof test.api.backend.http.postJson;
+    const editor = render(<AnonymousAuthProvider><NamedDashboardsRoute api={test.api} kind="question" view="detail" authoring={test.controller} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await waitUntil(() => test.controller.snapshots.size === 1);
+    const origin = [...test.controller.snapshots.values()][0];
+    const Renderer = test.agent.resultRenderers.list().find(item => item.id === "dashboards.question-preview")!.component;
+    const view = render(<Renderer {...toolProps("dashboards.question-preview", proposed(origin))} />);
+    click(view, "Preview proposed question"); await waitUntil(() => view.textContent?.includes("987654321") === true);
+    failValidation = true; click(view, "Use this question"); expect(view.textContent).not.toContain("987654321");
+    await waitUntil(() => view.textContent?.includes("Current proposal validation could not complete") === true);
+    expect(view.querySelector(".named-result")).toBeNull();
+    expect([...view.querySelectorAll("button")].find(button => button.textContent === "Use this question")?.disabled).toBe(true);
+    expect(test.controller.snapshots.size).toBe(1); expect(editor.querySelector(".named-query-controls")).not.toBeNull();
+    expect([...test.controller.snapshots.values()][0].definition).toEqual(origin.definition);
+    failValidation = false; click(view, "Preview proposed question"); await waitUntil(() => view.textContent?.includes("987654321") === true);
+    expect([...view.querySelectorAll("button")].find(button => button.textContent === "Use this question")?.disabled).toBe(false);
   });
 
   it("cancels and clears a native preview when its originating editor disappears, ignoring late transport success", async () => {

@@ -17,7 +17,7 @@ type Proposal = Bound & { definition: QuestionDefinition; definitionFingerprint:
 type Clarification = Bound & { clarification: { question: string; choices: { id: string; label: string; description: string }[] } };
 type Intent = { origin: Bound; definition?: QuestionDefinition; confirmedInterpretation?: string };
 type Pending = { requestId: string; origin: Bound };
-type Runtime = { api: ElsaStudioModuleApi; controller: DashboardAuthoringController; native: DashboardApi; intents: Map<string, Intent>; matches(bound: Bound): DashboardAuthoringSnapshot | undefined; dispatch(bound: Bound, message: string, confirmation?: string): { accepted: boolean; reason?: string }; status(): { available: boolean; reason?: string } };
+type Runtime = { api: ElsaStudioModuleApi; controller: DashboardAuthoringController; native: DashboardApi; intents: Map<string, Intent>; matches(bound: Bound): DashboardAuthoringSnapshot | undefined; dispatch(bound: Bound, message: string, confirmation?: string, definition?: QuestionDefinition): { accepted: boolean; reason?: string }; status(): { available: boolean; reason?: string } };
 
 function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function boundData(value: unknown): Bound | undefined {
@@ -68,12 +68,13 @@ export function registerDashboardWeaver(api: ElsaStudioModuleApi, controller: Da
     const snapshot = controller.snapshots.get(bound.client.generationId);
     return snapshot && sameBinding(snapshot, bound) ? snapshot : undefined;
   };
-  const dispatch: Runtime["dispatch"] = (bound, message, confirmation) => {
+  const dispatch: Runtime["dispatch"] = (bound, message, confirmation, definition) => {
     const availability = status(); const snapshot = matches(bound);
     if (!availability.available) return { accepted: false, reason: availability.reason };
     if (!snapshot || !snapshot.canEdit) return { accepted: false, reason: "The exact originating question changed, closed or became read-only. Nothing was sent." };
     if (!message.trim() || message.length > 4000) return { accepted: false, reason: "Enter a question of at most 4,000 characters." };
     if (pending) return { accepted: false, reason: "The previous bound question is still being collected. Try again after it finishes." };
+    if (definition) intents.set(snapshot.generationId, { ...intents.get(snapshot.generationId), origin: structuredClone(bound), definition: structuredClone(definition) });
     if (confirmation) {
       if (confirmation.length > 2000) return { accepted: false, reason: "This clarification exceeds the supported confirmation bound." };
       intents.set(snapshot.generationId, { ...intents.get(snapshot.generationId), origin: structuredClone(bound), confirmedInterpretation: confirmation });
@@ -186,14 +187,14 @@ function ProposalResult(props: StudioAgentResultRendererProps & { runtime: Runti
   return <section className="named-weaver-proposal" aria-label="Proposed dashboard question"><p>{proposal.interpretation || "A validated declarative question proposal."}</p><p>Preview reads data as you, outside the model transcript. Nothing has been applied or saved.</p>
     <div className="named-actions"><StudioButton disabled={busy} onClick={() => void preview()}>Preview proposed question</StudioButton>{busy ? <StudioButton onClick={() => { lifetime.cancel("preview"); setBusy(false); setResult(undefined); setError("Native preview cancelled."); }}>Cancel proposed preview</StudioButton> : null}
       <StudioButton disabled={busy || !result || result.outcome !== "succeeded" || !snapshot.canEdit} onClick={() => {
-        const request = lifetime.begin("use"); setBusy(true); setError(undefined);
+        const request = lifetime.begin("use"); setBusy(true); setError(undefined); setResult(undefined);
         // The server fingerprint is SHA-256. The native controller accepts a different optional
         // full-request fingerprint, so deliberately omit that field rather than substituting it.
         const nativeProposal: DashboardAuthoringProposal = { client: proposal.client, target: proposal.target, workingRevision: proposal.workingRevision, definition: proposal.definition, interpretation: proposal.interpretation };
         void runtime.controller.useProposal(proposal.client.generationId, nativeProposal).then(outcome => { if (!request.current()) return; if (outcome.outcome === "applied") { setApplied(true); setResult(undefined); } else setError(outcome.summary); }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(() => { if (request.current()) setBusy(false); request.finish(); });
       }}>Use this question</StudioButton>
       <StudioButton disabled={busy || !availability.available} onClick={() => {
-        const current = lifetime.capture(); void runtime.api.dialogs.prompt({ title: "Refine proposed question", message: "Describe the query or presentation change. Existing source result values will not be sent to the model." }).then(message => { if (!message?.trim() || !current()) return; const sent = runtime.dispatch(proposal, message); if (!sent.accepted) setError(sent.reason); });
+        const current = lifetime.capture(); void runtime.api.dialogs.prompt({ title: "Refine proposed question", message: "Describe the query or presentation change. Existing source result values will not be sent to the model." }).then(message => { if (!message?.trim() || !current()) return; const sent = runtime.dispatch(proposal, message, undefined, proposal.definition); if (!sent.accepted) setError(sent.reason); });
       }}>Refine proposal</StudioButton></div>
     {error ? <p role="alert">{error}</p> : null}{result ? <ResultView result={result} visualization={proposal.definition.visualization} /> : null}
   </section>;

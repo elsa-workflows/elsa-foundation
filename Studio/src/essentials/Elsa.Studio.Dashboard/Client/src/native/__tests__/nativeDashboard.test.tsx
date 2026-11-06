@@ -68,6 +68,24 @@ describe("native dashboard authorization and persistence boundary", () => {
     expect(put.mock.calls[0][2]).toEqual({ headers: { "If-Match": '"r1"' }, signal: undefined });
   });
 
+  it("keeps authorized metadata editable when the current question query is withheld", async () => {
+    window.history.replaceState({}, "", "/questions/q1");
+    const api = stubApi(); const authoring = createDashboardAuthoringController("metadata-editor");
+    const withheld = { ...question(), definition: undefined, definitionState: "withheld" as const };
+    api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [] } : withheld) as typeof api.backend.http.getJson;
+    const put = vi.fn(async (_url: string, _body: unknown, _init?: unknown) => ({ ...withheld, name: "Safe metadata update", revision: "r2" }));
+    api.backend.http.putJson = put as typeof api.backend.http.putJson;
+    const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await waitUntil(() => view.textContent?.includes("Metadata-only save preserves its query") === true);
+    const name = [...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Safe metadata update");
+    flushSync(() => name.dispatchEvent(new Event("input", { bubbles: true })));
+    click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
+    expect(put.mock.calls[0][1]).toEqual({ name: "Safe metadata update", description: "", preserveDefinition: true });
+    expect(put.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
+    expect(view.querySelector(".named-query-controls")).toBeNull(); expect(authoring.snapshots.size).toBe(0);
+  });
+
   it("retains distinct tile instances for the same question", () => {
     const tiles = serializeTiles([{ id: "one", questionId: "q1", size: "small" }, { id: "two", questionId: "q1", size: "full" }]);
     expect(tiles.map(tile => tile.id)).toEqual(["one", "two"]); expect(tiles.map(tile => tile.questionId)).toEqual(["q1", "q1"]);

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuthSession, usePermissions, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useAuthSession, usePermissions, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive, studioNavigationRequestedEvent, notifyStudioNavigationGuardReleased, type StudioNavigationRequest, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { createHomeLayoutScope } from "../homeLayout";
 import { DashboardApi } from "./api";
@@ -18,8 +18,8 @@ const uuid = () => crypto.randomUUID();
 /** The host can retain mounted tabs. Key all protected native state by actual authenticated/backend scope. */
 export function NamedDashboardsRoute(props: RouteProps) {
   const session = useAuthSession();
-  const [pathname, setPathname] = useState(() => window.location.pathname);
-  useEffect(() => { const changed = () => setPathname(window.location.pathname); window.addEventListener("popstate", changed); return () => window.removeEventListener("popstate", changed); }, []);
+  const location = useStudioRouteLocation();
+  const pathname = location.pathname;
   const scope = JSON.stringify(createHomeLayoutScope(props.api, session));
   const id = props.view === "detail" ? decodeURIComponent(pathname.split("/").pop() ?? "") : undefined;
   const native = useMemo(() => new DashboardApi(props.api.backend), [props.api.backend]);
@@ -55,25 +55,32 @@ function ResourceCollection({ native, kind, navigate }: RouteProps & { native: D
   </StudioPage>;
 }
 
+type AccessReview = { state: "checking" | "available" | "unavailable" | "denied"; message?: string };
 function ResourceRoute({ api, native, kind, id, navigate, authoring }: RouteProps & { native: DashboardApi; id?: string }) {
   const [resource, setResource] = useState<DashboardResource>();
   const [datasets, setDatasets] = useState<DatasetDeclaration[]>([]);
-  const [error, setError] = useState<string>();
+  const [review, setReview] = useState<AccessReview>({ state: "checking" });
   const [sourceError, setSourceError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController(); setResource(undefined); setError(undefined);
-    if (kind === "question") void native.datasets(controller.signal).then(page => { if (!controller.signal.aborted) setDatasets(page.items); }).catch(cause => { if (!controller.signal.aborted) setSourceError(errorMessage(cause)); });
-    if (id) void native.get(kind, id, controller.signal).then(value => { if (!controller.signal.aborted) setResource(value); }).catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)); });
-    else setResource({ id: "", kind, name: "", description: "", revision: "", ownerId: "", capabilities: { canRead: true, canEdit: true, canShare: false, canDelete: false, canCopy: false }, definition: kind === "question" ? initialDefinition() : undefined, definitionState: "available", tiles: [], createdAt: "", updatedAt: "" });
+  const [editorReset, setEditorReset] = useState(0);
+  // Activity restarts effects when a retained tab returns. Revalidate before paint while
+  // retaining its editor component and local working state throughout the check.
+  useLayoutEffect(() => {
+    const controller = new AbortController(); setReview({ state: "checking" });
+    if (kind === "question") void native.datasets(controller.signal).then(page => { if (!controller.signal.aborted) { setDatasets(page.items); setSourceError(undefined); } }).catch(cause => { if (!controller.signal.aborted) setSourceError(errorMessage(cause)); });
+    if (id) void native.get(kind, id, controller.signal).then(value => { if (!controller.signal.aborted) { setResource(value); setReview({ state: "available" }); } }).catch(cause => { if (!controller.signal.aborted) setReview({ state: accessLost(cause) ? "denied" : "unavailable", message: errorMessage(cause) }); });
+    else {
+      setResource(current => current ?? { id: "", kind, name: "", description: "", revision: "", ownerId: "", capabilities: { canRead: true, canEdit: true, canShare: false, canDelete: false, canCopy: false }, definition: kind === "question" ? initialDefinition() : undefined, definitionState: "available", tiles: [], createdAt: "", updatedAt: "" });
+      setReview({ state: "available" });
+    }
     return () => controller.abort();
   }, [native, kind, id, attempt]);
-  if (error) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={kind === "question" ? "Question unavailable" : "Dashboard unavailable"} /><StudioResultState tone="danger" title="Definition could not be opened" description={error} actions={<><StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
+  if (!resource && review.message) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={kind === "question" ? "Question unavailable" : "Dashboard unavailable"} /><StudioResultState tone="danger" title="Definition could not be opened" description={review.message} actions={<><StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
   if (!resource) return <StudioPage className="named-workspace"><SkeletonRows label="Loading definition" /></StudioPage>;
-  return <ResourceEditor key={resource.id || "new"} api={api} native={native} initial={resource} authoring={authoring} datasets={datasets} sourceError={sourceError} onReload={() => setAttempt(value => value + 1)} navigate={navigate} />;
+  return <ResourceEditor key={`${resource.id || "new"}:${editorReset}`} api={api} native={native} initial={resource} review={review} authoring={authoring} datasets={datasets} sourceError={sourceError} onRetryAccess={() => setAttempt(value => value + 1)} onReload={() => { setReview({ state: "checking" }); setEditorReset(value => value + 1); setAttempt(value => value + 1); }} navigate={navigate} />;
 }
 
-function ResourceEditor({ api, native, initial, datasets, sourceError, onReload, navigate, authoring }: { api: ElsaStudioModuleApi; native: DashboardApi; initial: DashboardResource; authoring?: DashboardAuthoringController; datasets: DatasetDeclaration[]; sourceError?: string; onReload(): void; navigate(path: string): void }) {
+function ResourceEditor({ api, native, initial, review, datasets, sourceError, onReload, onRetryAccess, navigate, authoring }: { api: ElsaStudioModuleApi; native: DashboardApi; initial: DashboardResource; review: AccessReview; authoring?: DashboardAuthoringController; datasets: DatasetDeclaration[]; sourceError?: string; onReload(): void; onRetryAccess(): void; navigate(path: string): void }) {
   const permissions = usePermissions();
   const canCreateQuestion = permissions.has("*") || permissions.has("studio/questions:create");
   const [saved, setSaved] = useState(initial);
@@ -85,13 +92,18 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
   const generationId = useRef(uuid()).current;
   const lifetime = useRequestLifetime();
   const [proposalUndo, setProposalUndo] = useState<{ definition: QuestionDefinition; appliedRevision: string }>();
-  const setDraft = (value: DashboardResource) => { workingRevision.current++; draftRef.current = value; replaceDraft(value); };
+  const setDraft = useCallback((value: DashboardResource) => { workingRevision.current++; draftRef.current = value; replaceDraft(value); }, []);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(busy); busyRef.current = busy;
+  const workspaceTab = useStudioWorkspaceTab(); const tabRef = useRef(workspaceTab); tabRef.current = workspaceTab;
+  const whenActive = useStudioWorkspaceWhenActive();
+  const [revisionConflict, setRevisionConflict] = useState(false);
   const [accessUnavailable, setAccessUnavailable] = useState(false);
   const accessUnavailableRef = useRef(false);
   const [dialog, setDialog] = useState<"share" | "history" | "questions" | null>(null);
   const [result, setResult] = useState<QueryResult>();
+  const resultRef = useRef(result); resultRef.current = result;
   const [resultDefinition, setResultDefinition] = useState<QuestionDefinition>();
   const [resultResource, setResultResource] = useState<DashboardResource>();
   const [resultCanDrill, setResultCanDrill] = useState(false);
@@ -118,10 +130,77 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
   const definitionDirty = definitionFingerprint !== JSON.stringify(saved.definition);
   const currentDefinition = useRef(definitionFingerprint);
   const outdated = resultFingerprint !== undefined && resultFingerprint !== definitionFingerprint;
-  useEffect(() => () => { previewRequest.current?.abort(); operation.current?.abort(); }, []);
+  useEffect(() => () => { previewRequest.current?.abort(); if (!tabRef.current || tabRef.current.isActive()) operation.current?.abort(); }, []);
   useEffect(() => { if (currentDefinition.current !== definitionFingerprint) { currentDefinition.current = definitionFingerprint; previewRequest.current?.abort(); setQuerying(false); } }, [definitionFingerprint]);
+
+  const denyProtectedContent = useCallback(() => {
+    accessUnavailableRef.current = true;
+    lifetime.invalidate(); previewRequest.current?.abort(); operation.current?.abort();
+    setAccessUnavailable(true); setResult(undefined); setDrillResult(undefined); setResultDefinition(undefined); setResultResource(undefined);
+    const redacted: DashboardResource = { ...savedRef.current, name: "", description: "", definition: undefined, tiles: [], capabilities: { canRead: false, canEdit: false, canCopy: false, canShare: false, canDelete: false } };
+    savedRef.current = redacted; setSaved(redacted); setDraft(redacted); setProposalUndo(undefined);
+  }, [lifetime, setDraft]);
+  const withholdResults = useCallback(() => {
+    // Neither a failed nor a cancelled read reauthorizes earlier facts.
+    previewRequest.current?.abort(); setQuerying(false);
+    lifetime.cancel("drill"); setDrilling(false); setDrillSource(undefined); setDrillResult(undefined);
+    const hadResult = Boolean(resultRef.current);
+    setResultWithheld(previous => previous || hadResult); setResult(undefined); setResultDefinition(undefined); setResultResource(undefined);
+    setResultFingerprint(undefined); setResultCanDrill(false); setStale(false);
+  }, [lifetime]);
+  useLayoutEffect(() => { withholdResults(); }, [withholdResults]);
+  const reviewedInitial = useRef(initial);
+  useLayoutEffect(() => {
+    if (review.state === "denied") { setError(review.message); denyProtectedContent(); return; }
+    if (review.state !== "available") { withholdResults(); return; }
+    if (!initial.capabilities.canRead) { setError("Current definition disclosure is unavailable."); denyProtectedContent(); return; }
+    if (initial.definitionState === "withheld") {
+      if (reviewedInitial.current !== initial || draftRef.current.definition) {
+        const persisted = savedRef.current;
+        const changed = JSON.stringify(draftRef.current) !== JSON.stringify(persisted);
+        const conflict = changed && persisted.revision !== initial.revision;
+        const baseline = conflict ? { ...persisted, capabilities: initial.capabilities, definition: undefined, definitionState: "withheld" as const } : initial;
+        savedRef.current = baseline; setSaved(baseline);
+        setDraft(changed ? { ...draftRef.current, capabilities: initial.capabilities, definition: undefined, definitionState: "withheld" } : baseline);
+        setProposalUndo(undefined); setRevisionConflict(conflict); withholdResults(); reviewedInitial.current = initial;
+        if (conflict) setError("The saved definition changed and query disclosure is unavailable. Review current access before saving metadata.");
+      }
+      return;
+    }
+    if (reviewedInitial.current === initial) return;
+    reviewedInitial.current = initial;
+    const persisted = savedRef.current;
+    if (persisted.revision !== initial.revision && JSON.stringify(draftRef.current) !== JSON.stringify(persisted)) {
+      // Keep the authored content and its CAS baseline while applying current rights immediately.
+      const baseline = { ...persisted, capabilities: initial.capabilities };
+      savedRef.current = baseline; setSaved(baseline);
+      setDraft({ ...draftRef.current, capabilities: initial.capabilities });
+      withholdResults(); setRevisionConflict(true); setError("The saved definition changed while this tab was away. Your unsaved draft remains here. Reload it or save a new question."); return;
+    }
+    if (persisted.revision !== initial.revision) {
+      savedRef.current = initial; setSaved(initial); setDraft(initial); setProposalUndo(undefined); setRevisionConflict(false); withholdResults();
+    } else if (JSON.stringify(persisted.capabilities) !== JSON.stringify(initial.capabilities)) {
+      const updated = { ...persisted, capabilities: initial.capabilities }; savedRef.current = updated; setSaved(updated);
+      setDraft({ ...draftRef.current, capabilities: initial.capabilities });
+    }
+  }, [initial, review, denyProtectedContent, withholdResults, setDraft]);
   useEffect(() => {
-    if (accessUnavailable || !authoring || kind !== "question" || !draft.definition || draft.definitionState === "withheld") return;
+    const held = () => Boolean(operation.current) || busyRef.current || JSON.stringify(draftRef.current) !== JSON.stringify(savedRef.current);
+    const guard = (event: Event) => {
+      if (!held()) return;
+      const detail = (event as CustomEvent<StudioNavigationRequest>).detail;
+      if (detail?.fromPath && new URL(detail.fromPath, window.location.origin).pathname !== resourcePath(initial.kind, initial.id || "new")) return;
+      if (detail?.intent === "probe" || operation.current || busyRef.current) { event.preventDefault(); return; }
+      if (!window.confirm("Discard unsaved changes to this question or dashboard?")) event.preventDefault();
+    };
+    const unload = (event: BeforeUnloadEvent) => { if (held()) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener(studioNavigationRequestedEvent, guard); window.addEventListener("beforeunload", unload);
+    return () => { window.removeEventListener(studioNavigationRequestedEvent, guard); window.removeEventListener("beforeunload", unload); };
+  }, [initial.id, initial.kind]);
+  useEffect(() => { if (!dirty && !busy) notifyStudioNavigationGuardReleased(); }, [dirty, busy]);
+
+  useEffect(() => {
+    if (accessUnavailable || review.state !== "available" || revisionConflict || !authoring || kind !== "question" || !draft.definition || draft.definitionState === "withheld") return;
     const snapshot = (): DashboardAuthoringSnapshot => {
       const current = draftRef.current;
       const persisted = savedRef.current;
@@ -144,7 +223,17 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
         return { outcome: "refused", summary: "The proposed definition no longer matches its accepted values. Repreview it before applying." };
       const request = lifetime.begin("proposal-use");
       try {
-        if (proposal.target.resourceType === "question") { const current = await native.get("question", proposal.target.resourceId, request.signal); if (current.revision !== proposal.target.revision || !current.capabilities.canEdit || current.definitionState === "withheld") return { outcome: "refused", summary: "Current question access or revision no longer allows this proposal. Reload before applying." }; }
+        if (proposal.target.resourceType === "question") {
+          const current = await native.get("question", proposal.target.resourceId, request.signal);
+          if (!current.capabilities.canRead || current.definitionState === "withheld" || !current.definition) {
+            setError("The current question definition is no longer available under your access."); denyProtectedContent();
+            return { outcome: "refused", summary: "Current question disclosure is unavailable. Nothing was applied or saved." };
+          }
+          if (current.revision !== proposal.target.revision || !current.capabilities.canEdit) {
+            withholdResults();
+            return { outcome: "refused", summary: "Current question access or revision no longer allows this proposal. Reload before applying." };
+          }
+        }
         const validation = await native.validate(proposal.definition, request.signal);
         if (!request.current() || !matches()) return { outcome: "refused", summary: "The originating question changed or closed during validation. Nothing was applied or saved." };
         if (!validation.isValid) return { outcome: "refused", summary: validation.problems.map(problem => problem.message).join(" ") || "The proposal is invalid under current source access." };
@@ -154,32 +243,31 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
         setAnnouncement("Proposal applied to the question draft. Nothing was saved. Undo is available.");
         return { outcome: "applied", summary: "Applied to the native question draft only; nothing was saved.", workingRevision: String(workingRevision.current) };
       } catch (cause) {
-        return { outcome: "refused", summary: request.current() ? errorMessage(cause) : "The originating editor closed. Nothing was applied or saved." };
+        if (!request.current()) return { outcome: "refused", summary: "The originating editor closed. Nothing was applied or saved." };
+        const summary = errorMessage(cause);
+        if (accessLost(cause)) { setError(summary); denyProtectedContent(); } else withholdResults();
+        return { outcome: "refused", summary };
       } finally { request.finish(); }
     });
-  }, [authoring, draft, saved, generationId, kind, native, lifetime, accessUnavailable]);
-  const denyProtectedContent = () => {
-    accessUnavailableRef.current = true;
-    lifetime.invalidate(); previewRequest.current?.abort(); operation.current?.abort();
-    setAccessUnavailable(true); setResult(undefined); setDrillResult(undefined); setResultDefinition(undefined); setResultResource(undefined);
-    const redacted: DashboardResource = { ...savedRef.current, name: "", description: "", definition: undefined, tiles: [], capabilities: { canRead: false, canEdit: false, canCopy: false, canShare: false, canDelete: false } };
-    savedRef.current = redacted; setSaved(redacted); setDraft(redacted); setProposalUndo(undefined);
-  };
-  const withholdResults = () => {
-    // Neither a failed nor a cancelled read reauthorizes earlier facts.
-    previewRequest.current?.abort(); setQuerying(false);
-    lifetime.cancel("drill"); setDrilling(false); setDrillSource(undefined); setDrillResult(undefined);
-    setResultWithheld(previous => previous || Boolean(result)); setResult(undefined); setResultDefinition(undefined); setResultResource(undefined);
-    setResultFingerprint(undefined); setResultCanDrill(false); setStale(false);
-  };
+  }, [authoring, draft, saved, generationId, kind, native, lifetime, accessUnavailable, review.state, revisionConflict, denyProtectedContent, withholdResults, setDraft]);
   const notify = (title: string) => api.notifications?.notify({ level: "success", title });
-  const accepted = (resource: DashboardResource) => { savedRef.current = resource; setSaved(resource); setDraft(resource); setProposalUndo(undefined); setDialog(null); };
+  const accepted = (resource: DashboardResource) => { setRevisionConflict(false); savedRef.current = resource; setSaved(resource); setDraft(resource); setProposalUndo(undefined); setDialog(null); };
   const runMutation = async (work: (signal: AbortSignal) => Promise<DashboardResource>, title: string, navigateToResult = false) => {
     if (operation.current || !lifetime.capture()()) return;
     const controller = new AbortController(); operation.current = controller; setBusy(true); setError(undefined);
-    try { const resource = await work(controller.signal); if (controller.signal.aborted) return; accepted(resource); notify(title); if (!initial.id || navigateToResult) navigate(resourcePath(kind, resource.id)); }
+    try { const resource = await work(controller.signal); if (controller.signal.aborted) return; accepted(resource); operation.current = undefined; busyRef.current = false; setBusy(false); whenActive(() => { notify(title); if (!initial.id || navigateToResult) navigate(resourcePath(kind, resource.id)); }); }
     catch (cause) { if (!controller.signal.aborted) { setError(errorMessage(cause)); if (accessLost(cause)) denyProtectedContent(); } }
-    finally { if (!controller.signal.aborted) { setBusy(false); operation.current = undefined; } }
+    finally { if (operation.current === controller) { operation.current = undefined; busyRef.current = false; setBusy(false); } }
+  };
+  const deleteResource = async () => {
+    if (operation.current) return;
+    const controller = new AbortController(); operation.current = controller; setBusy(true); setError(undefined);
+    try {
+      await native.remove(saved, controller.signal); if (controller.signal.aborted) return;
+      setDraft(savedRef.current); operation.current = undefined; busyRef.current = false; setBusy(false);
+      whenActive(() => { notify(`${kind === "question" ? "Question" : "Dashboard"} deleted`); navigate(resourcePath(kind)); });
+    } catch (cause) { if (!controller.signal.aborted) { setError(errorMessage(cause)); if (accessLost(cause)) denyProtectedContent(); } }
+    finally { if (operation.current === controller) { operation.current = undefined; busyRef.current = false; setBusy(false); } }
   };
   const saveDraftAsNew = async () => {
     if (!draftRef.current.definition || !canCreateQuestion || busy) return;
@@ -202,7 +290,7 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
   const preview = async () => {
     if (!draft.definition) return;
     previewRequest.current?.abort(); const controller = new AbortController(); previewRequest.current = controller;
-    const submitted = draft.definition; const fingerprint = JSON.stringify(submitted); setQuerying(true); setError(undefined);
+    const submitted = draft.definition; const fingerprint = JSON.stringify(submitted); currentDefinition.current = fingerprint; setQuerying(true); setError(undefined);
     try {
       const value = saved.id
         ? definitionDirty ? await native.savedPreview(saved.id, saved.revision, submitted, controller.signal) : await native.execute(saved.id, saved.revision, controller.signal)
@@ -243,6 +331,7 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
     requestAnimationFrame(() => pageRef.current?.querySelector<HTMLButtonElement>(`[data-tile-id="${CSS.escape(tileId)}"] button[data-move="${delta}"]`)?.focus());
   };
   const openPicker = () => setDialog("questions");
+  if (!accessUnavailable && review.state !== "available") return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={review.state === "checking" ? "Checking current access" : "Current access unavailable"} /><p role="status">{review.message || "Revalidating this retained editor. Its unsaved working state is preserved; protected previews remain withheld."}</p>{review.state === "unavailable" ? <StudioButton onClick={onRetryAccess}>Retry current access</StudioButton> : null}</StudioPage>;
   if (accessUnavailable) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title="Definition unavailable" /><StudioResultState tone="danger" title="Current access could not authorize this definition" description={error || "Protected definition and result content has been cleared. Reload to check your current access."} actions={<><StudioButton onClick={onReload}>Reload current access</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
   return <StudioPage className="named-workspace"><div className="named-editor-content" ref={pageRef}><StudioPageHeader headingLevel={2} title={draft.id ? draft.name : `Create ${kind}`} description={draft.id ? `Revision ${saved.revision}${dirty ? " · Unsaved changes" : ""}` : "Personal until you explicitly share it."} actions={<>
     {canEdit ? <StudioButton variant="primary" disabled={busy || !draft.name.trim() || kind === "question" && !draft.definition && draft.definitionState !== "withheld"} onClick={() => void runMutation(signal => native.save(draft, createKey.current, signal), kind === "question" ? "Question saved" : "Dashboard saved")}>{busy ? "Saving…" : kind === "question" ? "Save question" : "Save layout"}</StudioButton> : null}
@@ -250,7 +339,7 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
     {saved.id && kind === "question" && dirty && draft.definition && draft.definitionState !== "withheld" && canCreateQuestion ? <StudioButton disabled={busy} onClick={() => void saveDraftAsNew()}>Save draft as new question</StudioButton> : null}
     {saved.id && saved.capabilities.canShare ? <StudioButton disabled={busy || dirty} onClick={() => setDialog("share")}>Share</StudioButton> : null}
     {saved.id ? <StudioButton disabled={busy || dirty} onClick={() => setDialog("history")}>History</StudioButton> : null}
-    <StudioButton onClick={() => { const current = lifetime.capture(); void (dirty ? api.dialogs.confirm({ message: "Discard unsaved changes and return to the collection?" }) : Promise.resolve(true)).then(yes => { if (yes && current()) navigate(resourcePath(kind)); }); }}>Back to {kind === "question" ? "questions" : "dashboards"}</StudioButton>
+    <StudioButton onClick={() => navigate(resourcePath(kind))}>Back to {kind === "question" ? "questions" : "dashboards"}</StudioButton>
   </>} />
     {proposalUndo ? <div className="named-actions"><StudioButton disabled={busy || proposalUndo.appliedRevision !== String(workingRevision.current)} onClick={() => { if (proposalUndo.appliedRevision === String(workingRevision.current)) { setDraft({ ...draftRef.current, definition: structuredClone(proposalUndo.definition) }); setProposalUndo(undefined); setAnnouncement("Proposal undone. Nothing was saved."); } }}>Undo applied proposal</StudioButton><p>Proposal changes stay in this draft until Save. Undo is available until another edit or save.</p></div> : null}
     {!canEdit ? <p className="named-access-note">Read-only definition. Data uses your current access.</p> : null}
@@ -266,11 +355,11 @@ function ResourceEditor({ api, native, initial, datasets, sourceError, onReload,
       {!draft.tiles?.length ? <StudioResultState title="No questions on this dashboard" description="Add an accessible saved question. Each tile can use its own size and presentation." /> : <div className="named-tile-grid">{draft.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3>{canEdit ? <div className="named-actions"><StudioButton data-move="-1" disabled={busy || index === 0} aria-label={`Move question ${index + 1} earlier`} onClick={() => moveTile(tile.id, -1)}>Move earlier</StudioButton><StudioButton data-move="1" disabled={busy || index === draft.tiles!.length - 1} aria-label={`Move question ${index + 1} later`} onClick={() => moveTile(tile.id, 1)}>Move later</StudioButton><label>Size for question {index + 1}<select disabled={busy} value={tile.size} onChange={event => setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? { ...item, size: event.target.value as DashboardTile["size"] } : item) })}>{["small", "medium", "wide", "full"].map(item => <option key={item}>{item}</option>)}</select></label>{tile.referenceState !== "unavailable" && tile.questionId ? <StudioButton disabled={busy} onClick={() => setEditingTile(tile)}>Settings for question {index + 1}</StudioButton> : null}<StudioButton disabled={busy} onClick={() => setDraft({ ...draft, tiles: draft.tiles?.filter(item => item.id !== tile.id) })}>Remove tile {index + 1}</StudioButton></div> : null}</header>{tile.referenceState === "unavailable" || !tile.questionId ? <p role="status">This question is unavailable under your current access. Its reference is preserved during layout saves.</p> : <QuestionTile api={native} dashboard={saved} tile={tile} refresh={refresh} draftLayout={dirty} navigate={navigate} />}</article>)}</div>}
       <p aria-live="polite" className="named-announcement">{announcement}</p>
     </>}
-    {saved.id && saved.capabilities.canDelete ? <div className="named-danger-actions"><StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ title: `Delete ${kind}`, message: kind === "question" ? "Delete this question? Dashboard references will become unavailable. Underlying records will remain." : "Delete this dashboard? Its saved questions will remain.", tone: "danger" }).then(yes => { if (yes && current()) { const request = lifetime.begin("delete"); setBusy(true); void native.remove(saved, request.signal).then(() => { if (!request.current()) return; notify(`${kind === "question" ? "Question" : "Dashboard"} deleted`); navigate(resourcePath(kind)); }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(() => { if (request.current()) setBusy(false); request.finish(); }); } }); }}>Delete {kind}</StudioButton></div> : null}
+    {saved.id && saved.capabilities.canDelete ? <div className="named-danger-actions"><StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ title: `Delete ${kind}`, message: kind === "question" ? "Delete this question? Dashboard references will become unavailable. Underlying records will remain." : "Delete this dashboard? Its saved questions will remain.", tone: "danger" }).then(yes => { if (yes && current()) void deleteResource(); }); }}>Delete {kind}</StudioButton></div> : null}
     {editingTile ? <TileOptionsDialog api={native} tile={editingTile} onClose={() => setEditingTile(undefined)} onApply={tile => { setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? tile : item) }); setEditingTile(undefined); }} /> : null}
     {dialog === "share" ? <ShareDialog api={native} resource={saved} onClose={() => setDialog(null)} onSaved={resource => { accepted(resource); notify("Audience saved"); }} /> : null}
     {dialog === "history" ? <HistoryDialog api={native} resource={saved} onClose={() => setDialog(null)} onRestored={resource => { accepted(resource); notify("Definition restored as a new revision"); }} /> : null}
-    {dialog === "questions" ? <QuestionPickerDialog api={native} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => { const current = lifetime.capture(); void (dirty ? api.dialogs.confirm({ message: "Save or discard the dashboard layout before leaving to create a question. Discard unsaved changes?" }) : Promise.resolve(true)).then(yes => { if (yes && current()) navigate("/questions/new"); }); }} /> : null}
+    {dialog === "questions" ? <QuestionPickerDialog api={native} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => navigate("/questions/new")} /> : null}
     {drilling || drillResult || drillError ? <NativeDialog title="Matching source records" onClose={closeDrill}>{drilling ? <p role="status">Loading authorized source records…</p> : drillError ? <p role="alert">{drillError}</p> : drillResult ? <><ResultView result={drillResult} visualization={{ kind: "table", y: [] }} />{drillResult.nextCursor && drillSource ? <StudioButton onClick={() => void drill(drillSource, drillResult.nextCursor)}>Next matching records</StudioButton> : null}</> : null}</NativeDialog> : null}
   </div></StudioPage>;
 }
