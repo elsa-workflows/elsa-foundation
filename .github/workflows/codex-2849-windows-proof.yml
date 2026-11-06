@@ -157,12 +157,12 @@ jobs:
           }
 
       - name: Set native Windows Git checkout policy for the separate fixture qualification
-        if: always()
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: git config --global core.autocrlf true
 
       - name: Checkout the independent fixture fix at its exact source
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/checkout@v4
         with:
           ref: 39c9290671c211a44b41778d703e905cf2f94c94
@@ -170,7 +170,7 @@ jobs:
           persist-credentials: false
 
       - name: Qualify the retained fixture tests separately on native Windows
-        if: always()
+        if: ${{ !cancelled() }}
         shell: pwsh
         working-directory: fixture-3253
         run: |
