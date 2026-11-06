@@ -1,3 +1,4 @@
+import { useCompactNavigation } from "../navigation/useCompactNavigation";
 import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useMemo, useRef, useState, useId } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
@@ -69,6 +70,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const { previewTheme, refreshThemes } = useTheme();
   const [store, setStore] = useState<ThemeStoreResponse | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("");
+  const { compact, navigationRef, selectRef } = useCompactNavigation();
   const [draft, setDraft] = useState<StudioThemeDefinition | null>(null);
   const [tab, setTab] = useState<BuilderTab>("overview");
   const [mode, setMode] = useState<ThemeMode>("light");
@@ -333,7 +335,12 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
       <div className="theme-builder-workbench">
-        <aside className="theme-builder-list" aria-label="Themes">
+        {compact ? <label className="theme-builder-select">
+          <span>Current theme</span>
+          <select ref={selectRef} value={selectedThemeId} onChange={event => setSelectedThemeId(event.target.value)}>
+            {store.themes.map(theme => <option key={theme.id} value={theme.id}>{theme.name} · {theme.source}</option>)}
+          </select>
+        </label> : <aside ref={navigationRef} className="theme-builder-list" aria-label="Themes">
           {store.themes.map(theme => (
             <button
               key={theme.id}
@@ -352,7 +359,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
               </span>
             </button>
           ))}
-        </aside>
+        </aside>}
 
         <div className="theme-builder-detail">
           <div className="theme-builder-actions">
