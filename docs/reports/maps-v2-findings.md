@@ -6,14 +6,14 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 
 ## Summary
 
-- Domains in domain map: 35
-- Source extension catalogs discovered: 97
-- Source extension catalogs indexed from root: 97
+- Domains in domain map: 36
+- Source extension catalogs discovered: 104
+- Source extension catalogs indexed from root: 104
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 19
-- Bridge-like direct reference shapes: 22
+- Design-to-runtime direct reference signals: 20
+- Bridge-like direct reference shapes: 23
 
 ## Reference Signals
 
@@ -25,6 +25,7 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Elsa.Activities.Graph.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.Graph.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Connections.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Decisions.Workflows.Design -> Elsa.Decisions.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Etl.Design.Api -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Etl.Workflows.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Etl.Workflows.Design -> Elsa.Etl.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
