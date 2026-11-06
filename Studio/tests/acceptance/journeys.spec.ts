@@ -3,6 +3,7 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -35,6 +36,7 @@ const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: s
 const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page, request }, info) => {
   // The request fixture and teardown budget are independent of a timed-out page journey.
