@@ -134,7 +134,7 @@ public sealed class RuntimeCoreEngineShapeGuardTests
     // owns no engine, lifetime or transaction: the Runtime callback and provider lease own them.
     // A changed shape fails closed here rather than gaining a name-only exception. The Runtime
     // contract tests independently exercise every callback/lease access and expired-view refusal.
-    private static bool IsPreparationContractHandle(Type type)
+    internal static bool IsPreparationContractHandle(Type type)
     {
         if (type != typeof(WorkflowPreparationOwnerSession) || !type.IsSealed ||
             type.BaseType != typeof(object) || type.GetInterfaces().Length != 0 ||

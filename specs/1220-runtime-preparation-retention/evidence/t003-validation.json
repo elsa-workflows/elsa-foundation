@@ -125,11 +125,89 @@
     "actual captured old-writer migration/recovery",
     "native server provider apply/finalization",
     "native participation and owner protocol",
-    "whole projects/architecture/maps/API checks",
+    "remaining maps/API checks and broader affected-project qualification",
     "full exact-head PR review/required CI/merge/resulting main",
     "T066/ETL/Studio/production acceptance"
   ],
   "reviewCountReset": false,
   "formalRoundBound": 6,
-  "rawEvidence": "private retained; not claimed downloadable"
+  "rawEvidence": "private retained; not claimed downloadable",
+  "ciD405Correction": {
+    "state": "THREE_AFFECTED_WHOLE_PROJECTS_AND_ISOLATED_CAUSAL_CONTROL_QUALIFIED; SOURCE_PUBLICATION_PROPOSED",
+    "publishedFailedHead": "d40575caa14dda8f0c575b1b3b750fbd9c64be21",
+    "originalCiRun": 42261646884,
+    "originalCiConclusion": "FAILURE",
+    "sourceFiveManifestSha256": "bff14a25d7ff835f4eb5f3edf04289ab405a3e78ed0c47ccfff3208b3c8764fa",
+    "sourceFileHashes": {
+      "Essentials/tests/Architecture/Tests/ArchitectureGuardTests.CoreImplementationShape.cs": "0c666aaa17193d71de4ed31b32b8fa27565c0e8469e411b675f8c01593cf5d03",
+      "Essentials/tests/Architecture/Tests/RuntimeCoreEngineShapeGuardTests.cs": "b19eb567cd3afceb0405081a055eb790c36ac17337125e65635f920850b25e16",
+      "Essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs": "7d0adf76bc64c4bd92b98f5c9dd9c63069f3929427e5bb05b3ff1fc3b9622d18",
+      "Essentials/tests/Cluster/Readability/Tests/ReadabilityMembershipTests.cs": "9df6e6512f609c93e28af5c430f5c1825f77797a461476694b67644381798a91",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/ModulePayloadColumnTests.cs": "32897c68581b50cc9b505b98dc1628e8c2d7123912cefd0de27514923108d6f6"
+    },
+    "wholeProjectChecks": {
+      "Architecture": {
+        "attempt": "ci-d405-architecture-whole-native-mac-02",
+        "passed": 620,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "fb8d3e350e38390bb30e2f26040a39cec14fd4e5131561abbb8178cfc72c48ce",
+        "rootCustodySha256": "95ef00eae8702ff80b020bd2424cdceea21562d01c3625812c327fa2343d11df",
+        "rootAdditiveReconciliationSha256": "6ef9919371247ca0dce5e6aa1dd4665d5cbe5b89fea537365e9f7f62b0ee5694"
+      },
+      "Migrations": {
+        "attempt": "ci-d405-migrations-whole-native-mac-02",
+        "passed": 525,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "8fe81ac558f2696266aa54a2e815db007f7ed53fa708ce88d576c4a1b3599bcc",
+        "rootCustodySha256": "4b25c2d487d9ae8e703f71c2ffe62d17366f94f8eba9c266869e558e66710028",
+        "rootAdditiveReconciliationSha256": "e9c559a4d817d5cf9ad973793541172c7c321ddd0ec4ec334dba6a0b15b970c1"
+      },
+      "Readability": {
+        "attempt": "ci-d405-readability-whole-native-mac-01",
+        "passed": 124,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "85ac5f85655e2b01c1544cc22c292d9a98bb959bf7cefde0cc9b806786c3a824",
+        "rootCustodySha256": "f3bf52e1e7f177936a67781f64a40020a63bfe71a961051175c77525ed7d3cbb"
+      }
+    },
+    "discoveryAccounting": "Architecture:603 exact+11+6 deferred=620. Migrations:510 ordinary entries including retained duplicate display multiplicities+15 source-bound deferred=525. Readability:124 discovery/actual exact. Execution IDs unique; shared deferred definition IDs retained. Original incomplete/refusal receipts unchanged; additive Root reconciliation qualifies counts.",
+    "sourceReview": "Three independent focused five-file source preflights clean; not full-PR approval.",
+    "unchanged": "Production API/type/constructor/schema/codec, ratchet, shared full-shape predicate body and unsupported2.0 refusal.",
+    "formalRoundBound": 6,
+    "formalCountReset": false,
+    "nativeOrProviderAcceptance": false,
+    "rawEvidence": "private retained; not claimed downloadable",
+    "causalControl": {
+      "mutation": "Remove ONLY generic classifier exact-handle helper exclusion in a separate d405 worktree",
+      "build": "Passed",
+      "actualCases": 7,
+      "failed": 2,
+      "passedUnchangedSpecializedControls": 5,
+      "skipped": 0,
+      "testExitCode": 1,
+      "expectedFailureBoundaries": "generic Core sole WorkflowPreparationOwnerSession; new Fact earlier handle Assert.False",
+      "laterCtorAssertionsNotClaimedRerun": true,
+      "positiveThreeSourceLockBinaryInventoriesUnchanged": true,
+      "allOwnedGroupsAbsent": true,
+      "receiptSha256": "7976c6e2cff10b19a25b6533ba22fcb16e9a413f7733103bd1d9247759c0fcc8",
+      "workerCustodySha256": "ab0e1592a6f2cf3c37a543a1a53122cef55a7e6490601bd0209f4cc853a4f486",
+      "rootCustodySha256": "c77c99ce90499e220acf8d01dc1c4a155b3c3004d554a3c9a5a516f430413d90",
+      "rootIndependentlyVerified": true
+    },
+    "reviewAccounting": {
+      "consumedCumulativeRounds": 1,
+      "countedOriginalReceipt": "T002R1 bounded12-path source review, tree486c63354ae2191c21b7c0d8a95fb9b223b57d62, basec7b0aed97ac5ce9edadcbff4ff15b338604845c9",
+      "publicReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3951#issuecomment-6684577017",
+      "reason": "Post-PR invocation classification unrecoverable: count conservatively, preserve original limited scope",
+      "planningR1R2R3": "Original design receipts04:59\u201306:59UTC precede07:22:40UTC PR creation; not counted as formal PR rounds",
+      "nextFormalRound": 2,
+      "maxCumulativeRounds": 6,
+      "reset": false,
+      "laterRecoveredOriginalFormalReceipts": "Add and reconcile immediately; zeroGitHubreviews does not prove private absence",
+      "countDispositionSha256": "b1f83f6d742dc6f1ddd3f82403c99fe8718d1e7c0ba6e5b031694833d3d13454"
+    }
+  }
 }
