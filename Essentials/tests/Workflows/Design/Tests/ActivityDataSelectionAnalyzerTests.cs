@@ -127,7 +127,56 @@ public sealed class ActivityDataSelectionAnalyzerTests
         var source = Assert.Single(result.Sources);
         Assert.Equal("root", source.ScopeId);
         Assert.Equal("scope:root", Assert.IsType<JsonElement>(source.Binding.Value).GetProperty("producerScopeId").GetString());
-        Assert.Equal(binding, source.Binding);
+        Assert.Equal("producer", Assert.IsType<JsonElement>(source.Binding.Value).GetProperty("producerNodeId").GetString());
+    }
+
+    [Fact]
+    public async Task Focus_returns_only_canonical_identity_fields_and_never_echoes_ignored_business_data()
+    {
+        using var provider = Provider();
+        var binding = new ArgumentValue(JsonSerializer.SerializeToElement(new {
+            producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root", isOptional = false,
+            privateBusinessData = "must-not-be-returned"
+        }), "ActivityResult");
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer"))),
+            new("consumer", "CustomerId"), new() { Source = binding });
+        var payload = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding.Value);
+        Assert.False(payload.TryGetProperty("privateBusinessData", out _));
+        Assert.Equal("scope:root", payload.GetProperty("producerScopeId").GetString());
+    }
+
+    [Fact]
+    public async Task Target_only_analysis_precedes_source_metadata_and_preserves_actual_target_restrictions()
+    {
+        var shape = new TestShapeSource();
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(shape));
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer"))),
+            new("consumer", "CustomerId"), new() { IncludeSources = false });
+        Assert.Empty(result.Findings);
+        Assert.NotNull(result.Target);
+        Assert.Empty(result.Sources);
+        Assert.Equal(0, shape.Calls);
+    }
+
+    [Fact]
+    public async Task Request_local_input_index_preserves_ambiguous_declaration_refusal()
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer", Input(new(new VariableReference("customer"), "Input")))))
+            with { Inputs = [Definition("customer"), Definition("customer")] };
+        var result = await Analyzer(provider).AnalyzeAsync(document);
+        Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+    }
+
+    [Theory]
+    [InlineData("activity.shape.no-typed-result", true)]
+    [InlineData("activity.shape.metadata-unavailable", false)]
+    [InlineData("activity.shape.source-contract-mismatch", false)]
+    public async Task Only_definitive_source_bound_absence_rejects_a_whole_result(string reason, bool invalid)
+    {
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new MissingResultShape(reason)));
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Read("direct", "producer")))));
+        Assert.Equal(invalid, result.Findings.Any(finding => finding.Type == "ActivityData/UnknownProjection"));
     }
 
     [Fact]
@@ -315,6 +364,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
     }
     private sealed class TestShapeSource : IActivitySerializedShapeSource
     {
+        public int Calls { get; private set; }
         public ImmutableArray<string> LastPath { get; private set; } = [];
         public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
             ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) => Describe(memberPath);
@@ -322,11 +372,22 @@ public sealed class ActivityDataSelectionAnalyzerTests
             ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) => Describe(memberPath);
         private ValueTask<ActivitySerializedShape?> Describe(ImmutableArray<string> path)
         {
+            Calls++;
             LastPath = path;
             var scalar = new ActivitySerializedShape(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Scalar, new("String"), "contract", "profile", "metadata");
             return ValueTask.FromResult<ActivitySerializedShape?>(new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Object, new("Object"), "contract", "profile", "metadata") {
                 Members = [new("a.b", "A dot field", scalar), new("", "Empty field", scalar)]
             });
         }
+    }
+
+    private sealed class MissingResultShape(string reason) : IActivitySerializedShapeSource
+    {
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(new(ActivitySerializedShapeState.Unavailable, ActivitySerializedValueKind.Unknown,
+                null, "actual-contract", "actual-profile", "actual-metadata") { ReasonCode = reason });
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) => ValueTask.FromResult<ActivitySerializedShape?>(null);
     }
 }

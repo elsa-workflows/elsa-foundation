@@ -74,6 +74,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Source query bounds or literal member path are invalid."));
             return Result(document, targetFacts, [], findings);
         }
+        if (!query.IncludeSources)
+        {
+            if (query.Source is not null || !query.MemberPath.IsEmpty)
+                findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Target-only analysis does not select a source."));
+            return Result(document, targetFacts, [], findings);
+        }
         if (query.Source is null && !query.MemberPath.IsDefaultOrEmpty)
         {
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "A literal member path requires a focused source."));
@@ -87,8 +93,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
-                // Preserve a supplied authored identity, including its runtime scope hint. Labels never replace it.
-                source = source with { Binding = query.Source };
+                // Return only canonical identity fields. Ignored authored/client fields are never metadata.
                 candidates.Add(source);
             }
         }
@@ -194,7 +199,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         }
         if (binding.Role is "Input" or "WorkflowRequest")
         {
-            var matches = context.Document.Inputs.Where(input => input.ReferenceKey == binding.Key).ToArray();
+            var matches = context.Inputs.GetValueOrDefault(binding.Key) ?? [];
             if (matches.Length != 1)
             {
                 findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
@@ -259,6 +264,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, "ActivityData/UnknownProjection", "The referenced result projection is not declared unambiguously by the actual producer contract."));
             return null;
         }
+        if (admitOccurrence && binding.Projection == "$result" && await HasNoTypedResult(context, version, ct))
+        {
+            findings.Add(new(path, "ActivityData/UnknownProjection", "The admitted producer contract declares no typed whole result."));
+            return null;
+        }
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
         return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
             output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
@@ -294,6 +304,21 @@ internal sealed class ActivityDataSelectionAnalyzer(
         return shape with { IsNullable = memberPath.IsDefaultOrEmpty ? source.IsNullable ?? shape.IsNullable : shape.IsNullable,
             IsSensitive = source.IsSensitive == true ? true : shape.IsSensitive,
             IsCredential = source.IsCredential == true ? true : shape.IsCredential };
+    }
+
+    private async ValueTask<bool> HasNoTypedResult(Request context, IActivityDefinitionVersion version, CancellationToken ct)
+    {
+        if (context.NoTypedResults.TryGetValue(version.Id, out var cached)) return cached;
+        ActivitySerializedShape? owned = null;
+        foreach (var provider in shapeSources)
+        {
+            var candidate = await provider.DescribeResultAsync(version, "$result", [], new(0, 0), ct);
+            if (candidate is null) continue;
+            if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
+            owned = candidate;
+        }
+        // Only the exact, source-bound absence result is a static refusal. Missing assets/profiles stay uncertain.
+        return context.NoTypedResults[version.Id] = owned is { State: ActivitySerializedShapeState.Unavailable, ReasonCode: "activity.shape.no-typed-result" };
     }
 
     private IReadOnlyList<VisibleVariable> Visible(Request context, ActivityDataSelectionGraph.Location consumer)
@@ -347,6 +372,10 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public Dictionary<string, IReadOnlyList<VisibleVariable>> Variables { get; } = new(StringComparer.Ordinal);
         public ScopedVariableVisibility? WholeVisibility { get; set; }
         public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
+        public Dictionary<string, InputDefinition[]> Inputs { get; } = document.Inputs
+            .Where(input => !string.IsNullOrEmpty(input.ReferenceKey)).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        public Dictionary<string, bool> NoTypedResults { get; } = new(StringComparer.Ordinal);
     }
 
     /// <summary>Defends the single response budget even when a contribution returns more than requested.</summary>

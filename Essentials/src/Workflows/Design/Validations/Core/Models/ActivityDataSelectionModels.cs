@@ -29,6 +29,8 @@ public sealed record ActivityDataSelectionTarget(string NodeId, string InputKey)
 /// <remarks>Source is an existing canonical role binding. It is re-resolved, not trusted as metadata.</remarks>
 public sealed record ActivityDataSelectionQuery
 {
+    /// <summary>False resolves only the actual target and restrictions, before any source metadata is acquired.</summary>
+    public bool IncludeSources { get; init; } = true;
     public string? Search { get; init; }
     public int Skip { get; init; }
     public int Take { get; init; } = 100;
