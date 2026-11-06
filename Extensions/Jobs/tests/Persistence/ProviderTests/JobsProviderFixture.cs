@@ -39,7 +39,11 @@ public sealed class JobsPostgreSqlFixture : IAsyncLifetime
             var builder = new PostgreSqlBuilder("postgres:16-alpine").WithDatabase("jobs_tests").WithUsername("postgres").WithPassword("postgres");
             foreach (var label in _ownershipLabels) builder = builder.WithLabel(label.Key, label.Value);
             if (_qualificationCgroupParent is not null)
-                builder = builder.WithCreateParameterModifier(parameters => parameters.HostConfig.CgroupParent = _qualificationCgroupParent);
+                builder = builder.WithCreateParameterModifier(parameters =>
+                {
+                    parameters.HostConfig ??= new();
+                    parameters.HostConfig.CgroupParent = _qualificationCgroupParent;
+                });
             _container = builder.Build();
             try { await _container.StartAsync(); }
             finally { RecordOwnership(); }
