@@ -26,7 +26,7 @@ Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView.WorkflowExec
 Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView.WorkflowExecutionId.init -> void
 Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature
 Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature.SpecialistsInspectionApiFeature() -> void
-NativeEndpoints.Generated.ElsaAgentSpecialistsInspectionApiEndpoints
+MinimalEndpoints.Generated.ElsaAgentSpecialistsInspectionApiEndpoints
 override Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest.Equals(object? obj) -> bool
 override Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest.GetHashCode() -> int
 override Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest.ToString() -> string!
@@ -38,7 +38,7 @@ static Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest.op
 static Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest.operator ==(Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest? left, Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceRequest? right) -> bool
 static Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView.operator !=(Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView? left, Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView? right) -> bool
 static Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView.operator ==(Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView? left, Elsa.Agent.Specialists.Inspection.Api.SpecialistTestRunEvidenceView? right) -> bool
-static NativeEndpoints.Generated.ElsaAgentSpecialistsInspectionApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
+static MinimalEndpoints.Generated.ElsaAgentSpecialistsInspectionApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
 virtual Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 virtual Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
 Elsa.Agent.Specialists.Inspection.Api.SpecialistInvocationEvidenceRequest

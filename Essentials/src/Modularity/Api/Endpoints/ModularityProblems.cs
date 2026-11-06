@@ -4,7 +4,7 @@ using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Text.Json;
 
 namespace Elsa.Modularity.Api.Endpoints;
