@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Recovery;
@@ -20,6 +21,8 @@ namespace Elsa.Architecture.Tests;
 /// carry behavior (validating constructors, factories, computed properties) and they stay in
 /// <c>.Core</c> by user ratification (2026-07-05). Records are excluded for the same reason —
 /// engine services are classes, models are records/enums/DTO classes.
+/// The opaque preparation owner handle is a contract model despite its Session suffix. Its
+/// exact, read-only shape is checked below; all other Session types retain the engine predicate.
 /// </remarks>
 public sealed class RuntimeCoreEngineShapeGuardTests
 {
@@ -87,11 +90,30 @@ public sealed class RuntimeCoreEngineShapeGuardTests
         Assert.NotSame(typeof(WorkflowExecutable).Assembly, typeof(InMemoryRuntimeRecoverySweepCursorStore).Assembly);
     }
 
+    [Fact]
+    public void PreparationOwnerSession_IsAnOpaqueReadOnlyContractHandle()
+    {
+        Assert.True(IsPreparationContractHandle(typeof(WorkflowPreparationOwnerSession)));
+        Assert.False(IsEngineShaped(typeof(WorkflowPreparationOwnerSession)));
+    }
+
+    [Fact]
+    public void PreparationContractException_DoesNotAdmitOtherSessions()
+    {
+        Assert.False(IsPreparationContractHandle(typeof(UnapprovedPreparationSession)));
+        Assert.True(IsEngineShaped(typeof(UnapprovedPreparationSession)));
+        Assert.False(IsPreparationContractHandle(typeof(UnapprovedOwnerSession)));
+        Assert.True(IsEngineShaped(typeof(UnapprovedOwnerSession)));
+    }
+
     private static IEnumerable<Type> EngineShapedTypes(Assembly assembly) =>
         assembly.GetTypes().Where(IsEngineShaped);
 
     private static bool IsEngineShaped(Type type)
     {
+        if (IsPreparationContractHandle(type))
+            return false;
+
         if (!type.IsClass || type.IsAbstract || type.IsNested)
             return false;
 
@@ -107,4 +129,59 @@ public sealed class RuntimeCoreEngineShapeGuardTests
 
         return EngineRoleSuffixes.Any(suffix => type.Name.EndsWith(suffix, StringComparison.Ordinal));
     }
+
+    // ADR 0033 permits contract models, including validating/forwarding behavior. This handle
+    // owns no engine, lifetime or transaction: the Runtime callback and provider lease own them.
+    // A changed shape fails closed here rather than gaining a name-only exception. The Runtime
+    // contract tests independently exercise every callback/lease access and expired-view refusal.
+    private static bool IsPreparationContractHandle(Type type)
+    {
+        if (type != typeof(WorkflowPreparationOwnerSession) || !type.IsSealed ||
+            type.BaseType != typeof(object) || type.GetInterfaces().Length != 0 ||
+            type.GetConstructors().Length != 0)
+            return false;
+
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic |
+                                      BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var constructors = type.GetConstructors(declared);
+        if (constructors.Length != 1 || !constructors[0].IsAssembly ||
+            !constructors[0].GetParameters().Select(parameter => parameter.ParameterType)
+                .SequenceEqual([typeof(IWorkflowPreparationOwnerLease), typeof(Action)]))
+            return false;
+
+        var fields = type.GetFields(declared);
+        if (fields.Length != 2 || fields.Any(field => !field.IsPrivate || !field.IsInitOnly || field.IsStatic) ||
+            fields.Count(field => field.FieldType == typeof(Action)) != 1 ||
+            fields.Count(field => field.FieldType == typeof(IWorkflowPreparationOwnerLease)) != 1)
+            return false;
+
+        var expectedProperties = new Dictionary<string, Type>(StringComparer.Ordinal)
+        {
+            [nameof(WorkflowPreparationOwnerSession.Owner)] = typeof(WorkflowPreparationOwnerStamp),
+            [nameof(WorkflowPreparationOwnerSession.Decision)] = typeof(WorkflowPreparationDecision),
+            [nameof(WorkflowPreparationOwnerSession.Lease)] = typeof(IWorkflowPreparationOwnerLease),
+            [nameof(WorkflowPreparationOwnerSession.SelectedRoots)] = typeof(IReadOnlyList<WorkflowPreparationRoot>)
+        };
+        var properties = type.GetProperties(declared);
+        if (properties.Length != expectedProperties.Count || properties.Any(property =>
+                !expectedProperties.TryGetValue(property.Name, out var expected) || property.PropertyType != expected ||
+                property.SetMethod is not null || property.GetMethod is not { IsPublic: true, IsStatic: false }))
+            return false;
+
+        var methods = type.GetMethods(declared);
+        return type.GetEvents(declared).Length == 0 && methods.Length == 5 &&
+               methods.All(method => method.IsPublic && !method.IsStatic && !method.IsVirtual &&
+                   method.GetParameters().Length == 0 &&
+                   (method.IsSpecialName && properties.Any(property => property.GetMethod == method) ||
+                    method.Name == nameof(WorkflowPreparationOwnerSession.EnsureActive) && method.ReturnType == typeof(void)));
+    }
+}
+
+// Top-level controls exercise the same predicate used for production Core types (nested types
+// are intentionally excluded). Neither an overlapping suffix nor a lease-shaped API is admitted.
+internal sealed class UnapprovedPreparationSession;
+
+internal sealed class UnapprovedOwnerSession
+{
+    public IWorkflowPreparationOwnerLease? Lease { get; }
 }

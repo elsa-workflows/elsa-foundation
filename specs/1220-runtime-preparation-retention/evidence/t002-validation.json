@@ -1,0 +1,408 @@
+{
+  "kind": "T002_COMPILED_DECLARATIONS_ONLY",
+  "reviewBase": "c7b0aed97ac5ce9edadcbff4ff15b338604845c9",
+  "reviewedSourceTree": "486c63354ae2191c21b7c0d8a95fb9b223b57d62",
+  "sourceFileSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "3062a122b53bc59305e5c71ba2d865252a6b5696de071c505cc732c92a534b98",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowPreparationRetention.cs": "0fe754e55fa7a106aaff1a82207569b0da2671fb49e75a3b309fa4fe26c0ae38",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowPreparationRetention.cs": "154df2b27a42da8a60b1af2787d7692105b3f8019f9fc7fd8cf4e3b0de68755e",
+    "Essentials/src/Workflows/Runtime/Core/Properties/AssemblyInfo.cs": "a92a7e6a61a0853f18264966d5ae0ffadacba55302bd28cf446b97b6adde7e03",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "ce3eda9bbed2fd5c0d290e9609316ddd3ff0b32ed7028a25154e5fcab4a9b79e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Contracts/WorkflowPreparationParticipation.cs": "65240080f206c3f25cb598520668711aae9393c9810b3c823aeb97001368cd98",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "152e2756477789a6db216693de7c1d8fd0628a8375f2f1bff5260c831e31cef8",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowPreparationContractTests.cs": "2da6cbcf959ce84bad43257193952b9c625b4bfed4bf37493b755ec0b9fe27ec",
+    "Essentials/tests/Architecture/Tests/RuntimeCoreEngineShapeGuardTests.cs": "9283289a3d8c3b72fa5ec4af0219a8e6cb71c1d4fea58547fef3b99004ccb2cc",
+    "specs/1220-runtime-preparation-retention/spec.md": "adb12fa9988d8cac4a346eb6367fc81d590c930db52f6e3ff67d3159fa18c45a",
+    "specs/1220-runtime-preparation-retention/tasks.md": "05d9843e993397ac470d559f7533db14e102f6269a76a49a75c374fb404c0133",
+    "specs/1220-runtime-preparation-retention/planning-record.md": "bea13150ddbc4c4505682b4ae152168ff5eb455d61ddd691fe46ea7ac1001d2d"
+  },
+  "heldCoreApiSha256": "9cc6f6b831065c1233f4456d644aa2b273e98aa4ad70df4ce56b8ad8b7a25676",
+  "heldEfApiSha256": "6a361822b285e465a9366841deb4f0b4d374f012ab8d4c4e5f1bf5fd12a93b25",
+  "compiledAssemblies": {
+    "core": {
+      "path": "Essentials/src/Workflows/Runtime/Core/bin/Debug/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "bytes": 1815552,
+      "sha256": "7cfec16f82566a01ca001bf6652cffa4b8efcee9d5566206897ac57d1a9ecbff"
+    },
+    "ef": {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "bytes": 3272192,
+      "sha256": "968ca5bd2e4e5dcb84af938a66bdcb458fd42e36d822c64119c984670e1e5440"
+    }
+  },
+  "tests": {
+    "contracts": {
+      "total": "14",
+      "executed": "14",
+      "passed": "14",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "architecture": {
+      "total": "5",
+      "executed": "5",
+      "passed": "5",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "architecture-no-contract-admission": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "architecture-reviewed-source-restored": {
+      "total": "5",
+      "executed": "5",
+      "passed": "5",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  "reviews": {
+    "increment": "T002 R1 (not full PR review)",
+    "correctness": "CLEAN",
+    "standards": "CLEAN",
+    "acceptance": "CLEAN"
+  },
+  "apiGeneration": {
+    "method": "Exact canonical Symbol values emitted by PublicApiAnalyzers RS0016; dotnet format reported workspace warning and made no edits",
+    "sourceLogSha256": "4b565761e1cad4c04f4b96cde00809e20848a9b5bc6d4f9ab4972339c9fc991b",
+    "actualUniqueAnalyzerSymbols": 370,
+    "onlyWorkflowPreparationSymbols": true,
+    "existingApiRowsPreserved": true,
+    "beforeSha256": "556d8f8036a1b401f4ba5bd5104e622f0fa4179565708f2e26f20c0722a6115b",
+    "afterSha256": "ce3eda9bbed2fd5c0d290e9609316ddd3ff0b32ed7028a25154e5fcab4a9b79e",
+    "analyzersDisabled": false
+  },
+  "unproven": [
+    "durable retention",
+    "provider topology cooperation",
+    "Publishing adapter",
+    "old-binary provider replay",
+    "whole project and architecture suites",
+    "T066 acceptance",
+    "full PR readiness/required CI"
+  ],
+  "commands": [
+    {
+      "name": "core-restore",
+      "timeout": 180,
+      "argv": [
+        "dotnet",
+        "restore",
+        "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+        "--locked-mode",
+        "--disable-parallel",
+        "-m:1",
+        "-nr:false"
+      ],
+      "startedAt": "2026-11-06T12:03:08.900691+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 1.467,
+      "logSha256": "2482fd851d438cc4202bb1b5abb44725f9e0e6d7f04990e31696641207c39e31"
+    },
+    {
+      "name": "core-api-generation",
+      "timeout": 300,
+      "argv": [
+        "dotnet",
+        "format",
+        "analyzers",
+        "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+        "--no-restore",
+        "--diagnostics",
+        "RS0016",
+        "--severity",
+        "info"
+      ],
+      "startedAt": "2026-11-06T12:03:10.368472+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 3.534,
+      "logSha256": "239c224f01960886368326d9ef5ebdcce071dcd0996d157bef6a963fc1eaa49c"
+    },
+    {
+      "name": "core-build",
+      "timeout": 300,
+      "argv": [
+        "dotnet",
+        "build",
+        "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+        "--no-restore",
+        "-m:1",
+        "-nr:false",
+        "-p:UseSharedCompilation=false"
+      ],
+      "startedAt": "2026-11-06T12:03:13.903105+00:00",
+      "exitCode": 1,
+      "elapsedSeconds": 7.698,
+      "logSha256": "4b565761e1cad4c04f4b96cde00809e20848a9b5bc6d4f9ab4972339c9fc991b"
+    },
+    {
+      "name": "core-build-api-recorded",
+      "timeout": 300,
+      "argv": [
+        "dotnet",
+        "build",
+        "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+        "--no-restore",
+        "-m:1",
+        "-nr:false",
+        "-p:UseSharedCompilation=false"
+      ],
+      "startedAt": "2026-11-06T12:04:39.843943+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 2.958,
+      "logSha256": "13a96c4e1cedc80c960e5c6177948dd62352dfa310bfc142e2aa8e4dd1384382"
+    },
+    {
+      "name": "ef-locked-restore",
+      "timeout": 180,
+      "argv": [
+        "dotnet",
+        "restore",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+        "--locked-mode",
+        "--disable-parallel",
+        "-m:1",
+        "-nr:false"
+      ],
+      "startedAt": "2026-11-06T12:05:21.595018+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 0.82,
+      "logSha256": "0d3d80b93efebbb98d3e72e1a2feafe18f1a3dfb519e2edab1ddbb3c9723e15e"
+    },
+    {
+      "name": "ef-verification",
+      "timeout": 600,
+      "argv": [
+        "dotnet",
+        "build",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+        "--no-restore",
+        "-m:1",
+        "-nr:false",
+        "-p:UseSharedCompilation=false"
+      ],
+      "startedAt": "2026-11-06T12:05:22.414990+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 10.988,
+      "logSha256": "87fd443dd3b55bf062b41d2550442faa3359f289e321c7848f9855c93c1f1cee"
+    },
+    {
+      "name": "contracts-locked-restore",
+      "timeout": 180,
+      "argv": [
+        "dotnet",
+        "restore",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--locked-mode",
+        "--disable-parallel",
+        "-m:1",
+        "-nr:false"
+      ],
+      "startedAt": "2026-11-06T12:05:33.403146+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 0.997,
+      "logSha256": "284a8cae65bd5df18427b780a772cc100b170ef60fdf8ea60fc9220f2a63ad42"
+    },
+    {
+      "name": "contracts-verification",
+      "timeout": 600,
+      "argv": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "-m:1",
+        "-nr:false",
+        "-p:UseSharedCompilation=false",
+        "--filter",
+        "FullyQualifiedName~WorkflowPreparationContractTests",
+        "--logger",
+        "trx;LogFileName=contracts.trx",
+        "--results-directory",
+        "/Users/sipke/.codex/task-checkpoints/etl3804-resume-2026-11-06/retention-t002/results"
+      ],
+      "startedAt": "2026-11-06T12:05:34.400819+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 15.127,
+      "logSha256": "9d014ada5cdcf56fc090dc789b891f36b08793022802b1e081307720ea966f1f"
+    },
+    {
+      "name": "architecture-locked-restore",
+      "timeout": 180,
+      "argv": [
+        "dotnet",
+        "restore",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "--locked-mode",
+        "--disable-parallel",
+        "-m:1",
+        "-nr:false"
+      ],
+      "startedAt": "2026-11-06T12:05:49.528459+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 7.478,
+      "logSha256": "0dbcf99a9eefaa9a73337770a37363476171b94d5936eec1b9567c1a9493ab38"
+    },
+    {
+      "name": "architecture-verification",
+      "timeout": 600,
+      "argv": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "--no-restore",
+        "-m:1",
+        "-nr:false",
+        "-p:UseSharedCompilation=false",
+        "--filter",
+        "FullyQualifiedName~RuntimeCoreEngineShapeGuardTests",
+        "--logger",
+        "trx;LogFileName=architecture.trx",
+        "--results-directory",
+        "/Users/sipke/.codex/task-checkpoints/etl3804-resume-2026-11-06/retention-t002/results"
+      ],
+      "startedAt": "2026-11-06T12:05:57.006715+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 156.94,
+      "logSha256": "53f680ff7bb17247155019b39934c77990e19338209728ead823124c8bb07358"
+    }
+  ],
+  "causalControl": {
+    "reviewedGuardSha256": "9283289a3d8c3b72fa5ec4af0219a8e6cb71c1d4fea58547fef3b99004ccb2cc",
+    "mutation": "Remove only exact structurally qualified contract-handle admission",
+    "expectedRedAndRestoredGreen": true,
+    "reviewedSourceRestored": true,
+    "results": [
+      {
+        "name": "architecture-no-contract-admission",
+        "argv": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+          "--no-restore",
+          "-m:1",
+          "-nr:false",
+          "-p:UseSharedCompilation=false",
+          "--filter",
+          "FullyQualifiedName~RuntimeCoreEngineShapeGuardTests.RuntimeCore_ContainsNoEngineShapedTypes",
+          "--logger",
+          "trx;LogFileName=architecture-no-contract-admission.trx",
+          "--results-directory",
+          "/Users/sipke/.codex/task-checkpoints/etl3804-resume-2026-11-06/retention-t002/results"
+        ],
+        "exitCode": 1,
+        "counters": {
+          "total": "1",
+          "executed": "1",
+          "passed": "0",
+          "failed": "1",
+          "error": "0",
+          "timeout": "0",
+          "aborted": "0",
+          "inconclusive": "0",
+          "passedButRunAborted": "0",
+          "notRunnable": "0",
+          "notExecuted": "0",
+          "disconnected": "0",
+          "warning": "0",
+          "completed": "0",
+          "inProgress": "0",
+          "pending": "0"
+        },
+        "elapsedSeconds": 17.038,
+        "logSha256": "0e8c6cab9aa9c2c8f50b48ea91087e03fff86e1f0d2fd472069f9603f84523dc",
+        "failures": [
+          "Engine-shaped types found in Elsa.Workflows.Runtime.Core; they belong in the Elsa.Workflows.Runtime implementation package (ADR 0033):\nElsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession"
+        ]
+      },
+      {
+        "name": "architecture-reviewed-source-restored",
+        "argv": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+          "--no-restore",
+          "-m:1",
+          "-nr:false",
+          "-p:UseSharedCompilation=false",
+          "--filter",
+          "FullyQualifiedName~RuntimeCoreEngineShapeGuardTests",
+          "--logger",
+          "trx;LogFileName=architecture-reviewed-source-restored.trx",
+          "--results-directory",
+          "/Users/sipke/.codex/task-checkpoints/etl3804-resume-2026-11-06/retention-t002/results"
+        ],
+        "exitCode": 0,
+        "counters": {
+          "total": "5",
+          "executed": "5",
+          "passed": "5",
+          "failed": "0",
+          "error": "0",
+          "timeout": "0",
+          "aborted": "0",
+          "inconclusive": "0",
+          "passedButRunAborted": "0",
+          "notRunnable": "0",
+          "notExecuted": "0",
+          "disconnected": "0",
+          "warning": "0",
+          "completed": "0",
+          "inProgress": "0",
+          "pending": "0"
+        },
+        "elapsedSeconds": 15.867,
+        "logSha256": "1348b63cb560761c596e5d9c06975944d87a2ba4802f7958a7b89f2775058d5a",
+        "failures": []
+      }
+    ]
+  }
+}

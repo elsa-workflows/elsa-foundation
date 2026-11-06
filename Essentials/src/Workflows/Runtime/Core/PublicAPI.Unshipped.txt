@@ -10344,3 +10344,373 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext.EnsureActive() -> void
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext.Owner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession!
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitParticipant
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitParticipant.ExecuteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession! owner, System.Func<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>>! stage, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerIssuer
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerIssuer.ExecuteFencedAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! expected, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitParticipant! participant, System.Func<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! write, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease.Decision.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision?
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease.EnsureCurrent() -> void
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease.JoinAsync(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease.Owner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease.SelectedRoots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>!
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceReader
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceReader.FindPreparationAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot?>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceReader.HasPreparationMaterialAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot! material, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceReader.InspectPreparationAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceReader.ListPreparationPageAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceWriter
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceWriter.CanRetainPreparations(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! artifacts, Elsa.Workflows.Runtime.Core.Contracts.IExecutableActivityTemplateStore! templates, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerIssuer! configuredIssuer) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceWriter.StageCompletePreparationAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete! command, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease!>! grants, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationReferenceWriter.StageRetainPreparationAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain! command, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease!>! grants, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationCommitContext! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetention
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetention.CompleteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetention.RetainAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetentionFactory
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetentionFactory.Bind(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerIssuer! configuredIssuer) -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationRetention!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken! Expected, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! ExpectedOwner) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Expected.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Expected.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.ExpectedOwner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.ExpectedOwner.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.WorkflowPreparationComplete(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken! Expected, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! ExpectedOwner) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.CanonicalDecisionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.CanonicalDecisionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.DecisionFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.DecisionFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind Kind, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! VerifiedAt, out string! CanonicalDecisionId, out string! DecisionFingerprint, out string! SelectionFingerprint, out System.Collections.Generic.IReadOnlyList<string!>! PublishedReferenceIds) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.Kind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.Kind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.PublishedReferenceIds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.PublishedReferenceIds.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.SelectionFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.SelectionFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.VerifiedAt.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.VerifiedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.WorkflowPreparationDecision(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind Kind, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! VerifiedAt, string! CanonicalDecisionId, string! DecisionFingerprint, string! SelectionFingerprint, System.Collections.Generic.IReadOnlyList<string!>! PublishedReferenceIds) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind.Published = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind.Rejected = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecisionKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationException
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationException.Code.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationException.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationException.WorkflowPreparationException(string! code, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! id, System.Exception? inner = null) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind.Model = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind.Native = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind Kind, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Identity, out string! IncarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Identity.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Identity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.IncarnationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Kind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Kind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.WorkflowPreparationExecutablePin(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind Kind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Identity, string! IncarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind Kind, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Identity) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Identity.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Identity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Kind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Kind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.WorkflowPreparationExecutableRoot(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableKind Kind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Identity) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.PersistenceScope? Scope, out string! OwnerAddress, out string! OperationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.OperationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.OperationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.OwnerAddress.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.OwnerAddress.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.Scope.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.WorkflowPreparationId(Elsa.Workflows.Runtime.Core.Models.PersistenceScope? Scope, string! OwnerAddress, string! OperationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.WorkflowPreparationMaterialPin() -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.WorkflowPreparationMaterialPin(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin! original) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOutcomeUnknownException
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOutcomeUnknownException.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOutcomeUnknownException.WorkflowPreparationOutcomeUnknownException(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! id, System.Exception! inner) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession.Decision.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession.EnsureActive() -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession.Lease.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowPreparationOwnerLease!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession.Owner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerSession.SelectedRoots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.CompilerProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.CompilerProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out string! LedgerIncarnation, out long OperationRevision, out string! OperationState, out string! RequestFingerprint, out string! SnapshotId, out string! SourceFingerprint, out string! SourceProfile, out string! CompilerProfile, out string! PreparedProfile, out string! PreparedContentFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.LedgerIncarnation.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.LedgerIncarnation.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.OperationRevision.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.OperationRevision.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.OperationState.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.OperationState.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.PreparedContentFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.PreparedContentFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.PreparedProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.PreparedProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.RequestFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.RequestFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SnapshotId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SnapshotId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SourceFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SourceFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SourceProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.SourceProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.WorkflowPreparationOwnerStamp(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, string! LedgerIncarnation, long OperationRevision, string! OperationState, string! RequestFingerprint, string! SnapshotId, string! SourceFingerprint, string! SourceProfile, string! CompilerProfile, string! PreparedProfile, string! PreparedContentFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.WorkflowPreparationPageQuery(int limit = 100, string? continuationToken = null) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection! Selection, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! ExpectedOwner) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.ExpectedOwner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.ExpectedOwner.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Selection.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Selection.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.WorkflowPreparationRetain(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection! Selection, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! ExpectedOwner) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.WorkflowPreparationRoot() -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.WorkflowPreparationRoot(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot! original) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Closure.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Closure.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.CompilerProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.CompilerProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Deconstruct(out string! SnapshotId, out string! SourceFingerprint, out string! SourceProfile, out string! CompilerProfile, out string! PreparedProfile, out string! PreparedContentFingerprint, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>! Roots, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin!>! Closure, out string! Fingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Fingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.PreparedContentFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.PreparedContentFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.PreparedProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.PreparedProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Roots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Roots.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SnapshotId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SnapshotId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SourceFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SourceFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SourceProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.SourceProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.WorkflowPreparationSelection(string! SnapshotId, string! SourceFingerprint, string! SourceProfile, string! CompilerProfile, string! PreparedProfile, string! PreparedContentFingerprint, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>! Roots, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin!>! Closure, string! Fingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.CompilerProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.CompilerProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out string! SnapshotId, out string! SourceFingerprint, out string! SourceProfile, out string! CompilerProfile, out string! PreparedProfile, out string! PreparedContentFingerprint, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>! Roots) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.PreparedContentFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.PreparedContentFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.PreparedProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.PreparedProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Roots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Roots.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SnapshotId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SnapshotId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SourceFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SourceFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SourceProfile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.SourceProfile.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.WorkflowPreparationSelectionQuery(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, string! SnapshotId, string! SourceFingerprint, string! SourceProfile, string! CompilerProfile, string! PreparedProfile, string! PreparedContentFingerprint, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!>! Roots) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.AcceptedOwner.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.AcceptedOwner.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.ClosedFrom.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.ClosedFrom.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection! Selection, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! AcceptedOwner, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState State, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken! Token, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? ClosedFrom, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? TerminalDecision) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Selection.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Selection.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.State.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.State.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.TerminalDecision.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.TerminalDecision.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Token.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Token.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.WorkflowPreparationSnapshot(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection! Selection, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp! AcceptedOwner, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState State, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken! Token, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? ClosedFrom, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? TerminalDecision) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState.RejectedReleased = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState.Retained = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState.Transferred = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationState
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity! Identity, out string! IncarnationId, out string! HashClaimIncarnationId, out long Revision) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.HashClaimIncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.HashClaimIncarnationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Identity.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Identity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.IncarnationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Revision.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Revision.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.WorkflowPreparationTemplatePin(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity! Identity, string! IncarnationId, string! HashClaimIncarnationId, long Revision) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity! Identity) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Identity.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Identity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.WorkflowPreparationTemplateRoot(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity! Identity) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, out string! IncarnationId, out long Revision, out string! SelectionFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Id.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Id.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.IncarnationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Revision.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Revision.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.SelectionFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.SelectionFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.WorkflowPreparationToken(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId! Id, string! IncarnationId, long Revision, string! SelectionFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult!
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Code.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Code.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Confirmation.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken?
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Confirmation.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus Status, out Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? Confirmation, out string? Code) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Status.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Status.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.WorkflowPreparationWriteResult(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus Status, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? Confirmation, string? Code = null) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.AlreadyReleased = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.AlreadyRetained = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.Conflict = 5 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.Pending = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.Released = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.Retained = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus.Unsupported = 6 -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteStatus
+abstract Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin!
+abstract Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.ToString() -> string!
+override sealed Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? other) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? other) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest? other) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? other) -> bool
+override sealed Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? other) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationComplete? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationDecision? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutablePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationExecutableRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationId? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationOwnerStamp? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationPageQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRetain? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSelectionQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationSnapshot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplatePin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationTemplateRoot? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationToken? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult? left, Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationWriteResult? right) -> bool
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.EqualityContract.get -> System.Type!
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin? other) -> bool
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.EqualityContract.get -> System.Type!
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? other) -> bool
+virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.PrintMembers(System.Text.StringBuilder! builder) -> bool

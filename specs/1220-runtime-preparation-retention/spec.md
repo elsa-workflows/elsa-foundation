@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Approved — approved to implement under delegated #2892 authority after clean requirements, plan R3 and held API reviews; implementation has not started and no T066 acceptance is claimed.
+**Status**: In progress — approved contracts are being implemented under delegated #2892 authority after source reconciliation. Durable retention, provider and T066 acceptance remain unproven.
 
 **Input**: Provide the Runtime prerequisite requested by Program #3519 / T066: retain exact reviewed native, model and reusable-template material durably without granting permission to run or export it, then transfer or release retention using canonical publication authority.
 

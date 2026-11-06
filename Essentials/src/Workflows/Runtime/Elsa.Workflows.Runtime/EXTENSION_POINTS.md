@@ -70,6 +70,41 @@ adapters validate and translate the selected context at their own persistence bo
 
 ## Overridable replacement contracts
 
+### Preparation retention contracts *(Core; EF participation in Runtime EF)*
+
+[`IWorkflowPreparationRetention` / `IWorkflowPreparationRetentionFactory`](../Core/Contracts/IWorkflowPreparationRetention.cs)
+are scoped replacement contracts, with one selected facade/factory pair. The factory binds the actual
+configured canonical publication issuer; callers supply retain/complete commands, never a lease or
+transaction. This declarations slice registers no default implementation and makes no durable
+retention or provider qualification claim. Unsupported selected source-reference providers refuse.
+
+`IWorkflowPreparationOwnerIssuer` is operation-scoped and owned by the configured canonical
+publication store and typed winning-projection adapter. Its lease and the Runtime-minted opaque
+`WorkflowPreparationOwnerSession` last only for the fenced callback. The internal session constructor
+is accessible only to the same-domain Runtime implementation. Decision/selected-root reads require
+native Join and canonical reads, and escaped callback use must refuse.
+
+`IWorkflowPreparationCommitParticipant` / `IWorkflowPreparationCommitContext` belong to the actual
+selected source-reference provider and its active write frame, with one participant per qualified
+provider tuple. Existing `IWorkflowExecutableSourceReferenceReader` / `Writer` inherit the additive
+preparation read/staged-write contracts. Legacy reads and staged writes throw `NotSupportedException`;
+`CanRetainPreparations` defaults to false. Absence, an empty page or a successful confirmation must
+never substitute for unsupported capability. These ports do not authorize starts or export.
+
+[`IWorkflowPreparationEfOwnerLease` / `IWorkflowPreparationEfCommitParticipant` /
+`IWorkflowPreparationEfCommitContext`](../Persistence/EntityFrameworkCore/Contracts/WorkflowPreparationParticipation.cs)
+are provider-specific contracts in `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore`.
+They expose the actual configured owner/Runtime contexts and owned native transaction for
+SamePhysical or IndependentPhysical qualification. They accept no caller transaction; Core stays
+EF-free. No provider implementation or topology acceptance is supplied by these declarations.
+
+The typed roots, closure pins, token and bounded page use the existing runtime material identities.
+Template revision is a historical CAS observation, excluded from stable selection identity; each
+write attempt checks fresh native observations. Provider failures preserve preparation identity and
+original causes in `WorkflowPreparationException`; uncertain commits use
+`WorkflowPreparationOutcomeUnknownException`. See [spec 1220 contract semantics](../../../../../specs/1220-runtime-preparation-retention/contracts/preparation-retention.md)
+for the required fencing, terminal history and replay rules.
+
 ### Model protocol drivers and contributions *(Core contracts, implementation-owned dispatch)*
 
 [`IRuntimeExecutionProtocolDriver` / `IRuntimeExecutionProtocolSource`](../Core/Contracts/IRuntimeExecutionProtocolDriver.cs) define scoped model decisions and exact protocol registrations. `AddRuntimeModelHosting` opts into the existing command executor and drainer. Public Core [`RuntimeExecutionProtocolsInitializing`](../Core/Events/RuntimeExecutionProtocolsInitializing.cs) is a named Sequential event; one `RegisterRuntimeExecutionProtocols` handler aggregates protocol sources, and its startup task freezes the registry after checking duplicate protocol/version keys, input kinds and exactly one scoped driver registration.

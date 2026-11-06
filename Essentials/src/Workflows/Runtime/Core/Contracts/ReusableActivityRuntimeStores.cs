@@ -89,7 +89,7 @@ public interface IActivityExecutionHierarchyCursorCodec
     ActivityExecutionHierarchyCursorState Decode(string cursor);
 }
 
-public interface IWorkflowExecutableSourceReferenceReader
+public interface IWorkflowExecutableSourceReferenceReader : IWorkflowPreparationReferenceReader
 {
     ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default);
     ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
@@ -115,7 +115,7 @@ public interface IWorkflowExecutableSourceReferenceReader
         CancellationToken cancellationToken = default);
 }
 
-public interface IWorkflowExecutableSourceReferenceWriter
+public interface IWorkflowExecutableSourceReferenceWriter : IWorkflowPreparationReferenceWriter
 {
     ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
 
