@@ -308,10 +308,12 @@ and `CapturedAt`. It is owned by the workflow execution record and cannot be mut
 checkpoint.
 
 Admission completes the request from the pinned contract before the start checkpoint (ADR 0045 §2 amendment, D-10):
-- an omitted member takes its declared default;
+- requiredness is checked first: an omitted required member refuses admission even when a declared default exists (a
+  declared default never satisfies a required member);
+- an omitted optional member takes its declared default;
 - an omitted optional member without a default materializes as `null` when its type is nullable, and as its type's
   default otherwise;
-- an omitted required member refuses admission.
+- a rejected request executes no activities and schedules no workflow work.
 
 A later read of a declared member therefore always finds a value.
 

@@ -106,23 +106,26 @@ a visible policy, never through where it came from.
   variables, workflow outputs and the values of the `Set` / `SetOutput` intrinsics. The intrinsics' current refusal of
   an explicit null for a nullable target is a defect to fix.
 - **`null` for a non-nullable target** fails with `VF-ACT-004`, unless an explicit *default-on-null* policy applies.
-  That policy substitutes the target's default instead of failing. Where it is set (for the workflow, per input, or
-  both) and which default it uses (declared or type default) is settled in the implementing spec. It is visible in
-  the workflow and pinned in the executable.
+  That policy is **workflow-level** and substitutes the target's **type default**, independently of any declared
+  default, instead of failing. A nullable target always preserves explicit null; a non-nullable target without a
+  usable type default rejects it (below). The policy is visible in the workflow and pinned in the executable.
   - **A type without a non-null default** (for example a non-nullable `String`, or a JSON object) leaves the policy
     nothing to substitute, so `null` for such a target still fails with `VF-ACT-004`. Where an activity handles
     `null` correctly, its input is declared nullable instead; the policy never works around an activity's contract.
     Found by the implementing spec ([#3726](https://github.com/elsa-workflows/elsa-foundation/pull/3726), Q5).
-- **An omitted member** takes its declared default first.
+- **An omitted member.** Requiredness is checked first: an omitted *required* member fails even when a declared
+  default exists — a declared default never satisfies a required member. Declared defaults apply only to omitted
+  *optional* members, which take their declared default first.
   - An optional member without a declared default materializes as `null` when its type is nullable, and otherwise as
     its type's default. This is defined behaviour from the contract, not a silent fallback. A non-nullable type
     without a non-null default needs a declared default; publication refuses the member without one (`VF-ACT-003`).
   - An omitted required activity input still fails publication (`VF-ACT-003`).
   - An omitted required workflow-request member is refused when the workflow instance is admitted, before the start
-    checkpoint, not when a later step reads it.
+    checkpoint, on every start path, not when a later step reads it. A rejected request executes no activities and
+    schedules no workflow work.
 - **An undeclared name is not an omitted optional member.** Reading a value no contract declares remains an error.
   The sentence above about missing dynamic values keeps applying to it. For names a script reads:
-  - a name written literally in the script that resolves to nothing is a publish diagnostic;
+  - a name written literally in the script that resolves to nothing is a publication error that prevents publication;
   - a computed name (`variables[name]`, `getVariable(expr)`) that resolves to nothing at run time reads as
     `undefined` in JavaScript, and a warning is recorded with the read marked absent. Not `null`, which would erase
     the difference between null and missing; if the `undefined` leaves the script, the boundary rule below applies
@@ -131,7 +134,11 @@ a visible policy, never through where it came from.
 - **`undefined` (D-11).** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
   binding whose result is `undefined` is an error ([ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)),
   and an object property whose value is `undefined` is dropped, with a diagnostic, because a lossy conversion is
-  declared, never silent (A-1 P6). `NaN` and `Infinity` become `null`, also with a diagnostic. The JavaScript adapter
+  declared, never silent (A-1 P6). An `undefined` **array element or sparse hole** instead becomes a `null`
+  placeholder, with a path diagnostic, so positions are preserved — dropping it would shift every later index; this
+  holds under either policy, because an array's positions can never shift. An element that was already explicit `null`
+  needs no conversion diagnostic, and a string an explicit `JSON.stringify` produced is unchanged. `NaN` and
+  `Infinity` become `null`, also with a diagnostic. The JavaScript adapter
   contract in the ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V8) holds
   these rules. A workflow may select the *undefined-as-null* policy:
   - an `undefined` result materializes as `null`;
@@ -139,10 +146,15 @@ a visible policy, never through where it came from.
   - the policy acts only at the boundary. It does not change JavaScript's own semantics, and it does not rewrite a
     string an explicit `JSON.stringify` produced;
   - an input binding that produces no value and a script activity that completes without returning a value remain
-    distinct cases, each defined by the implementing spec.
-- **Both policies are recorded on the workflow and pinned in the executable,** so they take part in its artifact hash
+    distinct cases. An expression binding and a Script completion value have no `return` statement — their value is
+    the expression's result — so the no-return check applies only to function-body script activities whose result is
+    consumed, and the undefined policy applies to the value each form actually produces. Each case is defined by the
+    implementing spec.
+- **Both policies are off by default for native workflows,** and are **recorded on the workflow and pinned in the
+  executable,** so they take part in its artifact hash
   ([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)).
-  - A host or importer chooses them; the workflow carries the result.
+  - A host or importer enables them; the workflow carries the result. A native workflow that selects neither keeps the
+    default boundary behaviour above.
   - The Elsa 3 converter feature has one option that selects the policies Elsa 3 parity needs, and it records them on
     every workflow it converts.
   - A converted workflow that is later edited, exported or run on a host without the converter keeps behaving the
