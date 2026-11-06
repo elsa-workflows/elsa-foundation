@@ -209,6 +209,19 @@ not automatic constitution violations.
 | Authoring API operations and host composition | [`Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md) |
 | Studio authoring, inspection and published selection | [`Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md`](Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md) |
 
+### Decisions
+
+| Domain | Catalog |
+|---|---|
+| Decision compilation and evaluation | [Decisions evaluator](Extensions/Decisions/src/Elsa.Decisions/EXTENSION_POINTS.md) |
+| Decision persistence ports | [Decisions persistence](Extensions/Decisions/src/Persistence/Core/EXTENSION_POINTS.md) |
+| Decision authoring and completed tests | [Decisions design](Extensions/Decisions/src/Design/EXTENSION_POINTS.md) |
+| Decision API and permission contributions | [Decisions API](Extensions/Decisions/src/Api/EXTENSION_POINTS.md) |
+| Workflow publication | [Decisions workflow design](Extensions/Decisions/src/Workflows/Design/EXTENSION_POINTS.md) |
+| Workflow execution authority | [Decisions workflow runtime](Extensions/Decisions/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Workflow disclosure | [Decisions workflow API](Extensions/Decisions/src/Workflows/Api/EXTENSION_POINTS.md) |
+| Studio authoring and version selection | [Decisions Studio](Extensions/Decisions/studio/Elsa.Studio.Decisions/EXTENSION_POINTS.md) |
+
 ### Legacy
 
 | Domain | Catalog |

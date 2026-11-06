@@ -41,6 +41,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Named Embedded Blocks](named-embedded-blocks.md) | Active; end-to-end owner authorization, 3 November | Studio block authoring, bounded native/BPMN extraction and reviewed reusable promotion | Sipke | Program #3610; establishment #3748, then prototype #3749 before production completion; Project #67 |
 | [Elsa 4 StateMachine](state-machine.md) | Active; owner authorization, 4 November; design first | Generic root/nested hierarchical and parallel state machines, Studio and durable execution | Sipke | Program #3815; establishment #3826, then M0 contract #3820 before production implementation |
 | [Activity Data Selection](activity-data-selection.md) | Active; owner authorization, 5 November; proof first | Eligible activity-input data selection and causal result bindings | Sipke | Program #3882; establishment #3883, customer proof #3884, then reviewed contracts #3885; reuse feature #3094 |
+| [Entity-aware Integrations](entity-aware-integrations.md) | Active; owner authorization, 6 November; research/design first | Optional source metadata, record references, operations/events and authoring | Sipke | Canonical #3608; service connections first; source proof before production design agreement; record backend explicitly follows in #3916 |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the

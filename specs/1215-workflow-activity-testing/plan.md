@@ -23,7 +23,7 @@ Follow [research.md](research.md), [data model](data-model.md), [contract](contr
 
 ## Constitution Check
 
-Loaded framework v6.1.0 and Elsa v6.3.0 Gate indexes and [review checklist](../../docs/contributing/review-checklist.md). The scoped optional-domain addition in this delivery advances Elsa to v6.4.0 without changing the framework pin or ratifying provisional sections.
+Loaded framework v6.1.0 and Elsa v6.5.0 Gate indexes and [review checklist](../../docs/contributing/review-checklist.md). Main already admits Elsa.Decisions at v6.4.0; the scoped optional Testing domain addition advances Elsa to v6.5.0 while preserving that admission, the framework pin and provisional-section exclusions.
 
 - §2.1/§2.6/§2.6.4: `.Core` contains models/contracts/thin guards. Separate authoring discovery and runtime execution contributions. No concrete feature dependency or dependence on registration side effects.
 - §2.5/§2.11: public inheritable features with virtual configuration, scoped services, missing/duplicate provider diagnostics.
