@@ -98,7 +98,9 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
     private async Task<AgentSession?> CurrentSessionAsync(string sessionId, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var principal = accessor.HttpContext?.User;
+        var context = accessor.HttpContext;
+        var principal = context?.User;
+        bool CurrentRequest() => ReferenceEquals(accessor.HttpContext, context) && ReferenceEquals(context?.User, principal);
         var actor = principal is null ? null : AgentEndpointActor.Resolve(principal);
         var tenant = principal is null ? null : AgentEndpointActor.ResolveTenant(principal);
         if (principal?.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(actor) || string.IsNullOrWhiteSpace(tenant)) return null;
@@ -106,16 +108,15 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         if (authorities.Length != 1) return null;
         var decision = await authorities[0].AuthorizeAsync(new(principal, AgentPermissionKeys.Use, tenant), token);
         token.ThrowIfCancellationRequested();
-        if (!decision.Succeeded) return null;
+        if (!CurrentRequest() || !decision.Succeeded) return null;
         var owner = await sessions.FindOwnerAsync(sessionId, token);
         token.ThrowIfCancellationRequested();
-        if (owner is null || !AgentEndpointActor.CanAccess(owner.ActorId, owner.TenantId, principal)) return null;
+        if (!CurrentRequest() || owner is null || !AgentEndpointActor.CanAccess(owner.ActorId, owner.TenantId, principal)) return null;
         var session = await sessions.FindAsync(sessionId, token);
         token.ThrowIfCancellationRequested();
         // Recheck the actual current principal after awaited owner/hydration reads as well.
-        var currentPrincipal = accessor.HttpContext?.User;
-        return session is not null && currentPrincipal?.Identity?.IsAuthenticated == true
-            && AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, currentPrincipal)
+        return CurrentRequest() && session is not null && principal.Identity?.IsAuthenticated == true
+            && AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, principal)
             && session.ActorId == owner.ActorId && session.TenantId == owner.TenantId ? session : null;
     }
 
@@ -179,8 +180,34 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
                     || row.ResourceModuleIds is not null && (row.ResourceModuleIds.Count > 8 || row.ResourceModuleIds.Any(id => !Identifier(id)))
                     || row.Status is not ("available" or "unavailable" or "unknown"))
                 || value.Registrations.Select(row => (row.Kind, row.Id)).Distinct().Count() != value.Registrations.Count) return false;
-            projected = JsonSerializer.SerializeToElement(value, SupportContextJson.Default.StudioSupportView);
-            return projected.GetRawText().Length <= 24576;
+            var modules = value.Modules.ToList();
+            var loader = value.Loader.ToList();
+            var registrations = value.Registrations.ToList();
+            value = value with { Modules = modules, Loader = loader, Registrations = registrations };
+            // JSON.stringify and the backend's default encoder have different lengths for valid
+            // localized/HTML labels. Bound the actual accepted encoding without rejecting the prompt
+            // or falsely claiming that rows omitted during normalization were absent.
+            while (true)
+            {
+                projected = JsonSerializer.SerializeToElement(value, SupportContextJson.Default.StudioSupportView);
+                if (projected.GetRawText().Length <= 24576) return true;
+                if (registrations.Count > 0)
+                {
+                    registrations.RemoveAt(registrations.Count - 1);
+                    value = value with { RegistrationCompleteness = "incomplete" };
+                }
+                else if (loader.Count > 0)
+                {
+                    loader.RemoveAt(loader.Count - 1);
+                    value = value with { RegistrationCompleteness = "incomplete" };
+                }
+                else if (modules.Count > 0)
+                {
+                    modules.RemoveAt(modules.Count - 1);
+                    value = value with { Completeness = "incomplete" };
+                }
+                else return false;
+            }
         }
         catch (JsonException) { return false; }
     }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Agent.Api;
@@ -18,8 +19,11 @@ namespace Elsa.Agent.Tests;
 
 public sealed class HostSupportContextTests
 {
-    [Fact]
-    public async Task Actual_mapped_prompt_admits_typed_client_claim_and_native_session_policy_separately()
+    [Theory]
+    [InlineData("plain")]
+    [InlineData("unicode")]
+    [InlineData("html")]
+    public async Task Actual_mapped_prompt_admits_typed_client_claim_and_native_session_policy_separately(string encoding)
     {
         var support = new Support();
         using var root = Services(support);
@@ -29,14 +33,28 @@ public sealed class HostSupportContextTests
         var policy = AgentPolicy.Default with { Id = "owned-session-policy", DeniedCapabilityIds = ["not-supported"] };
         var session = await sessions.CreateAsync(new("tenant", "actor", "conversation", "test", "explain", null, policy, new Dictionary<string, string>()));
         var content = Content();
+        var displayName = new string(encoding == "unicode" ? 'é' : '<', 256);
+        if (encoding != "plain")
+        {
+            content["modules"] = new JsonArray(Enumerable.Range(0, 24).Select(index => (JsonNode)new JsonObject
+                { ["id"] = "module-" + index, ["displayName"] = displayName, ["status"] = "available" }).ToArray());
+            content["loader"] = new JsonArray(Enumerable.Range(0, 24).Select(index => (JsonNode)new JsonObject
+                { ["moduleId"] = "module-" + index, ["status"] = "loaded" }).ToArray());
+            content["registrations"] = new JsonArray();
+        }
         content["notProviderContent"] = Guid.NewGuid().ToString("N");
         var candidate = Caller(content);
         var body = JsonSerializer.SerializeToUtf8Bytes(new { message = "Explain available support", contextAttachments = new[]
         {
             new { candidate.Id, candidate.Source, candidate.SourceId, candidate.Label, candidate.ModuleId, candidate.ContentType,
-                candidate.SchemaVersion, candidate.Content, candidate.References, candidate.Target, candidate.Client,
+                candidate.SchemaVersion, Content = content, candidate.References, candidate.Target, candidate.Client,
                 sensitivity = "internal", origin = "authoritativeRead", agentScopes = new[] { "forged" } }
-        }, requestId = "support-admission" });
+        }, requestId = "support-admission" }, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            // Model the actual browser's JSON.stringify encoding, without changing product encoding.
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
+        Assert.True(System.Text.Encoding.UTF8.GetString(body).Length < 24576);
         var context = Context(services);
         context.Request.RouteValues["sessionId"] = session.Id;
         context.Request.Method = "POST";
@@ -72,6 +90,21 @@ public sealed class HostSupportContextTests
         Assert.Equal(policy.DeniedCapabilityIds, support.Policies[0].DeniedCapabilityIds);
         Assert.DoesNotContain("notProviderContent", Element(browser).GetRawText());
         Assert.DoesNotContain("forged", JsonSerializer.Serialize(message.Context));
+        Assert.True(JsonSerializer.Serialize(browser.Content).Length <= 24576);
+        if (encoding != "plain")
+        {
+            Assert.Equal("incomplete", Element(browser).GetProperty("completeness").GetString());
+            Assert.Equal("incomplete", Element(browser).GetProperty("registrationCompleteness").GetString());
+            Assert.InRange(Element(browser).GetProperty("modules").GetArrayLength(), 1, 23);
+            Assert.Equal(displayName, Element(browser).GetProperty("modules")[0].GetProperty("displayName").GetString());
+            var original = JsonSerializer.Serialize(message.Context);
+            var retained = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+                new(session.Id, "", new Dictionary<string, string>())
+                { Disclosure = new(session.Id, message.Context, [], false) { IsHistorical = true } });
+            Assert.True(retained.Succeeded, retained.Error?.Message);
+            Assert.Equal("backend", Assert.Single(retained.Value!.Attachments).Source);
+            Assert.Equal(original, JsonSerializer.Serialize(message.Context));
+        }
     }
 
     [Fact]
@@ -249,6 +282,51 @@ public sealed class HostSupportContextTests
         Assert.Equal(1, support.Calls);
     }
 
+    [Theory]
+    [InlineData(1, "owner", "principal")]
+    [InlineData(1, "hydrate", "principal")]
+    [InlineData(1, "owner", "context")]
+    [InlineData(1, "hydrate", "context")]
+    [InlineData(2, "owner", "principal")]
+    [InlineData(2, "hydrate", "principal")]
+    [InlineData(2, "owner", "context")]
+    [InlineData(2, "hydrate", "context")]
+    public async Task A_replaced_same_owner_request_cannot_reuse_permission_across_session_reads(int pass, string boundary, string changed)
+    {
+        var support = new Support();
+        using var fixture = new Fixture(support);
+        var accessor = fixture.Services.GetRequiredService<IHttpContextAccessor>();
+        var originalPrincipal = fixture.Context.User;
+        fixture.Permission.Decide = _ => Task.FromResult(ReferenceEquals(accessor.HttpContext?.User, originalPrincipal)
+            ? PermissionEvaluationResult.Success : PermissionEvaluationResult.Denied("withdrawn permission"));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task Pause(int calls)
+        {
+            if (calls != pass) return;
+            entered.TrySetResult();
+            await release.Task;
+        }
+        if (boundary == "owner") fixture.Sessions.BeforeOwner = Pause;
+        else fixture.Sessions.BeforeHydration = Pause;
+        var pending = fixture.Collect(Content());
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var replacement = Principal(); // The same actor/tenant, with a different permission-bearing principal.
+            if (changed == "principal") fixture.Context.User = replacement;
+            else accessor.HttpContext = new DefaultHttpContext { RequestServices = fixture.Services, User = replacement };
+            release.SetResult();
+            var result = await pending.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(result.Succeeded);
+            Assert.Empty(result.Value!.Attachments);
+            Assert.Equal(pass - 1, support.Calls);
+            Assert.Equal(pass, fixture.Sessions.OwnerCalls);
+            Assert.Equal(boundary == "owner" ? pass - 1 : pass, fixture.Sessions.HydrationCalls);
+        }
+        finally { release.TrySetResult(); }
+    }
+
     [Fact]
     public async Task A_late_permission_allow_after_stop_cannot_start_session_reads()
     {
@@ -407,10 +485,12 @@ public sealed class HostSupportContextTests
         public AgentSessionOwner Owner { get; set; } = new("actor", "tenant");
         public int OwnerCalls { get; private set; }
         public int HydrationCalls { get; private set; }
-        public Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
-        { Assert.Equal(Session.Id, sessionId); OwnerCalls++; return Task.FromResult<AgentSessionOwner?>(Owner); }
-        public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
-        { Assert.Equal(Session.Id, sessionId); HydrationCalls++; return Task.FromResult<AgentSession?>(Session); }
+        public Func<int, Task>? BeforeOwner { get; set; }
+        public Func<int, Task>? BeforeHydration { get; set; }
+        public async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+        { Assert.Equal(Session.Id, sessionId); OwnerCalls++; if (BeforeOwner is not null) await BeforeOwner(OwnerCalls); return Owner; }
+        public async Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+        { Assert.Equal(Session.Id, sessionId); HydrationCalls++; if (BeforeHydration is not null) await BeforeHydration(HydrationCalls); return Session; }
         public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
