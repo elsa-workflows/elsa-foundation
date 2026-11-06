@@ -10,7 +10,7 @@ export async function prepareInvalidDraft({ page, expect, capture, setMode }) {
   await page.getByLabel("Display name", { exact: true }).fill("Studio company");
   await page.getByLabel("Connection key", { exact: true }).fill("invalid key");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("lowercase");
+  await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("lowercase");
   await capture(page, "invalid-key", { action: "submit-invalid-key" });
   await page.getByLabel("Connection key", { exact: true }).fill("studio-company");
   const issuer = await page.getByLabel("Issuer URL", { exact: true }).inputValue();
@@ -39,7 +39,7 @@ export async function exercisePreviewDenial({ page, admin, backend, expect, capt
   const beforeSession = await (await admin.request.get(backend + "/_elsa/identity/session")).json();
   await control("deny-preview");
   await page.getByRole("button", { name: "Preview sign-in", exact: true }).click(); await confirm(page, "Preview provider sign-in", "Continue to provider");
-  await expect(page.getByRole("alert")).toContainText("provider sign-in was cancelled");
+  await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("provider sign-in was cancelled");
   await expect.poll(() => [...new URL(page.url()).searchParams.keys()].some(key => key.startsWith("externalPreview"))).toBe(false);
   await capture(page, "preview-provider-denied", { action: "owned-provider-denial-return" });
   const exchanges = await exchangeCount() - beforeExchanges; const after = await (await admin.request.get(backend + "/__probe/state")).json();
@@ -65,7 +65,7 @@ export async function exerciseConnectionConflict({ page, admin, componentUrl, ex
   const response = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/commands"));
   await confirm(page, "Save changes");
   expect((await response).status()).toBe(409);
-  await expect(page.getByRole("alert")).toContainText("changed on the server");
+  await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("changed on the server");
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");
   await capture(page, "stale-draft-preserved", { action: "real-catalog-cas-conflict" });
   const refresh = page.getByRole("button", { name: "Refresh connections", exact: true });
@@ -104,7 +104,7 @@ export async function exerciseAccessRecovery({ page, admin, browser, backend, co
     await conflict.getByLabel("External subject", { exact: true }).fill(subject);
     const response = conflict.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/links/attach"));
     await conflict.getByRole("button", { name: "Attach identity", exact: true }).click(); await confirm(conflict, "Attach identity");
-    expect((await response).status()).toBe(409); await expect(conflict.getByRole("alert")).toContainText("already belongs");
+    expect((await response).status()).toBe(409); await expect(conflict.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("already belongs");
     expect((await links("pending-fixture-user")).length).toBe(0); expect(await links(target.id)).toEqual(originalLinks);
     await capture(conflict, "identity-ownership-conflict", { action: "reject-already-owned-identity" });
     await conflict.waitForLoadState("networkidle");
@@ -124,7 +124,7 @@ export async function exerciseAccessRecovery({ page, admin, browser, backend, co
       await control(mode, target.id, selected.id);
       const response = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith(`/sessions/${selected.id}/revoke`));
       await card.getByRole("button", { name: "Revoke session", exact: true }).click(); await confirm(page, "Revoke session");
-      expect((await response).status()).toBe(503); await expect(page.getByRole("alert")).toContainText("Revocation could not be confirmed");
+      expect((await response).status()).toBe(503); await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("Revocation could not be confirmed");
       const stored = (await sessions()).find(session => session.id === selected.id);
       expect(stored.state).toBe(mode === "before-write" ? "active" : "revoked");
       await capture(page, `revocation-${mode}-failure`, { action: `real-${mode}-503` });
