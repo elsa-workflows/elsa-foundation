@@ -10,6 +10,8 @@ namespace Elsa.Activities.Design.Core.Contracts;
 /// configured metadata to the exact admitted contract; a client alias is never CLR reflection authority.
 /// Null means this contribution does not own the source. An owned opaque or missing contract returns
 /// Unknown or Unavailable facts. The coordinator refuses multiple matching owners.
+/// For a nonempty member path, the selected shape includes effective nullability, presence and protection
+/// through every traversed prefix; subtree discovery does not discard a nullable or optional parent.
 /// </remarks>
 public interface IActivitySerializedShapeSource
 {
@@ -33,6 +35,8 @@ public interface IActivitySerializedShapeSource
     /// Describes a boundary/variable/owner-exposed item type only through actual activated design-time
     /// type-contract admission. Missing or ambiguous admission yields honest unknown facts; runtime
     /// alias registries, arbitrary type lookup and alias installation are not permitted substitutes.
+    /// A selectable CLR alias alone does not establish a boundary value's serialized profile. An
+    /// unbound profile returns Unknown, and a nonempty path cannot assert a selected member type.
     /// </summary>
     /// <param name="declaredType">The type resolved from the actual accepted source declaration, never a client expected-type claim.</param>
     /// <param name="ownerContractIdentity">Server-resolved identity of that declaration's exact document/contract revision.</param>
