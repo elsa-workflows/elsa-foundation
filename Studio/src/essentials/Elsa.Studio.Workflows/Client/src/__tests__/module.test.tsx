@@ -5014,7 +5014,7 @@ describe("workflows module", () => {
     const rename = buttonByText(container, "Rename");
     rename?.focus();
     await click(rename);
-    const name = inputByLabel(dialog(container), "Folder name");
+    const name = inputByLabel(await waitForDialog(container), "Folder name");
     await fill(name, "Platform operations");
     await click(buttonByText(dialog(container), "Rename"));
 
@@ -5061,7 +5061,7 @@ describe("workflows module", () => {
     await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === child.id) ?? null);
     await click(buttonByLabel(container, `Collapse ${parent.name}`));
     await click(buttonByText(container, "Rename"));
-    await fill(inputByLabel(dialog(container), "Folder name"), "Platform operations");
+    await fill(inputByLabel(await waitForDialog(container), "Folder name"), "Platform operations");
     await click(buttonByText(dialog(container), "Rename"));
 
     await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Folder renamed" })));
@@ -5085,7 +5085,7 @@ describe("workflows module", () => {
 
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
     await click(buttonByText(container, "Rename"));
-    const name = inputByLabel(dialog(container), "Folder name");
+    const name = inputByLabel(await waitForDialog(container), "Folder name");
     await fill(name, "Platform operations");
     await click(buttonByText(dialog(container), "Rename"));
 
@@ -5160,7 +5160,7 @@ describe("workflows module", () => {
     const move = buttonByText(container, "Move");
     move?.focus();
     await click(move);
-    await waitForText(dialog(container), "Platform");
+    await waitForText(await waitForDialog(container), "Platform");
     await click(buttonByLabel(dialog(container), `Expand ${ancestor.name}`));
     await flushPromises();
     expect(dialog(container).textContent).not.toContain("Private descendant");

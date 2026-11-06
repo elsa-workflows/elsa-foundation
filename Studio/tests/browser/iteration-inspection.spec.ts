@@ -53,7 +53,7 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
   }
   const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
-  await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
+  await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).press("Enter");
   const chooser = page.locator(".wf-execution-choice");
   await chooser.press("Enter");
   await page.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Iteration 1 / }).press("Enter");
