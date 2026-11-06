@@ -242,6 +242,7 @@
   <Folder Name="/Essentials/src/Activities/Design/">
     <Project Path="Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <Project Path="Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
+    <Project Path="Essentials/src/Activities/Design/Disclosure/Elsa.Activities.Design.Disclosure.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/Design/Core/" />
   <Folder Name="/Essentials/src/Activities/Design/Persistence/">
