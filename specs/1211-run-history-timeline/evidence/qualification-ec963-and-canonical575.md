@@ -1,0 +1,38 @@
+# Current qualification and canonical Fields575 handoff
+
+This is author evidence, not whole-feature or independent visual acceptance. Formal review remains **4/6**. [PR3850 checkpoint](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6677844717) retains the published source and failed preparation boundary.
+
+## Native source preparation
+
+Published source `ec963b0c4cb673b5a338ba78b802acc86fdf3f99`, tree `f2f29166b6d218a35464ccd7dd509102f7cf29d2`, normally compiles the Activities test project from a fresh detached Azure worktree, fresh frozen pnpm dependencies, three original hash/size-pinned BPMN archives, normal canonical evidence hydration and locked restore. Source is clean and finite C06 closure verified. This phase runs **no product tests**. Its raw archive is69,489bytes, SHA256 `2b414af4c17865418f162f2e69a2e819ed2db86ef935dbceb62a5e812d066ab5`.
+
+The previous d67d attempt remains failed: the first helper failed before canonical hydration/restore/build after a receipt-path variable was shadowed; the named continuation completed hydration/restore then failed normal compilation with two `ClrActivityDescriptor` CS0246 errors. No product tests ran. Both original responses and the full compiler log are retained in58,617bytes, SHA256 `e151d0cd733da002ee2cc06013381cab402d592cdd9ff1cac1c325a50e5af706`. The actual namespace correction is part of ec963.
+
+The4,097-variable fix removes a total history-contribution limit while retaining immutable evidence identities, bounded validation windows, global duplicate validation, ordering and existing physical/native boundaries. Its first old-model comparison fails all four rows **before reaching that boundary**: the new test fixture's fixed partition-test accessor disagrees with the default scope transported by `RunAsync`. The actual guard refuses that mismatch, including capture-off cases. Restored-positive execution is unrun; this is not the intended causal contrast. Complete47,915-byte raw archive SHA256 `21d6a0bf8085963ddbe25742d8e5f79da65e6b4988eb8dfc19f74119105969df` retains full TRX/stack/log, actual source and four DLL hashes. Source is restored clean and finite C06 closure verified, while a negative binary may remain until normal rebuild. The follow-up removes the fixed accessor override from both new native fixtures and uses the runtime's ordinary scoped accessor/binder; it changes no runtime scope guard or test assertion. Current native qualification remains open.
+
+## Outcome detail capture
+
+An additional actual native audit established that the history source's230-character outcome guard rejects a valid selected outcome. ec963 removes that source restriction and snapshots the complete ordered original names in native source proof. Existing serialized outcome metadata up to2,048characters retains its representation. Oversized serialized text instead records `history.outcomeCaptureState = size-omitted`, invariant outcome count and an exact ordered `RuntimeHistoryIdentity.CreateBinding` hash. The inspector directly explains that full outcome detail was not captured within the metadata size policy; count/hash are consistency evidence and cannot reconstruct omitted text.
+
+This implements FR-012's explicit uncaptured-observation behavior, FR-024's bounded semantic metadata and FR-047/SC-008's unchanged native behavior. It adds no event kind, policy profile, physical checkpoint, DTO/schema migration, payload grant or full-text availability promise. Small previously valid event identities/wire content stay unchanged. Full source facts remain exact for commit/replay proof; current inspection values cannot substitute for omitted text.
+
+Eight actual selected-outcome capture-off/on cases cover short,231ASCII,2,045ASCII and escaping-heavy Unicode names. API and mounted-inspector cases cover explicit safe disclosure and absence of current-value/payload substitution. An independent narrow source response assessment found no additional concrete defect; it was not round5 and ran no build/test/browser. Actual old/restored native, API and inspector controls remain ahead in this receipt.
+
+## Independently frozen narrow Studio dependency
+
+Canonical local commit `ccd9299ac34cd156ce760146f37657acb0bf9ec9`, tree `6106590c921fff7b4b8970619f4b5bd017a7b65b`, parent2fed, contains only:
+
+- The four disposed-navigation guards in `WorkflowInstances.tsx`.
+- The deterministic deferred-child/unmount regression in `WorkflowInstanceWorkbenchIntegration.test.tsx`.
+
+Both complete files exactly match the qualified7979 bytes; this delta contains no CSS, inventory, Core, native or later readiness changes. The old `moveScopeOccurrence` body is also byte-identical to the originalE21 failing source, SHA256 `1d4d6acef086e6012696d3a5c312cf1b92602bd6071a5c624a8b8603228ca6cc`.
+
+Fresh canonical source/frozen dependencies pass the **whole Workbench file65/65, zero failures/pending** on the admitted Azure worker. All native rows, logs, actual two-file hashes and finite C06 closure were opened from the complete69,461-byte archive, SHA256 `9dd184f7c4e3cc6ba28a6ef95eea48133eefc0bed0eb27faaa089b8bd2308d36`. Source is restored clean. The six preparation/execution phases exit0.
+
+Supporting7979 controls retain the actual disposed negative **1failed /64unselected** (expected6calls, observed7), restored **1passed /64unselected**, and whole-file65pass. Its full seed1 remains3484pass/2fail/0pending across249files, with the separate readiness failures preserved. Raw438,392bytes, SHA256 `88b4271c7d4007347b159aca5bbd30aa657cf1ead0fc093dd8143f6e71041362`. The originalE21 seed1 call-stack trace independently identifies the previous workspace's `moveScopeOccurrence` inspection consuming the current mock response;242,159bytes, SHA256 `596618b911dd395d1fa432826a4bf3c01642587c6a3917cf6410aa0567edfee2`.
+
+The coordinator received the immutable same-owner bundle/patch/source manifest for the receiving Fields stream to cohere and qualify its own source. Bundle1,984bytes SHA256 `a3f121f96a7004a3e9aaa177cada88e9836ea015db8b5dc5ae28bc99839f8e6f`; patch7,455bytes SHA256 `52146f2b6cb489a2d4414cfabe03b0ab0769ab2ead31d5dfcd9269c6f8718885`. The canonical detached commit is not pushed and creates no second PR. Frontend source/Vite execution is retained; separate transformed binaries are not. Finite ownership sampling does not claim complete ancestry. None of this establishes wholeFields/Timeline/current-main acceptance.
+
+## Remaining gates
+
+Current source-bound native/API/frontend controls and complete shuffled orders, provider/migration/full checks, composed UX with the explicit target viewports, independent exact-head acceptance/review, protected merge and resulting-main verification remain open. Cancelled CI runs remain cancelled. No release/deployment or parked-program work is included.

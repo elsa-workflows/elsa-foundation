@@ -27,7 +27,6 @@ public sealed class ContainerVariableHistoryBulkTests
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
-                services.AddSingleton<IPersistenceAccessContextAccessor>(new Access());
                 if (capture) services.AddRuntimeHistory();
                 services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "wide-container-history-at-least32bytes");
             }).Build("wide-container", "wide-child");
@@ -100,6 +99,4 @@ public sealed class ContainerVariableHistoryBulkTests
         }
     }
 
-    private sealed class Access : IPersistenceAccessContextAccessor
-    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(WorkflowExecutionHarness.Partition.Value)); }
 }

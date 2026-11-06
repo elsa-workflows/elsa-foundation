@@ -34,7 +34,6 @@ public sealed class OutcomeHistoryCaptureTests
         };
         await using var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
         {
-            services.AddSingleton<IPersistenceAccessContextAccessor>(new Access());
             if (capture) services.AddRuntimeHistory();
             services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "outcome-history-capture-at-least32bytes");
         }).Build("outcome-owner");
@@ -93,6 +92,4 @@ public sealed class OutcomeHistoryCaptureTests
             (await reader.ReadPageAsync(new(host.ExecutionId, 100))).Items.Select(item => (item.HistoryEventId, item.Sequence)));
     }
 
-    private sealed class Access : IPersistenceAccessContextAccessor
-    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(WorkflowExecutionHarness.Partition.Value)); }
 }
