@@ -1,4 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function showRunData(page: Page, host: string) {
+  if (host !== "instance") return;
+  const data = page.getByRole("complementary", { name: "Run details panel", exact: true }).getByRole("tab", { name: "Data", exact: true });
+  if (await data.getAttribute("aria-selected") !== "true") await data.click();
+}
 
 for (const host of ["editor", "instance"]) {
   for (const theme of ["light", "dark"]) {
@@ -13,6 +19,7 @@ for (const host of ["editor", "instance"]) {
       const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
       await expect(source).toHaveAccessibleName(/Run state: Completed/);
       await source.click();
+      await showRunData(page, host);
       await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
       const connection = canvas.locator('.wf-execution-edge-pulse[data-execution-pulse="connection"]');
       await expect(connection).toHaveCount(0);
@@ -61,6 +68,7 @@ for (const host of ["editor", "instance"]) for (const reduced of [false, true]) 
     const source = canvas.getByRole("button", { name: "1. Notify buyer", exact: true });
     await expect(source.locator("..")).toContainText("Completed");
     await source.click();
+    await showRunData(page, host);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     const pulses = canvas.locator('.wf-execution-sequence-pulse[data-execution-pulse="connection"]');
     await expect(pulses).toHaveCount(0);
@@ -84,6 +92,7 @@ for (const host of ["editor", "instance"]) {
     }
     const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await expect(source).toHaveAccessibleName(/Run state: Completed/); await source.click();
+    await showRunData(page, host);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await page.evaluate(() => {
       const state = window as Window & { recoveredConnectionPulses?: number };
@@ -109,6 +118,6 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
     await expect(page.getByLabel("Workflow canvas", { exact: true }).locator('[data-execution-pulse="activity"]')).toHaveCount(2);
-    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true }).getByText("Completed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Test run summary" }).getByText("Completed", { exact: true })).toBeVisible();
   });
 }

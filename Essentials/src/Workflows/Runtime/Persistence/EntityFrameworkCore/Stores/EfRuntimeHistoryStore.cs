@@ -208,8 +208,8 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
         {
             // Hold the one run head while bounded rows are read: a concurrent purge or bookmark mutation must not
             // combine a pre-write head with post-write projections and masquerade as corruption.
-            await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
-            // The mutation lock order is native run, then history head. Match it before taking the head read lock,
+            await using var transaction = await EfRuntimeReadTransaction.BeginAsync(context, cancellationToken);
+            // The mutation lock order is native run, then history head. Match it before reading the head within this snapshot,
             // including descendant queries which may consult native ancestry later in this read boundary.
             var runId = EfWorkflowExecutionStateStore.CreateId(scope, run);
             _ = await context.WorkflowExecutionStates.AsNoTracking().Where(x => x.Id == runId).Select(x => x.Id).SingleOrDefaultAsync(cancellationToken);

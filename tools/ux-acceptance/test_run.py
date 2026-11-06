@@ -42,12 +42,38 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed'],
                          acceptance.CAPTURES['compact runtime Inputs retain exact captured values and accessible technical details'])
 
+    def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
+        journey = sorted(acceptance.JOURNEYS)[0]
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == journey]
+        self.assertEqual(len(acceptance.PROJECTS), acceptance.verdict(report, self.root, [journey]))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+        with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, [journey])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['unknown'])
+        report['suites'][0]['specs'][0]['tests'].pop()
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
+
+    def test_scoped_history_requires_the_dedicated_320px_projects(self):
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == acceptance.HISTORY_JOURNEY]
+        tests = report['suites'][0]['specs'][0]['tests']
+        self.assertEqual({'desktop-light', 'desktop-dark', 'timeline-320-light', 'timeline-320-dark'},
+                         {row['projectName'] for row in tests})
+        self.assertEqual(4, acceptance.verdict(report, self.root, [acceptance.HISTORY_JOURNEY]))
+        for replacement in ('narrow-light', 'desktop-light'):
+            changed = copy.deepcopy(report)
+            row = next(row for row in changed['suites'][0]['specs'][0]['tests'] if row['projectName'] == 'timeline-320-light')
+            row['projectName'] = replacement
+            with self.assertRaises(ValueError): acceptance.verdict(changed, self.root, [acceptance.HISTORY_JOURNEY])
+
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
-        for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
+        for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
             with self.subTest(change=change):
                 report = copy.deepcopy(self.report)
                 tests = report['suites'][0]['specs'][0]['tests']
                 if change == 'missing': tests.pop()
+                if change == 'missing-journey': report['suites'][0]['specs'].pop()
                 if change == 'duplicate': tests.append(copy.deepcopy(tests[0]))
                 if change == 'empty': report['suites'] = []
                 if change == 'skipped': tests[0]['results'][0]['status'] = 'skipped'

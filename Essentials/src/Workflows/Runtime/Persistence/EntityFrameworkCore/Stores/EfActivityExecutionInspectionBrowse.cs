@@ -26,7 +26,7 @@ public sealed partial class EfActivityExecutionInspectionStore
         return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "browsing", query.WorkflowExecutionId, async () =>
         {
             await using var transaction = callerTransaction is null
-                ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
+                ? await EfRuntimeReadTransaction.BeginAsync(context, cancellationToken) : null;
             var indexes = new List<(string Id, long Position, string? Previous, string? Next, long? Iteration)>();
             long total = 0, offset = 0;
             await using (var command = context.Database.GetDbConnection().CreateCommand())

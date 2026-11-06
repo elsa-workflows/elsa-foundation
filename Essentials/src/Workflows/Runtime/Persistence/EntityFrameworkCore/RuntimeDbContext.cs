@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -13,6 +14,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
+    // A request exists only while one owned read transaction is being started. It is neither an
+    // ambient mode nor permission for a later write or another transaction on this context.
+    internal EfRuntimeReadTransaction.Request? ReadTransactionRequest { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        EfRuntimeReadTransaction.Configure(optionsBuilder);
+    }
+
     internal DbSet<RuntimeHistoryActivityEntity> RuntimeHistoryActivities => Set<RuntimeHistoryActivityEntity>();
     internal DbSet<RuntimeHistoryHeadEntity> RuntimeHistoryHeads => Set<RuntimeHistoryHeadEntity>();
     internal DbSet<RuntimeHistoryEventEntity> RuntimeHistoryEvents => Set<RuntimeHistoryEventEntity>();

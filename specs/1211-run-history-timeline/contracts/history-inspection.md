@@ -14,6 +14,8 @@ Inputs: exact run, optional exact execution with explicit descendant scope, book
 
 Outputs: stable records and logical/physical group context; capture support, from-start/late/gap/disabled/purged/invalid coverage; first/last/settled sequence and retention boundary; next traversal/catch-up continuation. Default page size follows existing 100 and shared maximum 500. Qualification uses at most 100. Optional source settlement is not workflow completion.
 
+Each multi-query read must use one committed provider snapshot for the head, selected rows, ancestry and counts. Inspection must not reserve a provider's writer slot merely to read. SQLite uses a deferred Serializable transaction; native-run access still precedes head/projection access. Other providers retain their existing isolation and caller-transaction rules. This does not weaken atomic writers, fencing, deletion/purge serialization or failure classification. Held-writer and concurrent-commit controls must prove both read progress and a coherent old snapshot, followed by catch-up to the committed append.
+
 Bind purpose-separated continuation payloads to exact run, filters, limit, watermark, scope, tenant, audit subject and authorization profile using the existing authenticated runtime codec. Tokens are not authority. Invalid or mismatched continuations fail without exposing another range.
 
 Exact recorded IDs use indexed paths. Free text matches safe common fields in a bounded ordered search window; return searched-through position and whether more search range remains. UI says “no matches in this searched range” when appropriate and can continue; do not claim global absence or exact full filtered totals. Active presentation counts describe loaded/known ranges accurately.

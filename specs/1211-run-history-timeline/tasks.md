@@ -91,13 +91,13 @@ T005 and T007 were reopened after published-head CI exposed continuation separat
 
 - [x] T040 [US7] Prove pre-persistence safe capture and independent structure/value/payload grants, subject/tenant/scope-bound cursors and no protected identifiers via search/counts/links in existing Runtime/API/EF test projects.
 - [ ] T041 [US7] Complete public-token styling, focus/tab semantics, narrow stacked inspector and all required loading/empty/error/denied states in Studio Workflows run-history components and selected browser regressions.
-- [ ] T042 [US7] Add the real User Tasks approval/history/restart journey and exact screenshot/trace inventory to Studio/tests/acceptance/ and tools/ux-acceptance/run.py, including 320px and light/dark; preserve owned process/store lifecycle.
+- [x] T042 [US7] Add the real User Tasks approval/history/restart journey and exact screenshot/trace inventory to Studio/tests/acceptance/ and tools/ux-acceptance/run.py, including 320px and light/dark; preserve owned process/store lifecycle.
 - [ ] T043 [US7] Commit the complete candidate, run the added composed journey and inspect source-bound captures for waiting/completed/fault/duplicate/expiry/partial/denied/stale cases under specs/1211-run-history-timeline/evidence/ and the normal downloadable CI artifact.
 - [ ] T044 [US7] Obtain independent current-head UX acceptance using the actual owned host and downloaded screenshots/traces; fix/retest findings and retain the receipt on PR #3850 and feature evidence.
 
 ## Phase 10 — Integration, review and closeout
 
-- [ ] T045 Update touched public API baselines, Runtime extension-point catalogs, root index if needed and capability/module documentation under Essentials/src/Workflows/Runtime/ and EXTENSION_POINTS.md; no generated maps on main.
+- [x] T045 Update touched public API baselines, Runtime extension-point catalogs, root index if needed and capability/module documentation under Essentials/src/Workflows/Runtime/ and EXTENSION_POINTS.md; no generated maps on main.
 - [ ] T046 Reconcile current main and live overlapping #3828/#3847 source changes without wholesale branch copying; run affected whole .NET/Workflows/frontend/browser/provider suites plus required architecture/maps/locked restore gates, recording exact source and test counts in specs/1211-run-history-timeline/evidence/.
 - [ ] T047 Run separate independent correctness, repository-standards and acceptance/spec-and-UX lenses on the exact draft #3850 head without sharing reviewer output; fix actionable findings in additive commits, repeat affected qualification and record numbered rounds (maximum six) under the organization standing self-merge protocol and repo evidence rules.
 - [ ] T048 Update final PR title/body to delivered behavior with Fixes #3849, source-bound acceptance evidence and actual limitations; mark spec Implemented in specs/1211-run-history-timeline/spec.md only for the final fully delivered merge candidate.

@@ -7,7 +7,6 @@ import { getActivityAuthoringCapabilities } from "./api/activityDesign";
 import type { ActivityAuthoringCapabilities } from "./activityDefinitionTypes";
 import { IncidentStrategySection } from "./IncidentStrategySection";
 import { PersistenceModeSection } from "./PersistenceModeSection";
-import { WorkflowVersionHistory, type WorkflowVersionHistoryAgent } from "./workflow-editor/WorkflowVersionHistory";
 import {
   argumentNameKeys,
   createInput,
@@ -563,7 +562,7 @@ export function toRecords(value: unknown[] | undefined): Record<string, unknown>
 }
 
 // Self-contained variable editor (loads its own type/storage descriptors) for use outside the
-// Properties tab — e.g. the container-scoped variables section in the activity inspector. Workflow-
+// workflow data tabs — e.g. the container-scoped variables section in the activity inspector. Workflow-
 // and container-scoped declarations share this one editor, differing only by where they are stored.
 export function ScopedVariablesEditor({ context, variables, title, addLabel, emptyLabel, warnings, onChange }: {
   context: StudioEndpointContext;
@@ -652,21 +651,13 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
   );
 }
 
-export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange, versionAgent }: {
+export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange }: {
   details: WorkflowDefinitionDetails | null;
   draft: WorkflowDraft;
   context: StudioEndpointContext;
   onStateChange(producer: StateProducer): void;
   onDefinitionMetaChange?(patch: { name?: string; description?: string }): void;
-  /** Weaver's read-only version journey (spec 1193 story 8): a selected version is disclosed and can be explained. */
-  versionAgent?: WorkflowVersionHistoryAgent;
 }) {
-  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
-  const variables = toRecords(draft.state.variables);
-  const inputs = toRecords(draft.state.inputs);
-  const outputs = toRecords(draft.state.outputs);
-  const versions = details?.versions ?? [];
-
   return (
     <div className="wf-properties-view">
       <InformationSection
@@ -685,6 +676,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
       />
 
       <PersistenceModeSection
+        context={context}
         strategyOptions={draft.state.strategyOptions}
         onChange={persistenceMode => onStateChange(state => ({
           ...state,
@@ -692,34 +684,43 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         }))}
       />
 
-      <VariablesEditor
-        items={variables}
+    </div>
+  );
+}
+
+export type WorkflowDataSection = "variables" | "inputs" | "outputs";
+
+/** Workflow declarations share the scoped editors and the draft's existing save and undo path. */
+export function WorkflowDataView({ section, draft, context, onStateChange }: {
+  section: WorkflowDataSection;
+  draft: WorkflowDraft;
+  context: StudioEndpointContext;
+  onStateChange(producer: StateProducer): void;
+}) {
+  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
+  return (
+    <div className="wf-properties-view">
+      {section === "variables" ? <VariablesEditor
+        items={toRecords(draft.state.variables)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
-      />
-      <InputsEditor
-        items={inputs}
+      /> : section === "inputs" ? <InputsEditor
+        items={toRecords(draft.state.inputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, inputs: next }))}
-      />
-      <OutputsEditor
-        items={outputs}
+      /> : <OutputsEditor
+        items={toRecords(draft.state.outputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, outputs: next }))}
-      />
-
-      <section className="wf-properties-section">
-        <h3>Versions</h3>
-        <WorkflowVersionHistory definitionId={details?.definition.id ?? draft.definitionId} versions={versions} agent={versionAgent} />
-      </section>
+      />}
     </div>
   );
 }

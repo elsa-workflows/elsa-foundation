@@ -278,6 +278,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         }
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
+        // Continuations another deliverer finished whose work this drain has already gone back to drain (#3661).
+        var settledElsewhere = new HashSet<string>(StringComparer.Ordinal);
         var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
 
         var (coalescingScope, pageReuseCancellation) = BeginSegment(resolved);
@@ -360,7 +362,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                         ? ContinuationSettlement.Undelivered
                         : durableClaimBoundary
                             ? ContinuationSettlement.DrainAgain
-                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, coalescingScope, cancellationToken);
+                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledElsewhere, settledDeliveryIds, coalescingScope, cancellationToken);
                     if (restartCoalescing && settlement == ContinuationSettlement.ConcurrentDeliverySettled)
                     {
                         handoffDeliveredContinuation = true;
@@ -380,8 +382,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 if (settlement is ContinuationSettlement.DrainAgain or ContinuationSettlement.ConcurrentDeliverySettled)
                 {
                     // Another deliverer queued its continuation in the durable queue, after this segment filled its
-                    // overlay from it. The overlay never shows that work, so the next pass would run dry and report
-                    // quiescence, leaving the step to the sweep (#3659). Close this segment, unless taking back a lapsed
+                    // overlay from it, whether the drain waited for that delivery (#3659) or found it already finished
+                    // (#3661). The overlay never shows that work, so the next pass would run dry and report
+                    // quiescence, leaving the step to the sweep. Close this segment, unless taking back a lapsed
                     // claim already did, and start one from durable state. A segment a boundary had already ended reads
                     // the durable store directly, so it carries on as before: restarting it would resume coalescing that
                     // a terminal or external boundary, or an abandoned reconciliation, ended on purpose.
@@ -462,7 +465,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     /// before its first bookmark existed. Instead the drain waits, bounded, for a continuation another deliverer holds,
     /// takes it back once that claim lapses, and drains whatever the other deliverer queued. The drain still holds the
     /// execution's ownership lease, so nothing else would drain that work before the command returned. A continuation the
-    /// other deliverer failed ends the drain as a failed delivery of its own would.
+    /// other deliverer failed ends the drain as a failed delivery of its own would. A continuation another deliverer
+    /// finished after a coalescing segment filled its overlay counts as one the drain waited for (#3661).
     /// </summary>
     private async ValueTask<ContinuationSettlement> SettleContinuationsAsync(
         RuntimeSchedulerDrainRequest request,
@@ -470,6 +474,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimePostCommitOutboxProcessResult outboxResult,
         List<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
         ContinuationWaitDeadline continuationWait,
+        HashSet<string> settledElsewhere,
         ICollection<string>? settledDeliveryIds,
         IRuntimeCoalescingDrainScope segment,
         CancellationToken cancellationToken)
@@ -479,8 +484,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             .Where(item => item.IsSuperseded)
             .Select(item => item.OutboxItemId)
             .ToHashSet(StringComparer.Ordinal);
+        // An active segment reads queued work from the overlay it filled, which misses work a delivery that finished
+        // since then queued durably. The listing returns such deliveries too, at no extra read.
+        var overlayFilledAt = segment.Session.IsActive ? segment.Session.QueueSeededAt : null;
+        var finishedElsewhere = new HashSet<string>(StringComparer.Ordinal);
         var poll = FirstClaimPoll;
-        var held = await ListHeldContinuationsAsync(workflowExecutionId, cancellationToken);
+        var held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, settledElsewhere, cancellationToken));
         while (held.Count > 0)
         {
             // A failed attempt is not known to have queued anything, and its retry, after the policy's delay, is the sweep's
@@ -516,19 +525,34 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
             await Task.Delay(UntilNextPoll(poll, held, now, deadline), _timeProvider, cancellationToken);
             poll = poll * 2 < MaxClaimPoll ? poll * 2 : MaxClaimPoll;
-            held = await ListHeldContinuationsAsync(workflowExecutionId, cancellationToken);
+            held = Unsettled(await ListHeldContinuationsAsync(workflowExecutionId, overlayFilledAt, settledElsewhere, cancellationToken));
         }
 
         // The other deliverer finished. A delivery that failed for good is no longer listed, so the items are looked up: a
-        // failure ends the drain as above, otherwise the work they queued is drained next.
-        if (taken.Count > 0)
-            return await AnyDeliveryFailedAsync(taken, cancellationToken, settledDeliveryIds)
-                ? ContinuationSettlement.Undelivered
-                : ContinuationSettlement.ConcurrentDeliverySettled;
+        // failure ends the drain as above, otherwise the work they queued is drained next. One found already finished is
+        // gone back for once: a later listing still returns it when the other deliverer's clock runs ahead.
+        settledElsewhere.UnionWith(finishedElsewhere);
+        if (taken.Count > 0 || finishedElsewhere.Count > 0)
+        {
+            if (await AnyDeliveryFailedAsync(taken, cancellationToken, settledDeliveryIds))
+                return ContinuationSettlement.Undelivered;
+            // Superseded and waited-for deliveries are observed too; listing them again would repeat an empty refresh.
+            settledElsewhere.UnionWith(taken);
+            return ContinuationSettlement.ConcurrentDeliverySettled;
+        }
 
         return await HasUndrainedWorkAsync(request, drainResult, cancellationToken)
             ? ContinuationSettlement.DrainAgain
             : ContinuationSettlement.Quiesced;
+
+        // Keeps the items still taken on, and records the deliveries finished elsewhere that this drain has not gone back for.
+        IReadOnlyCollection<RuntimePostCommitOutboxItem> Unsettled(IReadOnlyCollection<RuntimePostCommitOutboxItem> listed)
+        {
+            finishedElsewhere.UnionWith(listed
+                .Where(item => item.Status == RuntimePostCommitOutboxStatus.Delivered && !settledElsewhere.Contains(item.OutboxItemId))
+                .Select(item => item.OutboxItemId));
+            return listed.Where(item => item.Status != RuntimePostCommitOutboxStatus.Delivered).ToArray();
+        }
     }
 
     // The execution's continuations another deliverer has taken on and not settled: claimed, or failed and awaiting a retry.
@@ -537,14 +561,19 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     // terminal and stays in the outbox, so it is not listed: every later drain of the execution would report a failed
     // delivery, and skip incident resolution, for good. The cost is that a continuation whose attempts were all made and
     // failed by other deliverers before this drain's first read goes unseen (#2225, docs/runtime-durable-resumption.md).
+    // Given a time, it also returns the continuations a claim delivered since then, after the unsettled ones (#3661).
     private ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListHeldContinuationsAsync(
         string workflowExecutionId,
+        DateTimeOffset? deliveredByClaimSince,
+        IReadOnlyCollection<string> excludedDeliveredIds,
         CancellationToken cancellationToken) =>
         _claimStore.ListClaimedAsync(
             new RuntimePostCommitOutboxClaimedQuery(
                 workflowExecutionId,
                 RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-                _options.OutboxDeliveryBatchSize),
+                _options.OutboxDeliveryBatchSize,
+                deliveredByClaimSince,
+                excludedDeliveredIds),
             cancellationToken);
 
     // A lapsed claim keeps its fencing token, and a claim-free delivery cannot complete a fenced item (#1798), so the drain

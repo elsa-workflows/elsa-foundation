@@ -5,7 +5,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

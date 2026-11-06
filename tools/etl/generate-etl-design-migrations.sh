@@ -11,14 +11,14 @@ fail() {
 usage() {
   cat <<'USAGE'
 Usage:
-  bash tools/etl/generate-etl-design-migrations.sh <MigrationName> <PostgreSql|SqlServer|MySql>
+  bash tools/etl/generate-etl-design-migrations.sh <MigrationName> <PostgreSql|SqlServer|MySql> [design|runtime]
 
-Each context retains its own migration set under
-Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/<Provider>/.
+The store defaults to design. Each context retains its own migration set under
+Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/<EtlDesign|EtlRuntime>/<Provider>/.
 USAGE
 }
 
-if [[ $# -lt 1 || $# -gt 2 ]] || [[ $# -eq 1 && "$1" != "-h" && "$1" != "--help" ]]; then
+if [[ $# -lt 1 || $# -gt 3 ]] || [[ $# -eq 1 && "$1" != "-h" && "$1" != "--help" ]]; then
   usage >&2
   exit 2
 fi
@@ -39,20 +39,26 @@ case "$provider" in
   PostgreSql|SqlServer|MySql) ;;
   *) fail "Unsupported ETL design provider '$provider' (the SQLite chain is hand-maintained)." ;;
 esac
-context="EtlDesign${provider}DbContext"
+store="${3:-design}"
+case "$store" in
+  design) store_name="EtlDesign"; context_file="EtlDesignDbContext.cs" ;;
+  runtime) store_name="EtlRuntime"; context_file="EtlRuntimeDbContext.cs" ;;
+  *) fail "Unsupported ETL store '$store' (design or runtime)." ;;
+esac
+context="${store_name}${provider}DbContext"
 project_rel="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
 project="${project_rel}"
 project_dir="$root/Extensions/Etl/src/Persistence/EntityFrameworkCore"
-context_source="$project_dir/EtlDesignDbContext.cs"
+context_source="$project_dir/$context_file"
 tooling="Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj"
 factory_source="Extensions/Etl/src/Tooling/${context}Factory.cs"
-output_dir="Migrations/EtlDesign/$provider"
-namespace="Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.EtlDesign.$provider"
+output_dir="Migrations/$store_name/$provider"
+namespace="Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.$store_name.$provider"
 destination="$project_dir/$output_dir"
-expected_destination="$root/Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/$provider"
+expected_destination="$root/Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/$store_name/$provider"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
-[[ "$destination" == "$expected_destination" ]] || fail "Unexpected ETL design migration destination."
+[[ "$destination" == "$expected_destination" ]] || fail "Unexpected ETL migration destination."
 
 for required_file in "$project_rel" "$context_source" "$tooling" "$factory_source" \
                      "tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactory.cs" \
@@ -68,7 +74,7 @@ grep -Fq "ModuleDesignTimeFactory<$context>" "$factory_source" ||
 # Refuse redirected destinations and non-directory path components before restore/build/scaffolding.
 for path in "$root/Extensions" "$root/Extensions/Etl" "$root/Extensions/Etl/src" \
             "$root/Extensions/Etl/src/Persistence" "$project_dir" \
-            "$project_dir/Migrations" "$project_dir/Migrations/EtlDesign" "$destination"; do
+            "$project_dir/Migrations" "$project_dir/Migrations/$store_name" "$destination"; do
   [[ ! -L "$path" ]] || fail "Migration path components must not be symlinks: $path."
   [[ ! -e "$path" || -d "$path" ]] || fail "Migration path component is not a directory: $path."
 done

@@ -18,6 +18,7 @@ import type {
 } from "../workflowTypes";
 import { historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
 import { readRunHistoryLocation } from "../workflow-editor/run-history/historyLocation";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds } from "../api/capabilities";
 import { bpmnActivity, flowchartActivity, sequenceActivity, writeLine } from "./fixtures";
 
 const api = vi.hoisted(() => ({
@@ -33,7 +34,7 @@ const api = vi.hoisted(() => ({
   supportsWorkflowInstanceHealthFilter: vi.fn(),
   listActivities: vi.fn()
 }));
-const historyApi = vi.hoisted(() => ({ supportsWorkflowHistory: vi.fn(), getWorkflowHistoryPage: vi.fn(), getWorkflowHistoryEvent: vi.fn(), listWorkflowHistoryBookmarks: vi.fn() }));
+const historyApi = vi.hoisted(() => ({ supportsWorkflowHistory: vi.fn(), getWorkflowHistoryPage: vi.fn(), getWorkflowHistoryEvent: vi.fn(), getWorkflowHistoryBookmark: vi.fn(), listWorkflowHistoryBookmarks: vi.fn() }));
 vi.mock("../api/runtimeHistory", async importOriginal => ({ ...await importOriginal<typeof import("../api/runtimeHistory")>(), ...historyApi }));
 const designApi = vi.hoisted(() => ({
   listDefinitions: vi.fn(),
@@ -208,6 +209,42 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
     pending.resolve({ activities: [sequenceActivity, writeLine] });
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+  });
+
+  it.each([
+    ["forbidden", { status: 403 }, "with your permissions"],
+    ["not found", { status: 404 }, "on this backend"],
+    ["missing capability", new ApiCapabilityUnavailableError(capabilityIds.activityDesign, "activity-catalog"), "on this backend"],
+    ["unsupported capability", new ApiCapabilityVersionMismatchError(capabilityIds.activityDesign, "1", "2"), "on this backend"]
+  ] as const)("keeps authorized runtime history available without optional activity definitions (%s)", async (_kind, error, limitation) => {
+    api.listActivities.mockRejectedValue(error);
+    api.getExecutableInputSources.mockRejectedValue({ status: 403 });
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    const historySearch = "?historyEvent=retained-event&keep=unchanged";
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    renderWorkbench("timeline", null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.textContent).toContain(`Activity definitions are not available ${limitation}`);
+    expect(container.textContent).toContain("Activity labels and input descriptions may be limited.");
+    expect(container.textContent).not.toContain("Something went wrong");
+    expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalledWith(expect.anything(), "run-1", "retained-event", expect.anything());
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(new URLSearchParams(window.location.search).get("keep")).toBe("unchanged");
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 503])("keeps authentication and transient activity-definition failures explicit (%s)", async status => {
+    api.listActivities.mockRejectedValue({ status });
+    renderWorkbench("timeline", null, "timeline");
+
+    await vi.waitFor(() => expect(container.textContent).toContain("Something went wrong"));
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
   });
 
   it("makes an interrupted ancestry read retryable after refresh", async () => {
@@ -488,6 +525,79 @@ describe("workflow run workbench incident navigation", () => {
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
+  it.each([true, false])("opens an activity-only phone link only when its exact execution resolves (%s)", async found => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    api.supportsActivityExecutionInspection.mockResolvedValue(true);
+    if (found) api.getActivityExecutionInspection.mockResolvedValue(activityInspection({ incidents: [] }));
+    else api.getActivityExecutionInspection.mockRejectedValue({ status: 404 });
+    renderWorkbench("activity", "execution-target");
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow")).toBeTruthy());
+    await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.map(call => call.slice(0, 3))).toContainEqual([
+      expect.anything(), "run-1", "execution-target"]));
+    await vi.waitFor(() => expect(container.querySelector(".narrow-inspector-view") !== null).toBe(found));
+    expect(container.querySelector(".narrow-canvas-view") !== null).toBe(!found);
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview") !== null).toBe(found));
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(historyApi.getWorkflowHistoryBookmark).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each(["event", "bookmark"] as const)("opens unavailable exact %s details on a phone without requiring an activity owner", async kind => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    const id = kind === "event" ? "purged-event" : "missing-bookmark";
+    const parameter = kind === "event" ? "historyEvent" : "bookmark";
+    const historySearch = `?${parameter}=${id}&returnTo=%2Fuser-tasks&keep=unchanged`;
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    historyApi.getWorkflowHistoryEvent.mockRejectedValue({ status: 404 });
+    historyApi.getWorkflowHistoryBookmark.mockRejectedValue({ status: 404 });
+    renderWorkbench("timeline", null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-inspector-view")).toBeTruthy());
+    const inspector = container.querySelector<HTMLElement>("[aria-label='Run details panel']")!;
+    await vi.waitFor(() => expect(inspector.textContent).toContain("This recorded target is unavailable or no longer retained."));
+    expect(inspector.closest("[hidden]")).toBeNull();
+    expect(inspector.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
+    const exactRead = kind === "event" ? historyApi.getWorkflowHistoryEvent : historyApi.getWorkflowHistoryBookmark;
+    const otherRead = kind === "event" ? historyApi.getWorkflowHistoryBookmark : historyApi.getWorkflowHistoryEvent;
+    expect(exactRead).toHaveBeenCalledTimes(1);
+    expect(exactRead).toHaveBeenCalledWith(expect.anything(), "run-1", id, expect.anything());
+    expect(otherRead).not.toHaveBeenCalled();
+    expect(api.getActivityExecutionInspection).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).get(parameter)).toBe(id);
+    expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/user-tasks");
+    expect(new URLSearchParams(window.location.search).get("keep")).toBe("unchanged");
+  });
+
+  it.each(["issues", "details"] as const)("preserves an explicit %s phone startup tab with a retained history target", async tab => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    const historySearch = `?historyEvent=retained-event&tab=${tab}`;
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    renderWorkbench(tab, null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-inspector-view")).toBeTruthy());
+    const inspector = container.querySelector<HTMLElement>("[aria-label='Run details panel']")!;
+    expect(inspector.querySelector(`[data-tab-id='${tab}']`)?.getAttribute("aria-selected")).toBe("true");
+    if (tab === "issues") expect(inspector.textContent).toContain("No incidents recorded.");
+    else expect(inspector.querySelector(".wf-instance-meta")?.textContent).toContain("Run Kind");
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+
+    click(inspector.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+    await vi.waitFor(() => expect(inspector.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalledWith(expect.anything(), "run-1", "retained-event", expect.anything());
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
   it("keeps the Timeline primary and returns from an exact journal event to the same activity tab", async () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
     renderWorkbench("activity", "execution-target", "timeline");
@@ -495,13 +605,16 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
     expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
-    click(container.querySelector<HTMLButtonElement>(".wf-activity-history .wf-history-event"));
+    const journalEvent = container.querySelector<HTMLButtonElement>(".wf-activity-history .wf-history-event")!;
+    journalEvent.focus();
+    click(journalEvent);
     await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
     expect(container.querySelector(".wf-activity-history")?.closest("[hidden]")).toBeTruthy();
     click(buttonByText(container, "Back to activity inspection"));
     await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeNull());
     expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
     expect(container.querySelector(".wf-activity-overview")?.closest("[hidden]")).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(journalEvent));
   });
 
   it("opens Diagram itself when leaving the stacked Timeline on a phone", async () => {
@@ -1210,14 +1323,15 @@ function buttonByText(scope: ParentNode, text: string) {
 function renderWorkbench(
   initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues",
   initialActivityExecutionId: string | null = null,
-  initialView: "diagram" | "timeline" = "diagram"
+  initialView: "diagram" | "timeline" = "diagram",
+  initialHistorySearch = ""
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
     ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
-    initialHistoryLocation={{ ...readRunHistoryLocation(""), view: initialView }}
+    initialHistoryLocation={{ ...readRunHistoryLocation(initialHistorySearch), view: initialView }}
     initialInspectorTab={initialInspectorTab}
     navigate={() => {}}
   />));
@@ -1225,6 +1339,12 @@ function renderWorkbench(
 
 function click(button: HTMLElement | undefined | null) {
   flushSync(() => button?.click());
+}
+
+async function showActivityData() {
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("[data-tab-id='data']"));
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")?.getAttribute("aria-selected")).toBe("true"));
 }
 
 function deferred<T>() {
@@ -1452,6 +1572,7 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
+  await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
   const details = container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
   details.open = true;
@@ -1582,6 +1703,7 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']"));
   await vi.waitFor(() => expect(window.location.search).toContain("write5"));
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 
   phase = "unavailable";
@@ -1602,5 +1724,6 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   // Only a new matching authoritative page may restore the selected child.
   pending.resolve(pageFor({ executableNodeId: "compiled-target", ancestorActivityExecutionId: "scope5" }));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 });

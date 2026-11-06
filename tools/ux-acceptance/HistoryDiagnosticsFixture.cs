@@ -134,7 +134,7 @@ try
             targets[0].ResumeTargetId, "history.native-legacy-expiry", run + ":stimulus", null, expiresAt,
             RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
         var work = new RuntimeSchedulerWorkItem(run + ":create-bookmark", run, run + ":command", WorkflowExecutionCommandKind.CreateBookmark,
-            run + ":envelope", run + ":idempotency", now, now, 1, JsonSerializer.SerializeToElement(payload, json), metadata, metadata);
+            run + ":envelope", run + ":idempotency", now, now, 1, JsonSerializer.SerializeToElement(payload), metadata, metadata);
         var handler = new WorkflowCreateBookmarkSchedulerWorkHandler(runtime.GetRequiredService<IWorkflowExecutableStore>(),
             runtime.GetRequiredService<IActivityExecutionStateStore>(), committer,
             new RuntimeActivityExecutionInspectionAccumulator(runtime.GetRequiredService<IActivityExecutionInspectionStore>()), TimeProvider.System);
@@ -185,7 +185,7 @@ static bool ProcessAlive(int pid)
 }
 static bool ValidPermissions(string profile, string[] permissions)
 {
-    var expected = new HashSet<string>(["workflows/runtime:read"], StringComparer.Ordinal);
+    var expected = new HashSet<string>(["api-capabilities:read", "workflows/runtime:read"], StringComparer.Ordinal);
     if (profile is "metadata" or "payload-denied") expected.Add("workflows/activity-executions:inspect");
     if (profile == "payload-denied") expected.Add("workflows/activity-executions:inspect-values");
     return (profile is "metadata" or "payload-denied" or "denied") && expected.SetEquals(permissions);
