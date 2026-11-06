@@ -21,7 +21,7 @@ public sealed class RuntimeHistoryMigrationTests
         var type = Assert.Single(ModuleContextCatalog.Contexts(provider), type => typeof(RuntimeDbContext).IsAssignableFrom(type));
         using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider));
         var chain = context.Database.GetMigrations().ToArray();
-        Assert.EndsWith("_RunHistory", chain[^1]); Assert.EndsWith("_UserTasks", chain[^2]);
+        Assert.EndsWith("_RunHistory", chain[^1]); Assert.EndsWith("_OutboxClaimDeliveredAt", chain[^2]);
         var assembly = context.GetService<IMigrationsAssembly>();
         var migration = assembly.CreateMigration(assembly.Migrations[chain[^1]], context.Database.ProviderName!);
         Assert.Equal(new[] { "elsa_runtime_history_activity", "elsa_runtime_history_bookmark", "elsa_runtime_history_bookmark_count", "elsa_runtime_history_event", "elsa_runtime_history_head" },
