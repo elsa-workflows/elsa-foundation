@@ -203,6 +203,23 @@ public class ReportPolicyTests
     }
 
     [Fact]
+    public async Task Copied_shell_collection_checks_its_own_late_replacements()
+    {
+        var parent = new ServiceCollection();
+        var feature = new WorkflowsTestingFeature();
+        feature.ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        feature.ConfigureServices(child);
+        child.AddScoped<IWorkflowTestReportPolicy, FixedPolicy>();
+        using var provider = child.BuildServiceProvider();
+        var validator = new WorkflowTestingCompositionValidator(provider.GetRequiredService<WorkflowTestingComposition>());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.InitializeAsync());
+        Assert.Contains(nameof(IWorkflowTestReportPolicy), error.Message);
+        Assert.Single(parent, x => x.ServiceType == typeof(IWorkflowTestReportPolicy));
+    }
+
+    [Fact]
     public void Captured_plan_requires_all_case_checks_and_ordered_steps_without_extras()
     {
         var content = Content([Assertion("case-one"), Assertion("case-two")],
