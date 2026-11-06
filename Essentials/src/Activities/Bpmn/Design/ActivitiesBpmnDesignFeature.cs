@@ -24,6 +24,8 @@ public class ActivitiesBpmnDesignFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentStructureHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentScopeViewHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnScopeViewSourceValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnDocumentAdmissionValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnDocumentCompilationSource>());
     }
 }

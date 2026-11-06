@@ -416,12 +416,12 @@ public sealed class BpmnDocumentStructureHandlerTests
     private static void AssertJson(JsonElement expected, JsonElement actual) => Assert.True(JsonElement.DeepEquals(expected, actual),
         $"Expected {expected.GetRawText()}{Environment.NewLine}Actual {actual.GetRawText()}");
 
-    private static (ExecutableNodeCompiler Compiler, DefaultActivityStructureService Structures, Dictionary<string, ActivityDefinitionVersion> Rows) Compiler()
+    internal static (ExecutableNodeCompiler Compiler, DefaultActivityStructureService Structures, Dictionary<string, ActivityDefinitionVersion> Rows) Compiler()
     {
         var services = new ServiceCollection();
         new ActivitiesSequenceFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
-        var structures = new DefaultActivityStructureService([new BpmnStructureHandler(), new BpmnDocumentStructureHandler(), .. provider.GetServices<IActivityStructureHandler>()]);
+        var structures = new DefaultActivityStructureService([new BpmnStructureHandler(), new BpmnDocumentStructureHandler(), new BpmnDocumentScopeViewHandler(), .. provider.GetServices<IActivityStructureHandler>()]);
         var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(SequenceActivity));
         var compiler = new ExecutableNodeCompiler(structures, registry, new RuntimeInputBindingCompiler(registry),
             new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));

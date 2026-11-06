@@ -17,7 +17,6 @@ public sealed class BpmnRoundTripTests
     private readonly BpmnDocumentExporter _exporter = new();
 
     [Theory]
-    [InlineData("2.0.0", false)]
     [InlineData("99.0.0", false)]
     [InlineData("2.0.0", true)]
     [InlineData("99.0.0", true)]

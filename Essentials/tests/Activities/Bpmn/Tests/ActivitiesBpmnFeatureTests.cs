@@ -58,8 +58,8 @@ public sealed class ActivitiesBpmnFeatureTests
         Assert.Equal(typeof(Models.BpmnAuthoredStructure), handler.AuthoredPayloadType);
         Assert.Equal(typeof(Models.BpmnAuthoredDocument), Assert.Single(handlers, handler => handler.SchemaVersion == "2.0.0").AuthoredPayloadType);
         Assert.Null(Assert.Single(handlers, handler => handler.Kind == Models.BpmnDocumentScopeView.Kind).AuthoredPayloadType);
-        Assert.Single(provider.GetServices<Elsa.Workflows.Design.Validations.Core.Contracts.IDraftValidator>());
-        Assert.Single(services, service => service.ServiceType == typeof(IExecutableCompilationSource));
+        Assert.Equal(2, provider.GetServices<Elsa.Workflows.Design.Validations.Core.Contracts.IDraftValidator>().Count());
+        Assert.Equal(2, services.Count(service => service.ServiceType == typeof(IExecutableCompilationSource)));
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
         Assert.DoesNotContain(typeof(ActivitiesBpmnDesignFeature).Assembly.GetReferencedAssemblies(),
             assembly => assembly.Name is "Elsa.Activities.Bpmn" or "Bpmn.Model" or "Bpmn.Semantics");

@@ -332,7 +332,7 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
         var root = Owner();
         var view = View(Children(root), "A");
         using var scope = _provider.CreateScope();
-        var validator = Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>());
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<BpmnScopeViewSourceValidator>());
         Assert.Empty(await validator.Validate(new Draft(root), CancellationToken.None));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await validator.Validate(new Draft(view), CancellationToken.None));
         var source = Document(root);
@@ -355,7 +355,7 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
         var literal = JsonSerializer.SerializeToElement(new { kind = BpmnDocumentScopeView.Kind, structure = new { kind = BpmnDocumentScopeView.Kind } }, Json);
         var ordinary = new ActivityNode("inline", "inline-version", [new("json", new(literal, "Literal"), null, null, null, null)], []);
         using var scope = _provider.CreateScope();
-        var validator = Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>());
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<BpmnScopeViewSourceValidator>());
         Assert.Empty(await validator.Validate(new Draft(ordinary), CancellationToken.None));
         var root = Owner();
         var document = Document(root);
@@ -372,11 +372,13 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
     }
 
     [Fact]
-    public async Task Actual_inline_validation_gate_rejects_a_physical_view_and_keeps_ordinary_source_valid()
+    public async Task Actual_inline_validation_gate_rejects_a_physical_view_and_returns_execution_diagnostics_for_retained_advanced_source()
     {
         using var scope = _provider.CreateScope();
         var gate = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();
-        Assert.Empty(await gate.DeriveValidationErrorsAsync(new Draft(Owner()), CancellationToken.None));
+        var errors = await gate.DeriveValidationErrorsAsync(new Draft(Owner()), CancellationToken.None);
+        Assert.NotEmpty(errors);
+        Assert.All(errors, error => Assert.Equal("Bpmn/ExecutionCapability", error.Type));
         var view = View(Children(Owner()), "A");
         await Assert.ThrowsAsync<InvalidOperationException>(() => gate.DeriveValidationErrorsAsync(new Draft(view), CancellationToken.None));
     }

@@ -26,6 +26,10 @@ public interface IActivityStructureService
 
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 
+    /// <summary>Compiles with explicit source and server-resolved invocation facts.</summary>
+    ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context) =>
+        CompileExecutableStructure(activity);
+
     /// <summary>
     /// Rewrites activity-owned references in a compiled structure from authored child node IDs to
     /// their placement-specific executable node IDs.

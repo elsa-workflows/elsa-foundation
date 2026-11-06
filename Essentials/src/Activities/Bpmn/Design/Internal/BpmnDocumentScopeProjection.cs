@@ -41,7 +41,8 @@ internal static class BpmnDocumentScopeProjection
         var scopes = scope.Elements().Where(IsScope)
             .Where(element => source.ScopeHeaders.Any(header => header.ScopeElementId == (string?)element.Attribute("id")))
             .Select(element => CreateView(owner, (string)element.Attribute("id")!));
-        return [new(BpmnActivityIdentities.ActivitiesSlotName, native.Concat(scopes).ToArray())];
+        return [new(BpmnActivityIdentities.ActivitiesSlotName, native.Concat(scopes).ToArray())
+        { OutcomeProjections = BpmnDocumentAdmission.Outcomes(owner, scopeId) }];
     }
 
     internal static ActivityNode Replace(ActivityNode owner, string scopeId, IReadOnlyCollection<ActivityChildProjection> projections)

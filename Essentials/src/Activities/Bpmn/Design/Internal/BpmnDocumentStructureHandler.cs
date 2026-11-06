@@ -11,8 +11,8 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>
-/// Stateless singleton contribution for complete-source drafts. Compilation deliberately refuses
-/// until complete-content admission and derived lowering have been qualified with #2736.
+/// Stateless singleton contribution for complete-source drafts. Source assessment retains unsupported
+/// content with diagnostics; execution stays closed while internal lowering is qualified on every route.
 /// </summary>
 internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
 {
@@ -63,10 +63,12 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
 
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
-        Read(activity);
-        throw new NotSupportedException(
-            "Complete-document BPMN authoring schema 2.0.0 cannot compile until complete-content capability admission and derived lowering are qualified (#2736). This applies to nested processes and CanStartWorkflow=false.");
+        BpmnDocumentAdmission.Require(activity);
+        throw new NotSupportedException("Complete-source BPMN lowering remains on hold until all real workflow, reusable-template and Test Drive compile routes qualify resolved catalog types and complete semantics. Internal Lower is a bounded proof, not publication authority.");
     }
+
+    public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context) =>
+        BpmnDocumentResolvedCompilation.Compile(activity, Read(activity).ProcessId, context);
 
     public ActivityNodeStructure RemapExecutableStructure(ActivityNodeStructure structure, IReadOnlyDictionary<string, string> authoredToExecutableNodeIds) =>
         throw new NotSupportedException("Complete-document BPMN authoring is not an executable structure schema.");

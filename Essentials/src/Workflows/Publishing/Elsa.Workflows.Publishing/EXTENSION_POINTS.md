@@ -24,6 +24,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
 | `IActivityPublicationVersionPolicy` *(Publishing Core)* | `ActivityPublicationVersions` (scoped) | Release choices differ while respecting the contract compatibility floor. |
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
+| `IExecutableStructureNormalizer` *(Publishing Core)* | Internal `ExecutableStructureNormalizer` (scoped) | Activity-owned semantic targets require the same variable/default compilation used by ordinary workflow nodes. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
@@ -182,6 +183,24 @@ A failed rebuild preserves the previous snapshot. With no snapshot, the dependen
 Ordinary edits still follow the coordinator's snapshot semantics; this is not a live usage index.
 
 ## Executable compilation fan-in
+
+### Structure compilation context and normalization
+
+`ActivityStructureCompilationContext` in Workflows Design Core carries the physical authored root, captured
+child projections and exact resolved invocation facts to the activity-owned handler's two-argument compilation
+overload. Workflow compilation validates these structures before returning a placed reusable node. Template
+coordination supplies facts from the actual exact loaded template root before placement changes boundary labels;
+providers must validate their compiled target against the resolved dependency's declared structure contract.
+The default overload preserves custom handlers' existing one-argument behavior. Context is transient and has
+no source-payload capability flag, ambient lookup or synchronous catalog request.
+
+`IExecutableStructureNormalizer` normalizes a semantic target through the same variable policy/default conversion
+implementation used by `ExecutableNodeCompiler`. A provider may identify a translated source contract through
+the transient `ActivityTemplateOccurrenceCompilation.AuthoredStructure` property. Template coordination requires
+the normalizer for a changed source/target identity; same-identity legacy overlays retain their previous shape.
+Both transient provider properties are excluded from JSON. A normalizer must retain the target kind/schema and
+must refuse unsupported defaults rather than discarding them. Activity modules remain responsible for content
+admission before reduction; this port adds no runtime interpretation.
 
 ### `IExecutableCompilationSource`
 
