@@ -1,0 +1,191 @@
+"""GitHub-hosted execution entrypoint. Local engine/container execution is refused."""
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+ARCHIVE_SHA = '67126d30b39d3e0ca6e5637ed1047153f3db24f593816903757df1bb26d305b7'
+MANIFEST_SHA = 'fe68e5d4142564a7544b7fd1094c2f4a712f5c5834757c652d49587c59ff3f97'
+PROBE = 'tools/experiments/runtime-architecture/RuntimeArchitectureProbe.csproj'
+PROBE_LOCK = 'tools/experiments/runtime-architecture/packages.lock.json'
+VARIANTS = ('baseline', 'runview', 'snapshot')
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + '.tmp')
+    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    temporary.replace(path)
+
+
+def command(argv, log, cwd=None, check=True):
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open('wb') as stream:
+        result = subprocess.run(argv, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT)
+    if check and result.returncode:
+        raise RuntimeError('Command failed; retained log: ' + str(log))
+    return result.returncode
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], timeout=60).decode().strip()
+
+
+def commit(root, message):
+    git(root, 'add', '-A')
+    git(root, '-c', 'user.name=Elsa Runtime Experiment', '-c', 'user.email=runtime-experiment@example.invalid',
+        'commit', '-m', message)
+
+
+class Runner:
+    def __init__(self, root):
+        if os.environ.get('GITHUB_ACTIONS') != 'true' or platform.system() != 'Linux':
+            raise RuntimeError('This execution entrypoint requires an authorized Linux GitHub Actions job')
+        temporary = Path(os.environ['RUNNER_TEMP']).resolve()
+        self.root = root.resolve()
+        if self.root == temporary or not self.root.is_relative_to(temporary):
+            raise ValueError('State must be in a fresh owned subdirectory of RUNNER_TEMP')
+        self.evidence = self.root / 'evidence'
+        self.evidence.mkdir(parents=True, exist_ok=True)
+        self.owner = {'runId': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+                      'repository': os.environ['GITHUB_REPOSITORY'], 'runnerRevision': os.environ['GITHUB_SHA']}
+        self.state_path = self.root / 'state.json'
+        if self.state_path.exists():
+            self.state = json.loads(self.state_path.read_bytes())
+            if self.state['owner'] != self.owner:
+                raise ValueError('State belongs to another workflow run/attempt/revision')
+        else:
+            self.state = {'schema': 'runtime-prototype-github-state-v1', 'owner': self.owner,
+                          'archiveSha256': ARCHIVE_SHA, 'variants': {}, 'stages': {}, 'qualifiedForBenchmarks': False}
+
+    def save(self):
+        write(self.state_path, self.state)
+        write(self.evidence / 'state.json', self.state)
+
+    def materialize(self):
+        if self.state['variants']:
+            raise ValueError('Source materialization is create-only')
+        archive = (HERE / 'source-transfer.json.gz').read_bytes()
+        if sha(archive) != ARCHIVE_SHA:
+            raise ValueError('Immutable reviewed source archive differs')
+        payload = self.root / 'source-transfer.b64'
+        payload.write_bytes(base64.b64encode(archive))
+        transfer = self.root / 'transfer'
+        command([sys.executable, str(HERE / 'unpack_transfer.py'), str(payload), str(transfer),
+                 '--archive-sha256', ARCHIVE_SHA, '--manifest-sha256', MANIFEST_SHA], self.evidence / 'unpack.log')
+        manifest = json.loads((transfer / 'manifest.json').read_bytes())
+        write(self.evidence / 'source-manifest.json', manifest)
+        repository = Path(git(HERE, 'rev-parse', '--show-toplevel'))
+        base = manifest['base']['commit']
+        git(repository, 'cat-file', '-e', base + '^{commit}')
+        for name in VARIANTS:
+            entry = manifest['variants'][name]
+            source = self.root / 'sources' / name
+            source.parent.mkdir(exist_ok=True)
+            branch = 'codex/runtime-cloud-' + self.owner['runId'] + '-' + self.owner['attempt'] + '-' + name
+            git(repository, 'worktree', 'add', '-b', branch, str(source), base)
+            command(['git', '-C', str(source), 'apply', '--index', '--binary', str(transfer / entry['patch']['file'])],
+                    self.evidence / ('apply-' + name + '.log'))
+            if git(source, 'write-tree') != entry['resultTree']:
+                raise ValueError('Applied source tree differs: ' + name)
+            commit(source, 'Materialize reviewed runtime experiment source ' + name)
+            initial = git(source, 'rev-parse', 'HEAD')
+            launcher = source / 'tools/experiments/runtime-architecture/launch_phase.py'
+            content = launcher.read_text()
+            old = "os.kill(expected['pid'], signal.SIGKILL)"
+            new = "assert resources.signal_exact(expected, signal.SIGKILL) is True, 'Exact owned signal was not sent'"
+            if content.count(old) != 1:
+                raise ValueError('The reviewed watcher signal seam differs')
+            before = sha(launcher.read_bytes())
+            launcher.write_text(content.replace(old, new))
+            commit(source, 'Use reviewed Linux exact-process signal primitive in hosted watcher')
+            self.state['variants'][name] = {'worktree': str(source), 'inputCommit': entry['originalCommit'],
+                'verifiedInputTree': entry['resultTree'], 'materializedCommit': initial,
+                'commit': git(source, 'rev-parse', 'HEAD'), 'tree': git(source, 'rev-parse', 'HEAD^{tree}'),
+                'linuxAdaptation': {'path': str(launcher.relative_to(source)), 'beforeSha256': before, 'afterSha256': sha(launcher.read_bytes())},
+                'buildStatus': 'NOT_RUN', 'qualificationStatus': 'NOT_RUN'}
+            self.save()
+
+    def phase(self, variant, label, commands, generated=()):
+        source = Path(self.state['variants'][variant]['worktree'])
+        root = self.evidence / 'phases' / (variant + '-' + label)
+        root.mkdir(parents=True, exist_ok=False)
+        helpers = HERE / 'helpers'
+        for name in ('owned_resources.py', 'process_scope.py'):
+            if not (helpers / name).is_file():
+                raise ValueError('Reviewed Linux helper missing: ' + name)
+        scripts = source / 'tools/experiments/runtime-architecture'
+        request = {'name': variant + '-' + label, 'worktree': str(source), 'output': str(root / 'output'),
+            'commands': commands, 'allowedGeneratedSourceFiles': list(generated),
+            'helpers': {name: str(helpers / name) for name in ('owned_resources.py', 'process_scope.py')}}
+        request['helpers']['launch_phase.py'] = str(scripts / 'launch_phase.py')
+        write(root / 'request.json', request)
+        packet = root / 'packet'
+        command([sys.executable, str(scripts / 'freeze_phase.py'), str(root / 'request.json'), str(packet)], root / 'freeze.log')
+        raw = (packet / 'manifest.json').read_bytes()
+        code = command([sys.executable, str(packet / 'launch_phase.py'), str(packet), '--run', '--manifest-sha256', sha(raw)],
+                       root / 'controller.log', check=False)
+        receipt_path = root / 'output/phase.json'
+        receipt = json.loads(receipt_path.read_bytes()) if receipt_path.exists() else {}
+        if code != 0 or receipt.get('status') != 'COMMANDS_PASSED' or receipt.get('processQuiescent') is not True:
+            raise RuntimeError('Bounded build phase failed; all logs retained at ' + str(root))
+        return {'phasePath': str(receipt_path), 'manifestPath': str(packet / 'manifest.json'), 'manifestSha256': sha(raw)}
+
+    def build(self, variant):
+        item = self.state['variants'][variant]
+        source = Path(item['worktree'])
+        binary_dir = source / 'tools/experiments/runtime-architecture/bin/Release/net10.0'
+        flags = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
+        if not (source / PROBE_LOCK).exists():
+            # Complete the actual baseline graph early. Generated lock + this exploratory receipt cannot qualify binaries.
+            self.phase(variant, 'bootstrap', [
+                {'name': 'restore-create-lock', 'argv': ['dotnet', 'restore', PROBE, '--use-lock-file', '--disable-parallel'] + flags, 'timeoutSeconds': 180},
+                {'name': 'build-complete-probe', 'argv': ['dotnet', 'build', PROBE, '-c', 'Release', '--no-restore'] + flags,
+                 'timeoutSeconds': 360, 'captureArtifactDirectories': [str(binary_dir)]}], generated=[PROBE_LOCK])
+            commit(source, 'Commit generated runtime probe dependency lock before qualification')
+        item.update(commit=git(source, 'rev-parse', 'HEAD'), tree=git(source, 'rev-parse', 'HEAD^{tree}'))
+        item['buildReceipt'] = self.phase(variant, 'qualified-build', [
+            {'name': 'locked-restore', 'argv': ['dotnet', 'restore', PROBE, '--locked-mode', '--disable-parallel'] + flags, 'timeoutSeconds': 120},
+            {'name': 'build-complete-probe', 'argv': ['dotnet', 'build', PROBE, '-c', 'Release', '--no-restore'] + flags,
+             'timeoutSeconds': 420, 'captureArtifactDirectories': [str(binary_dir)]}])
+        item.update(buildStatus='PASSED', binary=str(binary_dir / 'RuntimeArchitectureProbe.dll'))
+        self.save()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, required=True)
+    sub = parser.add_subparsers(dest='stage', required=True)
+    sub.add_parser('materialize')
+    build = sub.add_parser('build')
+    build.add_argument('--variant', choices=VARIANTS, required=True)
+    args = parser.parse_args()
+    runner = Runner(args.root)
+    name = args.stage + (('-' + args.variant) if hasattr(args, 'variant') else '')
+    runner.state['stages'][name] = {'status': 'RUNNING'}
+    runner.save()
+    try:
+        runner.materialize() if args.stage == 'materialize' else runner.build(args.variant)
+        runner.state['stages'][name] = {'status': 'PASSED'}
+        return 0
+    except BaseException as error:
+        runner.state['stages'][name] = {'status': 'FAILED', 'errorType': type(error).__name__, 'message': str(error)}
+        (runner.evidence / (name + '-failure.txt')).write_text(type(error).__name__ + ': ' + str(error) + '\n')
+        print(type(error).__name__ + ': ' + str(error), file=sys.stderr)
+        return 1
+    finally:
+        runner.save()
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
