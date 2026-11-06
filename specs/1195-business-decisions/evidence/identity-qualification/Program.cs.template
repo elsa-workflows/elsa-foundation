@@ -1,0 +1,61 @@
+using System.Text.Json;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+var request = JsonSerializer.Deserialize<ProvisionRequest>(await File.ReadAllTextAsync(args.Single()), json) ?? throw new InvalidOperationException("Missing owned provisioning request.");
+if (Environment.GetEnvironmentVariable("DECISIONS_OWNED_HOSTS") != "1") throw new InvalidOperationException("Explicit owned host required.");
+var ownedRoot = Path.GetFullPath(request.StoreRoot); var database = Path.GetFullPath(request.DatabasePath);
+var relative = Path.GetRelativePath(ownedRoot, database);
+if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) || !File.Exists(database)) throw new InvalidOperationException("Only an existing owned SQLite store is permitted.");
+var services = new ServiceCollection(); services.AddLogging(options => options.SetMinimumLevel(LogLevel.Error));
+services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(new IdentityIamEntityFrameworkCoreOptions
+{ Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder { DataSource = database, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString() }, isDevelopmentOrDemo: true);
+await using var provider = services.BuildServiceProvider(); var results = new List<ActorResult>();
+foreach (var actor in request.Actors)
+{
+    if (!actor.UserName.StartsWith(request.RunId + "-", StringComparison.Ordinal) || actor.Grants.Any(permission => permission.Contains('*'))) throw new InvalidOperationException("Only run-owned actors and explicit finite grants are permitted.");
+    await using var scope = provider.CreateAsyncScope(); var scoped = scope.ServiceProvider;
+    scoped.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope(actor.TenantId)));
+    var users = scoped.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+    var user = await users.FindByNameAsync(actor.UserName);
+    if (request.Command == "provision")
+    {
+        if (user is not null) throw new InvalidOperationException("A unique qualification actor already exists.");
+        var role = await scoped.GetRequiredService<Elsa.Foundation.Identity.Core.Iam.IRoleManager>().CreateAsync(new(actor.TenantId, actor.UserName + "-role", "Disposable Decisions permission qualification", actor.Grants.ToHashSet(StringComparer.Ordinal)));
+        user = new AspNetCoreIdentityUser { TenantId = actor.TenantId, UserName = actor.UserName, Email = actor.UserName + "@qualification.invalid", DisplayName = actor.UserName };
+        Require(await users.CreateAsync(user, actor.Password)); Require(await users.AddToRoleAsync(user, role.Name));
+        await scoped.GetRequiredService<ITenantMembershipStore>().SaveAsync(new(actor.TenantId, user.Id, TenantMembershipStatus.Active, new HashSet<string>(), new HashSet<string>()));
+        var persisted = await scoped.GetRequiredService<Elsa.Foundation.Identity.Core.Iam.IUserStore>().FindAsync(actor.TenantId, user.Id);
+        if (persisted is null || !persisted.RoleIds.Contains(role.Id) || persisted.DirectPermissions.Count != 0) throw new InvalidOperationException("Role-only qualification authority did not converge.");
+        results.Add(new(actor.Key, actor.TenantId, user.Id, role.Id, role.Permissions.ToArray()));
+    }
+    else if (request.Command == "revoke-evaluate")
+    {
+        if (user is null || actor.RoleId is null) throw new InvalidOperationException("The run-owned actor was not provisioned.");
+        var roles = scoped.GetRequiredService<IRevisionAwareRoleStore>();
+        var role = await roles.FindWithRevisionAsync(actor.TenantId, actor.RoleId) ?? throw new InvalidOperationException("Missing owned role.");
+        if (role.Record.Name != actor.UserName + "-role") throw new InvalidOperationException("The role does not belong to this run.");
+        var permissions = role.Record.Permissions.Where(permission => permission != "decisions:evaluate").ToHashSet(StringComparer.Ordinal);
+        if (!role.Record.Permissions.Contains("decisions:evaluate")) throw new InvalidOperationException("The run-owned Evaluate grant was already absent.");
+        var save = await roles.SaveWithRevisionAsync(role.Record with { Permissions = permissions }, role.Revision);
+        if (save.Status != IamRevisionSaveStatus.Saved) throw new InvalidOperationException("Role revocation conflicted.");
+        results.Add(new(actor.Key, actor.TenantId, user.Id, actor.RoleId, permissions.ToArray()));
+    }
+    else throw new InvalidOperationException("Unknown qualification command.");
+}
+Console.WriteLine(JsonSerializer.Serialize(results, json));
+static void Require(IdentityResult result) { if (!result.Succeeded) throw new InvalidOperationException("Identity operation failed: " + string.Join(",", result.Errors.Select(error => error.Code))); }
+record ProvisionRequest(string Command, string RunId, string StoreRoot, string DatabasePath, ActorSpec[] Actors);
+record ActorSpec(string Key, string TenantId, string UserName, string Password, string[] Grants, string? RoleId = null);
+record ActorResult(string Key, string TenantId, string UserId, string RoleId, string[] Grants);

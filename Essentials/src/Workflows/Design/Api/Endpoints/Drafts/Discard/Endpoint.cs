@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Discard;
 
