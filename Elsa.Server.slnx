@@ -65,6 +65,10 @@
     <Project Path="Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
     <Project Path="Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/src/Releases/">
+    <Project Path="Extensions/Etl/src/Releases/Core/Elsa.Etl.Releases.Core.csproj" />
+    <Project Path="Extensions/Etl/src/Releases/Elsa.Etl.Releases/Elsa.Etl.Releases.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/src/Persistence/">
     <Project Path="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
@@ -82,6 +86,9 @@
   </Folder>
   <Folder Name="/Extensions/Etl/tests/Persistence/">
     <Project Path="Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Etl/tests/Releases/">
+    <Project Path="Extensions/Etl/tests/Releases/Tests/Elsa.Etl.Releases.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/tests/RabbitMq/">
     <Project Path="Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj" />

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Compiler-free retained ETL release artifact contracts and copied owner-codec bytes.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Releases/Core/Elsa.Workflows.Publishing.Releases.Core.csproj" />
+  </ItemGroup>
+</Project>

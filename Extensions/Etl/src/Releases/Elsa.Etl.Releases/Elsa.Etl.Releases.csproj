@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Compiler-free owner validation and resource discovery for retained ETL release artifacts.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <ProjectReference Include="../Core/Elsa.Etl.Releases.Core.csproj" />
+    <ProjectReference Include="../../Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
+    <InternalsVisibleTo Include="Elsa.Etl.Releases.Tests" />
+  </ItemGroup>
+</Project>

@@ -13,7 +13,11 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
     private const int MaximumFieldCount = 1024;
     private const int MaximumDefinitionIdLength = 256;
 
-    public EtlPipeline Read(EtlArtifact artifact)
+    public EtlPipeline Read(EtlArtifact artifact) => ReadCore(artifact, options);
+
+    internal static EtlPipeline ReadPortable(EtlArtifact artifact) => ReadCore(artifact, null);
+
+    private static EtlPipeline ReadCore(EtlArtifact artifact, EtlRuntimeOptions? host)
     {
         if (artifact is null)
             throw Refused("etl.executable.invalid-envelope");
@@ -35,7 +39,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
                 throw Refused("etl.executable.too-large");
 
             var pipeline = EtlArtifactJson.Read(artifact.Pipeline);
-            ValidatePipeline(pipeline);
+            ValidatePipeline(pipeline, host);
 
             var effectiveLimit = Math.Min(EtlArtifact.MaximumByteLength, pipeline.Limits.MaxArtifactBytes);
             if (Encoding.UTF8.GetByteCount(rawPipeline) > effectiveLimit || envelopeSize > effectiveLimit)
@@ -70,7 +74,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
             throw Refused("etl.executable.invalid-envelope");
     }
 
-    private void ValidatePipeline(EtlPipeline pipeline)
+    private static void ValidatePipeline(EtlPipeline pipeline, EtlRuntimeOptions? host)
     {
         if (pipeline is null || pipeline.Bindings is null || pipeline.SourceSchema is null || pipeline.LookupSchema is null ||
             pipeline.Mapping is null || pipeline.Filters is null || pipeline.Limits is null ||
@@ -79,7 +83,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
             throw Refused("etl.executable.invalid-pipeline");
 
         var limits = pipeline.Limits;
-        if (limits.PartitionCount <= 0 || limits.PartitionCount > options.MaxPartitions ||
+        if (limits.PartitionCount <= 0 ||
             limits.MaxRecordBytes <= 0 || limits.MaxFields <= 0 || limits.MaxFields > MaximumFieldCount ||
             limits.MaxBatchRecords <= 0 || limits.MaxBatchBytes <= 0 || limits.MaxOutstandingRecords <= 0 ||
             limits.MaxOutstandingBytes <= 0 || limits.MaxLookupRecords <= 0 || limits.MaxLookupBytes <= 0 ||
@@ -87,15 +91,18 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
             limits.MaxArtifactBytes > EtlArtifact.MaximumByteLength ||
             limits.MaxBatchRecords > limits.MaxOutstandingRecords || limits.MaxBatchBytes > limits.MaxOutstandingBytes ||
             limits.MaxRecordBytes > limits.MaxBatchBytes || limits.MaxLookupBytes > limits.MaxSnapshotBytes ||
-            limits.MaxBatchRecords > options.Capacity.Records || limits.MaxBatchBytes > options.Capacity.InputBytes ||
-            limits.MaxRecordBytes > options.Capacity.InputBytes ||
-            limits.MaxLookupRecords > options.MaxLookupRecords ||
             pipeline.SourceSchema.Count == 0 || pipeline.LookupSchema.Count == 0 ||
-            limits.MaxLookupRecords > options.MaxLookupCells / pipeline.LookupSchema.Count ||
-            limits.MaxLookupBytes > options.Capacity.LookupBytes || limits.MaxOutputBatchBytes > options.Capacity.OutputBytes ||
-            limits.MaxSnapshotBytes > options.MaxSnapshotBytes ||
             pipeline.SourceSchema.Count > limits.MaxFields || pipeline.LookupSchema.Count > limits.MaxFields ||
             pipeline.Mapping.Count == 0 || pipeline.Mapping.Count > 2 * MaximumFieldCount || pipeline.Filters.Count > 2 * MaximumFieldCount)
+            throw Refused("etl.executable.limits-exceeded");
+
+        if (host is not null &&
+            (limits.PartitionCount > host.MaxPartitions || limits.MaxBatchRecords > host.Capacity.Records ||
+             limits.MaxBatchBytes > host.Capacity.InputBytes || limits.MaxRecordBytes > host.Capacity.InputBytes ||
+             limits.MaxLookupRecords > host.MaxLookupRecords ||
+             limits.MaxLookupRecords > host.MaxLookupCells / pipeline.LookupSchema.Count ||
+             limits.MaxLookupBytes > host.Capacity.LookupBytes || limits.MaxOutputBatchBytes > host.Capacity.OutputBytes ||
+             limits.MaxSnapshotBytes > host.MaxSnapshotBytes))
             throw Refused("etl.executable.limits-exceeded");
 
         ValidateSchema(pipeline.SourceSchema);

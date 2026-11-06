@@ -402,6 +402,16 @@ public sealed class EtlConnectorExecutableReaderTests
         return Assert.IsType<EtlArtifact>(result.Artifact);
     }
 
+    [Fact]
+    public void Portable_owner_validation_keeps_connector_host_ceilings_separate()
+    {
+        var pipeline = EtlV2TestPipelines.Create();
+        var artifact = CreateArtifact(pipeline with { Limits = pipeline.Limits with { MaxPartitions = 129 } });
+        EtlArtifactSemantics.Validate(artifact);
+        using var runtime = CreateRuntime();
+        Assert.Equal("etl.executable.limits-exceeded", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(artifact)).Code);
+    }
+
     // These tests deliberately rebuild provenance around malformed-but-canonical pipeline documents to
     // exercise the runtime's semantic checks independently of the design compiler.
     private static EtlArtifact CreateArtifact(EtlPipelineV2 pipeline)

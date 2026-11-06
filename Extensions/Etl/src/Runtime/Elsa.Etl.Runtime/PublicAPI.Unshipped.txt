@@ -164,3 +164,8 @@ Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.get -> System.Collections.Ge
 Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.set -> void
 Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.get -> System.Collections.Generic.IList<string!>!
 Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.set -> void
+Elsa.Etl.Runtime.Hosting.EtlArtifactSemantics
+static Elsa.Etl.Runtime.Hosting.EtlArtifactSemantics.Validate(Elsa.Etl.Core.EtlArtifact! artifact) -> void
+Elsa.Etl.Runtime.Hosting.EtlArtifactSemanticException
+Elsa.Etl.Runtime.Hosting.EtlArtifactSemanticException.EtlArtifactSemanticException(string! code) -> void
+Elsa.Etl.Runtime.Hosting.EtlArtifactSemanticException.Code.get -> string!

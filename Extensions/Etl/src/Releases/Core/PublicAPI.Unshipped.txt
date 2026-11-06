@@ -1,0 +1,24 @@
+#nullable enable
+Elsa.Etl.Releases.Core.EtlReleaseSourceScope
+Elsa.Etl.Releases.Core.EtlReleaseSourceScope.EtlReleaseSourceScope(string! authority, Elsa.Etl.Core.EtlScope! scope) -> void
+Elsa.Etl.Releases.Core.EtlReleaseSourceScope.Authority.get -> string!
+Elsa.Etl.Releases.Core.EtlReleaseSourceScope.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Releases.Core.EtlReleaseArtifact
+Elsa.Etl.Releases.Core.EtlReleaseArtifact.EtlReleaseArtifact(Elsa.Etl.Releases.Core.EtlReleaseSourceScope! source, Elsa.Etl.Core.EtlArtifact! artifact) -> void
+Elsa.Etl.Releases.Core.EtlReleaseArtifact.Source.get -> Elsa.Etl.Releases.Core.EtlReleaseSourceScope!
+Elsa.Etl.Releases.Core.EtlReleaseArtifact.Artifact.get -> Elsa.Etl.Core.EtlArtifact!
+Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact
+Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact.EtlEncodedReleaseArtifact(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember! descriptor, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion! ownerVersion, System.ReadOnlyMemory<byte> payload) -> void
+Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact.Descriptor.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember!
+Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact.OwnerVersion.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion!
+Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact.GetPayloadBytes() -> byte[]!
+Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec
+Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec.Encode(Elsa.Etl.Releases.Core.EtlReleaseArtifact! artifact, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact!
+Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec.Decode(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Etl.Releases.Core.EtlReleaseArtifact!
+Elsa.Etl.Releases.Core.EtlReleaseCodecs
+const Elsa.Etl.Releases.Core.EtlReleaseCodecs.MemberKind = "etl-artifact" -> string!
+const Elsa.Etl.Releases.Core.EtlReleaseCodecs.Artifact = "elsa.etl-artifact" -> string!
+Elsa.Etl.Releases.Core.EtlReleaseArtifactException
+Elsa.Etl.Releases.Core.EtlReleaseArtifactException.EtlReleaseArtifactException(string! code, bool isUnsupported = false) -> void
+Elsa.Etl.Releases.Core.EtlReleaseArtifactException.Code.get -> string!
+Elsa.Etl.Releases.Core.EtlReleaseArtifactException.IsUnsupported.get -> bool

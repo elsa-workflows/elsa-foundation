@@ -99,6 +99,16 @@ public sealed class EtlExecutableReaderTests
     }
 
     [Fact]
+    public void Portable_owner_validation_keeps_host_capacity_as_a_separate_readiness_check()
+    {
+        var pipeline = EtlTestPipelines.Create();
+        var artifact = CreateArtifact(pipeline with { Limits = pipeline.Limits with { MaxBatchRecords = 20_001, MaxOutstandingRecords = 20_001 } });
+        EtlArtifactSemantics.Validate(artifact);
+        using var runtime = CreateRuntime();
+        Assert.Equal("etl.executable.limits-exceeded", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(artifact)).Code);
+    }
+
+    [Fact]
     public void Reader_rejects_lookup_cardinality_above_the_host_lookup_ceiling()
     {
         var limits = new EtlLimits { MaxLookupRecords = 100_001 };

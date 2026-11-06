@@ -1,0 +1,5 @@
+#nullable enable
+Elsa.Etl.Releases.EtlReleaseVerificationFeature
+Elsa.Etl.Releases.EtlReleaseVerificationFeature.EtlReleaseVerificationFeature() -> void
+virtual Elsa.Etl.Releases.EtlReleaseVerificationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Releases.EtlReleaseVerificationFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
