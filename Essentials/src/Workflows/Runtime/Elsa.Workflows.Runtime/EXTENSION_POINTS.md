@@ -135,6 +135,8 @@ The process-local owner checks actual store instances and the current native sco
 
 The gateway is a runtime backstop. It does not implement whole-case effect-closure preflight, durable interaction storage or a sandbox for arbitrary code. Those remain prerequisites of public Testing admission. `RuntimeTestEffectUnavailableException` identifies control/infrastructure inability and cannot satisfy an expected business-fault assertion. Scope-only cross-workflow descendants remain unavailable until exact child policy/time/context propagation is qualified.
 
+Unexpected effect-provider failures are wrapped with a safe message and the original `InnerException` for trusted diagnostics. Normal fault capture retains that safe outer projection and omits the provider cause from persisted/public inner-fault fields, including when the wrapper has passed through secret masking. Raw exception rendering is trusted diagnostic data.
+
 ### Controlled business time *(Core contracts, Scheduling implementation)*
 
 - `IWorkflowBusinessClock` reads business time for the exact invocation. The Scheduling implementation keeps ordinary executions on the host clock and requires an explicit retained policy for a selected test entry. It never replaces infrastructure `TimeProvider`.

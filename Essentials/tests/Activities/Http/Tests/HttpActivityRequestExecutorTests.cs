@@ -149,6 +149,8 @@ public sealed class HttpActivityRequestExecutorTests
             .WithFeature(StubTransport(_ => throw new Xunit.Sdk.XunitException("Transport must not execute.")))
             .Build(ActivityExecutionId);
 
+        await HttpActivityRequestExecutorCompositionTests.InitializeHttpAsync(harness.Services);
+
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(expectedStatusCodes: [201],
             connection: new ConnectionReference("unavailable-original", "http"))));
 

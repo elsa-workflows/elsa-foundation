@@ -10719,6 +10719,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestPersistenceBoundary.CanPersist
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeTestEffectUnavailableException
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeTestEffectUnavailableException.Code.get -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeTestEffectUnavailableException.RuntimeTestEffectUnavailableException(string! code, string! message) -> void
+Elsa.Workflows.Runtime.Core.Exceptions.RuntimeTestEffectUnavailableException.RuntimeTestEffectUnavailableException(string! code, string! message, System.Exception? innerException) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestActivationRequest
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestActivationRequest.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestActivationRequest!
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestActivationRequest.ActivityExecutionId.get -> string!

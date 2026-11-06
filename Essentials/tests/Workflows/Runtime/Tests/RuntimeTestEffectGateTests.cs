@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -130,17 +132,49 @@ public sealed class RuntimeTestEffectGateTests
     }
 
     [Fact]
-    public async Task Stale_attempt_cannot_admit_and_provider_details_never_become_business_fault_data()
+    public async Task Stale_attempt_cannot_admit()
     {
         var f = await Fixture.CreateAsync();
         var error = await Assert.ThrowsAsync<RuntimeTestEffectUnavailableException>(() =>
             f.Gate().BeginAsync(f.Request with { Invocation = f.Invocation with { AttemptId = "old-attempt" } }).AsTask());
         Assert.Equal("runtime.test-effects.invocation-mismatch", error.Code);
         Assert.Equal(0, f.Policy.Begins);
-        f.Policy.PrivateFailure = true;
-        error = await Assert.ThrowsAsync<RuntimeTestEffectUnavailableException>(() => f.Gate().BeginAsync(f.Request).AsTask());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Provider_failure_retains_original_cause_without_exposing_it_through_fault_projection(bool returnsValue, bool asynchronous)
+    {
+        var f = await Fixture.CreateAsync();
+        var privateValue = $"private-provider-{Guid.NewGuid():N}";
+        var cause = new IOException(privateValue);
+        f.Policy.ProviderFailure = cause;
+        f.Policy.AsynchronousFailure = asynchronous;
+
+        var error = returnsValue
+            ? await Assert.ThrowsAsync<RuntimeTestEffectUnavailableException>(() => f.Gate().BeginAsync(f.Request).AsTask())
+            : await Assert.ThrowsAsync<RuntimeTestEffectUnavailableException>(() => f.Gate().ValidateNodeAsync(
+                new("workflow", "activity", f.Executable.Identity, f.Node)).AsTask());
+
         Assert.Equal("runtime.test-effects.infrastructure-failed", error.Code);
-        Assert.DoesNotContain("private-provider-value", error.ToString());
+        Assert.Same(cause, error.InnerException);
+        Assert.DoesNotContain(privateValue, error.Message, StringComparison.Ordinal);
+
+        // The normal runtime records both captures. Provider text need not be a registered activity secret.
+        // Masking therefore cannot be the only protection for the private diagnostic cause.
+        foreach (var captureStackTrace in new[] { false, true })
+        foreach (var projectedException in new Exception[] { error, new SecretMaskedException(error, text => text) })
+        {
+            var policy = new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions { CaptureStackTrace = captureStackTrace }));
+            var outer = policy.Capture(projectedException);
+            var inner = policy.CaptureInner(projectedException);
+            Assert.Equal(typeof(RuntimeTestEffectUnavailableException).FullName, outer.ExceptionType);
+            Assert.Null(inner);
+            Assert.DoesNotContain(privateValue, JsonSerializer.Serialize(new { outer, inner }), StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -207,11 +241,20 @@ public sealed class RuntimeTestEffectGateTests
     private sealed class Policy(WorkflowTestEntry entry) : IRuntimeTestEffectPolicySource, IWorkflowTestEntryContextResolver
     {
         public int Nodes, Activations, Begins, Completions;
-        public bool Downgrade, PrivateFailure, Revoked, ActivationRefused, CanExecute = true;
+        public bool Downgrade, Revoked, ActivationRefused, CanExecute = true, AsynchronousFailure;
+        public Exception? ProviderFailure;
         public ValueTask<WorkflowTestEntry?> FindAsync(string contextId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<WorkflowTestEntry?>(!Revoked && contextId == entry.ContextId ? entry : null);
         public ValueTask ValidateNodeAsync(WorkflowTestEntry accepted, RuntimeTestNodeRequest request, CancellationToken cancellationToken = default)
-        { Nodes++; return ValueTask.CompletedTask; }
+        {
+            Nodes++;
+            if (ProviderFailure is { } failure)
+            {
+                if (AsynchronousFailure) return ValueTask.FromException(failure);
+                throw failure;
+            }
+            return ValueTask.CompletedTask;
+        }
         public ValueTask ValidateActivityAsync(WorkflowTestEntry accepted, RuntimeTestInvocation invocation, CancellationToken cancellationToken = default)
         {
             Activations++;
@@ -223,7 +266,11 @@ public sealed class RuntimeTestEffectGateTests
         public ValueTask<RuntimeTestEffectAdmission> BeginAsync(WorkflowTestEntry accepted, RuntimeTestEffectRequest request, CancellationToken cancellationToken = default)
         {
             Begins++;
-            if (PrivateFailure) throw new InvalidOperationException("private-provider-value");
+            if (ProviderFailure is { } failure)
+            {
+                if (AsynchronousFailure) return ValueTask.FromException<RuntimeTestEffectAdmission>(failure);
+                throw failure;
+            }
             return ValueTask.FromResult(new RuntimeTestEffectAdmission(request, Downgrade ? RuntimeTestEffectMode.Ordinary : RuntimeTestEffectMode.Substitute,
                 "test-only-profile", JsonSerializer.SerializeToElement(new { }), accepted.ContextId, accepted.ContextFingerprint, "receipt", 0, CanExecute));
         }

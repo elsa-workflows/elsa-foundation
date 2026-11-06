@@ -194,7 +194,7 @@ internal sealed class RuntimeTestEffectGate(IWorkflowExecutionStateStore workflo
         try { await operation(); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (RuntimeTestEffectUnavailableException) { throw; }
-        catch (Exception) { throw Refused("runtime.test-effects.infrastructure-failed", "The owning effect infrastructure could not complete the operation."); }
+        catch (Exception exception) { throw new RuntimeTestEffectUnavailableException("runtime.test-effects.infrastructure-failed", "The owning effect infrastructure could not complete the operation.", exception); }
     }
 
     private static async ValueTask<T> Protect<T>(Func<ValueTask<T>> operation, CancellationToken ct)
@@ -202,7 +202,7 @@ internal sealed class RuntimeTestEffectGate(IWorkflowExecutionStateStore workflo
         try { return await operation(); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (RuntimeTestEffectUnavailableException) { throw; }
-        catch (Exception) { throw Refused("runtime.test-effects.infrastructure-failed", "The owning effect infrastructure could not complete the operation."); }
+        catch (Exception exception) { throw new RuntimeTestEffectUnavailableException("runtime.test-effects.infrastructure-failed", "The owning effect infrastructure could not complete the operation.", exception); }
     }
 
     private static RuntimeTestEffectUnavailableException Refused(string code, string message) => new(code, message);
