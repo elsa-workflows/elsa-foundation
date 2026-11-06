@@ -30,6 +30,10 @@ Independent test: one owned Workbench per server engine uses both ETL stores, pu
 - [x] T012 [US1] Add `specs/1206-etl-runtime-concurrency/evidence/runtime_store_workbench_journey.py` from the 1202 controller, using generated credentials, owned resource cleanup, safe ephemeral ports and verified product-source/hash receipts.
 - [x] T013 [US1] Build intended Workbench products and run both-store journeys on all three engines; capture pins, partition/run views, exact output, one native completion and retained post-restart state in `specs/1206-etl-runtime-concurrency/evidence/`. Do not classify completed-state readback as an old-writer or mid-work crash proof.
 
+The T013 receipt retains its historical executing source. Requalification after integration
+uses the same controller, with manual `CI` `suite=etl-host` available when local capacity is
+unallocated. Preparing that route does not mark fresh host qualification as passed.
+
 ## Qualification and delivery
 
 - [x] T014 Run complete `Elsa.Etl.Tests` and required `Elsa.Etl.Persistence.ProviderTests` projects; reconcile discovery/execution and record sources/counts plus deliberate failures/skips separately in `specs/1206-etl-runtime-concurrency/evidence/README.md`.

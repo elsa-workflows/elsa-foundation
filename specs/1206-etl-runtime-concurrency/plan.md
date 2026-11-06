@@ -37,6 +37,12 @@ Framework 6.1.0 and Elsa 6.3.0, both gate indexes and the contributor review che
 
 Use focused cases and one provider at a time while fixing; only new failures/changes reopen checks. Capture deterministic red/green controls, then run complete affected ETL/provider projects, public API/magnitude review, locked graph restore, architecture and generator checks on a stable candidate. Record discovery versus execution and source hashes. Independent full-diff review stays on draft; post gates, ready, request review. Merge base-first with fresh required checks; verify resulting main separately. Keep #2908/#2892/Project #62 In Progress and update evidence after the slice.
 
+When the shared machine has no allocated host-build capacity, use the manual-only `CI`
+`suite=etl-host` route. It publishes just Workbench, hashes its products against the actual
+checked-out commit and reuses the same three-engine controller. The default PR/main/nightly
+cadence is unchanged. Hosted job outcomes and retained partial evidence remain distinct from
+a completed 36-check journey; required PR checks and resulting-main proof remain separate gates.
+
 ## Project Structure
 
 All implementation stays in existing ETL Core, Persistence/EntityFrameworkCore and ETL test projects. Feature documents and runnable source-bound receipts are under this spec directory. See [research.md](research.md), [data-model.md](data-model.md), [failure contract](contracts/storage-failure.md) and [quickstart.md](quickstart.md). Tasks follow reviewed planning; no unrelated refactor or new project is proposed.
