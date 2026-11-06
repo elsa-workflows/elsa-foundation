@@ -1,0 +1,863 @@
+{
+  "status": "PASSED_FULL_EF_PROJECT",
+  "archiveSha256Digest": "d6840d8933d6ea264ea1ff387f8673f04c856bb77cbc2d2dae43667a74ca1332",
+  "archiveBytes": 1683252,
+  "sourceHead": "aea457472d25261b4d085417f1fa249f68ade3c3",
+  "sourceTree": "133826cbff149c1600fbfec06d391a9a21549cb4",
+  "rootCustodyAudit": {
+    "status": "VERIFIED_PASSED_FULL_ORIGINAL_CUSTODY",
+    "ownerChatId": "01a1add9-0acc-74d2-89a6-d2b648937656",
+    "at": "2026-11-06T07:18:12.313072+00:00",
+    "archiveBytes": 1683252,
+    "archiveSha256": "d6840d8933d6ea264ea1ff387f8673f04c856bb77cbc2d2dae43667a74ca1332",
+    "archiveFiles": 106,
+    "manifestEntries": 105,
+    "head": "aea457472d25261b4d085417f1fa249f68ade3c3",
+    "tree": "133826cbff149c1600fbfec06d391a9a21549cb4",
+    "wholeEfTotal": 1946,
+    "wholeEfPassed": 1946,
+    "wholeEfFailed": 0,
+    "otherCounters": {
+      "error": 0,
+      "timeout": 0,
+      "aborted": 0,
+      "inconclusive": 0,
+      "passedButRunAborted": 0,
+      "notRunnable": 0,
+      "notExecuted": 0,
+      "disconnected": 0,
+      "warning": 0,
+      "completed": 0,
+      "inProgress": 0,
+      "pending": 0
+    },
+    "actualUnchangedAssemblyFiles": 6,
+    "restoredRuntimeSha256": "45b1530d235bf1edb9ba21544823970b8993f7a4942bcc3b07ba9106acc11f8b",
+    "sourceStatus": "VERIFIED",
+    "cleanupStatus": "VERIFIED",
+    "actualInvocationSeconds": 505.121553,
+    "reportedActiveSeconds": 505.508602,
+    "conservativeCumulativeSeconds": 1424.5086019999999,
+    "limitSeconds": 1800,
+    "priorFailedA1ThroughA5Preserved": true,
+    "oldCohortSeparateClosedSeconds": 1652.889368,
+    "noOutcomeReset": true,
+    "newProductRuns": "Only unfinished owning EF project; no-build/no-restore",
+    "qualificationLimit": "Linux owning project/SQLite fixtures; no live four-SQL-engine or Message delivery acceptance claim"
+  },
+  "rawManifest": {
+    "schema": "elsa-owned-task-export/v1",
+    "unit": "elsa-durable-message-foundation-ef-r1.service",
+    "job": "/srv/elsa-qualification/durable-messaging/message-foundation-ef-r1",
+    "packet": "/opt/elsa-durable-messaging/message-foundation-ef-r1",
+    "sourceJobRetained": "/srv/elsa-qualification/durable-messaging/message-foundation-r1",
+    "sourceRoot": "/srv/elsa-qualification/durable-messaging/message-foundation-r1/source",
+    "at": "2026-11-06T07:14:20.691897+00:00",
+    "files": [
+      {
+        "path": "after-stop-systemd.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "after-stop-systemd.stdout",
+        "bytes": 9263,
+        "sha256": "056283608706933b91bf1986378a6a868e70b8e0532ba4fe77c6b9ad6c475b9a"
+      },
+      {
+        "path": "artifacts/admission.command",
+        "bytes": 392,
+        "sha256": "6420502e7b3e440f79be5c8b07be264441948b2d497a96602f4bb09500caa153"
+      },
+      {
+        "path": "artifacts/admission.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/admission.json",
+        "bytes": 1044,
+        "sha256": "1441fdb1203c46c0efdd29a0ef7e70a8fffab707cfea876d4743faa7f235eea5"
+      },
+      {
+        "path": "artifacts/admission.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/assemblies-after.command",
+        "bytes": 254,
+        "sha256": "09b168b4822ce9f42da44bb2119271428167740bdeaaa14d26ddeb1d7f68f270"
+      },
+      {
+        "path": "artifacts/assemblies-after.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/assemblies-after.json",
+        "bytes": 1900,
+        "sha256": "ced5232f1ca4a936c898f34c1372aec4f52aa36867c2cef5da326f68086cb2b8"
+      },
+      {
+        "path": "artifacts/assemblies-after.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/assemblies-before.command",
+        "bytes": 255,
+        "sha256": "42ea37ce8d7bc0c654edce237391cc10e51ad841438bcfa092e960084192fa45"
+      },
+      {
+        "path": "artifacts/assemblies-before.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/assemblies-before.json",
+        "bytes": 1900,
+        "sha256": "ced5232f1ca4a936c898f34c1372aec4f52aa36867c2cef5da326f68086cb2b8"
+      },
+      {
+        "path": "artifacts/assemblies-before.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/assemblies-compare.command",
+        "bytes": 174,
+        "sha256": "064c70d951745569e308af1b80ef17b96ed0d22d4a83edce1c269653cedfe2fe"
+      },
+      {
+        "path": "artifacts/assemblies-compare.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/assemblies-compare.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/assemblies-ready.json",
+        "bytes": 1950,
+        "sha256": "d86cbcd68d814c0fb79baf98ef36647be1a53b8e56809f819f4e95955c381ed5"
+      },
+      {
+        "path": "artifacts/assembly-binding.json",
+        "bytes": 86,
+        "sha256": "cfe989ff8dcd7f91c351f0384913ee03998e2604dfef783b10b3f3b1472e37e0"
+      },
+      {
+        "path": "artifacts/base-source.json",
+        "bytes": 258,
+        "sha256": "987254d92fc81cc51e0a85b9630505a67c7db8e9155ffa07408206f719e194c4"
+      },
+      {
+        "path": "artifacts/current-stage",
+        "bytes": 13,
+        "sha256": "b22c38c3549401efa7c0c7aeff5233a4db7252b41b354e2ebdab615e0e1faa77"
+      },
+      {
+        "path": "artifacts/exit-source.json",
+        "bytes": 258,
+        "sha256": "987254d92fc81cc51e0a85b9630505a67c7db8e9155ffa07408206f719e194c4"
+      },
+      {
+        "path": "artifacts/exit-source.patch",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/exit-source.status",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/final-source.json",
+        "bytes": 258,
+        "sha256": "987254d92fc81cc51e0a85b9630505a67c7db8e9155ffa07408206f719e194c4"
+      },
+      {
+        "path": "artifacts/phase-a-proof.command",
+        "bytes": 208,
+        "sha256": "d02381e1406161198f27b35193c9b1f4791382588aef1237e213774a492278cb"
+      },
+      {
+        "path": "artifacts/phase-a-proof.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/phase-a-proof.json",
+        "bytes": 314,
+        "sha256": "fd7d2cc36c6df6f242bb3fa270205569b2c15e3ca85c3514b80164ef6af352b3"
+      },
+      {
+        "path": "artifacts/phase-a-proof.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/phase-result.json",
+        "bytes": 528,
+        "sha256": "4267d321a0b62203d2bbf7d645851a2e836b3160aea2ea798388c6735067a1f9"
+      },
+      {
+        "path": "artifacts/prior-a/assemblies-ready.json",
+        "bytes": 1950,
+        "sha256": "d86cbcd68d814c0fb79baf98ef36647be1a53b8e56809f819f4e95955c381ed5"
+      },
+      {
+        "path": "artifacts/prior-a/current-restored-product.json",
+        "bytes": 298,
+        "sha256": "52be0bfdf82576b0e470e3d0e7384cd5301c588bc3ef490daffa8371413eceed"
+      },
+      {
+        "path": "artifacts/prior-a/ef-focused.counters.json",
+        "bytes": 562,
+        "sha256": "865f7331e4d4918af9c399b68d3850f5e1992251610327c2fdec1cf598092db6"
+      },
+      {
+        "path": "artifacts/prior-a/ef-focused.trx",
+        "bytes": 72416,
+        "sha256": "17988cbc2a26ae5851928658526c19e73ca70c64a8ce62b8c068ced75e2fb49b"
+      },
+      {
+        "path": "artifacts/prior-a/old-cohort-closure.json",
+        "bytes": 301,
+        "sha256": "89545e4934fd2e35d8ccbd1dcf1923b2bc7220857a1ab38d3adeb89f94d488c7"
+      },
+      {
+        "path": "artifacts/prior-a/phase-result.json",
+        "bytes": 519,
+        "sha256": "322a4fd20ded21be3e5dbb50c204e3c53a0a2c12263f9dcf6986e5c13c9380af"
+      },
+      {
+        "path": "artifacts/prior-a/prior-a5-proof.json",
+        "bytes": 630,
+        "sha256": "4f9a65c26f4d78ada9ace5fca869fb149e0127abd5ce08c14e05ffcf7a6283cc"
+      },
+      {
+        "path": "artifacts/prior-a/repair-mutation.counters.json",
+        "bytes": 525,
+        "sha256": "996d6aba37acf2cd8860893eba44d219a6ae29c156db318689e0207718a6e4e5"
+      },
+      {
+        "path": "artifacts/prior-a/repair-mutation.trx",
+        "bytes": 4834,
+        "sha256": "e26856143e9d69c21dd59be12286f8c8270e1614412c3ab4d627bb01233345ce"
+      },
+      {
+        "path": "artifacts/prior-a/repair-restored.counters.json",
+        "bytes": 525,
+        "sha256": "5a8c38ea3895c4fb174daefdd172a0e60759ca57b2c13ab6c695e31d660764f2"
+      },
+      {
+        "path": "artifacts/prior-a/repair-restored.trx",
+        "bytes": 3215,
+        "sha256": "d4fd7ecaafee7dc1d87ddcd5a45cbd2639706e3536743abeb7126a7bb7e9755c"
+      },
+      {
+        "path": "artifacts/prior-a/runtime-product-mutant.json",
+        "bytes": 604,
+        "sha256": "ca3484fd8ee3bed860f1fd7cc7fb01f8f2c062d15925f14622597192613932a6"
+      },
+      {
+        "path": "artifacts/prior-a/runtime-product-restored.json",
+        "bytes": 606,
+        "sha256": "65aa1fc1d261a4099429a85abe267b015bc501d99c9d5a4adf9cbd2bc805568c"
+      },
+      {
+        "path": "artifacts/prior-a/warm-final.json",
+        "bytes": 25832,
+        "sha256": "84a422471aa5725d6bfdc1dfd2a08fbc7e20fd7beade3f486fb62bb994e5a8b6"
+      },
+      {
+        "path": "artifacts/prior-a/whole-runtime.counters.json",
+        "bytes": 11284,
+        "sha256": "68f4553ed1afd27d082c8f06d8926e02ad3d226b6286dbe7a03a1214fba32748"
+      },
+      {
+        "path": "artifacts/prior-a/whole-runtime.trx",
+        "bytes": 6006082,
+        "sha256": "92bdd6d2f0d5c6f1b5af27af13c229ceb6d420c01e486c4001493639f796de46"
+      },
+      {
+        "path": "artifacts/source-before.command",
+        "bytes": 245,
+        "sha256": "b03581f0179d97843ace507a66b75d1d774b6e8b2959c6832ee28e7a4b0d09f0"
+      },
+      {
+        "path": "artifacts/source-before.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/source-before.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/source-final.command",
+        "bytes": 246,
+        "sha256": "89663918ad0c95fb177eb21742816a431ec3aaf904720958238363b3bbd8206c"
+      },
+      {
+        "path": "artifacts/source-final.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/source-final.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/toolchain.command",
+        "bytes": 90,
+        "sha256": "d71cfe0fff416db0e454d089b9d7a2b7113af64e9e253652d68c280cbd1799ff"
+      },
+      {
+        "path": "artifacts/toolchain.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/toolchain.log",
+        "bytes": 1532,
+        "sha256": "6646df68655a8065b4a6add784c9df65a04c510f927d73cd074a40b22b753bab"
+      },
+      {
+        "path": "artifacts/whole-ef-oracle.command",
+        "bytes": 183,
+        "sha256": "850919a58177afd398ff05479f006dc27d9f43cba2a9a6abb8be16a271a968da"
+      },
+      {
+        "path": "artifacts/whole-ef-oracle.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/whole-ef-oracle.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "artifacts/whole-ef.command",
+        "bytes": 461,
+        "sha256": "cb83b9c5311864179aaea90744a4fcfefe6c207b3f27a1abcfc42f020b97c204"
+      },
+      {
+        "path": "artifacts/whole-ef.counters.json",
+        "bytes": 4122,
+        "sha256": "a15a71bb53a797039526a1d36c5309863c87555f78ce093cab72e85f39ac3cfa"
+      },
+      {
+        "path": "artifacts/whole-ef.exit",
+        "bytes": 2,
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "path": "artifacts/whole-ef.log",
+        "bytes": 403883,
+        "sha256": "cf2cbecc51461a0f5397a90387d46337eef39da00721ea4d0b16c2fc9dd4ba82"
+      },
+      {
+        "path": "artifacts/whole-ef.trx",
+        "bytes": 3690295,
+        "sha256": "a402d135de1cee8d7f8f8d5bcb78736a8312e3088fdf48952ff27fd69152703b"
+      },
+      {
+        "path": "before-stop-systemd.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "before-stop-systemd.stdout",
+        "bytes": 10870,
+        "sha256": "4e3423f2794c9430f6098ca05859460ccefd3bf4496309daf51036e1bac17535"
+      },
+      {
+        "path": "cleanup-result.json",
+        "bytes": 711,
+        "sha256": "99e3ba44a3a42a97119b9ac660417e2ea72a3639fdfc09e576b95ff53ddd6263"
+      },
+      {
+        "path": "collection-result.json",
+        "bytes": 659,
+        "sha256": "8ec66d339f225a4b8c012c9f62a14503f6783f7da943299762b126b60da7f9b8"
+      },
+      {
+        "path": "command-results.json",
+        "bytes": 4931,
+        "sha256": "7773434426949897a0b70f3239f107deb9c73d93aab1683bc6b5aa13b1592a7a"
+      },
+      {
+        "path": "copy-results.json",
+        "bytes": 20820,
+        "sha256": "53ca1a940a09c3fe6b5dcf72c6ea324fc799ab36584b88363adbe3d94d2d5fae"
+      },
+      {
+        "path": "cumulative-active-budget.json",
+        "bytes": 222,
+        "sha256": "536822d45943df1b7d99967f5279fe541be442465ffbd4f50158d6b48de4029b"
+      },
+      {
+        "path": "original-journal.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "original-journal.stdout",
+        "bytes": 4279,
+        "sha256": "3b77f5e9883d974fa7499f6c5b46083dfe01e1e43c86c4f608b55ed94234e1b8"
+      },
+      {
+        "path": "original-phase-result.json",
+        "bytes": 528,
+        "sha256": "4267d321a0b62203d2bbf7d645851a2e836b3160aea2ea798388c6735067a1f9"
+      },
+      {
+        "path": "original-systemd.properties",
+        "bytes": 10870,
+        "sha256": "8d58a0335288e8aa6d729042361b1980a53171c769cc9172dc1c9d905284ba87"
+      },
+      {
+        "path": "original-unit-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "original-unit-definition.stdout",
+        "bytes": 1057,
+        "sha256": "6b7464fd858947f7d317af51193001babf3207a0058a178479ae1d7c0e044973"
+      },
+      {
+        "path": "original-unit-observation.json",
+        "bytes": 15008,
+        "sha256": "863f3cac54dd6873edd4a1b989a3f91e5404f96ac39622d81396484d157d495d"
+      },
+      {
+        "path": "packet/accepted-a6-custody.json",
+        "bytes": 1863,
+        "sha256": "03ae0097a9ee3b3f02a7088a16898259ca64dd83ac349f1e37b19c344d04d622"
+      },
+      {
+        "path": "packet/allocation.json",
+        "bytes": 2266,
+        "sha256": "2bdedc2fd9061d21d6d4cac3901abdd0b67c2755582d0ab21823f73f035ba7ec"
+      },
+      {
+        "path": "packet/check.py",
+        "bytes": 10550,
+        "sha256": "c5b7d85e88d0b802bab964e68c7e51c133257be205d86662da452e1a840115b5"
+      },
+      {
+        "path": "packet/expected-admission.json",
+        "bytes": 975,
+        "sha256": "e85d6936cb843fccd52e471cd86ba9de80c2a984aa18e47259c92abc3b81242c"
+      },
+      {
+        "path": "packet/packet-manifest.json",
+        "bytes": 1900,
+        "sha256": "a070a7708b0c3a6fe252c63696eecca9e899cff8861aaac76e636b413e3c1053"
+      },
+      {
+        "path": "packet/phase-a-cleanup.json",
+        "bytes": 705,
+        "sha256": "889b06995e7e1b6cf0c0eef14d2509209ed2f1267b703b3129a8feefa2a164d0"
+      },
+      {
+        "path": "packet/phase-a-collection.json",
+        "bytes": 653,
+        "sha256": "543940165364eeef5f1d432cccdb2995c155931b20702611288c8e66e263f01a"
+      },
+      {
+        "path": "packet/phase-a-primary.json",
+        "bytes": 922,
+        "sha256": "c48b4a3de75e4ae5ac0c6935b065ffadd28c73c4dbb12be098c3b408821e8dde"
+      },
+      {
+        "path": "packet/phase-a-proof.py",
+        "bytes": 5799,
+        "sha256": "c04d3dc06752831d56e637d12ca644400a1572a992635a9886a5a31761580745"
+      },
+      {
+        "path": "packet/phase-a-source.json",
+        "bytes": 10845,
+        "sha256": "f29305f2d303b15bb3c8c733d74c1c10f508dd6c1c209c51960c38ce5d34f7ce"
+      },
+      {
+        "path": "packet/phase.json",
+        "bytes": 11830,
+        "sha256": "f2e7e42a9084ae9652a7735a0bf2cad6b430e49cb0982baf1c04f5168c53f6a0"
+      },
+      {
+        "path": "packet/phase.sh",
+        "bytes": 3267,
+        "sha256": "0ed5d533d603a9147002d685956e0f481f6889da5472fec265beef73d0ac5f37"
+      },
+      {
+        "path": "preflight-systemd.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "preflight-systemd.stdout",
+        "bytes": 10870,
+        "sha256": "8d58a0335288e8aa6d729042361b1980a53171c769cc9172dc1c9d905284ba87"
+      },
+      {
+        "path": "primary-observation.json",
+        "bytes": 941,
+        "sha256": "eabf8917641382eec6406d954d88bfae831af8d1c5b5ed9cf98605cbbf6d7e8b"
+      },
+      {
+        "path": "source-after-stop-full-patch.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-full-patch.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-head.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-head.stdout",
+        "bytes": 41,
+        "sha256": "af4da76f5723e9d46e7d565a6d4a603b87a6d31897d9f333e836cb5d5c75bea1"
+      },
+      {
+        "path": "source-after-stop-status.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-status.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-tree.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-tree.stdout",
+        "bytes": 41,
+        "sha256": "c3afdd4bb955f2c5d6605688448be0c459718c6851a8f904eabd5c6be359cb33"
+      },
+      {
+        "path": "source-after-stop-untracked.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop-untracked.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "source-after-stop.json",
+        "bytes": 10845,
+        "sha256": "f29305f2d303b15bb3c8c733d74c1c10f508dd6c1c209c51960c38ce5d34f7ce"
+      },
+      {
+        "path": "stop-owned-unit.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "stop-owned-unit.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "manifestExcludesItself": true
+  },
+  "primaryObservation": {
+    "status": "PASSED",
+    "originalPhaseResult": {
+      "stage": "complete",
+      "exitCode": 0,
+      "startedAt": "2026-11-06T07:04:16Z",
+      "endedAt": "2026-11-06T07:12:41.508602+00:00",
+      "baseHead": "aea457472d25261b4d085417f1fa249f68ade3c3",
+      "baseTree": "133826cbff149c1600fbfec06d391a9a21549cb4",
+      "priorActiveCeilingSeconds": 919,
+      "resumeActiveSeconds": 505.508602,
+      "cumulativeActiveCeilingSeconds": 1424.5086019999999,
+      "cumulativeActiveLimitSeconds": 1800,
+      "oldCohortConservativeSeconds": 1652.889368,
+      "expectedCleanSourcePolicyPassed": true,
+      "status": "PASSED"
+    },
+    "originalSystemdResult": "success",
+    "originalExecMainStatus": "0",
+    "executionBudgetProof": {
+      "status": "VERIFIED",
+      "priorActiveCeilingSeconds": 919,
+      "actualInvocationSeconds": 505.121553,
+      "reportedActiveSeconds": 505.508602,
+      "conservativeCumulativeSeconds": 1424.5086019999999,
+      "limitSeconds": 1800
+    }
+  },
+  "sourceAfterStop": {
+    "status": "VERIFIED",
+    "head": "aea457472d25261b4d085417f1fa249f68ade3c3",
+    "tree": "133826cbff149c1600fbfec06d391a9a21549cb4",
+    "files": [
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/BusinessMessageAcceptedHeader.cs",
+        "bytes": 9604,
+        "sha256": "ec36ce922ade5514c39f1d3ed77b7ce93d99c1cec1e9a3a9bb4b8f8e783820c8",
+        "gitBlob": "baa8b1ba9e4e7d86b11780717203b729abb2a12c",
+        "gitMode": "100644",
+        "expectedSha256": "ec36ce922ade5514c39f1d3ed77b7ce93d99c1cec1e9a3a9bb4b8f8e783820c8"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/BusinessMessageAcceptedHeaderCodec.cs",
+        "bytes": 16358,
+        "sha256": "b6ad0737a01cf0d9712718fb0741343a427465872ac696056a823ab778f09639",
+        "gitBlob": "bd9bd93480ce4e8b5ee46059800c95f211c2cf9e",
+        "gitMode": "100644",
+        "expectedSha256": "b6ad0737a01cf0d9712718fb0741343a427465872ac696056a823ab778f09639"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/BusinessMessageDefinitionWork.cs",
+        "bytes": 7562,
+        "sha256": "cc9b1513fcb82c6818ecac711b5463d3d65fcba5023fe5d106628a0f15c33277",
+        "gitBlob": "7c959de615f682c51ed421530eb143cccf57c7b8",
+        "gitMode": "100644",
+        "expectedSha256": "cc9b1513fcb82c6818ecac711b5463d3d65fcba5023fe5d106628a0f15c33277"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/BusinessMessageSourceCodec.cs",
+        "bytes": 10269,
+        "sha256": "d6124d4ca353a9970029928f547d529ab72ad6b04f43e881f9875147ce8a7576",
+        "gitBlob": "a99346616568791740f7a3ffbc80037a37992086",
+        "gitMode": "100644",
+        "expectedSha256": "d6124d4ca353a9970029928f547d529ab72ad6b04f43e881f9875147ce8a7576"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/BusinessMessageSourceState.cs",
+        "bytes": 13095,
+        "sha256": "83ade5990f954aacd67122d634652538cfc119a0ef859a04d09a7cbd89c7facd",
+        "gitBlob": "eab5b385d004b4ea0d324b452773498ce23f518c",
+        "gitMode": "100644",
+        "expectedSha256": "83ade5990f954aacd67122d634652538cfc119a0ef859a04d09a7cbd89c7facd"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/IMessagePublicationInterestProjection.cs",
+        "bytes": 1071,
+        "sha256": "35abef7548b6d0074b0317f148b5866bd4a78d2392d22415b66671c18c1f961f",
+        "gitBlob": "643803e3cb970e5763593ee7a816c25c0f467a42",
+        "gitMode": "100644",
+        "expectedSha256": "35abef7548b6d0074b0317f148b5866bd4a78d2392d22415b66671c18c1f961f"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/InMemoryMessagePublicationInterestStore.cs",
+        "bytes": 16797,
+        "sha256": "bd6781da766a9330584925216fc7f89b725954f9c40e85a659220b8e41976cb0",
+        "gitBlob": "e4049a01be91f00cd85e2816f78c8ba42ab1901a",
+        "gitMode": "100644",
+        "expectedSha256": "bd6781da766a9330584925216fc7f89b725954f9c40e85a659220b8e41976cb0"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageSubmissionRules.cs",
+        "bytes": 10491,
+        "sha256": "3ccb5cdaef1b6c77a2cdfb598ebeebeaf81a485b9970d6541491d8e69e1f14ba",
+        "gitBlob": "4acd9a306141f103aafcf12e314e3070d313c5d0",
+        "gitMode": "100644",
+        "expectedSha256": "3ccb5cdaef1b6c77a2cdfb598ebeebeaf81a485b9970d6541491d8e69e1f14ba"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs",
+        "bytes": 82042,
+        "sha256": "92e0e32ab770b91677d73ff55dac2d93632117bde5514f6b04a9250e7a5784f7",
+        "gitBlob": "6389ec1126ed841ddf6258ae76416f41596644f6",
+        "gitMode": "100644",
+        "expectedSha256": "92e0e32ab770b91677d73ff55dac2d93632117bde5514f6b04a9250e7a5784f7"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowActivationSwitch.cs",
+        "bytes": 15524,
+        "sha256": "f348a770f3ee9549eb25c3aa9ee7865728a610c8a5fe0269627dacd035714cef",
+        "gitBlob": "77a6d6a081ebbb288f6821c6a6fc3808ce8716fd",
+        "gitMode": "100644",
+        "expectedSha256": "f348a770f3ee9549eb25c3aa9ee7865728a610c8a5fe0269627dacd035714cef"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs",
+        "bytes": 13771,
+        "sha256": "f2a92bf810b9fb615350802b42b53fa937e8e95cc92fa5a9a988646bcd5098db",
+        "gitBlob": "2866ac23bd94bc9cc60be5df23ab431947f902a5",
+        "gitMode": "100644",
+        "expectedSha256": "f2a92bf810b9fb615350802b42b53fa937e8e95cc92fa5a9a988646bcd5098db"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowActivationCoordinator.cs",
+        "bytes": 40577,
+        "sha256": "1b99bded5304d0383a186f202d0b8cb3b302c70db3291f3baa77cc5983aa2b1e",
+        "gitBlob": "fe1e1232a63bdccf16ede5812cf31c53414a50ed",
+        "gitMode": "100644",
+        "expectedSha256": "1b99bded5304d0383a186f202d0b8cb3b302c70db3291f3baa77cc5983aa2b1e"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/BusinessMessageCanonicalCodec.cs",
+        "bytes": 2651,
+        "sha256": "3725063a08a68965a5d82ba929d911b3c53afbd4dc77130eb9ef2f88c2f08064",
+        "gitBlob": "133b2dc264165602daabb8530efcb2b606f2f47f",
+        "gitMode": "100644",
+        "expectedSha256": "3725063a08a68965a5d82ba929d911b3c53afbd4dc77130eb9ef2f88c2f08064"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeDeliverySourceStore.cs",
+        "bytes": 20426,
+        "sha256": "b28c7e3e4bd4dcfe1f2e072cd40d97881bec5964bfe837ab2c3a88654e4d9235",
+        "gitBlob": "2518f35853fa6ff61ca1d14aa84c23b555c9dc1b",
+        "gitMode": "100644",
+        "expectedSha256": "b28c7e3e4bd4dcfe1f2e072cd40d97881bec5964bfe837ab2c3a88654e4d9235"
+      },
+      {
+        "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeDeliveryCanonicalFamilyReader.cs",
+        "bytes": 14679,
+        "sha256": "0fa2fc65a7d1dedfb96819ab1524066836accd96cb43c2fc7a8e8926f59109aa",
+        "gitBlob": "ad85c53ae677486b70421b9cb1a1b837c6e2cf50",
+        "gitMode": "100644",
+        "expectedSha256": "0fa2fc65a7d1dedfb96819ab1524066836accd96cb43c2fc7a8e8926f59109aa"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BusinessMessageCanonicalCodecTests.cs",
+        "bytes": 13389,
+        "sha256": "1940ba56259e21cc239d2e243698172388456943aa54b2075c1ba59630b76575",
+        "gitBlob": "d456d92c2dcf4587243ed07735ded5b9aff35fb7",
+        "gitMode": "100644",
+        "expectedSha256": "1940ba56259e21cc239d2e243698172388456943aa54b2075c1ba59630b76575"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/RuntimeDeliverySourceReadClaimTests.cs",
+        "bytes": 33045,
+        "sha256": "74d2cda93cefe3421b6f25ca456e7c78d6c56067ee7598b7a3fb07da89165cd9",
+        "gitBlob": "0ec1d334c02e87cdf2a64e13c6b2f5177f7d3ecc",
+        "gitMode": "100644",
+        "expectedSha256": "74d2cda93cefe3421b6f25ca456e7c78d6c56067ee7598b7a3fb07da89165cd9"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Tests/BusinessMessageAcceptedHeaderTests.cs",
+        "bytes": 14929,
+        "sha256": "5229b61187a33e5d834ade1980ae98d3d77563f6de23b2c85755d90af9ba9dc0",
+        "gitBlob": "455c94bf56911e0a53fb0a008de313f27b4dae5a",
+        "gitMode": "100644",
+        "expectedSha256": "5229b61187a33e5d834ade1980ae98d3d77563f6de23b2c85755d90af9ba9dc0"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Tests/BusinessMessageSourceCodecTests.cs",
+        "bytes": 22949,
+        "sha256": "4978440d9c5fc333a5636e2ab4bfa25abf90c912d8f8cf44f041de9c9943da76",
+        "gitBlob": "dad29a1dc2cfb6b644e82b96f46a642d30a3d13f",
+        "gitMode": "100644",
+        "expectedSha256": "4978440d9c5fc333a5636e2ab4bfa25abf90c912d8f8cf44f041de9c9943da76"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Tests/MessagePublicationInterestIntegrationTests.cs",
+        "bytes": 22266,
+        "sha256": "47ccb56b69ae2d4051772a0a322e89442069bd7258424d3ab76838c2f472222a",
+        "gitBlob": "620a905b25bf0398dbbdd41426c3802e16ed24dc",
+        "gitMode": "100644",
+        "expectedSha256": "47ccb56b69ae2d4051772a0a322e89442069bd7258424d3ab76838c2f472222a"
+      }
+    ],
+    "issues": [],
+    "sourceRoot": "/srv/elsa-qualification/durable-messaging/message-foundation-r1/source",
+    "gitRunsAsUid": 1001,
+    "gitSourceOrIndexWrites": false,
+    "rawStatusEmpty": true,
+    "fixture": {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz",
+      "bytes": 3267247,
+      "sha256": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+      "gitBlob": "34f0d443a091f62b471ce419c87230e25f8eb7a8",
+      "gitMode": "100644"
+    },
+    "assemblyBinding": {
+      "status": "VERIFIED_CURRENT_AND_RETAINED",
+      "files": [
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll",
+          "bytes": 5450240,
+          "sha256": "622b66bc410f4711a82ec8b39fd6f83d42a0040944c6d933200225b1e96ea023"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.deps.json",
+          "bytes": 75756,
+          "sha256": "18d73d3dbc5ec7126f842caa580c1a8ee8b545b14fec13f29947fa45c19789f3"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.runtimeconfig.json",
+          "bytes": 484,
+          "sha256": "f4ce423b58c5f103baf690a395ebc623fe12bf25ce9f9be46d4d09eff225c1f9"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+          "bytes": 2470912,
+          "sha256": "45b1530d235bf1edb9ba21544823970b8993f7a4942bcc3b07ba9106acc11f8b"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.Core.dll",
+          "bytes": 1812480,
+          "sha256": "28c1c64b751246dd0f88afcec03d474ac24af991f5b701457d4ef1f90f5b5fdd"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+          "bytes": 3549696,
+          "sha256": "9a8dcb59b7b88702b15f8fb4aa72fd4848fcce093e0b4ecc9dbcbcc6a46f979a"
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "status": "VERIFIED",
+    "unit": "elsa-durable-message-foundation-ef-r1.service",
+    "at": "2026-11-06T07:14:20.479974+00:00",
+    "stopExitCode": 0,
+    "postShowExitCode": 0,
+    "postShowTimedOut": false,
+    "postLoadState": "not-found",
+    "verifiedUnloadedTerminal": true,
+    "originalControlGroup": "",
+    "expectedControlGroup": "/system.slice/elsa-durable-message-foundation-ef-r1.service",
+    "cgroupExistedBefore": false,
+    "ownedIdentitiesBefore": [],
+    "cgroupExistsAfter": false,
+    "membersAfter": [],
+    "survivingOwnedIdentities": [],
+    "reusedPidsNotTouched": [],
+    "noOtherUnitOrPidStopped": true,
+    "sourceCachesStoresDeleted": false,
+    "dockerPlanned": false,
+    "ownedTestHostChildrenPossible": true
+  },
+  "collection": {
+    "at": "2026-11-06T07:14:20.679964+00:00",
+    "startedAt": "2026-11-06T07:14:20.428945+00:00",
+    "primaryStatus": "PASSED",
+    "cleanupStatus": "VERIFIED",
+    "sourceStatus": "VERIFIED",
+    "errors": [],
+    "jobRetained": "/srv/elsa-qualification/durable-messaging/message-foundation-ef-r1",
+    "sourceJobRetained": "/srv/elsa-qualification/durable-messaging/message-foundation-r1",
+    "sourceRootRetained": "/srv/elsa-qualification/durable-messaging/message-foundation-r1/source",
+    "stageRetained": "/opt/elsa-durable-messaging/message-foundation-ef-r1-export-51dfa2f44c404852abea607e6fef00ff",
+    "timeBoundSeconds": 120,
+    "noSourceCacheStoreDeletion": true
+  }
+}
