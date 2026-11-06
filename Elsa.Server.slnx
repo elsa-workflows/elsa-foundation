@@ -803,6 +803,9 @@
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Api/">
     <Project Path="Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
