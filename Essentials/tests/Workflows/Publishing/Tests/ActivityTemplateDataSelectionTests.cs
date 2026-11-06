@@ -7,6 +7,9 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -36,6 +39,9 @@ public sealed class ActivityTemplateDataSelectionTests
         Assert.Equal(findings, rejected.Findings);
         Assert.Equal("actual-source", analyzer.Document!.ResourceId);
         Assert.Equal(projector.Revision, analyzer.Document.ContractRevision);
+        Assert.Equal("ActivitySourceVersion", rejected.ResourceKind);
+        Assert.Equal("actual-source", rejected.ResourceId);
+        Assert.Equal("provider", rejected.ProviderKey);
     }
 
     [Fact]
@@ -147,6 +153,137 @@ public sealed class ActivityTemplateDataSelectionTests
     {
         ActivityTemplateDataSelectionGuard.Validate(Node("consumer", Expression(
             new WorkflowInstanceExpressionParameterBinding(WorkflowInstanceExpressionParameterBinding.Members.InstanceId))), [], false);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Owner_facts_admit_actual_workflow_and_container_variables_for_direct_and_portable_reads(bool portable)
+    {
+        var local = portable ? Expression(new VariableExpressionParameterBinding("container", "local")) : VariableBinding("local", "container");
+        var child = Node("consumer", local);
+        var root = Container("container", ["local"], child);
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(root, [],
+            new Dictionary<string, IReadOnlyCollection<string>> { ["workflow"] = ["outer"] });
+        ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
+        Assert.Equal(new[] { "workflow" }, facts.VisibleVariableScopesByConsumer["container"]);
+        Assert.Contains("container", facts.VisibleVariableScopesByConsumer["consumer"]);
+        var changed = Container("container", ["local"], Node("consumer", VariableBinding("missing", "container")));
+        Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(changed, true,
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(changed, [])));
+    }
+
+    [Fact]
+    public void Actual_authored_scope_projection_is_checked_against_its_compiled_contract_without_walking_opaque_JSON()
+    {
+        var authoredChild = new ActivityNode("consumer", "v", [], []);
+        var authoredRoot = new ActivityNode("container", "v", [], [], new("owned", "1", JsonSerializer.SerializeToElement(new
+        {
+            variables = new[] { new { referenceKey = "spoof" } }
+        })));
+        var owner = new StructureOwner(authoredRoot, authoredChild);
+        var compiled = Container("container", ["actual"], Node("consumer", VariableBinding("actual", "container")));
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(compiled, [], authoredRoot: authoredRoot, structures: owner);
+        ActivityTemplateDataSelectionGuard.Validate(compiled, true, facts);
+        Assert.True(owner.Projected);
+        Assert.Equal(new[] { "actual" }, facts.VariableDeclarations["container"]);
+        var corrupted = Container("container", ["spoof"], Node("consumer", VariableBinding("spoof", "container")));
+        var rejected = Assert.Throws<ActivityDataSelectionRejectedException>(() =>
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(corrupted, [], authoredRoot: authoredRoot, structures: owner));
+        Assert.Contains(rejected.Findings, finding => finding.Type == "ActivityDataSelection/VariableDeclarationMismatch");
+    }
+
+    [Fact]
+    public void Closed_boundary_itself_keeps_caller_names_but_body_uses_reference_keys_and_private_variables()
+    {
+        var consumer = Node("body", RequestBinding("body-key"));
+        var variable = Node("body-variable", VariableBinding("private", "boundary"));
+        var root = Closed("boundary", "body-key", ["private"], RequestBinding("OuterName"), consumer, variable);
+        var outer = new Dictionary<string, IReadOnlyCollection<string>> { ["workflow"] = ["outer"] };
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(root, ["OuterName"], outer);
+        ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
+        Assert.Equal(new[] { "OuterName" }, facts.RequestMembersByConsumer["boundary"]);
+        Assert.Equal(new[] { "body-key" }, facts.RequestMembersByConsumer["body"]);
+        Assert.DoesNotContain("workflow", facts.VisibleVariableScopesByConsumer["body"]);
+        var outerCapture = Closed("boundary", "body-key", ["private"], RequestBinding("OuterName"),
+            Node("body", VariableBinding("outer", "workflow")));
+        Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(outerCapture, true,
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(outerCapture, ["OuterName"], outer)));
+        var wrongName = Closed("boundary", "body-key", ["private"], RequestBinding("OuterName"), Node("body", RequestBinding("PublicDisplayName")));
+        Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(wrongName, true,
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(wrongName, ["OuterName"], outer)));
+    }
+
+    [Fact]
+    public void Nearest_nested_closed_boundary_resets_body_requests_and_variable_visibility()
+    {
+        var inner = Closed("inner", "inner-key", ["inner-var"], RequestBinding("outer-key"),
+            Node("inner-body", RequestBinding("inner-key")), Node("inner-variable", VariableBinding("inner-var", "inner")));
+        var root = Closed("outer", "outer-key", ["outer-var"], null, inner);
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(root, ["WorkflowName"]);
+        ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
+        Assert.Equal(new[] { "outer-key" }, facts.RequestMembersByConsumer["inner"]);
+        Assert.Equal(new[] { "inner-key" }, facts.RequestMembersByConsumer["inner-body"]);
+        Assert.Equal(new[] { "inner" }, facts.VisibleVariableScopesByConsumer["inner-variable"]);
+        var capture = Closed("inner", "inner-key", ["inner-var"], RequestBinding("outer-key"),
+            Node("inner-body", VariableBinding("outer-var", "outer")));
+        var invalid = Closed("outer", "outer-key", ["outer-var"], null, capture);
+        Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(invalid, true,
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(invalid, [])));
+    }
+
+    [Fact]
+    public void Native_literal_request_and_workflow_instance_reads_need_no_source_graph_or_variable_capture()
+    {
+        var literal = new RuntimeInputBinding("value", new("String"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement("hello"), ValueProtectionPolicy.InstanceInline));
+        foreach (var binding in new[] { literal, RequestBinding("PublicName"), Expression(new WorkflowInstanceExpressionParameterBinding(
+                     WorkflowInstanceExpressionParameterBinding.Members.InstanceId)) })
+        {
+            var root = Node("native", binding);
+            ActivityTemplateDataSelectionGuard.Validate(root, false,
+                ActivityTemplatePlacer.DescribeDataSelectionFacts(root, ["PublicName"]));
+        }
+    }
+
+    private static RuntimeInputBinding VariableBinding(string key, string scope) => new("value", new("String"),
+        ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead, variable: new(key, scope));
+
+    private static ExecutableNode Container(string id, string[] keys, params ExecutableNode[] children) =>
+        new(id, id, "native", "1", new("native", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            childSlots: [new("body", children)], structure: new("owned", "1", JsonSerializer.SerializeToElement(new
+            {
+                variables = keys.Select(key => new RuntimeVariableDeclaration(key, key, new("String"), ValueProtectionPolicy.InstanceInline)).ToArray()
+            }, DescriptorPayloadSerializer.Options)));
+
+    private static ExecutableNode Closed(string id, string inputKey, string[] keys, RuntimeInputBinding? boundaryInput, params ExecutableNode[] children)
+    {
+        var descriptor = new RuntimeActivityDescriptor("elsa.graph-activity", "1", JsonSerializer.SerializeToElement(new
+        {
+            scopeModel = RuntimeMetadataKeys.ActivityExecutionScopeClosed,
+            variables = keys.Select(key => new { referenceKey = key, name = key, type = new TypeReference("String"), storageDriverKey = "elsa.json" })
+        }));
+        var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract("graph", "1", "graph", descriptor.Payload,
+            [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(inputKey, "PublicDisplayName", new("String"), false, true, false, null, ActivityValuePolicy.Default)],
+            new(new("Object"), true, ActivityValuePolicy.Default, []), ["Done"], new("graph", id));
+        return new(id, id, "graph", "1", descriptor,
+            boundaryInput is null ? new Dictionary<string, RuntimeInputBinding>() : new Dictionary<string, RuntimeInputBinding> { [boundaryInput.InputKey] = boundaryInput },
+            new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed },
+            childSlots: [new("body", children)], activityContract: contract);
+    }
+
+    private sealed class StructureOwner(ActivityNode root, ActivityNode child) : IActivityStructureService
+    {
+        public bool Projected { get; private set; }
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => activity.NodeId == root.NodeId ? [new("body", [child])] : [];
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children) => activity;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity)
+        {
+            Projected = true;
+            return activity.NodeId == root.NodeId ? [new("actual", "Actual", new("String"), null, null)] : [];
+        }
     }
 
     private static RuntimeInputBinding RequestBinding(string key) => new("value", new("String"), ValueProtectionPolicy.InstanceInline,

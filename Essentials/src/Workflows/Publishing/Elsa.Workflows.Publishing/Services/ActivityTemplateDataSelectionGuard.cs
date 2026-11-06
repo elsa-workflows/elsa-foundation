@@ -4,15 +4,29 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
 
+/// <summary>Owner-derived read declarations at one actual compilation/placement stage.</summary>
+internal sealed record ActivityTemplateDataSelectionFacts(
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> VariableDeclarations,
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> VisibleVariableScopesByConsumer,
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> RequestMembersByConsumer);
+
 /// <summary>
 /// Checks typed reads in a provider's compiled native boundary without inspecting opaque descriptor JSON.
 /// An authored graph requires its owner projection for declaration and causal facts.
 /// </summary>
 internal static class ActivityTemplateDataSelectionGuard
 {
+    internal static void Validate(ExecutableNode root, bool hasSourceAnalysis, ActivityTemplateDataSelectionFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        Validate(root, [], hasSourceAnalysis, facts.VariableDeclarations, facts.RequestMembersByConsumer,
+            facts.VisibleVariableScopesByConsumer);
+    }
+
     internal static void Validate(ExecutableNode root, IEnumerable<string> publicRequestMembers, bool hasSourceAnalysis,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? variableDeclarations = null,
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? requestMembersByConsumer = null)
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? requestMembersByConsumer = null,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? visibleVariableScopesByConsumer = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(publicRequestMembers);
@@ -58,8 +72,7 @@ internal static class ActivityTemplateDataSelectionGuard
         void Request(string key, string consumer, string path)
         {
             // The owner supplies runtime names or preplacement keys, never a guessed union of identities.
-            var declared = requestMembersByConsumer is not null && requestMembersByConsumer.TryGetValue(consumer, out var scoped)
-                ? scoped : members;
+            var declared = requestMembersByConsumer is null ? members : requestMembersByConsumer.GetValueOrDefault(consumer, []);
             if (declared.Count(x => StringComparer.Ordinal.Equals(x, key)) != 1)
                 errors.Add(new(path, "ActivityDataSelection/InputUnknown", "The compiled read does not name one declared public activity input."));
         }
@@ -98,6 +111,8 @@ internal static class ActivityTemplateDataSelectionGuard
 
         bool Visible(string scope, string consumer)
         {
+            if (visibleVariableScopesByConsumer is not null)
+                return visibleVariableScopesByConsumer.TryGetValue(consumer, out var visible) && visible.Contains(scope, StringComparer.Ordinal);
             if (scope == "workflow") return true; // Only the explicitly supplied workflow declarations admit this scope.
             var visited = new HashSet<string>(StringComparer.Ordinal);
             while (visited.Add(consumer) && parents.TryGetValue(consumer, out var enclosing) && enclosing.Length == 1)
