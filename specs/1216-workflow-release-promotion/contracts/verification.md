@@ -106,6 +106,25 @@ is separate from workflow dispatch edges, and [ETL publication](../../../Extensi
 contributes embedded metadata without a generic workflow dependency edge. Inspectors must cover both.
 Native/BPMN/ETL adapters depend on their owning neutral codecs/Core contracts. Target verification never requires Design compilers.
 
+## Implemented Runtime profile foundation
+
+The optional [Runtime profile](../../../Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/README.md)
+uses two separate packages so the transport packages retain their small dependency graph. Its codec version 1 defines a
+new `{formatVersion: 1, content: ...}` envelope containing the source content scope and unchanged typed owner material;
+it is not the older naked executable or closure JSON codec. Original artifact/template/version IDs remain the member keys.
+Native/catalog versions retain their exact SemVer; the neutral model's retained version label is opaque until its protocol
+owner enforces a narrower contract. The wire preserves original opaque JSON, strings and full producer pins.
+
+The codec refuses lossy Unicode, duplicate/unknown fields, contradictory computed aliases and unsupported flattening.
+Decode bounds input before copying; encode bounds writer output and scratch while writing, including escaped strings and
+repeated opaque values. Recomputed node indexes are excluded from the wire. Target import still retains original blob bytes.
+
+Runtime verifies native historical hashes, template hashes/direct/closed DAGs, full dependency pins and native source-selection
+root associations. Neutral model verification emits a mandatory exact protocol site; BPMN supplies its protocol inspector.
+The containing-node/model reader exposes captured content only. Unclaimed aliases, consumers, structures, metadata,
+provider/contracts, policies or module references remain unsupported. This foundation is not a complete native, BPMN or ETL
+profile, source capture, publisher-authenticity proof or target import/activation capability.
+
 ## Selected source, artifact producer and origin
 
 Source capture reads the immutable selected version and its actual owner publication/reference association while retaining the closure.

@@ -51,6 +51,7 @@
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />

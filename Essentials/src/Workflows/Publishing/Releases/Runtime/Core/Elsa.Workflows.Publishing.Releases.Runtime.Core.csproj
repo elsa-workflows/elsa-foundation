@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Compiler-free Runtime release artifact codecs and captured occurrence inspection contracts.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Workflows.Publishing.Releases.Core.csproj" />
+    <ProjectReference Include="../../../../Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+</Project>
