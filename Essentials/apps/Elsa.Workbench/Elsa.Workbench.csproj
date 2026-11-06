@@ -7,6 +7,7 @@
 
 	<!-- Source-only composed Jobs acceptance fixture; absent from ordinary hosts and packages. -->
 	<PropertyGroup Condition="'$(JobsUxAcceptance)' == 'true'">
+		<NuGetLockFilePath>$(MSBuildThisFileDirectory)packages.jobs-ux.lock.json</NuGetLockFilePath>
 		<DefineConstants>$(DefineConstants);JOBS_UX_ACCEPTANCE</DefineConstants>
 	</PropertyGroup>
 	<ItemGroup Condition="'$(JobsUxAcceptance)' == 'true'">
