@@ -50,6 +50,7 @@ internal static class NativeHostingWitnessRegistration
             .Validate(settings => settings.ConfigurationError is null,
                 "Native hosting observation requires SQLite providers, absolute shared Data Source paths, and an absolute lock folder.")
             .ValidateOnStart();
+        services.AddSingleton(_ => new NativeHostingConsumptionGate(journalDirectory, role));
 
         ReplaceScoped<IRuntimeExecutionOwnershipService>(services, ownership,
             (inner, provider, settings, ownsInner) => new NativeHostingOwnershipWitness(inner, provider, settings, ownsInner));
@@ -512,7 +513,10 @@ internal sealed class NativeHostingCommandTransportWitness(
         int maxItems,
         CancellationToken cancellationToken = default)
     {
-        var items = await Inner.LeaseAsync(workflowExecutionId, ownerId, now, leaseDuration, maxItems, cancellationToken);
+        var items = await Services.GetRequiredService<NativeHostingConsumptionGate>()
+            .ReadAsync<IReadOnlyList<ExecutionCommandTransportItem>>(
+                () => Inner.LeaseAsync(workflowExecutionId, ownerId, now, leaseDuration, maxItems, cancellationToken),
+                [], cancellationToken);
         foreach (var item in items)
         {
             NativeHostingWitnessRecorder.Write(Settings, new
@@ -572,10 +576,12 @@ internal sealed class NativeHostingCommandTransportWitness(
         Inner.ListLeasedAsync(ownerId, now, maxItems, workflowExecutionId, cancellationToken);
 
     public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default) =>
-        Inner.ListPendingExecutionIdsAsync(now, maxItems, cancellationToken);
+        Services.GetRequiredService<NativeHostingConsumptionGate>().ReadAsync<IReadOnlyCollection<string>>(
+            () => Inner.ListPendingExecutionIdsAsync(now, maxItems, cancellationToken), [], cancellationToken);
 
     public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, int skip, CancellationToken cancellationToken = default) =>
-        Inner.ListPendingExecutionIdsAsync(now, maxItems, skip, cancellationToken);
+        Services.GetRequiredService<NativeHostingConsumptionGate>().ReadAsync<IReadOnlyCollection<string>>(
+            () => Inner.ListPendingExecutionIdsAsync(now, maxItems, skip, cancellationToken), [], cancellationToken);
 
     public ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
         Inner.CountPendingAsync(workflowExecutionId, cancellationToken);

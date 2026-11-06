@@ -43,7 +43,8 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
         services.Add(new ServiceDescriptor(typeof(IBackgroundActivityWorkStore), scope => new ReceiptDeliveryBarrier(
             (IBackgroundActivityWorkStore)(provider.ImplementationInstance ?? provider.ImplementationFactory?.Invoke(scope) ??
                 ActivatorUtilities.CreateInstance(scope, provider.ImplementationType!)), journal, Role,
-            ownsInner: provider.ImplementationInstance is null), provider.Lifetime));
+            ownsInner: provider.ImplementationInstance is null,
+            consumptionGate: scope.GetService<NativeHostingConsumptionGate>()), provider.Lifetime));
     }
 
     public virtual void PostConfigureServices(IServiceCollection services)

@@ -11,7 +11,8 @@ namespace Elsa.Workbench.Tests.BackgroundActivities;
 /// Captures the real worker claims used by the process-recovery witnesses, replays a cancelled claim when explicitly
 /// armed, and can hold a real receipt after commit but before notification to simulate process loss.
 /// </summary>
-internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner, string journal, string role, bool ownsInner)
+internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner, string journal, string role, bool ownsInner,
+    NativeHostingConsumptionGate? consumptionGate = null)
     : IBackgroundActivityWorkStore, IDisposable, IAsyncDisposable
 {
     private int _disposed;
@@ -98,9 +99,15 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner,
     }
 
     public ValueTask<IReadOnlyCollection<BackgroundActivityWorkItem>> ListResultReadyAsync(int limit,
-        string? workflowExecutionId = null, CancellationToken cancellationToken = default) =>
-        HoldDelivery ? ValueTask.FromResult<IReadOnlyCollection<BackgroundActivityWorkItem>>([]) :
-            inner.ListResultReadyAsync(limit, workflowExecutionId, cancellationToken);
+        string? workflowExecutionId = null, CancellationToken cancellationToken = default)
+    {
+        ValueTask<IReadOnlyCollection<BackgroundActivityWorkItem>> Read() =>
+            HoldDelivery ? ValueTask.FromResult<IReadOnlyCollection<BackgroundActivityWorkItem>>([]) :
+                inner.ListResultReadyAsync(limit, workflowExecutionId, cancellationToken);
+
+        return consumptionGate is null ? Read() :
+            consumptionGate.ReadAsync<IReadOnlyCollection<BackgroundActivityWorkItem>>(Read, [], cancellationToken);
+    }
 
     private async Task ReplayCancelledClaimsAsync(CancellationToken cancellationToken)
     {

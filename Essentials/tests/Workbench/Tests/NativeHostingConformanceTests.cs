@@ -16,7 +16,6 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
     public async Task Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor(
         string first, string second)
     {
-        Skip.If(OperatingSystem.IsWindows(), "The fixture suspends its owned coordinator with POSIX signals.");
         await using var fixture = NativeHostingFixture.Create(NativeHostingProfile.Clustered, observeNativeHosting: true);
         fixture.HoldWorkerClaims("owner");
         var hosts = await fixture.SerialStartAsync(("owner", true), ("survivor", true));
@@ -52,9 +51,21 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         Assert.Equal(ownerId, Value<string>(composition, "LocalHostId"));
         Assert.Equal(0, StartedCount(journal, "final"));
 
-        // At this quiescent wait the native drain has released its execution fence. Routing placement remains.
-        // Freeze the owner so its resumption pump cannot consume the survivor's receipt before it is forwarded.
-        await owner.SuspendAsync();
+        // Hold only the owner's receipt/transport consumption. Suspending the whole process here can freeze an
+        // unrelated SQLite writer and block the survivor's real receipt or transport commit indefinitely.
+        // The acknowledgement follows all pre-hold reads/leases, before either background body is released.
+        var holdToken = Guid.NewGuid().ToString("N");
+        var consumptionHeldPath = Path.Combine(journal, "consumption-held.owner.json");
+        File.WriteAllText(Path.Combine(journal, "hold-consumption-owner"), holdToken);
+        JsonObject? consumptionHeld = null;
+        await WaitForAsync(owner, () =>
+        {
+            if (!File.Exists(consumptionHeldPath))
+                return false;
+            consumptionHeld = JsonNode.Parse(File.ReadAllText(consumptionHeldPath))!.AsObject();
+            return Value<int>(consumptionHeld, "ProcessId") == owner.ProcessId &&
+                   Value<string>(consumptionHeld, "HoldToken") == holdToken;
+        }, "the owner's receipt and transport consumption to be held", () => DescribeJournal(journal));
         File.WriteAllText(Path.Combine(journal, "hold-receipts"), "hold");
         File.WriteAllText(Path.Combine(journal, first + ".release"), "release");
         var bodyClaim = JsonNode.Parse(File.ReadAllText(Path.Combine(journal, first + ".claim.json")))!.AsObject();
@@ -72,6 +83,8 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         Assert.True(File.Exists(Path.Combine(journal, first + ".receipt")));
         var receiptDigest = File.ReadAllText(Path.Combine(journal, first + ".receipt"));
         var receiptCommittedAt = Value<DateTimeOffset>(receipt!, "RecordedAt");
+        var ownerAliveAfterReceipt = !owner.HasExited;
+        Assert.True(ownerAliveAfterReceipt);
         File.Delete(Path.Combine(journal, "hold-receipts"));
 
         // This command is created by real resumption after the worker enqueues its persisted coordinator work.
@@ -101,8 +114,13 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         }
         Assert.True(Value<DateTimeOffset>(sent, "RecordedAt") < placementExpiry);
         Assert.Equal(0, StartedCount(journal, "final"));
+        Assert.False(owner.HasExited);
         await owner.CrashAsync();
         Assert.True(owner.HasExited);
+        Assert.DoesNotContain(ReadEvents(journal), record =>
+            Value<int>(record, "ProcessId") == owner.ProcessId &&
+            record["TransportItemId"]?.GetValue<string>() == transportId &&
+            record["Stage"]?.GetValue<string>() is "transport-leased" or "transport-acked");
 
         // Observe an actual release before TTL expiry, followed by a fresh snapshot showing departure.
         // The snapshot is independent of the pump's decision; FailoverTests cover its fresh-read authorization.
@@ -166,6 +184,8 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
             ArtifactHash = completed["instance"]?["artifactHash"]?.GetValue<string>(),
             FirstCompleted = first,
             OriginalFence = originalFence,
+            ConsumptionHeld = consumptionHeld,
+            OwnerAliveAfterReceipt = ownerAliveAfterReceipt,
             Receipt = receipt,
             ReceiptDigest = receiptDigest,
             TransportSent = sent,
