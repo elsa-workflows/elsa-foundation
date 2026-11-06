@@ -5,6 +5,8 @@ const record = value => value !== null && typeof value === "object" && !Array.is
 const identity = value => typeof value === "string" && value.length > 0 && value.length <= 256 ? value : null;
 const boolean = value => typeof value === "boolean" ? value : null;
 const network = value => ["unobserved", "requested", "received", "http-error", "unavailable"].includes(value) ? value : "unavailable";
+const choicePhase = value => ["card-visible", "card-click", "selected"].includes(value) ? value : "unobserved";
+const choiceCount = value => Number.isInteger(value) && value >= 0 ? Math.min(2, value) : null;
 
 // These are observations of the explicitly selected fixture, never default-Create acceptance.
 export function projectCreationState(value) {
@@ -13,6 +15,7 @@ export function projectCreationState(value) {
     catalog: network(value?.catalog), candidatePresent: boolean(value?.candidatePresent), templatePresent: boolean(value?.templatePresent),
     catalogAtCreate: network(value?.catalogAtCreate), candidateAtCreate: boolean(value?.candidateAtCreate), templateAtCreate: boolean(value?.templateAtCreate),
     choiceEnabled: boolean(value?.choiceEnabled), choiceSelected: boolean(value?.choiceSelected),
+    choicePhase: choicePhase(value?.choicePhase), choiceCount: choiceCount(value?.choiceCount), enabledCardCount: choiceCount(value?.enabledCardCount), choiceValuePresent: boolean(value?.choiceValuePresent),
     createRequests: Number.isInteger(value?.createRequests) ? Math.max(0, Math.min(2, value.createRequests)) : 0,
     requestRoot: boolean(value?.requestRoot), requestRootMatchesChoice: boolean(value?.requestRootMatchesChoice),
     createResponse: network(value?.createResponse), createRoot: boolean(value?.createRoot), createMatchesEditor: boolean(value?.createMatchesEditor),
@@ -20,17 +23,35 @@ export function projectCreationState(value) {
   };
 }
 
-export async function selectFlowchartRoot(dialog) {
+export async function selectFlowchartRoot(dialog, onState) {
   const choice = dialog.getByRole("radio", { name: "Flowchart", exact: true });
-  await choice.waitFor({ state: "visible" });
+  // Pinned Studio clips the native input. Its visible wrapping label is the user
+  // target; require that exact enabled label/input association, never force a click.
+  const card = dialog.locator('label.wf-root-card:not([aria-disabled="true"]):has(> input[type="radio"][name="wf-root-kind"][aria-label="Flowchart"])');
+  const emit = value => { try { onState?.(value); } catch {} };
+  async function observe(phase) {
+    emit({ phase });
+    if (typeof onState !== "function") return;
+    try {
+      const state = await choice.evaluateAll(nodes => ({
+        count: Math.min(2, nodes.length), enabled: nodes.length === 1 ? !nodes[0].disabled : null,
+        checked: nodes.length === 1 ? nodes[0].checked : null,
+        version: nodes.length === 1 && nodes[0].value.length <= 256 ? nodes[0].value : null
+      }));
+      emit({ phase, ...state, enabledCardCount: await card.count() });
+    } catch { /* Optional fixed-state observations cannot alter the journey. */ }
+  }
+  await observe("card-visible");
+  await card.waitFor({ state: "visible" });
+  assert.equal(await card.count(), 1, "the Create dialog must expose one enabled Flowchart label card");
   assert.equal(await choice.count(), 1, "the Create dialog must expose one Flowchart root choice");
-  // A default-checked radio may still be disabled. A real click retains the normal
-  // visibility/enabled/actionability wait and the page's existing 30-second default.
-  await choice.click();
+  await observe("card-click");
+  await card.click();
   assert.equal(await choice.isEnabled(), true, "the Flowchart root choice must be enabled");
   assert.equal(await choice.isChecked(), true, "the Flowchart root choice must be selected");
   const version = identity(await choice.inputValue());
   assert.ok(version, "the selected Flowchart root choice must identify an activity version");
+  emit({ phase: "selected", count: 1, enabledCardCount: 1, enabled: true, checked: true, version });
   return version;
 }
 
@@ -158,11 +179,22 @@ export function observeWorkflowCreation(page, { backendOrigin }) {
   try { page.on("request", onRequest); } catch { state.catalog = "unavailable"; }
   try { page.on("response", onResponse); } catch { state.createResponse = "unavailable"; }
   return {
+    observeChoice(value) {
+      selected = identity(value?.version);
+      state.choicePhase = choicePhase(value?.phase);
+      state.choiceCount = choiceCount(value?.count);
+      state.enabledCardCount = choiceCount(value?.enabledCardCount);
+      state.choiceEnabled = boolean(value?.enabled);
+      state.choiceSelected = boolean(value?.checked);
+      state.choiceValuePresent = value?.version === undefined ? null : selected !== null;
+    },
     select(version) {
       selected = identity(version);
       assert.ok(selected, "the observed Flowchart choice must identify an activity version");
       state.choiceEnabled = true;
       state.choiceSelected = true;
+      state.choicePhase = "selected";
+      state.choiceValuePresent = true;
     },
     bindEditor(definitionId) { editor = identity(definitionId); },
     snapshot() {

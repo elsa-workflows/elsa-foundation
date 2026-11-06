@@ -598,19 +598,39 @@ test("the journey keeps its strict selector, visibility wait, original click and
   assert.deepEqual(calls, []);
 });
 
-function creationFixture({ enabled = true, checked = true, count = 1, version = secret, clickError } = {}) {
+function creationFixture({ enabled = true, checked = true, count = 1, cardCount = count, version = secret, clickError, observationError } = {}) {
   const actions = [];
+  const states = [];
   const radio = {
     waitFor: async options => { assert.deepEqual(options, { state: "visible" }); actions.push("visible"); },
     count: async () => count,
     click: async (...args) => {
       assert.deepEqual(args, []); actions.push("radio-click");
       if (clickError) throw clickError;
-      if (!enabled) throw Object.assign(new Error("disabled choice"), { name: "TimeoutError" });
+      throw Object.assign(new Error("clipped input is not a pointer target"), { name: "TimeoutError" });
+    },
+    evaluateAll: async callback => {
+      if (observationError) throw observationError;
+      return callback(Array.from({ length: count }, () => ({ disabled: !enabled, checked, value: version })));
     },
     isEnabled: async () => enabled, isChecked: async () => checked, inputValue: async () => version
   };
+  const card = {
+    count: async () => enabled ? cardCount : 0,
+    waitFor: async options => {
+      assert.deepEqual(options, { state: "visible" }); actions.push("visible");
+      if (!enabled || cardCount === 0) throw Object.assign(new Error("no visible enabled associated card"), { name: "TimeoutError" });
+    },
+    click: async (...args) => {
+      assert.deepEqual(args, []); actions.push("card-click");
+      if (clickError) throw clickError;
+    }
+  };
   const dialog = {
+    locator: selector => {
+      assert.equal(selector, 'label.wf-root-card:not([aria-disabled="true"]):has(> input[type="radio"][name="wf-root-kind"][aria-label="Flowchart"])');
+      return card;
+    },
     getByLabel: (name, options) => {
       assert.equal(name, "Display name"); assert.deepEqual(options, { exact: true });
       return { fill: async () => actions.push("name") };
@@ -629,22 +649,22 @@ function creationFixture({ enabled = true, checked = true, count = 1, version = 
     getByRole: (role, options) => { assert.equal(role, "dialog"); assert.deepEqual(options, { name: "Create Workflow" }); return dialog; },
     waitForFunction: async () => {}, evaluate: async () => "created-definition"
   };
-  const observation = { select: value => { assert.equal(value, version); actions.push("observed-choice"); }, bindEditor: () => actions.push("bound-editor") };
-  return { dialog, page, observation, actions };
+  const observation = { observeChoice: state => states.push(state), select: value => { assert.equal(value, version); actions.push("observed-choice"); }, bindEditor: () => actions.push("bound-editor") };
+  return { dialog, page, observation, actions, states };
 }
 
 async function actualCreationBlock(f) {
   const start = runSource.indexOf('  stage = "workflow-create";', runSource.indexOf("async function runBrowserJourney()"));
   const end = runSource.indexOf('  stage = "activity-picker-trigger-visible";', start);
   assert.ok(start > 0 && end > start);
-  await new AsyncFunction("page", "workflowName", "selectFlowchartRoot", "creationDiagnostics", "assert", "log",
-    `let stage; ${runSource.slice(start, end)}`)(f.page, "owned fixture", selectFlowchartRoot, f.observation, assert, () => {});
+  await new AsyncFunction("page", "workflowName", "selectFlowchartRoot", "creationDiagnostics", "assert", "log", "recordStage",
+    `let stage; try { ${runSource.slice(start, end)} } finally { recordStage(stage); }`)(f.page, "owned fixture", selectFlowchartRoot, f.observation, assert, () => {}, value => { f.stage = value; });
 }
 
 test("actual creation path explicitly clicks the unique enabled selected Flowchart before Create", async () => {
   const f = creationFixture();
   await actualCreationBlock(f);
-  assert.deepEqual(f.actions, ["open", "name", "visible", "radio-click", "observed-choice", "create", "bound-editor"]);
+  assert.deepEqual(f.actions, ["open", "name", "visible", "card-click", "observed-choice", "create", "bound-editor"]);
 });
 
 test("a default-checked but disabled Flowchart cannot reach the actual Create action", async () => {
@@ -667,6 +687,72 @@ test("a root choice actionability failure preserves the original error", async (
   await assert.rejects(actualCreationBlock(f), error => error === original);
   assert.ok(!f.actions.includes("create"));
 });
+
+test("R4 the visible associated Flowchart card is clicked without targeting the clipped input", async () => {
+  const f = creationFixture();
+  await actualCreationBlock(f);
+  assert.ok(f.actions.includes("card-click")); assert.ok(!f.actions.includes("radio-click")); assert.ok(f.actions.includes("create"));
+  assert.deepEqual(f.states.filter(value => value.version).map(value => value.phase), ["card-visible", "card-click", "selected"]);
+  assert.equal(f.states.at(-1).enabled, true); assert.equal(f.states.at(-1).checked, true);
+});
+
+test("R4 absent or ambiguous associated label cards never advance to Create", async () => {
+  for (const cardCount of [0, 2]) {
+    const f = creationFixture({ cardCount });
+    await assert.rejects(actualCreationBlock(f)); assert.ok(!f.actions.includes("create")); assert.ok(!f.actions.includes("card-click"));
+  }
+});
+
+test("R4 the native disabled requirement and original label click error are preserved", async () => {
+  const disabled = creationFixture({ enabled: false });
+  await assert.rejects(actualCreationBlock(disabled), { name: "TimeoutError" });
+  assert.ok(!disabled.actions.includes("card-click")); assert.ok(!disabled.actions.includes("create"));
+  assert.equal(disabled.stage, "workflow-root-card-visible");
+  const original = Object.assign(new Error(secret), { name: "TimeoutError" }); const failed = creationFixture({ clickError: original });
+  await assert.rejects(actualCreationBlock(failed), error => error === original); assert.ok(!failed.actions.includes("create"));
+  assert.equal(failed.states.at(-1).phase, "card-click");
+  assert.equal(failed.stage, "workflow-root-card-click");
+});
+
+test("R4 failed optional choice-state observation cannot prevent the normal native card journey", async () => {
+  const f = creationFixture({ observationError: new Error(secret) });
+  await actualCreationBlock(f); assert.ok(f.actions.includes("create")); assert.ok(!f.actions.includes("radio-click"));
+  const throwing = creationFixture();
+  await selectFlowchartRoot(throwing.dialog, () => { throw new Error(secret); });
+  assert.ok(throwing.actions.includes("card-click"));
+});
+
+test("R4 choice phase/count/identity observations retain only fixed safe fields", async t => {
+  const page = new EventEmitter(); const observer = observeWorkflowCreation(page, { backendOrigin }); t.after(() => observer.dispose());
+  const catalog = request("GET", catalogRoute);
+  page.emit("response", response(catalog, { activities: [{ activityVersionId: secret, authoringTemplate: {} }] })); await tick();
+  observer.observeChoice({ phase: "card-click", count: 1, enabledCardCount: 1, enabled: true, checked: false, version: secret, raw: secret });
+  const state = observer.snapshot();
+  assert.equal(state.choicePhase, "card-click"); assert.equal(state.choiceCount, 1); assert.equal(state.enabledCardCount, 1);
+  assert.equal(state.choiceEnabled, true); assert.equal(state.choiceSelected, false); assert.equal(state.choiceValuePresent, true);
+  assert.equal(state.candidatePresent, true); assert.equal(state.templatePresent, true); assert.equal(state.createRequests, 0);
+  assert.ok(!JSON.stringify(state).includes(secret));
+  observer.observeChoice({ phase: secret, count: 999, enabledCardCount: -1, enabled: secret, checked: secret, version: "" });
+  const unknown = observer.snapshot();
+  assert.equal(unknown.choicePhase, "unobserved"); assert.equal(unknown.choiceCount, 2); assert.equal(unknown.enabledCardCount, null);
+  assert.equal(unknown.choiceEnabled, null); assert.equal(unknown.choiceSelected, null); assert.equal(unknown.choiceValuePresent, false);
+  assert.ok(!JSON.stringify(unknown).includes(secret));
+});
+
+test("R4 choice-state re-projection rejects arbitrary private phases and identity values", () => {
+  const value = projectCreationState({ choicePhase: secret, choiceCount: 999, enabledCardCount: Infinity, choiceValuePresent: secret, version: secret, raw: secret });
+  assert.equal(value.choicePhase, "unobserved"); assert.equal(value.choiceCount, 2); assert.equal(value.enabledCardCount, null); assert.equal(value.choiceValuePresent, null);
+  assert.ok(!JSON.stringify(value).includes(secret));
+});
+
+for (const phase of ["workflow-root-card-visible", "workflow-root-card-click"]) {
+  test(`R4 safe ${phase} evidence is retained without expanding screenshot eligibility`, async t => {
+    const f = await fixture(t, { page: new FakePage({ states: [editorState({ url: `${origin}/workflows/definitions` })] }), creationState: () => ({ choicePhase: "card-click", choiceCount: 1, choiceEnabled: true, raw: secret }) });
+    await f.observer.captureFailure(phase, "timeout");
+    const value = await f.receipt(); assert.equal(value.stage, phase); assert.equal(value.creation.choiceCount, 1); assert.equal(value.creation.choiceEnabled, true);
+    assert.equal(value.screenshot, "suppressed"); assert.deepEqual(await f.files(), ["diagnostic.json"]);
+  });
+}
 
 const backendOrigin = "http://localhost:13000";
 const definitionRoute = "/design/workflows/definitions";

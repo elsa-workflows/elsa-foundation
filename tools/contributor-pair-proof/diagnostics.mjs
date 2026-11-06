@@ -3,7 +3,7 @@ import path from "node:path";
 import { projectCreationState } from "./creation.mjs";
 
 export const limits = Object.freeze({ captureMs: 3_000, events: 20, buttons: 3, jsonBytes: 16 * 1024, pngBytes: 2 * 1024 * 1024 });
-const stages = new Set(["workflow-create", "workflow-root-selection", "activity-picker-trigger-visible", "activity-picker-trigger-click"]);
+const stages = new Set(["workflow-create", "workflow-root-selection", "workflow-root-card-visible", "workflow-root-card-click", "activity-picker-trigger-visible", "activity-picker-trigger-click"]);
 const failureClasses = new Set(["timeout", "assertion", "ambiguous-locator", "navigation-interrupted", "error", "other"]);
 const resourceTypes = new Set(["document", "stylesheet", "image", "media", "font", "script", "texttrack", "xhr", "fetch", "eventsource", "websocket", "manifest"]);
 

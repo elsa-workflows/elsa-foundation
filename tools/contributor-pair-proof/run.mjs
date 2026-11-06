@@ -463,7 +463,10 @@ async function runBrowserJourney() {
   const createDialog = page.getByRole("dialog", { name: "Create Workflow" });
   await createDialog.getByLabel("Display name", { exact: true }).fill(workflowName);
   stage = "workflow-root-selection";
-  creationDiagnostics.select(await selectFlowchartRoot(createDialog));
+  creationDiagnostics.select(await selectFlowchartRoot(createDialog, state => {
+    stage = state.phase === "card-visible" ? "workflow-root-card-visible" : state.phase === "card-click" ? "workflow-root-card-click" : "workflow-root-selection";
+    creationDiagnostics.observeChoice(state);
+  }));
   stage = "workflow-create";
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
