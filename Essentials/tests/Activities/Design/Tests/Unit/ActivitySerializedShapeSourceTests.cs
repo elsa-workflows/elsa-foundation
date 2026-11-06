@@ -91,6 +91,43 @@ public sealed class ActivitySerializedShapeSourceTests
     }
 
     [Fact]
+    public async Task Override_JSON_attributes_follow_the_actual_declaration_instead_of_inheriting_base_policy()
+    {
+        using var host = ResultHost(typeof(OverrideResultActivity));
+        var version = host.Version<OverrideResultActivity>();
+        var shape = (await host.Source.DescribeResultAsync(version, "$result", [], new()))!;
+        var json = JsonSerializer.SerializeToElement(new SerializedOverridePayload {
+            Name = "Ada", Optional = null, Removed = "not emitted", Hidden = "not emitted"
+        }, ActivityValueJsonProfile.CreateOptions());
+        Assert.Equal(ActivitySerializedShapeState.Known, shape.State);
+        Assert.True(json.TryGetProperty("name", out _));
+        Assert.True(json.TryGetProperty("optional", out var nullable));
+        Assert.Equal(JsonValueKind.Null, nullable.ValueKind);
+        Assert.False(json.TryGetProperty("removed", out _));
+        Assert.False(json.TryGetProperty("hidden", out _));
+        Assert.Equal(ActivitySerializedPresence.Required, Member(shape, "optional").Presence);
+        Assert.True(Member(shape, "optional").IsNullable);
+        var selected = (await host.Source.DescribeResultAsync(version, "$result", ["name"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Known, selected.State);
+        Assert.Equal(new TypeReference("String"), selected.Type);
+        foreach (var ignored in new[] { "removed", "hidden" })
+            Assert.Equal("activity.shape.member-not-declared", (await host.Source.DescribeResultAsync(version, "$result", [ignored], new()))!.ReasonCode);
+    }
+
+    [Theory]
+    [InlineData(typeof(RenamedOverrideResultActivity))]
+    [InlineData(typeof(RenamedShadowResultActivity))]
+    [InlineData(typeof(IgnoredShadowResultActivity))]
+    public async Task Unsupported_override_or_shadow_serialized_name_collisions_stay_unknown(Type activityType)
+    {
+        using var host = ResultHost(activityType);
+        var shape = (await host.Source.DescribeResultAsync(host.Version(activityType), "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, shape.State);
+        Assert.Equal("activity.shape.override-contract-unsupported", shape.ReasonCode);
+        Assert.Empty(shape.Members);
+    }
+
+    [Fact]
     public async Task Named_projection_is_bound_to_the_exact_source_version_and_output_identity()
     {
         using var host = new Host();
@@ -323,6 +360,10 @@ public sealed class ActivitySerializedShapeSourceTests
     public sealed class JsonResultActivity : MetadataResultActivity<JsonElement>;
     public sealed class RecursiveResultActivity : MetadataResultActivity<SerializedRecursive>;
     public sealed class BinaryResultActivity : MetadataResultActivity<byte[]>;
+    public sealed class OverrideResultActivity : MetadataResultActivity<SerializedOverridePayload>;
+    public sealed class RenamedOverrideResultActivity : MetadataResultActivity<SerializedRenamedOverride>;
+    public sealed class RenamedShadowResultActivity : MetadataResultActivity<SerializedRenamedShadow>;
+    public sealed class IgnoredShadowResultActivity : MetadataResultActivity<SerializedIgnoredShadow>;
     public sealed class UntypedActivity : IActivity
     {
         public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) =>

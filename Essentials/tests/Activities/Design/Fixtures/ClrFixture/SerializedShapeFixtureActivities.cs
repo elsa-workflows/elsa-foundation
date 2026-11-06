@@ -103,3 +103,41 @@ public sealed class IncludedFieldPayload
 [JsonDerivedType(typeof(DerivedPayload), "derived")]
 public class PolymorphicPayload;
 public sealed class DerivedPayload : PolymorphicPayload;
+
+public class SerializedOverrideBase
+{
+    [JsonIgnore]
+    public virtual string? Name { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public virtual string? Optional { get; set; }
+    public virtual string? Removed { get; set; }
+    [JsonIgnore]
+    public string? Hidden { get; set; }
+}
+
+public sealed class SerializedOverridePayload : SerializedOverrideBase
+{
+    public override string? Name { get; set; }
+    public override string? Optional { get; set; }
+    [JsonIgnore]
+    public override string? Removed { get; set; }
+}
+
+public class SerializedRenamedBase
+{
+    [JsonPropertyName("base_name")]
+    public virtual string Name { get; set; } = "";
+}
+public sealed class SerializedRenamedOverride : SerializedRenamedBase
+{
+    public override string Name { get; set; } = "";
+}
+public sealed class SerializedRenamedShadow : SerializedRenamedBase
+{
+    public new string Name { get; set; } = "";
+}
+public sealed class SerializedIgnoredShadow : SerializedRenamedBase
+{
+    [JsonIgnore]
+    public new string Name { get; set; } = "";
+}

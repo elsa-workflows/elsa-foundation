@@ -172,7 +172,14 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
             var ignore = Attribute(property, "JsonIgnoreAttribute");
             var condition = ignore is null ? 0 : Convert.ToInt32(ignore.NamedArguments.FirstOrDefault(x => x.MemberName == "Condition").TypedValue.Value ?? 1);
             if (condition is 1 or 4) // Always or WhenWriting.
+            {
+                if (HasUnsupportedPropertyHierarchy(property, string.Empty, ignored: true))
+                {
+                    reason = "activity.shape.override-contract-unsupported";
+                    return [];
+                }
                 continue;
+            }
             if (condition is not (0 or 2 or 3 or 5))
             {
                 reason = "activity.shape.ignore-condition-unsupported";
@@ -192,6 +199,11 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
             }
             var name = nameAttribute is null ? JsonNamingPolicy.CamelCase.ConvertName(property.Name) :
                 (string)nameAttribute.ConstructorArguments[0].Value!;
+            if (HasUnsupportedPropertyHierarchy(property, name))
+            {
+                reason = "activity.shape.override-contract-unsupported";
+                return [];
+            }
             var nullability = new NullabilityInfoContext().Create(property);
             var conditional = condition is 2 or 3;
             result.Add(new(name, property.Name.Humanize(),
@@ -370,7 +382,32 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
     private static ActivitySerializedPresence CombinePresence(ActivitySerializedPresence left, ActivitySerializedPresence right) =>
         left == ActivitySerializedPresence.Optional || right == ActivitySerializedPresence.Optional ? ActivitySerializedPresence.Optional :
         left == ActivitySerializedPresence.Required && right == ActivitySerializedPresence.Required ? ActivitySerializedPresence.Required : ActivitySerializedPresence.Unknown;
-    private static CustomAttributeData? Attribute(PropertyInfo property, string name) => ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, JsonPrefix + name);
+    // STJ reads attributes on each declaration with inherit:false; an override does not inherit its base's JSON policy.
+    private static CustomAttributeData? Attribute(PropertyInfo property, string name) =>
+        property.GetCustomAttributesData().FirstOrDefault(attribute => attribute.AttributeType.FullName == JsonPrefix + name);
+
+    private static bool HasUnsupportedPropertyHierarchy(PropertyInfo property, string serializedName, bool ignored = false)
+    {
+        var getter = property.GetMethod;
+        var isOverride = getter?.IsVirtual == true && (getter.Attributes & MethodAttributes.NewSlot) == 0;
+        if (ignored && isOverride) return false;
+        for (var ancestor = property.DeclaringType?.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        foreach (var previous in ancestor.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                     .Where(candidate => candidate.Name == property.Name && candidate.GetMethod?.IsPublic == true && candidate.GetIndexParameters().Length == 0))
+        {
+            // A differently named base declaration can survive STJ's override/shadow resolution as a second member.
+            // Until that hierarchy is fully represented, do not claim a complete Known object contract.
+            if (!isOverride) return true;
+            var ignore = Attribute(previous, "JsonIgnoreAttribute");
+            var condition = ignore is null ? 0 : Convert.ToInt32(ignore.NamedArguments.FirstOrDefault(x => x.MemberName == "Condition").TypedValue.Value ?? 1);
+            if (condition is 1 or 4) continue;
+            var naming = Attribute(previous, "JsonPropertyNameAttribute");
+            if (naming is not null && naming.ConstructorArguments.FirstOrDefault().Value is not string) return true;
+            var previousName = naming is null ? JsonNamingPolicy.CamelCase.ConvertName(previous.Name) : (string)naming.ConstructorArguments[0].Value!;
+            if (previousName != serializedName) return true;
+        }
+        return false;
+    }
     private static bool HasAttribute(MemberInfo member, string name) => member.GetCustomAttributesData().Any(a => a.AttributeType.FullName == JsonPrefix + name);
     private static bool IsScalar(Type type) => type.IsPrimitive || type.IsEnum ||
         type.IsArray && type.GetArrayRank() == 1 && type.GetElementType()?.FullName == "System.Byte" ||
