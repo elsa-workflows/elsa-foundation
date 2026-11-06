@@ -16,7 +16,7 @@ describe("WeaverSurface", () => {
       const api = readyApi(); const client = readyClient();
       const privileges = index === 8 ? undefined : Object.freeze({ administrative: Boolean(index & 1), irrecoverable: Boolean(index & 2), activation: Boolean(index & 4) });
       const baseline = await client.bootstrap();
-      client.bootstrap = vi.fn(async () => ({ ...baseline, privileges }));
+      client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...baseline, privileges }));
       const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
       try {
         await flushPromises();
@@ -40,7 +40,7 @@ describe("WeaverSurface", () => {
   it("waits for bootstrap before showing the host policy observation", async () => {
     const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
     let finish!: (value: Awaited<ReturnType<AgentClient["bootstrap"]>>) => void;
-    client.bootstrap = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    client.bootstrap = vi.fn<AgentClient["bootstrap"]>(() => new Promise(resolve => { finish = resolve; }));
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} />);
     try {
       await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")).toBeNull();
@@ -51,7 +51,7 @@ describe("WeaverSurface", () => {
 
   it.each(["dock", "full"] as const)("keeps a reported policy observable when the provider is unavailable (%s)", async variant => {
     const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
-    client.bootstrap = vi.fn(async () => ({ ...baseline, providerStatus: "unavailable", privileges: { administrative: true, irrecoverable: false, activation: false } }));
+    client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...baseline, providerStatus: "unavailable", privileges: { administrative: true, irrecoverable: false, activation: false } }));
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
     try {
       await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")?.textContent).toContain("AdministrativeEnabled");
