@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -290,6 +290,111 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   );
 }
 
+interface CollectionDefaultItem { id: number; token: string }
+
+function CollectionDefaultValueCell({ value, editor, ariaLabel, onChange }: {
+  value: string;
+  editor: string;
+  ariaLabel: string;
+  onChange(value: string): void;
+}) {
+  const nextId = useRef(0);
+  const container = useRef<HTMLDivElement>(null);
+  const focusAfter = useRef<number | "add" | null>(null);
+  const parsed = useMemo(() => {
+    const tokens = collectionDefaultTokens(value);
+    return tokens?.map(token => ({ id: ++nextId.current, token })) ?? null;
+  }, [value]);
+  // Keep an item's incomplete JSON draft in its own field while the parent retains the authored text.
+  const [edited, setEdited] = useState<{ value: string; rows: CollectionDefaultItem[] } | null>(null);
+  const rows = edited?.value === value ? edited.rows : parsed;
+  useEffect(() => {
+    if (focusAfter.current === null) return;
+    const target = focusAfter.current === "add"
+      ? container.current?.querySelector<HTMLButtonElement>(".wf-collection-add")
+      : container.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-default-item-id='${focusAfter.current}'] input, [data-default-item-id='${focusAfter.current}'] textarea`);
+    focusAfter.current = null;
+    target?.focus();
+  }, [rows]);
+
+  if (rows === null) {
+    return <div>
+      <textarea aria-label={ariaLabel} value={value} rows={3} aria-invalid="true"
+        onChange={event => onChange(event.target.value)} />
+      <span role="alert">Enter a JSON array. Comma-separated text is not a collection.</span>
+    </div>;
+  }
+  const change = (next: CollectionDefaultItem[]) => {
+    const text = `[${next.map(row => row.token).join(",")}]`;
+    setEdited({ value: text, rows: next });
+    onChange(text);
+  };
+  const add = () => {
+    const row = { id: ++nextId.current, token: editor === "number" ? "0" : editor === "checkbox" ? "false" : editor === "json" ? "null" : '""' };
+    focusAfter.current = row.id;
+    change([...rows, row]);
+  };
+  const remove = (index: number) => {
+    focusAfter.current = rows[index + 1]?.id ?? rows[index - 1]?.id ?? "add";
+    change(rows.filter((_, position) => position !== index));
+  };
+  return <div ref={container} className="wf-collection-editor" role="group" aria-label={ariaLabel}>
+    {rows.length === 0 ? <p className="wf-collection-empty">No items yet.</p> : <ul className="wf-collection-items">
+      {rows.map((row, index) => <li key={row.id} className="wf-collection-item" data-default-item-id={row.id}>
+        <div className="wf-collection-item-editor">
+          <DefaultValueCell value={collectionItemText(row.token, editor)} editor={editor}
+            ariaLabel={`${ariaLabel} item ${index + 1}`}
+            onChange={text => change(rows.map(current => current.id === row.id
+              ? { ...current, token: collectionItemToken(text, editor) } : current))} />
+        </div>
+        <button type="button" className="wf-collection-item-button danger" disabled={editor === "none"}
+          aria-label={`Remove ${ariaLabel} item ${index + 1}`} onClick={() => remove(index)}>
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      </li>)}
+    </ul>}
+    <button type="button" className="wf-collection-add" aria-label={`Add ${ariaLabel} item`}
+      disabled={editor === "none"} onClick={add}><Plus size={13} aria-hidden="true" /> Add item</button>
+  </div>;
+}
+
+// Validate once, then retain each top-level token's source. JSON.parse is never used to save numbers.
+function collectionDefaultTokens(value: string): string[] | null {
+  if (value === "") return [];
+  const source = value.trim();
+  try { if (!Array.isArray(JSON.parse(source))) return null; } catch { return null; }
+  const items: string[] = [];
+  let start = 1, depth = 0, quoted = false, escaped = false;
+  for (let index = 1; index < source.length - 1; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === "[" || character === "{") depth += 1;
+    else if (character === "]" || character === "}") depth -= 1;
+    else if (character === "," && depth === 0) { items.push(source.slice(start, index).trim()); start = index + 1; }
+  }
+  const last = source.slice(start, -1).trim();
+  if (last) items.push(last);
+  return items;
+}
+
+function collectionItemText(token: string, editor: string): string {
+  if (editor === "json") return token;
+  try {
+    const value: unknown = JSON.parse(token);
+    return typeof value === "string" ? value : token;
+  } catch { return token; }
+}
+
+function collectionItemToken(text: string, editor: string): string {
+  if (editor === "json" || editor === "checkbox") return text;
+  if (editor === "number" && /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(text.trim())) return text.trim();
+  return JSON.stringify(text);
+}
+
 function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, children }: {
   title: string;
   addLabel: string;
@@ -399,8 +504,7 @@ function ArgumentsEditor({
         const referenceKey = readStringField(item, referenceKeyKeys);
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
         const typeEditor = editorForAlias(argType.alias);
-        // JSON defaults keep their raw syntax for scalar values and collections alike.
-        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
+        const isCollection = argType.collectionKind !== "Single";
         return (
           <tr key={index}>
             <td>
@@ -426,14 +530,19 @@ function ArgumentsEditor({
             {columns.default ? (
               <td>
                 {/* Only Variables render this column; the value is their ArgumentValue default. */}
-                <DefaultValueCell
+                {isCollection ? <CollectionDefaultValueCell
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
-                  editor={editor}
-                  onChange={value => update(index, { default: editor === "json" && value !== ""
+                  editor={typeEditor}
+                  onChange={value => update(index, { default: literalDefault(value) })}
+                /> : <DefaultValueCell
+                  ariaLabel={`${namePrefix} default value`}
+                  value={readVariableDefault((item as VariableDefinition).default)}
+                  editor={typeEditor}
+                  onChange={value => update(index, { default: typeEditor === "json" && value !== ""
                     ? { value, expressionType: "Object" }
                     : literalDefault(value) })}
-                />
+                />}
               </td>
             ) : null}
             {columns.storage ? (
