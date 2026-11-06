@@ -1,6 +1,6 @@
 # Data model: Workflow and activity testing
 
-**Status**: Proposed design for [spec 1215](spec.md); no implementation or qualification is implied.
+**Status**: Proposed design for [spec 1220](spec.md); no implementation or qualification is implied.
 
 ## Ownership and storage
 

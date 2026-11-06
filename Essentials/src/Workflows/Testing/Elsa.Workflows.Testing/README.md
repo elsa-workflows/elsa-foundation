@@ -1,6 +1,6 @@
 # Workflow testing
 
-The optional `WorkflowsTesting` feature currently composes deterministic assertion evaluation, shared CI exit policy and JUnit rendering over the [public data contract](../Core/README.md). The saved runner, durable library, API, Studio and packaged CI journey are being implemented under [spec 1215](../../../../../specs/1215-workflow-activity-testing/spec.md). These services alone do not establish a runnable or accepted testing product.
+The optional `WorkflowsTesting` feature currently composes deterministic assertion evaluation, shared CI exit policy and JUnit rendering over the [public data contract](../Core/README.md). The saved runner, durable library, API, Studio and packaged CI journey are being implemented under [spec 1220](../../../../../specs/1220-workflow-activity-testing/spec.md). These services alone do not establish a runnable or accepted testing product.
 
 Execution status and assertion verdict are separate. Expected business faults may satisfy checks; a completed execution with wrong output fails. Missing/withheld observations do not become null. Interaction checks require a settled observation interval, including attempted calls. Numeric comparison preserves exact decimal coefficient/exponent values instead of rounding through machine floating point.
 

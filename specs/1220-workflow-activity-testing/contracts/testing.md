@@ -1,6 +1,6 @@
 # Workflow testing contracts
 
-**Status**: Proposed version-one contracts for [spec 1215](../spec.md). Paths, names and payloads below are planned product contracts, not evidence of implemented endpoints or a packaged runner. The [data model](../data-model.md) owns identities/state; [research](../research.md) records reusable source and runtime proof obligations.
+**Status**: Proposed version-one contracts for [spec 1220](../spec.md). Paths, names and payloads below are planned product contracts, not evidence of implemented endpoints or a packaged runner. The [data model](../data-model.md) owns identities/state; [research](../research.md) records reusable source and runtime proof obligations.
 
 ## Composition and authority
 

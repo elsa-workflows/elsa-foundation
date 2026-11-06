@@ -4,7 +4,7 @@
 - **Steward:** Sipke Schoorstra; delivery Codex.
 - **Program:** [#3901](https://github.com/elsa-workflows/elsa-foundation/issues/3901).
 - **Canonical features:** shared testing [#3588](https://github.com/elsa-workflows/elsa-foundation/issues/3588), selected-activity execution/designer entry [#3892](https://github.com/elsa-workflows/elsa-foundation/issues/3892).
-- **Specification:** [spec 1215](../../specs/1215-workflow-activity-testing/spec.md).
+- **Specification:** [spec 1220](../../specs/1220-workflow-activity-testing/spec.md).
 
 ## Purpose and authority
 

@@ -1,6 +1,6 @@
 # Extension points — Workflow Testing
 
-Current implemented surface; [spec 1215](../../../../../specs/1215-workflow-activity-testing/contracts/testing.md) separately describes planned scenario/module contributions. Registration alone does not qualify an execution profile.
+Current implemented surface; [spec 1220](../../../../../specs/1220-workflow-activity-testing/contracts/testing.md) separately describes planned scenario/module contributions. Registration alone does not qualify an execution profile.
 
 ## Overridable contracts
 

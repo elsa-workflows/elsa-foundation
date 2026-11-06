@@ -1,8 +1,8 @@
 <!--
 SYNC IMPACT REPORT — 6.4.0 -> 6.5.0 (2026-11-06)
-MINOR: admits optional Elsa.Workflows.Testing in §E2.1 for the owner-authorized combined #3588/#3892 delivery under Program #3901 and reviewed spec1215. Its purpose is to verify workflow behavior against saved expectations; it owns testing authoring/results and shared Studio/headless orchestration, while normal Runtime remains artifact-only and takes no Design or Testing implementation dependency. Existing domain purposes, framework pin and gates are unchanged.
+MINOR: admits optional Elsa.Workflows.Testing in §E2.1 for the owner-authorized combined #3588/#3892 delivery under Program #3901 and reviewed spec1220. Its purpose is to verify workflow behavior against saved expectations; it owns testing authoring/results and shared Studio/headless orchestration, while normal Runtime remains artifact-only and takes no Design or Testing implementation dependency. Existing domain purposes, framework pin and gates are unchanged.
 Authority: adopted within the owner's scoped design/delivery authorization after independent specification/runtime/acceptance review; no multi-architect agreement or provisional-section ratification is asserted. The change remains subject to ordinary PR architecture review and the governing open-to-dissent rule.
-Propagation: docs/reference/elsa-domain-tree.md, spec1215 plan and optional production Core package. Elsa.Testing remains a developer test grouping. No template pins a domain list.
+Propagation: docs/reference/elsa-domain-tree.md, spec1220 plan and optional production Core package. Elsa.Testing remains a developer test grouping. No template pins a domain list.
 -->
 <!--
 SYNC IMPACT REPORT — 6.3.0 -> 6.4.0 (2026-11-05)
