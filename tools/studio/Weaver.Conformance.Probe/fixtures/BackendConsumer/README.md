@@ -19,6 +19,14 @@ configure_runtime(run, backend_url=owned_backend_origin,
 
 This writes exact CORS/return origins, native initial-admin seed settings and the first-party issuer into private runtime JSON. No password is written to a public receipt. `enroll=True` authorizes the separate Studio protected store's enrollment. The backend uses a fresh ordinary Nuplane store, matching Foundation.Host/Workbench and its existing manifest contributor; it performs no enrollment or cutover. The only native credentials are obtained later through normal login cookie and `/_elsa/identity/token`; the consumer does not mint fixture tokens.
 
+The ordinary shell selects `FoundationAgentEffects` for its in-memory Agent store. `configure_runtime` explicitly enables
+all three fixture privilege classes under `Elsa:Agent:Privileges`, matching Workbench's base policy without changing the
+product's default-off options. Later operator controls can call
+`configure_agent_privileges(run, administrative=False, irrecoverable=False, activation=False)` (or another explicit
+boolean combination). It atomically replaces only those host options in private backend JSON and preserves unrelated
+configuration, credentials and the Studio file. It returns only the three booleans. A file update is not proof of a live
+policy change: the driver must observe the actual sessionless bootstrap after the configuration provider reloads.
+
 `select_protocol_profile(run, "copilot" | "anthropic")` changes only JSON after the driver has stopped its own backend. Exactly one actual provider feature and one corresponding native-loaded fixture feature are enabled; both adapter binaries remain unchanged. CommandFile and provider TraceFile are distinct absolute paths under the published private protocol directory. The driver atomically updates `{commandId,toolName,arguments}` before each new explicit request and keeps it fixed throughout review/continuation.
 
 The application starts on its ordinary isolated store, using real blocking native startup reconciliation with explicit `FailHost`, then activates its selected shell through public `IShellRegistry.GetOrActivateAsync` before printing `WEAVER_BACKEND_CONSUMER_READY`. A listening HTTP server alone is not readiness. Permission-protected `POST /__qualification/reconcile` uses the actual shared Nuplane admin service. `GET /__qualification/generation` reports the actual shell identity, scoped context/tool contributors and shared contract identities/locations. These are fixture observations; native services still own feature configuration, installed-package state and effects. Studio retains its separately required coordinated protected-asset profile. The earlier coordinated-backend serving failure remains unqualified evidence; this recipe does not claim a general native-admission concurrency fix.
@@ -31,11 +39,14 @@ The optional `Qualification:DiagnosticGateDirectory` pauses immediately before s
 
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
 
-The application also discovers `FoundationAgentEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
-does not select them. For the #3441 restart inventory, `consumers.enable_durable_agent_store(run, database, key)` adds both to
-the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
-root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
-starts a new generation of the same published application through `runtime.RestartableServer`.
+The application also discovers `FoundationAgentEntityFrameworkCore`, `FoundationAgentEfEffects` and `Secrets` from their
+existing package assemblies; the baseline shell does not select them. For the #3441 restart inventory,
+`consumers.enable_durable_agent_store(run, database, key)` removes common effects and selects EF effects alongside the store
+and Secrets in runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the
+run's output root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease.
+The helper refuses missing/already-durable effects selection rather than composing two siblings or guessing a store.
+The driver then starts a new generation of the same published application through `runtime.RestartableServer`. This
+configuration does not itself establish schema finalization or feature availability; the real composed-host gates remain.
 
 `QualificationWorkflowAuthority.cs` is a test-only host feature for the spec 1193 workflow-authorization-unavailable
 inventory. No baseline shell selects it. `authorization_journeys.py` selects it through the ordinary native feature

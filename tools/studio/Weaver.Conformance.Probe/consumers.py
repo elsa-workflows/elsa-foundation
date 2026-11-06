@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import secrets
 import shutil
+import tempfile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import zipfile
@@ -32,6 +33,8 @@ PROTOCOL_FEATURES = {
     "copilot": ("GitHubCopilotAgent", "AcmeCopilotProtocolFixture"),
     "anthropic": ("AnthropicAgent", "AcmeAnthropicProtocolFixture"),
 }
+COMMON_EFFECTS_FEATURE = "FoundationAgentEffects"
+DURABLE_EFFECTS_FEATURE = "FoundationAgentEfEffects"
 
 
 def sha(path):
@@ -175,7 +178,7 @@ def backend_features(published):
         "ActivitiesDesignApi", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
         "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
         "WorkflowsPublishing", "WorkflowsPublishingApi", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
-        "WorkflowsRuntimeResumption", "FoundationAgentAbstractions", "FoundationAgentApi",
+        "WorkflowsRuntimeResumption", "FoundationAgentAbstractions", "FoundationAgentApi", COMMON_EFFECTS_FEATURE,
         "FoundationWorkflowsAgent", "FoundationWorkflowsRuntimeAgent", "ModularityApi",
     )}
     for feature, database in (
@@ -239,16 +242,47 @@ def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=1
     path = profile["published"] / "shells.json"
     document = json.loads(path.read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
-    check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features,
+    check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features
+          and DURABLE_EFFECTS_FEATURE not in features,
           "The durable store is configured once per run, over a baseline that did not select it")
+    check(COMMON_EFFECTS_FEATURE in features, "The durable overlay replaces the ordinary in-memory effects selection")
+    features.pop(COMMON_EFFECTS_FEATURE)
+    features[DURABLE_EFFECTS_FEATURE] = {}
     features[DURABLE_STORE_DEPENDENCY] = {"EncryptionKey": encryption_key}
     features[DURABLE_STORE_FEATURE] = {"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(database), "LeaseSeconds": lease_seconds}
     write_json(path, document)
     path.chmod(0o600)
-    selected = {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
+    selected = {"feature": DURABLE_STORE_FEATURE, "effectsFeature": DURABLE_EFFECTS_FEATURE,
+                "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
                 "database": str(database), "leaseSeconds": lease_seconds}
     profile["durableAgentStore"] = dict(selected)
     return selected
+
+
+def configure_agent_privileges(run, *, administrative, irrecoverable, activation):
+    """Write only trusted host options; the driver must observe bootstrap to prove a live reload.
+
+    This is fixture operator configuration, never a session or model-supplied command. The atomic private replacement
+    also supports later boundary controls without rewriting origins, native credentials or the selected store.
+    """
+    privileges = {"Administrative": administrative, "Irrecoverable": irrecoverable, "Activation": activation}
+    check(all(type(value) is bool for value in privileges.values()), "Fixture privilege classes need explicit boolean values")
+    path = run.profiles["backend"]["published"] / "appsettings.json"
+    check(path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(run.root.resolve()),
+          "Fixture privilege configuration must remain in the owned backend")
+    settings = json.loads(path.read_text())
+    settings.setdefault("Elsa", {}).setdefault("Agent", {})["Privileges"] = privileges
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".agent-privileges-", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(settings, stream, indent=2)
+            stream.write("\n")
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return dict(privileges)
 
 
 def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False):
@@ -280,6 +314,7 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     check(len(artifacts["RecoveryContinuationSigningKey"].encode()) >= 32,
           "Owned runtime artifact paging needs its private persistent signing key")
     write_json(backend / "shells.json", document)
+    configure_agent_privileges(run, administrative=True, irrecoverable=True, activation=True)
     settings = json.loads((studio / "appsettings.json").read_text())
     settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
     settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)

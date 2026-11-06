@@ -3,6 +3,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import secrets
 import stat
 import tempfile
 from types import SimpleNamespace
@@ -10,7 +11,8 @@ import unittest
 from unittest.mock import Mock
 
 from case_records import retained
-from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
+from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE,
+                       backend_features, enable_durable_agent_store)
 import restart_journeys as rj
 from restart_journeys import (ABRUPT, AFTER_DEADLINE, CONTROL_ID, CORRELATION_KEYS, EXPECTED_CASES, EXPECTED_CONTROL, EXPECTED_OUTCOMES,
                               GRACEFUL, PHASE_ORDER, RESTART_CASES, RESTART_GROUPS, RestartCaseFailure, require_restart_inventory,
@@ -560,7 +562,7 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         root = Path(self.temporary.name).resolve()
         published = root / "backend-published"
         published.mkdir()
-        (published / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"FoundationAgentAbstractions": {}}}}}}))
+        (published / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(published)}}}}))
         self.store = root / "durable-agent-store"
         self.store.mkdir(mode=0o700)
         self.run = SimpleNamespace(root=root, profiles={"backend": {"published": published}})
@@ -574,6 +576,9 @@ class DurableStoreConfigurationTests(unittest.TestCase):
                          features[DURABLE_STORE_FEATURE])
         self.assertEqual({"EncryptionKey": key}, features[DURABLE_STORE_DEPENDENCY])
         self.assertIn("FoundationAgentAbstractions", features)
+        self.assertIn(DURABLE_EFFECTS_FEATURE, features)
+        self.assertNotIn(COMMON_EFFECTS_FEATURE, features)
+        self.assertEqual(DURABLE_EFFECTS_FEATURE, selected["effectsFeature"])
         self.assertNotIn(key, json.dumps(selected))
         self.assertEqual(0o600, stat.S_IMODE(path.stat().st_mode))
 
@@ -589,6 +594,25 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         enable_durable_agent_store(self.run, self.store / "agent.db", "k" * 48)
         with self.assertRaises(RuntimeError):
             enable_durable_agent_store(self.run, self.store / "again.db", "k" * 48)
+
+    def test_missing_or_already_durable_effects_selection_is_refused_without_rewriting_configuration(self):
+        path = self.run.profiles["backend"]["published"] / "shells.json"
+        original = json.loads(path.read_text())
+        key = secrets.token_urlsafe(48)
+        for common, durable in ((False, False), (True, True)):
+            with self.subTest(common=common, durable=durable):
+                document = copy.deepcopy(original)
+                features = document["CShells"]["Shells"]["Authoring"]["Features"]
+                if not common:
+                    features.pop(COMMON_EFFECTS_FEATURE)
+                if durable:
+                    features[DURABLE_EFFECTS_FEATURE] = {}
+                path.write_text(json.dumps(document))
+                before = path.read_bytes()
+                with self.assertRaises(RuntimeError):
+                    enable_durable_agent_store(self.run, self.store / "agent-records.db", key)
+                self.assertEqual(before, path.read_bytes())
+                self.assertNotIn("durableAgentStore", self.run.profiles["backend"])
 
 
 if __name__ == "__main__":
