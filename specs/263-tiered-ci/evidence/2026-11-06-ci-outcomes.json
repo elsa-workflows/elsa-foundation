@@ -18,11 +18,16 @@
       "initial_job_queue_minutes": 0.05,
       "max_pr_shard_queue_minutes": 0.033333,
       "run_attempt": 1,
-      "full_run_id": 39947367846,
-      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39947367846",
-      "full_minutes": 22.8,
+      "full_run_id": 39950155218,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39950155218",
+      "full_minutes": 23.283333,
       "full_conclusion": "success",
-      "full_reported_at": "2026-10-23T12:00:11Z",
+      "full_reported_at": "2026-10-23T12:24:02Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120402368613,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-23T12:00:59.9424824Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -39,11 +44,16 @@
       "initial_job_queue_minutes": 0.083333,
       "max_pr_shard_queue_minutes": 0.05,
       "run_attempt": 1,
-      "full_run_id": 39950593777,
-      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39950593777",
-      "full_minutes": 23.033333,
+      "full_run_id": 39959834252,
+      "full_run_url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39959834252",
+      "full_minutes": 21.933333,
       "full_conclusion": "success",
-      "full_reported_at": "2026-10-23T12:27:20Z",
+      "full_reported_at": "2026-10-23T13:38:21Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120434745267,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-23T13:16:39.5030172Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -65,6 +75,11 @@
       "full_minutes": 22.75,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-23T15:26:12Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120487012735,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-23T15:03:39.7443630Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -86,6 +101,11 @@
       "full_minutes": 26.966667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T03:40:39Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120763412292,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T03:13:54.0048849Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -107,6 +127,11 @@
       "full_minutes": 37.316667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T03:53:35Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120763960430,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T03:18:20.2710540Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -128,6 +153,11 @@
       "full_minutes": 38.216667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T03:54:46Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120764021993,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T03:18:14.4406944Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -149,6 +179,11 @@
       "full_minutes": 23.466667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T07:39:04Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120811585865,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T07:15:47.2846710Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -170,6 +205,11 @@
       "full_minutes": 28.3,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T08:08:50Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120816552834,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T07:40:53.8476823Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -191,6 +231,11 @@
       "full_minutes": 44.283333,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T08:27:36Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120817092121,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T07:45:35.4180424Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -212,6 +257,11 @@
       "full_minutes": 33.366667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T08:32:20Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120820094901,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T07:59:23.1167013Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -233,6 +283,11 @@
       "full_minutes": 31.383333,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T08:33:28Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120820707981,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T08:06:12.5541263Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -254,6 +309,11 @@
       "full_minutes": 31.283333,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T08:52:32Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120824551008,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T08:27:08.4838876Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -275,6 +335,11 @@
       "full_minutes": 29.25,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-24T09:38:10Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 120833772387,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-24T09:11:58.6689930Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / EF container shard (ef-3)\tUNKNOWN STEP\t2026-10-24T09:32:34.6651417Z Retrying the failed tests of 1 run(s) once."
@@ -298,6 +363,11 @@
       "full_minutes": 21.45,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T02:23:13Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121047928673,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T02:01:56.4040791Z   DRAFT: false"
+      ],
       "full_retry_observed": false,
       "retry_marker_lines": []
     },
@@ -319,6 +389,11 @@
       "full_minutes": 22.466667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T04:38:22Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121073134196,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T04:16:22.3122885Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T04:30:56.9422515Z Retrying the failed tests of 1 run(s) once."
@@ -342,6 +417,11 @@
       "full_minutes": 25.183333,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T05:39:33Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121083539148,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T05:15:59.0280189Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T05:34:51.6187966Z Retrying the failed tests of 1 run(s) once."
@@ -365,6 +445,11 @@
       "full_minutes": 26.2,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T12:11:15Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121159272356,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T11:46:15.4700242Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T12:11:00.3163216Z Retrying the failed tests of 1 run(s) once."
@@ -388,6 +473,11 @@
       "full_minutes": 23.066667,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T08:08:12Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121110549541,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T07:45:23.4991283Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T07:57:06.9671267Z Retrying the failed tests of 1 run(s) once."
@@ -411,6 +501,11 @@
       "full_minutes": 23.1,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T08:48:19Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121118374980,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T08:25:42.2967647Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T08:37:43.6128965Z Retrying the failed tests of 1 run(s) once."
@@ -434,6 +529,11 @@
       "full_minutes": 28.15,
       "full_conclusion": "success",
       "full_reported_at": "2026-10-25T10:04:24Z",
+      "full_event_draft": false,
+      "full_plan_job_id": 121132892812,
+      "full_draft_marker_lines": [
+        "Plan full tier\tUNKNOWN STEP\t2026-10-25T09:37:01.5251354Z   DRAFT: false"
+      ],
       "full_retry_observed": true,
       "retry_marker_lines": [
         "shards / Integration shard (workbench-rest)\tUNKNOWN STEP\t2026-10-25T09:53:43.0820304Z Retrying the failed tests of 1 run(s) once."
@@ -460,271 +560,375 @@
   },
   "load_exposure": {
     "ci_events": 52,
-    "known_matches": 45,
-    "ready": 17,
-    "draft": 28,
-    "unknown": 7,
-    "ready_share": 0.37777777777777777,
+    "known_matches": 51,
+    "ready": 18,
+    "draft": 33,
+    "unknown": 1,
+    "ready_share": 0.35294117647058826,
     "matches": [
       {
         "pr_run_id": 39947367572,
         "full_run_id": 39947367846,
-        "state": "ready"
+        "state": "draft",
+        "plan_job_id": 120393196942,
+        "event_draft": true
       },
       {
         "pr_run_id": 39950593991,
         "full_run_id": 39950593777,
-        "state": "ready"
+        "state": "draft",
+        "plan_job_id": 120403806030,
+        "event_draft": true
       },
       {
         "pr_run_id": 39956562236,
         "full_run_id": 39956562266,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120423750997,
+        "event_draft": true
       },
       {
         "pr_run_id": 39958070098,
         "full_run_id": 39958070035,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120428802842,
+        "event_draft": true
       },
       {
         "pr_run_id": 39958905913,
         "full_run_id": 39958905893,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120431610656,
+        "event_draft": true
       },
       {
         "pr_run_id": 39959576235,
         "full_run_id": 39959576385,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120433873728,
+        "event_draft": true
       },
       {
         "pr_run_id": 39974163343,
         "full_run_id": 39974163363,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120484309598,
+        "event_draft": true
       },
       {
         "pr_run_id": 40057434417,
         "full_run_id": 40057434389,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120763412292,
+        "event_draft": false
       },
       {
         "pr_run_id": 40057613724,
         "full_run_id": 40057613761,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120763960430,
+        "event_draft": false
       },
       {
         "pr_run_id": 40057632335,
         "full_run_id": 40057632647,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120764021993,
+        "event_draft": false
       },
       {
         "pr_run_id": 40065035633,
         "full_run_id": 40065035659,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120786372776,
+        "event_draft": true
       },
       {
         "pr_run_id": 40069149245,
         "full_run_id": 40069149263,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120798614080,
+        "event_draft": true
       },
       {
         "pr_run_id": 40070492564,
         "full_run_id": 40070492577,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120802666795,
+        "event_draft": true
       },
       {
         "pr_run_id": 40075068758,
         "full_run_id": 40075068772,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120816552834,
+        "event_draft": false
       },
       {
         "pr_run_id": 40075251962,
         "full_run_id": 40075251992,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120817092121,
+        "event_draft": false
       },
       {
         "pr_run_id": 40076245803,
         "full_run_id": 40076245750,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120820094901,
+        "event_draft": false
       },
       {
         "pr_run_id": 40076452470,
         "full_run_id": 40076452456,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120820707981,
+        "event_draft": false
       },
       {
         "pr_run_id": 40076761480,
         "full_run_id": 40076761463,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120821659592,
+        "event_draft": true
       },
       {
         "pr_run_id": 40077381082,
         "full_run_id": 40077381110,
-        "state": "unknown"
+        "state": "unknown",
+        "plan_job_id": 120823571874,
+        "event_draft": null
       },
       {
         "pr_run_id": 40080012576,
         "full_run_id": 40080012657,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 120831420273,
+        "event_draft": true
       },
       {
         "pr_run_id": 40085647517,
         "full_run_id": 40085647482,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 120847901530,
+        "event_draft": false
       },
       {
         "pr_run_id": 40147186788,
         "full_run_id": 40147186753,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121030928875,
+        "event_draft": true
       },
       {
         "pr_run_id": 40147354688,
         "full_run_id": 40147354672,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121031433134,
+        "event_draft": true
       },
       {
         "pr_run_id": 40148558443,
         "full_run_id": 40148558444,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121035056968,
+        "event_draft": true
       },
       {
         "pr_run_id": 40149669872,
         "full_run_id": 40149669864,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121038337228,
+        "event_draft": true
       },
       {
         "pr_run_id": 40150097180,
         "full_run_id": 40150097234,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121039632920,
+        "event_draft": true
       },
       {
         "pr_run_id": 40151211321,
         "full_run_id": 40151211296,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121042964569,
+        "event_draft": true
       },
       {
         "pr_run_id": 40159871850,
         "full_run_id": 40159871814,
-        "state": "unknown"
+        "state": "draft",
+        "plan_job_id": 121068990656,
+        "event_draft": true
       },
       {
         "pr_run_id": 40160480921,
         "full_run_id": 40160480944,
-        "state": "unknown"
+        "state": "draft",
+        "plan_job_id": 121070844005,
+        "event_draft": true
       },
       {
         "pr_run_id": 40161248885,
         "full_run_id": 40161248854,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121073134196,
+        "event_draft": false
       },
       {
         "pr_run_id": 40163065228,
         "full_run_id": 40163065235,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121078472469,
+        "event_draft": true
       },
       {
         "pr_run_id": 40164070705,
         "full_run_id": 40164070712,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121081404371,
+        "event_draft": true
       },
       {
         "pr_run_id": 40164440536,
         "full_run_id": 40164440433,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121082479500,
+        "event_draft": true
       },
       {
         "pr_run_id": 40164600109,
         "full_run_id": 40164600082,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121082953867,
+        "event_draft": true
       },
       {
         "pr_run_id": 40164653747,
         "full_run_id": 40164653857,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121083115251,
+        "event_draft": false
       },
       {
         "pr_run_id": 40169516720,
         "full_run_id": 40169516646,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121097337739,
+        "event_draft": true
       },
       {
         "pr_run_id": 40170520038,
         "full_run_id": 40170520028,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121100240859,
+        "event_draft": true
       },
       {
         "pr_run_id": 40171049388,
         "full_run_id": 40171049356,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121101766745,
+        "event_draft": true
       },
       {
         "pr_run_id": 40173957887,
         "full_run_id": 40173957813,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121110549541,
+        "event_draft": false
       },
       {
         "pr_run_id": 40174725767,
         "full_run_id": 40174725816,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121112835083,
+        "event_draft": true
       },
       {
         "pr_run_id": 40175898273,
         "full_run_id": 40175898200,
-        "state": "unknown"
+        "state": "ready",
+        "plan_job_id": 121116381014,
+        "event_draft": false
       },
       {
         "pr_run_id": 40176054487,
         "full_run_id": 40176054502,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121116858042,
+        "event_draft": true
       },
       {
         "pr_run_id": 40176537941,
         "full_run_id": 40176537938,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121118374980,
+        "event_draft": false
       },
       {
         "pr_run_id": 40178745442,
         "full_run_id": 40178745423,
-        "state": "unknown"
+        "state": "draft",
+        "plan_job_id": 121125035347,
+        "event_draft": true
       },
       {
         "pr_run_id": 40179538600,
         "full_run_id": 40179538601,
-        "state": "unknown"
+        "state": "ready",
+        "plan_job_id": 121127567324,
+        "event_draft": false
       },
       {
         "pr_run_id": 40181328962,
         "full_run_id": 40181328926,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121132892812,
+        "event_draft": false
       },
       {
         "pr_run_id": 40182629234,
         "full_run_id": 40182629219,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121136708642,
+        "event_draft": true
       },
       {
         "pr_run_id": 40183344477,
         "full_run_id": 40183344492,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121138848533,
+        "event_draft": true
       },
       {
         "pr_run_id": 40186271473,
         "full_run_id": 40186271431,
-        "state": "draft"
+        "state": "draft",
+        "plan_job_id": 121147609990,
+        "event_draft": true
       },
       {
         "pr_run_id": 40196545647,
         "full_run_id": 40196545646,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121178481894,
+        "event_draft": false
       },
       {
         "pr_run_id": 40199756879,
         "full_run_id": 40199756947,
-        "state": "unknown"
+        "state": "ready",
+        "plan_job_id": 121188226264,
+        "event_draft": false
       },
       {
         "pr_run_id": 40200012839,
         "full_run_id": 40200012907,
-        "state": "ready"
+        "state": "ready",
+        "plan_job_id": 121189075889,
+        "event_draft": false
       }
     ],
     "per_job_queue_median_minutes": 0.04166666666666667,
