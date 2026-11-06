@@ -131,10 +131,10 @@ function readBooleanInput(value: unknown): boolean {
   if (value === true) return true;
   if (!isRecord(value)) return false;
   const syntax = value.expressionType ?? value.type;
-  if (typeof syntax === "string" && syntax.toLowerCase() !== "literal") return false;
+  if (syntax != null && (typeof syntax !== "string" || syntax.toLowerCase() !== "literal")) return false;
   if (value.expression !== undefined) {
     const expression = value.expression;
-    return isRecord(expression) ? readBooleanInput(expression.value) : false;
+    return isRecord(expression) ? readBooleanInput(expression) : false;
   }
   return value.value !== undefined ? readBooleanInput(value.value) : false;
 }

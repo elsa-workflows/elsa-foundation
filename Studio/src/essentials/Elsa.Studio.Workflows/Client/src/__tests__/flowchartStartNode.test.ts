@@ -54,6 +54,18 @@ function flowchart(
 }
 
 describe("canStartWorkflow", () => {
+  it.each(["designer", "wire"])("keeps a wrapped %s dynamic/unknown value non-starting, including normalization fallback", shape => {
+    const descriptor = { executionType: "Trigger", inputs: [{ referenceKey: "CanStartWorkflow", defaultValue: true }] };
+    for (const syntax of ["JavaScript", "Unknown", 42]) {
+      const wrapped = { expression: { type: syntax, value: true } };
+      const activity = node("dynamic", shape === "designer" ? { canStartWorkflow: wrapped }
+        : { inputs: [{ referenceKey: "CanStartWorkflow", value: wrapped }] });
+      expect(canStartWorkflow(activity)).toBe(false);
+      expect(canStartWorkflow(activity, descriptor)).toBe(false);
+      expect(readFlowchartStartNodeId(normalizeFlowchartStartNode(flowchart([node("first"), activity])))).toBe("first");
+    }
+  });
+
   it("recognizes renamed catalog trigger capability without activity-type heuristics", () => {
     const descriptor = { executionType: "Trigger", inputs: [] };
     expect(canStartWorkflow(node("renamed"), descriptor)).toBe(true);
