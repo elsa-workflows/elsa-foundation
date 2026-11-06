@@ -17,8 +17,7 @@ public sealed partial class LongDrainCancellationTests
         var lifetime = new RedriveLifetimeProbe();
         var probe = new LoopProbe
         {
-            Continued = new(TaskCreationOptions.RunContinuationsAsynchronously),
-            OnContinued = token => lifetime.Cancellation = token.Register(() => lifetime.Cancelled.TrySetResult())
+            Continued = new(TaskCreationOptions.RunContinuationsAsynchronously)
         };
         var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(PersistenceMode.Ephemeral, 50, services =>
         {
@@ -65,6 +64,7 @@ public sealed partial class LongDrainCancellationTests
             Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, (await duplicate.WaitAsync(timeout.Token)).Status);
             await start.WaitAsync(timeout.Token);
             await probe.Continued!.Task.WaitAsync(timeout.Token);
+            Assert.Equal(2, Volatile.Read(ref lifetime.Acquisitions));
 
             lifetime.HoldRelease = true;
             cancel = actor.EnqueueAsync(NewCancel(executionId, "shutdown-cancel"), timeout.Token).AsTask();
@@ -130,6 +130,7 @@ public sealed partial class LongDrainCancellationTests
         public TaskCompletionSource ReleaseEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public CancellationTokenRegistration Cancellation;
+        public int Acquisitions;
         public CancellationToken ReleaseToken;
         public volatile bool HoldRelease;
         public volatile bool ReleaseFinished;
@@ -144,8 +145,13 @@ public sealed partial class LongDrainCancellationTests
     private sealed class HeldReleaseOwnership(IRuntimeExecutionOwnershipService inner, RedriveLifetimeProbe lifetime) :
         IRuntimeExecutionOwnershipService
     {
-        public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            inner.AcquireAsync(workflowExecutionId, cancellationToken);
+        public async ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            var lease = await inner.AcquireAsync(workflowExecutionId, cancellationToken);
+            if (Interlocked.Increment(ref lifetime.Acquisitions) == 2)
+                lifetime.Cancellation = cancellationToken.Register(() => lifetime.Cancelled.TrySetResult());
+            return lease;
+        }
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
             inner.HeartbeatAsync(lease, cancellationToken);
         public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default) =>
