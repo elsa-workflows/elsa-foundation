@@ -55,10 +55,13 @@ jobs:
           $changedTests = @(
             'Essentials/tests/Architecture/Tests/PackageVersioningPackTests.cs',
             'Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs',
-            'Essentials/tests/Architecture/Tests/RetiredPersistenceFamilyGuardTests.cs'
+            'Essentials/tests/Architecture/Tests/RetiredPersistenceFamilyGuardTests.cs',
+            'Essentials/tests/Architecture/Tests/RetiredTermEnforcementGuardTests.cs'
           )
           $conditional = 'Elsa.Architecture.Tests.EfCoreDependencyGuardTests.First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs'
           $namedPath = 'Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.No_project_or_directory_is_named_after_a_retired_persistence_family'
+          $retiredSection = 'Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Every_retired_term_section_matches_production_source'
+          $retiredSeverity = 'Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.No_analyzer_config_lowers_the_retired_term_diagnostics_or_marks_source_as_generated'
           $packClass = 'Elsa.Architecture.Tests.PackageVersioningPackTests'
           $existingPackDirectories = @(Get-ChildItem ([IO.Path]::GetTempPath()) -Directory -Filter 'PackageVersioningPackTests*' | ForEach-Object FullName)
 
@@ -91,6 +94,7 @@ jobs:
           try {
             git worktree add --detach $worktree HEAD
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the ignored Claude worktree.' }
+            Set-Content "$worktree/untracked-2849.globalconfig" "is_global = true`nelsa_naming.retired_terms = Probe=Probe`n"
             New-Item -ItemType Directory -Path "$leftovers/obj" -Force | Out-Null
             Set-Content "$leftovers/obj/leftover.txt" 'Untracked build output'
 
@@ -98,14 +102,17 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Could not materialize the original test implementations.' }
             dotnet build $project -c Release --no-restore --no-dependencies -p:WarningsNotAsErrors=NU1603
             if ($LASTEXITCODE -ne 0) { throw 'The original test implementations did not build.' }
-            $baseline = Test-Run 'baseline' "FullyQualifiedName~$packClass|FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath" $true
+            $baseline = Test-Run 'baseline' "FullyQualifiedName~$packClass|FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath|FullyQualifiedName=$retiredSection|FullyQualifiedName=$retiredSeverity" $true
             $baselineFailures = @($baseline.TestRun.Results.UnitTestResult | Where-Object outcome -eq 'Failed')
             $packFailures = @($baselineFailures | Where-Object testName -like '*PackageVersioningPackTests*')
             if ($packFailures.Count -ne 6 -or @($packFailures | Where-Object { $_.Output.ErrorInfo.Message -notlike '*UnauthorizedAccessException*' }).Count -ne 0) {
               throw 'The original six pack tests did not expose native read-only cleanup failures.'
             }
             if (@($baselineFailures | Where-Object testName -like '*First_party_dependency_edges_cannot*').Count -ne 1 -or
-                @($baselineFailures | Where-Object testName -like '*No_project_or_directory_is_named*').Count -ne 1) {
+                @($baselineFailures | Where-Object testName -like '*No_project_or_directory_is_named*').Count -ne 1 -or
+                @($baselineFailures | Where-Object testName -like '*Every_retired_term_section_matches*').Count -ne 1 -or
+                @($baselineFailures | Where-Object testName -like '*No_analyzer_config_lowers*').Count -ne 1 -or
+                $baselineFailures.Count -ne 10) {
               throw 'The original guards did not expose the untracked-checkout failures.'
             }
 
@@ -130,6 +137,20 @@ jobs:
             try { $null = Test-Run 'tracked-conditional' "FullyQualifiedName=$conditional" $true 'Conditional.csproj' }
             finally { git rm --cached -f -- $conditionalProbe; Remove-OwnedDirectory $conditionalDirectory }
 
+            $trackedEditorConfig = "$conditionalDirectory/.editorconfig"
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
+            Set-Content $trackedEditorConfig "[Missing2849/**.cs]`nelsa_naming.retired_terms = Probe=Probe`n"
+            git add -f -- $trackedEditorConfig
+            try { $null = Test-Run 'tracked-editorconfig' "FullyQualifiedName=$retiredSection" $true 'tracked-guard-2849/.editorconfig' }
+            finally { git rm --cached -f -- $trackedEditorConfig; Remove-OwnedDirectory $conditionalDirectory }
+
+            $trackedGlobalConfig = "$conditionalDirectory/naming.globalconfig"
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
+            Set-Content $trackedGlobalConfig "is_global = true`nelsa_naming.retired_terms = Probe=Probe`n"
+            git add -f -- $trackedGlobalConfig
+            try { $null = Test-Run 'tracked-globalconfig' "FullyQualifiedName=$retiredSeverity" $true 'is set in a global config' }
+            finally { git rm --cached -f -- $trackedGlobalConfig; Remove-OwnedDirectory $conditionalDirectory }
+
             $retiredProject = "$probeProject/$family.csproj"
             New-Item -ItemType Directory -Path $probeProject | Out-Null
             Set-Content $retiredProject '<Project />'
@@ -143,7 +164,7 @@ jobs:
             try { $null = Test-Run 'tracked-directory-name' "FullyQualifiedName=$namedPath" $true 'directory names a retired persistence family' }
             finally { git rm --cached -f -- $directoryProbe; Remove-Item $directoryProbe -Force }
 
-            $null = Test-Run 'restored-guards' "FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath" $false
+            $null = Test-Run 'restored-guards' "FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath|FullyQualifiedName=$retiredSection|FullyQualifiedName=$retiredSeverity" $false
             git diff --exit-code
             if ($LASTEXITCODE -ne 0) { throw 'The witness left tracked source changes.' }
             git diff --cached --exit-code
@@ -157,53 +178,11 @@ jobs:
               Where-Object { $_.FullName -notin $existingPackDirectories } | ForEach-Object { Remove-OwnedDirectory $_.FullName }
           }
 
-      - name: Set native Windows Git checkout policy for the separate fixture qualification
-        if: ${{ !cancelled() }}
-        shell: pwsh
-        run: git config --global core.autocrlf true
-
-      - name: Checkout the independent fixture fix at its exact source
-        if: ${{ !cancelled() }}
-        uses: actions/checkout@v4
-        with:
-          ref: 39c9290671c211a44b41778d703e905cf2f94c94
-          path: fixture-3253
-          persist-credentials: false
-
-      - name: Qualify the retained fixture tests separately on native Windows
-        if: ${{ !cancelled() }}
-        shell: pwsh
-        working-directory: fixture-3253
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $output = Join-Path $env:RUNNER_TEMP 'fixture-3253'
-          New-Item -ItemType Directory -Path $output -Force | Out-Null
-          $source = git rev-parse HEAD
-          if ($source -ne '39c9290671c211a44b41778d703e905cf2f94c94' -or (git config core.autocrlf) -ne 'true') { throw 'Fixture source or checkout policy differs.' }
-          git check-attr text -- Extensions/Etl/tests/Shared/Fixtures/V1/data/manifest.json | Set-Content (Join-Path $output 'attributes.log')
-          $project = 'Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj'
-          dotnet restore $project --locked-mode -p:WarningsNotAsErrors=NU1603
-          if ($LASTEXITCODE -ne 0) { throw 'Fixture test restore failed.' }
-          dotnet test $project -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --logger 'trx;LogFileName=fixture.trx' --results-directory $output
-          if ($LASTEXITCODE -ne 0) { throw 'Native Windows fixture tests failed.' }
-          dotnet test $project -c Release --no-build --no-restore -p:WarningsNotAsErrors=NU1603 --filter FullyQualifiedName~EtlV1CompatibilityFixtureTests --list-tests | Set-Content (Join-Path $output 'discovery.log')
-          if ($LASTEXITCODE -ne 0) { throw 'Fixture test discovery failed.' }
-          [xml] $trx = Get-Content (Join-Path $output 'fixture.trx') -Raw
-          $counts = $trx.TestRun.ResultSummary.Counters
-          $listed = @(Get-Content (Join-Path $output 'discovery.log') | Where-Object { $_ -match '^\s+Elsa\.Etl\.Tests\.EtlV1CompatibilityFixtureTests\.' })
-          if ($listed.Count -ne 3 -or [int]$counts.executed -ne 3 -or [int]$counts.passed -ne 3 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'The exact source did not execute all three retained fixture cases.' }
-          [ordered]@{ source = $source; coreAutocrlf = (git config core.autocrlf); discovered = $listed.Count; executed = [int]$counts.executed; passed = [int]$counts.passed } |
-            ConvertTo-Json | Set-Content (Join-Path $output 'fixture-source-and-counts.json')
-          git diff --exit-code
-          if ($LASTEXITCODE -ne 0) { throw 'The fixture qualification changed its source.' }
-
-      - name: Retain the separate source and test receipts
+      - name: Retain the architecture source and test receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: native-windows-2849-and-3253-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/architecture-2849
-            ${{ runner.temp }}/fixture-3253
+          name: native-windows-2849-${{ github.sha }}
+          path: ${{ runner.temp }}/architecture-2849
           if-no-files-found: error
           retention-days: 14
