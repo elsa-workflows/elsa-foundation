@@ -216,7 +216,10 @@ describe("workflow run workbench incident navigation", () => {
 
   it("keeps pending exact-execution ancestry when the active Activity tab is activated again", async () => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
-    api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
+    api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
+      items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...activityExecution(), activityExecutionId: "slow-parent" } : activityExecution(), position: 1 }],
+      totalCount: 1, previousCursor: null, nextCursor: null
+    }));
     const pending = deferred<ActivityExecutionInspection>();
     api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
       : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
