@@ -68,7 +68,7 @@ html[data-workspace-style] :is(.wf-icon-button, .wf-run-button, .wf-panel-action
 }
 
 /* Surface treatments must leave a strong keyboard indicator in every palette and mode. */
-html[data-workspace-style] :is(.wf-icon-button, .wf-run-button, .wf-panel-action-button, .wf-segmented button, .wf-search input, .wf-property-row input, .wf-property-row textarea, .wf-property-row select, .wf-form-field input, .wf-form-field textarea, .wf-form-field select):focus-visible {
+html[data-workspace-style] :is(.wf-toolbar button, .wf-icon-button, .wf-run-button, .wf-panel-action-button, .wf-segmented button, .wf-search input, .wf-property-row input, .wf-property-row textarea, .wf-property-row select, .wf-form-field input, .wf-form-field textarea, .wf-form-field select):focus-visible {
   outline: 2px solid var(--studio-focus);
   outline-offset: 2px;
 }
