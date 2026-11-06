@@ -144,10 +144,10 @@ public sealed class ForEachActivityTests : IDisposable
         Assert.DoesNotContain(RuntimeMetadataKeys.LoopIterationItemValue, request.Metadata);
     }
 
-    // The item value on the completion path must survive JsonElement unwrapping identically to Execute:
-    // a JSON array collection input resolves the scalar CLR item stored in the typed envelope.
+    // The item value on the completion path must resolve identically to Execute: a JSON array collection
+    // input stores the JSON item in the typed envelope.
     [Fact]
-    public async Task OnChildCompleted_ResolvesJsonElementItem_ThroughScalarUnwrapping()
+    public async Task OnChildCompleted_ResolvesJsonArrayItem()
     {
         var collection = JsonSerializer.SerializeToElement(new[] { "alpha", "beta" });
         var context = NewContext(collection);
@@ -158,6 +158,66 @@ public sealed class ForEachActivityTests : IDisposable
         var item = Assert.IsType<ValueEnvelope>(request.IterationFrame!.Values[ForEachActivity.CurrentItemVariableName]);
         Assert.Equal("beta", item.InlineValue!.Value.GetString());
         Assert.DoesNotContain(RuntimeMetadataKeys.LoopIterationItemValue, request.Metadata);
+    }
+
+    // A JSON number item keeps its exact JSON text in the iteration frame; it is never narrowed to a
+    // CLR double, and a number outside the double range does not fault the loop (#3421).
+    [Theory]
+    [InlineData("9007199254740993")]
+    [InlineData("12345678901234567890")]
+    [InlineData("1234567890.123456789012345")]
+    [InlineData("1.0")]
+    [InlineData("0.10")]
+    [InlineData("-0.0")]
+    [InlineData("1e400")]
+    public async Task Execute_KeepsExactJsonNumberText_ForJsonArrayItem(string number)
+    {
+        var context = NewContext(JsonArray(number));
+
+        var continuation = await ExecuteAsync(context);
+
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
+        Assert.Equal(number, item.InlineValue!.Value.GetRawText());
+        Assert.True(continuation.IsDeferred);
+    }
+
+    [Theory]
+    [InlineData("9007199254740993")]
+    [InlineData("9223372036854775807")]
+    [InlineData("-9223372036854775808")]
+    public async Task Execute_KeepsExactJsonNumberText_ForInt64ListItem(string number)
+    {
+        var context = NewContext(JsonArray(number), Int64ListCollectionBinding());
+
+        await ExecuteAsync(context);
+
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
+        Assert.Equal("Int64", item.Type.Alias);
+        Assert.Equal(CollectionKind.Single, item.Type.CollectionKind);
+        Assert.Equal(number, item.InlineValue!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task OnChildCompleted_KeepsExactJsonNumberText_ForNextItem()
+    {
+        var context = NewContext(JsonArray("1", "9007199254740993"));
+
+        await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
+
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
+        Assert.Equal("9007199254740993", item.InlineValue!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task Execute_PublishesExplicitNull_ForJsonNullItem()
+    {
+        var context = NewContext(JsonArray("null"));
+
+        await ExecuteAsync(context);
+
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName];
+        Assert.Equal(ValuePresence.ExplicitNull, item.Presence);
+        Assert.Null(item.InlineValue);
     }
 
     // The non-enumerable guard must fire on the completion path too, not only at Execute — the callback
@@ -284,6 +344,24 @@ public sealed class ForEachActivityTests : IDisposable
             policy,
             RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new[] { "value" }), policy));
+    }
+
+    private static RuntimeInputBinding Int64ListCollectionBinding()
+    {
+        var type = new ValueTypeDescriptor("Int64", CollectionKind.List);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            nameof(ForEachActivity.Collection),
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new[] { 1L }), policy));
+    }
+
+    private static JsonElement JsonArray(params string[] items)
+    {
+        using var document = JsonDocument.Parse($"[{string.Join(",", items)}]");
+        return document.RootElement.Clone();
     }
 
     private static ExecutableNode NewBodyNode() =>

@@ -305,7 +305,7 @@ describe("ETL definitions page", () => {
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: orders"));
     expect(selectByLabel(rendered.host, "Source file").selectedOptions[0].textContent).toBe("source (not loaded for Source CSV)");
     expect(rendered.host.textContent).toContain("Load more to reach aliases outside the current page.");
-    expect(rendered.host.textContent).toContain("No source csv aliases are in the loaded bindings yet. Load more to check other pages.");
+    expect(rendered.host.textContent).toContain("No source CSV aliases are in the loaded bindings yet. Load more to check other pages.");
     click(buttonByText(rendered.host, "Load more bindings"));
     await waitFor(() => expect(listEtlBindings).toHaveBeenCalledTimes(2));
     expect(listEtlBindings).toHaveBeenNthCalledWith(2, context, { limit: 50, cursor: "bindings-next" }, expect.any(AbortSignal));

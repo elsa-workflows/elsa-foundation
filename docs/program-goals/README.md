@@ -29,12 +29,18 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Isolated rehearsal and qualification under #2510 from captured copies; live cutover remains gated |
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
-| [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
+| [Runtime Efficiency](runtime-efficiency.md) | Active; end-to-end continuation, 1 November | Runtime database access, immutable preparation, persistence and concurrent correctness | Sipke | Program #2531; M0–M5 efficiency and recovery qualification |
 | [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October | Native workflows, BPMN, ETL, hosting and agent collaboration | Sipke | Verified released BPMN adoption under #2735; remaining production acceptance under #2892 |
 | [Native Compensation and Saga Recovery](native-compensation.md) | Active; owner authorization, 19 October | Native workflow compensation and integrated Studio authoring/inspection | Sipke | Program #3035; design packet #3043, then the M1 journey #3044 |
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | Released-semantics adoption #2735 delivered; import safeguards #2736 remain open |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 | [Studio Expression Developer Experience](studio-expression-developer-experience.md) | Active; owner authorization, 23 October | Studio activity-input code authoring and Foundation expression tooling | Sipke | Program #2310; plan #2367 and the permission-hash fix first; milestones 2 and 3 wait on the #3204 read-model ADR |
+| [Weaver across Studio](weaver-across-studio.md) | Active; owner authorization, 29 October | Module-owned assistant context, tools, review and effects across Studio | Sipke | Program #3428; M0–M3 complete, M4 module support (#3443, [spec 1203](../../specs/1203-weaver-module-support/spec.md)) current; Project #65 |
+| [Elsa Agents](elsa-agents.md) | Active; end-to-end owner authorization, 31 October | Reusable specialists, native/BPMN integration and bounded teams | Sipke | Program #3519; M0 research, then reviewed product/architecture design before production contract freeze |
+| [Named Embedded Blocks](named-embedded-blocks.md) | Active; end-to-end owner authorization, 3 November | Studio block authoring, bounded native/BPMN extraction and reviewed reusable promotion | Sipke | Program #3610; establishment #3748, then prototype #3749 before production completion; Project #67 |
+| [Elsa 4 StateMachine](state-machine.md) | Active; owner authorization, 4 November; design first | Generic root/nested hierarchical and parallel state machines, Studio and durable execution | Sipke | Program #3815; establishment #3826, then M0 contract #3820 before production implementation |
+| [Activity Data Selection](activity-data-selection.md) | Active; owner authorization, 5 November; proof first | Eligible activity-input data selection and causal result bindings | Sipke | Program #3882; establishment #3883, customer proof #3884, then reviewed contracts #3885; reuse feature #3094 |
+| [Entity-aware Integrations](entity-aware-integrations.md) | Active; owner authorization, 6 November; research/design first | Optional source metadata, record references, operations/events and authoring | Sipke | Canonical #3608; service connections first; source proof before production design agreement; record backend explicitly follows in #3916 |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
@@ -57,6 +63,8 @@ superseded.
 | [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Completed |
 | [EF Core Persistence](ef-core-persistence.md) | Completed |
 | [Studio Hosting and Package Reuse](studio-hosting-package-reuse.md) | Completed; Program #3340 / final delivery receipt |
+| [Workflow Library Organization](workflow-library-organization.md) | Completed; Program #3499 / delivery #3503 |
+| [User Tasks](user-tasks.md) | Completed; Program #3688 / implementation #3691 / closeout #3706 |
 | [Unified Workflow Authoring and Execution](unified-workflow-workspace.md) | Delivered; Program #3392 / final qualification #3399 |
 | [Zero-EF Persistence](zero-ef-persistence.md) | Superseded |
 | [Constitution Readiness](constitution-readiness.md) | Parked |

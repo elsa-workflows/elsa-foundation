@@ -27,7 +27,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 // End-to-end coverage for the checkpoint-folding machinery every persistence mode drains through. A workflow is driven
 // to completion through the in-process agent over an in-memory durable substrate, and the drain's session is observed to
 // run in the mode the run resolved to.
-public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
+public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 3, 12, 0, 0, TimeSpan.Zero);
 
@@ -535,14 +535,14 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task ActivityAttemptBoundary_WithPendingSegmentOutbox_HandsOwnershipToDurableStore()
+    public async Task ActivityAttemptBoundary_WithPendingSegmentOutbox_PersistsTheSourceAndKeepsFolding()
     {
         const string workflowExecutionId = "parent-dispatch";
         var innerStore = new InMemoryRuntimeCheckpointCommitStore();
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            new PersistenceModeOptions());
+            new PersistenceModeOptions(), innerStore);
         var store = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
             new FixedCoalescingSessionAccessor(session));
@@ -559,7 +559,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.ActivityAttemptClaimed),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
-        Assert.False(session.IsActive);
+        Assert.True(session.IsActive);
         var persisted = Assert.Single(innerStore.ListCommits()).Commit;
         Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, persisted.Checkpoint.Name);
         Assert.Single(persisted.StateChanges.PostCommitOutbox);
@@ -1339,8 +1339,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
 
-        // The bookmark boundary deactivates the session mid-dispatch; the in-flight work item must be consumed by
-        // that final flush, not copied into the durable inner queue where the still-live drain loop would redeliver
+        // The bookmark boundary commits the in-flight item before keeping the next segment active. The item must
+        // not be copied into the durable inner queue where the still-live drain loop would redeliver
         // it as a duplicate dispatch and park it in the poison store (replay-conflict tripwire).
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-1"));
     }
@@ -1632,7 +1632,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var outbox = Assert.Single(persisted.StateChanges.PostCommitOutbox);
         Assert.Equal(dispatch.State.ParentWorkflowExecutionId, outbox.State.Intent.WorkflowExecutionId);
         Assert.Equal("elsa.dispatch-workflow.start-child.v1", outbox.State.Intent.Kind);
-        Assert.False(session.IsActive);
+        Assert.True(session.IsActive);
     }
 
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State, IReadOnlyList<(PersistenceMode Mode, int? MaxActivitiesPerCommit)> Sessions)> DriveAsync(

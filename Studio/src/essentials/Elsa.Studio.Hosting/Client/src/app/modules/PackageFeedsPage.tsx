@@ -1,6 +1,7 @@
+import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useRef, useState } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
-import { useDialogFocus } from "../../sdk";
+import { defaultStudioHostId, useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -32,7 +33,7 @@ interface FeedDraft {
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("studio");
+  const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeQuery = byHost(activeHost.id);
   // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its
@@ -57,19 +58,13 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
 
   return (
     <section className="modules-page package-feeds-page">
-      <div className="section-header modules-header">
-        <div>
-          <h2>Package feeds</h2>
-          <p>Manage Nuplane feeds, reconciliation, and retention separately for Studio and Server.</p>
-        </div>
-        <StudioToolbar>
+      <StudioPageHeader headingLevel={2} title={<>Package feeds</>} description={<>Manage Nuplane feeds, reconciliation, and retention separately for Studio and Server.</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
+            <StudioButton type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
               <RefreshCcw size={15} />
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 

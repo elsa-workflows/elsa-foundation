@@ -4,10 +4,14 @@
  * the @xyflow/react model and `defaultPosition` in workflowAdapter.ts.
  */
 
+import { defaultNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
+
 export type LayoutMode = "flowchart" | "sequence";
 
 export interface LayoutNode {
   id: string;
+  /** Explicit (resized) width; nodes without one use the default node width. */
+  width?: number;
 }
 
 export interface LayoutEdge {
@@ -20,8 +24,11 @@ export interface LayoutPosition {
   y: number;
 }
 
-// Spacing chosen to match the canvas' native feel (sequence uses 280px steps).
-const COLUMN_STEP = 320;
+// Each flowchart column starts after the widest node of the previous one plus a 194px gap,
+// so the outcome port pill (rendered 10px outside the node's right edge) and the label at
+// the edge midpoint both fit without overlapping for typical outcome names. With default
+// 246px nodes that is a 440px column step.
+const COLUMN_GAP = 194;
 const ROW_STEP = 140;
 
 export function computeAutoLayout(
@@ -87,9 +94,17 @@ function layoutFlowchart(
     else columns.set(column, [node.id]);
   }
 
+  const widthById = new Map(nodes.map(node => [node.id, readSavedNodeWidth(node.width) ?? defaultNodeWidth]));
+  const columnX = new Map<number, number>();
+  let x = 0;
+  for (const column of [...columns.keys()].sort((a, b) => a - b)) {
+    columnX.set(column, x);
+    x += Math.max(...columns.get(column)!.map(id => widthById.get(id)!)) + COLUMN_GAP;
+  }
+
   for (const [column, columnNodes] of columns) {
     columnNodes.forEach((id, row) => {
-      positions.set(id, { x: column * COLUMN_STEP, y: row * ROW_STEP });
+      positions.set(id, { x: columnX.get(column)!, y: row * ROW_STEP });
     });
   }
 

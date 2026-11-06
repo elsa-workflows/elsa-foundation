@@ -2,6 +2,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.Workflows.Services;
+using Elsa.Agent.Services;
 
 namespace Elsa.Agent.Tests;
 

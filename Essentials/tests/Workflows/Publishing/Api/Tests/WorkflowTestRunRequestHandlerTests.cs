@@ -1,3 +1,10 @@
+using System.Security.Claims;
+using Elsa.Foundation.Identity;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Primitives.Exceptions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
@@ -45,6 +52,87 @@ public sealed class WorkflowTestRunRequestHandlerTests
 
     public WorkflowTestRunRequestHandlerTests() =>
         _testRunStore = CreateTestRunStore(_testScopeStore);
+
+    [Theory]
+    [InlineData("options", null)]
+    [InlineData("options", "tenant-a")]
+    [InlineData("draft", null)]
+    [InlineData("draft", "tenant-a")]
+    [InlineData("version", null)]
+    [InlineData("version", "tenant-a")]
+    public async Task Test_run_compilation_and_source_reference_keep_the_current_tenant(string entryPoint, string? tenantId)
+    {
+        var access = new StubPersistenceAccessContextAccessor(tenantId is null
+            ? PersistenceAccessContext.Global
+            : PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)));
+        var requests = new List<WorkflowExecutableCompileRequest>();
+        var handler = entryPoint == "version"
+            ? Handler(WorkflowVersion(Node("write-one", Text("hello"))), accessContextAccessor: access, onCompile: requests.Add)
+            : DraftSnapshotHandler(accessContextAccessor: access, onCompile: requests.Add);
+
+        if (entryPoint == "options")
+            await handler.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None);
+        else
+        {
+            var result = entryPoint == "version"
+                ? await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None)
+                : await handler.Handle(new StartWorkflowDraftTestRun("definition-1", "snapshot-tenant", DraftState()), CancellationToken.None);
+            Assert.Equal("DispatchAccepted", result.Status);
+            Assert.Equal(tenantId, Assert.Single(await _sourceReferenceStore.ListAllAsync()).TenantId);
+        }
+
+        Assert.Equal(tenantId, Assert.Single(requests).TenantId);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("draft")]
+    public async Task ImmediateHttpTestRunCapturesPersistedSubjectWithoutCapturingGrants(string entryPoint)
+    {
+        using var services = SubjectServices("tenant-a", "user-a");
+        var access = new StubPersistenceAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var dispatcher = new CapturingStartDispatcher(Dispatcher());
+        var handler = entryPoint == "version"
+            ? Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher, accessContextAccessor: access, ambientServices: services)
+            : DraftSnapshotHandler(dispatcher, accessContextAccessor: access, ambientServices: services);
+        if (entryPoint == "version") await handler.StartAsync(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        else await handler.StartDraftAsync(new StartWorkflowDraftTestRun("definition-1", "subject-snapshot", DraftState()), CancellationToken.None);
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(StartWorkflowTestRunRequestHandler.RequestedBy, request.RequestedBy);
+        Assert.Equal(request.RequestedBy, request.Authority.SystemIdentity);
+        Assert.Equal(request.RequestedBy, request.Authority.RootInitiator);
+        Assert.Equal("persisted-user", request.Authority.Metadata["elsa.identity.subject-kind"]);
+        Assert.Equal("user-a", request.Authority.Metadata["elsa.identity.subject-id"]);
+        Assert.Equal(7, request.Authority.Metadata.Count);
+        Assert.Equal("test-run", request.Authority.Metadata["runtime.scope"]);
+    }
+
+    [Theory]
+    [InlineData("tenant-b", "user-a")]
+    [InlineData("tenant-a", " ")]
+    public async Task ImmediateHttpTestRunRefusesMismatchedTenantOrMalformedSubject(string principalTenant, string subject)
+    {
+        using var services = SubjectServices(principalTenant, subject);
+        var access = new StubPersistenceAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var dispatcher = new CapturingStartDispatcher(Dispatcher());
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher, accessContextAccessor: access, ambientServices: services);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => handler.StartAsync(new StartWorkflowTestRun("version-1"), CancellationToken.None));
+        Assert.Empty(dispatcher.Requests);
+    }
+
+    private static ServiceProvider SubjectServices(string tenant, string subject)
+    {
+        var http = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(IdentityClaimTypes.Normalized, "v1"), new Claim(IdentityClaimTypes.TenantId, tenant),
+            new Claim(IdentityClaimTypes.UserId, subject), new Claim(IdentityClaimTypes.Permission, "not-saved"),
+            new Claim(ClaimTypes.NameIdentifier, "not-the-subject")
+        }, "trusted")) };
+        var services = new ServiceCollection();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = http });
+        services.AddSingleton(new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "trusted" } })));
+        return services.BuildServiceProvider();
+    }
 
     [Fact]
     public async Task StartsTransientWorkflowTestRunWithoutListingPublishedExecutable()
@@ -503,6 +591,30 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunFreezesCanvasLayoutOntoItsExpiringReference()
+    {
+        var coordinates = new[]
+        {
+            new WorkflowExecutableLayoutRecord("start-event", 80, 160),
+            new WorkflowExecutableLayoutRecord("write-one", 320, 120, 240, 100,
+                JsonSerializer.SerializeToElement(new { LabelOffset = 12 })),
+            new WorkflowExecutableLayoutRecord("end-event", 720, 160)
+        };
+        var request = new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-layout",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null))
+        {
+            Layout = coordinates
+        };
+        var view = await DraftSnapshotHandler().Handle(request, CancellationToken.None);
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        Assert.Equal(coordinates, reference.Layout);
+        coordinates[0] = coordinates[0] with { X = 999 };
+        Assert.Equal(80, reference.Layout[0].X);
+    }
+
+    [Fact]
     public async Task DraftTestRunFreezesActivityPresentationOntoItsExpiringReference()
     {
         var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
@@ -871,15 +983,18 @@ public sealed class WorkflowTestRunRequestHandlerTests
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
         IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null,
-        IExpressionDraftSemanticValidator? expressionValidator = null)
+        IExpressionDraftSemanticValidator? expressionValidator = null,
+        IPersistenceAccessContextAccessor? accessContextAccessor = null,
+        Action<WorkflowExecutableCompileRequest>? onCompile = null,
+        IServiceProvider? ambientServices = null)
     {
         var versionStore = new FakeVersionStore(workflowVersion);
         return new(
-            TestCompiler.Create(
+            ObserveCompiler(TestCompiler.Create(
                 versionStore,
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
-                TestWellKnownTypeRegistry.Create()),
+                TestWellKnownTypeRegistry.Create()), onCompile),
             _executableStore,
             _sourceReferenceStore,
             new EmptyWorkflowDefinitionVersionLayoutStore(),
@@ -891,7 +1006,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
             new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
         inputValidator: new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             testScopeStore: _testScopeStore,
-            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid);
+            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid,
+            accessContextAccessor: accessContextAccessor,
+            ambientServices: ambientServices);
     }
 
     private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(
@@ -905,14 +1022,16 @@ public sealed class WorkflowTestRunRequestHandlerTests
         IWorkflowExecutableInputValidator? inputValidator = null,
         IPersistenceAccessContextAccessor? accessContextAccessor = null,
         IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
-        bool inputValidatorUnavailable = false)
+        bool inputValidatorUnavailable = false,
+        Action<WorkflowExecutableCompileRequest>? onCompile = null,
+        IServiceProvider? ambientServices = null)
     {
         return new(
-            TestCompiler.Create(
+            ObserveCompiler(TestCompiler.Create(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
                 _activityStructureService,
-                TestWellKnownTypeRegistry.Create()),
+                TestWellKnownTypeRegistry.Create()), onCompile),
             _executableStore,
             _sourceReferenceStore,
             new EmptyWorkflowDefinitionVersionLayoutStore(),
@@ -932,7 +1051,20 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 ? null
                 : inputValidator ?? new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             accessContextAccessor: accessContextAccessor,
-            partitionAccessor: partitionAccessor);
+            partitionAccessor: partitionAccessor,
+            ambientServices: ambientServices);
+    }
+
+    private static IWorkflowExecutableCompiler ObserveCompiler(IWorkflowExecutableCompiler compiler, Action<WorkflowExecutableCompileRequest>? observer) =>
+        observer is null ? compiler : new ObservingCompiler(compiler, observer);
+
+    private sealed class ObservingCompiler(IWorkflowExecutableCompiler inner, Action<WorkflowExecutableCompileRequest> observer) : IWorkflowExecutableCompiler
+    {
+        public ValueTask<WorkflowExecutable> CompileAsync(WorkflowExecutableCompileRequest request, CancellationToken cancellationToken = default)
+        {
+            observer(request);
+            return inner.CompileAsync(request, cancellationToken);
+        }
     }
 
     private static WorkflowDefinitionState DraftState() =>

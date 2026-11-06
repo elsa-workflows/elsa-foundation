@@ -6,6 +6,7 @@ packages:
   - "src/essentials/Elsa.Studio.CodeEditor/Client"
   - "src/essentials/Elsa.Studio.Workflows/Client"
   - "src/essentials/Elsa.Studio.Dashboard/Client"
+  - "src/essentials/Elsa.Studio.Backends/Client"
   - "examples/react-host"
   - "examples/vanilla-host"
 overrides:

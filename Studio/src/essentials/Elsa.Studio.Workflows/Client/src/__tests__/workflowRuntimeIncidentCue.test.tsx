@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { NodeProps } from "@xyflow/react";
+import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { WorkflowActivityNode } from "../workflow-editor/graph";
 import type { WorkflowNodeData } from "../workflowAdapter";
 
@@ -49,9 +49,9 @@ describe("workflow activity runtime incident cue", () => {
       onIncidentClick
     };
     flushSync(() => root!.render(
-      <div onClick={onNodeClick}>
+      <ReactFlowProvider><div onClick={onNodeClick}>
         <WorkflowActivityNode {...({ id: "activity-node", data, selected: false } as unknown as NodeProps)} />
-      </div>
+      </div></ReactFlowProvider>
     ));
 
     const action = container.querySelector<HTMLButtonElement>("button.wf-node-incident-action");
@@ -95,9 +95,9 @@ describe("workflow activity runtime incident cue", () => {
       onIncidentClick
     };
     flushSync(() => root!.render(
-      <div onClick={onNodeClick}>
+      <ReactFlowProvider><div onClick={onNodeClick}>
         <WorkflowActivityNode {...({ id: "sequence-node", data, selected: false } as unknown as NodeProps)} />
-      </div>
+      </div></ReactFlowProvider>
     ));
 
     const parent = container.querySelector<HTMLElement>(".wf-node");

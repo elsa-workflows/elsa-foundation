@@ -160,6 +160,32 @@ describe("workflow publication operations", () => {
     expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication cancelled; no changes were saved, promoted, or published.");
   });
 
+  it("saves the review snapshot with the history line captured with it, before the pending save is awaited", async () => {
+    let line = ["batch-1"];
+    // The author undoes or redoes while the pending save settles: the snapshot is the draft of the click.
+    const fixture = renderOperations({ lineage: () => line, flushPendingSave: async () => { line = ["batch-2"]; } });
+    await prepare(fixture);
+    // And again while the review is open.
+    line = [];
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.saveDraft.mock.calls[0][2]).toEqual({ lineage: ["batch-1"] });
+  });
+
+  it("Save writes this render's draft with the line its caller captured at the click, or leaves the line to saveDraft", async () => {
+    const line = ["batch-1"];
+    const fixture = renderOperations({ lineage: () => line });
+
+    // Without a captured line, saveDraft compares this draft with the live one, so a stale render is never credited.
+    await fixture.current().save();
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: undefined });
+
+    await fixture.current().save({ lineage: ["captured-at-click"] });
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["captured-at-click"] });
+  });
+
   it("publishes the immutable authoritative review through save, promote, and token-bound publish", async () => {
     const source = draft();
     const fixture = renderOperations({ draft: source });
@@ -883,6 +909,8 @@ async function flushUpdates() {
 
 function renderOperations(options: {
   draft?: WorkflowDraft;
+  /** The live history line the editor reports (spec 1193 FR-010). */
+  lineage?: () => Iterable<string>;
   failPublish?: boolean;
   failPublishAttempts?: number;
   publishResponse?: Promise<Publication>;
@@ -1020,7 +1048,7 @@ function renderOperations(options: {
     baseUrl: `test://publication-${Math.random()}`,
     http: { getJson, postJson }
   } as unknown as StudioEndpointContext;
-  const saveDraft = vi.fn(async (snapshot: WorkflowDraft) => {
+  const saveDraft = vi.fn(async (snapshot: WorkflowDraft, _status?: string, _options?: { lineage?: Iterable<string> }) => {
     mutationOrder.push("save");
     if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
     const saved = structuredClone(snapshot);
@@ -1055,6 +1083,7 @@ function renderOperations(options: {
       catalog: [],
       busy: false,
       saveDraft,
+      lineage: options.lineage,
       flushPendingSave,
       ...callbacks
     }} />));

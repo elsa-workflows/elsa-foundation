@@ -1,5 +1,6 @@
-import { withDefaultHeaders, type StudioEndpointContext } from "../../sdk";
-import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent, WorkflowGraphOperationBatch } from "./agentTypes";
+import { resolveBackendPath, withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
+import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent } from "./agentTypes";
+import { mapAdmittedContextAttachment } from "./agentClient";
 
 export interface AgentStreamSubscription {
   close(): void;
@@ -39,7 +40,7 @@ async function readStream(
   defaultMessageId?: string
 ) {
   try {
-    const response = await request(new URL(streamUrl, context.baseUrl).toString(), await withStreamHeaders(context, {
+    const response = await request(new URL(resolveBackendPath(context.baseUrl,streamUrl), context.baseUrl).toString(), await withStreamHeaders(context, {
       cache: "no-store",
       headers: { Accept: "text/event-stream, application/x-ndjson, application/json" },
       signal
@@ -64,7 +65,7 @@ async function readStream(
 async function withStreamHeaders(context: StudioEndpointContext, init: RequestInit) {
   const withStaticHeaders = withDefaultHeaders(context.headers, init);
   const token = await context.accessTokenFactory?.();
-  if (!token) return withStaticHeaders;
+  if (!token) return { ...withStaticHeaders, credentials: "omit" as const };
 
   const headers = new Headers(withStaticHeaders.headers);
   headers.set("Authorization", `Bearer ${token}`);
@@ -188,9 +189,8 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   const payload = readObject<Record<string, unknown>>(event, "payload") ?? readObject<Record<string, unknown>>(data, "payload");
   const content = readString(event, "content") ?? readString(data, "content") ?? "";
 
-  if (resultKind === "workflow-graph-operation-batch" || type === "workflow-graph-operation-batch-created" || type === "workflow-graph-operation-batch") {
-    const batch = normalizeWorkflowBatch(payload ?? readObject<Record<string, unknown>>(event, "workflowGraphOperationBatch") ?? readObject<Record<string, unknown>>(data, "workflowGraphOperationBatch"));
-    return batch ? { type: "workflow-batch-created", messageId, batch } : null;
+  if (resultKind === "module-result" || type === "contributed-result") {
+    return payload ? { type: "module-result", messageId, result: payload as unknown as StudioAgentToolResult } : null;
   }
 
   if (resultKind === "clarification" || type === "clarification-requested" || type === "clarification") {
@@ -199,6 +199,15 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   }
 
   switch (type) {
+    case "context-admitted": {
+      const attachments = readField(payload, "attachments");
+      const diagnostics = readField(payload, "diagnostics");
+      return {
+        type: "context-admitted",
+        attachments: Array.isArray(attachments) ? attachments.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(mapAdmittedContextAttachment) : [],
+        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false })) : []
+      };
+    }
     case "message-started":
     case "started":
     case "conversation.started": {
@@ -238,8 +247,13 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       };
     case "plan-updated":
       return { type: "plan-updated", steps: normalizePlanSteps(payload) };
-    case "progress":
+    case "progress": {
+      // A provider notice (for example a conversation reset) is an explicit outcome, not transient progress. The server
+      // sends AgentProviderNotice(Code, Label): its label is the notice's text.
+      const code = readString(payload, "code");
+      if (code) return { type: "provider-notice", code, message: readString(payload, "label") || content || code };
       return { type: "progress", label: content || readString(payload, "label") || "Working…" };
+    }
     case "turn-cancelled":
       return { type: "turn-cancelled", turnId: readString(payload, "turnId") ?? messageId };
     case "message-delta":
@@ -254,8 +268,10 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
         type: "proposal-created",
         proposalId: readString(event, "proposalId") ?? readString(data, "proposalId") ?? messageId,
         messageId,
-        proposal: readObject<AgentActionProposalPayload>(event, "proposal") ?? readObject<AgentActionProposalPayload>(data, "proposal")
+        proposal: readObject<AgentActionProposalPayload>(event, "proposal") ?? readObject<AgentActionProposalPayload>(data, "proposal") ?? payload as AgentActionProposalPayload | undefined
       };
+    case "tool-approval-requested":
+      return { type: "review-requested", messageId };
     case "message-completed":
     case "completed":
     case "assistant.completed":
@@ -263,7 +279,10 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return { type: "message-completed", messageId };
     case "error": {
       const error = readObject<Record<string, unknown>>(event, "error") ?? readObject<Record<string, unknown>>(data, "error");
-      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed.") };
+      const code = readString(error, "code");
+      const limit = readString(error, "limit");
+      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed."), ...(code ? { code } : {}),
+        ...(limit === "snapshots" || limit === "bytes" ? { limit } : {}) };
     }
     case "conversation.error":
     case "conversation.failed":
@@ -286,7 +305,7 @@ const agentStreamEventNames = [
   "completed",
   "error",
   "clarification-requested",
-  "workflow-graph-operation-batch-created",
+  "contributed-result",
   "step-started",
   "step-completed",
   "tool-call-requested",
@@ -294,26 +313,16 @@ const agentStreamEventNames = [
   "tool-call-completed",
   "plan-updated",
   "progress",
-  "turn-cancelled"
+  "turn-cancelled",
+  "context-admitted"
 ];
 
 const agentResultKindNames = [
   "message",
   "clarification",
-  "workflow-graph-operation-batch",
+  "module-result",
   "proposal",
   "error"
-];
-
-const workflowOperationKindNames = [
-  "add-activity",
-  "update-activity",
-  "remove-activity",
-  "connect-activities",
-  "disconnect-activities",
-  "set-root",
-  "set-designer-position",
-  "set-activity-property"
 ];
 
 function normalizeEventName(value: unknown, numericNames?: string[]) {
@@ -365,32 +374,6 @@ function readField(source: Record<string, unknown> | undefined, key: string) {
   const lowered = key.toLowerCase();
   const match = Object.keys(source).find(candidate => candidate.toLowerCase() === lowered);
   return match ? source[match] : undefined;
-}
-
-function normalizeWorkflowBatch(value: Record<string, unknown> | undefined): WorkflowGraphOperationBatch | null {
-  if (!value) return null;
-
-  const operations = (readArray(value, "operations") ?? [])
-    .filter((operation): operation is Record<string, unknown> => !!operation && typeof operation === "object")
-    .map(normalizeWorkflowOperation);
-
-  return {
-    schemaVersion: readString(value, "schemaVersion") ?? "unknown",
-    workflowDefinitionId: readString(value, "workflowDefinitionId") ?? readString(value, "workflowId") ?? "active-draft",
-    baseRevision: readString(value, "baseRevision") ?? null,
-    operations,
-    metadata: readObject<Record<string, unknown>>(value, "metadata") ?? {}
-  };
-}
-
-function normalizeWorkflowOperation(value: Record<string, unknown>) {
-  return {
-    id: readString(value, "id") ?? `operation-${Date.now()}`,
-    kind: normalizeEventName(readField(value, "kind"), workflowOperationKindNames),
-    parameters: readObject<Record<string, unknown>>(value, "parameters") ?? {},
-    temporaryReferences: (readArray(value, "temporaryReferences") ?? []).filter((item): item is string => typeof item === "string"),
-    summary: readString(value, "summary") ?? null
-  };
 }
 
 function normalizeClarification(value: Record<string, unknown>, messageId: string): AgentClarificationRequest {

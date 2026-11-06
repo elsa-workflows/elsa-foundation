@@ -6,6 +6,8 @@ To set it up next to a server, follow the Foundation [Docker Compose quick start
 
 Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
 
+Use [folders, tags and saved views](organizing-workflows.md) to organize a large workflow library.
+
 ## Run and inspect in the editor
 
 Use **Test Run** in a workflow definition to execute the captured draft in the connected environment. The run appears on the editor's canvas, where you can select an activity and inspect its recorded inputs, outputs, outcomes and incidents. Test Runs are temporary executions; their activities can still produce real side effects.

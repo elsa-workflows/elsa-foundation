@@ -12,6 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+    <ProjectReference Include="..\Elsa.Agent\Elsa.Agent.csproj" />
     <ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
@@ -19,7 +20,8 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
+  <ItemGroup><ProjectReference Include="../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
 </Project>

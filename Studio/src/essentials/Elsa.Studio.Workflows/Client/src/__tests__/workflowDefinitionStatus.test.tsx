@@ -32,7 +32,7 @@ describe("workflow definition request status", () => {
     await fill(input(container, "Search all workflows"), "latest");
     expect(container.querySelector("[role='status']")?.textContent).toContain("The previous search “empty” on page 1 returned no workflows");
     expect(container.textContent).not.toContain("No workflows match “latest”");
-    expect(container.querySelector(".wf-empty-state")).toBeNull();
+    expect(container.querySelector(".studio-result-state[data-tone=\"neutral\"]")).toBeNull();
     await vi.advanceTimersByTimeAsync(250);
     vi.useRealTimers();
     await waitForCondition(() => expect(resolveLatest).toBeDefined());
@@ -73,7 +73,7 @@ describe("workflow definition request status", () => {
       expect(container.querySelector("[role='status']")?.textContent).toContain("“latest” waits to refresh");
       expect(container.querySelector("[role='status']")?.textContent).not.toContain("failed");
     } else {
-      expect(container.querySelector(".wf-grid[aria-busy='true']")).not.toBeNull();
+      expect(container.querySelector("[role='status'][aria-busy='true']")).not.toBeNull();
     }
     await fill(input(container, "Search all workflows"), "failed");
     expect(container.querySelector("[role='alert']")).toBeNull();

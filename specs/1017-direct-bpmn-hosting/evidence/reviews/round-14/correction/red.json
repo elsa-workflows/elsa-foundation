@@ -1,0 +1,31 @@
+{
+  "reviewedHead": "d3f6ff69593200610f983c47ac4643a5489ec0ce",
+  "counts": {
+    "total": "9",
+    "executed": "9",
+    "passed": "3",
+    "failed": "6",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "productionReaderSha256": "be895f87d7a8a9cbd611d33565f9d6cc31d1b09c07d77921820e03f92cb12053",
+  "testSha256": "a9fd8e39b8d88e42b9cf98e9149dfa2e887e8a8642bb19031a471c813c3eb150",
+  "expectedFailures": [
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"page\", providerCancellation: True)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"input\", providerCancellation: False)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"input\", providerCancellation: True)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"state\", providerCancellation: True)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"state\", providerCancellation: False)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeModelCheckpointTests.Model_read_io_and_unrequested_cancellation_retain_context(operation: \"page\", providerCancellation: False)"
+  ]
+}

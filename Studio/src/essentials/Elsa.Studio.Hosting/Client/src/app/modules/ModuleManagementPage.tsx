@@ -1,6 +1,7 @@
+import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi } from "../../sdk";
+import { defaultStudioHostId, type ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   deleteDropFolderPackage,
@@ -57,7 +58,7 @@ const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("studio");
+  const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
   // Query cache, not here.
   const [viewByHost, setViewByHost] = useState<Record<HostId, HostViewState>>(() => ({
@@ -140,21 +141,15 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const isReady = activeQuery.isSuccess;
 
   return (
-    <section className="modules-page">
-      <div className="section-header modules-header">
-        <div>
-          <h2>Modules</h2>
-          <p>{activeHost.label}: {summary.loaded} loaded, {summary.available} available, {summary.failed} failed, {summary.packages} package(s)</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page modules-page">
+      <StudioPageHeader headingLevel={2} title={<>Modules</>} description={<>{activeHost.label}: {summary.loaded} loaded, {summary.available} available, {summary.failed} failed, {summary.packages} package(s)</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
+            <StudioButton type="button" className="studio-button" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
               <RefreshCcw size={15} />
               {isLoading ? "Refreshing" : "Refresh"}
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 

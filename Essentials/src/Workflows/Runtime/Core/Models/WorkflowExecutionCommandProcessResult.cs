@@ -7,6 +7,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// drain coordinator was discarded and dispatch callers always observed success even when the drain stopped on a fault or
 /// the outbox failed to deliver. This result carries the drain verdict back to the agent so it can surface a non-success
 /// dispatch outcome.</para>
+/// <para>For model executions, <c>WorkflowTerminated</c> also reports a fully settled model after its permitted
+/// drain so the in-process mailbox can be evicted. It does not authorize the native terminal stop/purge policy.</para>
 /// </summary>
 public sealed record WorkflowExecutionCommandProcessResult(
     bool DrainPerformed,

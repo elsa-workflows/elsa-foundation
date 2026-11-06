@@ -217,6 +217,118 @@ public sealed class RuntimeSchedulerWorkDeferralTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Unavailable_dispatch_after_a_non_retaining_commit_is_never_released_to_run_again(bool commitConsumesClaim)
+    {
+        // #3683 outside a coalescing segment. A commit that consumed the claim leaves nothing to release, and the signal
+        // propagates as before, with no record. A commit through a committer of its own scope holds no claim and consumes
+        // nothing, so the item used to be released over a durable effect; it is acknowledged and recorded instead.
+        var queue = new ObservingWorkQueue(new InMemoryWorkflowSchedulerWorkQueue());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainerAccessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        var committer = new RuntimeCheckpointCommitter(
+            new ImmediateCheckpointPersistencePolicy(),
+            new InMemoryRuntimeCheckpointCommitStore(schedulerWorkQueue: queue),
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            enrichers: [],
+            intentHandlerContributions: [],
+            consumedWorkClaimAccessor: commitConsumesClaim ? drainerAccessor : new RuntimeConsumedSchedulerWorkClaimAccessor());
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [new CommittingThenUnavailableHandler(committer)],
+            new FakeTimeProvider(Now),
+            poisonStore: poisonStore,
+            consumedWorkClaimAccessor: drainerAccessor);
+        await queue.EnqueueAsync(Work("committed-source", 1));
+
+        if (commitConsumesClaim)
+        {
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+            Assert.Equal((1, 0), (queue.ConsumeClaimedCalls, queue.CompleteClaimCalls));
+            Assert.Empty(await poisonStore.ListAsync(WorkflowExecutionId));
+        }
+        else
+        {
+            var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.True(result.StoppedOnFault);
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+            Assert.Equal((0, 1), (queue.ConsumeClaimedCalls, queue.CompleteClaimCalls));
+            var poison = Assert.Single(await poisonStore.ListAsync(WorkflowExecutionId));
+            Assert.Equal(("committed-source", RuntimeSchedulerPoisonDisposition.Poisoned), (poison.WorkItemId, poison.Disposition));
+            Assert.Equal(typeof(RuntimeSchedulerWorkUnavailableException).FullName, poison.Fault.ExceptionType);
+        }
+
+        Assert.Equal(0, queue.ReleaseClaimCalls);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Store_refusing_a_commit_as_unavailable_is_not_a_checkpoint_attempt(bool earlierCommitInDispatch)
+    {
+        // #3683: a checkpoint store throws unavailability to refuse a commit outright, rolled back, as EF refuses a native
+        // worker's WorkflowStarted admission (a Checkpoint step) whose model decision changed. Nothing was applied, so the
+        // committer withdraws that attempt and the step is released with its delay, as it was before #3683. A
+        // non-retaining commit that landed earlier in the same dispatch, without consuming the claim, still counts: that
+        // step is handled as a fault, not released to run again over the earlier commit.
+        var retryDelay = TimeSpan.FromSeconds(17);
+        var queue = new ObservingWorkQueue(new InMemoryWorkflowSchedulerWorkQueue());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainerAccessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        var inner = new InMemoryRuntimeCheckpointCommitStore(schedulerWorkQueue: queue);
+        var store = new RefusingAsUnavailableCommitStore(inner, refusedCommitId: "commit-refused");
+        // The refused commit would consume the claim had it applied; the earlier one commits through a scope of its own.
+        var committer = NewCommitter(store, drainerAccessor);
+        var ownScopeCommitter = NewCommitter(store, new RuntimeConsumedSchedulerWorkClaimAccessor());
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [new CommitsThenRefusedHandler(earlierCommitInDispatch ? ownScopeCommitter : null, committer)],
+            new FakeTimeProvider(Now),
+            poisonStore: poisonStore,
+            claimOptions: new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = retryDelay },
+            consumedWorkClaimAccessor: drainerAccessor);
+        await queue.EnqueueAsync(Work("checkpoint-source", 1, WorkflowExecutionCommandKind.Checkpoint));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(1, store.Refusals);
+        Assert.Equal(0, queue.ConsumeClaimedCalls);
+        var queued = (await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+        if (!earlierCommitInDispatch)
+        {
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Deferred, result.StopReason);
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, Assert.Single(result.Items).Status);
+            Assert.Equal((1, 0), (queue.ReleaseClaimCalls, queue.CompleteClaimCalls));
+            Assert.Equal(Now + retryDelay, queue.LastReleasedVisibleAt);
+            Assert.Empty(await poisonStore.ListAsync(WorkflowExecutionId));
+            Assert.Equal("checkpoint-source", Assert.Single(queued).WorkItemId);
+            Assert.Empty(inner.ListCommits());
+            return;
+        }
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+        Assert.Equal((0, 1), (queue.ReleaseClaimCalls, queue.CompleteClaimCalls));
+        var poison = Assert.Single(await poisonStore.ListAsync(WorkflowExecutionId));
+        Assert.Equal(("checkpoint-source", RuntimeSchedulerPoisonDisposition.Poisoned), (poison.WorkItemId, poison.Disposition));
+        Assert.Equal(typeof(RuntimeSchedulerWorkUnavailableException).FullName, poison.Fault.ExceptionType);
+        Assert.Empty(queued);
+        Assert.Equal("commit-earlier", Assert.Single(inner.ListCommits()).Commit.CommitId);
+    }
+
+    private static RuntimeCheckpointCommitter NewCommitter(IRuntimeCheckpointCommitStore store, RuntimeConsumedSchedulerWorkClaimAccessor accessor) =>
+        new(
+            new ImmediateCheckpointPersistencePolicy(),
+            store,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            enrichers: [],
+            intentHandlerContributions: [],
+            consumedWorkClaimAccessor: accessor);
+
     private static RuntimeSchedulerWorkItem Work(string workItemId, long sequence, WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.ResumeBookmark) =>
         new(
             workItemId,
@@ -288,6 +400,51 @@ public sealed class RuntimeSchedulerWorkDeferralTests
                 TimeSpan.FromMinutes(1)));
             Assert.NotNull(SuccessorClaim);
             throw new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable.");
+        }
+    }
+
+    private sealed class CommittingThenUnavailableHandler(RuntimeCheckpointCommitter committer) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(CommittingThenUnavailableHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            await committer.CommitAsync(Commit($"commit-{workItem.WorkItemId}", RuntimeCheckpointNames.ActivityCompleted), cancellationToken);
+            throw new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable.");
+        }
+    }
+
+    private sealed class CommitsThenRefusedHandler(RuntimeCheckpointCommitter? earlier, RuntimeCheckpointCommitter refused)
+        : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(CommitsThenRefusedHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            if (earlier is not null)
+                await earlier.CommitAsync(Commit("commit-earlier", RuntimeCheckpointNames.ActivityCompleted), cancellationToken);
+            await refused.CommitAsync(Commit("commit-refused", RuntimeCheckpointNames.WorkflowStarted), cancellationToken);
+        }
+    }
+
+    // Refuses one commit as unavailable before it reaches the inner store, the way a store whose transaction rolled back does.
+    private sealed class RefusingAsUnavailableCommitStore(InMemoryRuntimeCheckpointCommitStore inner, string refusedCommitId)
+        : IRuntimeCheckpointCommitStore
+    {
+        public int Refusals { get; private set; }
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            if (commit.CommitId != refusedCommitId)
+                return inner.CommitAsync(commit, decision, cancellationToken);
+            Refusals++;
+            throw new RuntimeSchedulerWorkUnavailableException("test.admission-unavailable",
+                "The authorizing execution changed; the commit was rolled back.");
         }
     }
 

@@ -26,7 +26,7 @@
 | Fence | A number that grows each time ownership of a run or row changes. A write carrying an old fence is refused, so a worker that lost its claim cannot overwrite the new owner. |
 | Lease / heartbeat | The record a drain writes to say "this node is working on this run". A lease left behind by a crash tells the recovery scanner the run was interrupted. |
 | Pause gate | The check that decides whether a run's next step may go ahead (for example, the run is suspended by an operator). |
-| Segment | Under Balanced and Ephemeral modes, a stretch of steps whose checkpoints are folded into one commit. |
+| Segment | Under Durable, Balanced and Ephemeral modes, a stretch of steps whose checkpoints are folded into one commit (one activity under Durable). |
 | Quiesced | The drain's way of saying "the queue is empty; this run is now waiting". |
 
 ## How a workflow makes progress
@@ -82,7 +82,7 @@ The durable queue itself is an EF Core store (`EfSchedulerWorkQueueStore` over `
 Delivery is **at least once on both sides**: work can be added twice and taken twice. Consumers are idempotent **while the item is still queued**, so no crash window strands an activity and running the sweep again is safe on that path. A scheduler-work repeat after its chain has drained can re-run a checkpoint whose replay conflicts (the late-repeat limit below).
 
 - **Adding work.** The outbox can be delivered again, by the drain during normal running or by the sweep after a crash. So the same work can be queued twice. The queue absorbs duplicates by (run id, work item id). Re-drive commands carry a fresh key per sweep, while the work items behind them stay single. A run whose backlog survives (for example, a dispatch that raced a crash) is simply re-driven by the next sweep.
-- **Taking work.** The drain does not remove a step before running it. On the EF store it claims the FIFO head (revision compare-and-set), runs it in place, and only removes it **after** the step's effect is saved, by completing that claim (owner and token): after a successful commit, or, when the handler faults, before the poison record or the immediate retry is queued. A crash before that complete leaves the step queued, backlog discovery re-drives it, and the handler runs again idempotently. A store without claim transitions still dequeues the FIFO head after the effect is saved.
+- **Taking work.** The drain does not remove a step before running it. On the EF store it claims the FIFO head (revision compare-and-set), runs it in place, and only removes it **after** the step's effect is saved, by completing that claim (owner and token): after a successful commit, or, when the handler faults, before the poison record or the immediate retry is queued. A handler fault whose retry policy answers `RetryAfter` is the exception: where the drain can honor it, it releases the claim with the policy's delay instead, so the step stays queued until it is due and backlog discovery then re-drives it ([what a handler fault does](runtime-fault-behavior.md#what-it-does)). Until then it holds back the run's later queued steps, because the queue serves each run in order. A crash before that complete leaves the step queued, backlog discovery re-drives it, and the handler runs again idempotently. A store without claim transitions still dequeues the FIFO head after the effect is saved.
 
 ## Keeping the pump bounded
 
@@ -91,8 +91,17 @@ One restart with a large backlog, or one broken run, must not overwhelm or starv
 | Limit | How it works |
 |---|---|
 | **Per sweep** | At most 100 runs are re-driven per sweep (`MaxExecutionsPerSweep`). The recovery scanner keeps half the slots (at least one, at most its batch size) and the backlog the rest, so neither starves the other. Either side may use slots the other leaves. With a cap of one they take turns (#2188). |
+| **Concurrent dispatches** | `MaxConcurrentDispatches` defaults to 1 on resumption, durable-timer and recurring-trigger options/features. Raising it allows independent runs to drain together, up to the configured degree. Each concurrent dispatch uses its own ordinary persistence operation scope bound to the discovered partition. Timers for the same run retain provider order; recurring occurrences retain order within a schedule. Custom hosts without a scope factory and legacy timer stores remain sequential. |
 | **Across sweeps** | See below. |
 | **Per run** | A run whose re-drive fails gets its own growing back-off and is skipped until it passes. Separately, the whole sweep backs off after consecutive failures, up to 5 minutes by default. One broken run cannot block healthy ones. |
+
+Actual timer/recurring routes, recovery re-drives and outbox deliveries contribute to the runtime admission load
+signal while running. Empty scans, waiting claims and completed work carry no load. A pump dispatch uses an existing
+ambient charge when present, so nested delivery does not count the same admission twice. Durable pump work is not
+shed by the live-arrival limiter; its batch and concurrency limits bound it. Tune these limits against database
+connections, write capacity and foreground latency across all nodes. A higher setting is not a guarantee of higher
+throughput. Outbox delivery, discovery and recovery cursor settlement remain ordered; concurrent re-drive outcomes
+are settled in discovery order.
 
 **Across sweeps, in detail:**
 
@@ -107,9 +116,22 @@ One restart with a large backlog, or one broken run, must not overwhelm or starv
 - The position moves past a failed re-drive; that run keeps its work and its back-off, and a later walk reaches it again.
 - A queue without claimable discovery keeps the older first-page listing, and the sweep logs a warning once per queue type per host.
 
+## Wall-clock rollback during an active segment
+
+An active native segment knows which scheduler continuations its successful commits declared without an explicit
+`NotBefore`. Those continuations can advance immediately even if the wall clock moves behind their recorded commit
+time. The overlay evaluates only those initial claims at their own availability timestamp; it keeps the existing
+claim/fence transition and persisted outbox representation. This avoids returning a trivial start at
+`WorkflowStarted` with its first activity still undelivered. It works independently of the materialized-hop toggle.
+
+Explicit due times, retry waits, bare materialized outbox rows, durable-store reads and other intent kinds retain
+their visibility rules. This is local segment provenance, not a clock override for another execution or host.
+`StartClockRollbackTests` covers all three modes on memory and SQLite;
+`RuntimeDelayedScheduleDeliveryTests` checks the declared-source boundary, explicit times and retry waits.
+
 ## Claims that outlive their lease
 
-The outbox processor and the durable timer pump each claim a batch of rows under one visibility timeout (1 minute by default), then work through the batch one row at a time. Claims near the end of a long batch can lapse, and another node re-claims them.
+The outbox processor and timer pumps claim bounded batches under one visibility timeout (1 minute by default). Outbox delivery remains sequential; configured timer pumps can dispatch independent executions concurrently. Claims waiting behind long dispatches can lapse and be re-claimed by another node.
 
 Both follow one shared rule: **renew a claim just before acting on it, and never act on a claim that cannot be renewed.** The renewal is a compare-and-set on the claim's owner and fence, so a row that was re-claimed is skipped rather than delivered twice.
 
@@ -124,7 +146,9 @@ Both follow one shared rule: **renew a claim just before acting on it, and never
   | PublishStimulus start | Keyed run id (see [Stimulus START idempotency](serialization.md#stimulus-start-idempotency-is-at-least-once)) |
 
   The runtime extension-point notes (the per-kind table under the outbox store contract) record each mechanism and its limit. One limit: a scheduler-work repeat that arrives after its whole chain has drained can re-run a checkpoint whose replay conflicts. Redelivery after a crash already had the same exposure.
-- **Durable timers.** Each timer's claim is renewed just before it fires and kept renewed while the fire runs. A failed renewal cancels the fire.
+- **Durable timers.** Each timer's claim is renewed just before it fires and kept renewed while the fire runs. Configured pumps renew in a separate bound operation scope, so renewal cannot race the dispatch on one database context. A failed renewal cancels the fire.
+- **Recurring triggers.** Configured pumps also renew occurrence claims before and during routing in separate operation scopes. Custom direct construction retains renewal before routing only, since routing can share its supplied store's context. The occurrence's existing keyed start still governs repeated delivery.
+- **Completion during renewal.** Finishing a dispatch stops future renewals and waits for an already running renewal's acknowledgement. It must not cancel a write that may have advanced the claim revision. Caller shutdown still cancels provider I/O and prevents settlement, even after the body returned. An unrequested provider cancellation is an uncertain claim, so it cannot authorize completion or release.
 - **One lost claim never ends a sweep.** A row whose claim was lost before, during or at the fenced completion of its side effect is logged and skipped. The sweep moves to the next row, then to backlog discovery and re-drive. Whoever holds the row records its outcome.
 - **Test-scope clean-up runs separately.** It runs first on every resumption tick, in its own scope. A failure there (a clean-up race, an unreadable scope row) is logged and retried next tick; it does not stop outbox delivery or re-drive.
 
@@ -145,7 +169,11 @@ Now the drain treats such a continuation as still its own. It reports *Quiesced*
 | **That worker died** | Its claim lapses after the outbox's visibility timeout (1 minute). The drain never sleeps past the earliest lapse. It then claims the item through the normal durable claim path and delivers it itself. A worker that was merely slow finds its renewal refused and skips the item. |
 | **Already delivered** | A sweep that finished delivering before the drain looked leaves only queued work. So after a drain that ran steps and stopped neither on a final status nor at its work-item budget, it also checks the run's queue. |
 | **The other worker's attempt failed** | The listing also returns the run's `FailedRetryable` continuations, so a failed attempt waiting for retry is seen even if it failed before the drain first looked. An awaited item that ended failed is found by looking it up once it leaves the listing. A failed attempt is not known to have queued anything, so the drain stops with *OutboxDeliveryFailed* (as for a failed delivery of its own), and the command answers *AcceptedButFaulted* rather than *Accepted*. It does not wait for the retry; that stays with the sweep. |
-| **Waiting too long** | All of one drain request's waiting shares one deadline, set at the first wait, so the drain's cycles cannot multiply it. It defaults to the claim visibility timeout plus a 30-second margin: 90 seconds. When it passes with a continuation still held, the drain stops with *OutboxDeliveryFailed*; the item stays with its claimant, then the sweep. Cancellation and a lost lease end the wait like any other drain step. |
+| **Waiting too long** | All of one drain request's waiting shares one deadline, set at the first wait, so the drain's cycles cannot multiply it. It defaults to the claim visibility timeout plus a 30-second margin: 90 seconds. When it passes with a continuation still held, the drain stops with *OutboxDeliveryFailed*; the item stays with its claimant, then the sweep. Cancellation and a lost lease end the wait like any other drain step. A Cancel waiting for the run's mailbox, or a passivation such as a placement hand-off, ends it at the next poll, within half a second (#3678): the drain stops *Yielded*, as it does before a step, and takes nothing back and delivers nothing, so no step is queued ahead of the Cancel and a hand-off does not wait past the placement lease. The item stays with its claimant, which delivers it and re-drives the run. |
+
+**In a coalescing segment** (#3659, #3661). A segment reads the run's queue and continuations from its overlay, which it fills from the durable store on its first read. Work another worker queues after that, and a lapsed continuation the drain takes back, exist only in the durable store. So the drain closes the segment (at most one commit) before it takes a lapsed claim back. Once a delivery it waited for settles, it starts a fresh segment from durable state. Before, it reported *Quiesced* and left that work for the next sweep, or waited until the deadline and stopped with *OutboxDeliveryFailed*. This applies in every coalescing mode, Durable included, whose sessions keep an overlay across their per-activity commits. Closing the segment is then one more commit point mid-pass, even in Ephemeral, made only when another worker held one of the run's continuations.
+
+The other worker can also finish while the pass still runs, so the drain finds nothing held when it settles, and its check for queued work would read the overlay. For an active segment, the held-continuations listing therefore also returns the run's continuations a claim delivered since the overlay was filled. A drain treats such a delivery as one it waited for, once per continuation. The query excludes already-observed delivered IDs before applying its batch limit, including the provider page cap, so their still-qualifying timestamps cannot hide a new delivery. The extra rows ride in the same statement: on EF the outbox row projects the time a claim delivered it (`ClaimDeliveredAtUtcTicks`, migration `OutboxClaimDeliveredAt`), so a drain no other worker touched reads nothing more. The comparison uses the other worker's clock against the drain's. A worker whose clock runs behind by more than the gap between the overlay fill and its delivery is missed, and the step waits for the sweep as before. Rows written before the migration have no delivery time and are never returned.
 
 **Continuations go first in a sweep batch.** The outbox processor dispatches a batch's `EnqueueSchedulerWork` items before every other kind, each group in claim order. A continuation only queues work, but other kinds can need a run's mailbox: a PublishStimulus start or resume, or a DispatchWorkflow parent resume. A drain waiting for its continuation holds its run's mailbox, so if such an item came first, the batch would wait on the drain while the drain waited on the batch, until the claim lapsed. Each item is still renewed just before its own dispatch.
 
@@ -172,9 +200,9 @@ Every run folds the checkpoints of a **segment** into one atomic commit. The mod
 
 | Mode | A segment ends… |
 |---|---|
-| Durable | at each activity (one commit per activity) |
-| Balanced | after the host's activity cap (`MaxActivitiesPerCommit`, default 50) |
-| Ephemeral | only at boundaries and at the end of the pass |
+| Durable | at each activity (one commit per activity), and when a continuation another worker held settles or is taken back, or another worker delivered one during the pass (#3659, #3661) |
+| Balanced | after the host's activity cap (`MaxActivitiesPerCommit`, default 50), and when a continuation another worker held settles or is taken back, or another worker delivered one during the pass (#3659, #3661) |
+| Ephemeral | only at boundaries, when a continuation another worker held settles or is taken back, or another worker delivered one during the pass (#3659, #3661), and at the end of the pass |
 
 Every shell with the runtime API has this machinery: the runtime API feature calls `AddPersistenceModes` after every feature has registered its stores. The run's mode is decided once, when the run is started: the start dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command. The scheduler queue keeps that start until the run's first commit records the mode on the run. Every drain then resolves the mode from that record, or before the first commit from the start the queue still holds, so a run driven again before anything was committed keeps its mode. The queue holds a start's first delivery, so a start delivered again with another mode does not change it. A host composed without the machinery cannot run any mode, so it refuses the run before anything runs.
 
@@ -191,7 +219,19 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 - the attempt claim of an activity that is not ReplaySafe, committed before its body runs;
 - the end of a drain, even when the workflow is still running or waiting.
 
-Because a bookmark (including a `Delay` or other timer) is saved at once, an outside stimulus always finds a saved bookmark and never races one that exists only in memory. A fault is saved the moment it is decided. A boundary save is **complete**: it saves the folded state, the boundary checkpoint, any queued steps still only in memory (queued again durably) and undelivered outbox intents, all together. Nothing buffered is lost at a boundary.
+Because a bookmark (including a `Delay` or other timer) is saved at once, an outside stimulus always finds a saved bookmark and never races one that exists only in memory. A fault is saved the moment it is decided. A boundary save includes the folded state, boundary checkpoint and undelivered outbox intents. Original fused Schedule anchors are made durable before a continuing save; consumed durable queue claims advance only after the checkpoint lands.
+
+**Folding after a boundary.** A nonterminal native activity/workflow suspension, bookmark creation or child-dispatch
+checkpoint commits immediately and starts a fresh segment in the same drain. The later before-user-code attempt
+also commits immediately while preserving folding for subsequent work. Exact bookmark/model admission, terminal
+states, operational or incident changes, alterations, background activity work and dispatch cancellation end the
+session. External outbox delivery uses the durable store's current claim, renewal and completion lifecycle while the
+session stays active; only eligible scheduler continuations keep delivering from its working set. Previously committed
+dispatch/outbox snapshots are not reapplied by the next segment.
+
+**Queue capability.** A queue with `SupportsTargetedDeletion=false` disables folding for the drain. Its checkpoints
+are committed immediately in every mode; the runtime cannot safely advance selected durable items using an overlay.
+This fallback is covered by `RuntimeCheckpointCoalescingTests`; its throughput has not been measured here.
 
 **The one boundary that may be skipped.** Under Ephemeral with `RecordCompletion` off, a `WorkflowCompleted` boundary is not saved when:
 
@@ -200,7 +240,44 @@ Because a bookmark (including a `Delay` or other timer) is saved at once, an out
 
 The durable queue is still moved on, after checking that this node still owns the run, so the finished run is not started again and a node that lost the run cannot remove its new owner's work.
 
-**The activity cap (Durable and Balanced).** Durable's cap is one activity, whatever the host says; Balanced's is `MaxActivitiesPerCommit` (default 50). The cap counts distinct activity executions in a segment, not checkpoints, and a ReplaySafe activity's attempt claim never trips it (the claim is taken just before the work runs, so the next checkpoint takes the fold). A checkpoint that would bring one more activity into a full segment forces a save and starts a fresh segment, so a long replayable loop keeps folding at one save per window instead of saving every checkpoint. The cap limits both replay cost (a crash re-runs at most one window past the last save) and memory. Continuation outbox items saved by a cap flush keep delivering from the buffer in the next segment; their outcome is written back at the next save, so no stale *Pending* row is left for a later sweep to redeliver. Ephemeral has no cap: a long pass that meets none of its commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, or the end of the pass) holds its working set in memory.
+**Cancellation during a live native drain.** In the default in-process actor composition, a Cancel waiting for the
+same execution and partition requests a cooperative handoff. Both discrete scheduler steps and replay-safe fused
+steps check that in-memory signal before starting their next step. The active turn finishes its current step, flushes
+its folded segment through the ordinary ownership-fenced checkpoint path, reports `Yielded`, and releases its lease
+and mailbox. Cancel then runs through its normal scheduler handler. An activity already running must finish or
+cooperate with its own cancellation policy before handoff; the signal does not interrupt an external effect. A
+cancelled caller removes its waiting signal. The yielded segment flushes its next steps without delivering them, so the
+Cancel takes effect at that checkpoint. If that Cancel then does not run (its caller cancels before it acquires the
+mailbox, or its turn answers `Duplicate`), the mailbox re-drives the execution at once through its normal serialized
+dispatch path (#3647). That re-drive first delivers the flushed continuations into the queue, then drains them; it
+skips that delivery while another Cancel already waits, so no step is queued ahead of it. The sweep still picks up the
+work when the mailbox is passivated (it answers `Deferred`), when the provider has been disposed, when the re-drive
+fails or answers anything but `Accepted` (both are logged), and when the yielded drain throws after it yielded, for
+example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so its turn never reports `Yielded`. An idle drain adds no
+database read for this check. Passivating the mailbox makes the drain yield the same way (#3678), so a hand-off, a
+terminal eviction or a reaper does not wait for a drain that keeps making progress, nor for one that waits for a
+continuation another worker holds (see "Waiting too long" above). A Cancel that reaches the mailbox while it passivates
+asks the drain to yield too. It answers `Deferred` and runs nothing once the passivation completes; if the passivation
+is cancelled first, the drain still yields to the Cancel, which then runs on that mailbox. A Cancel that resolves the
+mailbox only then waits for the passivation and runs on a fresh mailbox. A drain that yielded to a passivation is not re-driven on that
+mailbox: the resumption sweep delivers its flushed continuations and re-drives the execution, on its next owner. A passivation that is cancelled before it takes
+the mailbox re-drives a drain that yielded to it, as a withdrawn Cancel does. Distributed placement uses the configured
+local mailbox on the owning node. A Cancel sent through another node takes effect once the owner's next placement pump
+sweep that lists the execution delivers it to that mailbox, usually within `SweepInterval` (default 10 seconds). The
+sweep's own waits for local work or failure backoff can make it later, and one sent while the owner hands the execution
+off takes effect on the next owner, or on a fresh mailbox on the owner when a sweep that overlaps the stop path's
+hand-off already leased it. The sweep does not wait for the running drain (see the
+[distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
+`InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
+
+**Acknowledging an inline parent decision.** The completion pump's current item remains in the working queue while
+its handler runs. Once that exact fenced, non-retaining decision has physically committed, queue advance acknowledges
+it like a normal dispatched claim instead of writing the same item back as another recovery anchor. Its workflow,
+work-item and command identities must match; an attempt claim, unrelated write or failed provider call cannot do this.
+The existing fused Schedule anchors and committed continuation retain recovery responsibility.
+
+**The activity cap (Durable and Balanced).** Durable's cap is one activity, whatever the host says; Balanced's is `MaxActivitiesPerCommit` (default 50). The cap counts distinct activity executions in a segment, not checkpoints, and a ReplaySafe activity's attempt claim never trips it (the claim is taken just before the work runs, so the next checkpoint takes the fold). A checkpoint that would bring one more activity into a full segment forces a save and starts a fresh segment, so a long replayable loop keeps folding at one save per window instead of saving every checkpoint. The cap limits both replay cost (a crash re-runs at most one window past the last save) and memory. Continuation outbox items saved by a cap flush keep delivering from the buffer in the next segment; their outcome is written back at the next save, so no stale *Pending* row is left for a later sweep to redeliver. Ephemeral has no cap: a long pass that meets none of its commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, a continuation another worker held, or the end of the pass) holds its working set in memory.
 
 > **Good to know: activities can run again after a crash.** A crash mid-segment loses checkpoints that were buffered but not saved. They are replayed from the last save plus the queue: recovery re-drives the segment's first step and re-runs the whole segment. So **activities in a lost segment run again**. This is the same at-least-once guarantee as the queue's; folding just sets the replay window to one segment (one activity under Durable). External-facing outbox intents are still delivered **only after** the save, so an activity's external effect is never sent before its state is saved.
 
@@ -270,6 +347,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Drain wait outcomes | `WorkflowDrainContinuationSettlementTests`: cancellation, failed attempts before and during the wait, queue-read skip rules, back-off, lapse and per-request deadline on a fake clock, and a batch with a mailbox-needing item ahead of the continuation |
 | Batch order and renewals | `RuntimePostCommitOutboxProcessorTests` |
 | Mid-segment crash | `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted` |
+| Retained suspension/dispatch crash and takeover | [Bounded process fixture](../specs/1183-runtime-efficiency-program/evidence/retained-boundaries/README.md): three modes, physical process kill around commit/queue advancement and mid-body; paused stale owner rejected after a fresh process recovers. Independent-host qualification is separate. |
 | Bookmarks saved at once | `RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately` (so the durable timer pump, which reads the saved bookmark store, never races an in-memory bookmark) |
 | Timer and bookmark stores never buffered | `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable` |
 | Every mode | `PersistenceModeFlushTests`: suspension, resume, fault, handler fault, cancellation and ownership loss |

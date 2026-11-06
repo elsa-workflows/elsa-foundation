@@ -1,3 +1,4 @@
+import type { ActivityPaletteHints } from "./graph-authoring/activityPaletteContext";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
@@ -48,6 +49,9 @@ export interface WorkflowDefinitionSummary {
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
   folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+  tags?: { tagId: string; valueId?: string | null }[];
+  favorite?: boolean;
+  permissions?: { canAssignTags?: boolean; canManageFolders?: boolean; canManageTags?: boolean; canShareViews?: boolean };
 }
 
 export interface WorkflowFolderBreadcrumbItem {
@@ -62,6 +66,7 @@ export interface WorkflowFolder {
   normalizedName: string;
   createdAt: string;
   lastModifiedAt: string;
+  revision?: string;
 }
 
 export interface WorkflowFolderDetail {
@@ -216,6 +221,7 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
   ports?: unknown[];
@@ -225,6 +231,8 @@ export interface ActivityCatalogItem {
   // additive). Signals the client to materialize an intrinsic ActivityNode rather than a catalog activity
   // reference; older backends omit it and nothing new is shown. Absent ⇒ an ordinary catalog activity.
   intrinsic?: ActivityAuthoringIntrinsic | null;
+  /** Where the catalog row came from (the API's provenance view): `CLR` or `Json` for a source-owned activity, `ActivityDefinitionDraft` for a design-authored one. */
+  provenance?: { sourceKind?: string | null; sourceId?: string | null; featureId?: string | null } | null;
   /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
@@ -517,6 +525,7 @@ export interface VariableTypeDescriptorsResponse {
 }
 
 export interface CreateDefinitionRequest {
+  activityPresentation?: ActivityPresentationRecord[];
   name: string;
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;
@@ -558,6 +567,7 @@ export interface PublishedWorkflowResponse {
 }
 
 export interface StartWorkflowDraftTestRunRequest {
+  layout?: DesignMetadataRecord[];
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
@@ -1052,6 +1062,7 @@ export interface ActivityExecutionLayoutConnection {
 }
 
 export interface ActivityExecutionLayout {
+  activityPresentation?: WorkflowExecutableActivityPresentation[];
   workflowExecutionId: string;
   activityExecutionId: string;
   artifactId: string;

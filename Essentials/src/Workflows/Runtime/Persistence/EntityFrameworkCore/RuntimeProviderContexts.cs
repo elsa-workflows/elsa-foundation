@@ -82,6 +82,8 @@ file static class RuntimeProviderModel
 
     public static void ConfigureText(ModelBuilder modelBuilder, string type)
     {
+        modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.PayloadJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);

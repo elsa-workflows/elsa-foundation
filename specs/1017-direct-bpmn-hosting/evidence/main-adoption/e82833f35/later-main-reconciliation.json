@@ -1,0 +1,22 @@
+{
+  "executingProductSource": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+  "adoptedBase": "b8fe4f464945cf1a9060bc7d1b83f50d8701425c",
+  "mergeCommit": "df109db70d068cd11cc849dbac042cb72d868280",
+  "changedFilesAfterQualifiedSource": [
+    "specs/1179-specialist-agents/research.md",
+    "tools/agents/research/providers/Probe.csproj.template",
+    "tools/agents/research/providers/Program.cs",
+    "tools/agents/research/providers/README.md",
+    "tools/agents/research/providers/packages.lock.json.template",
+    "tools/agents/research/providers/run.sh"
+  ],
+  "identicalSourceTrees": {
+    "Essentials": "86ea69a74dff4e40356b3d1293d280d266acaa0f",
+    "Extensions": "96dcb2a191ea7bc0d143677408910d25b36eec22",
+    "Studio": "4c86fa36d11f9ec0f11002c59c0ef7e7c76e0fa2",
+    "tools/bpmn": "bdd4366e2607f5f8f2e76f5a05009ab1610df004",
+    "e2e-tests": "075b390415fac29215da27b2f7d0792e945b3d4c"
+  },
+  "rootBuildInputsUnchanged": true,
+  "scope": "Only specialist-provider research and unbuilt templates changed after the real journey runs. No Elsa product, shared build input, test source, Studio source or BPMN qualification controller changed. Actual evidence retains 9d4221; no new b8 execution is claimed."
+}

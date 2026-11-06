@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfRuntimeCheckpointCommitStoreTests
+public sealed partial class EfRuntimeCheckpointCommitStoreTests
 {
     private static readonly DateTimeOffset OccurredAt = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 

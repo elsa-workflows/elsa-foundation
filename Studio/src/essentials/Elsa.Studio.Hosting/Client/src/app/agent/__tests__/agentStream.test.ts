@@ -4,6 +4,43 @@ import { subscribeAgentSessionStream } from "../agentStream";
 import type { AgentStreamEvent } from "../agentTypes";
 
 describe("agent stream", () => {
+  it.each(["contextAdmitted", 16])("normalizes current disclosure metadata and opaque payload for kind=%s", async kind => {
+    const events: AgentStreamEvent[] = [];
+    const attachment = { Id: "admitted", ModuleId: "Sample", Source: "Sample", Label: "Current owner context", ContentType: "sample", Sensitivity: 1, Scope: "screen", Origin: 2, Target: { ModuleId: "Sample", ResourceType: "sample", ResourceId: "one", Revision: "r2" }, Content: { OpaqueDomainKey: { value: 42 } } };
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ Kind: kind, Payload: { Attachments: [attachment], Diagnostics: [{ ContributorId: "optional-source", Code: "unavailable", Message: "Optional context is unavailable.", Required: false }] } })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([{ type: "context-admitted", attachments: [expect.objectContaining({ id: "admitted", moduleId: "Sample", label: "Current owner context", sensitivity: "internal", origin: "authoritativeRead", target: expect.objectContaining({ moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r2" }), content: { OpaqueDomainKey: { value: 42 } } })], diagnostics: [{ contributorId: "optional-source", code: "unavailable", message: "Optional context is unavailable.", required: false }] }]);
+  });
+
+  it("clears current evidence when a disclosure event has no admitted payload", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ kind: "contextAdmitted" })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([{ type: "context-admitted", attachments: [], diagnostics: [] }]);
+  });
+
+  it("recognizes the actual camel-case review pause without inventing completion", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ kind: "proposalCreated", proposalId: "proposal", payload: { title: "Review" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "toolApprovalRequested" })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg" });
+    await flushPromises();
+    expect(events.map(event => event.type)).toEqual(["proposal-created", "review-requested"]);
+    expect(events[1]).toEqual({ type: "review-requested", messageId: "msg" });
+  });
+
+  it("omits ambient cookies for anonymous SSE and aborts its subscription",async()=>{
+    const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(streamFrom([]),{status:200}));
+    const subscription=subscribeAgentSessionStream(createEndpointContext("https://foundation.example/shell/"),"/_elsa/agent/stream",()=>{},()=>{},{fetch:request});
+    await flushPromises();
+    expect(request.mock.calls[0][1]?.credentials).toBe("omit");
+    subscription.close();expect(request.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+
   it("attaches endpoint access tokens to stream requests", async () => {
     const fetch = vi.fn(async () => new Response(streamFrom([
       `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`
@@ -140,60 +177,13 @@ describe("agent stream", () => {
     ]);
   });
 
-  it("normalizes typed workflow graph operation batch events with numeric enums", async () => {
+  it("preserves generic typed module results without domain decoding", async () => {
     const events: AgentStreamEvent[] = [];
-    const fetch = vi.fn(async () => new Response(streamFrom([
-      `data: ${JSON.stringify({
-        Id: "evt_batch",
-        Kind: 7,
-        ResultKind: 2,
-        Payload: {
-          SchemaVersion: "elsa.workflow-graph-operation-batch.v1",
-          WorkflowDefinitionId: "workflow-1",
-          BaseRevision: "rev-1",
-          Operations: [
-            {
-              Id: "op-add",
-              Kind: 0,
-              Parameters: { activityId: "temp:activity:email", activityType: "Elsa.Email.SendEmail" },
-              TemporaryReferences: ["temp:activity:email"],
-              Summary: "Add email."
-            }
-          ],
-          Metadata: { source: "deterministic-workflow-authoring" }
-        }
-      })}\n\n`
-    ]), { status: 200 }));
-
-    subscribeAgentSessionStream(
-      createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
-      event => events.push(event),
-      error => { throw error; },
-      { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
+    const result = { toolCallId: "call", toolName: "sample_read", succeeded: true, content: "Observed sample.", payload: { typeId: "sample.result", schemaVersion: "2", data: { value: 42 } } };
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ Kind: 7, ResultKind: 2, Payload: result })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch, defaultMessageId: "message" });
     await flushPromises();
-
-    expect(events).toEqual([
-      {
-        type: "workflow-batch-created",
-        messageId: "msg_01",
-        batch: {
-          schemaVersion: "elsa.workflow-graph-operation-batch.v1",
-          workflowDefinitionId: "workflow-1",
-          baseRevision: "rev-1",
-          operations: [
-            {
-              id: "op-add",
-              kind: "add-activity",
-              parameters: { activityId: "temp:activity:email", activityType: "Elsa.Email.SendEmail" },
-              temporaryReferences: ["temp:activity:email"],
-              summary: "Add email."
-            }
-          ],
-          metadata: { source: "deterministic-workflow-authoring" }
-        }
-      }
-    ]);
+    expect(events).toEqual([{ type: "module-result", messageId: "message", result }]);
   });
 
   it("normalizes PascalCase typed error events", async () => {
@@ -296,3 +286,42 @@ function streamFrom(chunks: string[]) {
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
+
+// Preview (#3441): explicit provider notices and coded stream refusals.
+describe("agent stream recovery outcomes", () => {
+  it("keeps a provider notice and a refusal's code instead of treating them as transient progress or bare text", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      // The server's AgentProviderNotice(Code, Label); the label is the notice's text even without event content.
+      `data: ${JSON.stringify({ kind: "progress", payload: { code: "agent.provider.github_copilot.conversation_reset", label: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "progress", Content: "Reading context" })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "error", Error: { Code: "agent.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "provider-notice", code: "agent.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." },
+      { type: "progress", label: "Reading context" },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
+
+  it.each(["snapshots", "bytes"])("keeps the %s session limit detail and drops an unknown one", async limit => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", statusCode: 409, limit } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "rows" } })}\n\n`,
+      // One disclosure that does not fit, or is larger than any session: not a session limit, so no limit is kept.
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-does-not-fit" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-too-large" } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
+});

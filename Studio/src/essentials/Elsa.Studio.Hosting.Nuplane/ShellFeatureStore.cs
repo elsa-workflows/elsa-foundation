@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells;
 using CShells.Lifecycle;
+using CShells.Features;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
@@ -15,6 +16,8 @@ internal sealed class ShellFeatureStore(
     IOptions<StudioHostingOptions> options,
     IConfigurationRoot configuration,
     IShellRegistry registry,
+    IRuntimeFeatureCatalog featureCatalog,
+    ILogger<ShellFeatureStore> logger,
     StudioConfigurationMutationGate mutationGate) : IShellFeatureConfigurationStore
 {
     private static readonly byte[] RevisionKey = RandomNumberGenerator.GetBytes(32);
@@ -28,9 +31,9 @@ internal sealed class ShellFeatureStore(
         if (options.Value.ShellsFile is { } file && ConfigurationOwnership.IsExclusive(configuration, file, Prefix))
         {
             var document = await ReadAsync(file, cancellationToken);
-            return Snapshot(Features(document), settings, ShellConfiguration());
+            return await SnapshotAsync(Features(document), settings, ShellConfiguration(), cancellationToken);
         }
-        return Snapshot(null, settings, options.Value.ShellsFile is null ? default : ShellConfiguration());
+        return await SnapshotAsync(null, settings, options.Value.ShellsFile is null ? default : ShellConfiguration(), cancellationToken);
     }
 
     public async Task<ShellFeatureConfigurationSnapshot> SaveAsync(string expectedRevision, IReadOnlyList<FeatureConfigurationChange> features, CancellationToken cancellationToken = default)
@@ -44,7 +47,7 @@ internal sealed class ShellFeatureStore(
             throw new ConfigurationReadOnlyException("Code-first feature configurators control this shell; local feature administration is read-only.");
         var document = await ReadAsync(file, cancellationToken);
         var node = Features(document);
-        var current = Snapshot(node, settings, ShellConfiguration());
+        var current = await SnapshotAsync(node, settings, ShellConfiguration(), cancellationToken);
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
         node.Clear();
@@ -60,7 +63,7 @@ internal sealed class ShellFeatureStore(
             throw new StudioHostingException($"Could not persist feature configuration for Studio shell '{ShellName}'.", error);
         }
         AtomicConfigWriter.ReloadAfterSave(configuration, $"Feature configuration for Studio shell '{ShellName}'");
-        return Snapshot(node, await ComposeAsync(cancellationToken), ShellConfiguration());
+        return await SnapshotAsync(node, await ComposeAsync(cancellationToken), ShellConfiguration(), cancellationToken);
     }
 
     private async Task<ShellSettings> ComposeAsync(CancellationToken cancellationToken)
@@ -70,10 +73,12 @@ internal sealed class ShellFeatureStore(
         return await provided.Blueprint.ComposeAsync(cancellationToken);
     }
 
-    private ShellFeatureConfigurationSnapshot Snapshot(JsonObject? node, ShellSettings settings, JsonElement shellConfiguration = default)
+    private async Task<ShellFeatureConfigurationSnapshot> SnapshotAsync(JsonObject? node, ShellSettings settings, JsonElement shellConfiguration, CancellationToken cancellationToken)
     {
         var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
-        foreach (var id in settings.EnabledFeatures.Distinct(StringComparer.OrdinalIgnoreCase))
+        var catalog = await featureCatalog.GetSnapshotAsync(cancellationToken);
+        var selection = StudioFeatureSelection.Resolve(settings, catalog.FeatureDescriptors, logger);
+        foreach (var id in selection.Enabled)
         {
             var raw = node?.FirstOrDefault(pair => string.Equals(pair.Key, id, StringComparison.OrdinalIgnoreCase)).Value;
             values[id] = raw is JsonObject value

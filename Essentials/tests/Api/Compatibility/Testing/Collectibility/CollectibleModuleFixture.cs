@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Api.Compatibility.Testing.Collectibility;
 

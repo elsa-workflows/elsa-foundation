@@ -1,0 +1,66 @@
+import React, { useEffect, useState } from "react";
+
+// This fixture is a separately owned module. The host knows no note routes, values or result format.
+const moduleId = "Weaver.Journey";
+const path = "/qualification/weaver-note";
+
+export function register(api) {
+  let current = null;
+  const listeners = new Set();
+  const notify = () => { for (const listener of listeners) listener(current); };
+  const refresh = async () => { current = await api.backend.http.getJson("/_qualification/weaver/note"); notify(); return current; };
+  const attachment = (note, id) => ({
+    id, source: moduleId, sourceId: note.id, moduleId, schemaVersion: "1", label: "Qualification note", contentType: "weaver.journey.note",
+    sensitivity: "internal", scope: "selection", summary: "Selected qualification note", origin: "clientSnapshot",
+    target: { moduleId, resourceType: "weaver-journey-note", resourceId: note.id, revision: String(note.revision), displayName: "Qualification note" },
+    content: { id: note.id, revision: String(note.revision), value: note.value }
+  });
+  api.agent.contextProviders.add({
+    id: "weaver.journey.note-context", moduleId, displayName: "Qualification note", surfaces: [path], sensitivity: "internal",
+    async collect() {
+      try { const note = await refresh(); return { attachments: [attachment(note, `note:${note.id}`)], diagnostics: [] }; }
+      catch (error) {
+        if (error.status === 403 || error.status === 404) return { attachments: [], diagnostics: [{ contributorId: "weaver.journey.note-context", code: "note.unavailable", message: "The selected note is unavailable to the current actor.", required: true }] };
+        throw error;
+      }
+    }
+  });
+  api.agent.capabilities.add({ id: "weaver.journey.edit", moduleId, displayName: "Review note change", description: "Review a change to the selected qualification note.", kind: "proposal", risk: "review-required", surfaces: [path] });
+  api.agent.toolSlots.add({ id: "weaver.journey.tools", moduleId, displayName: "Qualification note", surfaces: [path], invocationModes: ["proposal"] });
+  api.agent.toolContracts.add({ id: "weaver_journey_set_note", slotId: "weaver.journey.tools", moduleId, contractVersion: "1", executionLocation: "server", displayName: "Set note", description: "Change the owning note through its server service.", surfaces: [path], inputSchema: { type: "object", required: ["value"], properties: { value: { type: "string" } }, additionalProperties: false }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, risk: "review-required", invocationModes: ["proposal"], resultRendererIds: ["weaver.journey.note-result"] });
+  api.agent.resultRenderers.add({
+    id: "weaver.journey.note-result", moduleId, displayName: "Qualification note result", resultTypes: ["weaver.journey.note-change"], schemaVersions: ["1"],
+    component: function NoteResult({ preparedInvocation, toolResult }) {
+      const [error, setError] = useState("");
+      useEffect(() => { if (toolResult?.receipt) void refresh().catch(failure => setError(failure.message)); }, [toolResult?.receipt?.after?.revision]);
+      return React.createElement("section", { "aria-label": "Qualification note result", "data-testid": "note-module-result" },
+        React.createElement("p", null, toolResult?.content ?? "Review the exact note revision and proposed value."),
+        React.createElement("pre", null, JSON.stringify(toolResult?.payload ?? preparedInvocation?.preview, null, 2)),
+        error ? React.createElement("p", { role: "alert" }, error) : null);
+    }
+  });
+  function NotePage() {
+    const [note, setNote] = useState(current);
+    const [value, setValue] = useState("Updated by Weaver");
+    const [error, setError] = useState("");
+    useEffect(() => { listeners.add(setNote); void refresh().catch(failure => setError(failure.message)); return () => listeners.delete(setNote); }, []);
+    const propose = async () => {
+      try {
+        const selected = await refresh(); const requestId = crypto.randomUUID();
+        api.agent.dispatchPrompt({ message: JSON.stringify({ toolName: "weaver_journey_set_note", arguments: { value } }), mode: "enqueue", requestId,
+          source: { moduleId, actionId: "weaver.journey.propose", label: "Review note change" }, attachments: [attachment(selected, `note-request:${requestId}`)] });
+      } catch (failure) { setError(failure.message); }
+    };
+    return React.createElement("section", { "aria-label": "Qualification note" },
+      React.createElement("h2", null, "Qualification note"),
+      note ? React.createElement("div", null,
+        React.createElement("output", { "data-testid": "note-value" }, note.value),
+        React.createElement("p", { "data-testid": "note-revision" }, String(note.revision)),
+        React.createElement("p", { "data-testid": "note-write-count" }, String(note.writeCount))) : React.createElement("p", null, "Loading note…"),
+      React.createElement("label", null, "New note value", React.createElement("input", { value, onChange: event => setValue(event.target.value) })),
+      React.createElement("button", { type: "button", disabled: !note, onClick: propose }, "Review note change"),
+      error ? React.createElement("p", { role: "alert" }, error) : null);
+  }
+  api.navigation.add({ id: "weaver.journey.note", label: "Qualification note", path, placement: "main", order: 900 });
+  api.routes.add({ id: "weaver.journey.note", label: "Qualification note", path, component: NotePage });
+}

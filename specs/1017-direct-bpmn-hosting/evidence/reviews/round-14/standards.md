@@ -1,0 +1,47 @@
+# PR 3410 author review 14 — standards / constitution / public API / persistence
+
+Verdict: **not clean — one P2 actionable finding (S1)**. No source or GitHub changes made. No other reviewer output read or reviewer contacted.
+
+- Reviewed local head: `d3f6ff69593200610f983c47ac4643a5489ec0ce`.
+- Frozen base: `588da3eb01d0949ba3c9721b61c09fbc2334a335`.
+- HEAD verified at start and finish; shared checkout remains clean.
+- Remote draft head in the supplied packet remains `f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a`; this review does not authorize a push, rewrite or merge.
+
+## Scope and governing inputs
+
+Reviewed the complete relevant change against that base, including the new BPMN Core/API/hosting and RunBpmn surfaces; protocol registration/selection and native lease extraction; checkpoint participation, model/state/receipt/material contracts; EF reader/writer/staging and schema families/upcasters; model/native closure and retention/decorators; four-provider Runtime migrations and retained Design history/decorator; fixture archive/restore/size guard and CI placement; API catalogs, project/tier registrations and spec1017 qualification boundaries. This was a whole-change review, not a review limited to the raw-evidence correction. `standards-validation/diff-paths.txt` records the boundary.
+
+Loaded current repository AGENTS, supplied current org AGENTS, `docs/contributing/review-checklist.md`, framework constitution 6.1.0 and Elsa constitution 6.3.0, root/Elsa glossary, spec1017 specification/plan/state model/hosting contracts/tasks and the current qualification receipts. Draft framework 2.24 and provisional Elsa E2.8/E2.9 were not treated as ratified requirements.
+
+The supplied issue bodies 2892/2897/2898/2907 and PR 3410 body were considered with every cached comment collection (343 program comments, 143 leaf comments, 379 PR comments), the sole Code Review changes request and the empty inline-comment collection. All collections were parsed/indexed, with full-body searches and relevant decision/findings/current receipts inspected; hashes/counts are in `standards-validation/discussion-inputs.json`. Historical review verdicts were not used as proof of the frozen head. The settled owner decisions, compatibility scope and declared broader-program deferrals were preserved.
+
+## Finding S1 — P2: model read failures still escape the declared availability boundary
+
+**Location:** `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs:31` (same filter at 49 and 87).
+
+The three new read methods normalize only `EfRelationalExceptionClassifier.IsProviderFailure`. An `IOException` during the authoritative query, or an `OperationCanceledException` with an uncancelled caller token, therefore escapes unchanged. This differs from the new reader's public contract (`Core/Contracts/IRuntimeModelExecutionReader.cs:7-8`) and the binding framework 2.23.5 gate (`.specify/memory/constitution-framework.md:210`). Requested cancellation is the exception that should propagate unchanged.
+
+**Concrete reproduction:** `standards-reader-probe/Program.cs` constructs the real SQLite Runtime context with a connection interceptor that throws the selected storage failure, obtains the actual internal reader via the existing EF test fixture's factory, and calls state/input/page queries independently. With an uncancelled token, all three return the exact injected raw IOException and all three return the exact injected raw OperationCanceledException; none has a contextual domain wrapper/InnerException. All three requested-cancellation controls still return cancellation before querying. Final output is in `standards-reader-probe/result.txt`. The first bootstrap attempt lacked the SQLite native library and reached no target scenario; after supplying the existing test output's native library, all nine scenarios executed.
+
+The probe uses the existing e28 Release provider/test binaries. Their informational version was checked, and `git diff c531..HEAD -- Essentials/src Essentials/tests` is empty: reviewed production/test sources are identical to those binaries' source. The provider binary hash is recorded in the validation metadata. No host was launched.
+
+This matters at both supported inspection/command reads and model decisions/recovery: the raw I/O failure crosses `IRuntimeModelExecutionReader` without the operation/scope/execution/input context promised to callers, and unrequested storage cancellation is presented as caller cancellation. `BpmnModelRuntime.FindExecutionAsync` forwards this failure; the BPMN fault renderer maps the required `RuntimeSchedulerWorkUnavailableException` to 503 (`Api/Endpoints/BpmnHostingApi.cs:108`), while the raw exceptions miss that mapping. The reproduction establishes the reader-boundary failure; it does not claim a separately executed HTTP outage.
+
+**Requested correction:** normalize I/O and unrequested cancellation across all three query paths into the existing contextual `RuntimeSchedulerWorkUnavailableException`, preserving the original cause, and add the missing per-operation controls while keeping requested cancellation unchanged. Do not turn malformed identity/cursor or corrupt-state refusal into successful absence.
+
+No additional actionable standards finding was identified.
+
+## Independently checked evidence and boundaries
+
+- Size/restore/generator controls: **2 size self-tests, 6 restore tests, 4 migration-generator tests pass**. The current tracked size guard passes. An isolated Git tree with a 2 MiB + 1 byte capture is rejected; a copy with the size condition removed accepts the same input. `standards-validation/size-negative-control.json` retains both outcomes. No missing/weak-guard finding is asserted.
+- Current publication archive: pinned ZIP size/SHA-256 and all **166 member sizes/hashes** pass. CI fixture pack: pinned size/SHA-256 and all **94 original members** match hydrated bytes. Expanding direct and wildcard project includes produces exactly those 94 inputs, with none missing or extra. All **104 frozen assets** and the original manifest digest also match. This verifies preservation/restoration, not execution acceptance.
+- Retained migration controls independently repeated from the existing Release assembly: **7 passed, 0 failed, 0 skipped**, including all four normal provider scripts, supported idempotent provider/schema guards and actual SQLite cumulative-history recognition. TRX: `standards-validation/retained-migrations.trx`. The decorator is metadata-driven; modules without includes keep their history answers, and provider locks/operations delegate to the actual provider. The known Design-history bridge remains owned by this saved-authoring compatibility lane. No separate native-provider live-upgrade proof is inferred.
+- All **18 ApiCompat comparisons independently repeated successfully**, with both assembly hashes checked, complete reference arguments, parameter-name rule enabled and no suppressions. `standards-validation/apicompat-repeat.json`. This supports binary surface compatibility within the pinned preview baselines; it does not replace runtime/state/Studio proof or reopen the settled preview-version exception.
+- Parsed current raw TRX rather than treating summaries as an all-green claim: actual-host 46/46; five whole affected projects 5702/5702; migration 508/508; final architecture 594/594, all zero skips. The initial architecture result remains 593 pass/1 fail and the mistaken filtered migration probe remains 0 executed. The archived orphan-lock correction does not weaken the architecture guard. Raw counters are in `standards-validation/trx-counters.json`; these host/whole-project runs were inspected, not rerun by this reviewer.
+- Current source boundaries remain c531 for host/nested/ABI, e28 for saved Studio and five projects, 7257 for final migration/tree inventory. Product/test source identity was checked against the frozen head. Studio evidence remains two saved families/four completed new runs/twelve whole stores/13 corrupt controls; first-class direct-model Studio is still unproved. Nested ETL compute is offline and its effects historical. The delayed-compensation repeat after the original deadline does not establish another before-deadline observation.
+
+No new provider umbrella, independent persistence authority, BPMN interpreter in shared Runtime/Core, required Elsa base DbContext, generic authoring graph field, first-class model Studio claim or wider ETL/provider acceptance was identified. New implementation types stay internal where appropriate; public contracts have actual host/API/provider consumers, tracked surfaces and catalog entries. Registration uses the named Sequential aggregation and startup cardinality checks. The physical capability/default-refusal/decorator checks and legacy-absent serialization/fingerprint paths remain deliberate. The cross-model checkpoint preconditions use the existing authority and forced physical persistence, while ordinary native policy remains separate.
+
+## Delivery gates still pending
+
+The history-route owner card, existing Code Review changes request, clean exact-head author review, required current-head native-provider CI, protected merge and resulting-main verification remain delivery gates. None is relabelled a current code defect or an approval inferred from elapsed time. S1 makes this standards lens not clean; the declared gate holds and broader #2898/#2907/#2908/program limitations remain in force.

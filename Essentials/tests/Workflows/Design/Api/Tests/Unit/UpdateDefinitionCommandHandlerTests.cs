@@ -89,6 +89,19 @@ public sealed class UpdateDefinitionCommandHandlerTests
             () => handler.Handle(new UpdateDefinition("update-missing", "missing", new WorkflowDefinitionStateView()), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Refused_response_authorization_never_updates_the_draft()
+    {
+        var update = new RecordingUpdateDraftCommand();
+        var reader = new StubDetailsReader(DetailsFor("def-1")) { RefuseRead = true };
+        var handler = new UpdateHandler(new StubDraftStore(new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1" }),
+            update, reader, CredentialLiteralTestSupport.Validator());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.Handle(new UpdateDefinition("refused", "def-1", new WorkflowDefinitionStateView()), CancellationToken.None));
+        Assert.Equal("Response read is refused.", exception.Message);
+        Assert.Null(update.LastRequest);
+    }
+
     private static WorkflowDefinitionDetailsView DetailsFor(string id) =>
         new(new WorkflowDefinitionView(id, "name", null, default, default), null, []);
 
@@ -137,6 +150,9 @@ public sealed class UpdateDefinitionCommandHandlerTests
 
     private sealed class StubDetailsReader(WorkflowDefinitionDetailsView? details = null) : IWorkflowDefinitionDetailsReader
     {
+        public bool RefuseRead;
+        public Task AuthorizeReadAsync(string definitionId, CancellationToken cancellationToken) => RefuseRead
+            ? Task.FromException(new InvalidOperationException("Response read is refused.")) : Task.CompletedTask;
         public Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken) =>
             Task.FromResult(details ?? throw new InvalidOperationException("This test did not expect the details view to be read."));
     }

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Acme.Specialists.Runtime" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Workflows.Runtime.Api" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Activities.Runtime" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Serialization.SystemText" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Activities.Primitives" Version="__VERSION__" />
+  </ItemGroup>
+</Project>

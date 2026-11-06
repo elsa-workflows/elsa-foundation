@@ -10,6 +10,16 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
 {
     IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
+    bool IWorkflowExecutableStore.SupportsModelMaterial => Inner.SupportsModelMaterial;
+    ValueTask<RuntimeExecutionMaterial?> IWorkflowExecutableStore.FindMaterialAsync(string artifactId, CancellationToken cancellationToken) =>
+        Inner.FindMaterialAsync(artifactId, cancellationToken);
+    ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken) =>
+        Inner.ListMaterialPageAsync(request, cancellationToken);
+    async ValueTask IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+    {
+        await Inner.SaveModelAsync(material, cancellationToken);
+        Invalidate(material.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
+    }
     private readonly WorkflowExecutableCache _cache;
     private readonly string? _partition;
 

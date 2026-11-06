@@ -1,0 +1,50 @@
+{
+  "caseId": "notice-c5e754d70eea49c2bc0c91c4b3d66cd2",
+  "phase": "called-control-before-acknowledgment",
+  "providerEvent": "ActualIntentDispatcherReturnedBeforeDeliveryResult",
+  "sourceOutboxItemId": "commit:efadb46a165c7c75:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsCfPJL4:activity-inspection-captured:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:intent:dispatch-control:v1:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:0",
+  "sourceCommitId": "commit:efadb46a165c7c75:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsCfPJL4:activity-inspection-captured:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+  "intentFingerprint": "9bd0f6147d79b8fb870c885cd40c4bb61912e05f2494a465d6b7c81fa43edf8d",
+  "scope": "default",
+  "ownerId": "runtime-outbox-ac53583262bb4309bce401191f17ff6b",
+  "fencingToken": 1,
+  "visibleAfter": "2026-10-28T07:19:54.824836+00:00",
+  "workflowExecutionId": "wfexec:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+  "intentKind": "Elsa.Activities.DispatchWorkflow.NotifyControl",
+  "transport": {
+    "dispatchId": "dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+    "parentWorkflowExecutionId": "14iZs5IOeZa",
+    "callingActivityExecutionId": "14iZs7B1wU1",
+    "consumerActivityExecutionId": "14iZs5jdNXX",
+    "parentExecutable": {
+      "artifactId": "artifact-e04aea951b8e",
+      "definitionId": "14iZs51pKS6",
+      "definitionVersionId": "14iZs51laEm",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:e04aea951b8eb37033cf17416fb76ae1f03204ef798cc0f745d8b52ce6e18a39"
+    },
+    "sourceCommitId": "commit:efadb46a165c7c75:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsCfPJL4:activity-inspection-captured:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+    "sourceIntentId": "intent:dispatch-control:v1:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:0",
+    "sourceOutboxItemId": "commit:efadb46a165c7c75:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsCfPJL4:activity-inspection-captured:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:intent:dispatch-control:v1:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:0",
+    "batch": {
+      "version": 1,
+      "consumerKey": "elsa.bpmn",
+      "consumerVersion": 1,
+      "childWorkflowExecutionId": "wfexec:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+      "rootActivityExecutionId": "dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+      "sourceWorkItemId": "efadb46a165c7c75:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsCfPJL4",
+      "ordinal": 0,
+      "isTerminal": false,
+      "notifications": [
+        {
+          "code": "bpmn.escalation",
+          "payload": {
+            "code": "WARN"
+          }
+        }
+      ],
+      "authoredFailureCode": null
+    }
+  },
+  "capturedAtUtc": "2026-10-28T07:18:54.925179+00:00"
+}

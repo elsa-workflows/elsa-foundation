@@ -27,6 +27,7 @@ internal sealed class FoundationIdentityRegistrationValidator(FoundationIdentity
     [
         typeof(IPermissionEvaluator),
         typeof(IPermissionAuthorizationService),
+        typeof(ICurrentSubjectPermissionAuthorizer),
         typeof(IPermissionPolicyNameFormatter),
         typeof(IPermissionCatalog)
     ];

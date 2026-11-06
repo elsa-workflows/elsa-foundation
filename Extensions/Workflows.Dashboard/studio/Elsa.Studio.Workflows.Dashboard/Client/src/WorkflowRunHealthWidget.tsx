@@ -1,5 +1,6 @@
 import React from "react";
 import type { StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { FailingDefinition, RunBucket, RunHealthSettings, WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
 import { WorkflowDashboardMetric } from "./WorkflowDashboardMetric";
 import { WorkflowDashboardUnavailable } from "./WorkflowDashboardUnavailable";
@@ -181,7 +182,7 @@ function FailingDefinitionList({ definitions, includeTestRuns }: { definitions: 
     <ol className="workflow-run-health__definitions">
       {ranked.map((definition, index) => {
         const label = definition.displayName?.trim() || definition.definitionId;
-        const href = failingDefinitionHref(definition.definitionId, includeTestRuns);
+        const href = qualifyStudioBackendPath(failingDefinitionHref(definition.definitionId, includeTestRuns));
         const width = `${definition.failedCount > 0 ? definition.failedCount / maxFailures * 100 : 0}%`;
         return (
           <li key={definition.definitionId}>

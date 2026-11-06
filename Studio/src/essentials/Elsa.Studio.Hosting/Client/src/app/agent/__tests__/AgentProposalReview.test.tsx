@@ -5,6 +5,16 @@ import { describe, expect, it, vi } from "vitest";
 import { AgentProposalReview } from "../AgentProposalReview";
 
 describe("AgentProposalReview", () => {
+  it.each(["supports", "component"])("keeps structured preview and common controls usable after a module %s failure", failure => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {}); const approve = vi.fn();
+    const { container, unmount } = render(<AgentProposalReview proposals={[{ id: "review", title: "Review resource", summary: "Review the resource change.", revision: "r1", risk: "review-required", status: "awaiting-approval", resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, resultType: "sample.preview", result: { value: 42 } }]} resultRenderers={[{ id: "sample", displayName: "Sample", supports: () => { if (failure === "supports") throw new Error("Broken predicate"); return true; }, component: () => { throw new Error("Broken presentation"); } }]} onApprove={approve} onDeny={() => {}} onExecute={() => {}} />);
+    try {
+      expect(container.textContent).toContain('"value": 42'); expect(container.textContent).toContain("Structured evidence remains available");
+      const button = [...container.querySelectorAll("button")].find(item => item.textContent?.includes("Approve"))!;
+      expect(button.disabled).toBe(false); button.click(); expect(approve).toHaveBeenCalledTimes(1);
+    } finally { unmount(); logged.mockRestore(); }
+  });
+
   it("requires explicit proposal approval before execution", () => {
     const onApprove = vi.fn();
     const onDeny = vi.fn();

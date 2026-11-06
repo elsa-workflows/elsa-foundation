@@ -188,3 +188,8 @@ console.log(
   `[build-tokens] Wrote ${OUT_PATH} (alias layer + ${themeBlockCount} theme/material blocks + ` +
     `${resolved.length} layer-1 snapshot values).`
 );
+
+// Ship the real primitive rules; external modules must never copy host CSS.
+const componentSources = ["components.css", "layout/page.css", "disclosure/disclosure.css", "minimal.css"];
+const componentCss = componentSources.map(name => readFileSync(resolve(pkgRoot, "../Client/src/app/ui", name), "utf8")).join("\n");
+writeFileSync(resolve(pkgRoot, "dist/styles.css"), `${output}\n${componentCss}`, "utf8");

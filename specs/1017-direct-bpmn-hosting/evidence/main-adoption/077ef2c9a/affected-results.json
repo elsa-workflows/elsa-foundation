@@ -1,0 +1,406 @@
+[
+  {
+    "name": "frontend-build",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "pnpm",
+      "-r",
+      "build"
+    ],
+    "exitCode": 0,
+    "seconds": 16.27
+  },
+  {
+    "name": "frontend-unit",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "pnpm",
+      "-r",
+      "--workspace-concurrency=1",
+      "test"
+    ],
+    "exitCode": 0,
+    "seconds": 64.85
+  },
+  {
+    "name": "frontend-typecheck",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 9.5
+  },
+  {
+    "name": "frontend-browser",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "tests/browser/backend-connections.spec.ts",
+      "tests/browser/backend-stream-isolation.spec.ts",
+      "tests/browser/workflow-library.spec.ts",
+      "--config",
+      ".artifacts/approved-main077/playwright.config.ts",
+      "--project=chromium",
+      "--workers=1",
+      "--retries=0",
+      "--reporter=json"
+    ],
+    "exitCode": 0,
+    "seconds": 47.36
+  },
+  {
+    "name": "architecture-required-restore",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "bash",
+      "tools/architecture/restore-ci-project-graph.sh",
+      "--locked-mode"
+    ],
+    "exitCode": 0,
+    "seconds": 8.87
+  },
+  {
+    "name": "architecture",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--logger",
+      "trx;LogFileName=approved-main077-architecture.trx"
+    ],
+    "exitCode": 0,
+    "seconds": 193.46,
+    "counters": {
+      "total": "606",
+      "executed": "606",
+      "passed": "606",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Essentials/tests/Architecture/Tests/TestResults/approved-main077-architecture.trx",
+    "discovery": {
+      "listedDisplays": 591,
+      "executedCases": 606,
+      "runtimeExpandedTheories": {
+        "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration": 11,
+        "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected": 6
+      },
+      "allListedCasesAccountedFor": true
+    }
+  },
+  {
+    "name": "identity",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--logger",
+      "trx;LogFileName=approved-main077-identity.trx"
+    ],
+    "exitCode": 0,
+    "seconds": 11.15,
+    "counters": {
+      "total": "535",
+      "executed": "535",
+      "passed": "535",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Essentials/tests/Foundation/Identity/Tests/TestResults/approved-main077-identity.trx",
+    "discovery": {
+      "listedDisplays": 535,
+      "executedCases": 535,
+      "runtimeExpandedTheories": {},
+      "allListedCasesAccountedFor": true
+    }
+  },
+  {
+    "name": "studio-tests",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--logger",
+      "trx;LogFileName=approved-main077-studio-tests.trx"
+    ],
+    "exitCode": 0,
+    "seconds": 153.24,
+    "counters": {
+      "total": "690",
+      "executed": "690",
+      "passed": "690",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Studio/tests/Elsa.Studio.Tests/TestResults/approved-main077-studio-tests.trx",
+    "discovery": {
+      "listedDisplays": 683,
+      "executedCases": 690,
+      "runtimeExpandedTheories": {
+        "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest": 8
+      },
+      "allListedCasesAccountedFor": true
+    }
+  },
+  {
+    "name": "retained-migrations",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--filter",
+      "FullyQualifiedName~WorkflowsDesignRetainedMigrationTests",
+      "--logger",
+      "trx;LogFileName=approved-main077-retained-migrations.trx"
+    ],
+    "exitCode": 0,
+    "seconds": 11.26,
+    "counters": {
+      "total": "7",
+      "executed": "7",
+      "passed": "7",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/TestResults/approved-main077-retained-migrations.trx",
+    "discovery": {
+      "listedDisplays": 494,
+      "selectedExecuted": 7,
+      "unselectedDisplays": 487,
+      "selection": [
+        "WorkflowsDesignRetainedMigrationTests"
+      ],
+      "scope": "Only selected cases newly executed; unselected displays are not new passes or skips."
+    }
+  },
+  {
+    "name": "hosting-build",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo"
+    ],
+    "exitCode": 0,
+    "seconds": 18.05
+  },
+  {
+    "name": "actual-hosts",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host|FullyQualifiedName~Actual_native_execution_and_pin_survive_an_owned_host_restart",
+      "--logger",
+      "trx;LogFileName=approved-main077-actual-hosts.trx",
+      "--nologo"
+    ],
+    "exitCode": 0,
+    "seconds": 18.14,
+    "counters": {
+      "total": "2",
+      "executed": "2",
+      "passed": "2",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Essentials/tests/Activities/Bpmn/Hosting/Tests/TestResults/approved-main077-actual-hosts.trx",
+    "discovery": {
+      "listedDisplays": 46,
+      "selectedExecuted": 2,
+      "unselectedDisplays": 44,
+      "selection": [
+        "Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+        "Actual_native_execution_and_pin_survive_an_owned_host_restart"
+      ],
+      "scope": "Only selected cases newly executed; unselected displays are not new passes or skips."
+    }
+  },
+  {
+    "name": "studio-build",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo"
+    ],
+    "exitCode": 0,
+    "seconds": 8.42
+  },
+  {
+    "name": "maps-build",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "build",
+      "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo"
+    ],
+    "exitCode": 0,
+    "seconds": 0.59
+  },
+  {
+    "name": "maps-check",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--",
+      "check"
+    ],
+    "exitCode": 0,
+    "seconds": 0.61
+  },
+  {
+    "name": "test-tiers-check",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--",
+      "test-tiers-check"
+    ],
+    "exitCode": 0,
+    "seconds": 0.86
+  },
+  {
+    "name": "evidence-size-check",
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "python3.14",
+      "tools/ci/check_evidence_sizes.py"
+    ],
+    "exitCode": 0,
+    "seconds": 0.13
+  }
+]

@@ -155,12 +155,19 @@ function studioRegistry() {
   };
 }
 
+// The pages default to the Server host; these cases exercise the Studio registry, so select it explicitly.
 function renderModuleManagementPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<ModuleManagementPage api={api} />);
+  return selectStudioHost(renderWithClient(<ModuleManagementPage api={api} />));
 }
 
 function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<PackageFeedsPage api={api} />);
+  return selectStudioHost(renderWithClient(<PackageFeedsPage api={api} />));
+}
+
+function selectStudioHost<T extends { container: Element }>(rendered: T) {
+  const tab = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [data-tab-id='studio']");
+  flushSync(() => tab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  return rendered;
 }
 
 async function clickSourceButton(container: Element, text: string) {

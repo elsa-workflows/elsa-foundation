@@ -1,0 +1,10 @@
+{
+  "sameItems": true,
+  "changedFields": [
+    "RebuildId",
+    "Sequence",
+    "AsOf",
+    "ConcurrencyToken",
+    "LastModifiedAt"
+  ]
+}

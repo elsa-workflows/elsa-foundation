@@ -17,6 +17,7 @@ afterEach(() => {
     container.remove();
   }
   vi.clearAllMocks();
+  window.history.replaceState({},"","/");
 });
 
 function render(content: React.ReactNode) {
@@ -73,4 +74,14 @@ describe("Home widget content", () => {
     expect(host.querySelectorAll(".home-action")).toHaveLength(2);
     expect(host.querySelector(".home-action-shortcut")?.getAttribute("href")).toBe("/workflows/instances");
   });
+  it("omits the runtime shortcut when only authoring is supported",() => {
+    const host=render(<QuickActionsWidget runtimeAvailable={false} />);
+    expect(host.querySelectorAll(".home-action")).toHaveLength(2);expect(host.querySelector(".home-action-shortcut")).toBeNull();
+  });
+  it("qualifies resource hrefs for copy and modified-click navigation",() => {
+    window.history.replaceState({},"","/?backend=runtime");
+    const host=render(<RecentRunsWidget {...props} snapshot={[{id:"shared-id",name:"Runtime only",status:"Running"}]} />);
+    expect(host.querySelector(".home-record")?.getAttribute("href")).toBe("/workflows/instances/shared-id?backend=runtime");
+  });
+
 });

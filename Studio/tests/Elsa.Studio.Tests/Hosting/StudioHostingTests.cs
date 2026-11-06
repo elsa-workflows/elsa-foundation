@@ -94,11 +94,11 @@ public sealed class StudioHostingTests
     }
 
     [Fact]
-    public async Task Failed_shell_activation_leaves_real_files_runtime_and_root_fallback_available()
+    public async Task Failed_shell_activation_keeps_files_available_but_refuses_partial_runtime_configuration()
     {
         await using var host = await HostingTestHost.StartAsync(failActivation: true);
         Assert.Equal("export const probe = true;", await host.Client.GetStringAsync("/entry.js"));
-        Assert.StartsWith("window.__ELSA_STUDIO_RUNTIME__", await host.Client.GetStringAsync("/studio-runtime.js"));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
         Assert.Equal("<html>custom Studio</html>", await host.Client.GetStringAsync("/"));
         using var missing = await host.Client.GetAsync("/_elsa/unknown");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
@@ -201,7 +201,7 @@ public sealed class StudioHostingTests
         var script = await host.Client.GetStringAsync("/studio-runtime.js");
         using var json = JsonDocument.Parse(script[(script.IndexOf('=') + 1)..].Trim().TrimEnd(';'));
         Assert.False(json.RootElement.GetProperty("auth").GetProperty("enabled").GetBoolean());
-        Assert.Equal(new[] { "activityDefinitions", "attention", "auth", "backendBaseUrl", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "activityDefinitions", "appearance", "attention", "auth", "backendBaseUrl", "backendId", "branding", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
     }
 
     [Theory]
@@ -215,6 +215,8 @@ public sealed class StudioHostingTests
     public void Invalid_registration_options_fail_early(string kind)
     {
         var builder = WebApplication.CreateSlimBuilder();
+        using var contentRoot = builder.Environment.ContentRootFileProvider as IDisposable;
+        using var configuration = builder.Configuration;
         Assert.Throws<ArgumentException>(() => builder.AddElsaStudio(options =>
         {
             options.ShellsFile = null;
@@ -338,13 +340,20 @@ public sealed class StudioHostingTests
 
 internal sealed class HostingTestHost : IAsyncDisposable
 {
+    private WebApplicationBuilder? _builder;
     public string Root { get; } = Directory.CreateTempSubdirectory("studio-hosting-").FullName;
     public HostingProbe Probe { get; } = new();
     public StudioBuilder Studio { get; private set; } = null!;
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
 
-    public static StudioConfigurationMutationGate CreateGate() => WebApplication.CreateSlimBuilder().AddElsaStudio(options => options.ShellsFile = null).ConfigurationMutationGate;
+    public static StudioConfigurationMutationGate CreateGate()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        using var contentRoot = builder.Environment.ContentRootFileProvider as IDisposable;
+        using var configuration = builder.Configuration;
+        return builder.AddElsaStudio(options => options.ShellsFile = null).ConfigurationMutationGate;
+    }
 
     public static async Task<HostingTestHost> StartAsync(bool failActivation = false, int scopeFailures = 0, bool withDefaultDecoy = false)
     {
@@ -355,7 +364,7 @@ internal sealed class HostingTestHost : IAsyncDisposable
             await File.WriteAllTextAsync(Path.Combine(webRoot, "entry.js"), "export const probe = true;");
             await File.WriteAllTextAsync(Path.Combine(webRoot, "entry.css"), "body{}");
             await File.WriteAllTextAsync(Path.Combine(webRoot, "custom.html"), "<html>custom Studio</html>");
-            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = host.Root, WebRootPath = webRoot });
+            var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = host.Root, WebRootPath = webRoot });
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -404,6 +413,11 @@ internal sealed class HostingTestHost : IAsyncDisposable
     {
         Client?.Dispose();
         if (App is not null) await App.DisposeAsync();
+        else if (_builder is not null)
+        {
+            _builder.Configuration.Dispose();
+            (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
+        }
         Directory.Delete(Root, true);
     }
 }

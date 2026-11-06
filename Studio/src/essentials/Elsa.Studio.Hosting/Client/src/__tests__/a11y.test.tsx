@@ -7,6 +7,7 @@ import { ThemeProvider } from "../app/components/ThemeProvider";
 import { StudioTabPanel, StudioTabs, type StudioTabItem } from "../app/ui/layout/Tabs";
 import { StudioAlert } from "../app/ui/feedback/FeedbackStates";
 import { StudioDataGrid } from "../app/ui/data-grid/DataGrid";
+import { StudioPageHeader, StudioResultState } from "../app/ui/layout/Page";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -206,11 +207,24 @@ describe("StudioDataGrid semantics", () => {
     expect(selected).toEqual(["b", "a"]);
   });
 
+  it("does not let an interactive ancestor outside the row suppress row clicks", () => {
+    const selected: string[] = [];
+    render(<div role="button"><StudioDataGrid columns={columns} items={items} getKey={item => item.id} onSelect={item => selected.push(item.id)} /></div>);
+    flushSync(() => container.querySelector<HTMLElement>('.studio-data-grid-row [role="cell"]')!.click());
+    expect(selected).toEqual(["a"]);
+  });
+
   it("renders the emptyState slot when there are no rows", () => {
     render(<StudioDataGrid columns={columns} items={[]} getKey={item => item.id} emptyState={<span>Nothing here</span>} />);
     expect(container.textContent).toContain("Nothing here");
     expect(container.querySelectorAll('.studio-data-grid-row[role="row"]')).toHaveLength(0);
   });
+});
+
+it("keeps result feedback below an embedded page title in the heading outline", () => {
+  render(<><StudioPageHeader title="Embedded collection" headingLevel={2} /><StudioResultState title="Nothing here" headingLevel={3} /></>);
+  expect(Array.from(container.querySelectorAll("h1,h2,h3")).map(heading => [heading.tagName, heading.textContent]))
+    .toEqual([["H2", "Embedded collection"], ["H3", "Nothing here"]]);
 });
 
 describe("sidebar search filtering", () => {

@@ -100,6 +100,29 @@ public sealed class IdentityProviderModuleTests
     }
 
     [Fact]
+    public async Task ExternalPrincipalFactory_EmitsTheCanonicalElsaUserIdEvenWhenTheProviderSubjectComesFirst()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityApi();
+        services.AddFoundationAspNetCoreIdentity();
+        using var provider = services.BuildServiceProvider();
+        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "provider-subject-ada"),
+            new Claim(IdentityClaimTypes.UserId, "forged-user"),
+            new Claim(ClaimTypes.Name, "Ada Lovelace")
+        ], "external"));
+
+        var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(new PrincipalFactoryContext(
+            "tenant-a", "entra", "provider-subject-ada", externalPrincipal, [], []));
+
+        var linked = await provider.GetRequiredService<IExternalIdentityStore>().FindBySubjectAsync("tenant-a", "entra", "provider-subject-ada");
+        Assert.NotNull(linked);
+        Assert.Equal(linked.UserId, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
+        Assert.NotEqual("provider-subject-ada", linked.UserId);
+    }
+
+    [Fact]
     public async Task ExternalPrincipalFactory_EmitsTrustedMarkerAfterProjection()
     {
         var services = new ServiceCollection();

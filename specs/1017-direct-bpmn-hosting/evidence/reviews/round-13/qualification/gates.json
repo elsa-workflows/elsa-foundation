@@ -1,0 +1,70 @@
+{
+  "architecture": {
+    "listedTests": 585,
+    "everyListedTestExecuted": true,
+    "runtimeExpandedTheoryCounts": {
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration": 5,
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected": 6
+    },
+    "counts": {
+      "total": "594",
+      "executed": "594",
+      "passed": "594",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "treeSource": "72576671d69336efe6c8f62bd31a0c6e9e14027e",
+    "assemblySource": "e28ef6701cc468d342803425ba77bed4594fb8db"
+  },
+  "firstMigrationProbe": {
+    "executedTests": 0,
+    "status": "NOT EXECUTED; filter targeted the wrong project; no migration pass inferred"
+  },
+  "migrationWhole": {
+    "listedTests": 494,
+    "everyListedTestExecuted": true,
+    "runtimeExpandedTheoryCounts": {
+      "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.EfModuleBindingForTests.For_reproduces_the_modules_hand_written_binding": 15
+    },
+    "counts": {
+      "total": "508",
+      "executed": "508",
+      "passed": "508",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "source": "72576671d69336efe6c8f62bd31a0c6e9e14027e",
+    "retainedMigrationControls": {
+      "passed": 7,
+      "providerScripts": [
+        "Sqlite",
+        "SqlServer",
+        "PostgreSql",
+        "MySql"
+      ],
+      "liveProviderUpgradeProof": false
+    }
+  }
+}

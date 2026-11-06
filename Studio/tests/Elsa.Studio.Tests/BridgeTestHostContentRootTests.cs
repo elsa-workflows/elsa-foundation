@@ -18,7 +18,7 @@ public sealed class BridgeTestHostContentRootTests
         var originalCurrentDirectory = Directory.GetCurrentDirectory();
         var alternateDirectory = Directory.CreateTempSubdirectory();
         var alternatePath = Path.GetFullPath(alternateDirectory.FullName);
-        var configurations = new List<IDisposable>();
+        var resources = new List<IDisposable>();
 
         try
         {
@@ -27,11 +27,13 @@ public sealed class BridgeTestHostContentRootTests
             Directory.SetCurrentDirectory(alternatePath);
 
             var defaultBuilder = WebApplication.CreateSlimBuilder();
-            configurations.Add(defaultBuilder.Configuration);
+            resources.Add(defaultBuilder.Configuration);
+            if (defaultBuilder.Environment.ContentRootFileProvider is IDisposable defaultFiles) resources.Add(defaultFiles);
             Assert.Equal(ResolvePhysicalPath(alternatePath), ResolvePhysicalPath(defaultBuilder.Environment.ContentRootPath));
 
             var bridgeBuilder = BridgeTestHost.CreateBuilder();
-            configurations.Add(bridgeBuilder.Configuration);
+            resources.Add(bridgeBuilder.Configuration);
+            if (bridgeBuilder.Environment.ContentRootFileProvider is IDisposable bridgeFiles) resources.Add(bridgeFiles);
             var actualContentRoot = bridgeBuilder.Environment.ContentRootPath;
             // Hosting may resolve a symlinked parent (for example, /var to /private/var on macOS).
             Assert.Equal(ResolvePhysicalPath(expectedContentRoot), ResolvePhysicalPath(actualContentRoot));
@@ -46,8 +48,8 @@ public sealed class BridgeTestHostContentRootTests
             {
                 try
                 {
-                    foreach (var configuration in configurations)
-                        configuration.Dispose();
+                    foreach (var resource in resources)
+                        resource.Dispose();
                 }
                 finally
                 {

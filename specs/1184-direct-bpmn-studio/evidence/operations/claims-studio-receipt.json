@@ -1,0 +1,439 @@
+{
+  "productSource": "26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+  "harnessSource": "86438f687fcf1437b4708e62a3e6e4935f502807",
+  "hostProducts": [
+    {
+      "name": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "1997a3939880deff34ce4a45e6d1de16cd8f243204cacd7bd568f3db78877b3f"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "e07246b5186c1117bf25bc396b57df00aa90157d431fccc257656588c0a8b932"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Interchange.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "8129e670a05093d93b40d914e8f12ad4e0fa21b87df14060eb7e0ecf1b38c2e6"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "082ba41578d122a357ca2c06ae79804f7c1bc102a46fe06a7f7421114fc2fc48"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "666635d9386891c04c1dc32e330792cf9a415f12891dc0feecf4f0a16e0897dd"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "b739ad1bfa12fef93a48f2c42568ac16e2d240687939c3658da736f26a399943"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "542e52a23e8c1fe491bd874d6ca53ad1b1999b6348eee53366f50cf04503c516"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "6582dfd42d4266643a6ee371fec44a38657e6e76a0c55a927292ed9d71a8a23f"
+    },
+    {
+      "name": "Elsa.Serialization.SystemText.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "28c432fb52665249e657c3370c538e8332cfcae815fec34b9dfc258ada3f7449"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "3a3807b7ae8580f4c2d53061605e414e7daa988a1d85f98c9ce10e193353afe0"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "37dbd420b5c1417e47fb54d8150711364aec0b46994e930bc61c061084400440"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "7a08854a2ab9c81277444a5f018306c23ce5707226c7e5bead558dc605619e78"
+    },
+    {
+      "name": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "a768085e3729cacde398b30368cff994362d973a89e4cb743c6c86195de95569"
+    }
+  ],
+  "studioProducts": [
+    {
+      "name": "Elsa.Studio.Web.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "9f707763f72bbe8d4be1b785fc59f00e092f4a293c329bc7adc9ba8ea436e864"
+    },
+    {
+      "name": "Elsa.Studio.Hosting.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "f3c6d4b5c76d372a54a071a23622c941e9850ddc32b2a7724de09a30efd55c17"
+    },
+    {
+      "name": "Elsa.Studio.Core.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "acd15cd9505accfeedaa16bdba8ee80aadee810000aa78696bc78972ae1ab9bf"
+    },
+    {
+      "name": "Elsa.Studio.Workflows.dll",
+      "productVersion": "1.0.0+26d8f32568e1ee7fc38bd9fb5c4b26dab8b50fcb",
+      "sha256": "7239a935b6b087aef5da6f056a369f1299d894427c5ff8fb12c9fb42d3354987"
+    }
+  ],
+  "controllerSha256": "04b17faef6838625378b8cfd071c2afb13aff786fe555f9ed0e64e23a6f2c296",
+  "driverSha256": "a0ef1f34c9a00ac9a65378d7e98ee32d50451b12bf3d6888220a45b40bbb93d0",
+  "stages": {
+    "recovered": {
+      "runtime": {
+        "databaseSha256": "03ed9079e88e8f39b153931ec1e23b38aaf8cc6f7427724add98d2a110470f51",
+        "gzipSha256": "3a738ae68728d8317e17bbdfbb6629827acb25028cb30941758f594161647037"
+      },
+      "design": {
+        "databaseSha256": "87684ba8e165a873a9fc2e2a9a67109dca9d86a902795f508a857b165b54064b",
+        "gzipSha256": "0c3231ea0f14be2abc6144873932d1e6d345c77ed895a17108d49edb9f1ffcf4"
+      }
+    },
+    "claimed": {
+      "runtime": {
+        "databaseSha256": "4d6429e921491d9705399babeb65c8bda8e960886fe664f77bc6c97290276463",
+        "gzipSha256": "b177b813694012ea8fd8287d7826f1af8e111094217cad87614b3440475dec78"
+      },
+      "design": {
+        "databaseSha256": "619f2b7c9d8f09bf6bcbeab0ec4f6a102688de533adb09e021db6f90a1c362ec",
+        "gzipSha256": "044732983781674d9877783dc9949e043beb495ce24270eb695802ba4ed6de67"
+      }
+    },
+    "restarted-claimed": {
+      "runtime": {
+        "databaseSha256": "4d6429e921491d9705399babeb65c8bda8e960886fe664f77bc6c97290276463",
+        "gzipSha256": "16162ab94a746b6632b17faf01981de0ce9d12756b5962cf98c8a6f1d4a980c3"
+      },
+      "design": {
+        "databaseSha256": "69f7a26b69450f17bc8dc52db06cc44a565c31aeb66c095a05a482444e47cd9d",
+        "gzipSha256": "f37907548ccf4c7cef3b40f453d4985db9b47e2253018c3e8bc4b36b4bdd54b1"
+      }
+    },
+    "completed": {
+      "runtime": {
+        "databaseSha256": "f61e154a390cd16371cbcdcfde4bfaf7d5ce30ecf8748c8815b065f89e570334",
+        "gzipSha256": "855fdd36d12e12184105944ef7ee796f2a8d171e5327ca06e20ba32bd96931a8"
+      },
+      "design": {
+        "databaseSha256": "69f7a26b69450f17bc8dc52db06cc44a565c31aeb66c095a05a482444e47cd9d",
+        "gzipSha256": "792855e947ef2255f7b5873fb520e10ca4f102c15e0b322be5b738a0af36932d"
+      }
+    },
+    "restarted-completed": {
+      "runtime": {
+        "databaseSha256": "f61e154a390cd16371cbcdcfde4bfaf7d5ce30ecf8748c8815b065f89e570334",
+        "gzipSha256": "e78d7b93d3fa207b00e31392956bbac7f7805095a792f2656fc058aa21fce090"
+      },
+      "design": {
+        "databaseSha256": "3daf4c71d0c4fba1117f79aa83664127b1d3cae55e5fbddc2baabf6976818e3d",
+        "gzipSha256": "10adab2e86fc2ce27802fbaf0dbdcdc63e7ea1c2a46b39a66df50e3f940107d5"
+      }
+    },
+    "timer-claimed": {
+      "runtime": {
+        "databaseSha256": "f0ff72de6bf383022112ea37a00c87a2b854b9e058daf4801c51ed428b898a08",
+        "gzipSha256": "deb1e3c871f64dbbd313f315235858757cae6a762e8e1bf9d8a35aa6d176cc56"
+      },
+      "design": {
+        "databaseSha256": "3daf4c71d0c4fba1117f79aa83664127b1d3cae55e5fbddc2baabf6976818e3d",
+        "gzipSha256": "6f0d6082db9c37af82315eef0a7329fd533acab9bc4007bcd6bac9ef95de9ae3"
+      }
+    },
+    "timer-interrupted": {
+      "runtime": {
+        "databaseSha256": "8d1a8dcc50b6c54f6accd7fcc8017bf90f4278b838d19b1fe97a06c27af69a8f",
+        "gzipSha256": "e0c9583f6d285279df4986e9ebca44bbc1628c93858d9eaf0ae1224b3ab8c138"
+      },
+      "design": {
+        "databaseSha256": "1cb3693a0cc7f1124d30fd62670ee3b847d427f9a3284fc7b049896599a24e6b",
+        "gzipSha256": "5e9e6a906c3cc78bb1f91d83fea68b031abe37df42a3c2248d025235ae347805"
+      }
+    },
+    "cancel-interrupted": {
+      "runtime": {
+        "databaseSha256": "19e50c8cc80d2176d30bcce1b2d1f89fef175130122c2ec679d91aec6b1f67c0",
+        "gzipSha256": "9723cacda75086754c65a7bdb6a63b21f27b825ee814f3e555e8525fd1cdfbd0"
+      },
+      "design": {
+        "databaseSha256": "1cb3693a0cc7f1124d30fd62670ee3b847d427f9a3284fc7b049896599a24e6b",
+        "gzipSha256": "174c3043f2a0472c4260f3edf49e81fd7c4c11a6298e7edb3af9f17dac44bcc5"
+      }
+    },
+    "finished": {
+      "runtime": {
+        "databaseSha256": "19e50c8cc80d2176d30bcce1b2d1f89fef175130122c2ec679d91aec6b1f67c0",
+        "gzipSha256": "764e275b5f92aaebb19f6a0186af87a8dd3ddba4c466367dc2342aed6c79c805"
+      },
+      "design": {
+        "databaseSha256": "1cb3693a0cc7f1124d30fd62670ee3b847d427f9a3284fc7b049896599a24e6b",
+        "gzipSha256": "8562620c5e51332132ccc4bb91824856451f191062398eda13dbd1045dfde518"
+      }
+    }
+  },
+  "actions": [
+    {
+      "action": "Signed in through the real form",
+      "at": "2026-11-01T22:15:23.265Z"
+    },
+    {
+      "action": "Authored, saved and reopened a claim-required human wait",
+      "at": "2026-11-01T22:15:26.502Z"
+    },
+    {
+      "action": "Claimed through Studio",
+      "at": "2026-11-01T22:15:28.306Z"
+    },
+    {
+      "action": "Controller checkpoint claimed",
+      "at": "2026-11-01T22:15:29.314Z"
+    },
+    {
+      "action": "Controller restart restarted-claimed",
+      "at": "2026-11-01T22:15:34.568Z"
+    },
+    {
+      "action": "A second subject sees the owner and cannot complete",
+      "at": "2026-11-01T22:15:36.576Z"
+    },
+    {
+      "action": "Controller checkpoint completed",
+      "at": "2026-11-01T22:15:38.931Z"
+    },
+    {
+      "action": "Controller restart restarted-completed",
+      "at": "2026-11-01T22:15:43.575Z"
+    },
+    {
+      "action": "The owner completed; the completion replays after a real restart",
+      "at": "2026-11-01T22:15:44.531Z"
+    },
+    {
+      "action": "Controller checkpoint timer-claimed",
+      "at": "2026-11-01T22:15:46.980Z"
+    },
+    {
+      "action": "Controller checkpoint timer-interrupted",
+      "at": "2026-11-01T22:16:14.040Z"
+    },
+    {
+      "action": "The duration timer interrupted claimed work; the late claimed completion is refused",
+      "at": "2026-11-01T22:16:14.040Z"
+    },
+    {
+      "action": "Controller checkpoint cancel-interrupted",
+      "at": "2026-11-01T22:16:16.725Z"
+    },
+    {
+      "action": "Cancellation interrupted claimed work; a late claimed completion is refused",
+      "at": "2026-11-01T22:16:16.725Z"
+    }
+  ],
+  "probes": {
+    "timedPublication": {
+      "status": 200,
+      "body": {
+        "executable": {
+          "artifactId": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "definitionId": "bpmn-model:sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "definitionVersionId": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97"
+        },
+        "incarnationId": "f0d5faf0e11d45838dace1f89b15ede3",
+        "sourceReferenceId": "bpmn-source:f74089703f18234c5d46418409452fae3e8d853f41b735c208850bf48a4a755d",
+        "profile": "foundation-direct-claims-v1"
+      }
+    },
+    "timedStart": {
+      "status": 201,
+      "body": {
+        "executionId": "bpmn:912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345",
+        "inputId": "timed-start",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 1,
+          "lifecycle": "Running"
+        }
+      }
+    },
+    "timerInspection": {
+      "status": "TerminalSettled",
+      "result": {
+        "status": "Completed",
+        "outcome": "Done"
+      },
+      "work": []
+    },
+    "lateClaimedCompletion": {
+      "status": 409,
+      "body": {
+        "executionId": "bpmn:912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345",
+        "inputId": "late-after-timer",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    "cancelStart": {
+      "status": 201,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "cancel-start",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 1,
+          "lifecycle": "Running"
+        }
+      }
+    },
+    "cancel": {
+      "status": 200,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "operator-cancel",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    "claimedCompletionAfterCancel": {
+      "status": 409,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "late-after-cancel",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    }
+  },
+  "owner": {
+    "claimId": "bpmn-claim:7ecdb36c9cb618849a0e9b59f679f9e6c45cb00cba0756591b0ad7557fc0c542",
+    "claimantId": "seed-user-516dd8aa49c146bd86326874",
+    "claimedAt": "2026-11-01T22:15:28.214415+00:00"
+  },
+  "executions": {
+    "claimedAuthored": "bpmn:2e0a7c1b1b4f02638c91aa825ceeee2a6bef2c53b7bc8600c149c5975d5a71bc",
+    "timerInterrupted": "bpmn:912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345",
+    "cancelInterrupted": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2"
+  },
+  "uiCommands": [
+    {
+      "method": "POST",
+      "path": "/bpmn/executions",
+      "status": 201,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 1,
+        "lifecycle": "Running"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/bpmn/executions/bpmn%3A2e0a7c1b1b4f02638c91aa825ceeee2a6bef2c53b7bc8600c149c5975d5a71bc/work/bpmn-work%3A559ab51b3902d4ed7139e3fbe736097272a7bc35b2e6347aba2ffd0e3bd172cf/claim",
+      "status": 200,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 2,
+        "lifecycle": "Running",
+        "claimId": "bpmn-claim:7ecdb36c9cb618849a0e9b59f679f9e6c45cb00cba0756591b0ad7557fc0c542"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/bpmn/executions/bpmn%3A2e0a7c1b1b4f02638c91aa825ceeee2a6bef2c53b7bc8600c149c5975d5a71bc/work/bpmn-work%3A559ab51b3902d4ed7139e3fbe736097272a7bc35b2e6347aba2ffd0e3bd172cf/complete-claimed",
+      "status": 200,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 3,
+        "lifecycle": "TerminalSettled"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/bpmn/executions/bpmn%3A2e0a7c1b1b4f02638c91aa825ceeee2a6bef2c53b7bc8600c149c5975d5a71bc/work/bpmn-work%3A559ab51b3902d4ed7139e3fbe736097272a7bc35b2e6347aba2ffd0e3bd172cf/complete-claimed",
+      "status": 200,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 3,
+        "lifecycle": "TerminalSettled"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/bpmn/executions/bpmn%3A912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345/work/bpmn-work%3A789e76d9ea4e695889badaf7ef9165150ec923deaf7494d5ce69d07778ff50cd/claim",
+      "status": 200,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 2,
+        "lifecycle": "Running",
+        "claimId": "bpmn-claim:381a51864fdd9a22e6480961479ff8d66f4522c9d8b3158999bd1484be375973"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/bpmn/executions/bpmn%3A7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2/work/bpmn-work%3A8d00b2d199828227c68f80f7780f1148a39a5de05f693e833ac9fb0238a4a7aa/claim",
+      "status": 200,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 2,
+        "lifecycle": "Running",
+        "claimId": "bpmn-claim:e545ffb3eee3ed58682aa0c3b76de4deb8c76db5cb51e8d570ad5669b3e3ac5a"
+      }
+    }
+  ],
+  "screenshotsSha256": {
+    "ui-cancel-interrupted.png": "98c7f386ca085076aaada4fc46c012a59449641b3e8deed1f358bce8c0b4736d",
+    "ui-claim-authored.png": "691c3ae7ec752c13e13beaa02f10f151ac5f1028973d4f3d8c06e6e67804a36e",
+    "ui-claim-unclaimed.png": "65c702e468f93cd801e9f4ffb53d13d154f1c5c5688c827155f8d1bb35070adb",
+    "ui-claimed-completed.png": "6fc30288ff976e4862d911e70b8274376c92841478af69489d339ae56a606cef",
+    "ui-claimed-replayed.png": "406ed0197f8c4b3a1c537ef2c1b532bbd9d27d6931445f40842b662e41ee8177",
+    "ui-claimed.png": "7f7b3bb385cd9ccdc470617acc7fbac0d289958611b6bf4d83227d1d2e453128",
+    "ui-other-owner.png": "a6e0f5aeeeb478feaf35bf50c53820d9960672b054642399b0ba9befd976b723",
+    "ui-timer-claimed.png": "1b256c56932f58c7e15cd1cbdc683a82b72ba7b5b02a11d269f5615f122134cf",
+    "ui-timer-interrupted.png": "09b35885e7e350439efe9e406f117a78475fafde04a914de32b3447223915514"
+  },
+  "pageErrors": [],
+  "completed": true
+}

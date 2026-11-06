@@ -10,6 +10,16 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 public sealed class CachingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
 {
     IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
+    bool IWorkflowExecutableStore.SupportsModelMaterial => Inner.SupportsModelMaterial;
+    ValueTask<RuntimeExecutionMaterial?> IWorkflowExecutableStore.FindMaterialAsync(string artifactId, CancellationToken cancellationToken) =>
+        Inner.FindMaterialAsync(artifactId, cancellationToken);
+    ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> IWorkflowExecutableStore.ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken) =>
+        Inner.ListMaterialPageAsync(request, cancellationToken);
+    async ValueTask IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+    {
+        await Inner.SaveModelAsync(material, cancellationToken);
+        _cache.Invalidate(_partition, material.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
+    }
     private const string DefaultPartition = "default";
 
     private readonly WorkflowExecutableCache _cache;

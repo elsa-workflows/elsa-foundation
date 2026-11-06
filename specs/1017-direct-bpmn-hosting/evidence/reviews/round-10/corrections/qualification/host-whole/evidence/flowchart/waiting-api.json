@@ -1,0 +1,20 @@
+{
+  "executionId": "bpmn-embedded:31f1d20e5fd1e97b0e46e33024f76085f221efe43348178a42a1e3720b487fe2",
+  "revision": 1,
+  "status": "Running",
+  "protocol": {
+    "key": "elsa.bpmn",
+    "version": 1
+  },
+  "executable": {
+    "artifactId": "sha256:237795d9e46afa71b8cb860269627e2af2db0f7fe6be4f0e9dceb7e63b471938",
+    "definitionId": "bpmn-model:sha256:237795d9e46afa71b8cb860269627e2af2db0f7fe6be4f0e9dceb7e63b471938",
+    "definitionVersionId": "sha256:237795d9e46afa71b8cb860269627e2af2db0f7fe6be4f0e9dceb7e63b471938",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:237795d9e46afa71b8cb860269627e2af2db0f7fe6be4f0e9dceb7e63b471938"
+  },
+  "materialIncarnationId": "92324754efa84e3db5e4f7f52c23f4a9",
+  "createdAt": "2026-10-31T19:33:07.643265\u002B00:00",
+  "updatedAt": "2026-10-31T19:33:07.643265\u002B00:00",
+  "result": null
+}

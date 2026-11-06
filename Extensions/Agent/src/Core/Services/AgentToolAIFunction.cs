@@ -16,7 +16,14 @@ public sealed record AgentToolAIFunctionContext(
     IReadOnlyCollection<AgentContextAttachment> Context,
     AgentPolicy Policy,
     IAgentToolInvoker Invoker,
-    Action<AgentActionProposal>? OnProposal = null);
+    Action<AgentActionProposal>? OnProposal = null)
+{
+    public string TenantId { get; init; } = string.Empty;
+    public string TurnId { get; init; } = string.Empty;
+    public AgentClientBinding? Client { get; init; }
+    public bool AllowMutations { get; init; } = true;
+    public Action<AgentToolResult>? OnResult { get; init; }
+}
 
 /// <summary>Projects <see cref="IAgentTool"/>s to MEAI <see cref="AIFunction"/>s — the shared tool currency across providers.</summary>
 public static class AgentToolAIFunctions
@@ -64,22 +71,33 @@ internal sealed class AgentToolAIFunction(AgentToolDescriptor descriptor, AgentT
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
+        if (!context.AllowMutations && descriptor.Mutability == AgentToolMutability.Mutating)
+            return new { status = "denied", executed = false, error = "Mutation tools are unavailable during receipt continuation." };
         var args = arguments.ToDictionary(pair => pair.Key, pair => pair.Value);
-        var invocation = new AgentToolInvocation(AgentProviderPrimitives.NewId(), descriptor.Name, context.SessionId, context.ActorId, args, context.Context);
+        var invocation = new AgentToolInvocation(AgentProviderPrimitives.NewId(), descriptor.Name, context.SessionId, context.ActorId, args, context.Context)
+        { TenantId = context.TenantId, TurnId = context.TurnId, Client = context.Client };
         var dispatch = await context.Invoker.DispatchAsync(invocation, context.Policy, cancellationToken);
 
         return dispatch.Outcome switch
         {
-            AgentToolDispatchOutcome.Executed => dispatch.Result?.Content ?? string.Empty,
+            AgentToolDispatchOutcome.Executed => HandleResult(dispatch.Result),
             AgentToolDispatchOutcome.ProposalCreated => HandleProposal(dispatch.Proposal!),
-            _ => $"Tool '{descriptor.Name}' was denied: {dispatch.Error?.Message}"
+            _ => new { status = "denied", executed = false, error = dispatch.Error }
         };
     }
 
-    private string HandleProposal(AgentActionProposal proposal)
+    private object? HandleResult(AgentToolResult? result)
+    {
+        if (result is not null) context.OnResult?.Invoke(result);
+        return result;
+    }
+
+    private object HandleProposal(AgentActionProposal proposal)
     {
         context.OnProposal?.Invoke(proposal);
-        return $"A change proposal '{proposal.Id}' was created and is awaiting human approval. It has NOT been applied yet.";
+        return new { status = "awaiting-approval", executed = false, proposalId = proposal.Id,
+            summary = "A reviewable proposal is awaiting human approval. No change has been applied.",
+            preview = proposal.PreparedInvocation?.Preview };
     }
 }
 

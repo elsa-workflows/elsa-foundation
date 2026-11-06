@@ -1,11 +1,11 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
 
-const technicalNamePattern = /^[a-z0-9._:-]+$/;
+const technicalNamePattern = /^[a-zA-Z0-9._:-]+$/;
 
 export function CreateSecretDialog({
   descriptors,
@@ -40,8 +40,8 @@ export function CreateSecretDialog({
   const errorRef = useRef<HTMLParagraphElement>(null);
   const descriptionInputId = useId();
   const scopeMatchingHintId = useId();
-  const normalizedName = normalizeTechnicalName(name);
-  const nameInvalid = normalizedName.length > 0 && !technicalNamePattern.test(normalizedName);
+  const trimmedName = name.trim();
+  const nameInvalid = trimmedName.length > 0 && !technicalNamePattern.test(trimmedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
   const supportedStores = useMemo(() => storesForType(descriptors, typeName), [descriptors, typeName]);
   const selectedStore = descriptors.stores.find(store => store.name === storeName);
@@ -54,7 +54,7 @@ export function CreateSecretDialog({
     storeName.length > 0 && storeName !== defaultStoreName
   ].filter(Boolean).length;
   const usesConfigurationKey = storeName === "configuration";
-  const canSubmit = normalizedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
+  const canSubmit = trimmedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
   useDialogFocus(dialogRef, submitting ? null : onCancel);
 
   useEffect(() => {
@@ -68,8 +68,8 @@ export function CreateSecretDialog({
     setError("");
     try {
       await onSave({
-        name: normalizedName,
-        displayName: displayName.trim() || normalizedName,
+        name: trimmedName,
+        displayName: displayName.trim() || trimmedName,
         description: description.trim() || undefined,
         typeName,
         storeName,
@@ -104,8 +104,8 @@ export function CreateSecretDialog({
           </header>
           <div className="secrets-create-content">
             {error ? <p ref={errorRef} className="secrets-alert" role="alert" tabIndex={0}>{error}</p> : null}
-            <Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(normalizedName)} autoComplete="off" />
-            <p className={nameInvalid ? "secrets-field-error" : "secrets-field-hint"}>Trimmed and lowercased. Use letters, numbers, dot, dash, underscore, or colon.</p>
+            <Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(trimmedName)} autoComplete="off" />
+            <p className={nameInvalid ? "secrets-field-error" : "secrets-field-hint"}>Casing is preserved; names are matched case-insensitively. Use letters, numbers, dot, dash, underscore, or colon.</p>
             <label>Type<select value={typeName} onChange={event => changeType(event.target.value)}>{descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}</select></label>
             {usesConfigurationKey ? (
               <Field label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" />
@@ -135,10 +135,13 @@ export function CreateSecretDialog({
               </div>
             </AdvancedSection>
           </div>
-          <div className="secrets-dialog-actions secrets-create-actions">
-            <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
-            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Creating..." : "Create"}</button>
-          </div>
+          <StudioDialogFooter
+            className="secrets-dialog-actions secrets-create-actions"
+            onCancel={onCancel}
+            cancelDisabled={submitting}
+            confirmLabel={submitting ? "Creating..." : "Create"}
+            confirmDisabled={!canSubmit || submitting}
+          />
         </form>
       </section>
     </div>
@@ -200,10 +203,13 @@ export function RotateSecretDialog({
           <SecretValueField label="New value" value={value} typeName={secret.typeName} editorHint={type?.editorHint ?? null} onChange={setValue} />
         )}
         <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
-        <div className="secrets-dialog-actions">
-          <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
-          <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Rotating..." : "Rotate"}</button>
-        </div>
+        <StudioDialogFooter
+          className="secrets-dialog-actions"
+          onCancel={onCancel}
+          cancelDisabled={submitting}
+          confirmLabel={submitting ? "Rotating..." : "Rotate"}
+          confirmDisabled={!canSubmit || submitting}
+        />
       </form>
     </div>
   );
@@ -263,10 +269,6 @@ function storesForType(descriptors: SecretDescriptorsResponse, typeName: string)
 
 function defaultStoreNameForType(descriptors: SecretDescriptorsResponse, typeName: string) {
   return storesForType(descriptors, typeName)[0]?.name ?? descriptors.stores[0]?.name ?? "encrypted";
-}
-
-function normalizeTechnicalName(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function parseTags(value: string) {

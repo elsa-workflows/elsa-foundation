@@ -42,6 +42,57 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 6 November 2026:** [Entity-aware integrations #3608](../program-goals/entity-aware-integrations.md)
+is authorized for research, necessary product/architecture design and specification, scoped implementation,
+verification, applicable review/merge and resulting-main qualification. The [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429)
+supersedes its intake-only delivery state. Entity-aware integrations come first, with external applications
+retaining record authority. The owner selected service connections first and, after the bounded assessment,
+the optional business-record backend as an explicit [follow-on #3916](https://github.com/elsa-workflows/elsa-foundation/issues/3916).
+The current production scope is external entity-aware integration; no record store is claimed. Domain
+applications remain separate compositions. Follow the [staged critical path](../plans/entity-aware-integrations.md):
+assessment/source proof and applicable design/spec agreement precede production implementation. Run beside
+active programs, preserve consolidation's priority one, coordinate shared ownership and keep one active
+implementation leaf. This authorization reactivates no unrelated paused/parked work and approves no unresolved
+architecture. Production/shared-system deployment, production credentials, package release, mandatory CRM,
+wholesale mirroring, arbitrary database access and an unbounded application platform are outside scope.
+
+**Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
+is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
+contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing
+the research, interaction direction and [delivery plan](../plans/activity-data-selection.md), the owner instructed:
+"Proceed as proposed". Authors select available whole outputs or nested fields at eligible consuming inputs,
+with readable references and optional explicit expression composition, without intermediate variable ceremony.
+Sequencing: M0 establishment #3883, M1 Flowchart/Sequence proof #3884, M2 reviewed contracts/specification #3885,
+then small picker/binding, expression/editing and integrated qualification slices. Reuse feature #3094 and
+preserve its compensation relationship and independently deliverable whole-output scope; #2310 retains text
+expression-authoring ownership. Run beside active programs, preserve consolidation's priority one, coordinate
+shared Studio/runtime paths and reactivate no unrelated work. Keep one integration lane; parallel workers use
+separate leaves/worktrees only after their shared contracts are committed. Basic data selection is language-neutral;
+authorized test-run examples follow the metadata-first core journey as a separately scheduled increment.
+Accepted ADR 0045 causal semantics remain; this does not settle draft activity-reference/coercion proposals or
+approve unresolved architecture. Establishment and the research proof are not product acceptance. Releases,
+deployment, credentials, provider purchases and publisher activation are excluded. The remaining decisions apply.
+
+**Owner amendment, 4 November 2026:** [Elsa 4 StateMachine #3815](../program-goals/state-machine.md)
+is authorized for interactive design, program establishment and delivery once the applicable design/spec
+agreement gates allow it. The owner explicitly selected both hierarchical states and parallel regions for
+the first release, delivered hierarchy first, with root/nested composition and integrated Studio authoring
+and inspection. [The program's owner decision register](https://github.com/elsa-workflows/elsa-foundation/issues/3815#accepted-owner-decisions-4-november-2026)
+records the accepted direction separately from unresolved semantics and architectural placement.
+Sequencing: run beside the active programs, preserve Foundation/Studio consolidation's priority one,
+coordinate shared runtime/Studio paths and keep one active implementation leaf. M0 design agreement precedes
+production implementation; establishment is not specification approval or product acceptance. This scoped
+revisit supersedes ADR 0085 D10's StateMachine deferral only; it reactivates no other parity or parked work.
+Saga/compensation semantics remain with their existing program; releases and deployments are not included.
+
+**Owner continuation, 1 November 2026:** the already active [Runtime Efficiency #2531](../program-goals/runtime-efficiency.md)
+collects the remaining improvements from the native performance assessment and PR #3545, and is authorized for
+end-to-end delivery by the [owner instruction recorded on the program](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6554699791).
+Reuse this program and its matching leaves, reconcile older outstanding acceptance and deliver the M0–M5
+continuation. It runs beside the active programs, with one implementation leaf at a time; model/hosting feature
+delivery stays with Unified Execution #2892. Bounded owner-requested performance qualification is included;
+wall-clock CI gates, the low-priority proposed commit journal, releases and production deployments are not added.
+
 Two programs stay active: **Elsa 4 Simplification** (this ADR) and **Runtime Efficiency**, which merges the
 Runtime Database Access and Runtime Throughput goals. Every other program, including all delivery programs, is
 parked for six weeks from this ADR's date and reviewed at the end of that window. Goals whose remaining work
@@ -114,6 +165,20 @@ merges once a review round leaves nothing actionable and CI is green, runtime an
 The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
 packet #3043 is reviewed.
 
+**Owner amendment, 3 November 2026:** [Named Embedded Blocks #3610](../program-goals/named-embedded-blocks.md)
+is authorized for end-to-end delivery. After approving the Block name, bounded native extraction,
+BPMN extraction, safe promotion analysis and review → publish → replace lifecycle, the owner instructed:
+“Update the plan to include that durable breakdown, then go ahead and deliver the program end to end
+as your stated goal.” The program uses a native Program/Epic/Feature/Task hierarchy and
+[Project 67](https://github.com/orgs/elsa-workflows/projects/67), with one implementation leaf at a time.
+Sequencing: establish the durable plan and prove a composed-host prototype, then deliver equivalent
+authoring, BPMN extraction, reusable promotion and integrated qualification. Run beside active programs,
+displace none, preserve consolidation's priority one, coordinate shared Studio/runtime paths and
+reactivate no parked backlog. Reuse existing activity-owned composite semantics; this is not a new
+execution-model program. The authorization includes scoped implementation, normal PR/review/merge
+delivery and resulting-main verification; releases and deployment are excluded. Establishment or
+prototype completion does not complete the product. Remaining decisions in this ADR still apply.
+
 **Owner amendment, 23 October 2026:** [Studio Expression Developer Experience #2310](../program-goals/studio-expression-developer-experience.md)
 is active again, by the owner's decision of 23 October to salvage its plan and start the program. Sequencing: the
 first two units are the program records (#2367) and the expression-tooling permission-hash fix ported from #2373,
@@ -150,6 +215,69 @@ own acceptance criteria and task checklists; this program uses that lightweight 
 SpecKit artifact tree. Consequential new runtime observation contracts still require an explicit design
 decision. Execution ownership, persistence policy, model semantics, capture policy and authorization are
 preserved. Releases, deployments and publisher activation are not included. The remaining decisions apply.
+
+**Owner amendment, 29 October 2026:** [Weaver across Studio #3428](../program-goals/weaver-across-studio.md)
+is authorized as an active program. After source analysis and the M0–M5 proposal, the owner instructed:
+"Approved. Additionally, create a Project with a Kanban board view to track WIP." The program establishes
+module-owned context, tools, guidance, review UI and supported effects across current Studio contexts,
+with an independent future-module extension requiring no changes to Weaver core, the Studio host or
+provider adapters. Sequencing: M0 baseline and activation, M1 candidate contract plus independent module
+witness before contract freeze, M2 shared lifecycle, M3 workflow and M4 current-module journeys, then
+M5 integrated qualification. Run beside the active programs, displace none, coordinate shared Studio
+paths with their owners and reactivate no parked backlog. Runtime agent composition remains under
+#2892; reuse the delivered Hosting #3340 and Unified Workspace #3392 seams. The native issue hierarchy
+and [Project #65](https://github.com/orgs/elsa-workflows/projects/65/views/1) track the approved roadmap,
+with one implementation leaf at a time. Establishment does not constitute product delivery; scoped
+issues retain normal triage, contract decisions and review gates. Releases, deployments, provider
+purchases and publisher activation are not included. The remaining decisions apply.
+
+**Owner continuation, 29 October 2026:** the owner authorizes autonomous end-to-end delivery of
+Weaver across Studio's full M0–M5 roadmap, including implementation, tests, documentation, scoped PRs,
+review, merges through the authorized repository process and verification on resulting main. The
+[delivery authorization on #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6509190533)
+supersedes the establishment-only session boundary. Within this Program, the agent may triage,
+refine and promote sufficiently clear issues, respecting dependencies, existing claims and the
+repository readiness cap. Keep one implementation leaf active with one integration/review lane;
+independent subagents may support investigation and review. Routine decisions and milestone
+transitions proceed without renewed permission. The module ownership, independent-package witness
+before contract freeze, sequencing and existing scope/credential/release boundaries remain.
+
+**Owner amendment, 31 October 2026:** [Workflow Library Organization #3499](../program-goals/workflow-library-organization.md)
+is authorized for program establishment and end-to-end delivery. After the folders/tags/saved-views proposal,
+the owner instructed: "Turn this into a Program, then deliver it end to end. Use a separate work tree."
+Sequencing: establish the reviewed requirements, restore folders and bounded browsing in the current EF host,
+deliver classification and private/shared views with Studio journeys, then qualify providers, packages and the
+normal composed host through review, required CI and resulting main. Run beside the active programs, displace
+none, preserve consolidation's first priority and coordinate shared Studio paths. This activates only the
+organization scope adopted from historical #790 and parked #792; other parked objectives remain parked.
+Timing benchmarks remain retired; deterministic bounded query work is the scale gate under D2. Releases and
+production deployment are not included. The remaining decisions in this ADR apply.
+
+**Owner amendment, 31 October 2026:** [Elsa Agents #3519](../program-goals/elsa-agents.md)
+is authorized for program establishment and end-to-end delivery. The owner selected reusable specialists
+with explicit inputs/outputs and optional conversation continuity, Microsoft Agent Framework reuse and
+Foundry-inspired authoring, then instructed: "make a complete end to end plan, including research spikes,
+designs, architecture and implementation, then turn that into a Program, then deliver that end to end".
+Sequencing: M0 executable research, M1 reviewed product/architecture design, M2 catalog/publication,
+M3 specialist execution, M4 native/BPMN integration, M5 Studio/evaluations, M6 tools/knowledge/bounded teams,
+then M7 integrated qualification. Run beside the active programs, displace none, preserve consolidation's
+first priority and reactivate no parked backlog. Existing #2892/#2912 retains production collaboration
+and recovery ownership; consume or deliver shared work through that owning hierarchy and its claims.
+Weaver #3428 retains Studio-assistant ownership and its provider defaults. One active implementation leaf
+for this Program; routine decisions, milestone transitions, tests, documentation, scoped PRs, authorized
+review/merge and resulting-main qualification proceed under this instruction. Releases, deployments,
+provider purchases and publisher activation are not included. The remaining decisions apply.
+
+**Owner amendment, 2 November 2026:** [User Tasks #3688](../program-goals/user-tasks.md)
+is authorized for establishment, design, planning and end-to-end delivery of feature #3577. The owner
+instructed: “Design and plan the delivery of https://github.com/elsa-workflows/elsa-foundation/issues/3577.
+Create a Program issue for a durable plan, then deliver the program end to end”. Sequence research and
+reviewed design before durable lifecycle/recovery, workflow/forms/API integration, Studio and integrated
+qualification, review/merge and resulting-main acceptance. Run beside active programs, displace none,
+preserve Foundation/Studio consolidation as priority one and coordinate shared runtime/Studio paths.
+This activates only the User Tasks scope linked from parity #2771, not its remaining phases or any parked
+backlog. Routine decisions, milestone transitions, tests, docs and scoped PRs proceed under this authority;
+release and production deployment remain separate.
 
 ### D1 — Risk-based testing
 

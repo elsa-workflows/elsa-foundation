@@ -70,6 +70,7 @@ public sealed class DomainManagementApiCompositionTests
         "elsa.api.expressions",
         "elsa.api.publishing",
         "elsa.api.runtime",
+        "elsa.api.structured-logs",
         "elsa.api.workflow-design"
     ];
 

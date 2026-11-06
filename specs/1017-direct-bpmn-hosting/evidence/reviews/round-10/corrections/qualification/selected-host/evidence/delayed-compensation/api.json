@@ -1,0 +1,8 @@
+{
+  "status": 404,
+  "errors": {
+    "generalErrors": [
+      "The BPMN resource is not available."
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+[
+  {
+    "name": "bpmn",
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 513,
+    "executedCases": 513,
+    "counters": {
+      "total": "513",
+      "executed": "513",
+      "passed": "513",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "allListedCasesAccountedFor": true,
+    "runtimeExpandedTheories": {}
+  },
+  {
+    "name": "interchange",
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 132,
+    "executedCases": 132,
+    "counters": {
+      "total": "132",
+      "executed": "132",
+      "passed": "132",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "allListedCasesAccountedFor": true,
+    "runtimeExpandedTheories": {}
+  },
+  {
+    "name": "actual-hosts",
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 46,
+    "executedCases": 46,
+    "counters": {
+      "total": "46",
+      "executed": "46",
+      "passed": "46",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "allListedCasesAccountedFor": true,
+    "runtimeExpandedTheories": {}
+  }
+]

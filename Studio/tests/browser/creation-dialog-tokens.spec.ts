@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 for (const fixture of [
-  { path: "connection-secrets.html", opener: "Create connection", dialog: "Create connection", scope: ".connections-header" },
-  { path: "secret-scopes.html", opener: "Create secret", dialog: "Create secret", scope: ".secrets-header" }
+  { path: "connection-secrets.html", opener: "Create connection", dialog: "Create connection", scope: ".studio-page-header" },
+  { path: "secret-scopes.html", opener: "Create secret", dialog: "Create secret", scope: ".studio-page-header" }
 ]) {
   test(`${fixture.dialog} retains desktop insets with the minimum host token contract`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });

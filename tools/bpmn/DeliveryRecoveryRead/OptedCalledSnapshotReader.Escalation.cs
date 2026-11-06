@@ -28,7 +28,7 @@ internal static partial class OptedCalledSnapshotReader
         var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(Path.GetFullPath(snapshot)).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
         await using (var query = connection.CreateCommand()) { query.CommandText = "PRAGMA query_only=ON"; await query.ExecuteNonQueryAsync(); }
-        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
         var access = new ScopedAccess(new PersistenceScope(scopeName));
         var workflows = new EfWorkflowExecutionStateStore(context, access, new NoPaging());
         var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());

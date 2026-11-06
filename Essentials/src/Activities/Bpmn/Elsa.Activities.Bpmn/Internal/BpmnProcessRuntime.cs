@@ -17,7 +17,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger ledger,
     IRuntimeWorkflowControlBoundary? controlBoundary = null) : IBpmnProcessRuntime
 {
-    private static readonly BpmnInterpreter Interpreter = BpmnInterpreter.CreateDefault();
+    private static BpmnInterpreter Interpreter => BpmnEvaluationComponent.Interpreter;
     private const string BpmnErrorCategory = "bpmn.error";
 
     public async ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
@@ -299,10 +299,6 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
     private static string Owner(IRuntimeActivityExecutionContext context) => context.ActivityExecutionState.InvocationId;
     private static string? ErrorCode(ActivityExecutionState child) => child.Fault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey) == BpmnErrorCategory
         ? child.Fault.Metadata.GetValueOrDefault(ActivityFault.FaultTypeMetadataKey) : null;
-    private static BpmnEvaluation Evaluate(Func<BpmnEvaluation> action)
-    {
-        try { return action(); }
-        catch (global::Bpmn.Semantics.BpmnExecutionException exception) { throw new BpmnHostException(exception.Message, exception); }
-    }
+    private static BpmnEvaluation Evaluate(Func<BpmnEvaluation> action) => BpmnEvaluationComponent.Evaluate(action);
     private sealed record Frame(global::Bpmn.Semantics.BpmnGraph Graph, BpmnStateDocument Document, IReadOnlyList<ActivityExecutionState> Children, RuntimeChildControlTarget? ControlTarget);
 }

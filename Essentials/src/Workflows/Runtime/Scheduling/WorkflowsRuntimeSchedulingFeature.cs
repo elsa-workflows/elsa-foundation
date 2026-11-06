@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Events.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -34,10 +36,10 @@ namespace Elsa.Workflows.Runtime.Scheduling;
     name: "WorkflowsRuntimeScheduling",
     DisplayName = "Workflows Runtime Scheduling",
     Description = "Background pump that fires durable timers, resuming suspended workflows (e.g. Delay) at their due time through the bookmark-resume dispatcher. Compose alongside a durable runtime persistence provider (e.g. the Runtime EF Core module on SQLite) and the Tasks feature to make timers restart-durable.",
-    DependsOn = new object[] { "Tasks" })]
+    DependsOn = new object[] { "Tasks", "Events" })]
 public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Sweep interval (seconds)", Description = "Baseline seconds between timer sweeps while the host is healthy.", Category = "Runtime", DefaultValue = "10")]
+    [ManifestSetting(DisplayName = "Recovery sweep interval (seconds)", Description = "Seconds between recovery sweeps for missed or other-host timer notifications. Known eligible timers wake at their deadlines while healthy.", Category = "Runtime", DefaultValue = "10")]
     public double SweepIntervalSeconds { get; set; } = 10;
 
     [ManifestSetting(DisplayName = "Max backoff interval (minutes)", Description = "Upper bound the sweep interval and per-timer backoff widen to under sustained failure.", Category = "Runtime", DefaultValue = "5")]
@@ -45,6 +47,9 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 
     [ManifestSetting(DisplayName = "Max timers per tick", Description = "Hard cap on due timers loaded and fired per sweep, bounding both the store scan and dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxTimersPerTick { get; set; } = 100;
+
+    [ManifestSetting(DisplayName = "Max concurrent dispatches", Description = "Maximum simultaneous pump dispatches across independent executions, using separate persistence scopes. Tune against provider capacity.", Category = "Runtime", DefaultValue = "1")]
+    public int MaxConcurrentDispatches { get; set; } = 1;
 
     [ManifestSetting(DisplayName = "Timer claim visibility (seconds)", Description = "Visibility lease renewed while a claim-capable durable timer store dispatches one timer.", Category = "Runtime", DefaultValue = "60")]
     public double ClaimVisibilitySeconds { get; set; } = 60;
@@ -60,6 +65,7 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
             options.MaxTimersPerTick = MaxTimersPerTick;
+            options.MaxConcurrentDispatches = MaxConcurrentDispatches;
             options.ClaimVisibilityTimeout = TimeSpan.FromSeconds(ClaimVisibilitySeconds);
             options.NotFoundGrace = TimeSpan.FromSeconds(NotFoundGraceSeconds);
         });
@@ -68,6 +74,8 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
         // supply their own TimeProvider) drive time deterministically. TryAdd defers to the runtime feature's
         // registration when composed together.
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<DurableTimerWakeup>();
+        services.AddEventHandler<DurableTimerScheduled, DurableTimerScheduledHandler>();
 
         // In-memory default; a durable persistence provider swaps IDurableTimerStore for a scoped,
         // restart-surviving adapter.
@@ -78,6 +86,7 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
             sp.GetRequiredService<IPersistenceScopeRunner>(),
             sp.GetRequiredService<IOptions<DurableTimerPumpOptions>>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<DurableTimerPumpTask>>()));
+            sp.GetRequiredService<ILogger<DurableTimerPumpTask>>(),
+            sp.GetRequiredService<DurableTimerWakeup>()));
     }
 }

@@ -89,6 +89,16 @@ public static class RuntimeCheckpointCommitFingerprint
         }
     }
 
+    /// <summary>Canonical identity of a model input, independent of transport timestamps and queue envelopes.</summary>
+    public static string ComputeModelInput(RuntimeModelExecutionCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var payload = JsonSerializer.SerializeToElement(new { Format = "elsa.model.input.v1", Command = command }, ExactBookmarkOptions);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
     // Intent equivalence uses JsonElement.DeepEquals, including exact numeric equivalence. Keep this
     // normalization separate from the historical checkpoint writer, whose existing bytes are durable identities.
     private static void WriteIntentCanonical(JsonElement element, Utf8JsonWriter writer)
@@ -265,6 +275,13 @@ public static class RuntimeCheckpointCommitFingerprint
         var element = commit.ExpectedBookmarkResume is null
             ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        if (commit.ModelState is not null)
+            element = JsonSerializer.SerializeToElement(new { ModelStateVersion = 1, Payload = element, commit.ModelState }, ExactBookmarkOptions);
+        // ExpectedModelExecution, like ExpectedFence, is an attempt's concurrency condition. A retry can
+        // validate a newer snapshot with the same live work. Its immutable semantic address is retained
+        // in WorkflowExecutionState.ModelWorkOrigin, which already participates in the decision identity.
+        // ExpectedModelParentWait is likewise only a refreshed physical condition. The model-owned state
+        // retains its immutable native invocation/result address and participates in this fingerprint.
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

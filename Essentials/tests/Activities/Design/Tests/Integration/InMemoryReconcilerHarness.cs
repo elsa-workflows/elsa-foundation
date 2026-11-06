@@ -37,7 +37,10 @@ internal static class InMemoryReconcilerHarness
     public static ActivityVersionReconciler BuildReconciler(
         CatalogStore store,
         IActivityReconciliationSource source,
-        DuplicateHandling duplicateHandling = DuplicateHandling.Skip)
+        DuplicateHandling duplicateHandling = DuplicateHandling.Skip,
+        IActivitySourceVersionPublisher? sourceVersionPublisher = null,
+        IActivityReconciliationDiagnosticStore? diagnosticStore = null,
+        Microsoft.Extensions.Logging.ILogger<ActivityVersionReconciler>? logger = null)
     {
         var identityGenerator = new TestIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
@@ -58,7 +61,7 @@ internal static class InMemoryReconcilerHarness
         var publisher = new DirectEventPublisher(handler);
 
         return new ActivityVersionReconciler(
-            NullLogger<ActivityVersionReconciler>.Instance,
+            logger ?? NullLogger<ActivityVersionReconciler>.Instance,
             hasher,
             publisher,
             Options.Create(new ActivityVersionReconcilerOptions { DuplicateHandling = duplicateHandling }),
@@ -66,7 +69,9 @@ internal static class InMemoryReconcilerHarness
             versionStore,
             new InMemoryAddActivityDefinitionCommand(store),
             new InMemoryAddVersionCommand(store),
-            new InMemoryRefreshVersionCommand(store));
+            new InMemoryRefreshVersionCommand(store),
+            sourceVersionPublisher is null ? null : [sourceVersionPublisher],
+            diagnosticStore);
     }
 
     public sealed class CatalogStore
@@ -123,6 +128,16 @@ internal static class InMemoryReconcilerHarness
 
     private sealed class InMemoryRefreshVersionCommand(CatalogStore store) : IRefreshActivityDefinitionVersionCommand
     {
+        public Task RefreshPaletteHintsAsync(DesignOperationKey operationKey, ActivityDefinitionVersion version,
+            string? expectedOldFacetsSource, CancellationToken cancellationToken = default)
+        {
+            var persisted = store.Versions.Single(item => item.Id == version.Id);
+            persisted.DesignFacets = version.DesignFacets;
+            persisted.LastModifiedAt = DateTimeOffset.UtcNow;
+            version.LastModifiedAt = persisted.LastModifiedAt;
+            return Task.CompletedTask;
+        }
+
         public Task RefreshAsync(
             DesignOperationKey operationKey,
             ActivityDefinitionVersion version,

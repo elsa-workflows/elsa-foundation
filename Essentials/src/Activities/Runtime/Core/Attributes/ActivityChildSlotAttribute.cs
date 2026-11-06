@@ -46,4 +46,10 @@ public sealed class ActivityChildSlotAttribute : Attribute
 
     /// <summary>The template used to derive a runtime slot name from a repeatable slot item.</summary>
     public string? SlotNameTemplate { get; init; }
+
+    /// <summary>An optional stable item identity used by authoring navigation for repeatable slots.</summary>
+    public string? ItemIdProperty { get; init; }
+
+    /// <summary>An optional boolean input argument inside each repeatable slot item.</summary>
+    public string? ConditionProperty { get; init; }
 }

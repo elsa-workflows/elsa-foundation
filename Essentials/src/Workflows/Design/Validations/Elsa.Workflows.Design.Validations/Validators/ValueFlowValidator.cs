@@ -430,7 +430,8 @@ public sealed class ValueFlowValidator(IActivityStructureService activityStructu
             while (pending.Count > 0)
             {
                 var (node, parent, order) = pending.Pop();
-                var info = new NodeInfo(node, parent, order);
+                var effective = node with { Inputs = _structureService.ProjectInputs(node).ApplyToInputs(node.Inputs) };
+                var info = new NodeInfo(effective, parent, order);
                 _nodes.Add(info);
                 if (!string.IsNullOrWhiteSpace(node.NodeId))
                     _byNodeId.TryAdd(node.NodeId, info);

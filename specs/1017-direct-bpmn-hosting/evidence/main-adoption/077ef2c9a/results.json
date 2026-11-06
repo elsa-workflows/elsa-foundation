@@ -1,0 +1,317 @@
+{
+  "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+  "base": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee",
+  "affectedProjects": [
+    {
+      "name": "architecture",
+      "counters": {
+        "total": "606",
+        "executed": "606",
+        "passed": "606",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "discovery": {
+        "listedDisplays": 591,
+        "executedCases": 606,
+        "runtimeExpandedTheories": {
+          "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration": 11,
+          "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected": 6
+        },
+        "allListedCasesAccountedFor": true
+      }
+    },
+    {
+      "name": "identity",
+      "counters": {
+        "total": "535",
+        "executed": "535",
+        "passed": "535",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "discovery": {
+        "listedDisplays": 535,
+        "executedCases": 535,
+        "runtimeExpandedTheories": {},
+        "allListedCasesAccountedFor": true
+      }
+    },
+    {
+      "name": "studio-tests",
+      "counters": {
+        "total": "690",
+        "executed": "690",
+        "passed": "690",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "discovery": {
+        "listedDisplays": 683,
+        "executedCases": 690,
+        "runtimeExpandedTheories": {
+          "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest": 8
+        },
+        "allListedCasesAccountedFor": true
+      }
+    },
+    {
+      "name": "retained-migrations",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "7",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "discovery": {
+        "listedDisplays": 494,
+        "selectedExecuted": 7,
+        "unselectedDisplays": 487,
+        "selection": [
+          "WorkflowsDesignRetainedMigrationTests"
+        ],
+        "scope": "Only selected cases newly executed; unselected displays are not new passes or skips."
+      }
+    },
+    {
+      "name": "actual-hosts",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "discovery": {
+        "listedDisplays": 46,
+        "selectedExecuted": 2,
+        "unselectedDisplays": 44,
+        "selection": [
+          "Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+          "Actual_native_execution_and_pin_survive_an_owned_host_restart"
+        ],
+        "scope": "Only selected cases newly executed; unselected displays are not new passes or skips."
+      }
+    }
+  ],
+  "runtimeEfCatalog": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo",
+      "--logger",
+      "trx;LogFileName=approved-main077-runtime-ef-catalog.trx"
+    ],
+    "exitCode": 0,
+    "seconds": 150.8,
+    "reason": "Upstream worker fixture changes only expected catalog digest/version3 to4; expected worker profile digest remains unchanged. Whole affected project repeats current catalog.",
+    "counters": {
+      "total": "1839",
+      "executed": "1839",
+      "passed": "1839",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trx": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/TestResults/approved-main077-runtime-ef-catalog.trx",
+    "discovery": {
+      "arguments": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--no-restore",
+        "--list-tests",
+        "--nologo"
+      ],
+      "listedDisplays": 1839,
+      "executedCases": 1839,
+      "runtimeExpandedTheories": {},
+      "allListedCasesAccountedFor": true
+    }
+  },
+  "frontend": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "normalSinglePass": true,
+    "vitestPackageSummaries": 19,
+    "passed": 4182,
+    "skipped": 0,
+    "extraShuffledPasses": false
+  },
+  "browser": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "discovered": 29,
+    "stats": {
+      "startTime": "2026-11-01T06:32:54.966Z",
+      "duration": 46892.029,
+      "expected": 29,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "retries": 0
+  },
+  "studio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false,
+    "negativeControls": {
+      "tests": 13,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "frozen": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "count": 104,
+    "allByteIdentical": true,
+    "manifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153"
+  },
+  "sourceArchive": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "base": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee",
+    "bundleRef": "refs/codex/verification/2898-main-077-1842ae257",
+    "name": "elsa-bpmn-hosting-source-1842ae257.bundle",
+    "bytes": 2277319,
+    "sha256": "c29c75837979d72b6d2e255cee6d8d9e9c9a2fea8986b5f4d2cf6a2a6a112459",
+    "assetId": 697554262,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-1842ae257.bundle",
+    "uploader": "elsa-workflows-codex[bot]",
+    "reDownloadedAndHashVerified": true,
+    "checksumAssetVerified": true,
+    "coldRestoreCandidateInitiallyAbsent": true,
+    "coldRestoreMatchesSource": true,
+    "releasePublishedAtUnchanged": true,
+    "scope": "Exact adopted-main077 product source1842ae257. Current affected qualification is recorded separately; no clean review, remote publication, required CI or merge verdict is implied. Owner approved the existing history route; no force action has been used. No new release/tag."
+  },
+  "sourceReconciliation": {
+    "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+    "base": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee",
+    "previousQualifiedProduct": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "unchangedSourceTrees": [
+      "Essentials/src/Workflows/Runtime",
+      "Essentials/src/Workflows/Publishing",
+      "Essentials/src/Activities/Bpmn",
+      "Essentials/src/Activities/Behavioral",
+      "Essentials/tests/Workflows/Runtime/Tests",
+      "Essentials/tests/Activities/Bpmn",
+      "tools/bpmn"
+    ],
+    "unchangedDoesNotMeanNewExecution": true,
+    "priorFullEvidence": {
+      "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+      "runtime": 3106,
+      "bpmn": 513,
+      "interchange": 132,
+      "behavioral": 220,
+      "fullActualHosts": 46
+    },
+    "affectedRuntimeEfFixture": "WorkerProfileCandidate expected catalog hash/version3 to4 only; profile digest unchanged. Whole Runtime EF repeats separately; see runtime-ef-catalog-results.json.",
+    "priorStrictNativeEvidence": {
+      "source": "f12385fcbe829e6f7cc0bb29347ec6c2e1d27dbf",
+      "passed": 21
+    },
+    "priorBinaryApiEvidence": {
+      "source": "c53167925de74d026be739ce4248ed4047c0e578",
+      "comparisons": 18
+    },
+    "limits": "Earlier passes keep actual source. Current selected actual hosts2 do not claim a new full46 run. Broader provider/direct-model Studio/ETL/program acceptance and final delivery gates remain."
+  },
+  "ownerHistoryDecision": {
+    "ownerReply": "Approved both",
+    "goalReactivatedByUser": true,
+    "forceTarget": "c53167925de74d026be739ce4248ed4047c0e578",
+    "requiredRemoteLease": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+    "forceActionsAuthorized": 1,
+    "forceActionsUsed": 0,
+    "subsequentStep": "Ordinary forward publication of qualified descendant",
+    "prCheckpoint": "https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6554403026",
+    "state": "Reconciling current main before approved publication; no branch mutation yet"
+  },
+  "limits": "Current local affected qualification, not a clean final review, current remote-head required CI, merge or resulting-main proof.15 full rounds complete; final16 reserved for Code Review. One leased clean-root rewrite is owner-approved but not yet used. Older whole Runtime/BPMN/host46/native21/ABI18 evidence retains declared sources. Broader2898/2907/2908/program acceptance and deferrals remain open."
+}
