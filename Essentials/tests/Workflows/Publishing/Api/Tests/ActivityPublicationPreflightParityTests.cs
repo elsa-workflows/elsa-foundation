@@ -67,6 +67,31 @@ public sealed class ActivityPublicationPreflightParityTests
         Assert.Equal(expectedErrorCode is null ? 1 : 0, scenario.Commits.Count);
     }
 
+    [Fact]
+    public async Task Replaced_core_evaluator_controls_both_preflight_and_publish()
+    {
+        var evaluator = new RefusingEvaluator();
+        var scenario = new Scenario(Candidate.Publishable, evaluator: evaluator);
+        var preflight = await scenario.PreflightAsync();
+        var publish = await scenario.PublishAsync();
+        Assert.Equal(ActivityErrorCodes.PublicationInvalid, preflight.ErrorCode);
+        Assert.Equal("fixture.replaced-evaluator", preflight.DiagnosticCodes);
+        Assert.Equal(preflight, publish);
+        Assert.Equal(3, evaluator.Calls);
+        Assert.Empty(scenario.Commits);
+    }
+
+    private sealed class RefusingEvaluator : IActivityPublicationCandidateEvaluator
+    {
+        public int Calls;
+        public Task<EvaluatedPublicationCandidate> EvaluateAsync(ActivityTemplateCompilerRequest request, ActivityDraftValidation validation, CancellationToken cancellationToken)
+        {
+            Calls++;
+            ActivityDiagnostic diagnostic = new("fixture.replaced-evaluator", ActivityDiagnosticSeverity.Error, "The replacement policy refuses this candidate.", new(request.Candidate.SubjectKind, request.Candidate.Id));
+            return Task.FromResult(new EvaluatedPublicationCandidate(new(null, new(0, 0, 0, 0, 0, 0, 0), [], [diagnostic]), [diagnostic], false));
+        }
+    }
+
     /// <summary>
     /// What an entry point concluded, reduced to what a caller can act on. A preflight that returns a view it does not
     /// call publishable is the same refusal publish raises as <see cref="ActivityErrorCodes.PublicationInvalid"/>.
@@ -90,7 +115,7 @@ public sealed class ActivityPublicationPreflightParityTests
         private readonly string? _headVersionId;
         private readonly string _version;
 
-        public Scenario(Candidate candidate)
+        public Scenario(Candidate candidate, IReadOnlyList<ActivityNodePresentationRecord>? presentation = null, IActivityPublicationCandidateEvaluator? evaluator = null)
         {
             var hasHead = candidate is Candidate.VersionTaken or Candidate.VersionBelowRequiredBump;
             _headVersionId = hasHead ? "version-head" : null;
@@ -123,8 +148,10 @@ public sealed class ActivityPublicationPreflightParityTests
                 Id = "layout-draft-1",
                 DraftId = DraftId,
                 Revision = candidate == Candidate.StaleLayout ? Revision - 1 : Revision,
-                Records = [new("boundary", JsonSerializer.SerializeToElement(new { x = 10, y = 20 }))]
+                Records = [new("boundary", JsonSerializer.SerializeToElement(new { x = 10, y = 20 }))],
+                ActivityPresentation = presentation?.ToArray() ?? []
             };
+            Layout = layout;
             IReadOnlyList<ActivityDefinitionVersionPublication> publications = hasHead
                 ? [Publication("version-head", "1.0.0"), Publication("version-later", "1.0.1")]
                 : [];
@@ -148,15 +175,17 @@ public sealed class ActivityPublicationPreflightParityTests
                 new FixedBumpDiffer(candidate == Candidate.VersionBelowRequiredBump ? ActivityVersionBump.Major : ActivityVersionBump.None),
                 new FixedCompiler(candidate == Candidate.CompilationFailed),
                 new TestActivityPublishingAuthorizationContext(),
-                new RecordingCommit(receipts, Commits),
+                new RecordingCommit(receipts, Commits, MaterialCommits),
                 new ImmediateLockProvider(),
                 new SequentialIdentityGenerator(),
                 TimeProvider.System,
                 receipts,
-                candidate == Candidate.RuntimeConsumerMissing ? null : [new ReadyActivationStrategy()]);
+                candidate == Candidate.RuntimeConsumerMissing ? null : [new ReadyActivationStrategy()], publicationEvaluator: evaluator);
         }
 
         public List<ActivityPublicationDesignMutation> Commits { get; } = [];
+        public List<ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>> MaterialCommits { get; } = [];
+        public ActivityDefinitionDraftLayout Layout { get; }
 
         public async Task<Outcome> PreflightAsync()
         {
@@ -354,7 +383,10 @@ public sealed class ActivityPublicationPreflightParityTests
                 throw new NotSupportedException("Publication only reads what the strategy supports.");
         }
 
-        private sealed class RecordingCommit(IActivityPublicationReceiptStore receipts, List<ActivityPublicationDesignMutation> commits) :
+        private sealed class RecordingCommit(
+            IActivityPublicationReceiptStore receipts,
+            List<ActivityPublicationDesignMutation> commits,
+            List<ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>> materialCommits) :
             ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
         {
             public async Task<ActivityPublicationResult> ExecuteAsync(
@@ -362,6 +394,7 @@ public sealed class ActivityPublicationPreflightParityTests
                 CancellationToken cancellationToken = default)
             {
                 commits.Add(commit.Design);
+                materialCommits.Add(commit);
                 Assert.True(await receipts.TryCreateAsync(commit.Receipt, cancellationToken));
                 return new(
                     commit.Design.DefinitionId,

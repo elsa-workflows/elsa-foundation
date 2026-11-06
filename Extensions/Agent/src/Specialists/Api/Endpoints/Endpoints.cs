@@ -4,12 +4,12 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Agent.Specialists.Api.Endpoints;
 
 [Get("/" + SpecialistsApi.ModelProvidersRoute)]
-[RequireAnyPermission(SpecialistsApi.AuthorProvider, SpecialistsApi.DesignManage)]
+[RequireAnyPermission(SpecialistsApi.AuthorProvider, SpecialistsApi.DesignManage, AgentSourcePermissions.Manage)]
 internal sealed class ListModelProviders(IEnumerable<IConnectionTypeProvider> types, IEnumerable<ISpecialistModelCapabilitiesSource> sources) : ApiEndpointWithoutRequest<SpecialistModelProvidersResponse>
 {
     public override void Configure(ApiEndpointOptions options)
@@ -33,7 +33,7 @@ internal sealed class ListModelProviders(IEnumerable<IConnectionTypeProvider> ty
 }
 
 [Post("/" + SpecialistsApi.ModelCapabilitiesRoute)]
-[RequireAnyPermission(SpecialistsApi.AuthorProvider, SpecialistsApi.DesignManage)]
+[RequireAnyPermission(SpecialistsApi.AuthorProvider, SpecialistsApi.DesignManage, AgentSourcePermissions.Manage)]
 internal sealed class ReadModelCapabilities(IEnumerable<ISpecialistModelCapabilitiesSource> sources) : ApiEndpoint<SpecialistModelCapabilitiesRequest, SpecialistModelCapabilitiesView>
 {
     public override void Configure(ApiEndpointOptions options)

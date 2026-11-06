@@ -11,7 +11,7 @@
 
 ## Decision: Use immutable normalized technical names
 
-**Rationale**: Workflow definitions and module settings need stable serialized references. Normalizing names for uniqueness avoids collisions from case or whitespace while preserving a simple reference model.
+**Rationale**: Workflow definitions and module settings need stable serialized references. Normalizing names for uniqueness avoids collisions from case or whitespace while preserving a simple reference model. Owner amendment, 2026-11-05 ([#3855](https://github.com/elsa-workflows/elsa-foundation/issues/3855)): preserve entered casing in the trimmed technical name for readability, and lowercase only the lookup/storage key. Existing lowercase names retain their spelling; technical names remain immutable.
 
 **Alternatives considered**:
 

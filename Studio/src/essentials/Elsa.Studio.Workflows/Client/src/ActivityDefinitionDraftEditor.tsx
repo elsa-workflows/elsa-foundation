@@ -241,6 +241,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
             payload: snapshot.provider.payload
           },
           layout: snapshot.layout,
+          activityPresentation: snapshot.activityPresentation ?? [],
           presentationLabel: snapshot.presentationLabel ?? null
         });
         revisionRef.current = saved.revision;
@@ -279,7 +280,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     scheduleSave({
       ...currentRef.current,
       provider: { ...currentRef.current.provider, payload: value.payload },
-      layout: value.layout
+      layout: value.layout,
+      activityPresentation: value.activityPresentation ?? currentRef.current.activityPresentation ?? []
     });
   };
   const updateContract = (contract: ActivityDefinitionDraftView["contract"]) => {
@@ -324,6 +326,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
         contract: local.contract,
         provider: { providerKey: local.provider.providerKey, schemaVersion: local.provider.schemaVersion, payload: local.provider.payload },
         layout: local.layout,
+        activityPresentation: local.activityPresentation ?? [],
         presentationLabel: local.presentationLabel ?? null
       });
       recoveryStore?.clear(local);
@@ -344,6 +347,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
       contract: recovery.contract,
       provider: { ...currentRef.current.provider, payload: recovery.payload },
       layout: recovery.layout,
+      activityPresentation: recovery.activityPresentation ?? [],
       presentationLabel: recovery.presentationLabel ?? null
     };
     if (recovery.baseRevision === currentRef.current.revision) {
@@ -363,6 +367,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
           payload: recovery.payload
         },
         layout: recovery.layout,
+        activityPresentation: recovery.activityPresentation ?? [],
         presentationLabel: recovery.presentationLabel ?? null
       });
       recoveryStore?.clear(currentRef.current);
@@ -700,7 +705,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
           expressionEditors={expressionEditors}
           graphAuthoringPanels={graphAuthoringPanels}
           historyResetKey={historyResetKey}
-          value={{ payload: draft.provider.payload, layout: draft.layout }}
+          value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }}
           readOnly={providerReadOnly}
           onChange={updateImplementation}
         />
@@ -718,13 +723,13 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     </details>
     </section>
     <section id={tabElementIds(authoringTabsId, 0).panelId} className="ad-designer-view" role="tabpanel" aria-label="Designer" aria-labelledby={tabElementIds(authoringTabsId, 0).tabId} hidden={activeView !== "designer"}>
-    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
+    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
     </section>
     {hasGraphVariables ? <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
       {activeView === "variables" ? <>
         <p className="wf-muted">Private to each execution of this activity and available throughout its designer.</p>
         <Suspense fallback={<p role="status">Loading variables…</p>}>
-          <ActivityGraphVariablesEditor context={context} value={{ payload: draft.provider.payload, layout: draft.layout }} readOnly={providerReadOnly} onChange={updateImplementation} />
+          <ActivityGraphVariablesEditor context={context} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} />
         </Suspense>
       </> : null}
     </section> : null}
@@ -791,7 +796,7 @@ class ProviderEditorBoundary extends Component<{ children: ReactNode; onFailure(
 }
 
 function editableSignature(draft: ActivityDefinitionDraftView) {
-  return JSON.stringify({ contract: draft.contract, provider: { providerKey: draft.provider.providerKey, schemaVersion: draft.provider.schemaVersion, payload: draft.provider.payload }, layout: draft.layout, presentationLabel: draft.presentationLabel ?? null });
+  return JSON.stringify({ contract: draft.contract, provider: { providerKey: draft.provider.providerKey, schemaVersion: draft.provider.schemaVersion, payload: draft.provider.payload }, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [], presentationLabel: draft.presentationLabel ?? null });
 }
 
 function isActiveDraft(status: string) {
@@ -889,8 +894,12 @@ function focusContractDiagnostic(
     : null;
   const target = exact ?? member ?? editor.querySelector<HTMLElement>("[data-contract-schema]");
   if (!target) return unsupportedDiagnosticFocus();
+  const memberPanel = target.closest<HTMLElement>(".ad-member-settings > [role='tabpanel']");
+  if (memberPanel?.hidden && member) {
+    const tab = [...member.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(button => button.getAttribute("aria-controls") === memberPanel.id);
+    flushSync(() => tab?.click());
+  }
   target.closest("details")?.setAttribute("open", "");
-  member?.querySelector("details")?.setAttribute("open", "");
   const disabledContext = target.matches(":disabled")
     ? target.closest<HTMLElement>("label") ?? member
     : null;
@@ -997,7 +1006,8 @@ function formatRecoveryPreview(recovery: ActivityDefinitionRecoverySnapshot) {
       schemaVersion: recovery.providerSchemaVersion,
       payload: recovery.payload
     },
-    layout: recovery.layout
+    layout: recovery.layout,
+    activityPresentation: recovery.activityPresentation ?? []
   }, null, 2);
 }
 

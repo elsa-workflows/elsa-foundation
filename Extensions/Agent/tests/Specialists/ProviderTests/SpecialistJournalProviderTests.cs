@@ -34,7 +34,10 @@ public sealed class SpecialistJournalProviderTests
             {
                 var context = scope.ServiceProvider.GetRequiredService<SpecialistsDbContext>();
                 await context.Database.MigrateAsync();
-                Assert.Single(await context.Database.GetAppliedMigrationsAsync());
+                var appliedMigrations = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+                Assert.Equal(2, appliedMigrations.Length);
+                Assert.EndsWith("_Initial", appliedMigrations[0]);
+                Assert.EndsWith("_SharedSourceRevisions", appliedMigrations[1]);
                 var denied = await Assert.ThrowsAsync<SpecialistJournalException>(() => scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>()
                     .StageAsync(candidate, false, CancellationToken.None).AsTask());
                 Assert.Equal("specialist.journal.admission-disabled", denied.Code);

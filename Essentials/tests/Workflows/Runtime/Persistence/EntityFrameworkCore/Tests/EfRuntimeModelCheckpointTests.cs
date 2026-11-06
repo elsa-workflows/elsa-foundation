@@ -10,12 +10,16 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
@@ -284,6 +288,72 @@ public sealed class EfRuntimeModelCheckpointTests
         Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
         Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
         Assert.False(await restarted.RuntimeCheckpointCommits.AnyAsync(row => row.CommitId == Encode(admission.CommitId)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_refused_native_admission_checkpoint_step_is_released_for_retry_not_poisoned(bool modelDecisionChanged)
+    {
+        // #3683: a native worker's admission rides on its WorkflowStarted checkpoint, a Checkpoint step whose dispatch opens
+        // a frame. When the model decision changed, the EF store refuses it, rolled back, as native-admission-unavailable
+        // ("cross-model admission remains owed"). That refusal is no checkpoint attempt, so the drainer releases the step for
+        // its retry delay instead of poisoning it; an unchanged decision admits it and the step completes.
+        await using var database = await CreateDatabaseAsync();
+        // The committer materializes the root-work outbox from the intent itself, as it does for the real checkpoint.
+        var prepared = await PrepareAdmissionAsync(database);
+        var admission = prepared with { StateChanges = prepared.StateChanges.WithPostCommitOutbox([]) };
+        if (modelDecisionChanged)
+            await using (var context = database.Open())
+                await Store(context).CommitAsync(Commit(2, RuntimeModelLifecycle.TerminalSettled), Immediate);
+
+        var clock = new FakeTimeProvider(Now);
+        var delay = TimeSpan.FromSeconds(5);
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poison = new InMemoryWorkflowSchedulerPoisonStore();
+        await using (var context = database.Open())
+        {
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), Store(context),
+                new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+            var drainer = new WorkflowSchedulerDrainer(queue, [new CommitHandler(committer, admission)],
+                new InMemoryWorkflowExecutionStateStore(), poison,
+                new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), clock),
+                clock, claimOptions: new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = delay });
+            await queue.EnqueueAsync(new RuntimeSchedulerWorkItem("checkpoint:workflow-started", admission.WorkflowExecutionId,
+                "command-started", WorkflowExecutionCommandKind.Checkpoint, "envelope-started", "started", Now, Now, 1));
+
+            var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(admission.WorkflowExecutionId));
+
+            Assert.Empty(await poison.ListAsync(admission.WorkflowExecutionId));
+            var queued = (await queue.ListAsync(new RuntimeSchedulerWorkQuery(admission.WorkflowExecutionId))).Items;
+            if (!modelDecisionChanged)
+            {
+                Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(result.Items).Status);
+                Assert.Empty(queued);
+                return;
+            }
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Deferred, result.StopReason);
+            var deferred = Assert.Single(result.Items);
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, deferred.Status);
+            Assert.Equal("checkpoint:workflow-started", Assert.Single(queued).WorkItemId);
+            Assert.Null(await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(admission.WorkflowExecutionId, "probe",
+                Now + delay - TimeSpan.FromTicks(1), TimeSpan.FromMinutes(1))));
+            Assert.NotNull(await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(admission.WorkflowExecutionId, "probe",
+                Now + delay, TimeSpan.FromMinutes(1))));
+        }
+
+        await using var restarted = database.Open();
+        Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+    }
+
+    private sealed class CommitHandler(RuntimeCheckpointCommitter committer, RuntimeCheckpointCommit commit) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(CommitHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            await committer.CommitAsync(commit, cancellationToken);
     }
 
     [Fact]

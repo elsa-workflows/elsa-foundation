@@ -42,6 +42,8 @@ Evidence:
 
 ## BPMN inventory
 
+**Current-main reconciliation (4 November):** upstream #3795 / commit `6bb6969e5` supplies the existing exact-version/portable-literal vendor binding profile. T004 will extend and qualify that boundary rather than introduce a second format. Nested-process DI, variable types/defaults, structured references and Block-specific no-loss/refusal behavior still require proof. See the [interchange contract](../../Essentials/src/Activities/Bpmn/Interchange/README.md#exact-task-bindings) and [T004 evidence](https://github.com/elsa-workflows/elsa-foundation/issues/3753#issuecomment-6617962817). The original inventory below describes the earlier baseline.
+
 **Decision:** extract eligible native bound tasks/ordinary subprocesses into a subprocess bound to a new native BPMN process. Preserve task ActivityNodes, elements and internal flows; add plain internal start/end events. Refuse unsupported events, gateways, listeners, special boundaries, direct-model bindings and cross-lane selections.
 
 **Finding:** `BpmnDocumentExporter` recursively emits a subprocess body only for an `elsa.bpmn.structure` child. Arbitrary native task versions/arguments are not fully serialized by the current XML exporter; `BpmnDocumentImporter` rematerializes work through its binder and may classify it as unbound.

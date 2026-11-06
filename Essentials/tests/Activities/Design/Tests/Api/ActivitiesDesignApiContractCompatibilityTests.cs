@@ -18,6 +18,19 @@ namespace Elsa.Activities.Design.Tests.Api;
 /// </summary>
 public sealed class ActivitiesDesignApiContractCompatibilityTests
 {
+    [Theory]
+    [InlineData(typeof(CreateReusableActivityDefinition), 7)]
+    [InlineData(typeof(CreateReusableActivityDraft), 6)]
+    [InlineData(typeof(CreateReusableActivityDraftRequest), 6)]
+    [InlineData(typeof(CreateReusableActivityDraftConflictCopy), 6)]
+    [InlineData(typeof(ReplaceReusableActivityDraft), 6)]
+    public void Node_presentation_preserves_existing_positional_constructor_and_deconstructor(Type type, int count)
+    {
+        Assert.Equal(count, Assert.Single(type.GetConstructors()).GetParameters().Length);
+        Assert.Equal(count, type.GetMethod("Deconstruct")!.GetParameters().Length);
+        Assert.NotNull(type.GetProperty("ActivityPresentation")!.SetMethod);
+    }
+
     private static readonly Type[] ContractTypes =
     [
         typeof(ActivityActionAvailabilityView),
@@ -58,6 +71,11 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityInputDefaultView),
         typeof(ActivityInputDescriptorView),
         typeof(ActivityLayoutRecordsPayload),
+        typeof(ActivityNodePresentationPayload),
+        typeof(CreateReusableActivityDraftBody),
+        typeof(CreateReusableActivityDefinitionRequest),
+        typeof(ReplaceReusableActivityDraftRequest),
+        typeof(DraftConflictCopyRequest),
         typeof(ActivityManagementPageView<>),
         typeof(ActivityManagementSnapshotView),
         typeof(ActivityOutcomeContractView),
@@ -156,7 +174,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(114, ContractTypes.Length);
+        Assert.Equal(119, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
@@ -205,13 +223,15 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
         // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
-        // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
+        // contracts because MinimalEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
         // It moved for PaletteHints as an additive body init property. The existing 17-parameter
         // constructor and deconstructor remain covered separately; palette metadata stays on the JSON wire.
         // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
-        Assert.Equal("b0416616df02ddca9d960c6c126700a973e207563e87eba2d9b21064d89f604f", PublicShapeHash(ContractTypes));
+        // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
+        // command constructors/deconstructors are retained and explicitly covered above.
+        Assert.Equal("4180874702ea7eac813efba4dc50a9b2463bab7970f125ecd4a06796db22730d", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

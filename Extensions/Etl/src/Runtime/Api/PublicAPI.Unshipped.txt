@@ -206,16 +206,16 @@ Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.CancelAsync(Elsa.Etl.Runtime.A
 Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.GetRunAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunDetailView!>!
 Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView!>!>!
 Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListRunsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView!>!>!
-NativeEndpoints.Generated.ElsaEtlRuntimeApiEndpoints
+MinimalEndpoints.Generated.ElsaEtlRuntimeApiEndpoints
 const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.CancelRuns = "etl/runs:cancel" -> string!
 const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.ReadRuns = "etl/runs:read" -> string!
-override Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView!>!
-override Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunDetailView!>!
-override Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView!>!>!
-override Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView!>!>!
 override Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Equals(object? obj) -> bool
 override Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.GetHashCode() -> int
@@ -283,7 +283,7 @@ static Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.operator !=(Elsa.Etl.Runtim
 static Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? right) -> bool
 static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
 static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
-static NativeEndpoints.Generated.ElsaEtlRuntimeApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
+static MinimalEndpoints.Generated.ElsaEtlRuntimeApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
 Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint
 Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Deconstruct(out string! Source, out string? Lookup, out string! Output, out string! Errors) -> void
@@ -401,7 +401,7 @@ Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.NotBefore.init -> void
 Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.init -> void
 Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListConnectorPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
-override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
 override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Equals(object? obj) -> bool
 override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.GetHashCode() -> int
@@ -451,7 +451,7 @@ Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Result.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Result.init -> void
 Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.CompleteAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView!>!
 const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.CompleteRuns = "etl/runs:complete" -> string!
-override Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView!>!
 override Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Equals(object? obj) -> bool
 override Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.GetHashCode() -> int

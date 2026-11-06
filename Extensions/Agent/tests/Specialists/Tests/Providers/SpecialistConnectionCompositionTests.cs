@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Elsa.Agent.Specialists.Anthropic;
 using Elsa.Agent.Specialists.AzureOpenAI;
+using Elsa.Agent.Specialists.OpenAI;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
@@ -24,9 +25,14 @@ public sealed class SpecialistConnectionCompositionTests
         new ConnectionsFeature().ConfigureServices(services);
         new AnthropicSpecialistsFeature().ConfigureServices(services);
         new AzureOpenAISpecialistsFeature().ConfigureServices(services);
+        new OpenAISpecialistsFeature().ConfigureServices(services);
         await using var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         await using var scope = root.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        Assert.Equal(new[] { "anthropic", "azure-openai", "openai" },
+            scope.ServiceProvider.GetServices<ISpecialistModelClientFactory>().Select(x => x.ProviderKey).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "anthropic", "azure-openai", "openai" },
+            scope.ServiceProvider.GetServices<ISpecialistModelCapabilitiesSource>().Select(x => x.ProviderKey).Order(StringComparer.Ordinal));
         foreach (var factory in scope.ServiceProvider.GetServices<ISpecialistModelClientFactory>())
         {
             await manager.CreateAsync("tenant", new()

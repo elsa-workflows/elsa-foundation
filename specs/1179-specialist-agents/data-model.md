@@ -1,6 +1,6 @@
 # Agent state, identity and transactions
 
-**Status**: Draft ownership amendment under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); existing journal behavior remains the regression baseline. These are logical shapes, not frozen C# signatures or an implemented schema.
+**Status**: Accepted ownership direction; source implementation in progress (#3790) under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); existing journal behavior remains the regression baseline. These are logical shapes; #3790 implements only shared source storage/adapters. Concrete placement and transition limits are recorded in plan.md; publication/release shapes remain pending.
 Meanings belong to the [glossary](../../docs/glossary/elsa.md); architecture choices are in [plan.md](plan.md).
 
 ## Shared source and distinct execution authorities

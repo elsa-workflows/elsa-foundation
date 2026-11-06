@@ -1,5 +1,5 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -16,6 +16,10 @@ import type {
   WorkflowExecutableInputSources,
   WorkflowExecutableReference
 } from "../workflowTypes";
+import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { CompensationScopeDesigner } from "../graph-authoring/CompensationScopeDesigner";
+import { compensationStepsSlotId } from "../compensationScope";
+import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { formatActivitySummary } from "../activitySummary";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
@@ -56,7 +60,7 @@ import {
   useExecutableWorkflowRun
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
-import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
@@ -235,7 +239,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   };
 
   const workbenchClassName = [
-    "wf-instance-detail-workbench",
+    "wf-instance-detail-workbench wf-executable-workbench",
     inspectorCollapsed ? "inspector-collapsed" : "",
     maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
   ].filter(Boolean).join(" ");
@@ -277,7 +281,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       {state === "loading" ? <div className="wf-empty">Loading executable...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data && graph ? (
-        <div className={workbenchClassName} style={editorBodyStyle}>
+        <div className={workbenchClassName} style={{ ...editorBodyStyle, "--wf-run-inspector-width": `${inspectorWidth}px` } as React.CSSProperties}>
           <WorkflowExecutableCanvas
             detail={data.detail}
             activityCatalog={data.activityCatalog}
@@ -322,7 +326,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   );
 }
 
-function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
+export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
@@ -332,6 +336,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
   selectedNodeId: string | null;
   onSelectNode(nodeId: string | null): void;
 }) {
+  const canvasRef = useRef<HTMLDivElement>(null);
   const canvas = useMemo(
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
     [activityCatalog, detail, frames, graph, onNavigateToScope, selectedNodeId]
@@ -353,8 +358,18 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
         )}
       </header>
       <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
-      <div className="wf-instance-canvas">
-        {canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
+      <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
+        const node = canvas.nodes.find(candidate => candidate.id === nodeId);
+        if (node) onSelectNode(node.data.runtimeNodeId ?? node.id);
+      })}>
+        {canvas.mode === "compensation" ? (
+          <CompensationScopeDesigner key={scopeKey} owner={canvas.owner} nodes={canvas.nodes}
+            selectedNodeId={selectedNodeId} readOnly canvasRef={canvasRef}
+            onSelect={onSelectNode} onOpenSlot={canvas.openSlot} />
+        ) : canvas.mode === "sequence" ? (
+          <SequenceDesigner key={scopeKey} nodes={canvas.nodes} selectedNodeId={selectedNodeId}
+            readOnly canvasRef={canvasRef} onSelect={onSelectNode} onOpenSlot={canvas.openSlot} />
+        ) : canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
           <ReactFlow
             key={scopeKey}
             nodes={flowNodes}
@@ -367,13 +382,19 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
-            onNodeClick={(_, node) => onSelectNode(node.id)}
+            ariaLabelConfig={{
+              "node.a11yDescription.default": "Press Enter or Space to select and inspect this activity.",
+              "node.a11yDescription.keyboardDisabled": "Press Enter or Space to select and inspect this activity."
+            }}
+            deleteKeyCode={null}
+            edgesReconnectable={false}
+            onNodeClick={(_, node) => onSelectNode(node.data.runtimeNodeId ?? node.id)}
             onPaneClick={() => onSelectNode(null)}
           >
             <Background />
             <FitReadOnlyFlowView nodeCount={flowNodes.length} />
             <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-            <Controls />
+            <Controls showInteractive={false} />
             <RetainFlowViewport />
           </ReactFlow>
         )}
@@ -393,12 +414,24 @@ export function buildExecutableInspectorCanvas(
   frames: ScopeFrame[],
   onNavigateToScope: (frames: ScopeFrame[]) => void,
   selectedNodeId: string | null = null
-): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[] } {
+): {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  mode: "sequence" | "compensation" | "graph";
+  owner: ExecutableActivityGraph["root"];
+  openSlot(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
+} {
   const scope = resolveScope(graph.root, frames, activityCatalog);
   const scopeOwner = scope?.owner ?? graph.root;
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
-  const baseCanvas = support === "unsupported" || !scope
+  const openSlot = (ownerNodeId: string, ownerLabel: string, slot: ChildSlot) => {
+    const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
+    if (plan) onNavigateToScope(plan.frames);
+  };
+  const baseCanvas = support === "bpmn" && scope
+    ? buildBpmnCanvas(scope, activityCatalog, layout, graph.activityPresentation)
+    : support === "unsupported" || !scope
     ? buildUnsupportedActivityCanvas(
         scopeOwner,
         activityCatalog,
@@ -412,10 +445,12 @@ export function buildExecutableInspectorCanvas(
         formatActivitySummary,
         graph.activityPresentation);
 
-  const nodes = baseCanvas.nodes.map(node => {
-    const fact = graph.factsByNodeId.get(node.id);
+  const nodes = baseCanvas.nodes.map((node): Node<WorkflowNodeData> => {
+    const bpmn = node.data as BpmnNodeData;
+    const activityNodeId = bpmn.boundActivity?.nodeId ?? node.id;
+    const fact = graph.factsByNodeId.get(activityNodeId);
     const ghost = isGhostFact(fact);
-    const selected = node.id === selectedNodeId;
+    const selected = activityNodeId === selectedNodeId;
     return {
       ...node,
       draggable: false,
@@ -423,22 +458,30 @@ export function buildExecutableInspectorCanvas(
       deletable: false,
       selected,
       data: {
-        ...node.data,
+        ...node.data as WorkflowNodeData,
+        runtimeNodeId: activityNodeId,
         ...(ghost && fact ? {
           ghost: true,
-          label: graph.activityPresentation.some(record => record.nodeId === node.id)
+          activityTypeKey: fact.activityType,
+          category: "Unavailable activity",
+          label: graph.activityPresentation.some(record => record.nodeId === activityNodeId)
             ? node.data.label
             : ghostNodeLabel(fact.activityType)
         } : {}),
         onEnterSlot: (slot: ChildSlot) => {
-          const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
-          if (plan) onNavigateToScope(plan.frames);
+          openSlot(activityNodeId, node.data.label, slot);
         }
       }
     };
   });
   const edges = baseCanvas.edges.map(edge => ({ ...edge, deletable: false }));
-  return decorateWorkflowCanvasElements(nodes, edges);
+  return {
+    ...decorateWorkflowCanvasElements(nodes, edges),
+    owner: scopeOwner,
+    openSlot,
+    mode: support !== "unsupported" && scope?.slot.id === compensationStepsSlotId ? "compensation"
+      : support !== "unsupported" && scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" ? "sequence" : "graph"
+  };
 }
 
 function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference, collapsed, expanded, maximized, onToggleCollapsed, onToggleMaximized }: {

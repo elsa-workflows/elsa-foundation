@@ -188,6 +188,10 @@ Validate actual interactions and rendered styles; checking class names alone doe
 not establish consistency. The Weather sample uses this public recipe without a
 module stylesheet, and the standalone React example uses published package imports.
 
+## Delivery acceptance
+
+For visible or interaction changes, use the repository's [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) workflow. Choose an existing reference and observable states before implementation; verify the actual composed host and independently inspect its screenshots. Reuse shared controls and fix recurring defects in their owning primitive. A component fixture or successful build alone does not establish product acceptance.
+
 ## Navigation and focused editors
 
 Set `featureAreas.nav.icon` to the module's icon component; the feature-area registry

@@ -77,8 +77,10 @@ public sealed class TemplateDesignUpgradeTests
             SameView(created, await host.GetAsync(createdRoute));
             await host.StopAsync();
             // The original cumulative template row stays untouched; the library delta and the library operation-key
-            // increment (spec 1193 slice E) each append their own row.
-            Assert.Equal(originalHistory.Append("20261031002424_Initial|10.0.10").Append("20261103085804_WorkflowLibraryOperationKeys|10.0.10"),
+            // increment (spec 1193 slice E) and shared source storage each append their own row.
+            Assert.Equal(originalHistory.Append("20261031002424_Initial|10.0.10")
+                    .Append("20261103085804_WorkflowLibraryOperationKeys|10.0.10")
+                    .Append("20261104005839_SharedSourceRevisions|10.0.10"),
                 await DesignHistoryAsync(host.DesignDatabase));
             var snapshot = await host.SnapshotAsync("upgraded-runtime.sqlite.gz", "template-design-upgrade");
             var designSnapshot = await host.SnapshotAsync("upgraded-design.sqlite.gz", "template-design-upgrade", design: true);

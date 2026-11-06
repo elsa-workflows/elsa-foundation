@@ -50,7 +50,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, hold.ExitCode);
         var family = Assert.Single(hold.Response.GetProperty("finalization").GetProperty("families").EnumerateArray());
-        Assert.Equal((SecretsEfModule.SchemaFamily, SecretsEfModule.SchemaVersion), (family.GetProperty("family").GetString(), family.GetProperty("finalizedVersion").GetString()));
+        Assert.Equal((SecretsEfModule.SchemaFamily, SecretsEfModule.Chain.ReadableVersions[0]), (family.GetProperty("family").GetString(), family.GetProperty("finalizedVersion").GetString()));
         var placed = Assert.Single(family.GetProperty("holds").EnumerateArray());
         Assert.Equal(("canary of the next release", "ops@example"), (placed.GetProperty("reason").GetString(), placed.GetProperty("placedBy").GetString()));
 
@@ -66,7 +66,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         await RunAsync(Release(version: null));
         var before = await RecordAsync();
 
-        var refused = await HoldAsync(SecretsEfModule.SchemaVersion);
+        var refused = await HoldAsync(before!.FinalizedVersion);
 
         Assert.Equal(EfToolingExitCode.Refusal, refused.ExitCode);
         Assert.Equal("rollback-boundary-crossed", refused.Response.GetProperty("error").GetProperty("code").GetString());

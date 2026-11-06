@@ -1,5 +1,7 @@
 # Contract: Weaver recovery (#3441, preview)
 
+> **Amended by spec 1203 — 4 November 2026.** Agent 1.1 readable protected records, performed terminal results and current privilege/principal checks on explicit recovered execution are amended by [spec 1203](../../1203-weaver-module-support/spec.md), approved in [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757). The proposed [leaf 0 plan and contracts](../../1203-weaver-module-support/plan.md) require renewed old-row/restart and no-replay evidence; the historical qualification and owner-statement distinctions below remain intact.
+
 **Status**: Frozen for #3441 as Preview API. It was frozen after these proofs passed on the final source
 `23dc6bd4a`:
 - the normal composed Studio proof;
