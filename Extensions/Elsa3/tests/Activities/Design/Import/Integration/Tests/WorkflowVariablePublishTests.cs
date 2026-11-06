@@ -15,6 +15,21 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 public sealed class WorkflowVariablePublishTests(ITestOutputHelper output)
 {
     [Fact]
+    public async Task A_Variable_expression_imports_publishes_and_reads_its_declared_variable()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var import = await host.ImportSelectionAsync("import-variable-expression", ["workflow-variable-expression"]);
+        Assert.True(import.Apply.StatusCode == HttpStatusCode.Created, import.Apply.Body.ToJsonString());
+        var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("workflow-variable-expression-v1"), "workflowVersionId"));
+
+        var run = await host.RunAsync(workflow);
+
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Empty(run.Incidents);
+        Assert.Equal("\"read through Variable\"", Variable(run, "destination"));
+    }
+
+    [Fact]
     public async Task A_workflow_variable_without_a_value_publishes_and_receives_a_captured_Event_payload()
     {
         await using var host = await Elsa3ImportHost.StartAsync();

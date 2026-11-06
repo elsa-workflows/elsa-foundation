@@ -203,16 +203,7 @@ internal sealed class Elsa3DefinitionConverter(
         var jsonPaths = plan.JsonPaths;
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
-        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(
-            plan.Definition,
-            inventory,
-            plan.Request.DiagnosticMetadata,
-            jsonPaths,
-            plan.SourceName,
-            (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
-            plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
-            plan.MemoryAliases,
-            plan.Request.IsReusable));
+        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory));
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>

@@ -94,6 +94,19 @@ The 6 that still do not publish stop at the same first errors as in the baseline
 reports only its first error, so the corpus cannot show the #3122 fix on its own. The integration tests show it
 (`WorkflowVariablePublishTests`), and the follow-ups above remove the errors that hide it.
 
+### Follow-up #3201 qualification (2026-11-06)
+
+The `Variable` expression follow-up uses source baseline `3ba0383f81095c41dcf8254253711fa053900ca2`.
+Its self-contained workflow imports through the real collection API, then publishing reproduces the missing
+reference-key HTTP 400 before the correction. After lowering the expression's declared variable id, it publishes,
+runs to completion and copies the source value into a separate variable. Mapping coverage also checks workflow and
+container scope, ambiguous or undeclared ids, malformed declarations and the existing loop-current-value boundary.
+
+**JTest publish remeasurement: not run.** The private `JTEST-nexxbiz` corpus is unavailable in this checkout and the
+available local project directories. The 36/8/2 historical counts above remain the 2026-10-21 measurement; they are
+not fresh qualification of #3201 or evidence that either named corpus definition now publishes. That acceptance row
+remains open until the same corpus can be run against the correction.
+
 ## Clarifications
 
 ### Session 2026-10-21
