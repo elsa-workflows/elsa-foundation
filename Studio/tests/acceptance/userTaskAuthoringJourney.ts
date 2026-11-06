@@ -192,6 +192,57 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   }
   await expect(page.locator(".react-flow__edge-text").filter({ hasText: /^Approve$/ })).toHaveCount(0);
   await capture(page, info, "run-outcomes");
+
+  // Fit View is an overview. Verify ordinary controls can recover readable outcomes.
+  const runCanvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
+  const outcomeLabels = runtimeTask.locator(".wf-node-port-label").filter({ hasText: /^(Approve|Reject|Unmatched)$/ });
+  const renderedOutcomeFont = () => outcomeLabels.first().evaluate(element => {
+    const viewport = element.closest(".react-flow__viewport");
+    if (!viewport) throw new Error("Runtime graph viewport is unavailable");
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
+    return Number.parseFloat(getComputedStyle(element).fontSize) * Math.hypot(matrix.a, matrix.b);
+  });
+  const overviewFont = await renderedOutcomeFont();
+  const zoomIn = runCanvas.getByRole("button", { name: "Zoom In", exact: true });
+  await expect(zoomIn).toBeVisible(); await expect(zoomIn).toBeEnabled();
+  for (let step = 0; step < 8 && await renderedOutcomeFont() < 10; step++) {
+    const previous = await renderedOutcomeFont();
+    await zoomIn.press("Enter"); await expect(zoomIn).toBeFocused();
+    await expect.poll(renderedOutcomeFont).toBeGreaterThan(previous);
+  }
+  await expect.poll(renderedOutcomeFont).toBeGreaterThanOrEqual(10);
+  const panTo = async (targets: Locator[]) => {
+    const pane = (await runCanvas.locator(".react-flow__pane").boundingBox())!;
+    for (let gesture = 0; gesture < 6; gesture++) {
+      const boxes = await Promise.all(targets.map(target => target.boundingBox()));
+      if (boxes.some(box => !box)) throw new Error("Runtime graph target is unavailable");
+      const left = Math.min(...boxes.map(box => box!.x));
+      const right = Math.max(...boxes.map(box => box!.x + box!.width));
+      const delta = left < pane.x + 8 ? pane.x + 8 - left : right > pane.x + pane.width - 8 ? pane.x + pane.width - 8 - right : 0;
+      if (Math.abs(delta) < 1) break;
+      const distance = Math.sign(delta) * Math.min(Math.abs(delta), pane.width / 2 - 24);
+      const x = pane.x + pane.width / 2; const y = pane.y + pane.height - 12;
+      const before = await runCanvas.locator(".react-flow__viewport").getAttribute("style");
+      await page.mouse.move(x, y); await page.mouse.down();
+      await page.mouse.move(x + distance, y, { steps: 8 }); await page.mouse.up();
+      await expect.poll(() => runCanvas.locator(".react-flow__viewport").getAttribute("style")).not.toBe(before);
+    }
+    for (const target of targets) {
+      await expect.poll(async () => {
+        const box = await target.boundingBox();
+        return Boolean(box && box.x >= pane.x && box.x + box.width <= pane.x + pane.width && box.y >= pane.y && box.y + box.height <= pane.y + pane.height);
+      }).toBe(true);
+    }
+  };
+  await panTo(await outcomeLabels.all());
+  for (const label of ["Approve", "Reject", "Unmatched"]) await expect(outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) })).toBeVisible();
+  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ overviewFont, recoveredFont: await renderedOutcomeFont() }), contentType: "application/json" });
+  await capture(page, info, "run-outcomes-readable");
+  const runtimeOutput = page.locator(`.react-flow__node[data-id="${outputNodeId}"]`);
+  await panTo([runtimeOutput]);
+  await expect(runtimeOutput).toContainText("Set Output");
+  await capture(page, info, "run-output-reached");
+  await runCanvas.getByRole("button", { name: "Fit View", exact: true }).press("Enter");
   await info.attach("workflow-outputs.json", { body: JSON.stringify(completed.outputs, null, 2), contentType: "application/json" });
   // Keyboard activation opens the real responsive inspector after changing viewport.
   await runtimeTask.press("Enter");
