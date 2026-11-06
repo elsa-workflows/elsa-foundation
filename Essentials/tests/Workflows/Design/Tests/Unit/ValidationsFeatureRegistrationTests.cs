@@ -164,6 +164,47 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    [InlineData("singleton")]
+    public async Task A_copied_child_shell_checks_its_own_source_authority_and_preserves_the_parent(string invalid)
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        if (invalid != "duplicate") child.RemoveAll<IActivityDataSelectionAnalyzer>();
+        if (invalid == "singleton") child.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(childProvider).InitializeAsync());
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+        Assert.Single(parent, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+    }
+
+    [Fact]
+    public async Task A_copied_child_shell_can_keep_one_scoped_source_authority()
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        child.RemoveAll<IActivityDataSelectionAnalyzer>();
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        await SourceInitializer(childProvider).InitializeAsync();
+    }
+
+    private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
+        provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "ActivityDataSelectionAnalyzerCompositionCheck");
+
     private static ServiceProvider BuildProvider(
         Action<WorkflowDesignValidationsFeature> configureFeature,
         Action<IServiceCollection>? hostRegistrations = null,

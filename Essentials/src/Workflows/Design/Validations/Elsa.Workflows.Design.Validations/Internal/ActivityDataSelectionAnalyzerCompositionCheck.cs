@@ -20,8 +20,13 @@ internal sealed class ActivityDataSelectionAnalyzerCompositionCheck(ActivityData
 
     internal static void Register(IServiceCollection services)
     {
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(ActivityDataSelectionAnalyzerComposition))) return;
+        var existing = services.Where(descriptor => descriptor.ServiceType == typeof(ActivityDataSelectionAnalyzerComposition)).ToArray();
+        if (existing.Length == 1 && existing[0].ImplementationInstance is ActivityDataSelectionAnalyzerComposition current &&
+            ReferenceEquals(current.Services, services)) return;
+        // A copied shell retains initializer descriptors, but must inspect its own final registrations.
+        foreach (var descriptor in existing) services.Remove(descriptor);
         services.AddSingleton(new ActivityDataSelectionAnalyzerComposition(services));
-        services.AddShellInitializer<ActivityDataSelectionAnalyzerCompositionCheck>(LifecyclePhase.Prepare, 0);
+        if (existing.Length == 0)
+            services.AddShellInitializer<ActivityDataSelectionAnalyzerCompositionCheck>(LifecyclePhase.Prepare, 0);
     }
 }
