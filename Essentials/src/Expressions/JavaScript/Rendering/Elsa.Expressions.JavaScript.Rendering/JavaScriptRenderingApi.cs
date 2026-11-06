@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Expressions.JavaScript.Rendering.Contracts;
 using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Builder;

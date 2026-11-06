@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests.Support;
 

@@ -65,7 +65,7 @@ from explain_journeys import READ_FRAMES
 from authorization_journeys import select_command
 from inspection_journeys import (ADMISSION_REFUSAL, MUTATING_TOOLS, RUNTIME_AGENT_FEATURE, RUNTIME_DENIED, _completed, _frames, _kinds, _owned,
                                  _called_once, _offered, _refused_at_admission, _session, _without_feature, require_admissions, require_unchanged)
-from journey_runtime import BASE_GRANTS, same
+from journey_runtime import BASE_GRANTS, safe_browser_failure, same
 from owner_resources import owner_path, seed_faulted_run
 from runtime import RUNTIME_ENVIRONMENT, private_json
 from truth_seam_journeys import CAPABILITIES_READ, same_target
@@ -427,8 +427,17 @@ def _browser(runtime, name, seed, canary):
     offset = transport.trace_file.stat().st_size if transport.trace_file.exists() else 0
     node = shutil.which("node")
     check(node, "The actual browser driver needs Node")
-    runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
-                    env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    try:
+        runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                        env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    except RuntimeError:
+        try:
+            runtime.run.report["browserFailureDiagnostic"] = safe_browser_failure({
+                "failureDiagnostic": json.loads((output / "failure-diagnostic.json").read_text())})
+            runtime.run.save()
+        except Exception:
+            pass  # Optional diagnostics must never replace the original failed subprocess.
+        raise
     observation = output / "observation.json"
     observed = json.loads(observation.read_text())
     trace = transport.protocol_trace(offset)

@@ -43,14 +43,14 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; keys that are not one concrete `{resource}:{verb}` permission, canonical duplicates, padded keys, and wildcard definitions fail during catalog construction with both ownership sources in the diagnostic. The catalog carries no implications; see [Elsa 3.9 to Elsa 4 permission mapping](../../../../../docs/reference/elsa3-permission-mapping.md) for the matching rules.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*; `HumanReviewPermissionContributor` (`Elsa.Agent.Specialists.Review.Api`) for `agent-reviews:read` / `agent-reviews:decide` *(cross-domain)*.
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*; `HumanReviewPermissionContributor` (`Elsa.Agent.Specialists.Review.Api`) for `agent-reviews:read` / `agent-reviews:decide` *(cross-domain)*; `DecisionsPermissionContributor` (`Elsa.Decisions.Api`) for the independent Decisions read/manage/publish/evaluate/test/history/source/sensitive-values grants *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 
 - **Kind:** Contributor (resource-specific authorization decision hook).
 - **Register:** `services.AddScoped<IPermissionResourceHandler, MyResourceHandler>()`.
 - **Consumed by:** the shared single/any/all permission handler before falling back to `IPermissionEvaluator`. For one member, every resource source runs in registration order: any denial vetoes grants; otherwise any grant succeeds; the evaluator runs only after unanimous abstention. Exceptions, timeouts, and request cancellation propagate and stop later sources. The protected resource is preserved, while the active HTTP request's `RequestAborted` token is supplied through both evaluator APIs.
-- **Known implementations:** none yet in this PR. Feature modules can contribute resource-specific checks while preserving backend source-of-truth enforcement *(cross-domain)*.
+- **Known implementations:** `DecisionWorkflowResourceHandler` (`Elsa.Decisions.Workflows.Api`) contributes deny-only checks for the exact retained decision dependencies in workflow values/evidence and executable exports *(cross-domain)*. It never grants the underlying workflow permission.
 
 ## Endpoint permission metadata and trusted principals
 
