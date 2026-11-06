@@ -38,6 +38,7 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
       variable("strings", "Items", "String", "List", null),
       variable("numbers", "Counts", "Int32", "Array", "[1,2]"),
       variable("flags", "Flags", "Boolean", "List", "[true,false]"),
+      variable("dates", "Dates", "DateTime", "Array", '["2026-11-06","2026-11-07","2024-02-29"]'),
       variable("json", "JSON", "System.Text.Json.JsonElement", "Array", `[${exactJson}]`),
       variable("legacy", "Legacy", "String", "Array", "[]")
     ],
@@ -62,6 +63,7 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     const draft = await api<{ state: State }>(`/design/workflows/drafts/${submitted.draftId}`);
     draft.state.variables.find(item => item.referenceKey === "legacy")!.default = { expressionType: "Literal", value: "a, b" };
     draft.state.variables.find(item => item.referenceKey === "flags")!.default = { expressionType: "Literal", value: '["true",false]' };
+    draft.state.variables.find(item => item.referenceKey === "dates")!.default = { expressionType: "Literal", value: '["2026-99-99","2026-02-30","2025-02-29"]' };
     await api(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: draft.state, layout: [] });
     await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
     await showVariables();
@@ -93,6 +95,31 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     await expect(flags.getByRole("alert")).toHaveCount(0);
     await rawFlag.press("Tab");
     await expect(flags.getByRole("checkbox", { name: "Variable default value item 1", exact: true })).toBeChecked();
+
+    const dates = row("Dates");
+    for (const [index, value] of ["2026-99-99", "2026-02-30", "2025-02-29"].entries()) {
+      const rawDate = dates.getByRole("textbox", { name: `Variable default value item ${index + 1}`, exact: true });
+      await expect(rawDate).toHaveValue(JSON.stringify(value));
+      await expect(rawDate).toHaveAttribute("aria-invalid", "true");
+      const description = await rawDate.getAttribute("aria-describedby");
+      expect(description).toBeTruthy();
+      await expect(dates.locator(`[id="${description}"]`)).toContainText(`Stored JSON: ${JSON.stringify(value)}`);
+    }
+    await expect(dates.getByRole("alert")).toHaveCount(3);
+    await dates.getByRole("group", { name: "Variable default value", exact: true }).scrollIntoViewIfNeeded();
+    await capture(page, info, "collection-invalid-dates");
+    for (let index = 1; index <= 3; index += 1) {
+      const rawDate = dates.getByRole("textbox", { name: `Variable default value item ${index}`, exact: true });
+      await rawDate.fill('"2024-02-29"');
+      await expect(rawDate).toBeFocused();
+      await expect(rawDate).toHaveValue('"2024-02-29"');
+      await rawDate.press("Tab");
+      const nativeDate = dates.getByLabel(`Variable default value item ${index}`, { exact: true });
+      await expect(nativeDate).toHaveAttribute("type", "date");
+      await expect(nativeDate).toHaveValue("2024-02-29");
+    }
+    await expect(dates.getByRole("alert")).toHaveCount(0);
+    await capture(page, info, "collection-dates-recovered");
 
     const strings = row("Items");
     const add = strings.getByRole("button", { name: "Add Variable default value item", exact: true });
@@ -126,11 +153,14 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     const saved = await api<{ state: State }>(`/design/workflows/drafts/${submitted.draftId}`);
     expect(saved.state.variables.find(item => item.referenceKey === "numbers")!.default).toEqual({ expressionType: "Literal", value: "[1,3]" });
     expect(saved.state.variables.find(item => item.referenceKey === "flags")!.default).toEqual({ expressionType: "Literal", value: "[true,true]" });
+    expect(saved.state.variables.find(item => item.referenceKey === "dates")!.default).toEqual({ expressionType: "Literal", value: '["2024-02-29","2024-02-29","2024-02-29"]' });
     expect(saved.state.variables.find(item => item.referenceKey === "json")!.default?.value).toBe(`[${exactJson}]`);
     await page.reload();
     await showVariables();
     await expect(row("Items").getByRole("textbox", { name: "Variable default value item 1", exact: true })).toHaveValue("first,second");
     await expect(row("Legacy").getByRole("textbox", { name: "Variable default value item 1", exact: true })).toHaveValue("kept,as one item");
+    await expect(row("Dates").getByLabel("Variable default value item 1", { exact: true })).toHaveAttribute("type", "date");
+    await expect(row("Dates").getByLabel("Variable default value item 1", { exact: true })).toHaveValue("2024-02-29");
     await row("Items").scrollIntoViewIfNeeded();
     await capture(page, info, "collection-reopened");
 
@@ -150,6 +180,7 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy&version=${version.id}`);
     await showVariables();
     await expect(row("Items").getByRole("textbox", { name: "Variable default value item 1", exact: true })).toBeDisabled();
+    await expect(row("Dates").getByLabel("Variable default value item 1", { exact: true })).toBeDisabled();
     await capture(page, info, "collection-read-only");
   } finally {
     await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE");

@@ -231,7 +231,10 @@ function fitsEditor(editor: string, value: string): boolean {
   if (value === "") return true;
   if (editor === "checkbox") return value === "true" || value === "false" || value === "True" || value === "False";
   if (editor === "number") return Number.isFinite(Number(value.trim())) && value.trim() !== "";
-  if (editor === "date") return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (editor === "date") {
+    const date = new Date(value);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && date.getUTCFullYear() > 0 && date.toISOString().slice(0, 10) === value;
+  }
   return true;
 }
 
@@ -390,6 +393,8 @@ function collectionItemError(token: string, editor: string, alias: string): stri
   if (editor === "number" && typeof value !== "number") return "Enter a JSON number.";
   // Null handling and custom type conversion remain the publisher's responsibility.
   if ((alias === "String" || editor === "date") && value !== null && typeof value !== "string") return "Enter a JSON string.";
+  if (editor === "date" && typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !fitsEditor(editor, value))
+    return "Enter a valid calendar date (YYYY-MM-DD).";
   return null;
 }
 

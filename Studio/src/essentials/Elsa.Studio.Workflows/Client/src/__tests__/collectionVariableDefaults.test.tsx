@@ -152,6 +152,48 @@ describe("collection variable starting values", () => {
     expect(saved(changed)).toEqual({ expressionType: "Literal", value: "[1,3]" });
   });
 
+  it.each(["2026-99-99", "2026-02-30", "2025-02-29"])("keeps an impossible date %s visible as raw JSON with an associated error", value => {
+    const { container, changed } = render("date", JSON.stringify([value]), "DateTime");
+    const raw = item(container, 1);
+    expect(raw.tagName).toBe("TEXTAREA");
+    expect(raw.value).toBe(JSON.stringify(value));
+    expect(raw.getAttribute("aria-invalid")).toBe("true");
+    const error = container.querySelector("[role='alert']")!;
+    expect(error.textContent).toContain("valid calendar date");
+    expect(raw.getAttribute("aria-describedby")).toBe(error.id);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("retains focus and the corrected date token before returning to a native control", () => {
+    const { container, changed } = render("date", '["2025-02-29"]', "DateTime");
+    const raw = item(container, 1);
+    raw.focus();
+    edit(raw, '"2024-02-29"');
+    expect(item(container, 1)).toBe(raw);
+    expect(document.activeElement).toBe(raw);
+    expect(saved(changed)).toEqual({ expressionType: "Literal", value: '["2024-02-29"]' });
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    flushSync(() => raw.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(item(container, 1).getAttribute("type")).toBe("date");
+    expect(item(container, 1).value).toBe("2024-02-29");
+  });
+
+  it("loads a valid leap date in the native control without changing it", () => {
+    const { container, changed } = render("date", '["2024-02-29"]', "DateTime");
+    expect(item(container, 1).getAttribute("type")).toBe("date");
+    expect(item(container, 1).value).toBe("2024-02-29");
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("keeps the shared scalar date fallback visible for an impossible calendar date", () => {
+    const { container, changed } = render("date", "2026-02-30", "DateTime", "Single");
+    const input = container.querySelector<HTMLInputElement>("[aria-label='Variable default value']")!;
+    expect(input.type).toBe("text");
+    expect(input.value).toBe("2026-02-30");
+    expect(changed).not.toHaveBeenCalled();
+  });
+
   it("keeps invalid legacy text visible until it is corrected to an array", () => {
     const { container, changed } = render("text", "a, b");
     const raw = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Variable default value']")!;
