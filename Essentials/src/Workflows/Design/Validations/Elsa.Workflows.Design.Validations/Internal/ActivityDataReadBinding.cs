@@ -13,6 +13,13 @@ internal sealed record ActivityDataReadBinding(
     string? Path = null,
     string? Error = null)
 {
+    // Match the publication compiler's descriptor payload profile, including case-insensitive
+    // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
+    // Only existing expression contract types are deserialized; arbitrary authored CLR values
+    // must never be serialized or inspected through their getters here.
+    private static readonly JsonSerializerOptions PortableExpressionOptions = new(JsonSerializerDefaults.Web)
+        { AllowOutOfOrderMetadataProperties = true };
+
     public static IEnumerable<ActivityDataReadBinding> Read(ArgumentValue? argument)
     {
         if (argument is null)
@@ -40,16 +47,44 @@ internal sealed record ActivityDataReadBinding(
         }
 
         if (argument.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
-            !payload.TryGetProperty("language", out var language) || language.ValueKind != JsonValueKind.String ||
-            !payload.TryGetProperty("parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object)
+            !payload.TryGetProperty("language", out _) ||
+            !payload.TryGetProperty("source", out _) ||
+            !payload.TryGetProperty("capabilityProfile", out _))
             yield break;
 
-        foreach (var parameter in parameters.EnumerateObject())
+        var portable = ReadPortable(payload);
+        if (portable is null)
         {
-            if (parameter.Value.ValueKind != JsonValueKind.Object) continue;
-            var kind = String(parameter.Value, "kind");
-            if (IsRole(kind) || IsMemberRole(kind))
-                yield return Direct(kind!, parameter.Value, portable: true);
+            yield return new("", Error: "InvalidSource");
+            yield break;
+        }
+        // Preserve the existing whole-role selection refusal on the effective parameters object.
+        // The serializer chooses the last case-insensitive property alias; dictionary keys remain exact.
+        var parameters = payload.EnumerateObject().Last(property =>
+            property.Name.Equals("parameters", StringComparison.OrdinalIgnoreCase)).Value;
+        foreach (var parameter in portable.Parameters)
+        {
+            var binding = Parameter(parameter.Value);
+            if (binding is null) continue;
+            if (parameters.TryGetProperty(parameter.Key, out var raw) && raw.ValueKind == JsonValueKind.Object &&
+                (raw.TryGetProperty("memberPath", out _) ||
+                 binding.Role != "WorkflowRequest" && raw.TryGetProperty("path", out _)))
+                binding = binding with { Error = "UnsupportedMemberSelection" };
+            yield return binding;
+        }
+    }
+
+    private static ExpressionDefinition? ReadPortable(JsonElement payload)
+    {
+        try
+        {
+            return payload.Deserialize<ExpressionDefinition>(PortableExpressionOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            // A payload admitted as portable by the compiler cannot silently become an opaque
+            // expression here when its owned contract or discriminator is malformed.
+            return null;
         }
     }
 

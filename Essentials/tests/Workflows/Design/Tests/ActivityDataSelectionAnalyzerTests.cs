@@ -120,6 +120,44 @@ public sealed class ActivityDataSelectionAnalyzerTests
     }
 
     [Theory]
+    [InlineData("""{"Kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result"}""")]
+    [InlineData("""{"kind":"activityresult","producerNodeId":"producer","projectionKey":"$result"}""")]
+    [InlineData("""{"kind":"Unrecognized","producerNodeId":"producer","projectionKey":"$result"}""")]
+    [InlineData("""{"kind":"ActivityResult","producerNodeId":null,"projectionKey":"$result"}""")]
+    public async Task Recognized_portable_json_refuses_malformed_contracts_without_guessing_discriminators(string parameter)
+    {
+        using var provider = Provider();
+        var value = PortableJson("\"Parameters\":{\"p\":" + parameter + "}");
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
+        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ActivityData/InvalidSource").Path);
+    }
+
+    [Theory]
+    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"missing","DeclaringScopeNodeId":"workflow","variableKey":"missing","VariableKey":"customer"}""")]
+    [InlineData("""{"kind":"WorkflowRequest","memberKey":"missing","MemberKey":"Customer"}""")]
+    public async Task Portable_json_variable_and_request_aliases_resolve_the_effective_owned_identity(string parameter)
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"Parameters\":{\"p\":" + parameter + "}"))))) with
+        {
+            Variables = [Variable("customer", "Customer")],
+            Inputs = [new("customer", "Customer", new("String"), null, "Customer", null, true)]
+        };
+        Assert.Empty((await Analyzer(provider).AnalyzeAsync(document)).Findings);
+    }
+
+    [Fact]
+    public async Task Portable_json_keeps_whole_role_selection_refusal_after_parameter_alias_resolution()
+    {
+        using var provider = Provider();
+        var value = PortableJson("""
+            "parameters":{},"Parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result","memberPath":["id"]}}
+            """);
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
+        Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
+    }
+
+    [Theory]
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
@@ -459,6 +497,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
     private static ActivityNode Sequence(params ActivityNode[] children) => new("root", "sequence", [], [],
         new("elsa.sequence.structure", "1.0.0", JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<VariableDefinition>() }, Web)));
     private static ArgumentState Input(ArgumentValue value) => new("CustomerId", value, null, null, null, null);
+    private static ArgumentValue PortableJson(string properties)
+    {
+        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"p","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-pure-v1",""" + properties + "}");
+        return new(json.RootElement.Clone(), "JavaScript");
+    }
     private static ArgumentValue Result(string producer, string projection = "$result", bool optional = false, string scope = "root") => new(
         JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = projection, producerScopeId = scope, isOptional = optional }), "ActivityResult");
     private static ArgumentState Read(string form, string producer, string projection = "$result", bool optional = false)
