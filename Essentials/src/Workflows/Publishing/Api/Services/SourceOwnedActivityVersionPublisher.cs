@@ -67,11 +67,17 @@ public sealed class SourceOwnedActivityVersionPublisher(
         if (StringComparer.Ordinal.Equals(version.ProviderKey, WellKnownActivityContentAuthorities.Design) ||
             StringComparer.Ordinal.Equals(version.SourceKind, "ActivityDefinitionDraft"))
             throw new InvalidOperationException("The source-owned publication bridge cannot publish Design-owned activity content.");
-        if (await publicationStore.FindAsync(version.Id, cancellationToken) is not null)
-            return ActivitySourceVersionPublicationResult.Published;
-        var now = timeProvider.GetUtcNow();
         var catalogVersion = ActivityDefinitionVersion.From(version);
         var persistedDefinition = ActivityDefinition.From(definition);
+        if (!StringComparer.Ordinal.Equals(persistedDefinition.TenantId, catalogVersion.TenantId))
+            throw new ArgumentException("Source activity publication ownership does not align.", nameof(version));
+        if (await publicationStore.FindAsync(version.Id, cancellationToken) is { } existing)
+        {
+            if (!StringComparer.Ordinal.Equals(existing.TenantId, catalogVersion.TenantId))
+                throw new ArgumentException("Existing source activity publication ownership does not align.", nameof(version));
+            return ActivitySourceVersionPublicationResult.Published;
+        }
+        var now = timeProvider.GetUtcNow();
         catalogVersion.Definition = persistedDefinition;
         var contract = ToContract(version);
         var sourceReferenceId = StableId("activity-source-ref", version.Id);
@@ -139,7 +145,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
             version.Version,
             now,
             now,
-            WorkflowExecutableReferenceScope.Published);
+            WorkflowExecutableReferenceScope.Published,
+            TenantId: catalogVersion.TenantId);
         var authoring = new ActivityDefinitionAuthoringState
         {
             Id = StableId("activity-authority", definition.Id),
