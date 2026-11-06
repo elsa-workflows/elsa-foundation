@@ -29,7 +29,7 @@ CAPTURES = {
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
-    'native dashboard questions and sharing': ['reference', 'questions-empty', 'question-controls', 'question-preview', 'question-drill', 'question-saved', 'question-refreshed', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-copy', 'question-share', 'dashboard-share', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-conflict', 'question-conflict-recovered'],
+    'native dashboard questions and sharing': ['reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-saved', 'question-refreshed', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-copy', 'question-share', 'dashboard-share', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-reuse-confirmation', 'question-conflict', 'question-conflict-recovered'],
     'existing home widgets and layout defaults': ['reference', 'home-widgets', 'home-layout-edit', 'home-layout-reopened', 'home-widget-picker', 'home-server-default', 'home-existing-aliases'],
 }
 JOURNEYS = set(CAPTURES)
@@ -57,22 +57,33 @@ def configure_dashboard_qualification(settings, shells):
     features['GitHubCopilotAgent']['Enabled'] = False
 
 
+def signal_owned_group(process, signal_number):
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # macOS may deny signalling a retired group after its leader was reaped.
+        # Only tolerate this when no living process owned by us remains in that group.
+        if process.poll() is None:
+            raise
+        members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
+        if any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
+               and int(parts[1]) == process.pid and not parts[2].startswith('Z')
+               for line in members.splitlines()):
+            raise
+
+
 def stop_group(process):
     # The leader can exit before Chromium/workers, including a worker that ignores TERM.
     # Drain the group even after its leader exited, then kill any remaining owned members.
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    signal_owned_group(process, signal.SIGTERM)
     try:
         process.wait(timeout=15)
     except subprocess.TimeoutExpired:
         pass
     finally:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signal_owned_group(process, signal.SIGKILL)
         process.wait(timeout=10)
 
 

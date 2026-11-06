@@ -254,3 +254,7 @@ not automatic constitution violations.
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
+
+## Reference modules
+
+- [Acme Processing replacement ports and cross-domain contributions](Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md)

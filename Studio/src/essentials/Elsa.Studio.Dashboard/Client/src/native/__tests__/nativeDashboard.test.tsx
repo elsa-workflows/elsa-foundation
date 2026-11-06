@@ -182,7 +182,8 @@ describe("native dashboard authorization and persistence boundary", () => {
     expect(view.querySelector("tbody td:nth-child(2)")?.textContent).toBe("41");
     fail = true; click(view, "Preview question");
     await waitUntil(() => view.textContent?.includes(status === 404 ? "This data source is no longer available" : status === 422 ? "A field or metric is no longer valid" : "The data source is temporarily unavailable") === true);
-    expect(post.mock.calls.every(call => call[0] === "https://backend.example/_elsa/studio/dashboard-queries/preview")).toBe(true);
+    expect(post.mock.calls.filter(call => !call[0].endsWith("/validate")).every(call => call[0] === "https://backend.example/_elsa/studio/dashboard-queries/preview")).toBe(true);
+    expect(post.mock.calls.filter(call => call[0].endsWith("/validate"))).toHaveLength(status === 422 ? 1 : 0);
     expect(post.mock.calls.every(call => !(call[2] as { headers?: unknown } | undefined)?.headers)).toBe(true);
     if (status === 404) {
       await waitUntil(() => authoring.snapshots.size === 0);

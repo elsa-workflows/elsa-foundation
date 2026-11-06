@@ -43,7 +43,9 @@ export interface DashboardResource {
   ownerId: string; capabilities: ResourceCapabilities;
   definition?: QuestionDefinition; definitionState?: "available" | "withheld";
   tiles?: DashboardTile[]; createdAt: string; updatedAt: string;
+  uses?: { id: string; name: string; tileCount: number }[];
 }
+export interface QueryProblem { code: string; path: string; message: string }
 export interface AudienceGrant { kind: "user" | "role"; id: string; access: "viewer" | "editor" }
 export interface AudienceCandidate { kind: "user" | "role"; id: string; name?: string; displayName?: string }
 export interface DefinitionRevision { revision: string; name: string; description: string; actorId: string; updatedAt: string }

@@ -47,7 +47,13 @@ public sealed record DashboardResourceDocument(string Id, string Kind, string Te
 
 public sealed record DashboardResourceView(string Id, string Kind, string OwnerId, string Revision, string Name,
     string? Description, DashboardResourceCapabilities Capabilities, DashboardQueryRequest? Definition,
-    string DefinitionState, IReadOnlyList<DashboardTileView> Tiles, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    string DefinitionState, IReadOnlyList<DashboardTileView> Tiles, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt)
+{
+    /// <summary>Current readable dashboard uses of this question; omitted for collection items and other resources. This is not an inventory of inaccessible uses.</summary>
+    public IReadOnlyList<DashboardQuestionUse>? Uses { get; init; }
+}
+
+public sealed record DashboardQuestionUse(string Id, string Name, int TileCount);
 
 public sealed record DashboardResourcePage(IReadOnlyList<DashboardResourceView> Items, string? ContinuationToken = null);
 public sealed record DashboardAudiencePage(IReadOnlyList<DashboardAudienceGrant> Items);

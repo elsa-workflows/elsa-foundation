@@ -1,4 +1,5 @@
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Events.Core.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Dashboard.Core.Contracts;
@@ -34,5 +35,6 @@ public class DashboardManagementFeature : IShellFeature
             services.Remove(fallback);
         services.TryAddScoped<IDashboardDefinitionValidator, DashboardDefinitionValidator>();
         services.AddDashboardResources();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer>(new DashboardManagementCompositionGuard(services)));
     }
 }

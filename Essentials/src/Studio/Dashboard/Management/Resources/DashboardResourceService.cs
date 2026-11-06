@@ -36,7 +36,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
             catch (Exception error) when (error is JsonException or FormatException) { Invalid("The continuation is invalid. Reload this collection."); }
         }
         var result = new List<DashboardResourceView>();
-        foreach (var document in visible.Skip(offset).Take(100)) result.Add(await ProjectAsync(actor, document, cancellationToken));
+        foreach (var document in visible.Skip(offset).Take(100)) result.Add(await ProjectAsync(actor, document, cancellationToken, includeUses: false));
         var continuation = offset + result.Count < visible.Length ? Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Cursor(scope, result[^1].Id))) : null;
         return new(result, continuation);
     }
@@ -224,7 +224,8 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         return document;
     }
 
-    private async ValueTask<DashboardResourceView> ProjectAsync(DashboardActor actor, DashboardResourceDocument document, CancellationToken cancellationToken)
+    private async ValueTask<DashboardResourceView> ProjectAsync(DashboardActor actor, DashboardResourceDocument document,
+        CancellationToken cancellationToken, bool includeUses = true)
     {
         if (!CanRead(actor, document)) throw Missing();
         var definition = document.Content.Definition;
@@ -242,8 +243,18 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         var owner = IsOwner(actor, document); var canEdit = owner || Grant(actor, document) == "editor";
         var caps = new DashboardResourceCapabilities(true, canEdit && Has(actor, document.Kind, "edit"), owner && Has(actor, document.Kind, "share"),
             owner && Has(actor, document.Kind, "delete"), Has(actor, document.Kind, "create") && !withheld);
+        IReadOnlyList<DashboardQuestionUse>? uses = null;
+        if (includeUses && document.Kind == DashboardResourceKinds.Question)
+            uses = Has(actor, DashboardResourceKinds.Dashboard, "read")
+                ? (await store.ListAsync(actor.TenantId, DashboardResourceKinds.Dashboard, cancellationToken))
+                    .Where(dashboard => dashboard.Kind == DashboardResourceKinds.Dashboard && CanRead(actor, dashboard))
+                    .Select(dashboard => new DashboardQuestionUse(dashboard.Id, dashboard.Content.Name,
+                        dashboard.Content.Tiles.Count(tile => tile.QuestionId == document.Id)))
+                    .Where(use => use.TileCount != 0)
+                    .OrderBy(use => use.Name, StringComparer.OrdinalIgnoreCase).ThenBy(use => use.Id, StringComparer.Ordinal).ToArray()
+                : [];
         return new(document.Id, document.Kind, document.OwnerId, document.Revision, document.Content.Name, document.Content.Description,
-            caps, withheld ? null : definition, withheld ? "withheld" : "available", tiles, document.CreatedAt, document.UpdatedAt);
+            caps, withheld ? null : definition, withheld ? "withheld" : "available", tiles, document.CreatedAt, document.UpdatedAt) { Uses = uses };
     }
 
     private DashboardResourceDocument Next(DashboardResourceDocument current, DashboardResourceContent content, string actorId) =>

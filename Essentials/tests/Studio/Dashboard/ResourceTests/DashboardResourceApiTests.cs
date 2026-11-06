@@ -32,6 +32,70 @@ namespace Elsa.Studio.Dashboard.ResourceTests;
 
 public sealed class DashboardResourceApiTests
 {
+    [Fact]
+    public async Task Question_details_and_updates_show_only_current_readable_same_tenant_dashboard_uses()
+    {
+        await using var host = await DashboardResourceApiHost.CreateAsync();
+        var question = await host.CreateQuestionAsync();
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<DashboardQuestionUse>>(question.Uses));
+        using (var shared = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/questions/{question.Id}/audience", "owner",
+            new DashboardAudiencePage([new("user", "viewer", "viewer")]), question.Revision))
+        {
+            shared.EnsureSuccessStatusCode();
+            question = (await shared.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+        }
+        var alpha = await Board("Alpha", 2, share: true);
+        var beta = await Board("Beta", 1, share: true);
+        var hidden = await Board("Private operations", 1, share: false);
+        await host.SeedForeignDashboardUseAsync(question.Id);
+
+        using (var updated = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/questions/{question.Id}", "owner",
+            new DashboardResourceInput { Name = "Revised question", PreserveDefinition = true }, question.Revision))
+        {
+            updated.EnsureSuccessStatusCode();
+            var value = (await updated.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+            Assert.Equal(new[] { alpha.Id, beta.Id, hidden.Id }, value.Uses!.Select(use => use.Id));
+        }
+        using (var detail = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer"))
+        {
+            detail.EnsureSuccessStatusCode();
+            var value = (await detail.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+            Assert.Equal(new[] { new DashboardQuestionUse(alpha.Id, "Alpha", 2), new DashboardQuestionUse(beta.Id, "Beta", 1) }, value.Uses);
+        }
+        using (var coarseDenied = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "owner", fixture: "questions-only"))
+        {
+            coarseDenied.EnsureSuccessStatusCode();
+            Assert.Empty((await coarseDenied.Content.ReadFromJsonAsync<DashboardResourceView>())!.Uses!);
+        }
+        using (var collection = await host.SendAsync(HttpMethod.Get, "/_elsa/studio/questions", "viewer"))
+        {
+            collection.EnsureSuccessStatusCode();
+            Assert.Null(Assert.Single((await collection.Content.ReadFromJsonAsync<DashboardResourcePage>())!.Items).Uses);
+        }
+        using (var revoked = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/dashboards/{alpha.Id}/audience", "owner",
+            new DashboardAudiencePage([]), alpha.Revision)) revoked.EnsureSuccessStatusCode();
+        using (var detail = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "viewer"))
+        {
+            detail.EnsureSuccessStatusCode();
+            Assert.Equal(new DashboardQuestionUse(beta.Id, "Beta", 1), Assert.Single((await detail.Content.ReadFromJsonAsync<DashboardResourceView>())!.Uses!));
+        }
+
+        async Task<DashboardResourceView> Board(string name, int tiles, bool share)
+        {
+            using var created = await host.SendAsync(HttpMethod.Post, "/_elsa/studio/dashboards", "owner",
+                new DashboardResourceInput { Name = name, OperationKey = name,
+                    Tiles = Enumerable.Range(0, tiles).Select(index => new DashboardTileInput { Id = $"tile-{index}", QuestionId = question.Id }).ToArray() });
+            created.EnsureSuccessStatusCode();
+            var board = (await created.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+            Assert.Null(board.Uses);
+            if (!share) return board;
+            using var granted = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/dashboards/{board.Id}/audience", "owner",
+                new DashboardAudiencePage([new("user", "viewer", "viewer")]), board.Revision);
+            granted.EnsureSuccessStatusCode();
+            return (await granted.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+        }
+    }
+
     [Theory]
     [InlineData("DATASET_UNAVAILABLE", 404)]
     [InlineData("UNSUPPORTED_QUERY", 422)]
@@ -386,6 +450,15 @@ internal sealed class DashboardResourceApiHost : IAsyncDisposable
         return (await scope.ServiceProvider.GetRequiredService<IDashboardResourceStore>().ListAsync("tenant-a", "question")).Count;
     }
 
+    public async Task SeedForeignDashboardUseAsync(string questionId)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var now = DateTimeOffset.UtcNow;
+        var document = new DashboardResourceDocument("foreign-board", "dashboard", "tenant-b", "owner", "foreign-revision",
+            new("Foreign dashboard", null, null, [new("foreign-tile", questionId, "medium")]), [], [], now, now);
+        Assert.Equal("saved", (await scope.ServiceProvider.GetRequiredService<IDashboardResourceStore>().WriteAsync(new(document, null))).Status);
+    }
+
     public Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, string? actor, object? body = null,
         string? revision = null, string? fixture = null, string tenant = "tenant-a")
     {
@@ -450,6 +523,7 @@ internal sealed class DashboardAuthenticationFixture(IOptionsMonitor<Authenticat
         if (fixture == "duplicate-user") claims.Add(new(IdentityClaimTypes.UserId, "another"));
         foreach (var permission in fixture switch {
             "coarse-denied" => Array.Empty<string>(),
+            "questions-only" => ["studio/questions:read"],
             "read-only" => new[] { "studio/questions:read", "studio/dashboards:read" },
             _ => ["*"] })
             claims.Add(new(IdentityClaimTypes.Permission, permission));

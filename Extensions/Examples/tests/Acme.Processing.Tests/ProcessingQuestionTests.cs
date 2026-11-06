@@ -10,6 +10,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Dashboard.Core.Contracts;
 using Elsa.Studio.Dashboard.Core.Exceptions;
 using Elsa.Studio.Dashboard.Core.Models;
+using Elsa.Studio.Dashboard.Core.Resources;
 using Elsa.Studio.Dashboard.Management;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -24,6 +25,42 @@ namespace Acme.Processing.Tests;
 public sealed class ProcessingQuestionTests
 {
     private static readonly DateTimeOffset Started = new(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Numeric_having_rejects_null_parameter_values_before_resource_admission(bool supplied)
+    {
+        using var host = new Host();
+        await host.Create("retail", 60);
+        var question = Question([new("count", "processing.record-count", "v1")]);
+        question = question with { Query = question.Query with {
+            Parameters = [new("minimum", "decimal", Nullable: true, Default: supplied ? new("decimal", "0") : new("null"))],
+            Having = new() { Metric = "current.count", Operator = "gt", Value = new("decimal", Parameter: "minimum") }
+        }, ParameterValues = supplied ? new Dictionary<string, DashboardValue> { ["minimum"] = new("null") } : new Dictionary<string, DashboardValue>() };
+
+        var validation = await host.Query.ValidateAsync(host.Scope, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == "INVALID_VALUE" && problem.Path == "query.having");
+        var admission = await Assert.ThrowsAsync<DashboardResourceException>(() =>
+            host.Validator.ValidateAsync(new("tenant-a", "alice", new HashSet<string>(), new HashSet<string>()), question).AsTask());
+        Assert.Equal("validation", admission.Code);
+        var execution = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Query.ExecuteAsync(host.Scope, question).AsTask());
+        Assert.Equal("INVALID_VALUE", execution.Code);
+    }
+
+    [Theory]
+    [InlineData("isNull", 0)]
+    [InlineData("isNotNull", 1)]
+    public async Task Having_null_tests_keep_their_operand_free_meaning(string operation, int expectedRows)
+    {
+        using var host = new Host();
+        var question = Question([new("count", "processing.record-count", "v1")]);
+        question = question with { Query = question.Query with {
+            Having = new() { Metric = "current.count", Operator = operation } } };
+        Assert.True((await host.Query.ValidateAsync(host.Scope, question)).IsValid);
+        Assert.Equal(expectedRows, (await host.Query.ExecuteAsync(host.Scope, question)).Rows.Count);
+    }
 
     [Fact]
     public async Task Explicit_business_dimension_has_independently_checked_values_for_each_actor_and_tenant()
@@ -291,6 +328,7 @@ public sealed class ProcessingQuestionTests
         private readonly ServiceProvider _provider; private readonly IServiceScope _scope;
         public ActorContext Actor { get; } = new(); public PermissionService Permission { get; } = new();
         public IProcessingRecords Records { get; } public IDashboardQueryService Query { get; }
+        public IDashboardDefinitionValidator Validator { get; }
         public DashboardRequestScope Scope => new(Actor.Current.TenantId, Actor.Current.SubjectId, "studio");
         public Host(DashboardQueryLimits? limits = null)
         {
@@ -304,6 +342,7 @@ public sealed class ProcessingQuestionTests
             new EventsFeature().ConfigureServices(services); new DashboardManagementFeature().ConfigureServices(services); new ProcessingFeature().ConfigureServices(services);
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }); _scope = _provider.CreateScope();
             Records = _scope.ServiceProvider.GetRequiredService<IProcessingRecords>(); Query = _scope.ServiceProvider.GetRequiredService<IDashboardQueryService>();
+            Validator = _scope.ServiceProvider.GetRequiredService<IDashboardDefinitionValidator>();
         }
         public Task<string> Create(string category, int? seconds, string status = "completed", IReadOnlyList<string>? readers = null, bool previous = false)
         {

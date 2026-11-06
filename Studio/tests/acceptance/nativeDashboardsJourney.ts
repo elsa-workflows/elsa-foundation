@@ -1,4 +1,4 @@
-import { chromium, expect, type Page, type TestInfo } from "@playwright/test";
+import { chromium, expect, type Page, type Request, type TestInfo } from "@playwright/test";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeAgentBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
@@ -97,6 +97,22 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("region", { name: "Ask Weaver", exact: true }).getByLabel("Your question", { exact: true }).fill("A provider-disabled native question remains editable");
       await expect(page.getByRole("button", { name: "Ask Weaver", exact: true })).toBeDisabled();
       await capture(page, info, "question-controls");
+      // A real native validation response identifies the invalid field and moves focus there.
+      const limit = page.getByLabel("Maximum result rows/groups", { exact: true });
+      await limit.fill("0");
+      const invalidResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/validate"));
+      await page.getByRole("button", { name: "Validate question", exact: true }).click();
+      const invalid = await invalidResponse; expect(invalid.ok()).toBe(true);
+      expect(await invalid.json()).toMatchObject({ isValid: false, problems: expect.arrayContaining([expect.objectContaining({ path: "query.limit" })]) });
+      await expect(page.getByRole("group", { name: "Sort and limit", exact: true })).toHaveAttribute("aria-invalid", "true");
+      await expect(limit).toBeFocused(); await expect(limit).toHaveValue("0");
+      await capture(page, info, "question-validation");
+      await limit.fill("25");
+      const validResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/validate"));
+      await page.getByRole("button", { name: "Validate question", exact: true }).click();
+      expect(await (await validResponse).json()).toMatchObject({ isValid: true, problems: [] });
+      await expect(page.getByRole("group", { name: "Sort and limit", exact: true })).not.toHaveAttribute("aria-invalid", "true");
+      await expect(page.getByLabel("Name", { exact: true })).toHaveValue(`Started run quality ${suffix}`);
       const preview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/preview"));
       await page.getByRole("button", { name: "Preview question", exact: true }).click();
       const resultResponse = await preview; expect(resultResponse.ok()).toBe(true);
@@ -197,18 +213,49 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       }
       await page.getByRole("combobox", { name: "Size for question 1", exact: true }).selectOption("wide");
       await page.getByRole("button", { name: "Move question 1 later", exact: true }).press("Enter");
-      await expect(page.getByRole("button", { name: "Move question 2 later", exact: true })).toBeFocused();
+      await expect(page.getByRole("button", { name: "Move question 2 earlier", exact: true })).toBeFocused();
       await expect(page.locator(".named-announcement")).toContainText("Tile moved to position 2 of 2");
       await capture(page, info, "dashboard-layout");
+      // Keep the two-tile endpoint focus proof, then exercise native admission with four references.
+      for (let index = 0; index < 2; index++) {
+        await page.getByRole("button", { name: "Add saved question", exact: true }).click();
+        const picker = page.getByRole("dialog", { name: "Add saved question", exact: true });
+        await picker.getByLabel("Search accessible questions", { exact: true }).fill(saved.name);
+        await picker.getByRole("button", { name: "Search questions", exact: true }).click();
+        await picker.getByRole("button", { name: `Add ${saved.name}`, exact: true }).click();
+      }
       const dashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
       await page.getByRole("button", { name: "Save layout", exact: true }).click();
       const dashboard = await (await dashboardResponse).json() as Resource; dashboardId = dashboard.id; resources.push({ kind: "dashboards", id: dashboard.id });
-      expect(dashboard.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id]); expect(new Set(dashboard.tiles.map(tile => tile.id)).size).toBe(2);
-      expect(dashboard.tiles.map(tile => tile.size)).toEqual(["medium", "wide"]);
+      expect(dashboard.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]); expect(new Set(dashboard.tiles.map(tile => tile.id)).size).toBe(4);
+      expect(dashboard.tiles.map(tile => tile.size)).toEqual(["medium", "wide", "medium", "medium"]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/dashboards/${dashboard.id}/audience`)).items).toEqual([]);
-      await page.reload(); await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
+      await page.reload(); await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
       await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveValue("wide");
       await capture(page, info, "dashboard-reopened");
+      await capture(page, info, "dashboard-multi-tile");
+      // CDP adds controlled network latency only: all requests and result data still reach real APIs.
+      // This qualifies visible UI cancellation and late-network-result rejection, not server compute cancellation.
+      const network = await page.context().newCDPSession(page);
+      const firstTile = page.locator(".named-tile").first();
+      try {
+        await network.send("Network.enable");
+        await network.send("Network.emulateNetworkConditions", { offline: false, latency: 1500, downloadThroughput: -1, uploadThroughput: -1 });
+        await page.getByRole("button", { name: "Refresh all", exact: true }).click();
+        await firstTile.getByRole("button", { name: "Cancel refresh for question 1", exact: true }).click();
+        await expect(firstTile.getByText("Refresh cancelled. No saved definition was changed.", { exact: true })).toBeVisible();
+        await expect(firstTile.locator(".named-result")).toHaveCount(0);
+        await capture(page, info, "dashboard-refresh-cancelled");
+      } finally {
+        try { await network.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }); }
+        finally { await network.detach(); }
+      }
+      const retriedRequest = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`/dashboards/${dashboard.id}/tiles/${dashboard.tiles[0].id}/execute`));
+      await firstTile.getByRole("button", { name: "Retry refresh for question 1", exact: true }).click();
+      const retriedResponse = await (await retriedRequest).response(); expect(retriedResponse?.ok()).toBe(true);
+      const retried = await retriedResponse!.json() as Result; expect(retried.outcome).toBe("succeeded"); expect(retried.rows[0].values.started.value).toBe("4");
+      await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
+      await capture(page, info, "dashboard-refresh-retried");
       await page.getByRole("button", { name: "Settings for question 1", exact: true }).click();
       const tileSettings = page.getByRole("dialog", { name: "Tile presentation and parameters", exact: true });
       await tileSettings.getByRole("combobox", { name: "Tile visualization", exact: true }).selectOption("line");
@@ -228,7 +275,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const dashboardCopyResponse = page.waitForResponse(response => response.url().endsWith(`/dashboards/${dashboard.id}/copies`));
       await copy.getByRole("button", { name: "Confirm", exact: true }).click();
       const dashboardCopy = await (await dashboardCopyResponse).json() as Resource; resources.push({ kind: "dashboards", id: dashboardCopy.id });
-      expect(dashboardCopy.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id]);
+      expect(dashboardCopy.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/dashboards/${dashboardCopy.id}/audience`)).items).toEqual([]);
       await expect(page).toHaveURL(new RegExp(`/dashboards/${dashboardCopy.id}$`)); await capture(page, info, "dashboard-copy");
       await share("questions", questionId); await share("dashboards", dashboardId);
@@ -240,31 +287,77 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
       await expect(reader.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
       await capture(reader, info, "shared-question");
-      await reader.goto(`/dashboards/${dashboardId}`); await expect(reader.locator(".named-tile .named-result")).toHaveCount(2);
+      await reader.goto(`/dashboards/${dashboardId}`); await expect(reader.locator(".named-tile .named-result")).toHaveCount(4);
       await capture(reader, info, "shared-dashboard");
       // IAM permission changes are qualified only after a new authenticated reader session.
       await profile("dashboard-native-no-source"); await readerContext.clearCookies(); await signInDashboardReader(reader, info);
       await reader.goto(`/questions/${questionId}`);
       await expect(reader.getByText(/^Parts of this definition are withheld under your current access\./)).toBeVisible();
       await expect(reader.locator(".named-query-controls")).toHaveCount(0); await expect(reader.locator(".named-result")).toHaveCount(0);
+      await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
+      await expect(reader.getByRole("button", { name: "Replace unavailable query", exact: true })).toHaveCount(0);
       await capture(reader, info, "question-source-unavailable");
+      // Elevate only the owned resource grant to editor. The independently authenticated reader
+      // still lacks source access, and the earlier read-only assertions remain unchanged.
+      const beforeRepair = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
+      const originalAudience = await backend.api<{ items: { kind: string; id: string; access: string }[] }>(`/_elsa/studio/questions/${questionId}/audience`);
+      expect(originalAudience.items).toContainEqual({ kind: "user", id: "dashboard-qa-reader", access: "viewer" });
+      const editorAudience = originalAudience.items.map(grant => grant.kind === "user" && grant.id === "dashboard-qa-reader" ? { ...grant, access: "editor" } : grant);
+      await backend.api(`/_elsa/studio/questions/${questionId}/audience`, "PUT", { items: editorAudience }, tag(beforeRepair.revision));
+      await reader.reload();
+      await expect(reader.getByRole("button", { name: "Replace unavailable query", exact: true })).toBeVisible();
+      await expect(reader.locator(".named-query-controls")).toHaveCount(0);
+      const repairWrites: string[] = [];
+      const collectRepairWrite = (request: Request) => { if (["POST", "PUT", "DELETE"].includes(request.method()) && new URL(request.url()).pathname.endsWith(`/_elsa/studio/questions/${questionId}`)) repairWrites.push(request.method()); };
+      reader.on("request", collectRepairWrite);
+      try {
+        await reader.getByRole("button", { name: "Replace unavailable query", exact: true }).click();
+        const repair = reader.getByRole("dialog", { name: "Replace unavailable query", exact: true });
+        await expect(repair).toContainText("blank replacement query");
+        await repair.getByRole("button", { name: "Confirm", exact: true }).click();
+        await expect(reader.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("");
+        await expect(reader.getByRole("group", { name: "Metrics", exact: true }).getByRole("combobox")).toHaveCount(0);
+        await expect(reader.getByRole("group", { name: "Parameters and accepted defaults", exact: true }).getByRole("textbox")).toHaveCount(0);
+        await expect(reader.locator(".named-result")).toHaveCount(0);
+        await expect(reader.getByRole("status").filter({ hasText: "Started a blank replacement query. Nothing has been saved." })).toBeVisible();
+        await capture(reader, info, "question-repair-blank");
+        expect(repairWrites).toEqual([]);
+        // Explicitly discard the local replacement before reopening the saved definition.
+        const discardRepair = reader.waitForEvent("dialog"); const back = reader.getByRole("button", { name: "Back to questions", exact: true }).click();
+        const discard = await discardRepair; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.accept(); await back;
+        await expect(reader.getByRole("heading", { name: "Questions", exact: true })).toBeVisible();
+      } finally { reader.off("request", collectRepairWrite); }
+      const afterRepair = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
+      expect(afterRepair.definition).toEqual(beforeRepair.definition);
+      await backend.api(`/_elsa/studio/questions/${questionId}/audience`, "PUT", originalAudience, tag(afterRepair.revision));
       await profile("dashboard-native-reader"); await readerContext.clearCookies(); await signInDashboardReader(reader, info);
       // With the reader's question still open, revoke only that resource's ACL through the native owner dialog.
       await reader.goto(`/questions/${questionId}`); await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
+      await expect(reader.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("elsa.workflows.runs");
+      await expect(reader.locator(".named-result")).toBeVisible();
+      await capture(reader, info, "question-repair-reopened");
       await expect(reader.locator(".named-result")).toBeVisible(); await share("questions", questionId, true);
       await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
       await expect(reader.getByRole("heading", { name: "Current access could not authorize this definition", exact: true })).toBeVisible();
       await expect(reader.locator(".named-result")).toHaveCount(0); await expect(reader.locator(".named-query-controls")).toHaveCount(0);
       await capture(reader, info, "question-access-lost");
       await reader.goto(`/dashboards/${dashboardId}`);
-      await expect(reader.getByText("This question is unavailable under your current access. Its reference is preserved during layout saves.", { exact: true })).toHaveCount(2);
+      await expect(reader.getByText("This question is unavailable under your current access. Its reference is preserved during layout saves.", { exact: true })).toHaveCount(4);
       await expect(reader.locator(".named-result")).toHaveCount(0); await capture(reader, info, "dashboard-unavailable-tiles");
       // A current saved revision mismatch is rejected instead of silently overwriting the editor's draft.
       await page.goto(`/questions/${questionId}`); const current = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
       await page.getByLabel("Description", { exact: true }).fill("Keep this local conflicted draft");
+      await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("24");
       await backend.api(`/_elsa/studio/questions/${questionId}`, "PUT", { name: current.name, description: "Concurrent saved edit", definition: current.definition }, tag(current.revision));
       await page.getByRole("button", { name: "Save question", exact: true }).click();
+      const reuse = page.getByRole("dialog", { name: "Update reused question", exact: true });
+      await expect(reuse).toContainText("Save draft as new question");
+      await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toContainText(`Private operations ${suffix}`);
+      await capture(page, info, "question-reuse-confirmation");
+      await reuse.getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(page.locator(".named-inline-error")).toBeVisible(); await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Keep this local conflicted draft");
+      await expect(page.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("24");
       await capture(page, info, "question-conflict");
       await page.getByRole("button", { name: "Save draft as new question", exact: true }).click();
       const recovery = page.getByRole("dialog", { name: "Save draft as new question", exact: true });
@@ -273,10 +366,11 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await recovery.getByRole("button", { name: "Confirm", exact: true }).click();
       const recovered = await (await recoveredResponse).json() as Resource; resources.push({ kind: "questions", id: recovered.id });
       expect(recovered.description).toBe("Keep this local conflicted draft");
+      expect(recovered.definition).toMatchObject({ query: { limit: 24 } });
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${recovered.id}/audience`)).items).toEqual([]);
       await expect(page).toHaveURL(new RegExp(`/questions/${recovered.id}$`)); await capture(page, info, "question-conflict-recovered");
       await boundary.verify(info); await readerBoundary.verify(info, "reader"); expect(readerErrors).toEqual([]);
-      await attachDashboardJson(info, "dashboard-native-oracle.json", { definitionId: seeded.definitionId, executionIds: seeded.executionIds, observedInstances: seeded.observedInstances, expectedInitialStarted: 3, expectedRefreshedStarted: 4, expectedFailed: 0, expectedFailureRatePercent: 0, actualQueryRows: result.rows, actualRefreshedRows: refreshed.rows, coverage: result.coverage, questionId, dashboardId });
+      await attachDashboardJson(info, "dashboard-native-oracle.json", { definitionId: seeded.definitionId, executionIds: seeded.executionIds, observedInstances: seeded.observedInstances, expectedInitialStarted: 3, expectedRefreshedStarted: 4, expectedFailed: 0, expectedFailureRatePercent: 0, actualQueryRows: result.rows, actualRefreshedRows: refreshed.rows, actualRetriedTileRows: retried.rows, coverage: result.coverage, questionId, dashboardId, tileCount: 4, cancellationQualification: { mechanism: "Owned Chromium CDP network latency, 1500ms", responseMocks: false, actualNativeApis: true, assertionScope: "UI cancellation and late-network-result withholding; server compute cancellation is not qualified", networkResetAndDetached: true }, repairQualification: { withheldEditorReplacement: "Confirmed blank local draft, discarded without Save", readerNativeWrites: repairWrites.length, savedDefinitionPreserved: true, originalViewerGrantRestored: true } });
     } finally {
       boundary.dispose(); readerBoundary.dispose();
       // Playwright merges owner and reader contexts into the required trace attachment.

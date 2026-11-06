@@ -720,6 +720,17 @@ Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Deconstruct(out System
 Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? other) -> bool
 Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem!>!
 Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Items.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.DashboardQuestionUse(string! Id, string! Name, int TileCount) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Deconstruct(out string! Id, out string! Name, out int TileCount) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.TileCount.get -> int
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.TileCount.init -> void
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities!
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanCopy.get -> bool
@@ -846,6 +857,8 @@ Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Tiles.get -> System.C
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Tiles.init -> void
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.UpdatedAt.get -> System.DateTimeOffset
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Uses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse!>?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Uses.init -> void
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite!
 Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.DashboardResourceWrite(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument! Document, string? ExpectedRevision, string? OperationKey = null, string? OperationFingerprint = null, bool Delete = false) -> void
@@ -1089,6 +1102,9 @@ override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.ToString() ->
 override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Equals(object? obj) -> bool
 override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.GetHashCode() -> int
 override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.ToString() -> string!
 override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.Equals(object? obj) -> bool
 override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.GetHashCode() -> int
 override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.ToString() -> string!
@@ -1220,6 +1236,8 @@ static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.operator !=(Els
 static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? right) -> bool
 static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? right) -> bool
 static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? left, Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? left, Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? right) -> bool
 static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? right) -> bool
 static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? right) -> bool
 static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? right) -> bool

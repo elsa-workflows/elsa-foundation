@@ -29,6 +29,60 @@ public sealed class WorkflowDashboardQueryTests
     private static readonly DateTimeOffset Current = new(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Baseline = Current.AddDays(-7);
 
+    [Theory]
+    [InlineData("default")]
+    [InlineData("override")]
+    [InlineData("missing")]
+    public async Task Numeric_having_parameters_require_resolved_nonnull_values_before_resource_admission(string input)
+    {
+        using var host = new Host();
+        var question = Aggregate();
+        question = question with { Query = question.Query with {
+            Parameters = [new("minimum", "decimal", Nullable: true,
+                Default: input == "missing" ? null : input == "default" ? new("null") : new("decimal", "0"))],
+            Having = new() { Metric = "current.started", Operator = "gt", Value = new("decimal", Parameter: "minimum") }
+        }, ParameterValues = input == "override" ? new Dictionary<string, DashboardValue> { ["minimum"] = new("null") } : new Dictionary<string, DashboardValue>() };
+
+        var validation = await host.Queries.ValidateAsync(Caller, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == (input == "missing" ? "INVALID_QUERY" : "INVALID_VALUE"));
+        var admission = await Assert.ThrowsAsync<DashboardResourceException>(() =>
+            host.Validator.ValidateAsync(new("tenant-a", "user-a", new HashSet<string>(), new HashSet<string>()), question).AsTask());
+        Assert.Equal("validation", admission.Code);
+        var execution = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
+        Assert.Equal(input == "missing" ? "INVALID_QUERY" : "INVALID_VALUE", execution.Code);
+        Assert.Empty(host.Store.Requests);
+    }
+
+    [Theory]
+    [InlineData("isNull", 0)]
+    [InlineData("isNotNull", 1)]
+    public async Task Having_null_tests_remain_valid_without_a_numeric_operand(string operation, int expectedRows)
+    {
+        using var host = new Host();
+        var question = Aggregate();
+        question = question with { Query = question.Query with {
+            Having = new() { Metric = "current.started", Operator = operation } } };
+        Assert.True((await host.Queries.ValidateAsync(Caller, question)).IsValid);
+        Assert.Equal(expectedRows, (await host.Queries.ExecuteAsync(Caller, question)).Rows.Count);
+    }
+
+    [Fact]
+    public async Task Nullable_numeric_having_parameters_accept_nonnull_defaults_and_overrides()
+    {
+        using var host = new Host();
+        await host.Add(Run("run", "definition", Current, WorkflowExecutionStatus.Completed));
+        var question = Aggregate();
+        question = question with { Query = question.Query with {
+            Parameters = [new("minimum", "decimal", Nullable: true, Default: new("decimal", "0"))],
+            Having = new() { Metric = "current.started", Operator = "gt", Value = new("decimal", Parameter: "minimum") } } };
+        Assert.True((await host.Queries.ValidateAsync(Caller, question)).IsValid);
+        Assert.Single((await host.Queries.ExecuteAsync(Caller, question)).Rows);
+        question = question with { ParameterValues = new Dictionary<string, DashboardValue> { ["minimum"] = new("integer", "2") } };
+        Assert.True((await host.Queries.ValidateAsync(Caller, question)).IsValid);
+        Assert.Empty((await host.Queries.ExecuteAsync(Caller, question)).Rows);
+    }
+
     [Fact]
     public async Task Novel_comparison_filters_and_current_folder_groups_match_independent_counts()
     {
@@ -413,6 +467,7 @@ public sealed class WorkflowDashboardQueryTests
         public PermissionService Permission { get; } = new();
         public WorkflowLibraryProxy Library { get; }
         public IDashboardQueryService Queries { get; }
+        public IDashboardDefinitionValidator Validator { get; }
         public Host(bool includeDesign = true, DashboardQueryLimits? limits = null)
         {
             var library = DispatchProxy.Create<IWorkflowLibraryStore, WorkflowLibraryProxy>();
@@ -438,6 +493,7 @@ public sealed class WorkflowDashboardQueryTests
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             Queries = _scope.ServiceProvider.GetRequiredService<IDashboardQueryService>();
+            Validator = _scope.ServiceProvider.GetRequiredService<IDashboardDefinitionValidator>();
         }
         public ValueTask<WorkflowExecutionState> Add(WorkflowExecutionState state) => Store.SaveAsync(state);
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }

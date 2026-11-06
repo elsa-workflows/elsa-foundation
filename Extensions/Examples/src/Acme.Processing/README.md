@@ -4,6 +4,8 @@ This separately packable reference module demonstrates an explicitly exposed bus
 
 Enable the `AcmeProcessing` feature alongside `StudioDashboardApi`. The default actor adapter uses the host's canonical Dashboard identity mapping; another trusted identity integration can replace `IProcessingActorContext`. This fixture is not a customer integration or evidence that native workflow variables became searchable.
 
+The [extension-points catalog](Module/EXTENSION_POINTS.md) lists replaceable contracts, default implementations, registration lifetimes and cross-domain contributions.
+
 ## Deliberate data exposure
 
 `customerCategory` is a required typed field accepted by the ordinary record capability. The module deliberately advertises it as a business dimension only with current category-read permission. `processingTimeMs` derives from completed/failed records with valid start/completion pairs. Processing records, uncaptured completion and inverted pairs do not contribute a duration; a valid zero duration is zero.

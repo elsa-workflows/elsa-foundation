@@ -130,6 +130,25 @@ class VerdictTests(unittest.TestCase):
             acceptance.stop_group(process)
             self.assertEqual([(44, acceptance.signal.SIGTERM), (44, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
 
+    def test_retired_group_permission_denial_does_not_fail_a_successful_command(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.poll.return_value = 0
+        # A zombie is already dead; a different user's group must never be touched.
+        members = f'{os.getuid()} 44 Z\n{os.getuid() + 1} 44 S\n'
+        with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('retired group')) as kill, \
+             patch.object(acceptance.subprocess, 'check_output', return_value=members):
+            acceptance.stop_group(process)
+        self.assertEqual(2, kill.call_count)
+        self.assertEqual(2, process.wait.call_count)
+
+    def test_permission_denial_cannot_hide_a_live_owned_process(self):
+        from unittest.mock import Mock
+        for leader in (None, 0):
+            process = Mock(pid=44); process.poll.return_value = leader
+            with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('live process')), \
+                 patch.object(acceptance.subprocess, 'check_output', return_value=f'{os.getuid()} 44 S\n'):
+                with self.assertRaises(PermissionError): acceptance.stop_group(process)
+
     def test_command_interrupt_stops_its_entire_group(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:
             process = popen.return_value

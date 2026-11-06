@@ -4,6 +4,7 @@ import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, typ
 import type { DashboardAuthoringController, DashboardAuthoringProposal, DashboardAuthoringSnapshot, DashboardAuthoringTarget } from "./authoring";
 import { sameAuthoringTarget } from "./authoring";
 import { DashboardApi } from "./api";
+import { dashboardActorScope } from "./requestScheduler";
 import { ResultView } from "./ResultView";
 import type { QueryResult, QuestionDefinition } from "./types";
 import { accessLost, errorMessage } from "./types";
@@ -88,7 +89,7 @@ export function registerDashboardWeaver(api: ElsaStudioModuleApi, controller: Da
       return { accepted: true };
     } catch (cause) { pending = undefined; return { accepted: false, reason: errorMessage(cause) }; }
   };
-  const runtime: Runtime = { api, controller, native: new DashboardApi(endpoint), intents, matches, dispatch, status };
+  const runtime: Runtime = { api, controller, native: new DashboardApi(endpoint, session?.identity ? dashboardActorScope(session.identity) : undefined), intents, matches, dispatch, status };
   controller.subscribe(() => {
     for (const [id, intent] of intents) if (!matches(intent.origin)) intents.delete(id);
     // Retain a dispatched target until collection (or its correlated cancellation) consumes it.

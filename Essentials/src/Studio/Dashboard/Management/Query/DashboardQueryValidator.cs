@@ -246,6 +246,10 @@ internal static class DashboardQueryValidator
             foreach (var child in predicate.All ?? predicate.Any!) PredicateDeclaration(child, having, request, fields, comparable, problems);
             return;
         }
+        var parameters = request.Query.Parameters.ToDictionary(parameter => parameter.Name, StringComparer.Ordinal);
+        DashboardValue? Resolve(DashboardValue? value) => value?.Parameter is { } name
+            ? request.ParameterValues.GetValueOrDefault(name) ?? parameters.GetValueOrDefault(name)?.Default
+            : value;
         if (having)
         {
             var reference = predicate.Metric!;
@@ -255,6 +259,8 @@ internal static class DashboardQueryValidator
             if (role is not ("current" or "baseline" or "delta") || !request.Query.Metrics.Any(metric => metric.Alias == alias) ||
                 role != "current" && (request.Query.Comparison is null || !comparable.Contains(alias)))
                 problems.Add(new("UNSUPPORTED_QUERY", "query.having", "A comparison/metric reference is unavailable."));
+            if (predicate.Operator is not ("isNull" or "isNotNull"))
+                Value(Resolve(predicate.Value), "decimal", false, null, "query.having", problems);
             return;
         }
         if (!fields.TryGetValue(predicate.Field!, out var field) || !field.FilterOperators.Contains(predicate.Operator!, StringComparer.Ordinal))
@@ -262,10 +268,6 @@ internal static class DashboardQueryValidator
             problems.Add(new("UNSUPPORTED_QUERY", "query.filters", "A filter field/operator is unavailable in the current scope."));
             return;
         }
-        var parameters = request.Query.Parameters.ToDictionary(parameter => parameter.Name, StringComparer.Ordinal);
-        DashboardValue? Resolve(DashboardValue? value) => value?.Parameter is { } name
-            ? request.ParameterValues.GetValueOrDefault(name) ?? parameters.GetValueOrDefault(name)?.Default
-            : value;
         if (predicate.Value is not null) Value(Resolve(predicate.Value), field.Type, field.Nullable, null, "query.filters", problems);
         if (predicate.Values is not null)
             foreach (var value in predicate.Values) Value(Resolve(value), field.Type, field.Nullable, null, "query.filters", problems);

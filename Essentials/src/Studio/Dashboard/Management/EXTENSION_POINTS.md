@@ -14,7 +14,7 @@ Owner/composition root: `Elsa.Studio.Dashboard.Management`. Contract layer: `Els
 | [`IDashboardAudienceDirectory`](../Core/Resources/DashboardResourceContracts.cs) | Replacement, Core | `DashboardAudienceDirectory`, scoped in API; resource grants/candidate discovery consume current same-tenant users/roles and scoped cursors. |
 | [`IDashboardAuthoringService`](../Core/Authoring/DashboardAuthoringContracts.cs) | Optional replacement, Core | `WeaverDashboardAuthoringService`, scoped in `Elsa.Agent.Dashboard` (cross-domain). Prepare/stream delegate existing Agent orchestration. Native resource/query operation works without it. Exactly one when composed. |
 
-Use deliberate replacement registrations preserving current authority, cancellation, domain errors, bounds and identity. The native API's composition guard diagnoses required missing/duplicate registrations; the optional authoring feature validates its composition too. A caller attachment never supplies identity authority.
+Use deliberate replacement registrations preserving current authority, cancellation, domain errors, bounds and identity. Management's shell initializer rejects duplicate registrations for every replacement above, including when the feature is composed without the API. It also requires its query/resource/definition-validator registrations; actor, audience, persistence and authoring remain optional for query-only composition. The native API's composition guard diagnoses required missing/duplicate registrations; the optional authoring feature validates its composition too. A caller attachment never supplies identity authority.
 
 ## Implementable contributor interfaces
 
