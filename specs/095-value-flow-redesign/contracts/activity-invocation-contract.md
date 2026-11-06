@@ -261,13 +261,16 @@ allocated, stable member key when applicable, and the pinned contract fingerprin
 | `VF-ACT-003` | Required input absent after binding normalization |
 | `VF-ACT-004` | Input type/nullability violation |
 | `VF-ACT-005` | Input, state, or result is nonpersistable under durable policy |
-| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set and no valid, explicitly configured outcome fallback applies; or several outcomes are selected on a node that does not permit them; or the selection is unspecified on a node without `Done` |
+| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set and the activity declares no catch-all outcome it routes such values to; or several outcomes are selected on a node that does not permit them; or the selection is unspecified on a node without `Done` |
 | `VF-ACT-007` | Attempt requested after committed completion |
 | `VF-ACT-008` | Trigger type or identity does not match suspended state |
 | `VF-ACT-009` | Persisted invocation document version is incompatible and cannot be upcast |
 
-An outcome fallback MUST itself be declared in the node's pinned outcome set. A fallback MUST NOT suppress an
-undeclared result projection diagnostic.
+A catch-all that an activity routes unfamiliar values to (an explicit routing decision inside its own contract, such
+as SendHttpRequest's unmatched status or an activity-declared `Review` / `Unmatched`) MUST itself be declared in the
+node's pinned outcome set, and MUST NOT suppress an undeclared result projection diagnostic. A generic per-node
+fallback setting that turns any invalid outcome name into another outcome is deferred until a concrete use case
+justifies it (ADR 0045 §6, Q6).
 
 Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault
 transition/incident path; contract and durability failures occur before user code and are not
