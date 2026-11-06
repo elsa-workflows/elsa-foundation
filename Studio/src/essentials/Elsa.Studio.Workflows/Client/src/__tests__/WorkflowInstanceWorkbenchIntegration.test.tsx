@@ -589,7 +589,7 @@ describe("workflow run workbench incident navigation", () => {
     else expect(inspector.querySelector(".wf-instance-meta")?.textContent).toContain("Run Kind");
     expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
     expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
-    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false));
 
     click(inspector.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
     await vi.waitFor(() => expect(inspector.querySelector("[aria-label='History event details']")).toBeTruthy());

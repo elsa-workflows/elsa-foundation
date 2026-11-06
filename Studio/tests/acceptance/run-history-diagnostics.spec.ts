@@ -232,7 +232,9 @@ test("diagnose exact executions, long history, retention and restricted access",
   page.on("response", observeHistory);
   await page.goto(`/workflows/instances/${longRun}?selected=${encodeURIComponent(earlier.activityExecutionId!)}&bookmark=${encodeURIComponent(late.bookmark.identity.bookmarkId)}`);
   await expect(inspectorOf(page).getByRole("region", { name: "Bookmark lifecycle", exact: true })).toBeVisible();
-  await expect(inspectorOf(page)).toContainText("current eligibility: Eligible"); await capture(page, info, "long-exact-bookmark");
+  await expect(inspectorOf(page)).toContainText("current eligibility: Eligible");
+  const lateEligibility = inspectorOf(page).getByText("Active · current eligibility: Eligible", { exact: true });
+  await lateEligibility.scrollIntoViewIfNeeded(); await expect(lateEligibility).toBeInViewport(); await capture(page, info, "long-exact-bookmark");
   await inspectorOf(page).getByRole("button", { name: "Back to activity inspection", exact: true }).press("Enter");
   const longTimeline = timelineOf(page); await row(longTimeline, earlier).press("Enter");
   await inspectorOf(page).getByRole("button", { name: "Back to activity inspection", exact: true }).press("Enter"); await expect(row(longTimeline, earlier)).toBeFocused();
@@ -277,7 +279,9 @@ test("diagnose exact executions, long history, retention and restricted access",
   await timelineOf(page).getByText("Purged through", { exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "partial-history");
   await page.goto(`/workflows/instances/${partialRun}?historyEvent=${encodeURIComponent(partialBefore!.items[0].historyEventId)}`);
   await expect(timelineOf(page)).toContainText("Partial recorded history.");
-  await expect(inspectorOf(page)).toContainText(/unavailable|no longer retained/i); await capture(page, info, "purged-exact-event");
+  await expect(inspectorOf(page)).toContainText(/unavailable|no longer retained/i);
+  const purgedTarget = inspectorOf(page).getByRole("region", { name: "History event details", exact: true }).getByRole("status");
+  await purgedTarget.scrollIntoViewIfNeeded(); await expect(purgedTarget).toBeInViewport(); await capture(page, info, "purged-exact-event");
   const expiry = prepared.expiry!;
   await page.goto(`/workflows/instances/${expiry.workflowExecutionId}?selected=${encodeURIComponent(expiry.activityExecutionId)}&bookmark=${encodeURIComponent(expiry.bookmarkId)}`);
   await expect(inspectorOf(page)).toContainText("Active · current eligibility: Expired", { timeout: 30_000 });
@@ -339,7 +343,9 @@ test("diagnose exact executions, long history, retention and restricted access",
   // A real foreign ID under a different real run cannot resolve to that run's latest event.
   await page.goto(`/workflows/instances/${run}?historyEvent=${encodeURIComponent(protectedEvent.historyEventId)}`);
   await expect(timelineOf(page).locator("[data-history-event-id]").first()).toBeVisible();
-  await expect(inspectorOf(page)).toContainText(/unavailable|no longer retained/i); await expect(inspectorOf(page)).not.toContainText(protectedValue); await capture(page, info, "foreign-exact-event");
+  await expect(inspectorOf(page)).toContainText(/unavailable|no longer retained/i); await expect(inspectorOf(page)).not.toContainText(protectedValue);
+  const foreignTarget = inspectorOf(page).getByRole("region", { name: "History event details", exact: true }).getByRole("status");
+  await foreignTarget.scrollIntoViewIfNeeded(); await expect(foreignTarget).toBeInViewport(); await capture(page, info, "foreign-exact-event");
 
   await page.close(); // No enabled-profile observer remains active while the owned store/profile changes.
   const disabled = await operation(info, "disabled"); await info.attach("disabled-profile", { path: disabled.receiptFile, contentType: "application/json" });

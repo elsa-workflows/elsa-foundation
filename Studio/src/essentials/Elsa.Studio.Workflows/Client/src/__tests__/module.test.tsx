@@ -3984,8 +3984,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Pinned Runtime executable");
     // Timeline reports the original host's history capability explicitly.
-    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     await waitForText(container, "This host does not support durable run history");
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes(encodeURIComponent(draftVersionId)))).toBe(false);
     // Artifact metadata lives under the Details tab.
     await click(buttonByText(container, "Details"));

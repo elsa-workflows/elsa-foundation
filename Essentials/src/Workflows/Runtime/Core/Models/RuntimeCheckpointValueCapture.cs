@@ -9,10 +9,16 @@ public sealed record RuntimeCheckpointValueCapture
     public RuntimeCheckpointValueCapture(string checkpointId, string? schedulerWorkItemId, IReadOnlyList<string> evidenceIds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId); ArgumentNullException.ThrowIfNull(evidenceIds);
-        if (checkpointId.Length > 1024 || schedulerWorkItemId is not null && (string.IsNullOrWhiteSpace(schedulerWorkItemId) || schedulerWorkItemId.Length > 1024) ||
-            evidenceIds.Count > 4096 || evidenceIds.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 1024) || evidenceIds.Distinct(StringComparer.Ordinal).Count() != evidenceIds.Count)
+        if (checkpointId.Length > 1024 || schedulerWorkItemId is not null && (string.IsNullOrWhiteSpace(schedulerWorkItemId) || schedulerWorkItemId.Length > 1024))
             throw new ArgumentException("Checkpoint evidence requires bounded exact source identities.");
-        CheckpointId = checkpointId; SchedulerWorkItemId = schedulerWorkItemId; EvidenceIds = Array.AsReadOnly(evidenceIds.ToArray());
+        var snapshot = evidenceIds.ToArray();
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        // Bound each validation window without imposing a new width limit on the native checkpoint.
+        foreach (var window in snapshot.Chunk(256))
+        foreach (var id in window)
+            if (string.IsNullOrWhiteSpace(id) || id.Length > 1024 || !identities.Add(id))
+                throw new ArgumentException("Checkpoint evidence requires bounded exact source identities.");
+        CheckpointId = checkpointId; SchedulerWorkItemId = schedulerWorkItemId; EvidenceIds = Array.AsReadOnly(snapshot);
     }
     public string CheckpointId { get; }
     public string? SchedulerWorkItemId { get; }
