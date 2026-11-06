@@ -16,9 +16,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests;
 public sealed class CliAcceptanceLegTests
 {
     /// <summary>
-    /// Every EF module Workbench's own committed <c>shells.json</c> enables by default -- the 13-name
-    /// vocabulary minus <c>Elsa3.Activities.Design.Import</c>, which that composition does not turn on, plus the
-    /// <c>Specialists</c> turn journal it does. This
+    /// Every EF module Workbench's own committed <c>shells.json</c> enables by default. This
     /// is what lets the last step's host-wide <c>Migrate:Policy=Validate</c> mean something: every module the
     /// running host actually activates has to already be migrated, not just the modules this test happened
     /// to pick.
@@ -26,6 +24,7 @@ public sealed class CliAcceptanceLegTests
     private static readonly string[] Modules =
     [
         "Activities.Design",
+        "Decisions",
         "Diagnostics.OpenTelemetry",
         "Diagnostics.StructuredLogs",
         "Identity.Iam",
@@ -53,6 +52,7 @@ public sealed class CliAcceptanceLegTests
     private static readonly string[] WorkbenchEfFeatureKeys =
     [
         "ActivitiesDesignEntityFrameworkCore",
+        "DecisionsEntityFrameworkCore",
         "DiagnosticsOpenTelemetryEntityFrameworkCore",
         "DiagnosticsStructuredLogsEntityFrameworkCore",
         "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
