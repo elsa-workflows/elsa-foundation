@@ -972,6 +972,7 @@
         "dependencies": {
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
@@ -982,6 +983,7 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
@@ -1032,6 +1034,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "System.Reflection.MetadataLoadContext": "[10.0.8, )"
         }
       },
@@ -1614,6 +1617,7 @@
           "Elsa.Decisions.Core": "[4.0.0-dev, )",
           "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Decisions.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
         }
       },
@@ -2532,7 +2536,10 @@
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
