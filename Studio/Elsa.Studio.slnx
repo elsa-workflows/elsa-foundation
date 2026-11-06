@@ -29,6 +29,7 @@
     <Project Path="../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />
     <Project Path="../Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
     <Project Path="../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <Project Path="../Extensions/Decisions/studio/Elsa.Studio.Decisions/Elsa.Studio.Decisions.csproj" />
     <Project Path="../Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj" />
     <Project Path="../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <Project Path="../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" />

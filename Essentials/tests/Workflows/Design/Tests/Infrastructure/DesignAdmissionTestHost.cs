@@ -21,7 +21,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Security.Claims;
 using AddDefinitionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Definitions.Add.Endpoint;
 using AddVersionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Versions.Add.Endpoint;

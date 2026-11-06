@@ -1,0 +1,43 @@
+[
+  {
+    "definitionId": "wfdef_fr2_remote_delivery_1145",
+    "name": "FR2 remote delivery proof",
+    "version": "1.0.0",
+    "deleted": false,
+    "sourceCreatedAt": "2026-11-05T00:00:00Z",
+    "state": {
+      "variables": [],
+      "inputs": [],
+      "outputs": [],
+      "workflowActivityOptions": null,
+      "rootActivity": {
+        "nodeId": "proof-result",
+        "activityVersionId": "elsa.intrinsic.set-output@1",
+        "outputs": [],
+        "intrinsic": {
+          "kind": "setOutput",
+          "valueType": {
+            "alias": "String",
+            "collectionKind": "single"
+          }
+        },
+        "inputs": [
+          {
+            "referenceKey": "name",
+            "value": {
+              "value": "proof",
+              "expressionType": "Literal"
+            }
+          },
+          {
+            "referenceKey": "value",
+            "value": {
+              "value": "remote-feed-execution-passed",
+              "expressionType": "Literal"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

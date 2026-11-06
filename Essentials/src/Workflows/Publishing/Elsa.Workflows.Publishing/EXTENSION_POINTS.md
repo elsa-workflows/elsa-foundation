@@ -220,6 +220,7 @@ admission before reduction; this port adds no runtime interpretation.
   child metadata and dependency claims after tenant/liveness/input-contract validation.
 - **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
   exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
+- **Known implementation:** `DecisionPinSource` *(cross-domain — `Elsa.Decisions.Workflows.Design`)* resolves a permitted published decision once and contributes its exact frozen artifact/profile/semantics metadata. Decision identity is not a child workflow-executable dependency claim.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.

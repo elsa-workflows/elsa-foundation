@@ -3,7 +3,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Design.Core.Contracts;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Capabilities;
 
