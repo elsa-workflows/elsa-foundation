@@ -8,16 +8,38 @@ the owning contracts and registration lifetimes.
 
 Enable `ActivitiesBpmnDesign` in an authoring/publishing host. `ActivitiesBpmnInterchange` specializes
 this feature and includes these registrations when configured directly. Repeated composition retains
-one structure handler and one model-reference contribution. Publishing hosts supply their ordinary
+one handler per structure schema and one model-reference contribution. Publishing hosts supply their ordinary
 material and source-reference stores. Runtime-only hosts enable `ActivitiesBpmn` and/or
 `ActivitiesBpmnHosting` without this package.
 
 ## Cross-domain contributions
 
 - Workflows Design [`IActivityStructureHandler`](../../../Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore):
-  the singleton `BpmnStructureHandler` projects authored children/outcomes and scoped variables, then lowers/remaps the executable graph.
+  the singleton `BpmnStructureHandler` retains schema `1.0.0` graph projection/lowering. The stateless singleton
+  `BpmnDocumentStructureHandler` projects schema `2.0.0` native children and scoped variables while preserving complete XML.
 - Workflows Publishing [`IExecutableCompilationSource`](../../../Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md#iexecutablecompilationsource):
   the scoped `BpmnEmbeddingPinSource` validates exact live tenant-matched model material and contributes its immutable metadata/dependency pin.
+
+## Complete-document retention spike
+
+Internal schema `2.0.0` stores `documentXml`, `processId`, native `activities`, identity-linked `bindings`
+(`elementId`, optional `childNodeId` / `listenerNodeId`) and scoped `variables`. XML is the only standard
+BPMN semantics, extension and DI authority; parallel flat graph fields are rejected. Opaque payload and binding
+metadata survive replacement. The original XML string is retained without parsing/serializing it back to text.
+
+Bindings currently project direct flow nodes of the selected process. Native Sequence bodies and listeners
+retain their own authored records. Complete unbound standard subprocess XML survives, but binding/projecting
+its nested standard scopes is not qualified; an independent BPMN body on a standard subprocess is refused.
+Generic child replacement supports existing identities/property edits, reordering and order-preserving identity
+remapping. Adding/removing ownership requires an explicit atomic document/binding edit.
+
+This is an intermediate contract proof for [#3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597),
+not full-toolbox delivery or executable qualification. With this handler registered, schema `2.0.0` compilation
+always refuses, including nested processes with `CanStartWorkflow=false`. Unknown-schema rejection in the current
+generic compiler requires the catalog's owned structure facet; an older host without that declaration is not
+qualified by this spike. Production needs complete-content capability admission before
+typed lowering, coordinated with [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736), and
+qualified derived lowering for currently executable content. The interpreter and runtime schema remain unchanged.
 
 ## Pre-GA source/package migration
 

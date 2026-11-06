@@ -3,10 +3,14 @@
 ## Authored structure
 
 - Owning contract: Workflows Design Core `IActivityStructureHandler`.
-- Contributor: internal `BpmnStructureHandler`, singleton enumerable registration by `ActivitiesBpmnDesignFeature`.
-- Classification: cross-domain contribution, keyed by the frozen structure kind/schema. It projects
-  bound children, scoped variables and typed Decision outcomes, then lowers/remaps the compiled graph.
-- Repeated feature composition retains one implementation. Runtime-only feature registration supplies no handler.
+- Contributors: internal stateless `BpmnStructureHandler` and `BpmnDocumentStructureHandler`, singleton enumerable
+  registrations by `ActivitiesBpmnDesignFeature`; each holds only process-wide schema policy, with no scoped state.
+- Classification: cross-domain contributions, keyed by structure kind and exact schema. The frozen `1.0.0`
+  handler projects bound children, scoped variables and typed Decision outcomes, then lowers/remaps the graph.
+  The internal `2.0.0` handler retains canonical XML, disjoint native children/bindings and metadata; it projects
+  direct native children/scoped variables and refuses executable compilation pending complete-content admission
+  and derived lowering. Standard nested-scope projection remains unqualified.
+- Repeated feature composition retains one implementation per schema. Runtime-only registration supplies no handler.
 
 ## Published model references
 

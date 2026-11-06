@@ -2,14 +2,14 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ActivityNode } from "../workflowTypes";
-import { BpmnJsCanvas, type BpmnJsCanvasProps } from "../bpmn/BpmnJsCanvas";
+import type { ActivityNode } from "@elsa-workflows/studio-workflows";
+import { BpmnJsCanvas, type BpmnJsCanvasProps } from "../BpmnJsCanvas";
 
 // Control-plane evidence only. Native SVG/modeling and semantic preservation are covered by the
 // separate real-modeler browser and real-moddle bridge suites, rather than fabricated jsdom SVG APIs.
 const controls = vi.hoisted(() => ({ instances: [] as FakeModeler[] }));
 
-vi.mock("../bpmn/bpmnJsBridge", () => ({
+vi.mock("../bpmnJsBridge", () => ({
   projectBpmnJsXml: (owner: ActivityNode, layout: unknown) => JSON.stringify([owner, layout]),
   mergeBpmnJsDefinitions: (owner: ActivityNode, definitions: unknown, layout: unknown) => ({
     owner: { ...owner, ...(definitions as { patch: Partial<ActivityNode> }).patch }, layout

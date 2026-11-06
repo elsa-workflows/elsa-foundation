@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
+import type { ActivityNode, DesignMetadataRecord, WorkflowCanvasEditorContext } from "@elsa-workflows/studio-workflows";
 import { mergeBpmnJsDefinitions, projectBpmnJsXml } from "./bpmnJsBridge";
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
@@ -303,4 +303,11 @@ export function BpmnJsCanvas(props: BpmnJsCanvasProps) {
     <div className="wf-bpmn-js-modeler" ref={hostRef} tabIndex={0} aria-label="BPMN modeling canvas" aria-busy={state.status === "loading"} />
     {state.status === "loading" ? <p className="wf-bpmn-js-loading" role="status">Loading BPMN canvas…</p> : null}
   </section>;
+}
+
+/** Registry boundary consumes only the explicitly matched Workflows protocol. */
+export function BpmnJsCanvasEditor({ context }: { context: unknown }) {
+  const controlled = context as WorkflowCanvasEditorContext;
+  if (controlled.protocol?.id !== "elsa.workflows.controlled-canvas" || controlled.protocol.version !== 1) throw new Error("Unsupported Workflows canvas protocol.");
+  return <BpmnJsCanvas {...controlled} />;
 }

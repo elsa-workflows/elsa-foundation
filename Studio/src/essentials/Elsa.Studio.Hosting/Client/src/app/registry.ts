@@ -87,6 +87,7 @@ export function createStudioRegistry(
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers,hostPolicy }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems,hostPolicy }),
       panels: createContributionRegistry<RegistryItem<ElsaStudioModuleApi["workflowDesigner"]["panels"]>>({ slot: studioSlots.workflowDesignerPanels,hostPolicy }),
+      canvasEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowDesigner"]["canvasEditors"]>>>({ slot: studioSlots.workflowDesignerCanvasEditors,hostPolicy }),
       registerActivityIcons
     },
     ai,

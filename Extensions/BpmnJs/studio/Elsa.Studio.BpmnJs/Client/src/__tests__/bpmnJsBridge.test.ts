@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error bpmn-moddle 10.3.1 publishes schema types but no declaration for its runtime export.
 import { BpmnModdle } from "bpmn-moddle";
 import SubprocessCompatibility from "bpmn-js/lib/features/drilldown/SubprocessCompatibility";
-import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { mergeBpmnJsDefinitions, projectBpmnJsXml } from "../bpmn/bpmnJsBridge";
+import type { ActivityNode, DesignMetadataRecord } from "@elsa-workflows/studio-workflows";
+import { mergeBpmnJsDefinitions, projectBpmnJsXml } from "../bpmnJsBridge";
 
 type ObjectValue = Record<string, unknown>;
 interface Moddle {

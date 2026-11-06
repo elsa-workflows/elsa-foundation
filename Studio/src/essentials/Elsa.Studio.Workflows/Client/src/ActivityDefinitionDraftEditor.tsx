@@ -1,3 +1,4 @@
+import type { StudioWorkflowDesignerCanvasContribution, StudioCanvasEditorPreferenceStore } from "@elsa-workflows/studio-sdk";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { tabElementIds, useTablistKeyboard } from "@elsa-workflows/studio-ui";
@@ -51,7 +52,7 @@ const authoringViewTabIndices: Record<ActivityDefinitionAuthoringView, number> =
 const ActivityDefinitionTestRunDialog = lazy(() => import("./ActivityDefinitionTestRunDialog").then(module => ({ default: module.ActivityDefinitionTestRunDialog })));
 const ActivityGraphVariablesEditor = lazy(() => import("./ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphVariablesEditor })));
 
-export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], graphCanvasEditors = [], canvasEditorPreferences, inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   definitionId: string;
   draftId: string;
@@ -59,6 +60,8 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   propertyEditors?: StudioActivityPropertyEditorContribution[];
   expressionEditors?: StudioExpressionEditorContribution[];
   graphAuthoringPanels?: StudioWorkflowDesignerPanelContribution[];
+  graphCanvasEditors?: StudioWorkflowDesignerCanvasContribution[];
+  canvasEditorPreferences?: StudioCanvasEditorPreferenceStore;
   inputEditors?: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
@@ -74,10 +77,10 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   if (query.isPending || query.isFetching && !query.isFetchedAfterMount) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition draft…</div></main>;
   if (query.isError || !query.data || query.data.definitionId !== definitionId) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> Activity Definition</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity draft unavailable</h1><p>Studio could not confirm the exact authorized draft. No provider state is shown.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></section></main>;
 
-  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
+  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} graphCanvasEditors={graphCanvasEditors} canvasEditorPreferences={canvasEditorPreferences} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, graphCanvasEditors, canvasEditorPreferences, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
   definitionDisplayName?: string;
@@ -86,6 +89,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   graphAuthoringPanels: StudioWorkflowDesignerPanelContribution[];
+  graphCanvasEditors: StudioWorkflowDesignerCanvasContribution[];
+  canvasEditorPreferences?: StudioCanvasEditorPreferenceStore;
   inputEditors: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
@@ -107,6 +112,9 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   const [focusAnnouncement, setFocusAnnouncement] = useState<string | null>(null);
   const [recoveryReviewed, setRecoveryReviewed] = useState(false);
   const [providerEditorFailed, setProviderEditorFailed] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(true);
+  const canvasReadyRef = useRef(true);
+  const updateCanvasReadiness = useCallback((ready: boolean) => { canvasReadyRef.current = ready; setCanvasReady(ready); }, []);
   const [contractLocallyValid, setContractLocallyValid] = useState(true);
   const [proposalApplying, setProposalApplying] = useState(false);
   const [publicationPending, setPublicationPending] = useState(false);
@@ -309,7 +317,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   }, [recoveryStore]);
 
   const saveNow = () => {
-    if (publicationPendingRef.current || !isActiveDraft(currentRef.current.status)) return;
+    if (!canvasReadyRef.current || publicationPendingRef.current || !isActiveDraft(currentRef.current.status)) return;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
     enqueueSave(currentRef.current);
@@ -535,8 +543,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   const draftIsActive = isActiveDraft(draft.status);
   const providerReadOnly = !draftIsActive || publicationPending || status === "conflict" || proposalApplying;
   const canEditProvider = draftIsActive && !publicationPending && hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
-  const revisionSensitiveActionsBlocked = publicationPending || draftIsActive && (status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty);
-  const dependentActionsBlocked = publicationPending || Boolean(recovery) || !draftIsActive || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
+  const revisionSensitiveActionsBlocked = !canvasReady || publicationPending || draftIsActive && (status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty);
+  const dependentActionsBlocked = !canvasReady || publicationPending || Boolean(recovery) || !draftIsActive || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
   const graphDesignerActive = activeView === "designer" && draft.provider.providerKey === "elsa.activity-graph";
   const hasGraphVariables = hasPayload && Boolean(contribution) && draft.provider.providerKey === "elsa.activity-graph" && ["1", "2"].includes(draft.provider.schemaVersion);
   const authoringTabs: Array<[ActivityDefinitionAuthoringView, string]> = [
@@ -643,7 +651,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
             triggerRef={publicationToolbarRef}
           />
           <button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
-          <button type="button" className="ad-primary-action" onClick={saveNow} disabled={!draftIsActive || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button>
+          <button type="button" className="ad-primary-action" onClick={saveNow} disabled={!canvasReady || !draftIsActive || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button>
           <details className="ad-authoring-advanced">
             <summary>Advanced</summary>
             <div className="ad-authoring-advanced-panel">
@@ -703,7 +711,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
           contract={draft.contract}
           propertyEditors={propertyEditors}
           expressionEditors={expressionEditors}
-          graphAuthoringPanels={graphAuthoringPanels}
+          graphAuthoringPanels={graphAuthoringPanels} graphCanvasEditors={graphCanvasEditors} canvasEditorPreferences={canvasEditorPreferences}
           historyResetKey={historyResetKey}
           value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }}
           readOnly={providerReadOnly}
@@ -723,7 +731,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     </details>
     </section>
     <section id={tabElementIds(authoringTabsId, 0).panelId} className="ad-designer-view" role="tabpanel" aria-label="Designer" aria-labelledby={tabElementIds(authoringTabsId, 0).tabId} hidden={activeView !== "designer"}>
-    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
+    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} graphCanvasEditors={graphCanvasEditors} canvasEditorPreferences={canvasEditorPreferences} onCanvasReadinessChange={updateCanvasReadiness} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
     </section>
     {hasGraphVariables ? <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
       {activeView === "variables" ? <>

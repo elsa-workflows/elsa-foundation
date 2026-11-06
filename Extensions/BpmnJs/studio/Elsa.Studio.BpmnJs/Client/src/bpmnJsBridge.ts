@@ -1,5 +1,6 @@
-import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
+import type { ActivityNode, DesignMetadataRecord, BpmnElement, BpmnSequenceFlow } from "@elsa-workflows/studio-workflows";
+
+const bpmnStructureKind = "elsa.bpmn.structure";
 
 /** Experimental, scope-local canvas bridge. The Elsa tree owns configuration; XML is a projection. */
 export interface BpmnJsDefinitions {

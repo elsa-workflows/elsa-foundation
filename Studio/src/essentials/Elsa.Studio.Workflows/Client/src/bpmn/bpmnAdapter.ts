@@ -1,4 +1,5 @@
 import { directHumanMode } from "./bpmnDirectBinding";
+import { reconcileBpmnDiagram } from "./bpmnDiagram";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
@@ -200,7 +201,11 @@ export function syncBpmnCanvasToScope(
         ...owner.structure.payload,
         elements,
         sequenceFlows,
-        activities
+        activities,
+        ...(owner.structure.payload.diagram !== undefined ? {
+          diagram: reconcileBpmnDiagram(owner.structure.payload.diagram, [...previousElementsById.values()], [...previousFlowsById.values()],
+            elements, sequenceFlows, new Map(nodes.map(node => [node.id, node.position])))
+        } : {})
       }
     }
   };

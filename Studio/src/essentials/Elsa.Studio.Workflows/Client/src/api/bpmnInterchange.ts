@@ -1,6 +1,6 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { bpmnStructureKind } from "../bpmn/bpmnStructure";
 import { readBpmnElements } from "../bpmn/bpmnAdapter";
 
 // Client for the ingestion-style BPMN interchange endpoints (elsa-foundation PR #889): pure

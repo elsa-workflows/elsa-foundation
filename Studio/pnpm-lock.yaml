@@ -138,6 +138,52 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
+  ../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      bpmn-js:
+        specifier: 18.31.1
+        version: 18.31.1
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@elsa-workflows/studio-workflows':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.0
+        version: 5.2.0(vite@7.3.5)
+      bpmn-moddle:
+        specifier: 10.3.1
+        version: 10.3.1
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vite-plugin-dts:
+        specifier: ^4.5.0
+        version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
   ../Extensions/Connections/studio/Elsa.Studio.Connections/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
@@ -861,9 +907,6 @@ importers:
       '@xyflow/react':
         specifier: ^12.10.2
         version: 12.11.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      bpmn-js:
-        specifier: 18.31.1
-        version: 18.31.1
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -880,9 +923,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
-      bpmn-moddle:
-        specifier: 10.3.1
-        version: 10.3.1
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

@@ -77,11 +77,17 @@ async function seed(api: Api, suffix: string) {
     structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: {
       activities: [inline("low-inline", '"Nested low"'), captureResult("capture-low", "low-inline", "nested-low")]
     } } };
+  // Required ActivityResult ordering is currently established by Sequence, not by the BPMN
+  // validator. Keep the real Inline result/capture in that supported scope; attempt3 separately
+  // retains the rejected direct-BPMN-sibling case rather than making its reference optional.
+  const nestedHigh: Node = { nodeId: "nested-high", activityVersionId: sequenceVersion, inputs: [], outputs: [],
+    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: {
+      activities: [inline("high", '"Original high"'), captureResult("capture-high", "high", "nested-high")]
+    } } };
   const elements: Element[] = [
     { elementId: "start", elementType: "startEvent" },
     { elementId: "gateway", elementType: "exclusiveGateway", name: "Order routing", childNodeId: "decision", defaultFlowId: "high-flow" },
-    { elementId: "high-task", elementType: "task", name: "High", childNodeId: "high" },
-    { elementId: "capture-high-task", elementType: "task", name: "Capture high result", childNodeId: "capture-high" },
+    { elementId: "high-task", elementType: "subProcess", name: "High", childNodeId: "nested-high" },
     { elementId: "low-task", elementType: "subProcess", name: "Nested low", childNodeId: "nested-low" },
     { elementId: "end-high", elementType: "endEvent" }, { elementId: "end-low", elementType: "endEvent" }
   ];
@@ -89,15 +95,14 @@ async function seed(api: Api, suffix: string) {
     { flowId: "enter", sourceRef: "start", targetRef: "gateway" },
     { flowId: "high-flow", sourceRef: "gateway", targetRef: "high-task", isDefault: true },
     { flowId: "low-flow", sourceRef: "gateway", targetRef: "low-task", conditionOutcome: "Low" },
-    { flowId: "high-capture", sourceRef: "high-task", targetRef: "capture-high-task" },
-    { flowId: "high-end-flow", sourceRef: "capture-high-task", targetRef: "end-high" },
+    { flowId: "high-end-flow", sourceRef: "high-task", targetRef: "end-high" },
     { flowId: "low-end-flow", sourceRef: "low-task", targetRef: "end-low" }
   ];
   const root: Node = { nodeId: "process", activityVersionId: bpmnVersion, inputs: [], outputs: [], structure: {
     kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {
       activities: [{ nodeId: "decision", activityVersionId: decisionVersion, structure: null, inputs: [{ referenceKey: "Outcome", value: {
         expressionType: "WorkflowRequest", value: { memberKey: "route" }
-      } }], outputs: [] }, inline("high", '"Original high"'), captureResult("capture-high", "high", "process"), nested],
+      } }], outputs: [] }, nestedHigh, nested],
       elements, sequenceFlows
     }
   } };
@@ -110,8 +115,9 @@ async function seed(api: Api, suffix: string) {
   const initial = await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`);
   const layout: Layout[] = [
     { nodeId: "start", x: 60, y: 220 }, { nodeId: "gateway", x: 240, y: 210 },
-    { nodeId: "high-task", x: 440, y: 100 }, { nodeId: "capture-high-task", x: 660, y: 100 },
-    { nodeId: "low-task", x: 440, y: 360 }, { nodeId: "end-high", x: 880, y: 120 }, { nodeId: "end-low", x: 700, y: 380 },
+    { nodeId: "high-task", x: 440, y: 100 },
+    { nodeId: "low-task", x: 440, y: 360 }, { nodeId: "end-high", x: 700, y: 120 }, { nodeId: "end-low", x: 700, y: 380 },
+    { nodeId: "high", x: 120, y: 120 }, { nodeId: "capture-high", x: 360, y: 120 },
     { nodeId: "low-inline", x: 120, y: 120 }, { nodeId: "capture-low", x: 360, y: 120 }
   ];
   const baseline = await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: initial.state, layout });
@@ -179,10 +185,16 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       await expect(routing(page).getByLabel("Default flow to Nested low", { exact: true })).toBeChecked();
       await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toHaveValue("High");
       await selectElement(page, "bpmn-js", "high-task");
+      await page.getByRole("tab", { name: "Slots", exact: true }).click();
+      await page.locator(".wf-slot-list .wf-slot-row > button").first().click();
+      await page.locator(".wf-sequence-step[data-id='high']").click();
       await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
       await page.locator(".cm-content[contenteditable='true']").fill('"Edited high"');
-      await routing(page).getByLabel("Name", { exact: true }).click();
+      await page.locator(".wf-sequence-step[data-id='high']").click();
       await expect(page.getByRole("button", { name: /JavaScript expression.*Activate to edit/ })).toContainText('"Edited high"');
+      await capture(page, info, "high-inline-binding-through-shared-inspector");
+      await page.locator(".wf-breadcrumb").getByRole("button", { name: "Root", exact: true }).click();
+      await expect(alternate(page)).toHaveAttribute("data-bpmn-js-state", "ready");
 
       await selectElement(page, "bpmn-js", "low-task");
       await page.getByRole("tab", { name: "Slots", exact: true }).click();
@@ -216,6 +228,8 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
         return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
       })).toBe(true);
       await capture(page, info, "alternate-shared-routing-and-attribution");
+      const enteringPath = () => alternate(page).locator(".djs-connection[data-element-id='enter'] .djs-visual > path").first();
+      const pathBeforeIntegratedMove = await enteringPath().getAttribute("d");
 
       await chooseEditor(page, "integrated");
       await selectElement(page, "integrated", "gateway");
@@ -225,6 +239,20 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       await page.getByRole("button", { name: "Redo", exact: true }).click();
       await selectElement(page, "integrated", "gateway");
       await expect(routing(page).getByLabel("Name", { exact: true })).toHaveValue(name);
+      // Existing native DI must follow a subsequent integrated edit, including connected routes.
+      const integratedGateway = page.locator(".react-flow__node[data-id='gateway']");
+      const integratedTransform = await integratedGateway.getAttribute("style");
+      const integratedBounds = await integratedGateway.locator(".wf-bpmn-gateway").boundingBox();
+      expect(integratedBounds).not.toBeNull();
+      await page.mouse.move(integratedBounds!.x + integratedBounds!.width / 2, integratedBounds!.y + integratedBounds!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(integratedBounds!.x + integratedBounds!.width / 2 + 35, integratedBounds!.y + integratedBounds!.height / 2 - 25, { steps: 10 });
+      await page.mouse.up();
+      await expect(integratedGateway).not.toHaveAttribute("style", integratedTransform!);
+      await chooseEditor(page, "bpmn-js");
+      await expect(enteringPath()).not.toHaveAttribute("d", pathBeforeIntegratedMove!);
+      await capture(page, info, "alternate-after-integrated-layout-edit");
+      await chooseEditor(page, "integrated");
       expect(payload(await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`)).elements.find(element => element.elementId === "gateway")!.name).toBe("Order routing");
       await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect.poll(async () => payload(await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`)).elements.find(element => element.elementId === "gateway")!.name).toBe(name);
@@ -235,15 +263,28 @@ for (const firstEditor of ["integrated", "bpmn-js"] as const) {
       expect(saved.state.rootActivity.activityVersionId).toBe(baseline.state.rootActivity.activityVersionId);
       expect(payload(saved).activities.find(node => node.nodeId === "nested-low")).toEqual(payload(baseline).activities.find(node => node.nodeId === "nested-low"));
       expect(payload(saved).activities.find(node => node.nodeId === "decision")).toEqual(payload(baseline).activities.find(node => node.nodeId === "decision"));
-      expect(payload(saved).activities.find(node => node.nodeId === "high")).toMatchObject({ nodeId: "high", activityVersionId: payload(baseline).activities.find(node => node.nodeId === "high")!.activityVersionId,
-        inputs: [expect.objectContaining({ referenceKey: "Expression", value: { expressionType: "JavaScript", value: '"Edited high"' } })] });
+      const expectedHigh = structuredClone(payload(baseline).activities.find(node => node.nodeId === "nested-high")!);
+      const expectedHighInline = (expectedHigh.structure!.payload.activities as Node[]).find(node => node.nodeId === "high")!;
+      const expressionInput = expectedHighInline.inputs.find(input => (input as { referenceKey: string }).referenceKey === "Expression") as { value: { value: string } };
+      expressionInput.value.value = '"Edited high"';
+      expect(payload(saved).activities.find(node => node.nodeId === "nested-high")).toEqual(expectedHigh);
       expect(payload(saved).elements).toEqual(expect.arrayContaining([expect.objectContaining({ elementId: "gateway", childNodeId: "decision", defaultFlowId: "low-flow", name })]));
       expect(payload(saved).sequenceFlows).toEqual(expect.arrayContaining([
         expect.objectContaining({ flowId: "high-flow", sourceRef: "gateway", targetRef: "high-task", conditionOutcome: "High", isDefault: false }),
         expect.objectContaining({ flowId: "low-flow", sourceRef: "gateway", targetRef: "low-task", conditionOutcome: null, isDefault: true })
       ]));
       expect(saved.layout.find(record => record.nodeId === "gateway")).not.toMatchObject({ x: 240, y: 210 });
-      for (const id of ["low-inline", "capture-low"]) expect(saved.layout.find(record => record.nodeId === id)).toEqual(baseline.layout.find(record => record.nodeId === id));
+      const diagram = saved.state.rootActivity.structure!.payload.diagram as {
+        shapes: Record<string, { x: number; y: number; width: number; height: number }>;
+        edges: Record<string, { waypoints: { x: number; y: number }[] }>;
+      };
+      const gatewayShape = diagram.shapes.gateway;
+      expect(saved.layout.find(record => record.nodeId === "gateway")).toMatchObject({ x: gatewayShape.x, y: gatewayShape.y });
+      const arrival = diagram.edges.enter.waypoints.at(-1)!;
+      expect([[gatewayShape.x, gatewayShape.y + gatewayShape.height / 2], [gatewayShape.x + gatewayShape.width, gatewayShape.y + gatewayShape.height / 2],
+        [gatewayShape.x + gatewayShape.width / 2, gatewayShape.y], [gatewayShape.x + gatewayShape.width / 2, gatewayShape.y + gatewayShape.height]])
+        .toContainEqual([arrival.x, arrival.y]);
+      for (const id of ["high", "capture-high", "low-inline", "capture-low"]) expect(saved.layout.find(record => record.nodeId === id)).toEqual(baseline.layout.find(record => record.nodeId === id));
       await capture(page, info, "integrated-saved-same-process");
 
       await page.getByRole("button", { name: "More workflow actions", exact: true }).click();

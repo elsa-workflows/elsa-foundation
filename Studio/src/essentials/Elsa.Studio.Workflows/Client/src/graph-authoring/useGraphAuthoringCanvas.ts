@@ -143,6 +143,13 @@ export function useGraphAuthoringCanvas<TDocument>({
       setEdges(current => applyEdgeChanges(changes, current)),
     commitCanvas,
     commitDocument: emit,
+    /** Revision-check a controlled canvas against the synchronously acknowledged document. */
+    updateDocument: (recipe: (current: TDocument) => TDocument | null): boolean => {
+      const next = recipe(documentRef.current);
+      if (!next) return false;
+      emit(next);
+      return true;
+    },
     undo,
     redo,
     canUndo: canUndoActivityGraph(historyRef.current),

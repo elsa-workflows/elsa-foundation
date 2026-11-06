@@ -20,6 +20,7 @@ public class ActivitiesBpmnDesignFeature : IShellFeature
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnStructureHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentStructureHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
     }
 }

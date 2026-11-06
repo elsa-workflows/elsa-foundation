@@ -64,6 +64,7 @@
     <ProjectReference Include="..\..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj"/>
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
+    <ProjectReference Include="../../../../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Elsa.Studio.BpmnJs.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Workflows.Dashboard\studio\Elsa.Studio.Workflows.Dashboard\Elsa.Studio.Workflows.Dashboard.csproj"/>
   </ItemGroup>
 

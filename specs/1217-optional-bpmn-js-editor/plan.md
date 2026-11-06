@@ -9,7 +9,7 @@ Build and exercise an embedded prototype before freezing production contracts. P
 
 ## Technical Context
 
-Existing React/TypeScript Studio, modular/lazy frontend loading and .NET 10 Workbench; exact upstream candidate bpmn-js **18.31.1**. Existing `WorkflowEditor`, `ActivityGraphImplementationEditor`, draft/history, inspectors, native/direct BPMN publication and host-agnostic 0.5.0 semantics remain owning paths. No runtime engine or persistence-schema replacement.
+Existing React/TypeScript Studio, modular/lazy frontend loading and .NET 10 Workbench; exact upstream candidate bpmn-js **18.31.1**. Existing `WorkflowEditor`, `ActivityGraphImplementationEditor`, draft/history, inspectors, native/direct BPMN publication and host-agnostic 0.5.0 semantics remain owning paths. No runtime engine or workflow-store replacement. A versioned activity-owned authored payload is being spiked for complete syntax; its compiled runtime structure remains unchanged.
 
 ## Constitution Check — before prototype
 
@@ -37,6 +37,8 @@ Read framework v6.1.0 and Elsa v6.3.0 gate indexes and relevant contributor rule
 - Initial experimental edits cover ordinary start/end/terminate events, tasks, collapsed Elsa-bound subprocesses, exclusive/inclusive/parallel gateways, names, supported outcome/default routing and diagram layout. Unknown executable constructs, non-outcome conditions, collaboration, boundary/events, multi-instance/transaction/compensation and unsupported type/binding transitions require explicit representation/admission or refusal before edit. Retaining opaque configuration alone does not prove the canvas accurately represents its semantics.
 
 ## Actual Hazards to Disprove
+
+The complete-source production proposal and reversible contract/notation/module spikes are recorded in [production-design.md](production-design.md). The restricted prototype model above does not establish the preservation format for full-toolbox authoring. Production contract freeze still depends on real-host feasibility and preservation/admission proofs.
 
 Public export omits expressions/output/reference/structured bindings; gateway child binding is outside its task collection. Import synthesizes child IDs and loses typed variable/nested layout data. `syncBpmnCanvasToScope` currently trims activity inventory using only child IDs, ignoring listeners. Native publication and direct human/service publication are different profiles. #2736 is still open/parked; do not claim its general safeguards delivered. A local controlled bridge must not infer universal publication protection from current root-graph preflight.
 

@@ -344,12 +344,60 @@ it("refuses to substitute a different execution in a command response", async ()
   } finally { view.dispose(); }
 });
 
-it("does not draw unsupported notation as an ordinary task", async () => {
+it("keeps work available when a boundary event has no attachment context", async () => {
   const view = fixture("run"); const normal = view.getJson.getMockImplementation()!;
   view.getJson.mockImplementation(async path => path.endsWith("/inspection") ? { ...structuredClone(inspection), process: { ...inspection.process, elements: [...inspection.process.elements, { elementId: "boundary", elementType: "boundaryEvent" }] } } : normal(path));
   try {
     await vi.waitFor(() => expect(view.container.textContent).toContain("notation the diagram cannot display"));
     expect(view.container.querySelector(".react-flow__node[data-id='boundary']")).toBeNull(); expect(view.button("Complete work")).toBeTruthy();
+  } finally { view.dispose(); }
+});
+
+function boundaryInspection() {
+  return { ...structuredClone(inspection), process: { ...inspection.process, elements: [...inspection.process.elements,
+    { elementId: "boundary", elementType: "boundaryEvent", attachedToRef: "review", cancelActivity: false, eventDefinitions: [{ type: "timer" }] }] },
+  source: { ...inspection.source, layout: [...inspection.source.layout, { nodeId: "bpmn-diagram:process", x: 0, y: 0, additionalProperties: { shapes: {
+    review: { x: 240, y: 0, width: 100, height: 80 }, boundary: { x: 322.25, y: 62.5, width: 36, height: 36 }
+  }, edges: {} } }] } };
+}
+
+it.each(["missing host", "missing geometry", "detached geometry"])("refuses boundary notation with %s while preserving current work", async problem => {
+  const value = boundaryInspection();
+  if (problem === "missing host") (value.process.elements.at(-1)! as Record<string, unknown>).attachedToRef = "missing";
+  if (problem === "missing geometry") value.source.layout = inspection.source.layout;
+  if (problem === "detached geometry") {
+    const diagram = value.source.layout.find(item => "additionalProperties" in item);
+    if (diagram && "additionalProperties" in diagram) diagram.additionalProperties.shapes.boundary.x = 500;
+  }
+  const view = fixture("run", value);
+  try {
+    await vi.waitFor(() => expect(view.container.textContent).toContain("notation the diagram cannot display"));
+    expect(view.container.querySelector(".react-flow__node[data-id='boundary']")).toBeNull();
+    expect(view.button("Complete work")).toBeTruthy();
+  } finally { view.dispose(); }
+});
+
+it("renders a boundary event using its frozen host and attachment geometry", async () => {
+  const view = fixture("run", boundaryInspection());
+  try {
+    await vi.waitFor(() => expect(view.container.querySelector(".react-flow__node[data-id='boundary'] svg[aria-label='boundary event, non-interrupting, timer']")).toBeTruthy());
+    const boundary = view.container.querySelector<HTMLElement>(".react-flow__node[data-id='boundary']")!;
+    expect(boundary.style.transform).toBe("translate(322.25px,62.5px)");
+    expect(boundary.querySelector("svg")?.getAttribute("width")).toBe("36");
+    expect(view.container.querySelector(".react-flow__node[data-id='review'] svg")?.getAttribute("width")).toBe("100");
+    expect(view.container.textContent).not.toContain("notation the diagram cannot display");
+    expect(view.button("Complete work")).toBeTruthy();
+  } finally { view.dispose(); }
+});
+
+it("does not draw a genuinely unknown runtime element as an ordinary task", async () => {
+  const value = structuredClone(inspection);
+  value.process.elements.push({ elementId: "vendor", elementType: "vendor:customTask" });
+  const view = fixture("run", value);
+  try {
+    await vi.waitFor(() => expect(view.container.textContent).toContain("notation the diagram cannot display"));
+    expect(view.container.querySelector(".react-flow__node[data-id='vendor']")).toBeNull();
+    expect(view.button("Complete work")).toBeTruthy();
   } finally { view.dispose(); }
 });
 

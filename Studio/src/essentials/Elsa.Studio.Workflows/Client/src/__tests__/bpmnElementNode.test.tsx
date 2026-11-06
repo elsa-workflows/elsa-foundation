@@ -106,6 +106,28 @@ describe("NodeSlotBadges", () => {
 });
 
 describe("BpmnElementNode slot badges", () => {
+  it("retains the Elsa icon and actual activity slot navigation beside complete-source SVG notation", async () => {
+    const navigate = vi.fn();
+    render(bpmnNode({ boundActivity: boundContainer, childSlots: [slot()], notation: {
+      type: "bpmn:SubProcess", name: "Complete body", width: 180, height: 100, isExpanded: false, loop: "parallel"
+    } }), navigate);
+    await vi.waitFor(() => expect(container.querySelector("svg.wf-bpmn-notation")).not.toBeNull());
+    const svg = container.querySelector("svg.wf-bpmn-notation")!;
+    expect(svg.getAttribute("width")).toBe("180");
+    expect(svg.querySelector("[data-bpmn-marker='parallel']")).not.toBeNull();
+    expect(container.querySelector(".wf-bpmn-notation-binding .wf-node-icon-svg, .wf-bpmn-notation-binding svg")).not.toBeNull();
+    click(badges()[0]);
+    expect(navigate).toHaveBeenCalledWith("node-sub", "Complete body", expect.objectContaining({ id: "elsa.bpmn.structure:activities" }));
+  });
+
+  it("shows an explicit unfamiliar-shape indicator instead of rendering a generic task", async () => {
+    render(bpmnNode({ element: { elementId: "custom", elementType: "moduleSpecificShape", name: "Retained shape" } }));
+    await vi.waitFor(() => expect(container.querySelector("svg.wf-bpmn-notation")).not.toBeNull());
+    expect(container.querySelector("svg[data-bpmn-notation-known='false']")).not.toBeNull();
+    expect(container.querySelector(".wf-bpmn-task")).toBeNull();
+    expect(container.querySelector("svg.wf-bpmn-notation")!.getAttribute("aria-label")).toContain("content retained");
+  });
+
   it("renders a badge per child slot on a subprocess", () => {
     render(bpmnNode({ boundActivity: boundContainer, childSlots: [slot()] }), vi.fn());
     expect(badges().map(badge => badge.textContent)).toEqual(["Activities"]);

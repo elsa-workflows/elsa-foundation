@@ -9,3 +9,5 @@ Diagram bounds, sizes, edge waypoints and label positions belong to existing des
 State transitions are load canonical draft → admit/project → ready → supported modeling command → validate/merge atomically → ordinary host draft edit. Property edits and host Undo/Redo refresh the projection from the same draft. Failed/refused import/modeling preserves canonical data and displays recovery; a stale asynchronous completion never mutates a newer scope. Source-owned/pinned/read-only documents stay read-only regardless of preference.
 
 This is a prototype model, subject to real-host feasibility and post-design review. Native child-bound and direct human/service publication contracts remain separate existing contracts.
+
+The expanded full-toolbox scope requires a complete syntax authority; see the schema-2 XML-plus-disjoint-bindings proposal and bounded proofs in [production-design.md](production-design.md). The production proposal stores no independently editable V1 graph or second diagram copy. The existing prototype representation remains supported during qualification and is not migrated merely by viewing or switching editors.

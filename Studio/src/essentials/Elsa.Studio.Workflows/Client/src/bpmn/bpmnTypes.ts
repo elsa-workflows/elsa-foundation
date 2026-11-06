@@ -2,7 +2,15 @@
 // in elsa-foundation, spec 108). Gateways and events are engine-interpreted structure elements; only
 // tasks, subprocesses and decision gateways bind an Elsa child through `childNodeId`.
 
-export const bpmnStructureKind = "elsa.bpmn.structure";
+export { bpmnStructureKind } from "./bpmnStructure";
+
+/** Normalize standard modeler names without treating a foreign namespace as a known BPMN shape. */
+export function bpmnNotationType(type: string) {
+  if (type.startsWith("unknown:")) return type;
+  if (type.includes(":") && !type.startsWith("bpmn:")) return `unknown:${type}`;
+  const local = type.includes(":") ? type.slice(type.lastIndexOf(":") + 1) : type;
+  return local.charAt(0).toLowerCase() + local.slice(1);
+}
 
 export interface BpmnEventDefinition {
   type: string;
@@ -33,6 +41,9 @@ export interface BpmnSequenceFlow {
 
 export const bpmnElementTypes = {
   startEvent: "startEvent",
+  intermediateCatchEvent: "intermediateCatchEvent",
+  intermediateThrowEvent: "intermediateThrowEvent",
+  boundaryEvent: "boundaryEvent",
   endEvent: "endEvent",
   task: "task",
   userTask: "userTask",
@@ -43,9 +54,23 @@ export const bpmnElementTypes = {
   sendTask: "sendTask",
   receiveTask: "receiveTask",
   subProcess: "subProcess",
+  adHocSubProcess: "adHocSubProcess",
+  transaction: "transaction",
+  callActivity: "callActivity",
   exclusiveGateway: "exclusiveGateway",
   parallelGateway: "parallelGateway",
-  inclusiveGateway: "inclusiveGateway"
+  inclusiveGateway: "inclusiveGateway",
+  complexGateway: "complexGateway",
+  eventBasedGateway: "eventBasedGateway",
+  dataObject: "dataObject",
+  dataObjectReference: "dataObjectReference",
+  dataInput: "dataInput",
+  dataOutput: "dataOutput",
+  dataStoreReference: "dataStoreReference",
+  textAnnotation: "textAnnotation",
+  group: "group",
+  participant: "participant",
+  lane: "lane"
 } as const;
 
 const taskElementTypes: ReadonlySet<string> = new Set([
@@ -64,17 +89,25 @@ export function isTaskElementType(elementType: string) {
 }
 
 export function isActivityBearingElementType(elementType: string) {
-  return isTaskElementType(elementType) || elementType === bpmnElementTypes.subProcess;
+  return isTaskElementType(elementType) || isSubProcessElementType(elementType) || elementType === bpmnElementTypes.callActivity;
+}
+
+export function isSubProcessElementType(elementType: string) {
+  return elementType === bpmnElementTypes.subProcess || elementType === bpmnElementTypes.adHocSubProcess || elementType === bpmnElementTypes.transaction;
 }
 
 export function isEventElementType(elementType: string) {
-  return elementType === bpmnElementTypes.startEvent || elementType === bpmnElementTypes.endEvent;
+  return elementType === bpmnElementTypes.startEvent || elementType === bpmnElementTypes.endEvent
+    || elementType === bpmnElementTypes.intermediateCatchEvent || elementType === bpmnElementTypes.intermediateThrowEvent
+    || elementType === bpmnElementTypes.boundaryEvent;
 }
 
 export function isGatewayElementType(elementType: string) {
   return elementType === bpmnElementTypes.exclusiveGateway
     || elementType === bpmnElementTypes.parallelGateway
-    || elementType === bpmnElementTypes.inclusiveGateway;
+    || elementType === bpmnElementTypes.inclusiveGateway
+    || elementType === bpmnElementTypes.complexGateway
+    || elementType === bpmnElementTypes.eventBasedGateway;
 }
 
 export function isDecisionGatewayType(elementType: string) {

@@ -80,7 +80,7 @@ if (pkg.name.endsWith("studio-ui")) {
   exportsMap["./tokens.css"] = "./dist/tokens.css";
   exportsMap["./styles.css"] = "./dist/styles.css";
 }
-if (pkg.name.endsWith("studio-workflows") || pkg.name.endsWith("studio-code-editor")) exportsMap["./style.css"] = "./dist/style.css";
+if (pkg.name.endsWith("studio-workflows") || pkg.name.endsWith("studio-code-editor") || pkg.name.endsWith("studio-bpmn-js")) exportsMap["./style.css"] = "./dist/style.css";
 pkg.exports = exportsMap;
 
 pkg.files = ["dist"];

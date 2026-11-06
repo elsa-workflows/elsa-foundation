@@ -276,7 +276,7 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: dotnet nuget push packages/nuget/*.nupkg -k "$NUGET_API_KEY" -s "$nuget_feed_source" --skip-duplicate
 
-  # Builds, packs and verifies the four npm workspace libraries. Runs in parallel with the NuGet
+  # Builds, packs and verifies the five npm workspace libraries. Runs in parallel with the NuGet
   # `build` job on the same triggers, sharing the identical versioning scheme.
   build_npm:
     name: Build npm packages
@@ -303,7 +303,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build the four publishable libraries (each produces dist/index.js + dist/index.d.ts,
+      # Build the five publishable libraries (each produces dist/index.js + dist/index.d.ts,
       # plus dist/tokens.css for studio-ui and dist/style.css for studio-workflows).
       - name: Build libraries
         run: >-
@@ -312,6 +312,7 @@ jobs:
           --filter @elsa-workflows/studio-ui
           --filter @elsa-workflows/studio-code-editor
           --filter @elsa-workflows/studio-workflows
+          --filter @elsa-workflows/studio-bpmn-js
           run build:lib
 
       # Rewrite each on-disk (private, src-pointing) manifest into publishable shape. See
@@ -322,12 +323,13 @@ jobs:
             src/essentials/Elsa.Studio.Hosting/StudioSdk \
             src/essentials/Elsa.Studio.Hosting/StudioUi \
             src/essentials/Elsa.Studio.CodeEditor/Client \
-            src/essentials/Elsa.Studio.Workflows/Client; do
+            src/essentials/Elsa.Studio.Workflows/Client \
+            ../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Client; do
             node scripts/prepare-npm-package.mjs "$dir" "$VERSION"
           done
 
       # Pack each package into packages/npm. `pnpm pack` writes the tarball relative to the
-      # package dir by default, so we pin the destination to an absolute path shared by all four.
+      # package dir by default, so we pin the destination to an absolute path shared by all five.
       - name: Pack packages
         run: |
           mkdir -p packages/npm
@@ -336,7 +338,8 @@ jobs:
             src/essentials/Elsa.Studio.Hosting/StudioSdk \
             src/essentials/Elsa.Studio.Hosting/StudioUi \
             src/essentials/Elsa.Studio.CodeEditor/Client \
-            src/essentials/Elsa.Studio.Workflows/Client; do
+            src/essentials/Elsa.Studio.Workflows/Client \
+            ../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Client; do
             (cd "$dir" && pnpm pack --pack-destination "$DEST")
           done
 
@@ -346,8 +349,8 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           tarballs=(packages/npm/*.tgz)
-          if [[ ${#tarballs[@]} -ne 4 ]]; then
-            echo "Expected exactly four npm package tarballs, found ${#tarballs[@]}" >&2
+          if [[ ${#tarballs[@]} -ne 5 ]]; then
+            echo "Expected exactly five npm package tarballs, found ${#tarballs[@]}" >&2
             exit 1
           fi
           actual_ids=()
@@ -369,9 +372,15 @@ jobs:
               fi
             fi
             # Workflow and code editor consumers use a public bundled stylesheet.
-            if [[ "$tgz" == *studio-workflows-* || "$tgz" == *studio-code-editor-* ]]; then
+            if [[ "$tgz" == *studio-workflows-* || "$tgz" == *studio-code-editor-* || "$tgz" == *studio-bpmn-js-* ]]; then
               if ! grep -qx "package/dist/style.css" <<< "$contents"; then
                 echo "  MISSING: package/dist/style.css in $tgz" >&2
+                exit 1
+              fi
+            fi
+            if [[ "$tgz" == *studio-bpmn-js-* ]]; then
+              if ! grep -qx "package/dist/THIRD_PARTY_NOTICES.txt" <<< "$contents"; then
+                echo "  MISSING: pinned toolkit notices in $tgz" >&2
                 exit 1
               fi
             fi
@@ -409,7 +418,8 @@ jobs:
             '@elsa-workflows/studio-sdk' \
             '@elsa-workflows/studio-ui' \
             '@elsa-workflows/studio-code-editor' \
-            '@elsa-workflows/studio-workflows' | sort)
+            '@elsa-workflows/studio-workflows' \
+            '@elsa-workflows/studio-bpmn-js' | sort)
           actual_id_set=$(printf '%s\n' "${actual_ids[@]}" | sort)
           if [[ "$actual_id_set" != "$expected_ids" ]]; then
             echo "Unexpected npm package identities. Expected:" >&2
@@ -457,7 +467,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.FEEDZ_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
-          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
+          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows studio-bpmn-js; do
             for file in packages/npm/*"$pattern"-*.tgz; do
               echo "Publishing $file"
               npm publish "$file" --access public --tag preview
@@ -504,7 +514,7 @@ jobs:
           if [[ "$VERSION" == *-* ]]; then
             TAG_ARGS=(--tag preview)
           fi
-          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
+          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows studio-bpmn-js; do
             for file in packages/npm/*"$pattern"-*.tgz; do
               echo "Publishing $file"
               npm publish "$file" --access public "${TAG_ARGS[@]}"

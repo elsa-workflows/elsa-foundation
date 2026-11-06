@@ -1,3 +1,4 @@
+import { bpmnJsCanvasEditor } from "../../../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Client/src/module";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
@@ -302,6 +303,7 @@ function ActivityDuplicateEditorFixtureContent() {
               expressionEditors={expressionEditors}
               runInputEditors={[]}
               workflowDesignerPanels={[]}
+              workflowCanvasEditors={[bpmnJsCanvasEditor]}
               autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
               onBack={() => undefined}
             />}
@@ -328,6 +330,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     propertyEditors={[]}
     expressionEditors={expressionEditors}
     graphAuthoringPanels={[]}
+    graphCanvasEditors={[bpmnJsCanvasEditor]}
     historyResetKey="draft-1:activity-sequence"
     value={value}
     readOnly={readOnly}

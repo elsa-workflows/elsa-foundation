@@ -16,7 +16,6 @@ export default mergeConfig(
           // Keep the rich editor deferred and each downloaded chunk within the module budget.
           manualChunks(id) {
             if (id.includes("/@codemirror/view/")) return "code-editor-view";
-            if (id.includes("/node_modules/diagram-js/")) return "bpmn-js-diagram";
           }
         }
       }

@@ -5,7 +5,7 @@
 Use this worktree and an owned disposable host/store. Follow [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and existing [backend source setup](../../docs/contributing/backend-source-quickstart.md). Do not attach to shared/personal hosts.
 
 1. Install locked Studio dependencies: `pnpm --dir Studio install --frozen-lockfile`.
-2. Run the bridge and adapter regression suites through the Workflows package: `pnpm --dir Studio --filter @elsa-workflows/studio-workflows test -- src/__tests__/bpmnJsBridge.test.ts src/__tests__/bpmnAdapter.test.ts`.
+2. Run the bridge/canvas suites in `@elsa-workflows/studio-bpmn-js` and adapter/document/diagram suites in `@elsa-workflows/studio-workflows`. For example: `pnpm --dir Studio --filter @elsa-workflows/studio-bpmn-js test` and `pnpm --dir Studio --filter @elsa-workflows/studio-workflows exec vitest run src/__tests__/bpmnAdapter.test.ts src/__tests__/bpmnDocument.test.ts src/__tests__/bpmnDiagram.test.ts`.
 3. Run affected Workflows typechecking/build and browser editor journeys. Isolated fixture hosts establish frontend regressions only; record them separately from composed-host acceptance.
 4. Commit the prototype before source acceptance. Build/run owned Workbench and Studio through the established acceptance runner or feature-specific equivalent that retains source identity, isolated stores, logs, screenshots and traces.
 
