@@ -70,7 +70,10 @@ export async function structuredLogsReadabilityJourney(page: Page, info: TestInf
   const dockRow = dock.getByRole("row", { name: /Select Information structured log/ }).first();
   await expect(dockRow).toBeVisible();
   await dockRow.click();
-  await expect(dock.getByRole("complementary", { name: "Structured log details", exact: true })).toBeVisible();
+  await expect(dockRow).toHaveClass(/selected/);
+  await expect(dock.getByRole("complementary", { name: "Structured log details", exact: true })).toHaveCount(0);
+  const dockMessage = await dockRow.locator(".structured-log-message").innerText();
   await dockRow.getByRole("button", { name: /Copy structured log message/ }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(dockMessage);
   await capture(page, info, "readability-dock");
 }
