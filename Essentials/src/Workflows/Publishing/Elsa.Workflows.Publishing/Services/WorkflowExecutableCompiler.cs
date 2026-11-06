@@ -160,27 +160,6 @@ public sealed class WorkflowExecutableCompiler(
 
             var sourceAuthority = _dataSelectionAnalyzer
                 ?? throw new InvalidOperationException("Workflow compilation requires the scoped activity data selection analyzer. Compose WorkflowDesignValidations and use the source-authority constructor.");
-            var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
-            {
-                source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,
-                source.DefinitionVersionId, state
-            });
-            var sourceAnalysis = await sourceAuthority.AnalyzeAsync(new ActivityDataSelectionDocument(
-                "Workflow", source.DefinitionId,
-                sourceRevision,
-                rootActivity, state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
-                state.Outputs.ToImmutableArray()), cancellationToken: cancellationToken);
-            if (!StringComparer.Ordinal.Equals(sourceAnalysis.ContractRevision, sourceRevision))
-                throw new InvalidOperationException("Activity data selection analysis does not match the actual workflow candidate.");
-            var sourceErrors = sourceAnalysis.Findings
-                .Where(finding => StringComparer.Ordinal.Equals(finding.Severity, ValidationSeverities.Error))
-                .ToImmutableArray();
-            if (!sourceErrors.IsEmpty)
-                throw new ActivityDataSelectionRejectedException(sourceErrors)
-                {
-                    ResourceKind = source.SourceKind,
-                    ResourceId = source.SourceId
-                };
 
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
@@ -256,6 +235,29 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
+            {
+                source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,
+                source.DefinitionVersionId, state
+            });
+            var sourceAnalysis = await sourceAuthority.AnalyzeAsync(new ActivityDataSelectionDocument(
+                "Workflow", source.DefinitionId,
+                sourceRevision,
+                rootActivity, state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
+                state.Outputs.ToImmutableArray()), cancellationToken: cancellationToken);
+            if (!StringComparer.Ordinal.Equals(sourceAnalysis.ContractRevision, sourceRevision))
+                throw new InvalidOperationException("Activity data selection analysis does not match the actual workflow candidate.");
+            var sourceErrors = sourceAnalysis.Findings
+                .Where(finding => StringComparer.Ordinal.Equals(finding.Severity, ValidationSeverities.Error))
+                .ToImmutableArray();
+            if (!sourceErrors.IsEmpty)
+                throw new ActivityDataSelectionRejectedException(sourceErrors)
+                {
+                    ResourceKind = source.SourceKind,
+                    ResourceId = source.SourceId
+                };
+
+
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {

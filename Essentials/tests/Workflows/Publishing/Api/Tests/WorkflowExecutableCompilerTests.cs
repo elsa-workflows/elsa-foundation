@@ -2443,7 +2443,8 @@ public sealed class WorkflowExecutableCompilerTests
         // key + declaring scope), so the runtime VariableExpressionHandler resolves it at execution time.
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
         var reference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
-        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(reference))));
+        var declaration = new Elsa.Expressions.Core.Models.VariableDefinition("var-counter", "Counter", new("String"), null, null);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("node-sequence", [Node("write-var", VariableText(reference))], [declaration])));
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
@@ -2453,7 +2454,7 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.NodesById["write-var"].InputBindings);
         Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
         Assert.Null(binding.LiteralValue);
         Assert.Equal("var-counter", binding.Variable?.VariableKey);
@@ -2465,7 +2466,8 @@ public sealed class WorkflowExecutableCompilerTests
     {
         // A Variable input may carry just a bare reference key string (workflow-scope reference).
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
-        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter")))));
+        var declaration = new Elsa.Expressions.Core.Models.VariableDefinition("var-counter", "Counter", new("String"), null, null);
+        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter"))), variables: [declaration]));
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
