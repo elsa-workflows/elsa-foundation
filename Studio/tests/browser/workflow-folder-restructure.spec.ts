@@ -39,6 +39,8 @@ for (const theme of ["light", "dark"]) {
     await navigation.getByRole("button", { name: "Collapse folders", exact: true }).click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.locator(".studio-toast").getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
+    await expect(page.locator(".studio-toast-host")).toHaveCSS("position", "fixed");
+    await expect(page.locator('.studio-toast-live[aria-live="polite"]')).toHaveCSS("clip-path", "inset(50%)");
     await expect(navigation.getByRole("button", { name: "Expand folders", exact: true })).toBeFocused();
     await expect(navigation.getByRole("tree")).toBeHidden();
     await expect(page.getByText("Archive workflow")).toBeVisible();
