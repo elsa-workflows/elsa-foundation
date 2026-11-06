@@ -1,0 +1,41 @@
+#nullable enable
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Decision.get -> string!
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Decision.set -> void
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.EvaluateDecision(Elsa.Decisions.Core.IDecisionEvaluator! evaluator, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Decisions.Workflows.Runtime.IDecisionWorkflowAuthorizer! authorization, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities) -> void
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Inputs.get -> System.Collections.Generic.Dictionary<string!, Elsa.Decisions.Core.DecisionValue!>!
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.Inputs.set -> void
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.OperationBudget.get -> int
+Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.OperationBudget.set -> void
+Elsa.Decisions.Workflows.Runtime.DecisionInvocationException
+Elsa.Decisions.Workflows.Runtime.DecisionInvocationException.Code.get -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionInvocationException.DecisionInvocationException(string! code, string! message, System.Exception? innerException = null) -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.<Clone>$() -> Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Artifact.get -> Elsa.Decisions.Core.DecisionArtifact!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Artifact.init -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.AssetId.get -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.AssetId.init -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.DecisionWorkflowPin(string! Selection, string! TenantId, string! AssetId, string! VersionId, Elsa.Decisions.Core.DecisionArtifact! Artifact) -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Deconstruct(out string! Selection, out string! TenantId, out string! AssetId, out string! VersionId, out Elsa.Decisions.Core.DecisionArtifact! Artifact) -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Equals(Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin? other) -> bool
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Selection.get -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Selection.init -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Serialize() -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.TenantId.get -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.TenantId.init -> void
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.VersionId.get -> string!
+Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.VersionId.init -> void
+Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature
+Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature.DecisionsWorkflowsRuntimeFeature() -> void
+Elsa.Decisions.Workflows.Runtime.IDecisionWorkflowAuthorizer
+Elsa.Decisions.Workflows.Runtime.IDecisionWorkflowAuthorizer.EnsureAsync(string! tenantId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+const Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision.ActivityType = "Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision" -> string!
+const Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.MetadataKey = "decisions.artifact.v1" -> string!
+override Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Equals(object? obj) -> bool
+override Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.GetHashCode() -> int
+override Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.ToString() -> string!
+static Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.Parse(string! serialized) -> Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin!
+static Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.operator !=(Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin? left, Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin? right) -> bool
+static Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin.operator ==(Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin? left, Elsa.Decisions.Workflows.Runtime.DecisionWorkflowPin? right) -> bool
+virtual Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
