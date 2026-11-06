@@ -17,8 +17,19 @@ internal sealed class JobRecord : IJobRecord
     public byte[] Token { get; set; } = [];
     public string SchemaVersion { get; set; } = JobsEfModule.Version;
     public string JobId { get; set; } = null!;
-    public string RequestJson { get; set; } = null!;
+    public string? RequestJson { get; set; }
     public string RequestSha256 { get; set; } = null!;
+    public string? RequestMetadataJson { get; set; }
+    public string? RequestMetadataSha256 { get; set; }
+    public string? ResultMetadataJson { get; set; }
+    public string? ResultMetadataSha256 { get; set; }
+    public long? TerminalInputRetentionTicks { get; set; }
+    public long? TerminalResultRetentionTicks { get; set; }
+    public string? RetentionPolicySha256 { get; set; }
+    public long? InputExpiresAt { get; set; }
+    public long? ResultExpiresAt { get; set; }
+    public long? InputExpiredAt { get; set; }
+    public long? ResultExpiredAt { get; set; }
     public string HandlerKey { get; set; } = null!;
     public string? ImplementationIdentity { get; set; }
     public string? PinnedSupportKey { get; set; }
@@ -170,8 +181,11 @@ internal sealed class JobPhysicalReceiptRecord : IJobRecord
     public string SchemaVersion { get; set; } = JobsEfModule.Version;
     public string JobKey { get; set; } = null!;
     public string AttemptKey { get; set; } = null!;
-    public string ReceiptJson { get; set; } = null!;
+    public string? ReceiptJson { get; set; }
     public string ReceiptSha256 { get; set; } = null!;
+    public string? MetadataJson { get; set; }
+    public string? MetadataSha256 { get; set; }
+    public long? PayloadExpiredAt { get; set; }
 }
 
 internal sealed class JobOperationRecord : IJobRecord

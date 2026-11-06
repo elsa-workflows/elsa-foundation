@@ -62,13 +62,18 @@ internal sealed record JobView(string JobId, JobHandlerIdentity? Handler, JobSch
     double? ProgressFraction, bool CancellationRequested, string? RetriedFromJobId, JobAssociationView? Association,
     string? Diagnostic, string ConsumptionState)
 {
-    internal static JobView From(JobSnapshot value) => new(value.JobId, value.Request?.Handler, value.Request?.Input.Schema,
-        value.Request?.ResultSchema, value.Request?.Queue, value.State, value.Revision, value.AcceptedAt, value.EligibleAt,
-        JobPermissionView.From(value.ActiveAttempt), value.Result?.Outcome, value.Result?.ResultId, value.Result?.CompletedAt,
-        value.Progress?.Fraction, value.CancellationRequested, value.RetriedFromJobId, JobAssociationView.From(value.Request?.Association),
-        SafeDiagnostic(value.Result?.Outcome, value.UnavailableDiagnostic is not null),
-        value.Request is { Association: null } or { Association: { Mode: JobAssociationMode.Independent or JobAssociationMode.Detached, Continuation: null } }
-            ? "not-applicable" : "unknown");
+    public JobPayloadState InputPayloadState { get; init; }
+    public JobPayloadState ResultPayloadState { get; init; }
+    internal static JobView From(JobSnapshot value) => new(value.JobId, value.RequestMetadata?.Handler ?? value.Request?.Handler, value.RequestMetadata?.InputSchema ?? value.Request?.Input.Schema,
+        value.RequestMetadata?.ResultSchema ?? value.Request?.ResultSchema, value.RequestMetadata?.Queue ?? value.Request?.Queue, value.State, value.Revision, value.AcceptedAt, value.EligibleAt,
+        JobPermissionView.From(value.ActiveAttempt), value.ResultMetadata?.Outcome ?? value.Result?.Outcome, value.ResultMetadata?.ResultId ?? value.Result?.ResultId,
+        value.ResultMetadata?.CompletedAt ?? value.Result?.CompletedAt,
+        value.Progress?.Fraction, value.CancellationRequested, value.RetriedFromJobId, JobAssociationView.From(value.RequestMetadata?.Association ?? value.Request?.Association),
+        SafeDiagnostic(value.ResultMetadata?.Outcome ?? value.Result?.Outcome, value.UnavailableDiagnostic is not null),
+        value.UnavailableDiagnostic is null && (value.RequestMetadata is not null || value.Request is not null) &&
+        (value.RequestMetadata?.Association ?? value.Request?.Association) is null or { Mode: JobAssociationMode.Independent or JobAssociationMode.Detached, Continuation: null }
+            ? "not-applicable" : "unknown")
+        { InputPayloadState = value.InputPayloadState, ResultPayloadState = value.ResultPayloadState };
 
     internal static string? SafeDiagnostic(JobOutcome? outcome, bool unavailable = false) => unavailable ? "jobs.record.unavailable" : outcome switch
     {
@@ -84,13 +89,16 @@ internal sealed record JobAttemptView(JobPermissionView Permission, JobAttemptSt
         new(JobPermissionView.From(value.Lease)!, value.State, value.PhysicalStartedAt, value.PhysicalExitedAt);
 }
 internal sealed record JobPhysicalReceiptView(string ReceiptId, string AttemptId, string Owner, long Fence,
-    JobAttemptOutcome Outcome, bool Retryable, DateTimeOffset ReportedAt)
+    JobAttemptOutcome Outcome, bool Retryable, DateTimeOffset ReportedAt, JobPayloadState PayloadState, DateTimeOffset? ExpiredAt)
 {
-    internal static JobPhysicalReceiptView From(JobPhysicalReceipt value) =>
-        new(value.ReceiptId, value.AttemptId, value.Owner, value.Fence, value.Outcome, value.Retryable, value.ReportedAt);
+    internal static JobPhysicalReceiptView From(JobPhysicalReceiptInspection value) =>
+        new(value.Metadata.ReceiptId, value.Metadata.AttemptId, value.Metadata.Owner, value.Metadata.Fence, value.Metadata.Outcome,
+            value.Metadata.Retryable, value.Metadata.ReportedAt, value.PayloadState, value.ExpiredAt);
 }
-internal sealed record JobInputView(string State, JobPayload? Input, string? ValueJson = null);
-internal sealed record JobResultView(string State, string? ResultId, JobOutcome? Outcome, JobPayload? Payload, DateTimeOffset? CompletedAt, string? ValueJson = null);
+internal sealed record JobInputView(string State, JobPayload? Input, string? ValueJson = null,
+    JobSchema? Schema = null, string? PayloadSha256 = null, DateTimeOffset? ExpiredAt = null);
+internal sealed record JobResultView(string State, string? ResultId, JobOutcome? Outcome, JobPayload? Payload, DateTimeOffset? CompletedAt, string? ValueJson = null,
+    JobSchema? Schema = null, string? PayloadSha256 = null, DateTimeOffset? ExpiredAt = null);
 internal sealed record JobScheduleView(string ScheduleId, long Revision, bool Enabled, DateTimeOffset NextOccurrence,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, JobHandlerIdentity? Handler, JobSchema? InputSchema, JobSchema? ResultSchema,
     string? Queue, JobExecutionPolicy? Policy, DateTimeOffset? NotBefore, JobRecurrence? Recurrence,

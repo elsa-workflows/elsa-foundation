@@ -28,11 +28,13 @@ export function JobDetail({ api, id, navigate }: { api: ElsaStudioModuleApi; id:
   const back = requestedBack && (requestedBack === "/jobs" || requestedBack.startsWith("/jobs?")) ? requestedBack : "/jobs";
   const read = useJobsRead(api, "job:" + id, client => client.read<Job>("jobs", [id]));
   const [newJobId, setNewJobId] = useState<string>();
+  const [evidenceRefresh, setEvidenceRefresh] = useState(0);
+  const refresh = () => { setEvidenceRefresh(value => value + 1); void read.refresh(); };
   const actorChanged = useJobsActorBoundary(api, read.identity, () => setNewJobId(undefined));
   const mutation = useJobsMutation(api, result => {
     if (typeof result === "object" && result !== null && "jobId" in result && typeof result.jobId === "string" && result.jobId !== id) setNewJobId(result.jobId);
-    void read.refresh();
-  }, () => void read.refresh());
+    refresh();
+  }, refresh);
   const heading = useRef<HTMLDivElement>(null); useEffect(() => { const title = heading.current?.querySelector("h1"); title?.setAttribute("tabindex", "-1"); title?.focus(); }, [id]);
   const job = read.value; useStudioWorkspaceTitle(job?.jobId, job?.outcome ?? "Job");
   const gates = useMemo<Gate[]>(() => {
@@ -46,7 +48,7 @@ export function JobDetail({ api, id, navigate }: { api: ElsaStudioModuleApi; id:
   }, [job]);
   return <StudioPage className="jobs" aria-label="Job detail">
     <div ref={heading}><StudioPageHeader title="Job detail" description="Retained work, physical evidence and delivery responsibility."
-      actions={<StudioButton onClick={() => void read.refresh()} disabled={read.loading || mutation.busy}>Refresh</StudioButton>} /></div>
+      actions={<StudioButton onClick={refresh} disabled={read.loading || mutation.busy}>Refresh</StudioButton>} /></div>
     <JobsNavigation navigate={navigate} /><JobsLink path={back} navigate={navigate}>Back to Jobs</JobsLink>
     <MutationNotice mutation={mutation} />
     {job && newJobId && !actorChanged && <StudioAlert><JobsLink path={`/jobs/${encodeURIComponent(newJobId)}`} navigate={navigate}>Open new linked job {newJobId}</JobsLink>. The original job and result remain retained.</StudioAlert>}
@@ -67,8 +69,9 @@ export function JobDetail({ api, id, navigate }: { api: ElsaStudioModuleApi; id:
         {job.retriedFromJobId && <JobsLink path={`/jobs/${encodeURIComponent(job.retriedFromJobId)}`} navigate={navigate}>Open original job {job.retriedFromJobId}</JobsLink>}
         <div className="jobs-actions">
           {job.state !== "terminal" && can(read.identity, permissions.cancel) && <StudioButton disabled={mutation.blocked} onClick={() => void cancel(api, mutation, job)}>Request cancellation…</StudioButton>}
-          {job.state === "terminal" && can(read.identity, permissions.retry) && <StudioButton disabled={mutation.blocked || Boolean(job.diagnostic === "jobs.record.unavailable")} onClick={() => void retry(api, mutation, job)}>Retry as new run…</StudioButton>}
+          {job.state === "terminal" && can(read.identity, permissions.retry) && <StudioButton disabled={mutation.blocked || job.inputPayloadState === "expired" || Boolean(job.diagnostic === "jobs.record.unavailable")} onClick={() => void retry(api, mutation, job)}>Retry as new run…</StudioButton>}
         </div>
+        {job.inputPayloadState === "expired" && <p>The accepted input payload has expired. Its identity remains retained; Retry as new run requires the original input and is unavailable.</p>}
       </section>
       <section aria-label="Parent and result delivery" className="jobs-stack"><h2>Parent and result delivery</h2><p>{consumptionText(job)}</p>
         <ParentLinks association={job.association} navigate={navigate} /></section>
@@ -76,13 +79,13 @@ export function JobDetail({ api, id, navigate }: { api: ElsaStudioModuleApi; id:
         <p>Pause blocks later durable permissions. Already granted work may finish. Workflow holds also prevent later result-driven continuation permissions.</p>
         {can(read.identity, permissions.pause) ? <div className="jobs-actions">{gates.map(gate => <StudioButton key={JSON.stringify(gate)} disabled={mutation.blocked} onClick={() => void pause(api, mutation, gate)}>Pause {gateLabel(gate)}…</StudioButton>)}</div> : <p>Pause actions are unavailable with your current permissions.</p>}
       </section>
-      <JobHoldPanel api={api} jobId={id} revision={job.revision} mutation={mutation} />
-      <AttemptPanel api={api} jobId={id} revision={job.revision} activeAttemptId={job.activePermission?.attemptId} />
-      <ReceiptPanel api={api} jobId={id} revision={job.revision} />
+      <JobHoldPanel key={`holds:${evidenceRefresh}`} api={api} jobId={id} revision={job.revision} mutation={mutation} />
+      <AttemptPanel key={`attempts:${evidenceRefresh}`} api={api} jobId={id} revision={job.revision} activeAttemptId={job.activePermission?.attemptId} />
+      <ReceiptPanel key={`receipts:${evidenceRefresh}`} api={api} jobId={id} revision={job.revision} />
       <section id="job-result" aria-label="Saved result" className="jobs-stack"><h2>Saved result</h2>
         {job.resultId ? <CopyableIdentifier value={job.resultId} label="Selected result ID" /> : <p>{job.diagnostic === "jobs.record.unavailable" ? "Selected result metadata is unavailable." : "No terminal result has been selected."}</p>}
-        <p>{consumptionText(job)}</p><PayloadPanel api={api} jobId={id} kind="result" allowed={can(read.identity, permissions.results)} /></section>
-      <section aria-label="Accepted input" className="jobs-stack"><h2>Accepted input</h2><PayloadPanel api={api} jobId={id} kind="input" allowed={can(read.identity, permissions.inputs)} /></section>
+        <p>{consumptionText(job)}</p><PayloadPanel key={`result:${evidenceRefresh}:${job.resultPayloadState}`} api={api} jobId={id} kind="result" allowed={can(read.identity, permissions.results)} /></section>
+      <section aria-label="Accepted input" className="jobs-stack"><h2>Accepted input</h2><PayloadPanel key={`input:${evidenceRefresh}:${job.inputPayloadState}`} api={api} jobId={id} kind="input" allowed={can(read.identity, permissions.inputs)} /></section>
     </>}</ReadState>
   </StudioPage>;
 }
@@ -105,7 +108,7 @@ function ReceiptPanel({ api, jobId, revision }: { api: ElsaStudioModuleApi; jobI
   const [after, setAfter] = useState<string>();
   const read = useJobsRead(api, JSON.stringify([jobId, revision, "receipts", after]), client => client.read<Page<Receipt>>("jobs", [jobId, "physical-receipts"], { limit: 25, after }));
   return <section className="jobs-stack" aria-label="Physical receipts"><h2>Physical receipts</h2><p>Physical reports can arrive late. They do not replace the selected result.</p>
-    <ReadState {...read} empty={read.value?.items.length === 0} retry={() => void read.refresh()}><ul className="jobs-records">{read.value?.items.map(receipt => <li key={receipt.receiptId}>{receipt.attemptId} · {receipt.outcome} · {date(receipt.reportedAt)} · {receipt.owner}</li>)}</ul></ReadState>
+    <ReadState {...read} empty={read.value?.items.length === 0} retry={() => void read.refresh()}><ul className="jobs-records">{read.value?.items.map(receipt => <li key={receipt.receiptId}>{receipt.attemptId} · {receipt.outcome} · {date(receipt.reportedAt)} · {receipt.owner}{receipt.payloadState === "expired" ? " · Payload expired; report identity retained" : ""}</li>)}</ul></ReadState>
     {read.value && <PageFooter count={read.value.items.length} next={read.value.next} after={after} change={setAfter} />}
   </section>;
 }
@@ -150,8 +153,9 @@ function LoadedPayload({ api, jobId, kind, close }: { api: ElsaStudioModuleApi; 
     } catch (error) { close(); api.notifications?.notify({ level: "error", title: "Export unavailable", message: failureText(error) }); }
   };
   return <ReadState {...read} retry={() => void read.refresh()}>{read.value && <>
-    <p>{read.value.state === "pending" ? "No terminal result is available yet." : "Current authorized payload. Values are rendered as text."}</p>
+    <p>{read.value.state === "expired" ? `The ${kind} payload expired on ${date(read.value.expiredAt)}. Its identity and original digest remain retained.`
+      : read.value.state === "pending" ? "No terminal result is available yet." : "Current authorized payload. Values are rendered as text."}</p>
     <pre className="jobs-json" tabIndex={0} role="region" aria-label={`Permitted ${kind} JSON`}>{payloadDocument(read.value, kind)}</pre>
-    <StudioButton onClick={() => void exportPayload()}>Export permitted {kind} JSON</StudioButton>
+    <StudioButton onClick={() => void exportPayload()}>{read.value.state === "expired" ? `Export retained ${kind} metadata` : `Export permitted ${kind} JSON`}</StudioButton>
   </>}</ReadState>;
 }

@@ -20,9 +20,10 @@ export interface Job {
   activePermission?: Permission | null; outcome?: string | null; resultId?: string | null; completedAt?: string | null;
   progressFraction?: number | null; cancellationRequested: boolean; retriedFromJobId?: string | null;
   association?: Association | null; diagnostic?: string | null; consumptionState: "pending-result" | "unknown" | "owed" | "settled" | "not-applicable";
+  inputPayloadState?: "available" | "expired"; resultPayloadState?: "available" | "notProduced" | "expired";
 }
 export interface Attempt { permission: Permission; state: string; physicalStartedAt?: string | null; physicalExitedAt?: string | null }
-export interface Receipt { receiptId: string; attemptId: string; owner: string; fence: number; outcome: string; retryable: boolean; reportedAt: string }
+export interface Receipt { receiptId: string; attemptId: string; owner: string; fence: number; outcome: string; retryable: boolean; reportedAt: string; payloadState?: string; expiredAt?: string | null }
 export interface Hold { gate: Gate; holdId: string; revision: number; actor: string; reason: string; requestedAt: string; releasedAt?: string | null; releasedBy?: string | null }
 export interface GateHolds { gate: Gate; items: Hold[]; next?: string | null }
 export interface JobHolds { gates: GateHolds[]; complete: boolean }
@@ -39,8 +40,8 @@ export interface Schedule {
 export interface Operation { operationId: string; reason: string }
 export interface Transition { status: string; revision?: number | null; jobId?: string | null; resultId?: string | null }
 export interface Acceptance { jobId: string; acceptedAt: string; recognizeUntil: string; revision: number }
-export interface InputView { state: string; input?: Payload | null; valueJson?: string | null }
-export interface ResultView { state: string; resultId?: string | null; outcome?: string | null; payload?: Payload | null; completedAt?: string | null; valueJson?: string | null }
+export interface InputView { state: string; input?: Payload | null; valueJson?: string | null; schema?: Schema | null; payloadSha256?: string | null; expiredAt?: string | null }
+export interface ResultView { state: string; resultId?: string | null; outcome?: string | null; payload?: Payload | null; completedAt?: string | null; valueJson?: string | null; schema?: Schema | null; payloadSha256?: string | null; expiredAt?: string | null }
 export interface ScheduleSave extends Operation {
   invocation: Invocation; recurrence: NonNullable<Schedule["recurrence"]>; firstOccurrence: string;
   missedPolicy: "coalesceOne" | "replayEveryOccurrence"; expectedRevision: number;

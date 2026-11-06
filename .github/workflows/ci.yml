@@ -1046,11 +1046,15 @@ jobs:
         working-directory: Studio
 
   studio-ux-acceptance:
-    name: UX acceptance (composed Studio)
+    name: UX acceptance (composed Studio, ${{ matrix.feature }})
     needs: plan-scope
     if: needs.plan-scope.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [baseline, jobs]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1069,12 +1073,12 @@ jobs:
       - name: Exercise real composed hosts with disposable stores
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+        run: python3 tools/ux-acceptance/run.py --feature "${{ matrix.feature }}" --output "$RUNNER_TEMP/ux-acceptance/${{ matrix.feature }}"
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
+          name: studio-ux-${{ matrix.feature }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ux-acceptance
           if-no-files-found: error
           retention-days: 14

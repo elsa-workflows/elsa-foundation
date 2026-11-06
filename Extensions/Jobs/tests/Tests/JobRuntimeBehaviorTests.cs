@@ -794,6 +794,8 @@ public class JobRuntimeBehaviorTests
 /// <summary>Scripted protocol responses only: no durable state, admission, retry, recovery or result-selection algorithm.</summary>
 internal sealed class ScriptedJobTransport : IJobCommands, IJobQueries
 {
+    public ValueTask<JobPayloadCleanupResult> ExpirePayloadsAsync(JobPayloadCleanupRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
+    public ValueTask<JobPage<JobPhysicalReceiptInspection>> ListPhysicalReceiptInspectionsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default) => throw Unexpected();
     internal Func<JobAdmission, CancellationToken, ValueTask<JobAdmissionResult>>? Admission { get; init; }
     internal Func<JobClaimRequest, CancellationToken, ValueTask<JobClaimResult>>? Claim { get; set; }
     internal Func<JobAttemptLease, TimeSpan, CancellationToken, ValueTask<JobRenewal>>? Renewal { get; set; }

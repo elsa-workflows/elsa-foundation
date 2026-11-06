@@ -58,6 +58,11 @@ internal abstract class JobsDbContext(DbContextOptions options) : DbContext(opti
         modelBuilder.Entity<JobRecord>().Property(x => x.JobType).HasMaxLength(256);
         modelBuilder.Entity<JobRecord>().Property(x => x.HandlerKey).HasMaxLength(64);
         modelBuilder.Entity<JobRecord>().Property(x => x.RequestSha256).HasMaxLength(64);
+        modelBuilder.Entity<JobRecord>().Property(x => x.RequestMetadataSha256).HasMaxLength(64);
+        modelBuilder.Entity<JobRecord>().Property(x => x.ResultMetadataSha256).HasMaxLength(64);
+        modelBuilder.Entity<JobRecord>().Property(x => x.RetentionPolicySha256).HasMaxLength(64);
+        modelBuilder.Entity<JobPhysicalReceiptRecord>().Property(x => x.MetadataSha256).HasMaxLength(64);
+        modelBuilder.Entity<JobRecord>().HasIndex(x => new { x.ScopeKey, x.State, x.InputExpiresAt, x.ResultExpiresAt });
         modelBuilder.Entity<JobRecord>().Property(x => x.ActiveAttemptKey).HasMaxLength(64);
         modelBuilder.Entity<JobRecord>().Property(x => x.RetriedFromJobId).HasMaxLength(256);
         modelBuilder.Entity<JobGateRecord>().Property(x => x.Name).HasMaxLength(256);

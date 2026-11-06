@@ -3,6 +3,9 @@ namespace Elsa.Jobs.Core;
 /// <summary>Replacement contract: one authoritative mutation provider per configured context; atomic commands return confirmation tokens only.</summary>
 public interface IJobCommands
 {
+    /// <summary>Expires acceptance-configured terminal payloads only after exact owed delivery proof has settled; metadata and digests remain.</summary>
+    ValueTask<JobPayloadCleanupResult> ExpirePayloadsAsync(JobPayloadCleanupRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Validates and atomically recognizes a producer key or protected durable origin before accepting new work.</summary>
     ValueTask<JobAdmissionResult> AdmitAsync(JobAdmission admission, CancellationToken cancellationToken = default);
 

@@ -14,8 +14,11 @@ export function invocationDraft(value?: Invocation, valueJson?: string): Invocat
     input: valueJson ?? JSON.stringify(value ? value.input.value : {}, null, 2), notBefore: value?.notBefore ?? "", policy: structuredClone(value?.policy ?? defaultPolicy) };
 }
 export function utc(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 19) !== value.slice(0, 19)) throw new Error("Enter an exact UTC time ending in Z, including seconds.");
-  return value;
+  // DateTimeOffset API projections use +00:00. Change only that suffix, preserving
+  // all seven fractional digits rather than routing the instant through Date serialization.
+  const normalized = value.replace(/\+00:00$/, "Z");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(normalized) || !Number.isFinite(Date.parse(normalized)) || new Date(normalized).toISOString().slice(0, 19) !== normalized.slice(0, 19)) throw new Error("Enter an exact UTC time ending in Z, including seconds.");
+  return normalized;
 }
 export function toInvocation(value: InvocationDraft): Invocation {
   for (const name of [value.jobType, value.handlerVersion, value.queue, value.inputAlias, value.resultAlias])

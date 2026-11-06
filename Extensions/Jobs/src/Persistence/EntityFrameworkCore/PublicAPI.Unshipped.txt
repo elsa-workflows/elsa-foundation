@@ -19,6 +19,10 @@ Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Provide
 Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Provider.set -> void
 Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Schema.get -> string?
 Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalInputRetention.get -> System.TimeSpan?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalInputRetention.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalResultRetention.get -> System.TimeSpan?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalResultRetention.set -> void
 Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreRegistration
 static Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreRegistration.AddJobsEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 virtual Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

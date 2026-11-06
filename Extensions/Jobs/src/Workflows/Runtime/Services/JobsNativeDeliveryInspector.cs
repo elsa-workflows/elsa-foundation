@@ -133,6 +133,7 @@ internal sealed class JobsNativeDeliveryInspector(IWorkflowExecutionStateStore w
         if (activity.Execution.ActivityType != JobsNativeBoundary.ActivityType) return null;
         if (!activity.Metadata.TryGetValue(JobsNativeBoundary.DeliveryMetadataKey, out var serialized))
             return activity.Status == ActivityExecutionStatus.Faulted && PreAdmissionFailure(parent, activity) ? null
+                : JobsNativePreWaitCancellation.Matches(parent, activity) ? null
                 : activity.Status == ActivityExecutionStatus.Cancelled && NativeOwnerCancellation(parent, activity) ? null
                 : activity.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled ? throw JobsNativeBoundary.Invalid() : null;
         var admission = JobsNativeBoundary.ReadAdmission(activity); var address = admission.Address; MatchParent(parent, address);

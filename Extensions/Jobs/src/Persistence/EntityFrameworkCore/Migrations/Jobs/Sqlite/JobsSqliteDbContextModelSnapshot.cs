@@ -430,6 +430,9 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AuditJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Digest")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -461,6 +464,8 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                     b.HasKey("Key");
 
                     b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "Key");
 
                     b.ToTable("elsa_jobs_operations", (string)null);
                 });

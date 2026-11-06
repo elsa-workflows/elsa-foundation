@@ -33,9 +33,11 @@ internal sealed partial class EfJobStore
         JobStoreCodec.Exact(delivery, scope, "delivery", jobId);
         if (delivery.JobKey != jobKey) throw new InvalidDataException("The retained Jobs delivery has an invalid job binding.");
         var snapshot = await AvailableSnapshot(db, scope, job, ct);
-        if (snapshot.State != JobState.Terminal || snapshot.Request?.Association is not { } association || snapshot.Result is not { } result
+        if (snapshot.State != JobState.Terminal || snapshot.RequestMetadata?.Association is not { } association || snapshot.ResultMetadata is not { } result
             || result.ResultId != delivery.ResultId || delivery.AssociationJson != JobStoreCodec.Json(association))
             throw new InvalidDataException("The retained Jobs delivery does not match its selected result and association.");
+        if (!delivery.Acknowledged && (snapshot.InputPayloadState == JobPayloadState.Expired || snapshot.ResultPayloadState == JobPayloadState.Expired))
+            throw InvalidRetention();
         JobContinuationPermission? permission = null;
         if (delivery.PermissionJson is { } json)
         {
@@ -72,7 +74,7 @@ internal sealed partial class EfJobStore
         try
         {
             var snapshot = await Snapshot(db, scope, job, ct);
-            if (snapshot.UnavailableDiagnostic is not null || snapshot.Request is null)
+            if (snapshot.UnavailableDiagnostic is not null || snapshot.RequestMetadata is null)
                 throw new InvalidDataException("The retained Jobs invocation is unavailable.");
             return snapshot;
         }
@@ -103,7 +105,7 @@ internal sealed partial class EfJobStore
                 var snapshot = await AvailableSnapshot(db, scope, job, ct);
                 if (job.Key != JobStoreCodec.Key(scope, "job", job.JobId) || job.RequestSha256 != row.RequestSha256)
                     throw new InvalidDataException("The protected Jobs origin has an invalid invocation binding.");
-                try { acceptance = Acceptance(job, checked(job.AcceptedAt + snapshot.Request!.Policy.MinimumKeyRecognition.Ticks)); }
+                try { acceptance = Acceptance(job, checked(job.AcceptedAt + snapshot.RequestMetadata!.Policy.MinimumKeyRecognition.Ticks)); }
                 catch (Exception error) when (error is ArgumentException or OverflowException)
                 { throw new InvalidDataException("The retained Jobs acceptance has invalid fields.", error); }
             }

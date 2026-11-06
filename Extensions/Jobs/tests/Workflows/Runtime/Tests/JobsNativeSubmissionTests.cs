@@ -8,6 +8,7 @@ using Elsa.Jobs.Workflows.Runtime.Models;
 using Elsa.Jobs.Workflows.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using ActivityTransitionKind = Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind;

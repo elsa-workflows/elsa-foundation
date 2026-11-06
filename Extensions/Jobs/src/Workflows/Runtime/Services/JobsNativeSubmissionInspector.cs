@@ -57,8 +57,8 @@ internal sealed class JobsNativeSubmissionInspector(IJobQueries jobs, JobsNative
         {
             var actual = await jobs.FindAsync(admission.Submission.Scope, accepted.JobId, cancellationToken) ?? throw Unavailable();
             if (actual.Scope != admission.Submission.Scope || actual.JobId != admission.ProposedJobId || actual.UnavailableDiagnostic is not null ||
-                actual.RequestSha256 != admission.RequestSha256 || actual.Request is not { Association.Continuation: null } ||
-                !JobsNativeBoundary.Equivalent(actual.Request, admission.Request)) throw JobsNativeBoundary.Invalid();
+                actual.RequestSha256 != admission.RequestSha256 || JobsNativeBoundary.RetainedRequest(actual) is not { Association.Continuation: null } metadata ||
+                !JobsNativeBoundary.Equivalent(metadata, JobRequestMetadata.From(admission.Request))) throw JobsNativeBoundary.Invalid();
             disposition = JobNativeSubmissionDisposition.Accepted;
         }
         else if (origin.Cancelled && !origin.Retired) disposition = JobNativeSubmissionDisposition.CancelledBeforeAdmission;

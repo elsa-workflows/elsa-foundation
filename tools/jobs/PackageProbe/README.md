@@ -1,5 +1,22 @@
 # Packaged standalone Jobs witness
 
+The separate opt-in payload-retention slice uses an already published current-source consumer:
+
+```sh
+python3 tools/jobs/PackageProbe/retention_witness.py \
+  --entry-assembly /absolute/current-deployment/Jobs.PackageProbe.dll \
+  --evidence-dir /tmp/owned-jobs-retention --provider sqlite
+```
+
+Select `postgresql` for its owned temporary container profile. This controller runs actual report
+handlers, captures finite versus indefinite admission policy, restarts producer/inspector processes,
+executes explicit bounded cleanup, reconciles client keys and durable origins, refuses retry after
+input expiry, and appends a late report without restoring payload bytes. It retains its own case
+states/receipt and does not alter or promote the M1/M2 or model plans. The supported probe commands
+are `expire-payloads` and `receipt-inspections`; admission accepts optional `terminalInputRetention`
+and `terminalResultRetention` durations. Fresh commands cannot replace an already accepted policy.
+This new controller is source-only until actual execution and package provenance are retained.
+
 `../verify-packaged-jobs.py` freezes a full source SHA and publish-state SHA, computes the Jobs
 package closure, packs that exact tree, and verifies archive provenance. `--stage publish` creates a
 clean console application outside the checkout with exact `PackageReference` versions and a fresh

@@ -129,3 +129,22 @@ A positive native owner-cancellation phase also covers cancellation before the f
 It records the exact full pinned cancellation marker; a missing submission alone never proves zero
 admission. Source controls for these paths are unexecuted until the immutable native/BPMN qualification
 runs. The public inspector's phase classification and cancellation receipt do not grant model authority.
+
+Optional Jobs-store payload expiry does not erase model responsibility. Live awaited delivery still
+requires retained input/result bytes and cannot be purged before exact Jobs ACK. Already-settled
+source/ACK replay and independent origin reconciliation use validated compact canonical identities,
+association and original digests. If a native source still retains its original completion bytes,
+the adapter can authenticate those bytes against compact settled metadata after store expiry; it
+does not reconstruct a successful null result or persist expired bytes again. Missing expiry or
+consumption proof remains unavailable. Native source/history retention follows its existing required
+responsibility fence and is not shortened by the Jobs payload policy.
+
+Ordinary whole-workflow cancellation also covers a created root `RunJob` helper whose initial
+activation was durably claimed before its Jobs wait/admission checkpoint. The cancellation enricher
+records a bounded positive receipt tied to that existing activation claim, the exact cancellation
+commit/checkpoint/work item/command, full native/model pins, tenant, contract and invocation. It
+requires the single initial attempt still open and no saved wait, private state, completed activation,
+admission or result effects; it does not invent an ended attempt. Inspection and settlement accept
+only that exact receipt. Missing admission metadata alone remains unavailable. This receipt proves
+no committed Jobs handoff, not the timing of preparatory CLR instructions. The separate actual BPMN
+pre-wait witness must establish its stronger checkpoint-before-handler cut and resulting cleanup.

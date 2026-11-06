@@ -4,7 +4,7 @@
 |---|---|---|
 | `AddJobsEntityFrameworkCore` | Composition | Ordinary .NET producer/worker hosts; installs one Jobs authority using the shared host migration policy. |
 | `JobsEntityFrameworkCoreFeature` | Inheritable feature | CShell hosts; uses the same registration with normal shell lifecycle migration. |
-| `JobsEntityFrameworkCoreOptions` | Host configuration | Provider/connection/schema/pooling and bounded page, claim scan and retry limits. Host supplies an engine package. |
+| `JobsEntityFrameworkCoreOptions` | Host configuration | Provider/connection/schema/pooling, bounded page/claim/retry limits and opt-in terminal payload durations captured at acceptance. Host supplies an engine package. |
 | `IJobCommands` | Scoped replacement | Jobs runtime, trusted model adapters and authorized operations; default `EfJobStore` owns atomic mutations. |
 | `IJobQueries` | Scoped replacement | Producer lookup and operations; follows the selected combined command provider unless independently replaced. Reads never mutate state. |
 | `IJobRecurrenceCalculator` | Pure arithmetic replacement | Schedule materialization; implementation supplied by Jobs runtime, never cursor/lifecycle authority. |

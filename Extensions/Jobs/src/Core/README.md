@@ -196,3 +196,19 @@ metadata or retained audit metadata is unreadable/unsupported. Missing identity,
 is never invented. This query is scoped metadata, not authorization; API hosts must authorize it.
 The list uses stable key order, not chronological order or complete per-job history. A dedicated
 indexed job-history query would need a separate explicit contract.
+
+Payload lifetime is separate from identity and proof retention. `JobSnapshot.InputPayloadState` and
+`ResultPayloadState` distinguish available bytes, no result yet and actual expiry. After expiry the
+original `Request` or `Result` is absent, while `RequestMetadata`/`ResultMetadata` retain schema,
+identity, outcome and original digests. A successful expired result is never replaced by a successful
+JSON-null payload. Code that polls for completion must check `State` and `ResultPayloadState`; a
+terminal expired result is an explicit unavailable-payload outcome, not pending work.
+
+The EF host captures optional terminal input/result durations at admission. Null/default and legacy
+policies retain payloads indefinitely. Trusted maintenance calls `ExpirePayloadsAsync` in bounded
+scope-bound pages after terminal settlement; reads never purge bytes. Missing/corrupt proof refuses
+cleanup. Result expiry also clears progress and copied physical-report payloads. The original full
+report query refuses `jobs.payload.expired`; `ListPhysicalReceiptInspectionsAsync` preserves useful
+report metadata with an explicit expired state. Metadata, original digests, durable origins and
+consumer proofs stay indefinitely; ordinary producer-key recognition keeps its separate finite
+window. `RetryAsNewRunAsync` returns `PayloadExpired` when its original input bytes have expired.

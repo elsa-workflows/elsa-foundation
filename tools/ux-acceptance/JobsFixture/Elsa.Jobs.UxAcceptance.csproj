@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsPackable>false</IsPackable><Description>Owned composed Jobs UX acceptance fixture; excluded from standard Workbench builds.</Description></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <ProjectReference Include="../../../Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj" />
+    <ProjectReference Include="../../../Extensions/Jobs/src/Api/Elsa.Jobs.Api.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+  </ItemGroup>
+</Project>

@@ -207,6 +207,36 @@ internal static class JobsNativeBoundary
         return result;
     }
 
+    internal static JobRequestMetadata RetainedRequest(JobSnapshot snapshot)
+    {
+        if (snapshot.UnavailableDiagnostic is not null) throw Invalid();
+        var actual = snapshot.Request is { } request ? JobRequestMetadata.From(request) : null;
+        if (snapshot.Request is { } content && JobRequestDigest.Compute(content) != snapshot.RequestSha256) throw Invalid();
+        var metadata = snapshot.RequestMetadata ?? actual ?? throw Invalid();
+        if (actual is not null && !Equivalent(actual, metadata) || actual is null &&
+            (snapshot.InputPayloadState != JobPayloadState.Expired || snapshot.PayloadRetention?.InputExpiredAt is null)) throw Invalid();
+        return metadata;
+    }
+
+    internal static JobResultMetadata RetainedResult(JobSnapshot snapshot)
+    {
+        var request = RetainedRequest(snapshot);
+        var actual = snapshot.Result is { } result ? JobResultMetadata.From(result) : null;
+        var metadata = snapshot.ResultMetadata ?? actual ?? throw Invalid();
+        if (snapshot.State != JobState.Terminal || metadata.JobId != snapshot.JobId || !Enum.IsDefined(metadata.Outcome) ||
+            metadata.Outcome == JobOutcome.Succeeded && metadata.PayloadSchema != request.ResultSchema ||
+            metadata.Outcome != JobOutcome.Succeeded && (metadata.PayloadSchema is not null || metadata.PayloadSha256 != JobPayloadDigest.Compute(null)) ||
+            actual is not null && (!Equivalent(actual, metadata) || snapshot.Result!.PayloadSha256 != JobPayloadDigest.Compute(snapshot.Result.Payload)) ||
+            actual is null && (snapshot.ResultPayloadState != JobPayloadState.Expired || snapshot.PayloadRetention?.ResultExpiredAt is null)) throw Invalid();
+        Name(metadata.ResultId); Digest(metadata.PayloadSha256); if (metadata.AttemptId is not null) Name(metadata.AttemptId);
+        if (metadata.Diagnostic is { } diagnostic)
+        {
+            Name(diagnostic.Code);
+            if (diagnostic.Summary is null || diagnostic.Summary.Length > 2048) throw Invalid();
+        }
+        return metadata;
+    }
+
     internal static void EnsureAddress(RunJobInvocation invocation, JobNativeAddress address)
     {
         if (address is null || address.FormatVersion != Version || address.Scope != invocation.Scope ||
@@ -301,7 +331,14 @@ internal static class JobsNativeBoundary
     internal static string ModelInputId(JobNativeAddress address, JobResult result) => address.Owner.Origin?.ResultInputId
         ?? "jobs-input-" + Hash(new { Format = "jobs.native.input.v1", address.Scope, result.JobId, result.ResultId, Address = address });
 
+    internal static string ModelInputId(JobNativeAddress address, JobResultMetadata result) => address.Owner.Origin?.ResultInputId
+        ?? "jobs-input-" + Hash(new { Format = "jobs.native.input.v1", address.Scope, result.JobId, result.ResultId, Address = address });
+
     internal static string ContinuationId(JobNativeAddress address, JobResult result, JobAssociation association) =>
+        "jobs-cont-" + Hash(new { Format = "jobs.native.continuation.v1", address.Scope, result.JobId, result.ResultId,
+            Association = association, Input = ModelInputId(address, result) });
+
+    internal static string ContinuationId(JobNativeAddress address, JobResultMetadata result, JobAssociation association) =>
         "jobs-cont-" + Hash(new { Format = "jobs.native.continuation.v1", address.Scope, result.JobId, result.ResultId,
             Association = association, Input = ModelInputId(address, result) });
 

@@ -51,7 +51,9 @@ internal sealed partial class EfJobStore
                     ?? throw new InvalidDataException("A protected Jobs origin lost its accepted invocation.");
                 JobStoreCodec.Exact(recognized, scope, "job", recognized.JobId);
                 if (recognized.RequestSha256 != admission.RequestSha256) throw new InvalidDataException("The Jobs origin request identity diverged.");
-                return new(JobCommandStatus.Replayed, Acceptance(recognized, checked(recognized.AcceptedAt + Request(recognized).Policy.MinimumKeyRecognition.Ticks)));
+                var recognizedMetadata = RequestMetadata(recognized);
+                _ = Retention(recognized, ResultMetadata(recognized, recognizedMetadata));
+                return new(JobCommandStatus.Replayed, Acceptance(recognized, checked(recognized.AcceptedAt + recognizedMetadata.Policy.MinimumKeyRecognition.Ticks)));
             }
         }
         var recognitionKey = JobStoreCodec.Key(scope, "recognition", admission.IdempotencyKey);
@@ -63,6 +65,7 @@ internal sealed partial class EfJobStore
             prior = await db.Jobs.SingleOrDefaultAsync(x => x.Key == recognition.JobKey, ct)
                 ?? throw new InvalidDataException("A protected Jobs producer key lost its invocation.");
             JobStoreCodec.Exact(prior, scope, "job", prior.JobId);
+            var priorMetadata = RequestMetadata(prior); _ = Retention(prior, ResultMetadata(prior, priorMetadata));
             // Expiry does not itself erase recognition. Pending job/delivery responsibility always protects it.
             var protectedKey = recognition.RecognizeUntil > now || prior.State != (int)JobState.Terminal
                 || await db.Deliveries.AnyAsync(x => x.JobKey == prior.Key && !x.Acknowledged, ct);
@@ -87,6 +90,11 @@ internal sealed partial class EfJobStore
         var job = JobStoreCodec.New<JobRecord>(scope, "job", admission.ProposedJobId);
         job.JobId = admission.ProposedJobId;
         job.RequestJson = JobStoreCodec.Json(admission.Request); job.RequestSha256 = admission.RequestSha256;
+        job.RequestMetadataJson = JobStoreCodec.Json(JobRequestMetadata.From(admission.Request));
+        job.RequestMetadataSha256 = JobStoreCodec.Hash(job.RequestMetadataJson);
+        job.TerminalInputRetentionTicks = settings.TerminalInputRetention?.Ticks;
+        job.TerminalResultRetentionTicks = settings.TerminalResultRetention?.Ticks;
+        job.RetentionPolicySha256 = RetentionPolicyDigest(job);
         job.HandlerKey = JobStoreCodec.Support(admission.Request); job.JobType = admission.Request.Handler.JobType; job.Queue = admission.Request.Queue;
         job.State = (int)JobState.Accepted; job.Revision = 1; job.AcceptedAt = now;
         job.EligibleAt = Math.Max(now, admission.Request.NotBefore?.UtcTicks ?? now); job.RetriedFromJobId = retriedFrom;
@@ -204,6 +212,11 @@ internal sealed partial class EfJobStore
             JobAdmissionResult result;
             if (job is null) result = new(JobCommandStatus.NotFound, null);
             else if (job.State != (int)JobState.Terminal || job.Revision != request.ExpectedTerminalRevision) result = new(JobCommandStatus.Conflict, null);
+            else if (job.InputExpiredAt is not null)
+            {
+                var metadata = RequestMetadata(job); _ = Retention(job, ResultMetadata(job, metadata));
+                result = new(JobCommandStatus.PayloadExpired, null);
+            }
             else
             {
                 var original = Request(job);

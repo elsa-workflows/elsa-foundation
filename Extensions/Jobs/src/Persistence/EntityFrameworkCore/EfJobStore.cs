@@ -52,13 +52,16 @@ internal sealed partial class EfJobStore(IDbContextFactory<JobsDbContext> contex
     private sealed class LeaseExpiredDuringWriteException : Exception { }
     private void AuthorizeUntil(JobsDbContext db, long expiresAt) => _leaseWindows.AddOrUpdate(db, new(expiresAt));
     private static JobTransition Transition(JobCommandStatus status, JobRecord? job = null) => new(status, job?.Revision, job?.JobId,
-        job?.ResultJson is { } json ? JobStoreCodec.ReadRetained<JobResult>(json).ResultId : null);
+        job is null ? null : ResultMetadata(job, RequestMetadata(job))?.ResultId);
     private static JobAcceptance Acceptance(JobRecord job, long recognizeUntil) => new(job.JobId, JobStoreCodec.At(job.AcceptedAt), JobStoreCodec.At(recognizeUntil), job.Revision);
     private static JobAttemptLease Lease(JobScope scope, JobRecord job, JobAttemptRecord attempt) => new(scope, job.JobId,
         attempt.AttemptId, attempt.Number, attempt.Owner, attempt.Fence, attempt.OwnershipRevision,
         JobStoreCodec.At(attempt.GrantedAt), JobStoreCodec.At(attempt.ExpiresAt), JobStoreCodec.At(attempt.Deadline), attempt.ImplementationIdentity);
     private static JobRequest Request(JobRecord job)
     {
+        if (job.InputExpiredAt is not null && job.RequestJson is null)
+            throw new JobException("jobs.payload.expired", "The retained Jobs input payload has expired.");
+        if (job.RequestJson is null) throw InvalidRetention();
         try
         {
             // Constructor validation can throw ArgumentException during deserialization itself.

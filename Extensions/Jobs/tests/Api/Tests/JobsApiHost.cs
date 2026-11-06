@@ -33,7 +33,7 @@ internal sealed class JobsApiHost(WebApplication app, HttpClient client, string 
     internal IReadOnlyList<RouteEndpoint> Endpoints => ((IEndpointRouteBuilder)app).DataSources.SelectMany(x => x.Endpoints).OfType<RouteEndpoint>().ToArray();
 
     internal static async Task<JobsApiHost> StartAsync(string? storageDirectory = null, bool installJobsProducer = true,
-        Action<IServiceCollection>? configure = null)
+        Action<IServiceCollection>? configure = null, Action<JobsEntityFrameworkCoreOptions>? persistence = null)
     {
         var ownsDirectory = storageDirectory is null;
         var directory = storageDirectory ?? Path.Combine(Path.GetTempPath(), "elsa-jobs-api-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
@@ -46,7 +46,11 @@ internal sealed class JobsApiHost(WebApplication app, HttpClient client, string 
         var authorization = new MutableJobAuthorization(); builder.Services.AddSingleton(authorization);
         builder.Services.ReplaceCurrentSubjectPermissionAuthorizer<MutableJobAuthorization>();
         builder.Services.Replace(ServiceDescriptor.Singleton<ICurrentSubjectPermissionAuthorizer>(authorization));
-        builder.Services.AddJobsEntityFrameworkCore(options => options.ConnectionString = "Data Source=" + Path.Combine(directory, "jobs.db") + ";Pooling=False");
+        builder.Services.AddJobsEntityFrameworkCore(options =>
+        {
+            options.ConnectionString = "Data Source=" + Path.Combine(directory, "jobs.db") + ";Pooling=False";
+            persistence?.Invoke(options);
+        });
         builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
         if (installJobsProducer) builder.Services.AddElsaJobs();
         builder.Services.AddJobsApi(options => options.PersistencePartition = Partition);

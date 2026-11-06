@@ -279,16 +279,31 @@ internal sealed partial class EfJobStore
     private static async ValueTask<JobPhysicalReceiptRecord?> Receipt(JobsDbContext db, JobScope scope, JobRecord job, JobAttemptRecord attempt, JobPhysicalReceipt receipt, long now, CancellationToken ct)
     {
         if (attempt.Owner != receipt.Owner || attempt.Fence != receipt.Fence) return null;
+        if (job.ResultExpiredAt is not null)
+        {
+            var metadata = RequestMetadata(job); _ = Retention(job, ResultMetadata(job, metadata));
+        }
         var identity = JobStoreCodec.Key(scope, "receipt", receipt.ReceiptId);
         var json = JobStoreCodec.Json(receipt); var hash = JobStoreCodec.Hash(json);
         var existing = await db.Receipts.SingleOrDefaultAsync(x => x.Key == identity, ct);
         if (existing is not null)
         {
             JobStoreCodec.Exact(existing, scope, "receipt", receipt.ReceiptId);
-            return existing.JobKey == job.Key && existing.AttemptKey == attempt.Key && existing.ReceiptSha256 == hash && existing.ReceiptJson == json ? existing : null;
+            _ = ReceiptInspection(scope, job, existing);
+            return existing.JobKey == job.Key && existing.AttemptKey == attempt.Key && existing.ReceiptSha256 == hash &&
+                (existing.ReceiptJson == json || existing.PayloadExpiredAt is not null) ? existing : null;
         }
         var row = JobStoreCodec.New<JobPhysicalReceiptRecord>(scope, "receipt", receipt.ReceiptId);
         row.JobKey = job.Key; row.AttemptKey = attempt.Key; row.ReceiptJson = json; row.ReceiptSha256 = hash; db.Receipts.Add(row);
+        // Serialize payload insertion with retention using the job's row token, without changing its terminal revision.
+        db.Entry(job).Property(value => value.Token).IsModified = true;
+        SaveReceiptMetadata(row, new(receipt.ReceiptId, receipt.AttemptId, receipt.Owner, receipt.Fence, receipt.Outcome,
+            receipt.Payload?.Schema, receipt.PayloadSha256, receipt.Diagnostic, receipt.Retryable, receipt.ReportedAt, hash));
+        if (job.ResultExpiredAt is { } expired)
+        {
+            var metadata = RequestMetadata(job); _ = Retention(job, ResultMetadata(job, metadata));
+            row.ReceiptJson = null; row.PayloadExpiredAt = Math.Max(now, expired);
+        }
         // Retained late exit is observational; it never restores authority or changes the selected outcome.
         attempt.PhysicalExitedAt ??= now;
         return row;
@@ -297,11 +312,15 @@ internal sealed partial class EfJobStore
     private static async ValueTask Settle(JobsDbContext db, JobScope scope, JobRecord job, JobAttemptRecord? attempt,
         JobOutcome outcome, JobPayload? payload, JobDiagnostic? diagnostic, long now, CancellationToken ct)
     {
-        if (job.ResultJson is not null) throw new InvalidOperationException("An authoritative Jobs result is immutable.");
+        if (job.ResultJson is not null || job.ResultMetadataJson is not null) throw new InvalidOperationException("An authoritative Jobs result is immutable.");
         job.State = (int)JobState.Terminal; job.ActiveAttemptKey = null; job.Revision = checked(job.Revision + 1);
         var resultId = JobStoreCodec.Hash(JobStoreCodec.Identity("jobs.result.v1", job.Key, attempt?.AttemptId, job.Revision));
         var result = new JobResult(resultId, job.JobId, attempt?.AttemptId, outcome, payload, diagnostic, JobPayloadDigest.Compute(payload), JobStoreCodec.At(now));
         job.ResultJson = JobStoreCodec.Json(result);
+        job.ResultMetadataJson = JobStoreCodec.Json(JobResultMetadata.From(result));
+        job.ResultMetadataSha256 = JobStoreCodec.Hash(job.ResultMetadataJson);
+        job.InputExpiresAt = job.TerminalInputRetentionTicks is { } inputRetention ? Expiry(now, inputRetention) : null;
+        job.ResultExpiresAt = job.TerminalResultRetentionTicks is { } resultRetention ? Expiry(now, resultRetention) : null;
         var association = Request(job).Association;
         if (association is { Mode: JobAssociationMode.Awaited, Continuation: not null })
         {

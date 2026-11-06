@@ -93,3 +93,29 @@ Audit listing uses the operations `(ScopeKey, Key)` index and the existing scope
 It is global within the supplied authorized scope, not a chronological or complete per-job query.
 The additive audit migration, real-engine controls and API/Studio integration require M4
 qualification; audit source work is not migration/application or acceptance evidence.
+
+Terminal payload retention defaults to indefinite. Hosts can explicitly set
+`TerminalInputRetention` and `TerminalResultRetention` on `JobsEntityFrameworkCoreOptions`.
+Each admission captures those durations separately from the immutable v1 request; later configuration
+or restart cannot shorten an accepted promise. Legacy records without a captured policy remain
+indefinite. Deadlines use provider terminal time, and actual expiry occurs only when a trusted host
+invokes bounded `IJobCommands.ExpirePayloadsAsync`; reads never run cleanup. A host can schedule that
+maintenance command independently of workers, including while processing is paused. Follow its
+scope-bound continuation token to finish a pass.
+
+Cleanup requires a terminal job, no active attempt, and exact settled delivery/grant/ACK proof when
+an awaited association requires it. Unsettled, missing or corrupt proof cannot authorize cleanup.
+Expiry clears full input/result envelopes, progress and copied physical-report payloads. A late
+physical report is fully validated before retaining only its metadata after result expiry; row-token
+arbitration prevents a concurrent late report from restoring purged bytes. Cleanup does not change
+the selected result, terminal revision or original request/payload/receipt digests.
+
+Request/acceptance/result/association metadata, ordinary-key recognition, durable origins, attempts,
+grants, ACKs and consumer proofs remain indefinitely. This explicit metadata policy does not promise
+indefinite ordinary-key recognition: its existing window and settled-obligation cleanup still apply.
+`JobSnapshot` exposes explicit payload states, compact metadata and captured/actual expiry times.
+Expired input cannot be manually retried; `PayloadExpired` is an explicit refusal. The original full
+physical-report query refuses `jobs.payload.expired`; `ListPhysicalReceiptInspectionsAsync` continues
+to expose exact report identity and original digests without inventing a successful null-valued report.
+Schema generation, real provider execution and the separate opt-in packaged retention witness remain
+required qualification; these source changes do not update prior milestone receipts.

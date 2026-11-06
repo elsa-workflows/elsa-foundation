@@ -51,7 +51,12 @@ are ordinal and collision-safe; cursor tokens bind tenant, filter/order and rete
 read and mutation independently checks trusted scope even when the submitted ID exists.
 
 Retention protects accepted inputs, authoritative results and all still-owed delivery/consumer proof.
-Terminal payload and metadata policies are explicit/configurable. Acceptance advertises a minimum key
+Terminal input/result payload durations are explicit host configuration captured at acceptance; the
+default and legacy policy retains payloads indefinitely. Cleanup records positive expired states only
+after terminal settlement and all required delivery proof. Compact request/acceptance/result/association,
+attempt, grant/ACK and origin metadata is retained indefinitely; there is no metadata TTL or proof purge.
+Payload cleanup does not rewrite request-v1 digests, selected results or terminal revisions, and late
+physical receipts cannot restore expired payload bytes. Acceptance advertises a minimum key
 recognition window (proposed default 30 days); pending job/delivery obligations extend protection.
 Purge cannot turn a pending obligation into NotFound or allow duplicate acceptance while protected.
 After the window and settled obligations, recognition cleanup may retire a key, and later reuse can

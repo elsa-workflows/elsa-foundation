@@ -27,7 +27,12 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Resumption;
+using System.Data.Common;
+#if MODEL_POSTGRESQL
+using Npgsql;
+#else
 using Microsoft.Data.Sqlite;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -36,6 +41,11 @@ return await ModelProbe.RunAsync(args);
 
 internal static partial class ModelProbe
 {
+#if MODEL_POSTGRESQL
+    private const string ProfileProvider = "PostgreSql";
+#else
+    private const string ProfileProvider = "Sqlite";
+#endif
     internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     internal const string BpmnStartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string BpmnResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
@@ -48,6 +58,7 @@ internal static partial class ModelProbe
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(command.TimeoutSeconds));
         try
         {
+            if (command.Provider != ProfileProvider) throw new InvalidDataException("The model command provider differs from this compiled package profile.");
             using var faults = command.AckFault is null ? null : new AckReplyFault(command.AckFault);
             var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
                 { Args = [], ContentRootPath = AppContext.BaseDirectory, DisableDefaults = true });
@@ -65,7 +76,7 @@ internal static partial class ModelProbe
                 options.ShutdownGracePeriod = TimeSpan.FromSeconds(2);
             });
             builder.Services.AddJobsEntityFrameworkCore(options =>
-                { options.Provider = "Sqlite"; options.ConnectionString = command.JobsConnectionString; });
+                { options.Provider = command.Provider; options.ConnectionString = command.JobsConnectionString; options.Schema = command.Schema; });
             if (command.Mode == "worker") builder.Services.AddJobHandler<ControlledReportHandler, ControlledReportInput, ControlledReportResult>(Probe.Support);
             new EventsFeature().ConfigureServices(builder.Services);
             new SerializationFeature().ConfigureServices(builder.Services);
@@ -87,10 +98,11 @@ internal static partial class ModelProbe
             new JobsBpmnFeature().ConfigureServices(builder.Services);
             builder.Services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
             {
-                Provider = "Sqlite", ConnectionString = command.RuntimeConnectionString, Pooling = false,
+                Provider = command.Provider, ConnectionString = command.RuntimeConnectionString, Schema = command.Schema, Pooling = false,
                 CacheWorkflowExecutables = false, RecoveryContinuationSigningKey = new string('r', 32),
                 HierarchyCursorSigningKey = new string('h', 32)
-            }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+            }).AddEfModuleMigrations<RuntimeDbContext>(command.Provider);
+            if (command.PreWaitCut is { } cut) PreWaitCut.Register(builder.Services, cut);
             // Force the actual CLR activity assembly into the ordinary startup registration scan.
             _ = typeof(Elsa.Jobs.Workflows.Runtime.Activities.RunJob).Assembly.GetName();
             using var host = builder.Build();
@@ -134,7 +146,13 @@ internal static partial class ModelProbe
     private static ValueTask<PersistenceOperationScope> ScopeAsync(IServiceProvider services, ModelCommand command, CancellationToken ct) =>
         services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new(command.Scope.PersistencePartition), ct);
 
-    private static object[] LoadedProducts() => new[] { typeof(ModelProbe).Assembly, typeof(IJobCommands).Assembly, typeof(JobsFeature).Assembly,
+    private static object[] LoadedProducts() => new[] { typeof(ModelProbe).Assembly,
+#if MODEL_POSTGRESQL
+        typeof(NpgsqlConnection).Assembly,
+#else
+        typeof(SqliteConnection).Assembly,
+#endif
+        typeof(IJobCommands).Assembly, typeof(JobsFeature).Assembly,
         typeof(JobsEntityFrameworkCoreFeature).Assembly, typeof(Elsa.Jobs.Workflows.Runtime.Activities.RunJob).Assembly,
         typeof(JobsBpmnFeature).Assembly, typeof(ActivitiesBpmnHostingFeature).Assembly, typeof(ActivitiesSequenceFeature).Assembly,
         typeof(ActivitiesFlowchartFeature).Assembly, typeof(IWorkflowStartDispatcher).Assembly,
@@ -150,13 +168,9 @@ internal static partial class ModelProbe
         switch (command.Mode)
         {
             case "initialize": return new { initialized = true };
-            case "provider-version":
-                await using (var connection = new SqliteConnection(command.JobsConnectionString))
-                {
-                    await connection.OpenAsync(ct); await using var query = connection.CreateCommand();
-                    query.CommandText = "SELECT sqlite_version()";
-                    return new { provider = "Sqlite", version = await query.ExecuteScalarAsync(ct) };
-                }
+            case "provider-version": return new { provider = command.Provider,
+                version = await ProviderVersionAsync(command.JobsConnectionString, ct),
+                runtimeVersion = await ProviderVersionAsync(command.RuntimeConnectionString, ct) };
             case "create": return await CreateAsync(services, command, ct);
             case "send-start": return await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>()
                 .ProcessAsync(new(16, command.ExecutionId, BpmnStartKind), ct);
@@ -184,6 +198,20 @@ internal static partial class ModelProbe
                     await deletion.TryDeleteTerminalAsync(candidate, ct) };
             default: throw new InvalidDataException("Unknown model witness command.");
         }
+    }
+
+    private static async Task<string> ProviderVersionAsync(string connectionString, CancellationToken ct)
+    {
+        await using DbConnection connection =
+#if MODEL_POSTGRESQL
+            new NpgsqlConnection(connectionString);
+#else
+            new SqliteConnection(connectionString);
+#endif
+        await connection.OpenAsync(ct);
+        await using var query = connection.CreateCommand();
+        query.CommandText = ProfileProvider == "Sqlite" ? "SELECT sqlite_version()" : "SELECT version()";
+        return (string)(await query.ExecuteScalarAsync(ct))!;
     }
 
     private static async Task<object> InspectAsync(IServiceProvider services, ModelCommand command, CancellationToken ct)
@@ -258,4 +286,5 @@ internal sealed record ModelCommand(string Mode, string JobsConnectionString, st
     bool SendBpmnStart = true, string ReadyFile = "", string StopFile = "", JobGateKey? Gate = null,
     string HoldId = "", string OperationId = "", long ExpectedRevision = 0, int TimeoutSeconds = 150,
     AckFaultOptions? AckFault = null, string NativeStructure = "root",
-    JobAssociationMode AssociationMode = JobAssociationMode.Awaited, bool KeepParentActive = false);
+    JobAssociationMode AssociationMode = JobAssociationMode.Awaited, bool KeepParentActive = false,
+    string Provider = "Sqlite", string? Schema = null, PreWaitCutOptions? PreWaitCut = null);

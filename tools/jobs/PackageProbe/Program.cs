@@ -45,6 +45,8 @@ internal static partial class Probe
                 options.Provider = command.Provider;
                 options.ConnectionString = command.ConnectionString;
                 options.Schema = command.Schema;
+                options.TerminalInputRetention = command.TerminalInputRetention;
+                options.TerminalResultRetention = command.TerminalResultRetention;
             });
             var worker = command.Mode == "worker";
             builder.Services.AddElsaJobs(options =>
@@ -117,8 +119,9 @@ internal static partial class Probe
                     result = confirmations;
                     break;
                 case "admit-associated":
+                case "admit-origin":
                     var associated = Request(command);
-                    if (associated.Association is null) throw new InvalidDataException("A trusted qualification association is required.");
+                    if (command.Mode == "admit-associated" && associated.Association is null) throw new InvalidDataException("A trusted qualification association is required.");
                     var digest = JobRequestDigest.Compute(associated);
                     result = await commands.AdmitAsync(new(command.Scope, Guid.NewGuid().ToString("N"), command.ClientKey,
                         digest, associated, new("package-witness", "controlled-probe", command.ClientKey, digest)), timeout.Token);
@@ -131,6 +134,12 @@ internal static partial class Probe
                     break;
                 case "receipts":
                     result = await queries.ListPhysicalReceiptsAsync(command.Scope, command.JobId, new(100, null), timeout.Token);
+                    break;
+                case "receipt-inspections":
+                    result = await queries.ListPhysicalReceiptInspectionsAsync(command.Scope, command.JobId, new(100, null), timeout.Token);
+                    break;
+                case "expire-payloads":
+                    result = await commands.ExpirePayloadsAsync(new(command.Scope, command.MaximumJobs, command.ContinuationToken), timeout.Token);
                     break;
                 case "list":
                     result = await queries.ListJobsAsync(command.Scope, new(new(100, null), null, null, null), timeout.Token);
@@ -234,7 +243,8 @@ internal sealed record ProbeCommand(string Mode, string Provider, string Connect
     bool Enabled = true, bool MaterializeSchedules = true, int MaximumOccurrences = 4,
     string[]? Queues = null, int MaximumConcurrentAttempts = 1, int LeaseSeconds = 3,
     int RenewalMilliseconds = 500, int ShutdownGraceMilliseconds = 250, ProbeFaultOptions? Fault = null,
-    bool SubmitUnrelated = false, int BatchCount = 1);
+    bool SubmitUnrelated = false, int BatchCount = 1, TimeSpan? TerminalInputRetention = null,
+    TimeSpan? TerminalResultRetention = null, int MaximumJobs = 100, string? ContinuationToken = null);
 
 internal sealed record ReportLine(string Product, int Quantity, decimal UnitPrice);
 internal sealed record ReportInput(string Name, ReportLine[] Lines, string EntryDirectory, string? ReleaseFile = null);

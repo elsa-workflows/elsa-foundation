@@ -15,7 +15,14 @@ public sealed record JobSnapshot(
     JobProgress? Progress,
     bool CancellationRequested,
     string? RetriedFromJobId,
-    JobDiagnostic? UnavailableDiagnostic = null);
+    JobDiagnostic? UnavailableDiagnostic = null)
+{
+    public JobRequestMetadata? RequestMetadata { get; init; }
+    public JobResultMetadata? ResultMetadata { get; init; }
+    public JobPayloadState InputPayloadState { get; init; } = JobPayloadState.Available;
+    public JobPayloadState ResultPayloadState { get; init; } = JobPayloadState.NotProduced;
+    public JobPayloadRetention? PayloadRetention { get; init; }
+}
 
 /// <summary>Bounded cursor request; providers bind opaque cursors to exact scope and filters.</summary>
 public sealed record JobPageRequest(
@@ -56,6 +63,8 @@ public interface IJobQueries
     ValueTask<JobPage<JobSnapshot>> ListJobsAsync(JobScope scope, JobListQuery query, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobAttemptSnapshot>> ListAttemptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobPhysicalReceipt>> ListPhysicalReceiptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default);
+    /// <summary>Reads original report metadata with explicit payload expiry, without inventing a null-valued successful receipt.</summary>
+    ValueTask<JobPage<JobPhysicalReceiptInspection>> ListPhysicalReceiptInspectionsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobHold>> ListHoldsAsync(JobScope scope, JobGateKey? gate, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobCapacity>> ListCapacityAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobScheduleSnapshot?> FindScheduleAsync(JobScope scope, string scheduleId, CancellationToken cancellationToken = default);

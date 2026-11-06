@@ -182,7 +182,7 @@ def model_closure(graph):
     return ordered
 
 
-def publish_consumer(receipt, evidence, source, feed, run, environment):
+def publish_consumer(receipt, evidence, source, feed, run, environment, provider):
     consumer, deployment = evidence / 'consumer', evidence / 'deployment'
     consumer.mkdir()
     for ancestor in consumer.parents:
@@ -212,12 +212,14 @@ def publish_consumer(receipt, evidence, source, feed, run, environment):
     versions = {item['id']: item['version'] for item in receipt['closure']}
     central = {item.attrib['Include']: item.attrib['Version'] for item in ET.parse(source / 'Directory.Packages.props').findall('.//PackageVersion')}
     references = {package: versions[package] for package in MODULES}
-    for package in ('Microsoft.Extensions.Hosting', 'Microsoft.EntityFrameworkCore.Sqlite', 'SQLitePCLRaw.bundle_e_sqlite3'):
+    provider_packages = ('Microsoft.EntityFrameworkCore.Sqlite', 'SQLitePCLRaw.bundle_e_sqlite3') if provider == 'sqlite' else ('Npgsql', 'Npgsql.EntityFrameworkCore.PostgreSQL')
+    for package in ('Microsoft.Extensions.Hosting', *provider_packages):
         references[package] = central[package]
     project = ET.Element('Project', Sdk='Microsoft.NET.Sdk')
     properties = ET.SubElement(project, 'PropertyGroup')
     for key, value in {'OutputType': 'Exe', 'TargetFramework': 'net10.0', 'ImplicitUsings': 'enable',
-                       'Nullable': 'enable', 'RestorePackagesWithLockFile': 'true'}.items():
+                       'Nullable': 'enable', 'RestorePackagesWithLockFile': 'true',
+                       'DefineConstants': 'MODEL_POSTGRESQL' if provider == 'postgresql' else 'MODEL_SQLITE'}.items():
         ET.SubElement(properties, key).text = value
     items = ET.SubElement(project, 'ItemGroup')
     for package, version in sorted(references.items()):
@@ -283,7 +285,7 @@ def publish_consumer(receipt, evidence, source, feed, run, environment):
     for package in MODULES:
         if not any(item['id'].casefold() == package.casefold() for item in deployed):
             raise ValueError('Selected model package has no verified deployed assembly: ' + package)
-    receipt['consumer'] = {'packageRoots': list(MODULES), 'references': references, 'restoredProjectLibraries': 0,
+    receipt['consumer'] = {'provider': provider, 'packageRoots': list(MODULES), 'references': references, 'restoredProjectLibraries': 0,
         'resolvedPackedPackages': restored, 'deployedPackedAssets': deployed,
         'resolvedExternalPackages': [{'id': key.rsplit('/', 1)[0], 'version': key.rsplit('/', 1)[1], 'sha512': item.get('sha512')}
             for key, item in sorted(libraries.items()) if key.rsplit('/', 1)[0].casefold() not in packed],
@@ -292,6 +294,11 @@ def publish_consumer(receipt, evidence, source, feed, run, environment):
         'nugetConfigSha256': sha256(config), 'entryAssembly': str(entry), 'deployment': str(deployment),
         'runtimeConfigSha256': sha256(runtime_path),
         'deploymentFilesSha256': {str(path.relative_to(deployment)): sha256(path) for path in sorted(deployment.rglob('*')) if path.is_file()}}
+    provider_assets = ('Microsoft.Data.Sqlite.dll', 'Microsoft.EntityFrameworkCore.Sqlite.dll') if provider == 'sqlite' else ('Npgsql.dll', 'Npgsql.EntityFrameworkCore.PostgreSQL.dll')
+    if not all((deployment / name).is_file() for name in provider_assets):
+        raise ValueError('The selected provider runtime assets are missing from the actual model deployment.')
+    receipt['consumer']['providerRuntimeAssetsSha256'] = {name: sha256(deployment / name) for name in provider_assets}
+    receipt['consumer']['compileProfile'] = 'MODEL_POSTGRESQL' if provider == 'postgresql' else 'MODEL_SQLITE'
     receipt['consumerPublishState'] = 'PASSED'
 
 
@@ -303,6 +310,7 @@ def main():
     parser.add_argument('--publish-state-ref', required=True, type=BASE['immutable_commit'])
     parser.add_argument('--evidence-dir', required=True, type=Path)
     parser.add_argument('--stage', choices=('pack', 'publish', 'execute'), default='pack')
+    parser.add_argument('--provider', choices=('sqlite', 'postgresql'), default='sqlite')
     parser.add_argument('--m2-receipt', type=Path)
     parser.add_argument('--m2-source-ref', type=BASE['immutable_commit'])
     parser.add_argument('--m2-publish-state-ref', type=BASE['immutable_commit'])
@@ -315,7 +323,7 @@ def main():
         if any(value is None for value in (args.m2_receipt, args.m2_source_ref, args.m2_publish_state_ref)):
             parser.error('M3 execution requires the full raw M2 receipt tree and its explicitly selected source/publish-state commits.')
         try:
-            m2 = validate_m2_gate(args.m2_receipt, args.m2_source_ref, args.m2_publish_state_ref)
+            m2 = validate_m2_gate(args.m2_receipt, args.m2_source_ref, args.m2_publish_state_ref, args.provider)
         except (OSError, ValueError, KeyError, TypeError, IndexError, zipfile.BadZipFile) as error:
             parser.error('The selected M2 prerequisite is not qualified: ' + str(error))
     base = args.evidence_dir.expanduser().resolve()
@@ -326,7 +334,7 @@ def main():
     source, feed = evidence / 'source', evidence / 'feed'
     feed.mkdir()
     receipt = {'schemaVersion': 1, 'profile': 'jobs-native-genuine-bpmn', 'sourceCommit': args.source_ref,
-        'publishStateCommit': args.publish_state_ref, 'stage': args.stage, 'packState': 'NOT RUN',
+        'publishStateCommit': args.publish_state_ref, 'provider': args.provider, 'stage': args.stage, 'packState': 'NOT RUN',
         'consumerPublishState': 'NOT RUN', 'consumerExecutionState': 'NOT RUN', 'modelSliceState': 'NOT RUN',
         'fullAcceptanceState': 'INCOMPLETE', 'commands': [], 'harnessSha256': sha256(Path(__file__)), 'helperSha256': sha256(HELPER)}
     if m2 is not None:
@@ -404,14 +412,15 @@ def main():
                 raise ValueError('A model archive lost its exact source/input fingerprint.')
         receipt['packages'], receipt['packState'] = records, 'PASSED'
         if args.stage in ('publish', 'execute'):
-            publish_consumer(receipt, evidence, source, feed, run, environment)
+            publish_consumer(receipt, evidence, source, feed, run, environment, args.provider)
         if args.stage == 'execute':
             controller = source / 'tools/jobs/ModelPackageProbe/run_models.py'
             witness = evidence / 'model-witness'
             receipt['controllerSha256'] = sha256(controller)
+            receipt['controllerFilesSha256'] = {str(path.relative_to(source)): sha256(path) for path in sorted(controller.parent.glob('*.py'))}
             receipt['consumerExecutionState'] = 'IN PROGRESS'
             try:
-                run([sys.executable, controller, '--entry', receipt['consumer']['entryAssembly'], '--evidence-dir', witness],
+                run([sys.executable, controller, '--entry', receipt['consumer']['entryAssembly'], '--evidence-dir', witness, '--provider', args.provider],
                     Path(receipt['consumer']['deployment']))
             finally:
                 proof = witness / 'witness-receipt.json'
@@ -421,8 +430,13 @@ def main():
                         modelCases=result['cases'], remainingCases=result['remainingCases'], modelSliceState=result['state'])
             if not proof.is_file():
                 raise ValueError('The model controller returned without its retained witness receipt.')
-            if receipt['modelSliceState'] != 'PASSED' or not result['ownedProcessesCleaned']:
-                raise ValueError('The model slice failed or retained an owned process.')
+            if receipt['modelSliceState'] != 'PASSED' or not result['ownedProcessesCleaned'] or not result['ownedResourcesCleaned'] or result['provider'] != args.provider:
+                raise ValueError('The selected model slice failed its process/provider/resource boundary.')
+            if args.provider == 'postgresql' and (result['ownedModelStores']['cleanupState'] != 'PASSED' or
+                    result['ownedModelStores'].get('exactContainerAbsent') is not True or
+                    set(result['ownedModelStores']['retainedStores']) != {'jobs', 'runtime'}):
+                raise ValueError('PostgreSQL model stores were not retained and their exact owned container cleaned.')
+            receipt['executedProviderVersion'] = result['providerVersion']
             receipt['consumerExecutionState'] = 'PASSED'
         if git('status', '--porcelain', cwd=source):
             raise ValueError('The immutable source changed during model verification.')

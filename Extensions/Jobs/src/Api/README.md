@@ -44,5 +44,13 @@ responsibility. Unknown/absent delivery evidence is never presented as consumed.
 durable permissions, while already granted work can finish. A cancellation request is not proof that
 physical code stopped.
 
+Input/result routes return `state: "expired"` after actual configured cleanup, with retained schema,
+original payload digest and expiry time, plus result identity/outcome where applicable. No value is
+fabricated. Ordinary job detail/list metadata, parent association, result identity and settled delivery
+remain visible under their existing permissions. Current payload-read authorization still applies to
+expired projections. Retry after input expiry returns `jobs.payload.expired`; the original terminal
+revision remains unchanged. Studio explains the expired bytes and exports retained metadata separately
+from value-bearing payload documents.
+
 Current source is uncompiled and unqualified. API/security/secret-binding, full composed model/Studio
 and immutable package acceptance remain required by the [feature acceptance matrix](../../../../specs/1218-standalone-jobs/acceptance-matrix.md).

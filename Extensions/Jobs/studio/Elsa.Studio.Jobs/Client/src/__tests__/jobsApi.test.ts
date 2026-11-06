@@ -29,6 +29,7 @@ describe("Jobs module transport and forms", () => {
   });
   it("preserves seven-digit UTC precision for server-side identity and rejects an oversized JSON envelope", () => {
     expect(utc("2026-11-06T12:00:00.1234567Z")).toBe("2026-11-06T12:00:00.1234567Z");
+    expect(utc("2026-11-06T12:00:00.1234567+00:00")).toBe("2026-11-06T12:00:00.1234567Z");
     const draft = invocationDraft(); draft.jobType = "reports"; draft.inputAlias = "input"; draft.resultAlias = "result"; draft.input = JSON.stringify("x".repeat(1048576));
     expect(() => toInvocation(draft)).toThrow("1 MiB");
   });
@@ -65,5 +66,13 @@ describe("Jobs module transport and forms", () => {
     const document = payloadDocument(kind === "input" ? { state: "available", input: payload, valueJson: raw } : { state: "available", resultId: "result", payload, valueJson: raw }, kind);
     expect(document).toContain('"value":' + raw); expect(document).not.toContain("9007199254740992"); expect(() => JSON.parse(document)).not.toThrow();
     expect(() => payloadDocument(kind === "input" ? { state: "available", input: payload } : { state: "available", payload }, kind)).toThrow();
+  });
+  it.each(["input", "result"] as const)("exports explicit expired %s metadata without fabricating a null value", kind => {
+    const view = { state: "expired", schema: { alias: "report", version: 1 }, payloadSha256: "a".repeat(64), expiredAt: "2026-11-06T12:00:00Z" };
+    const document = payloadDocument(view, kind);
+    expect(JSON.parse(document)).toMatchObject(view); expect(document).not.toContain('"value"');
+    expect(document).not.toContain('"payload"'); expect(document).not.toContain('"input"');
+    expect(() => payloadDocument({ ...view, valueJson: "null" }, kind)).toThrow();
+    expect(() => payloadDocument({ ...view, payloadSha256: undefined }, kind)).toThrow();
   });
 });

@@ -29,10 +29,10 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
     {
         var actor = access.Actor(); var job = await JobAsync(actor, jobId, JobsPermissions.Read, ct);
         var view = JobView.From(job);
-        if (job.Request?.Association?.Mode != JobAssociationMode.Awaited) return view;
+        if ((job.RequestMetadata?.Association ?? job.Request?.Association)?.Mode != JobAssociationMode.Awaited) return view;
         var delivery = await queries.FindDeliveryAsync(actor.Scope, jobId, ct);
-        if (delivery is null) return view with { ConsumptionState = job.Result is null ? "pending-result" : "unknown" };
-        if (delivery.JobId != jobId || job.Result is not { } result || delivery.ResultId != result.ResultId) throw Unavailable();
+        if (delivery is null) return view with { ConsumptionState = job.ResultMetadata is null && job.Result is null ? "pending-result" : "unknown" };
+        if (delivery.JobId != jobId || delivery.ResultId != (job.ResultMetadata?.ResultId ?? job.Result?.ResultId)) throw Unavailable();
         return view with { ConsumptionState = delivery.IsAcknowledged ? "settled" : "owed" };
     }
 
@@ -54,7 +54,10 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
         var actor = await RequireAsync(JobsPermissions.InputsRead, ct);
         var job = await JobAsync(actor, jobId, JobsPermissions.Read, ct);
         await access.RequireAsync(actor, JobsPermissions.InputsRead, Resource(actor, job), ct, conceal: true);
-        if (job.Request is null || job.UnavailableDiagnostic is not null) throw Unavailable();
+        if (job.UnavailableDiagnostic is not null) throw Unavailable();
+        if (job.InputPayloadState == JobPayloadState.Expired && job.RequestMetadata is { } metadata && job.PayloadRetention?.InputExpiredAt is { } expired)
+            return new("expired", null, Schema: metadata.InputSchema, PayloadSha256: metadata.InputSha256, ExpiredAt: expired);
+        if (job.Request is null) throw Unavailable();
         return new("available", job.Request.Input, PayloadValueJson(job.Request.Input));
     }
 
@@ -64,6 +67,9 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
         var job = await JobAsync(actor, jobId, JobsPermissions.Read, ct);
         await access.RequireAsync(actor, JobsPermissions.ResultsRead, Resource(actor, job), ct, conceal: true);
         if (job.UnavailableDiagnostic is not null) throw Unavailable();
+        if (job.ResultPayloadState == JobPayloadState.Expired && job.ResultMetadata is { } metadata && job.PayloadRetention?.ResultExpiredAt is { } expired)
+            return new("expired", metadata.ResultId, metadata.Outcome, null, metadata.CompletedAt,
+                Schema: metadata.PayloadSchema, PayloadSha256: metadata.PayloadSha256, ExpiredAt: expired);
         return job.Result is { } result ? new("available", result.ResultId, result.Outcome, result.Payload, result.CompletedAt, PayloadValueJson(result.Payload))
             : new("pending", null, null, null, null);
     }
@@ -80,7 +86,7 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
     {
         var actor = access.Actor(); await JobAsync(actor, jobId, JobsPermissions.Read, ct);
         var cursor = cursors.Bind(actor, request.Limit, "physical-receipts", jobId);
-        var page = await queries.ListPhysicalReceiptsAsync(actor.Scope, jobId, cursor.Request(request.After), ct);
+        var page = await queries.ListPhysicalReceiptInspectionsAsync(actor.Scope, jobId, cursor.Request(request.After), ct);
         return new(page.Items.Select(JobPhysicalReceiptView.From).ToArray(), cursor.Next(page.ContinuationToken));
     }
 
@@ -172,7 +178,8 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
     {
         if (request.After is not null) throw new ArgumentException("Continue each gate through the holds endpoint.");
         var actor = access.Actor(); var job = await JobAsync(actor, jobId, JobsPermissions.Read, ct);
-        if (job.Request is not { } invocation || job.UnavailableDiagnostic is not null) throw Unavailable();
+        var invocation = job.RequestMetadata ?? (job.Request is { } retained ? JobRequestMetadata.From(retained) : null);
+        if (invocation is null || job.UnavailableDiagnostic is not null) throw Unavailable();
         var gates = new List<JobGateKey> { new(JobGateKind.Queue, invocation.Queue), new(JobGateKind.JobType, invocation.Handler.JobType) };
         if (invocation.Association is { } association)
         {
@@ -246,7 +253,7 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
         return new(result, cursor.Next(page.ContinuationToken));
     }
     private static JobApiResource Resource(JobApiActor actor, JobSnapshot job) =>
-        new(actor.Scope.TenantId!, "job", job.JobId, job.Request?.Queue, job.Request?.Handler.JobType);
+        new(actor.Scope.TenantId!, "job", job.JobId, job.RequestMetadata?.Queue ?? job.Request?.Queue, job.RequestMetadata?.Handler.JobType ?? job.Request?.Handler.JobType);
     private static JobApiResource ScheduleResource(JobApiActor actor, JobScheduleSnapshot schedule) =>
         new(actor.Scope.TenantId!, "schedule", schedule.ScheduleId, schedule.Definition?.Template.Queue, schedule.Definition?.Template.Handler.JobType);
     private static JobApiResource GateResource(JobApiActor actor, JobGateKey gate) => new(actor.Scope.TenantId!, "gate", gate.Name,
@@ -270,6 +277,7 @@ internal sealed partial class JobsOperations(JobsRequestAccess access, IJobComma
         if (status is JobCommandStatus.Applied or JobCommandStatus.Replayed) return;
         throw status == JobCommandStatus.NotFound ? Missing()
             : status == JobCommandStatus.Unavailable ? Unavailable()
+            : status == JobCommandStatus.PayloadExpired ? new JobsApiException(409, "jobs.payload.expired", "The original Jobs input has expired and cannot be retried as a new run.")
             : new JobsApiException(409, "jobs.operation.conflict", "The Jobs authority refused this operation; reload its current state.");
     }
     private static string? PayloadValueJson(JobPayload? payload)

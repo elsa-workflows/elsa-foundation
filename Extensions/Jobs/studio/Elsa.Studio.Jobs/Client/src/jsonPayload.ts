@@ -41,6 +41,12 @@ export function payloadDocument(view: InputView | ResultView, kind: "input" | "r
   const result = view as ResultView;
   const metadata = kind === "input" ? { state: view.state } : { state: view.state, resultId: result.resultId,
     outcome: result.outcome, completedAt: result.completedAt };
+  if (view.state === "expired") {
+    if (payload != null || view.valueJson != null || typeof view.expiredAt !== "string" || !Number.isFinite(Date.parse(view.expiredAt))
+      || typeof view.payloadSha256 !== "string" || !/^[a-f0-9]{64}$/.test(view.payloadSha256)
+      || kind === "input" && !view.schema) throw new JobsFault(503);
+    return JSON.stringify({ ...metadata, schema: view.schema, payloadSha256: view.payloadSha256, expiredAt: view.expiredAt }, null, 2);
+  }
   if (!payload) {
     if (kind === "input" || view.valueJson != null) throw new JobsFault(503);
     return JSON.stringify({ ...metadata, payload: null }, null, 2);

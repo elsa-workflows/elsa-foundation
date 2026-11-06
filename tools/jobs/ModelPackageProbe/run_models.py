@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Owned independent-process native and genuine BPMN package witness, SQLite first slice."""
+"""Owned independent-process native and genuine BPMN package witness, SQLite and owned PostgreSQL 16 profiles."""
 import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import signal
+import runpy
 import subprocess
 import sys
 import time
@@ -27,9 +28,10 @@ PLANNED = (
     'native-detached-parent-completes-before-job', 'bpmn-detached-parent-completes-before-job',
     'native-independent-inherits-explicit-cancellation', 'bpmn-independent-inherits-explicit-cancellation',
     'native-detached-survives-explicit-cancellation', 'bpmn-detached-survives-explicit-cancellation',
-    'native-nested-independent-association', 'native-nested-detached-association')
+    'native-nested-independent-association', 'native-nested-detached-association',
+    'bpmn-created-helper-cancel-before-job-saved-wait')
 REMAINING = (
-    'postgresql-model-package-profile', 'linked-retry-model-association', 'native-cancel-before-saved-wait',
+    'linked-retry-model-association', 'native-cancel-before-saved-wait',
     'selected-failed-timedout-cancelled-result-forged-or-missing-grant-runtime-control',
     'instance-and-definition-grant-before-pause-replay', 'model-host-stale-process-and-fenced-overlap',
     'authoring-submit-publish-and-import', 'authorization-and-tenant-cross-scope-negative', 'composed-studio-experience')
@@ -60,13 +62,15 @@ def terminate_owned(process):
 
 
 class Models:
-    def __init__(self, entry, evidence):
-        self.entry, self.evidence = entry, evidence
+    def __init__(self, entry, evidence, provider):
+        self.entry, self.evidence, self.provider = entry, evidence, provider
         self.processes, self.steps, self.cases = [], [], []
         self.active_case = None
         self.number = 0
         self.run_id = uuid.uuid4().hex
-        self.base = {'jobsConnectionString': 'Data Source=' + str(evidence / 'jobs.db') + ';Pooling=False',
+        self.store_owner = None
+        self.resources_cleaned = False
+        self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql', 'schema': None, 'jobsConnectionString': 'Data Source=' + str(evidence / 'jobs.db') + ';Pooling=False',
                      'runtimeConnectionString': 'Data Source=' + str(evidence / 'runtime.db') + ';Pooling=False',
                      'scope': {'persistencePartition': 'initialize-' + self.run_id, 'tenantId': None}}
 
@@ -76,6 +80,7 @@ class Models:
         path, output = self.evidence / (prefix + '.command.json'), self.evidence / (prefix + '.result.json')
         command = {**self.base, 'mode': mode, 'outputFile': str(output), **arguments}
         write_json(path, command)
+        path.chmod(0o600)
         log_path = self.evidence / (prefix + '.log')
         log = log_path.open('w')
         process = subprocess.Popen(['dotnet', str(self.entry), str(path)], cwd=self.entry.parent,
@@ -323,8 +328,16 @@ class Models:
         return job, submitted
 
     def run(self):
+        if self.provider == 'postgresql':
+            owner_type = runpy.run_path(str(Path(__file__).with_name('owned_model_store.py')))['OwnedModelStores']
+            self.store_owner = owner_type(self.evidence, self.run_id)
+            jobs, runtime, schema = self.store_owner.create()
+            self.base.update(jobsConnectionString=jobs, runtimeConnectionString=runtime, schema=schema)
         self.call('initialize')
         self.provider_version = self.call('provider-version')
+        assert self.provider_version['provider'] == self.base['provider'] and self.provider_version['version'] and self.provider_version['runtimeVersion']
+        if self.provider == 'postgresql':
+            assert self.provider_version['version'].startswith('PostgreSQL 16.') and self.provider_version['runtimeVersion'].startswith('PostgreSQL 16.')
         for kind in ('native', 'bpmn'):
             for failed in (False, True):
                 self.begin(kind + ('-failure' if failed else '-success'))
@@ -677,11 +690,72 @@ class Models:
             assert same_submitted == submitted and len(final['deliveries'][0]['attempts']) == 1
             self.passed(rootExecutionId=run['executionId'], jobId=job['jobId'], resultId=original['resultId'], invocationId=activity['invocationId'])
 
+        self.begin('bpmn-created-helper-cancel-before-job-saved-wait')
+        run = self.create('bpmn', send=False)
+        marker = self.evidence / 'created-helper-before-wait.json'
+        observer = self.role('coordinator', preWaitCut={'rootExecutionId': run['executionId'],
+            'workerExecutionId': run['workerExecutionId'], 'markerFile': str(marker)})
+        self.until(marker.is_file, 'actual committed helper initial-attempt claim before RunJob body', timeout=60, process=observer[0])
+        observed = json.loads(marker.read_text())
+        assert observed['state'] == 'CommittedBeforeBody' and observed['occurrence'] == 1 and observed['processId'] == observer[0].pid
+        assert observed['checkpointName'] == 'ActivityAttemptClaimed' and observed['commitId'] and observed['checkpointId']
+        assert observed['workerExecutionId'] == run['workerExecutionId'] and observed['rootExecutionId'] == run['executionId']
+        cut = self.snapshot(run)  # A separate inspector process reads the real committed provider, outside the observer.
+        assert cut['worker'] is not None and cut['worker']['status'] == 'Running'
+        assert cut['worker']['modelWorkOrigin'] == observed['modelWorkOrigin']
+        assert cut['worker']['pinnedExecutable'] == observed['pinnedExecutable']
+        assert len(cut['activities']) == 1 and cut['jobs'] == [] and cut['deliveries'] == []
+        activity = cut['activities'][0]
+        assert activity['invocationId'] == observed['activity']['invocationId'] and activity['status'] == 'Running'
+        assert activity['privateState'] is None and activity['completion'] is None and activity['bookmarkIds'] == []
+        assert not activity['triggerRegistrations'] and not activity['triggerDeliveries']
+        assert len(activity['attempts']) == 1 and activity['attempts'][0]['attemptId'] == observed['initialAttemptId']
+        assert activity['attempts'][0]['reason'] == 'Initial' and activity['attempts'][0]['endedAt'] is None
+        assert activity['metadata'][observed['activationClaimMetadataKey']] == observed['initialAttemptId']
+        timed_out = Path(str(marker) + '.timed-out.json')
+        assert not timed_out.exists(), 'The created-helper cut expired before the independent inspection.'
+        assert observer[0].poll() is None, 'The owned observer exited before the required actual kill.'
+        os.killpg(observer[0].pid, signal.SIGKILL)
+        exit_code = observer[0].wait(timeout=10)
+        assert exit_code == -signal.SIGKILL
+        next(item for item in self.steps if item['processId'] == observer[0].pid).update(
+            exitCode=exit_code, expectedTermination='SIGKILL_AFTER_COMMITTED_PRE_WAIT_CUT', preWaitMarker=str(marker))
+        assert not timed_out.exists()
+        cancellation = self.call('cancel', modelKind='bpmn', executionId=run['executionId'], operationId='cancel-created-helper-' + uuid.uuid4().hex)
+        # Root cancellation must commit before a replacement coordinator can run ordinary recovery work.
+        before_recovery = self.snapshot(run)
+        assert before_recovery['model']['terminalResult']['status'] == 'Cancelled'
+        assert before_recovery['jobs'] == [] and before_recovery['worker'] is not None
+        successor = self.role('coordinator')
+        def cancelled_created_helper():
+            snapshot = self.snapshot(run)
+            return snapshot if snapshot['model']['lifecycle'] == 'TerminalSettled' and snapshot['worker']['status'] == 'Cancelled' and snapshot['pendingSource'] is None else None
+        final = self.until(cancelled_created_helper, 'positive created-helper pre-wait cancellation and actual bridge settlement', process=successor[0])
+        self.stop(successor)
+        assert final['jobs'] == [] and final['deliveries'] == [] and final['nativeEvidence'] is None
+        assert final['owner']['terminalReceiptId'] and final['activities'][0]['bookmarkIds'] == []
+        assert final['activities'][0]['privateState'] is None and final['activities'][0]['completion'] is None
+        assert final['activities'][0]['invocationId'] == activity['invocationId']
+        assert final['activities'][0]['attempts'][0]['attemptId'] == observed['initialAttemptId']
+        assert not list(Path(run['report']['entryDirectory']).glob('*.entry.json'))
+        assert self.call('delete-worker', executionId=run['executionId'], workerExecutionId=run['workerExecutionId'])['result'] == 'Deleted'
+        self.passed(rootExecutionId=run['executionId'], workerExecutionId=run['workerExecutionId'], canonicalJobs=0,
+                    initialAttemptId=observed['initialAttemptId'], committedClaimId=observed['commitId'], killedProcessId=observer[0].pid,
+                    successorProcessId=successor[0].pid, actualCancellation=cancellation, terminalReceiptId=final['owner']['terminalReceiptId'])
+
     def close(self):
-        for process, log in self.processes:
-            terminate_owned(process)
-            log.close()
-        return all(process.poll() is not None for process, _ in self.processes)
+        errors = []
+        for process, log in reversed(self.processes):
+            try:
+                terminate_owned(process)
+            except (OSError, subprocess.SubprocessError) as error:
+                errors.append(type(error).__name__)
+            finally:
+                log.close()
+        processes_cleaned = not errors and all(process.poll() is not None for process, _ in self.processes)
+        stores_cleaned = self.store_owner.close() if self.store_owner is not None else True
+        self.resources_cleaned = processes_cleaned and stores_cleaned
+        return processes_cleaned
 
 
 def main():
@@ -690,14 +764,16 @@ def main():
         parser.error('Run without optimized Python; model witness assertions must remain enabled.')
     parser.add_argument('--entry', required=True, type=Path)
     parser.add_argument('--evidence-dir', required=True, type=Path)
+    parser.add_argument('--provider', choices=('sqlite', 'postgresql'), default='sqlite')
     args = parser.parse_args()
     entry = args.entry.resolve(strict=True)
     evidence = args.evidence_dir.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
-    witness = Models(entry, evidence)
-    receipt = {'schemaVersion': 1, 'provider': 'sqlite', 'profile': 'jobs-native-genuine-bpmn', 'state': 'NOT RUN',
+    witness = Models(entry, evidence, args.provider)
+    receipt = {'schemaVersion': 1, 'provider': args.provider, 'profile': 'jobs-native-genuine-bpmn', 'state': 'NOT RUN',
         'fullAcceptanceState': 'INCOMPLETE', 'entryAssembly': str(entry), 'entrySha256': hashlib.sha256(entry.read_bytes()).hexdigest(),
-        'controllerSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'plannedCases': list(PLANNED),
+        'controllerSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'controllerFilesSha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(Path(__file__).parent.glob('*.py'))}, 'plannedCases': list(PLANNED),
         'remainingCases': [{'name': name, 'state': 'NOT RUN'} for name in REMAINING]}
     def stop_requested(_signum, _frame):
         raise RuntimeError('Owned model witness received stop request.')
@@ -717,10 +793,12 @@ def main():
     finally:
         try:
             receipt['ownedProcessesCleaned'] = witness.close()
-        except (OSError, subprocess.SubprocessError) as error:
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
             receipt['ownedProcessesCleaned'] = False
             receipt['cleanupError'] = type(error).__name__
-        if not receipt['ownedProcessesCleaned']:
+        receipt['ownedResourcesCleaned'] = witness.resources_cleaned
+        receipt['ownedModelStores'] = witness.store_owner.proof if witness.store_owner is not None else {'cleanupState': 'NOT APPLICABLE', 'retainedStores': {}}
+        if not receipt['ownedProcessesCleaned'] or not receipt['ownedResourcesCleaned']:
             receipt['state'], code = 'FAILED', 1
         actual = {case['name']: case for case in witness.cases}
         receipt['cases'] = [actual.pop(name, {'name': name, 'state': 'NOT RUN'}) for name in PLANNED]
@@ -730,7 +808,7 @@ def main():
         receipt['processes'] = witness.steps
         receipt['providerVersion'] = getattr(witness, 'provider_version', None)
         receipt['retainedStoreFiles'] = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in sorted(evidence.glob('*.db*')) if path.is_file()}
+            for path in sorted([*evidence.glob('*.db*'), *evidence.glob('*.pgdump')]) if path.is_file()}
         write_json(evidence / 'witness-receipt.json', receipt)
     return code
 

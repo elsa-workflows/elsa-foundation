@@ -39,39 +39,35 @@ internal sealed partial class EfJobStore
         JobStoreCodec.ExactIdentity(job, scope, "job", job.JobId);
         var active = job.ActiveAttemptKey is { } key ? await db.Attempts.AsNoTracking().SingleOrDefaultAsync(x => x.Key == key, ct) : null;
         JobRequest? content = null; JobResult? result = null; JobProgress? progress = null; JobDiagnostic? unavailable = null;
+        JobRequestMetadata? requestMetadata = null; JobResultMetadata? resultMetadata = null; JobPayloadRetention? retention = null;
         try
         {
             if (job.UnavailableDiagnosticJson is { } diagnostic) unavailable = JobStoreCodec.ReadRetained<JobDiagnostic>(diagnostic);
             if (job.SchemaVersion != JobsEfModule.Version) throw new NotSupportedException("The Jobs record schema is unavailable.");
-            content = Request(job);
-            if (job.ResultJson is { } resultJson)
-            {
-                result = JobStoreCodec.ReadRetained<JobResult>(resultJson);
-                if (!Enum.IsDefined(result.Outcome)) throw new InvalidDataException("The retained Jobs result outcome is unsupported.");
-                if (result.Outcome == JobOutcome.Succeeded && result.Payload is null)
-                    throw new InvalidDataException("The retained successful Jobs result lost its payload envelope.");
-                if (result.Payload is { } resultPayload)
-                {
-                    JobStoreCodec.Payload(resultPayload);
-                    if (resultPayload.Schema != content.ResultSchema || result.Outcome != JobOutcome.Succeeded)
-                        throw new InvalidDataException("The retained Jobs result payload does not match its accepted schema and outcome.");
-                }
-                if (result.JobId != job.JobId || result.PayloadSha256 != JobPayloadDigest.Compute(result.Payload)) throw new InvalidDataException("The retained Jobs result failed digest validation.");
-            }
+            requestMetadata = RequestMetadata(job); resultMetadata = ResultMetadata(job, requestMetadata);
+            retention = Retention(job, resultMetadata);
+            content = job.InputExpiredAt is null ? Request(job) : null;
+            result = job.ResultJson is { } resultJson ? JobStoreCodec.ReadRetained<JobResult>(resultJson) : null;
             progress = job.ProgressJson is { } progressJson ? JobStoreCodec.ReadRetained<JobProgress>(progressJson) : null;
             if (progress?.Data is { } progressData) JobStoreCodec.Payload(progressData);
             if (progress is not null && System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(progress).Length > JobPayloadLimits.MaximumProgressBytes)
                 throw new InvalidDataException("The retained Jobs progress exceeds its durable envelope bound.");
             if (active is not null) JobStoreCodec.Exact(active, scope, "attempt", job.JobId, active.AttemptId);
         }
-        catch (Exception error) when (error is InvalidDataException or System.Text.Json.JsonException or NotSupportedException or ArgumentException || JobStoreCodec.SerializationFailure(error))
+        catch (Exception error) when (error is InvalidDataException or System.Text.Json.JsonException or NotSupportedException or ArgumentException or OverflowException || JobStoreCodec.SerializationFailure(error))
         {
-            content = null; result = null; progress = null; active = null;
+            content = null; result = null; progress = null; active = null; requestMetadata = null; resultMetadata = null; retention = null;
             unavailable = new("jobs.record.unavailable", "Retained execution data is unavailable; its identity and original bytes remain protected.");
         }
         return new(scope, job.JobId, job.RequestSha256, content, (JobState)job.State, job.Revision,
             JobStoreCodec.At(job.AcceptedAt), JobStoreCodec.At(job.EligibleAt), active is null ? null : Lease(scope, job, active),
-            result, progress, job.CancellationRequested, job.RetriedFromJobId, unavailable);
+            result, progress, job.CancellationRequested, job.RetriedFromJobId, unavailable)
+        {
+            RequestMetadata = requestMetadata, ResultMetadata = resultMetadata, PayloadRetention = retention,
+            InputPayloadState = retention?.InputExpiredAt is not null ? JobPayloadState.Expired : JobPayloadState.Available,
+            ResultPayloadState = retention?.ResultExpiredAt is not null ? JobPayloadState.Expired
+                : resultMetadata is null ? JobPayloadState.NotProduced : JobPayloadState.Available
+        };
     }
 
     private sealed record Cursor(string Scope, string Category, string Filter, string After);
@@ -137,22 +133,30 @@ internal sealed partial class EfJobStore
 
     public ValueTask<JobPage<JobPhysicalReceipt>> ListPhysicalReceiptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default)
     {
+        return FullReceiptsAsync(scope, jobId, page, cancellationToken);
+    }
+
+    private async ValueTask<JobPage<JobPhysicalReceipt>> FullReceiptsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken)
+    {
+        var inspections = await ListPhysicalReceiptInspectionsAsync(scope, jobId, page, cancellationToken);
+        if (inspections.Items.Any(item => item.PayloadState == JobPayloadState.Expired))
+            throw new JobException("jobs.payload.expired", "The original Jobs physical-report payload has expired; retained report metadata remains available.");
+        return new(inspections.Items.Select(item => item.Receipt ?? throw InvalidRetention()).ToArray(), inspections.ContinuationToken);
+    }
+
+    public ValueTask<JobPage<JobPhysicalReceiptInspection>> ListPhysicalReceiptInspectionsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default)
+    {
         var after = After(scope, "receipts", jobId, page);
         return Read("list-receipts", async (db, ct) =>
         {
             var job = await Find(db, scope, jobId, ct);
-            if (job is null) return new JobPage<JobPhysicalReceipt>([], null);
+            if (job is null) return new JobPage<JobPhysicalReceiptInspection>([], null);
+            var metadata = RequestMetadata(job); _ = Retention(job, ResultMetadata(job, metadata));
             var query = db.Receipts.AsNoTracking().Where(x => x.JobKey == job.Key);
             if (after is not null) query = query.Where(x => string.Compare(x.Key, after) > 0);
             var rows = await query.OrderBy(x => x.Key).Take(page.Limit + 1).ToArrayAsync(ct);
-            var items = rows.Take(page.Limit).Select(row =>
-            {
-                var receipt = JobStoreCodec.ReadRetained<JobPhysicalReceipt>(row.ReceiptJson, JobStoreCodec.Receipt);
-                JobStoreCodec.Exact(row, scope, "receipt", receipt.ReceiptId);
-                if (JobStoreCodec.Hash(row.ReceiptJson) != row.ReceiptSha256 || JobPayloadDigest.Compute(receipt.Payload) != receipt.PayloadSha256) throw new InvalidDataException("The retained Jobs physical receipt failed digest validation.");
-                return receipt;
-            }).ToArray();
-            return new JobPage<JobPhysicalReceipt>(items, rows.Length > page.Limit ? CursorFor(scope, "receipts", jobId, rows[page.Limit - 1].Key) : null);
+            var items = rows.Take(page.Limit).Select(row => ReceiptInspection(scope, job, row)).ToArray();
+            return new JobPage<JobPhysicalReceiptInspection>(items, rows.Length > page.Limit ? CursorFor(scope, "receipts", jobId, rows[page.Limit - 1].Key) : null);
         }, cancellationToken);
     }
 

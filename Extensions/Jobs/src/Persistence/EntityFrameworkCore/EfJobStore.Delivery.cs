@@ -45,9 +45,12 @@ internal sealed partial class EfJobStore
             var delivery = await db.Deliveries.SingleOrDefaultAsync(x => x.JobKey == job.Key, ct);
             if (delivery is null) return Transition(JobCommandStatus.NotFound, job);
             JobStoreCodec.Exact(delivery, request.Scope, "delivery", job.JobId);
-            var result = job.ResultJson is { } json ? JobStoreCodec.ReadRetained<JobResult>(json) : throw new InvalidDataException("Jobs delivery lost its terminal result.");
+            var metadata = RequestMetadata(job); var result = ResultMetadata(job, metadata) ?? throw InvalidRetention();
+            _ = Retention(job, result);
+            _ = await ReadDelivery(db, request.Scope, request.JobId, ct) ?? throw InvalidRetention();
             if (result.ResultId != delivery.ResultId || result.PayloadSha256 != request.Proof.ResultSha256) return Transition(JobCommandStatus.Conflict, job);
             if (delivery.Acknowledged) return Transition(delivery.ProofJson == proof ? JobCommandStatus.Replayed : JobCommandStatus.Conflict, job);
+            if (job.InputExpiredAt is not null || job.ResultExpiredAt is not null) throw InvalidRetention();
             // The trusted owning model validates receipt meaning; the authority verifies exact retained result/input binding.
             if (request.Proof.Kind != JobDeliveryProofKind.ParentProvenTerminal)
             {

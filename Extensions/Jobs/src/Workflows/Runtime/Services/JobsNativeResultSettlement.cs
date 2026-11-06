@@ -30,7 +30,7 @@ internal sealed class JobsNativeResultSettlement(IJobQueries queries, JobsResult
             }
             if (!root.Metadata.ContainsKey(JobsNativeBoundary.AdmissionMetadataKey))
             {
-                if (JobsNativeDeliveryInspector.PreAdmissionFailure(worker, root)) return;
+                if (JobsNativeDeliveryInspector.PreAdmissionFailure(worker, root) || JobsNativePreWaitCancellation.Matches(worker, root)) return;
                 throw JobsNativeBoundary.Invalid();
             }
             var admission = JobsNativeBoundary.ReadAdmission(root);
@@ -52,14 +52,15 @@ internal sealed class JobsNativeResultSettlement(IJobQueries queries, JobsResult
             throw Unavailable(); // Retirement or absence is not a never-admitted proof.
         }
         var snapshot = await queries.FindAsync(admission.Address.Scope, origin.Acceptance.JobId, cancellationToken) ?? throw Unavailable();
-        if (snapshot.UnavailableDiagnostic is not null || snapshot.Request is null) throw Unavailable();
+        var metadata = JobsNativeBoundary.RetainedRequest(snapshot);
         if (snapshot.Scope != admission.Address.Scope || snapshot.JobId != origin.Acceptance.JobId ||
-            snapshot.RequestSha256 != admission.RequestSha256 || !JobsNativeBoundary.Equivalent(snapshot.Request, admission.Request) ||
-            !JobsNativeBoundary.Equivalent(JobsNativeBoundary.ReadAddress(snapshot), admission.Address)) throw JobsNativeBoundary.Invalid();
-        if (snapshot.State != JobState.Terminal || snapshot.Result is null) throw Unavailable();
-        _ = JobsNativeBoundary.SelectedResult(snapshot);
+            snapshot.RequestSha256 != admission.RequestSha256 || !JobsNativeBoundary.Equivalent(metadata, JobRequestMetadata.From(admission.Request)))
+            throw JobsNativeBoundary.Invalid();
+        if (snapshot.State != JobState.Terminal) throw Unavailable();
         var delivery = await queries.FindDeliveryAsync(snapshot.Scope, snapshot.JobId, cancellationToken) ?? throw Unavailable();
         if (Confirmed(admission, snapshot, delivery)) return;
+        // Only an already-ACKed result may rely on compact expiry proof. Live delivery still needs its actual payload bytes.
+        _ = JobsNativeBoundary.SelectedResult(snapshot);
         try
         {
             await execution.ExecuteAsync(snapshot.Scope, new(delivery.JobId, delivery.ResultId, delivery.Association, delivery.Permission), cancellationToken);
@@ -79,8 +80,8 @@ internal sealed class JobsNativeResultSettlement(IJobQueries queries, JobsResult
 
     internal static bool Confirmed(JobNativeAdmission admission, JobSnapshot snapshot, JobDeliveryStatusSnapshot delivery)
     {
-        var result = snapshot.Result ?? throw JobsNativeBoundary.Invalid();
-        var association = snapshot.Request?.Association ?? throw JobsNativeBoundary.Invalid();
+        var result = JobsNativeBoundary.RetainedResult(snapshot);
+        var association = JobsNativeBoundary.RetainedRequest(snapshot).Association ?? throw JobsNativeBoundary.Invalid();
         var continuationId = JobsNativeBoundary.ContinuationId(admission.Address, result, association);
         if (delivery.JobId != snapshot.JobId || delivery.ResultId != result.ResultId || !JobsNativeBoundary.Equivalent(delivery.Association, association))
             throw JobsNativeBoundary.Invalid();

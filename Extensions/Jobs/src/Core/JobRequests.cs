@@ -78,5 +78,6 @@ public enum JobCommandStatus
     CapacityUnavailable = 8,
     Terminal = 9,
     OriginCancelled = 10,
-    OriginRetired = 11
+    OriginRetired = 11,
+    PayloadExpired = 12
 }

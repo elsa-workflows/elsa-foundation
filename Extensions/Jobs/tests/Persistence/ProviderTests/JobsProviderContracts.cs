@@ -340,7 +340,7 @@ public sealed partial class JobsProviderContracts(JobsPostgreSqlFixture postgres
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
             var row = await db.Jobs.SingleAsync(x => x.JobId == accepted.JobId);
-            var json = JsonNode.Parse(row.RequestJson)!.AsObject();
+            var json = JsonNode.Parse(row.RequestJson!)!.AsObject();
             var input = json["Input"]!.AsObject();
             if (missing) input.Remove("Schema"); else input["Schema"] = null;
             row.RequestJson = originalBytes = json.ToJsonString();
@@ -606,7 +606,7 @@ public sealed partial class JobsProviderContracts(JobsPostgreSqlFixture postgres
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
             var row = await db.Jobs.SingleAsync(x => x.JobId == accepted.JobId);
-            var json = JsonNode.Parse(row.RequestJson)!.AsObject();
+            var json = JsonNode.Parse(row.RequestJson!)!.AsObject();
             json["Input"]!["Value"] = JsonNode.Parse(new string('[', 33) + "0" + new string(']', 33));
             row.RequestJson = originalBytes = json.ToJsonString();
             await db.SaveChangesAsync();
@@ -661,7 +661,7 @@ public sealed partial class JobsProviderContracts(JobsPostgreSqlFixture postgres
             if (kind == "receipt")
             {
                 var row = await db.Receipts.SingleAsync(x => x.JobKey == job.Key);
-                var json = JsonNode.Parse(row.ReceiptJson)!.AsObject(); json["Payload"]!["Schema"] = null;
+                var json = JsonNode.Parse(row.ReceiptJson!)!.AsObject(); json["Payload"]!["Schema"] = null;
                 row.ReceiptJson = originalBytes = json.ToJsonString(); row.ReceiptSha256 = JobStoreCodec.Hash(originalBytes);
             }
             else
@@ -710,7 +710,7 @@ public sealed partial class JobsProviderContracts(JobsPostgreSqlFixture postgres
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
             var row = await db.Receipts.SingleAsync();
-            var json = JsonNode.Parse(row.ReceiptJson)!.AsObject();
+            var json = JsonNode.Parse(row.ReceiptJson!)!.AsObject();
             if (kind == "payload-digest") json["PayloadSha256"] = null;
             else json["Diagnostic"] = new JsonObject { ["Code"] = "provider-control", ["Summary"] = null };
             row.ReceiptJson = originalBytes = json.ToJsonString(); row.ReceiptSha256 = JobStoreCodec.Hash(originalBytes);

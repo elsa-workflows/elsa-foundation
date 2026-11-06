@@ -18,6 +18,10 @@ public class JobsEntityFrameworkCoreOptions
     public int MaximumPageSize { get; set; } = 100;
     public int MaximumClaimScan { get; set; } = 1000;
     public int MaximumWriteAttempts { get; set; } = EfWriteRetry.DefaultMaxAttempts;
+    /// <summary>Opt-in terminal input lifetime, captured for each new admission. Null retains indefinitely.</summary>
+    public TimeSpan? TerminalInputRetention { get; set; }
+    /// <summary>Opt-in terminal result/progress/physical-report payload lifetime, captured for each new admission. Null retains indefinitely.</summary>
+    public TimeSpan? TerminalResultRetention { get; set; }
 }
 
 public static class JobsEntityFrameworkCoreRegistration
@@ -37,7 +41,9 @@ public static class JobsEntityFrameworkCoreRegistration
             throw new JobException("jobs.persistence.duplicate-authority", "Jobs EF persistence is already configured in this service collection.");
         if (options.MaximumPageSize is < 1 or > 1000 || options.MaximumClaimScan is < 1 or > 100_000 || options.MaximumWriteAttempts is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(options), "Jobs persistence bounds are invalid.");
-        var settings = new JobsStoreSettings(options.MaximumPageSize, options.MaximumClaimScan, options.MaximumWriteAttempts);
+        ValidateRetention(options.TerminalInputRetention); ValidateRetention(options.TerminalResultRetention);
+        var settings = new JobsStoreSettings(options.MaximumPageSize, options.MaximumClaimScan, options.MaximumWriteAttempts,
+            options.TerminalInputRetention, options.TerminalResultRetention);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         var connectionString = options.ConnectionString;
         var connectionName = options.ConnectionName;
@@ -69,6 +75,12 @@ public static class JobsEntityFrameworkCoreRegistration
         return services;
     }
 
+    private static void ValidateRetention(TimeSpan? value)
+    {
+        if (value is { } duration && (duration <= TimeSpan.Zero || duration > TimeSpan.FromDays(36500)))
+            throw new ArgumentOutOfRangeException(nameof(value), "A Jobs payload lifetime must be positive and at most 100 years.");
+    }
+
     private static void Context<TContext>(IServiceCollection services, Action<IServiceProvider, DbContextOptionsBuilder> configure, bool pooling)
         where TContext : JobsDbContext
     {
@@ -94,4 +106,5 @@ public class JobsEntityFrameworkCoreFeature : JobsEntityFrameworkCoreOptions, IS
     public virtual void ConfigureServices(IServiceCollection services) => JobsEntityFrameworkCoreRegistration.Register(services, this, shell: true);
 }
 
-internal sealed record JobsStoreSettings(int MaximumPageSize, int MaximumClaimScan, int MaximumWriteAttempts);
+internal sealed record JobsStoreSettings(int MaximumPageSize, int MaximumClaimScan, int MaximumWriteAttempts,
+    TimeSpan? TerminalInputRetention = null, TimeSpan? TerminalResultRetention = null);

@@ -8,6 +8,7 @@ Elsa.Jobs.Core.IJobCommands.CancelAsync(Elsa.Jobs.Core.JobCancelRequest! request
 Elsa.Jobs.Core.IJobCommands.CancelOriginAsync(Elsa.Jobs.Core.JobCancelOriginRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobTransition!>
 Elsa.Jobs.Core.IJobCommands.ClaimAsync(Elsa.Jobs.Core.JobClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobClaimResult!>
 Elsa.Jobs.Core.IJobCommands.CompleteAsync(Elsa.Jobs.Core.JobAttemptLease! lease, Elsa.Jobs.Core.JobPhysicalReceipt! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobTransition!>
+Elsa.Jobs.Core.IJobCommands.ExpirePayloadsAsync(Elsa.Jobs.Core.JobPayloadCleanupRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPayloadCleanupResult!>
 Elsa.Jobs.Core.IJobCommands.GrantContinuationAsync(Elsa.Jobs.Core.JobContinuationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobContinuationResult!>
 Elsa.Jobs.Core.IJobCommands.MaterializeDueAsync(Elsa.Jobs.Core.JobMaterializationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobMaterializationResult!>
 Elsa.Jobs.Core.IJobCommands.PauseAsync(Elsa.Jobs.Core.JobPauseRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobTransition!>
@@ -42,6 +43,7 @@ Elsa.Jobs.Core.IJobQueries.ListHoldsAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.J
 Elsa.Jobs.Core.IJobQueries.ListJobsAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.Jobs.Core.JobListQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobSnapshot!>!>
 Elsa.Jobs.Core.IJobQueries.ListOperationAuditsAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobOperationAuditSnapshot!>!>
 Elsa.Jobs.Core.IJobQueries.ListPendingDeliveriesAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobDeliverySnapshot!>!>
+Elsa.Jobs.Core.IJobQueries.ListPhysicalReceiptInspectionsAsync(Elsa.Jobs.Core.JobScope! scope, string! jobId, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobPhysicalReceiptInspection!>!>
 Elsa.Jobs.Core.IJobQueries.ListPhysicalReceiptsAsync(Elsa.Jobs.Core.JobScope! scope, string! jobId, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobPhysicalReceipt!>!>
 Elsa.Jobs.Core.IJobQueries.ListQueuesAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobQueueSnapshot!>!>
 Elsa.Jobs.Core.IJobQueries.ListSchedulesAsync(Elsa.Jobs.Core.JobScope! scope, Elsa.Jobs.Core.JobPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Core.JobPage<Elsa.Jobs.Core.JobScheduleSnapshot!>!>
@@ -253,6 +255,7 @@ Elsa.Jobs.Core.JobCommandStatus.NoEligibleWork = 6 -> Elsa.Jobs.Core.JobCommandS
 Elsa.Jobs.Core.JobCommandStatus.NotFound = 3 -> Elsa.Jobs.Core.JobCommandStatus
 Elsa.Jobs.Core.JobCommandStatus.OriginCancelled = 10 -> Elsa.Jobs.Core.JobCommandStatus
 Elsa.Jobs.Core.JobCommandStatus.OriginRetired = 11 -> Elsa.Jobs.Core.JobCommandStatus
+Elsa.Jobs.Core.JobCommandStatus.PayloadExpired = 12 -> Elsa.Jobs.Core.JobCommandStatus
 Elsa.Jobs.Core.JobCommandStatus.Replayed = 1 -> Elsa.Jobs.Core.JobCommandStatus
 Elsa.Jobs.Core.JobCommandStatus.Terminal = 9 -> Elsa.Jobs.Core.JobCommandStatus
 Elsa.Jobs.Core.JobCommandStatus.Unavailable = 4 -> Elsa.Jobs.Core.JobCommandStatus
@@ -648,8 +651,53 @@ Elsa.Jobs.Core.JobPayload
 Elsa.Jobs.Core.JobPayload.JobPayload(Elsa.Jobs.Core.JobSchema! schema, System.Text.Json.JsonElement value) -> void
 Elsa.Jobs.Core.JobPayload.Schema.get -> Elsa.Jobs.Core.JobSchema!
 Elsa.Jobs.Core.JobPayload.Value.get -> System.Text.Json.JsonElement
+Elsa.Jobs.Core.JobPayloadCleanupRequest
+Elsa.Jobs.Core.JobPayloadCleanupRequest.<Clone>$() -> Elsa.Jobs.Core.JobPayloadCleanupRequest!
+Elsa.Jobs.Core.JobPayloadCleanupRequest.ContinuationToken.get -> string?
+Elsa.Jobs.Core.JobPayloadCleanupRequest.ContinuationToken.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupRequest.Deconstruct(out Elsa.Jobs.Core.JobScope! Scope, out int MaximumJobs, out string? ContinuationToken) -> void
+Elsa.Jobs.Core.JobPayloadCleanupRequest.Equals(Elsa.Jobs.Core.JobPayloadCleanupRequest? other) -> bool
+Elsa.Jobs.Core.JobPayloadCleanupRequest.JobPayloadCleanupRequest(Elsa.Jobs.Core.JobScope! Scope, int MaximumJobs = 100, string? ContinuationToken = null) -> void
+Elsa.Jobs.Core.JobPayloadCleanupRequest.MaximumJobs.get -> int
+Elsa.Jobs.Core.JobPayloadCleanupRequest.MaximumJobs.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupRequest.Scope.get -> Elsa.Jobs.Core.JobScope!
+Elsa.Jobs.Core.JobPayloadCleanupRequest.Scope.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult
+Elsa.Jobs.Core.JobPayloadCleanupResult.<Clone>$() -> Elsa.Jobs.Core.JobPayloadCleanupResult!
+Elsa.Jobs.Core.JobPayloadCleanupResult.ContinuationToken.get -> string?
+Elsa.Jobs.Core.JobPayloadCleanupResult.ContinuationToken.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult.Deconstruct(out int ExaminedJobs, out int ExpiredInputs, out int ExpiredResults, out string? ContinuationToken) -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult.Equals(Elsa.Jobs.Core.JobPayloadCleanupResult? other) -> bool
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExaminedJobs.get -> int
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExaminedJobs.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExpiredInputs.get -> int
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExpiredInputs.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExpiredResults.get -> int
+Elsa.Jobs.Core.JobPayloadCleanupResult.ExpiredResults.init -> void
+Elsa.Jobs.Core.JobPayloadCleanupResult.JobPayloadCleanupResult(int ExaminedJobs, int ExpiredInputs, int ExpiredResults, string? ContinuationToken) -> void
 Elsa.Jobs.Core.JobPayloadDigest
 Elsa.Jobs.Core.JobPayloadLimits
+Elsa.Jobs.Core.JobPayloadRetention
+Elsa.Jobs.Core.JobPayloadRetention.<Clone>$() -> Elsa.Jobs.Core.JobPayloadRetention!
+Elsa.Jobs.Core.JobPayloadRetention.Deconstruct(out System.TimeSpan? TerminalInputRetention, out System.TimeSpan? TerminalResultRetention, out System.DateTimeOffset? InputExpiresAt, out System.DateTimeOffset? ResultExpiresAt, out System.DateTimeOffset? InputExpiredAt, out System.DateTimeOffset? ResultExpiredAt) -> void
+Elsa.Jobs.Core.JobPayloadRetention.Equals(Elsa.Jobs.Core.JobPayloadRetention? other) -> bool
+Elsa.Jobs.Core.JobPayloadRetention.InputExpiredAt.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobPayloadRetention.InputExpiredAt.init -> void
+Elsa.Jobs.Core.JobPayloadRetention.InputExpiresAt.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobPayloadRetention.InputExpiresAt.init -> void
+Elsa.Jobs.Core.JobPayloadRetention.JobPayloadRetention(System.TimeSpan? TerminalInputRetention, System.TimeSpan? TerminalResultRetention, System.DateTimeOffset? InputExpiresAt, System.DateTimeOffset? ResultExpiresAt, System.DateTimeOffset? InputExpiredAt, System.DateTimeOffset? ResultExpiredAt) -> void
+Elsa.Jobs.Core.JobPayloadRetention.ResultExpiredAt.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobPayloadRetention.ResultExpiredAt.init -> void
+Elsa.Jobs.Core.JobPayloadRetention.ResultExpiresAt.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobPayloadRetention.ResultExpiresAt.init -> void
+Elsa.Jobs.Core.JobPayloadRetention.TerminalInputRetention.get -> System.TimeSpan?
+Elsa.Jobs.Core.JobPayloadRetention.TerminalInputRetention.init -> void
+Elsa.Jobs.Core.JobPayloadRetention.TerminalResultRetention.get -> System.TimeSpan?
+Elsa.Jobs.Core.JobPayloadRetention.TerminalResultRetention.init -> void
+Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobPayloadState.Available = 0 -> Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobPayloadState.Expired = 2 -> Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobPayloadState.NotProduced = 1 -> Elsa.Jobs.Core.JobPayloadState
 Elsa.Jobs.Core.JobPersistenceException
 Elsa.Jobs.Core.JobPersistenceException.JobPersistenceException(string! operation, System.Exception! innerException) -> void
 Elsa.Jobs.Core.JobPersistenceException.Operation.get -> string!
@@ -678,6 +726,46 @@ Elsa.Jobs.Core.JobPhysicalReceipt.ReportedAt.get -> System.DateTimeOffset
 Elsa.Jobs.Core.JobPhysicalReceipt.ReportedAt.init -> void
 Elsa.Jobs.Core.JobPhysicalReceipt.Retryable.get -> bool
 Elsa.Jobs.Core.JobPhysicalReceipt.Retryable.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.<Clone>$() -> Elsa.Jobs.Core.JobPhysicalReceiptInspection!
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Deconstruct(out Elsa.Jobs.Core.JobPhysicalReceiptMetadata! Metadata, out Elsa.Jobs.Core.JobPhysicalReceipt? Receipt, out Elsa.Jobs.Core.JobPayloadState PayloadState, out System.DateTimeOffset? ExpiredAt) -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Equals(Elsa.Jobs.Core.JobPhysicalReceiptInspection? other) -> bool
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.ExpiredAt.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.ExpiredAt.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.JobPhysicalReceiptInspection(Elsa.Jobs.Core.JobPhysicalReceiptMetadata! Metadata, Elsa.Jobs.Core.JobPhysicalReceipt? Receipt, Elsa.Jobs.Core.JobPayloadState PayloadState, System.DateTimeOffset? ExpiredAt) -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Metadata.get -> Elsa.Jobs.Core.JobPhysicalReceiptMetadata!
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Metadata.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.PayloadState.get -> Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.PayloadState.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Receipt.get -> Elsa.Jobs.Core.JobPhysicalReceipt?
+Elsa.Jobs.Core.JobPhysicalReceiptInspection.Receipt.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.<Clone>$() -> Elsa.Jobs.Core.JobPhysicalReceiptMetadata!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.AttemptId.get -> string!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.AttemptId.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Deconstruct(out string! ReceiptId, out string! AttemptId, out string! Owner, out long Fence, out Elsa.Jobs.Core.JobAttemptOutcome Outcome, out Elsa.Jobs.Core.JobSchema? PayloadSchema, out string! PayloadSha256, out Elsa.Jobs.Core.JobDiagnostic? Diagnostic, out bool Retryable, out System.DateTimeOffset ReportedAt, out string! ReceiptSha256) -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Diagnostic.get -> Elsa.Jobs.Core.JobDiagnostic?
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Diagnostic.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Equals(Elsa.Jobs.Core.JobPhysicalReceiptMetadata? other) -> bool
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Fence.get -> long
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Fence.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.JobPhysicalReceiptMetadata(string! ReceiptId, string! AttemptId, string! Owner, long Fence, Elsa.Jobs.Core.JobAttemptOutcome Outcome, Elsa.Jobs.Core.JobSchema? PayloadSchema, string! PayloadSha256, Elsa.Jobs.Core.JobDiagnostic? Diagnostic, bool Retryable, System.DateTimeOffset ReportedAt, string! ReceiptSha256) -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Outcome.get -> Elsa.Jobs.Core.JobAttemptOutcome
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Outcome.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Owner.get -> string!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Owner.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.PayloadSchema.get -> Elsa.Jobs.Core.JobSchema?
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.PayloadSchema.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.PayloadSha256.get -> string!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.PayloadSha256.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReceiptId.get -> string!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReceiptId.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReceiptSha256.get -> string!
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReceiptSha256.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReportedAt.get -> System.DateTimeOffset
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ReportedAt.init -> void
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Retryable.get -> bool
+Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Retryable.init -> void
 Elsa.Jobs.Core.JobProgress
 Elsa.Jobs.Core.JobProgress.<Clone>$() -> Elsa.Jobs.Core.JobProgress!
 Elsa.Jobs.Core.JobProgress.Data.get -> Elsa.Jobs.Core.JobPayload?
@@ -762,6 +850,27 @@ Elsa.Jobs.Core.JobRequest.Queue.init -> void
 Elsa.Jobs.Core.JobRequest.ResultSchema.get -> Elsa.Jobs.Core.JobSchema!
 Elsa.Jobs.Core.JobRequest.ResultSchema.init -> void
 Elsa.Jobs.Core.JobRequestDigest
+Elsa.Jobs.Core.JobRequestMetadata
+Elsa.Jobs.Core.JobRequestMetadata.<Clone>$() -> Elsa.Jobs.Core.JobRequestMetadata!
+Elsa.Jobs.Core.JobRequestMetadata.Association.get -> Elsa.Jobs.Core.JobAssociation?
+Elsa.Jobs.Core.JobRequestMetadata.Association.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.Deconstruct(out Elsa.Jobs.Core.JobHandlerIdentity! Handler, out Elsa.Jobs.Core.JobSchema! InputSchema, out string! InputSha256, out Elsa.Jobs.Core.JobSchema! ResultSchema, out string! Queue, out Elsa.Jobs.Core.JobExecutionPolicy! Policy, out System.DateTimeOffset? NotBefore, out Elsa.Jobs.Core.JobAssociation? Association) -> void
+Elsa.Jobs.Core.JobRequestMetadata.Equals(Elsa.Jobs.Core.JobRequestMetadata? other) -> bool
+Elsa.Jobs.Core.JobRequestMetadata.Handler.get -> Elsa.Jobs.Core.JobHandlerIdentity!
+Elsa.Jobs.Core.JobRequestMetadata.Handler.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.InputSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Core.JobRequestMetadata.InputSchema.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.InputSha256.get -> string!
+Elsa.Jobs.Core.JobRequestMetadata.InputSha256.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.JobRequestMetadata(Elsa.Jobs.Core.JobHandlerIdentity! Handler, Elsa.Jobs.Core.JobSchema! InputSchema, string! InputSha256, Elsa.Jobs.Core.JobSchema! ResultSchema, string! Queue, Elsa.Jobs.Core.JobExecutionPolicy! Policy, System.DateTimeOffset? NotBefore, Elsa.Jobs.Core.JobAssociation? Association) -> void
+Elsa.Jobs.Core.JobRequestMetadata.NotBefore.get -> System.DateTimeOffset?
+Elsa.Jobs.Core.JobRequestMetadata.NotBefore.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.Policy.get -> Elsa.Jobs.Core.JobExecutionPolicy!
+Elsa.Jobs.Core.JobRequestMetadata.Policy.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.Queue.get -> string!
+Elsa.Jobs.Core.JobRequestMetadata.Queue.init -> void
+Elsa.Jobs.Core.JobRequestMetadata.ResultSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Core.JobRequestMetadata.ResultSchema.init -> void
 Elsa.Jobs.Core.JobResult
 Elsa.Jobs.Core.JobResult.<Clone>$() -> Elsa.Jobs.Core.JobResult!
 Elsa.Jobs.Core.JobResult.AttemptId.get -> string?
@@ -783,6 +892,27 @@ Elsa.Jobs.Core.JobResult.PayloadSha256.get -> string!
 Elsa.Jobs.Core.JobResult.PayloadSha256.init -> void
 Elsa.Jobs.Core.JobResult.ResultId.get -> string!
 Elsa.Jobs.Core.JobResult.ResultId.init -> void
+Elsa.Jobs.Core.JobResultMetadata
+Elsa.Jobs.Core.JobResultMetadata.<Clone>$() -> Elsa.Jobs.Core.JobResultMetadata!
+Elsa.Jobs.Core.JobResultMetadata.AttemptId.get -> string?
+Elsa.Jobs.Core.JobResultMetadata.AttemptId.init -> void
+Elsa.Jobs.Core.JobResultMetadata.CompletedAt.get -> System.DateTimeOffset
+Elsa.Jobs.Core.JobResultMetadata.CompletedAt.init -> void
+Elsa.Jobs.Core.JobResultMetadata.Deconstruct(out string! ResultId, out string! JobId, out string? AttemptId, out Elsa.Jobs.Core.JobOutcome Outcome, out Elsa.Jobs.Core.JobSchema? PayloadSchema, out string! PayloadSha256, out System.DateTimeOffset CompletedAt, out Elsa.Jobs.Core.JobDiagnostic? Diagnostic) -> void
+Elsa.Jobs.Core.JobResultMetadata.Diagnostic.get -> Elsa.Jobs.Core.JobDiagnostic?
+Elsa.Jobs.Core.JobResultMetadata.Diagnostic.init -> void
+Elsa.Jobs.Core.JobResultMetadata.Equals(Elsa.Jobs.Core.JobResultMetadata? other) -> bool
+Elsa.Jobs.Core.JobResultMetadata.JobId.get -> string!
+Elsa.Jobs.Core.JobResultMetadata.JobId.init -> void
+Elsa.Jobs.Core.JobResultMetadata.JobResultMetadata(string! ResultId, string! JobId, string? AttemptId, Elsa.Jobs.Core.JobOutcome Outcome, Elsa.Jobs.Core.JobSchema? PayloadSchema, string! PayloadSha256, System.DateTimeOffset CompletedAt, Elsa.Jobs.Core.JobDiagnostic? Diagnostic) -> void
+Elsa.Jobs.Core.JobResultMetadata.Outcome.get -> Elsa.Jobs.Core.JobOutcome
+Elsa.Jobs.Core.JobResultMetadata.Outcome.init -> void
+Elsa.Jobs.Core.JobResultMetadata.PayloadSchema.get -> Elsa.Jobs.Core.JobSchema?
+Elsa.Jobs.Core.JobResultMetadata.PayloadSchema.init -> void
+Elsa.Jobs.Core.JobResultMetadata.PayloadSha256.get -> string!
+Elsa.Jobs.Core.JobResultMetadata.PayloadSha256.init -> void
+Elsa.Jobs.Core.JobResultMetadata.ResultId.get -> string!
+Elsa.Jobs.Core.JobResultMetadata.ResultId.init -> void
 Elsa.Jobs.Core.JobRetryAsNewRunRequest
 Elsa.Jobs.Core.JobRetryAsNewRunRequest.<Clone>$() -> Elsa.Jobs.Core.JobRetryAsNewRunRequest!
 Elsa.Jobs.Core.JobRetryAsNewRunRequest.Deconstruct(out Elsa.Jobs.Core.JobScope! Scope, out string! JobId, out long ExpectedTerminalRevision, out string! ProposedNewJobId, out string! IdempotencyKey, out Elsa.Jobs.Core.JobOperation! Operation) -> void
@@ -926,17 +1056,27 @@ Elsa.Jobs.Core.JobSnapshot.Deconstruct(out Elsa.Jobs.Core.JobScope! Scope, out s
 Elsa.Jobs.Core.JobSnapshot.EligibleAt.get -> System.DateTimeOffset
 Elsa.Jobs.Core.JobSnapshot.EligibleAt.init -> void
 Elsa.Jobs.Core.JobSnapshot.Equals(Elsa.Jobs.Core.JobSnapshot? other) -> bool
+Elsa.Jobs.Core.JobSnapshot.InputPayloadState.get -> Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobSnapshot.InputPayloadState.init -> void
 Elsa.Jobs.Core.JobSnapshot.JobId.get -> string!
 Elsa.Jobs.Core.JobSnapshot.JobId.init -> void
 Elsa.Jobs.Core.JobSnapshot.JobSnapshot(Elsa.Jobs.Core.JobScope! Scope, string! JobId, string! RequestSha256, Elsa.Jobs.Core.JobRequest? Request, Elsa.Jobs.Core.JobState State, long Revision, System.DateTimeOffset AcceptedAt, System.DateTimeOffset EligibleAt, Elsa.Jobs.Core.JobAttemptLease? ActiveAttempt, Elsa.Jobs.Core.JobResult? Result, Elsa.Jobs.Core.JobProgress? Progress, bool CancellationRequested, string? RetriedFromJobId, Elsa.Jobs.Core.JobDiagnostic? UnavailableDiagnostic = null) -> void
+Elsa.Jobs.Core.JobSnapshot.PayloadRetention.get -> Elsa.Jobs.Core.JobPayloadRetention?
+Elsa.Jobs.Core.JobSnapshot.PayloadRetention.init -> void
 Elsa.Jobs.Core.JobSnapshot.Progress.get -> Elsa.Jobs.Core.JobProgress?
 Elsa.Jobs.Core.JobSnapshot.Progress.init -> void
 Elsa.Jobs.Core.JobSnapshot.Request.get -> Elsa.Jobs.Core.JobRequest?
 Elsa.Jobs.Core.JobSnapshot.Request.init -> void
+Elsa.Jobs.Core.JobSnapshot.RequestMetadata.get -> Elsa.Jobs.Core.JobRequestMetadata?
+Elsa.Jobs.Core.JobSnapshot.RequestMetadata.init -> void
 Elsa.Jobs.Core.JobSnapshot.RequestSha256.get -> string!
 Elsa.Jobs.Core.JobSnapshot.RequestSha256.init -> void
 Elsa.Jobs.Core.JobSnapshot.Result.get -> Elsa.Jobs.Core.JobResult?
 Elsa.Jobs.Core.JobSnapshot.Result.init -> void
+Elsa.Jobs.Core.JobSnapshot.ResultMetadata.get -> Elsa.Jobs.Core.JobResultMetadata?
+Elsa.Jobs.Core.JobSnapshot.ResultMetadata.init -> void
+Elsa.Jobs.Core.JobSnapshot.ResultPayloadState.get -> Elsa.Jobs.Core.JobPayloadState
+Elsa.Jobs.Core.JobSnapshot.ResultPayloadState.init -> void
 Elsa.Jobs.Core.JobSnapshot.RetriedFromJobId.get -> string?
 Elsa.Jobs.Core.JobSnapshot.RetriedFromJobId.init -> void
 Elsa.Jobs.Core.JobSnapshot.Revision.get -> long
@@ -1096,9 +1236,24 @@ override Elsa.Jobs.Core.JobPageRequest.ToString() -> string!
 override Elsa.Jobs.Core.JobPauseRequest.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobPauseRequest.GetHashCode() -> int
 override Elsa.Jobs.Core.JobPauseRequest.ToString() -> string!
+override Elsa.Jobs.Core.JobPayloadCleanupRequest.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobPayloadCleanupRequest.GetHashCode() -> int
+override Elsa.Jobs.Core.JobPayloadCleanupRequest.ToString() -> string!
+override Elsa.Jobs.Core.JobPayloadCleanupResult.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobPayloadCleanupResult.GetHashCode() -> int
+override Elsa.Jobs.Core.JobPayloadCleanupResult.ToString() -> string!
+override Elsa.Jobs.Core.JobPayloadRetention.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobPayloadRetention.GetHashCode() -> int
+override Elsa.Jobs.Core.JobPayloadRetention.ToString() -> string!
 override Elsa.Jobs.Core.JobPhysicalReceipt.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobPhysicalReceipt.GetHashCode() -> int
 override Elsa.Jobs.Core.JobPhysicalReceipt.ToString() -> string!
+override Elsa.Jobs.Core.JobPhysicalReceiptInspection.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobPhysicalReceiptInspection.GetHashCode() -> int
+override Elsa.Jobs.Core.JobPhysicalReceiptInspection.ToString() -> string!
+override Elsa.Jobs.Core.JobPhysicalReceiptMetadata.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobPhysicalReceiptMetadata.GetHashCode() -> int
+override Elsa.Jobs.Core.JobPhysicalReceiptMetadata.ToString() -> string!
 override Elsa.Jobs.Core.JobProgress.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobProgress.GetHashCode() -> int
 override Elsa.Jobs.Core.JobProgress.ToString() -> string!
@@ -1117,9 +1272,15 @@ override Elsa.Jobs.Core.JobRenewal.ToString() -> string!
 override Elsa.Jobs.Core.JobRequest.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobRequest.GetHashCode() -> int
 override Elsa.Jobs.Core.JobRequest.ToString() -> string!
+override Elsa.Jobs.Core.JobRequestMetadata.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobRequestMetadata.GetHashCode() -> int
+override Elsa.Jobs.Core.JobRequestMetadata.ToString() -> string!
 override Elsa.Jobs.Core.JobResult.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobResult.GetHashCode() -> int
 override Elsa.Jobs.Core.JobResult.ToString() -> string!
+override Elsa.Jobs.Core.JobResultMetadata.Equals(object? obj) -> bool
+override Elsa.Jobs.Core.JobResultMetadata.GetHashCode() -> int
+override Elsa.Jobs.Core.JobResultMetadata.ToString() -> string!
 override Elsa.Jobs.Core.JobRetryAsNewRunRequest.Equals(object? obj) -> bool
 override Elsa.Jobs.Core.JobRetryAsNewRunRequest.GetHashCode() -> int
 override Elsa.Jobs.Core.JobRetryAsNewRunRequest.ToString() -> string!
@@ -1234,10 +1395,20 @@ static Elsa.Jobs.Core.JobPageRequest.operator !=(Elsa.Jobs.Core.JobPageRequest? 
 static Elsa.Jobs.Core.JobPageRequest.operator ==(Elsa.Jobs.Core.JobPageRequest? left, Elsa.Jobs.Core.JobPageRequest? right) -> bool
 static Elsa.Jobs.Core.JobPauseRequest.operator !=(Elsa.Jobs.Core.JobPauseRequest? left, Elsa.Jobs.Core.JobPauseRequest? right) -> bool
 static Elsa.Jobs.Core.JobPauseRequest.operator ==(Elsa.Jobs.Core.JobPauseRequest? left, Elsa.Jobs.Core.JobPauseRequest? right) -> bool
+static Elsa.Jobs.Core.JobPayloadCleanupRequest.operator !=(Elsa.Jobs.Core.JobPayloadCleanupRequest? left, Elsa.Jobs.Core.JobPayloadCleanupRequest? right) -> bool
+static Elsa.Jobs.Core.JobPayloadCleanupRequest.operator ==(Elsa.Jobs.Core.JobPayloadCleanupRequest? left, Elsa.Jobs.Core.JobPayloadCleanupRequest? right) -> bool
+static Elsa.Jobs.Core.JobPayloadCleanupResult.operator !=(Elsa.Jobs.Core.JobPayloadCleanupResult? left, Elsa.Jobs.Core.JobPayloadCleanupResult? right) -> bool
+static Elsa.Jobs.Core.JobPayloadCleanupResult.operator ==(Elsa.Jobs.Core.JobPayloadCleanupResult? left, Elsa.Jobs.Core.JobPayloadCleanupResult? right) -> bool
 static Elsa.Jobs.Core.JobPayloadDigest.Compute(Elsa.Jobs.Core.JobPayload? payload) -> string!
 static Elsa.Jobs.Core.JobPayloadLimits.GetByteCount(Elsa.Jobs.Core.JobPayload! payload) -> int
+static Elsa.Jobs.Core.JobPayloadRetention.operator !=(Elsa.Jobs.Core.JobPayloadRetention? left, Elsa.Jobs.Core.JobPayloadRetention? right) -> bool
+static Elsa.Jobs.Core.JobPayloadRetention.operator ==(Elsa.Jobs.Core.JobPayloadRetention? left, Elsa.Jobs.Core.JobPayloadRetention? right) -> bool
 static Elsa.Jobs.Core.JobPhysicalReceipt.operator !=(Elsa.Jobs.Core.JobPhysicalReceipt? left, Elsa.Jobs.Core.JobPhysicalReceipt? right) -> bool
 static Elsa.Jobs.Core.JobPhysicalReceipt.operator ==(Elsa.Jobs.Core.JobPhysicalReceipt? left, Elsa.Jobs.Core.JobPhysicalReceipt? right) -> bool
+static Elsa.Jobs.Core.JobPhysicalReceiptInspection.operator !=(Elsa.Jobs.Core.JobPhysicalReceiptInspection? left, Elsa.Jobs.Core.JobPhysicalReceiptInspection? right) -> bool
+static Elsa.Jobs.Core.JobPhysicalReceiptInspection.operator ==(Elsa.Jobs.Core.JobPhysicalReceiptInspection? left, Elsa.Jobs.Core.JobPhysicalReceiptInspection? right) -> bool
+static Elsa.Jobs.Core.JobPhysicalReceiptMetadata.operator !=(Elsa.Jobs.Core.JobPhysicalReceiptMetadata? left, Elsa.Jobs.Core.JobPhysicalReceiptMetadata? right) -> bool
+static Elsa.Jobs.Core.JobPhysicalReceiptMetadata.operator ==(Elsa.Jobs.Core.JobPhysicalReceiptMetadata? left, Elsa.Jobs.Core.JobPhysicalReceiptMetadata? right) -> bool
 static Elsa.Jobs.Core.JobProgress.operator !=(Elsa.Jobs.Core.JobProgress? left, Elsa.Jobs.Core.JobProgress? right) -> bool
 static Elsa.Jobs.Core.JobProgress.operator ==(Elsa.Jobs.Core.JobProgress? left, Elsa.Jobs.Core.JobProgress? right) -> bool
 static Elsa.Jobs.Core.JobQueueSnapshot.operator !=(Elsa.Jobs.Core.JobQueueSnapshot? left, Elsa.Jobs.Core.JobQueueSnapshot? right) -> bool
@@ -1251,8 +1422,14 @@ static Elsa.Jobs.Core.JobRenewal.operator ==(Elsa.Jobs.Core.JobRenewal? left, El
 static Elsa.Jobs.Core.JobRequest.operator !=(Elsa.Jobs.Core.JobRequest? left, Elsa.Jobs.Core.JobRequest? right) -> bool
 static Elsa.Jobs.Core.JobRequest.operator ==(Elsa.Jobs.Core.JobRequest? left, Elsa.Jobs.Core.JobRequest? right) -> bool
 static Elsa.Jobs.Core.JobRequestDigest.Compute(Elsa.Jobs.Core.JobRequest! request) -> string!
+static Elsa.Jobs.Core.JobRequestMetadata.From(Elsa.Jobs.Core.JobRequest! request) -> Elsa.Jobs.Core.JobRequestMetadata!
+static Elsa.Jobs.Core.JobRequestMetadata.operator !=(Elsa.Jobs.Core.JobRequestMetadata? left, Elsa.Jobs.Core.JobRequestMetadata? right) -> bool
+static Elsa.Jobs.Core.JobRequestMetadata.operator ==(Elsa.Jobs.Core.JobRequestMetadata? left, Elsa.Jobs.Core.JobRequestMetadata? right) -> bool
 static Elsa.Jobs.Core.JobResult.operator !=(Elsa.Jobs.Core.JobResult? left, Elsa.Jobs.Core.JobResult? right) -> bool
 static Elsa.Jobs.Core.JobResult.operator ==(Elsa.Jobs.Core.JobResult? left, Elsa.Jobs.Core.JobResult? right) -> bool
+static Elsa.Jobs.Core.JobResultMetadata.From(Elsa.Jobs.Core.JobResult! result) -> Elsa.Jobs.Core.JobResultMetadata!
+static Elsa.Jobs.Core.JobResultMetadata.operator !=(Elsa.Jobs.Core.JobResultMetadata? left, Elsa.Jobs.Core.JobResultMetadata? right) -> bool
+static Elsa.Jobs.Core.JobResultMetadata.operator ==(Elsa.Jobs.Core.JobResultMetadata? left, Elsa.Jobs.Core.JobResultMetadata? right) -> bool
 static Elsa.Jobs.Core.JobRetryAsNewRunRequest.operator !=(Elsa.Jobs.Core.JobRetryAsNewRunRequest? left, Elsa.Jobs.Core.JobRetryAsNewRunRequest? right) -> bool
 static Elsa.Jobs.Core.JobRetryAsNewRunRequest.operator ==(Elsa.Jobs.Core.JobRetryAsNewRunRequest? left, Elsa.Jobs.Core.JobRetryAsNewRunRequest? right) -> bool
 static Elsa.Jobs.Core.JobRetryPolicy.operator !=(Elsa.Jobs.Core.JobRetryPolicy? left, Elsa.Jobs.Core.JobRetryPolicy? right) -> bool

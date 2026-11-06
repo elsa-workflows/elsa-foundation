@@ -93,6 +93,19 @@ describe("durable operation confirmation controls", () => {
 });
 
 describe("job evidence and hold controls", () => {
+  it("refreshes hold transitions and late physical evidence even when the terminal job revision is unchanged", async () => {
+    const f = detailFixture(); const gate = { kind: "queue" as const, name: "reports" }; let released = false; let late = false;
+    const hold = () => ({ gate, holdId: "same-revision-hold", revision: released ? 2 : 1, actor: "alice", reason: "Current gate state", requestedAt: job.acceptedAt,
+      ...(released ? { releasedAt: job.completedAt, releasedBy: "alice" } : {}) });
+    f.get.mockImplementation(async path => path === "/jobs/report-one" ? job : path.startsWith("/jobs/report-one/holds") ? { gates: [{ gate, items: [hold()] }], complete: true } :
+      path.startsWith("/jobs/holds?") ? { items: [hold()] } : path.includes("/physical-receipts") ? { items: late ? [{ receiptId: "LATE_PHYSICAL_RECEIPT", attemptId: "old-attempt", owner: "worker", fence: 1, outcome: "failed", retryable: false, reportedAt: job.completedAt }] : [] } : { items: [] });
+    f.post.mockImplementation(async () => { released = true; return { status: "applied", revision: 2 }; });
+    await view.render(<JobDetail api={f.api} id="report-one" navigate={vi.fn()} />); await click(view.container, "Release this hold…");
+    expect(view.container.textContent).toContain("Released by alice");
+    expect([...view.container.querySelectorAll("button")].some(button => button.textContent === "Release this hold…")).toBe(false);
+    late = true; await click(view.container, "Refresh"); expect(view.container.textContent).toContain("LATE_PHYSICAL_RECEIPT");
+    expect(f.get.mock.calls.filter(([path]) => path.includes("/physical-receipts")).length).toBeGreaterThan(1);
+  });
   it.each(["input", "result"] as const)("renders and downloads exact retained %s JSON after fresh authorization and read", async kind => {
     const raw = '{"large":9007199254740993,"overflow":1e309,"precise":1.0000000000000001,"zero":-0}';
     const f = detailFixture();
@@ -237,5 +250,24 @@ describe("operation audit inspection", () => {
     expect(view.container.textContent).toContain("Jobs access denied");
     expect(view.container.textContent).not.toContain("ORIGINAL_ACTOR_CANARY");
     expect(view.container.textContent).not.toContain("ORIGINAL_REASON_CANARY");
+  });
+});
+
+describe("expired payload inspection", () => {
+  it("keeps result identity visible, explains expired bytes and disables retry after input expiry", async () => {
+    const f = detailFixture(); const original = f.get.getMockImplementation()!;
+    const expired = { state: "expired", schema: { alias: "report", version: 1 }, payloadSha256: "a".repeat(64), expiredAt: "2026-11-06T12:02:00Z" };
+    f.get.mockImplementation(async path => path === "/jobs/report-one" ? { ...job, consumptionState: "settled", inputPayloadState: "expired", resultPayloadState: "expired" }
+      : path.endsWith("/input") ? expired : path.endsWith("/result") ? { ...expired, resultId: job.resultId, outcome: job.outcome, completedAt: job.completedAt }
+      : original(path));
+    await view.render(<JobDetail api={f.api} id="report-one" navigate={vi.fn()} />); await act(() => {});
+    const retry = Array.from(view.container.querySelectorAll("button")).find(button => button.textContent === "Retry as new run…")!;
+    expect(retry.disabled).toBe(true); expect(view.container.textContent).toContain("The accepted input payload has expired");
+    expect(view.container.textContent).toContain("result-one");
+    await click(view.container, "Load permitted input"); await click(view.container, "Load permitted result");
+    expect(view.container.textContent).toContain("The input payload expired on"); expect(view.container.textContent).toContain("The result payload expired on");
+    expect(view.container.textContent).toContain("Export retained input metadata"); expect(view.container.textContent).toContain("Export retained result metadata");
+    for (const region of view.container.querySelectorAll("pre.jobs-json")) expect(region.textContent).not.toContain('"value"');
+    expect(f.post).not.toHaveBeenCalled();
   });
 });

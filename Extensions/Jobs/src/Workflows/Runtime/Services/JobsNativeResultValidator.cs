@@ -14,11 +14,22 @@ internal sealed class JobsNativeResultValidator(IJobQueries jobs)
         var suppliedResult = JobsNativeBoundary.Read<JobResult>(completion.Result);
         var suppliedPermission = JobsNativeBoundary.Read<JobContinuationPermission>(completion.Permission);
         var snapshot = await ReadAsync(() => jobs.FindAsync(admission.Address.Scope, completion.JobId, cancellationToken), cancellationToken);
-        if (snapshot?.Request is null || snapshot.UnavailableDiagnostic is not null || snapshot.Result is null) throw Unavailable();
-        var result = snapshot.Result;
+        if (snapshot is null || snapshot.UnavailableDiagnostic is not null) throw Unavailable();
+        var metadata = JobsNativeBoundary.RetainedRequest(snapshot);
+        var retained = JobsNativeBoundary.RetainedResult(snapshot);
+        if (snapshot.InputPayloadState == JobPayloadState.Expired || snapshot.ResultPayloadState == JobPayloadState.Expired)
+        {
+            var settled = await ReadAsync(() => jobs.FindDeliveryAsync(admission.Address.Scope, completion.JobId, cancellationToken), cancellationToken);
+            if (settled?.Acknowledgement is not { } ack || settled.ResultId != retained.ResultId ||
+                ack.ContinuationId != completion.ContinuationId || ack.Proof.ResultSha256 != retained.PayloadSha256 ||
+                !Enum.IsDefined(ack.Proof.Kind) || string.IsNullOrWhiteSpace(ack.Proof.ModelReceiptId)) throw Unavailable();
+        }
+        // An already-settled native source retains its own original completion bytes. Compact canonical metadata
+        // authenticates that existing source after store expiry; no successful null payload is reconstructed.
+        var result = snapshot.Result ?? suppliedResult;
         if (snapshot.Scope != admission.Address.Scope || snapshot.JobId != completion.JobId || snapshot.State != JobState.Terminal ||
-            snapshot.RequestSha256 != admission.RequestSha256 || JobRequestDigest.Compute(snapshot.Request) != admission.RequestSha256 ||
-            !JobsNativeBoundary.Equivalent(snapshot.Request, admission.Request) || result.JobId != completion.JobId || result.ResultId != completion.ResultId ||
+            snapshot.RequestSha256 != admission.RequestSha256 || !JobsNativeBoundary.Equivalent(metadata, JobRequestMetadata.From(admission.Request)) ||
+            !JobsNativeBoundary.Equivalent(retained, JobResultMetadata.From(result)) || result.JobId != completion.JobId || result.ResultId != completion.ResultId ||
             !JobsNativeBoundary.Equivalent(result, suppliedResult) || result.PayloadSha256 != JobPayloadDigest.Compute(result.Payload) ||
             !Enum.IsDefined(result.Outcome) || result.Outcome == JobOutcome.Succeeded && (result.Payload is null || result.Payload.Schema != admission.Request.ResultSchema) ||
             completion.ModelInputId != JobsNativeBoundary.ModelInputId(admission.Address, result) ||

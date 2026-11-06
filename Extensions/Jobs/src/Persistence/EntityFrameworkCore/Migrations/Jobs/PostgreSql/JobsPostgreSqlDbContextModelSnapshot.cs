@@ -458,6 +458,9 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
 
+                    b.Property<string>("AuditJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Digest")
                         .IsRequired()
                         .HasColumnType("text");
@@ -479,7 +482,8 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("Token")
                         .IsConcurrencyToken()
@@ -490,6 +494,8 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                     b.HasKey("Key");
 
                     b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "Key");
 
                     b.ToTable("elsa_jobs_operations", (string)null);
                 });

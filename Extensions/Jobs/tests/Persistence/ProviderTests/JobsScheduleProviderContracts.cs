@@ -89,7 +89,7 @@ public sealed partial class JobsProviderContracts
         string bytes;
         await using (var db = await database.Contexts.CreateDbContextAsync())
         {
-            var row = await db.Jobs.SingleAsync(); var json = JsonNode.Parse(row.RequestJson)!.AsObject();
+            var row = await db.Jobs.SingleAsync(); var json = JsonNode.Parse(row.RequestJson!)!.AsObject();
             json["Input"]!.AsObject().Remove("Value"); row.RequestJson = bytes = json.ToJsonString(); await db.SaveChangesAsync();
         }
         Assert.Null((await database.Commands.ClaimAsync(Claim())).Lease);
@@ -416,7 +416,7 @@ public sealed partial class JobsProviderContracts
         {
             var row = await db.Schedules.SingleAsync(); due = row.NextOccurrence; next = row.CoalesceNext; cutoff = row.CoalesceCutoff; count = row.CoalesceCount; through = row.CoalesceThrough;
             Assert.NotNull(next); Assert.NotNull(cutoff); Assert.Equal(3, count);
-            receiptBytes = (await db.Occurrences.SingleAsync()).ReceiptJson; acceptedBytes = (await db.Jobs.SingleAsync()).RequestJson;
+            receiptBytes = (await db.Occurrences.SingleAsync()).ReceiptJson; acceptedBytes = (await db.Jobs.SingleAsync()).RequestJson!;
             row.DefinitionJson = "{"; await db.SaveChangesAsync();
         }
         await store.SaveScheduleAsync(new(Scope, definition with { ScheduleId = ids[1], FirstOccurrence = JobStoreCodec.At(clock.Now) }, 0, Op()));

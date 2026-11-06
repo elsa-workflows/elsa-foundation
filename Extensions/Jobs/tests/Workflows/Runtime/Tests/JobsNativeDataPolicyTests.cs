@@ -8,6 +8,7 @@ using Elsa.Jobs.Workflows.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using ActivityTransitionKind = Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind;
 
 namespace Elsa.Jobs.Workflows.Runtime.Tests;
 

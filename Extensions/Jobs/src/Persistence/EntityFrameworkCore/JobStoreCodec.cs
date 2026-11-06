@@ -93,14 +93,22 @@ internal static class JobStoreCodec
         Payload(request.Input); Schema(request.ResultSchema);
         if (Encoding.UTF8.GetByteCount(Json(request)) > 3 * JobPayloadLimits.MaximumBytes)
             throw new ArgumentException("The Jobs input/request exceeds its bounded durable size.");
-        var policy = request.Policy;
+        Policy(request.Policy);
+        Association(request.Association);
+    }
+    internal static void Policy(JobExecutionPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(policy.Retry);
         var retry = policy.Retry;
         if (retry.MaximumAttempts is < 1 or > 1000 || retry.InitialBackoff < TimeSpan.Zero || retry.MaximumBackoff < retry.InitialBackoff || retry.MaximumBackoff > TimeSpan.FromDays(365)
             || !double.IsFinite(retry.BackoffMultiplier) || retry.BackoffMultiplier < 1 || !double.IsFinite(retry.JitterFraction) || retry.JitterFraction is < 0 or > 1
             || policy.AttemptTimeout <= TimeSpan.Zero || policy.AttemptTimeout > TimeSpan.FromDays(365)
             || policy.MinimumKeyRecognition <= TimeSpan.Zero || policy.MinimumKeyRecognition > TimeSpan.FromDays(3650))
             throw new ArgumentException("The Jobs retry, timeout or recognition policy is invalid.");
-        if (request.Association is { } a)
+    }
+    internal static void Association(JobAssociation? association)
+    {
+        if (association is { } a)
         {
             Name(a.ModelKind); Name(a.DefinitionId); Name(a.DefinitionVersion); Name(a.ExecutionId); Name(a.InvocationId); Name(a.MaterialId); Digest(a.MaterialSha256);
             if (!Enum.IsDefined(a.Mode) || a.Mode == JobAssociationMode.Awaited && a.Continuation is null)
@@ -110,6 +118,13 @@ internal static class JobStoreCodec
                 Payload(c);
             }
         }
+    }
+    internal static void RequestMetadata(JobRequestMetadata value)
+    {
+        ArgumentNullException.ThrowIfNull(value); ArgumentNullException.ThrowIfNull(value.Handler);
+        Name(value.Handler.JobType); Name(value.Handler.Version); Name(value.Queue);
+        Schema(value.InputSchema); Schema(value.ResultSchema); Digest(value.InputSha256);
+        Policy(value.Policy); Association(value.Association);
     }
     internal static JobGateKey[] Gates(JobRequest request, bool workflowOnly = false)
     {

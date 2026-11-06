@@ -20,13 +20,13 @@ directory. They control an actual handler invocation, without changing its accep
 ```sh
 python3 tools/jobs/verify-packaged-job-models.py \
   --source-ref FULL_SOURCE_SHA --publish-state-ref FULL_PUBLISH_STATE_SHA \
-  --evidence-dir /tmp/elsa-jobs-model-evidence --stage execute \
+  --evidence-dir /tmp/elsa-jobs-model-evidence --provider sqlite --stage execute \
   --m2-receipt /absolute/passing-m2-all-groups/receipt.json \
   --m2-source-ref FULL_M2_SOURCE_SHA --m2-publish-state-ref FULL_M2_PUBLISH_STATE_SHA
 ```
 
 `pack` and `publish` are separate construction stages. `execute` requires the complete passing raw
-SQLite M2 evidence tree and explicitly selected M2 source/publish-state commits. The gate matches
+M2 evidence tree for the selected provider and explicitly selected M2 source/publish-state commits. The gate matches
 all 27 source-owned case identities and their Passed states, the identical nested plan/cases/hash,
 provider engine/version and cleanup, source/controller/harness hashes, complete packed/restored/
 deployed package bindings, and version-computation source/fingerprint/command identities. Older
@@ -34,8 +34,18 @@ five-case M1 receipts and scalar-only promotions refuse. Retain `source`, `feed`
 `computation.json` and `standalone-witness` beside the package receipt. Canonical relative locations
 allow relocating that complete tree without rewriting the hashed receipts' original paths.
 The gate records `PRIOR_SOURCE_M2_SLICE_ONLY`; it grants no current-M3-source qualification.
-The first execution profile is SQLite with
-separate retained Jobs and Runtime files. It creates no database container or external credentials.
+The default execution profile remains SQLite with separate retained Jobs and Runtime files. The
+`--provider postgresql` profile compiles a distinct external consumer against the centrally pinned
+Npgsql provider, requires the actual PostgreSQL M2 all-groups prerequisite, and runs the identical
+34-case oracle plus the new created-helper cancellation case. It accepts no external database or
+connection string. Its owned `postgres:16-alpine` container has exact run labels, a loopback-only
+port, actual image ID and PostgreSQL 16 engine evidence. Jobs and Runtime use separate databases
+with verified C collation and a generated schema. An admitted aggregate cgroup parent, when supplied,
+is checked against the actual container PID. Command files containing this throwaway credential are
+private. After all child processes stop, both actual databases are exported as retained `pg_dump`
+artifacts and hashed. Cleanup verifies labels before removing only the returned full container ID,
+then proves exact-ID absence using a successful daemon query. Export or cleanup failure fails the
+receipt. The selected provider assembly bytes and compile profile remain in package evidence.
 Initialization uses actual migrations once; subsequent hosts validate the schema. Exact-scope
 operations run through `IPersistenceOperationScopeFactory`. The actual SQLite engine version is read.
 
@@ -57,7 +67,7 @@ protocol `elsa.bpmn/1`; the probe refuses any native workflow header for that ro
 public BPMN graph/work/header projections and `IBpmnNativeWorkConsumer`, without parsing a private
 BPMN payload. `ProcessId` supplies the logical definition identity across two material versions.
 
-The reviewed twenty-case checkpoint is preserved separately. The extended thirty-four declared cases cover:
+The reviewed twenty-case checkpoint is preserved separately. The extended thirty-five declared cases cover:
 
 - Native/BPMN success and selected handler failure, retaining the useful selected result and exact
   native consumption/grant binding; a fresh inspector verifies one physical handler entry.
@@ -99,9 +109,21 @@ The reviewed twenty-case checkpoint is preserved separately. The extended thirty
   Independent work is cancelled without handler entry; detached work runs once after cancellation.
   Additional nested Sequence → Flowchart → SubmitJob cases preserve the exact leaf association.
 
+- A real initial-attempt checkpoint cut creates the BPMN native helper before RunJob executes its
+  body. A qualification observer forwards the actual checkpoint writer and all reader/capability
+  checks, waits for its successful immediate `ActivityAttemptClaimed` commit, then blocks before
+  returning to activation. A separate inspector proves the exact committed helper/attempt/pin/origin,
+  zero saved bookmarks and zero Jobs. The controller kills that exact owned observer before its
+  timeout, commits genuine-root cancellation from a new process, then starts a successor coordinator.
+  The case requires positive normal native cancellation settlement, the same initial invocation,
+  zero handler entry/Jobs admission, root `TerminalSettled`, and successful native-history deletion.
+  The qualification marker is never product authority. This case must remain Failed or Not Run
+  until the ordinary native cancellation path provides its exact committed pre-wait phase proof;
+  missing admission state or a helper that never existed cannot satisfy it.
+
 Every planned case is retained as Passed, Failed or Not Run. Failure and cleanup failures remain
 failures. `fullAcceptanceState` remains Incomplete even if this focused slice passes. The controller
-also records the finite remaining plan: PostgreSQL; linked retry association;
+also records the finite remaining plan: linked retry association;
 pre-wait native cancellation; exact forged/missing-grant runtime mutations for selected
 failed/timed-out/cancelled results; grant-before-pause replay; stale process overlap; authoring
 publication/import; cross-tenant authorization; and the composed Studio experience. The source unit

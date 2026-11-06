@@ -58,6 +58,16 @@ internal sealed class JobsCheckpointEnricher(IActivityExecutionStateStore activi
 
         var cancelledParent = commit.StateChanges.WorkflowExecution is
             { Operation: RuntimeStateChangeOperation.Upsert, State.Status: WorkflowExecutionStatus.Cancelled };
+        if (cancelledParent && commit.StateChanges.WorkflowExecution is { } cancelled &&
+            JobsNativePreWaitCancellation.IsCancellationSource(commit, cancelled.State))
+        {
+            foreach (var activity in changed.Values.Where(activity => JobsNativePreWaitCancellation.IsInitialClaim(activity, ActivityExecutionStatus.Cancelled)).ToArray())
+            {
+                var receipt = JobsNativePreWaitCancellation.Create(commit, cancelled.State, activity);
+                var marked = Freeze(activity, JobsNativePreWaitCancellation.MetadataKey, JobsNativeBoundary.Write(receipt).GetRawText(), immutable: true);
+                changed[activity.InvocationId] = marked; replacements[activity.InvocationId] = marked;
+            }
+        }
         var cancellations = changed.Values.Where(state => cancelledParent
             ? state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Superseded)
             : state.Status == ActivityExecutionStatus.Cancelled).ToList();
@@ -120,6 +130,18 @@ internal sealed class JobsCheckpointEnricher(IActivityExecutionStateStore activi
 
     public ValueTask ValidateFinalAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
+        if (commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert, State.Status: WorkflowExecutionStatus.Cancelled } cancelled)
+        {
+            foreach (var change in commit.StateChanges.ActivityExecutions.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+                         change.State.Metadata.ContainsKey(JobsNativePreWaitCancellation.MetadataKey)))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var expected = JobsNativePreWaitCancellation.Create(commit, cancelled.State, change.State);
+                if (!JobsNativePreWaitCancellation.Matches(cancelled.State, change.State) ||
+                    !JobsNativeBoundary.Equivalent(expected, JobsNativeBoundary.ReadString<JobNativePreWaitCancellationReceipt>(
+                        change.State.Metadata[JobsNativePreWaitCancellation.MetadataKey]))) throw JobsNativeBoundary.Invalid();
+            }
+        }
         foreach (var change in commit.StateChanges.ActivityExecutions.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
                      change.State.Execution.ActivityType == JobsNativeBoundary.ActivityType && change.State.Metadata.ContainsKey(JobsNativeBoundary.AdmissionMetadataKey)))
         {

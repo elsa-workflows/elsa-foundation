@@ -6,6 +6,8 @@ namespace Elsa.Jobs.Workflows.Runtime.Tests;
 
 internal sealed class JobTransport : IJobCommands, IJobQueries
 {
+    public ValueTask<JobPayloadCleanupResult> ExpirePayloadsAsync(JobPayloadCleanupRequest request, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ExpirePayloadsAsync.");
+    public ValueTask<JobPage<JobPhysicalReceiptInspection>> ListPhysicalReceiptInspectionsAsync(JobScope scope, string jobId, JobPageRequest page, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Unexpected test authority call: ListPhysicalReceiptInspectionsAsync.");
     internal JobSnapshot? Snapshot { get; set; }
     internal JobContinuationPermission? Permission { get; set; }
     internal JobOriginSnapshot? Origin { get; set; }
