@@ -237,6 +237,15 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
             if (attributes.Any(a => a.AttributeType.FullName is JsonPrefix + "JsonPolymorphicAttribute" or JsonPrefix + "JsonDerivedTypeAttribute"))
                 return "activity.shape.polymorphic-opaque";
         }
+        // Nullable<T>'s codec delegates present values to T. Its scalar classification cannot
+        // bypass an underlying enum/type converter that changes the serialized JSON shape.
+        if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "System.Nullable`1")
+        {
+            var underlying = type.GetGenericArguments()[0];
+            Track(underlying);
+            if (OpaqueReason(underlying) is { } underlyingReason)
+                return underlyingReason;
+        }
         if (type.IsPointer || type.IsByRef || type.IsByRefLike || type.ContainsGenericParameters)
             return "activity.shape.type-unsupported";
         if (type.IsArray && type.GetArrayRank() != 1)
