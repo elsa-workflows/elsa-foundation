@@ -29,4 +29,3 @@ public interface IWorkflowPreparationEfEnrollmentParticipant : IWorkflowPreparat
         WorkflowPreparationOwnerSession owner, CancellationToken cancellationToken = default)
         => ValueTask.FromResult(WorkflowPreparationEfEnrollmentResult.Unsupported());
 }
-

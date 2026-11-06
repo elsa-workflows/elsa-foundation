@@ -19,12 +19,18 @@ public sealed class WorkflowPreparationOwnerInvocationTests
     }
 
     [Fact]
-    public async Task Current_owner_is_checked_again_after_the_operation()
+    public async Task The_participant_can_join_before_current_owner_validation()
     {
         var lease = new Lease();
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await WorkflowPreparationOwnerInvocation.ExecuteAsync(new Issuer(lease), new Participant(), lease.Owner,
-                (_, _) => { lease.Current = false; return ValueTask.CompletedTask; }, default));
+        await WorkflowPreparationOwnerInvocation.ExecuteAsync(new Issuer(lease), new Participant(), lease.Owner,
+            async (session, token) =>
+            {
+                session.EnsureActive();
+                Assert.Throws<InvalidOperationException>(() => session.Lease.EnsureCurrent());
+                await session.Lease.JoinAsync(new CommitFrame(session), token);
+                session.Lease.EnsureCurrent();
+            }, default);
+        Assert.True(lease.Joined);
     }
 
     [Fact]
@@ -67,17 +73,23 @@ public sealed class WorkflowPreparationOwnerInvocationTests
             Func<IWorkflowPreparationCommitContext, CancellationToken, ValueTask<WorkflowPreparationWriteResult>> stage,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
+    private sealed class CommitFrame(WorkflowPreparationOwnerSession owner) : IWorkflowPreparationCommitContext
+    {
+        public WorkflowPreparationOwnerSession Owner => owner;
+        public void EnsureActive() => owner.EnsureActive();
+    }
     private sealed class Lease : IWorkflowPreparationOwnerLease
     {
-        public bool Current { get; set; } = true;
+        public bool Joined { get; private set; }
         public WorkflowPreparationOwnerStamp Owner { get; } = new(new(null, "owner", "operation"), "ledger", 1, "Prepared",
             "request", "snapshot", "source", "source-profile", "compiler", "prepared", "content");
         public WorkflowPreparationDecision? Decision => throw new NotSupportedException();
         public IReadOnlyList<WorkflowPreparationRoot> SelectedRoots => throw new NotSupportedException();
-        public ValueTask JoinAsync(IWorkflowPreparationCommitContext commit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask JoinAsync(IWorkflowPreparationCommitContext commit, CancellationToken cancellationToken = default)
+        { Joined = true; return ValueTask.CompletedTask; }
         public void EnsureCurrent()
         {
-            if (!Current) throw new InvalidOperationException("The canonical owner guard ended.");
+            if (!Joined) throw new InvalidOperationException("Native Join has not succeeded.");
         }
     }
 }

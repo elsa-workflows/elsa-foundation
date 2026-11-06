@@ -20,13 +20,11 @@ internal static class WorkflowPreparationOwnerInvocation
             var active = 1;
             try
             {
-                lease.EnsureCurrent();
                 if (lease.Owner != expected)
                     throw new WorkflowPreparationException("enrollment-owner-mismatch", expected.Id);
                 var owner = new WorkflowPreparationOwnerSession(lease, () =>
                 {
                     if (Volatile.Read(ref active) == 0) throw new InvalidOperationException("The enrollment owner callback ended.");
-                    lease.EnsureCurrent();
                 });
                 await operation(owner, token);
                 owner.EnsureActive();

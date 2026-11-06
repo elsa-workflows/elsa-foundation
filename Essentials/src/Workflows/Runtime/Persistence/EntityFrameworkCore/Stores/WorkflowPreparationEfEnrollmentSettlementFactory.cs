@@ -33,17 +33,32 @@ internal sealed class WorkflowPreparationEfEnrollmentSettlementFactory(
             if (participant?.CanSettleEnrollment(issuer) != true)
                 return WorkflowPreparationEfEnrollmentResult.Unsupported();
             WorkflowPreparationEfEnrollmentResult? result = null;
-            await WorkflowPreparationOwnerInvocation.ExecuteAsync(issuer, participant, expectedOwner,
-                async (owner, token) =>
-                {
-                    result = bindTarget
-                        ? await participant.BindEnrollmentTargetAsync(owner, token)
-                        : await participant.SettleEnrollmentAsync(owner, token);
-                    owner.EnsureActive();
-                    ValidateResult(result, expectedOwner, bindTarget);
-                }, cancellationToken);
+            try
+            {
+                await WorkflowPreparationOwnerInvocation.ExecuteAsync(issuer, participant, expectedOwner,
+                    async (owner, token) =>
+                    {
+                        result = bindTarget
+                            ? await participant.BindEnrollmentTargetAsync(owner, token)
+                            : await participant.SettleEnrollmentAsync(owner, token);
+                        owner.EnsureActive();
+                        if (MayHaveCommitted(result)) owner.Lease.EnsureCurrent();
+                        ValidateResult(result, expectedOwner, bindTarget);
+                    }, cancellationToken);
+            }
+            catch (WorkflowPreparationOutcomeUnknownException) { throw; }
+            catch (Exception error) when (MayHaveCommitted(result))
+            {
+                // A result was returned by the native participant; a later current-owner check,
+                // callback/issuer guard release or response validation cannot undo its commit.
+                throw new WorkflowPreparationOutcomeUnknownException(expectedOwner.Id, error);
+            }
             return result ?? throw new WorkflowPreparationException("enrollment-no-owner-result", expectedOwner.Id);
         }
+
+        private static bool MayHaveCommitted(WorkflowPreparationEfEnrollmentResult? result) =>
+            result?.Status is WorkflowPreparationEfEnrollmentStatus.Bound or
+                WorkflowPreparationEfEnrollmentStatus.Accepted or WorkflowPreparationEfEnrollmentStatus.Aborted;
 
         private static void ValidateResult(WorkflowPreparationEfEnrollmentResult? result,
             WorkflowPreparationOwnerStamp owner, bool bindTarget)
