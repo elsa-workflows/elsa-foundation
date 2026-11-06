@@ -1,7 +1,8 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { ActivityNode } from "../workflowTypes";
 import { bpmnNotationFromElement, type BpmnNotationDescriptor } from "./bpmnNotation";
-import { isSubProcessElementType } from "./bpmnTypes";
+import { readBpmnDocumentAppearance, type BpmnDocumentAppearance } from "./bpmnDocumentAppearance";
+import { isGatewayElementType, isSubProcessElementType } from "./bpmnTypes";
 import { projectBpmnDocumentScene, readBpmnDocument, resolveBpmnDocumentReference,
   type BpmnBounds, type BpmnDocumentBinding, type BpmnDocumentCommand, type BpmnDocumentScene, type BpmnDocumentShape, type BpmnPoint, type BpmnScopeAddress, type ParsedBpmnDocument } from "./bpmnDocument";
 import { assessBpmnBoundaryAttachment, assessBpmnDocumentResize, bpmnDocumentDisplayEndpoints, bpmnFlowScope, bpmnOwningProcess, isBpmnModelElement, type BpmnDocumentEndpoint } from "./bpmnDocumentPolicy";
@@ -28,6 +29,9 @@ export interface BpmnDocumentEdgeData extends Record<string, unknown> {
   labelBounds?: BpmnBounds;
   semanticSource: BpmnDocumentEndpoint;
   semanticTarget: BpmnDocumentEndpoint;
+  appearance: BpmnDocumentAppearance;
+  isDefault?: boolean;
+  isConditional?: boolean;
 }
 export interface BpmnDocumentCanvas {
   scope: BpmnScopeAddress;
@@ -141,7 +145,8 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
       width: shape.bounds.width, height: shape.bounds.height, style: { width: shape.bounds.width, height: shape.bounds.height },
       expandParent: false, hidden: hidden.get(shape.shapeId), zIndex: shape.elementType === "participant" || shape.elementType === "lane" ? 0 : shape.elementType === "boundaryEvent" ? 3 : 2,
       data: { semanticElementId: shape.elementId, semanticType: shape.elementType, element: shape.element,
-        notation: bpmnNotationFromElement(shape.element, { ...shape.bounds, isExpanded: shape.isExpanded, isHorizontal: shape.isHorizontal, isMarkerVisible: shape.isMarkerVisible }),
+        notation: bpmnNotationFromElement(shape.element, { ...shape.bounds, isExpanded: shape.isExpanded, isHorizontal: shape.isHorizontal, isMarkerVisible: shape.isMarkerVisible,
+          appearance: readBpmnDocumentAppearance(parsed.byId.get(shape.shapeId)!) }),
         absoluteBounds: { ...shape.bounds }, labelBounds: shape.labelBounds && { ...shape.labelBounds }, semanticScopeId: identity(bpmnFlowScope(shape.element)),
         laneIds: membershipById.get(shape.shapeId) ?? [], attachmentHostId: attachmentById.get(shape.shapeId),
         binding: parsed.payload.bindings.find(binding => binding.elementId === shape.elementId) }
@@ -157,10 +162,15 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
       diagnostics.push({ code: "missing-edge-di", elementId: edge.elementId, diId: edge.edgeId, message: "A semantic connection endpoint has no shape in this view; source references are retained." });
       continue;
     }
+    const semanticSource = parsed.byId.get(endpoints.source.referenceIds[0]);
     edges.push({ id: edge.edgeId, type: "bpmnDocumentConnection", source: source.shapeId, target: target.shapeId,
       hidden: hidden.get(source.shapeId) || hidden.get(target.shapeId), zIndex: edge.elementType.endsWith("Association") ? 4 : 1,
       data: { semanticElementId: edge.elementId, semanticType: edge.elementType, element: edge.element, points: edge.points.map(point => ({ ...point })),
-        labelBounds: edge.labelBounds && { ...edge.labelBounds }, semanticSource: endpoints.source, semanticTarget: endpoints.target } });
+        labelBounds: edge.labelBounds && { ...edge.labelBounds }, semanticSource: endpoints.source, semanticTarget: endpoints.target,
+        appearance: readBpmnDocumentAppearance(parsed.byId.get(edge.edgeId)!),
+        isDefault: edge.elementType === "sequenceFlow" && !!semanticSource && resolveBpmnDocumentReference(parsed, semanticSource, semanticSource.getAttribute("default")) === edge.element,
+        isConditional: edge.elementType === "sequenceFlow" && !!semanticSource && !isGatewayElementType(semanticSource.localName)
+          && [...edge.element.children].some(child => isBpmnModelElement(child) && child.localName === "conditionExpression") } });
   }
   return { scope: { ...address }, scene, nodes, edges, unresolvedEdgeIds, diagnostics };
 }

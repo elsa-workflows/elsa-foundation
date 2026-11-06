@@ -1,9 +1,14 @@
 import { CanvasEditorChoice, CanvasEditorHost, useCanvasEditorChoice } from "./graph-authoring/CanvasEditorHost";
 import type { WorkflowCanvasChange } from "./graph-authoring/canvasEditorContract";
-import { collectOwnedNodeIds } from "./bpmn/bpmnAdapter";
+import { collectBpmnElementIds, collectOwnedNodeIds } from "./bpmn/bpmnAdapter";
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import type { ActivityGraphAuthoringHost } from "./graph-authoring/activityGraphAuthoringHost";
+import { BpmnDocumentQueryInspector } from "./bpmn/BpmnDocumentNativeInspector";
+import { resolveBpmnDocumentNativeSlotState, type BpmnDocumentNativeSlotContext } from "./bpmn/bpmnDocumentNativeSlot";
+import type { BpmnDocumentSurfaceHost, BpmnDocumentSurfaceSlots } from "./bpmn/bpmnDocumentSurfacePort";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import type {
@@ -22,6 +27,7 @@ import {
   collectActivityNodeIds,
   createActivityNode,
   findNodeScopePath,
+  findActivityNode,
   getActivityDisplay,
   getChildSlots,
   planSlotNavigation,
@@ -80,7 +86,7 @@ import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthor
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
 import { ScopeBreadcrumb } from "./workflow-editor/ScopeBreadcrumb";
-import { applyActivityDuplicatePlan, planActivityDuplicate, snapshotSelectedActivities } from "./workflow-editor/duplicateActivities";
+import { ActivityCopyRefusal, applyActivityDuplicatePlan, planActivityDuplicate, snapshotSelectedActivities } from "./workflow-editor/duplicateActivities";
 import { SlotEmptyState } from "./workflow-editor/SlotEmptyState";
 import { ConnectMenu } from "./workflow-editor/graph";
 import { listExpressionDescriptors } from "./api/expressions";
@@ -103,6 +109,7 @@ import { getActivityGraphOutcomeMappingOptions, type ActivityGraphOutcomeChoice 
 import { SequenceDesigner } from "./graph-authoring/SequenceDesigner";
 import { addCollectionItem, getCollectionSlots, type CollectionSlot } from "./collectionSlots";
 export { getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
+const BpmnDocumentAuthoringSurface = lazy(() => import("./bpmn/BpmnDocumentAuthoringSurface").then(module => ({ default: module.BpmnDocumentAuthoringSurface })));
 export type { ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 
 export interface ActivityGraphOutcomeMapping {
@@ -183,18 +190,19 @@ export function ActivityGraphPublicInterfaceEditor({
   }, [outcomeMappingOptions]);
 
   const commitPayload = (nextPayload: ActivityGraphPayload) => {
-    onChange({ ...value, payload: { ...(isRecord(value.payload) ? value.payload : {}), ...nextPayload } });
+    return onChange({ ...value, payload: { ...(isRecord(value.payload) ? value.payload : {}), ...nextPayload } }, value);
   };
   const updateOutcomeMappings = (outcomeMappings: ActivityGraphOutcomeMapping[]) => {
-    commitPayload({ ...payload, outcomeMappings });
+    return commitPayload({ ...payload, outcomeMappings });
   };
   const addOutcomeMapping = () => {
     if (!sourceOutcomeReferenceKey || !boundaryOutcomeReferenceKey) return;
     if (!canAddActivityGraphOutcomeMapping(payload.outcomeMappings, sourceOutcomeReferenceKey)) return;
-    updateOutcomeMappings([
+    const accepted = updateOutcomeMappings([
       ...payload.outcomeMappings,
       { sourceOutcomeReferenceKey, boundaryOutcomeReferenceKey }
     ]);
+    if (accepted === false) return;
     setSourceOutcomeReferenceKey("");
     setBoundaryOutcomeReferenceKey("");
   };
@@ -276,7 +284,7 @@ export function ActivityGraphVariablesEditor({ context, value, readOnly, onChang
       onChange={next => onChange({ ...value, payload: {
         ...(isRecord(value.payload) ? value.payload : {}),
         variables: fromVariableEditorRecords(next)
-      } })}
+      } }, value)}
     />
   </fieldset>;
 }
@@ -293,6 +301,7 @@ export function ActivityGraphImplementationEditor({
   graphCanvasEditors = [],
   canvasEditorPreferences,
   onCanvasReadinessChange,
+  authoringHost,
   historyResetKey = `${draftId}:active`,
   readOnly,
   onChange
@@ -301,6 +310,10 @@ export function ActivityGraphImplementationEditor({
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const [scopePath, setScopePath] = useState<ScopeFrame[]>([]);
+  const [bpmnSlotContext, setBpmnSlotContext] = useState<BpmnDocumentNativeSlotContext | null>(null);
+  const [preservationNotice, setPreservationNotice] = useState<string | null>(null);
+  const parentAuthoring = authoringHost?.protocol.id === "elsa.workflows.activity-graph-authoring" && authoringHost.protocol.version === 1
+    ? authoringHost.context as ActivityGraphAuthoringHost : undefined;
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [paletteSearch, setPaletteSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set());
@@ -321,6 +334,7 @@ export function ActivityGraphImplementationEditor({
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return { nodes: [], edges: [] };
     const { owner: documentOwner, slot: documentSlot } = documentScope;
+    if (documentOwner.structure?.kind === "elsa.bpmn.structure" && documentOwner.structure.schemaVersion === "2.0.0") return { nodes: [], edges: [] };
     const documentOwnerItem = catalogByVersion.get(documentOwner.activityVersionId);
     if (!supportsActivityNode(documentOwner, documentOwnerItem)) return { nodes: [], edges: [] };
     // A BPMN scope's canvas nodes are its process ELEMENTS (an activity-bearing element carries its
@@ -347,6 +361,7 @@ export function ActivityGraphImplementationEditor({
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return document;
     const { owner: documentOwner, slot: documentSlot } = documentScope;
+    if (documentOwner.structure?.kind === "elsa.bpmn.structure" && documentOwner.structure.schemaVersion === "2.0.0") return document;
     const documentOwnerItem = catalogByVersion.get(documentOwner.activityVersionId);
     if (!supportsActivityNode(documentOwner, documentOwnerItem)) return document;
     // Activities the shared canvas layer created in place (edge splice, connect menu) are not in the
@@ -408,6 +423,7 @@ export function ActivityGraphImplementationEditor({
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
   const slot = ownerSupported ? scope?.slot : undefined;
   const isBpmnSlot = slot?.mode === "bpmn";
+  const isBpmnDocumentSurface = isBpmnSlot && owner.structure?.kind === "elsa.bpmn.structure" && (!!parentAuthoring || owner.structure.schemaVersion === "2.0.0");
   const canvasChoice = useCanvasEditorChoice(graphCanvasEditors, "activity-definition-graph", isBpmnSlot ? owner.structure : undefined,
     `${definitionId}:${historyResetKey}:${owner.nodeId}`, canvasEditorPreferences);
   useEffect(() => {
@@ -443,6 +459,50 @@ export function ActivityGraphImplementationEditor({
       for (const record of unrelated.values()) if (!included.has(record.nodeId)) layout.push(record);
       return activityGraphDocumentAdapter.replaceGraph(current, updateActivity(currentRoot, owner.nodeId, () => change.owner, catalogByVersion), layout);
     });
+  };
+  const hostLive = useRef({ parentAuthoring, canvas, catalogByVersion, readOnly });
+  useLayoutEffect(() => { hostLive.current = { parentAuthoring, canvas, catalogByVersion, readOnly }; });
+  const bpmnSurfaceHost = useMemo<BpmnDocumentSurfaceHost | undefined>(() => {
+    if (!parentAuthoring || !isBpmnDocumentSurface) return undefined;
+    const fixedOwnerId = owner.nodeId, initial = parentAuthoring.readLive().token;
+    const readCanonical = () => {
+      const live = hostLive.current.parentAuthoring!.readLive();
+      const currentOwner = findActivityNode(activityGraphDocumentAdapter.readRoot(live.snapshot), fixedOwnerId, hostLive.current.catalogByVersion);
+      if (!currentOwner) throw new Error("The BPMN owner is no longer present in this implementation.");
+      return { token: live.token, owner: currentOwner, layout: activityGraphDocumentAdapter.readLayout(live.snapshot) };
+    };
+    const canEdit = () => {
+      const parent = hostLive.current.parentAuthoring;
+      if (!parent?.canEdit()) return false;
+      try { const token = readCanonical().token; return token.authorityId === initial.authorityId && token.resourceId === initial.resourceId && token.scopeId === initial.scopeId; } catch { return false; }
+    };
+    const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+    return { id: `${definitionId}:${historyResetKey}:${fixedOwnerId}`, authorityKey: JSON.stringify([initial.authorityId, initial.resourceId]),
+      coordinator: parentAuthoring.getResource(), readCanonical, canEdit,
+      notifyWorkChanged: () => hostLive.current.parentAuthoring!.notifyWorkChanged(),
+      async transitionScope(action) { await hostLive.current.parentAuthoring!.transition("scope-change", () => { flushSync(() => { hostLive.current.parentAuthoring!.invalidateScope(); action(); }); return undefined; }); },
+      admit(expected, candidate, plan, preparation) {
+        if (!canEdit() || !equal(readCanonical(), expected) || candidate.nodeId !== fixedOwnerId) return false;
+        if (preparation.preparation && (!equal(expected.owner, preparation.preparation.canonicalBaseOwner) || !equal(expected.layout, preparation.preparation.canonicalBaseLayout))) return false;
+        if (equal(candidate, expected.owner) || preparation.preparation && equal(candidate, preparation.preparation.preparedOwner)) return true;
+        let accepted = false;
+        flushSync(() => { accepted = hostLive.current.canvas.updateDocument(current => {
+          const catalog = hostLive.current.catalogByVersion, currentRoot = activityGraphDocumentAdapter.readRoot(current);
+          if (!canEdit() || !equal(readCanonical(), expected) || !equal(findActivityNode(currentRoot, fixedOwnerId, catalog), expected.owner) || !equal(activityGraphDocumentAdapter.readLayout(current), expected.layout)) return null;
+          const removed = new Set(plan.removedNodeIds), native = collectActivityNodeIds(candidate, catalog);
+          const previousElements = preparation.preparation ? collectBpmnElementIds(expected.owner, catalog) : new Set<string>();
+          const remainingElements = preparation.preparation ? collectBpmnElementIds(candidate, catalog) : new Set<string>();
+          const layout = expected.layout.filter(record => !removed.has(record.nodeId) && (!previousElements.has(record.nodeId) || native.has(record.nodeId) || remainingElements.has(record.nodeId)));
+          return activityGraphDocumentAdapter.replaceGraph({ ...current, activityPresentation: current.activityPresentation?.filter(record => !removed.has(record.nodeId)) }, updateActivity(currentRoot, fixedOwnerId, () => candidate, catalog), layout);
+        }); });
+        return accepted && equal(readCanonical().owner, candidate);
+      }
+    };
+  }, [parentAuthoring, isBpmnDocumentSurface, owner.nodeId, definitionId, historyResetKey]);
+  const historyAction = (direction: "undo" | "redo") => {
+    const action = () => { flushSync(() => { (direction === "undo" ? undo : redo)(); }); return undefined; };
+    if (parentAuthoring) void parentAuthoring.transition(direction, action).catch(error => setPreservationNotice(error instanceof Error ? error.message : String(error)));
+    else action();
   };
   const elements = isBpmnSlot ? bpmnPaletteElements : emptyGraphElements;
   // Authoring inline drops the activity list, not the Activities tab: it also holds the scope owner and
@@ -495,19 +555,21 @@ export function ActivityGraphImplementationEditor({
     () => payload.variables.flatMap(toVisibleGraphVariable),
     [payload.variables]
   );
-  const commitRoot = useCallback((nextRoot: ActivityNode, pinned?: PinnedGraphNodePosition) => {
-    const currentLayout = activityGraphDocumentAdapter.readLayout(value);
+  const bpmnSlotContextActive = !!bpmnSlotContext && scopeFrames.some(frame => frame.ownerNodeId === bpmnSlotContext.nativeOwnerNodeId);
+  const bpmnSlotQuery = useMemo(() => resolveBpmnDocumentNativeSlotState(workflowState, scopeFrames, bpmnSlotContext, catalogByVersion), [workflowState, scopeFrames, bpmnSlotContext, catalogByVersion]);
+  useEffect(() => { if (bpmnSlotContext && !scopeFrames.some(frame => frame.ownerNodeId === bpmnSlotContext.nativeOwnerNodeId)) setBpmnSlotContext(null); }, [bpmnSlotContext, scopeFrames]);
+  const commitRoot = useCallback((nextRoot: ActivityNode, pinned?: PinnedGraphNodePosition) => canvas.updateDocument(current => {
+    // An old inspector callback carries a whole authored subtree. Parent ACK alone cannot make
+    // that old candidate current: compare its captured document before entering shared history.
+    if (parentAuthoring && activityGraphDocumentSignature(current) !== activityGraphDocumentSignature(value)) return null;
+    const currentLayout = activityGraphDocumentAdapter.readLayout(current);
     const reconciledLayout = reconcileGraphLayout(nextRoot, catalogByVersion, currentLayout, pinned);
     const currentScope = resolveScope(nextRoot, resolveScopeFrames(nextRoot, scopePath, catalogByVersion), catalogByVersion);
     const nextLayout = currentScope?.slot.mode === "sequence"
       ? reconciledLayout.filter(record => currentLayout.some(current => current.nodeId === record.nodeId))
       : reconciledLayout;
-    commitDocument(activityGraphDocumentAdapter.replaceGraph(
-      value,
-      nextRoot,
-      nextLayout
-    ));
-  }, [catalogByVersion, commitDocument, scopePath, value]);
+    return activityGraphDocumentAdapter.replaceGraph(current, nextRoot, nextLayout);
+  }), [canvas, catalogByVersion, parentAuthoring, scopePath, value]);
 
   const updateOwnerActivities = useCallback((nextActivities: ActivityNode[], pinned?: PinnedGraphNodePosition) => {
     if (!slot) return;
@@ -542,12 +604,23 @@ export function ActivityGraphImplementationEditor({
     return placement.activityNode;
   }, [createPlacement, nodes.length]);
 
-  const enterChildSlot = useCallback((ownerNodeId: string, childSlot: ChildSlot, label: string) => {
-    const plan = planSlotNavigation(scopeFrames, owner, ownerNodeId, childSlot, label, catalogByVersion);
-    if (!plan) return;
-    setScopePath(plan.frames);
-    setSelectedNodeId(plan.selectedNodeId);
-  }, [catalogByVersion, owner, scopeFrames]);
+  const enterChildSlot = useCallback((ownerNodeId: string, childSlot: ChildSlot, label: string, sourceContext?: BpmnDocumentNativeSlotContext) => {
+    if (!parentAuthoring) {
+      const plan = planSlotNavigation(scopeFrames, owner, ownerNodeId, childSlot, label, catalogByVersion);
+      if (plan) { setScopePath(plan.frames); setSelectedNodeId(plan.selectedNodeId); }
+      return;
+    }
+    const apply = () => {
+      const currentRoot = parentAuthoring ? activityGraphDocumentAdapter.readRoot(parentAuthoring.readLive().snapshot) : root;
+      const currentFrames = resolveScopeFrames(currentRoot, scopePath, catalogByVersion), currentScope = resolveScope(currentRoot, currentFrames, catalogByVersion);
+      const nativeOwner = findActivityNode(currentRoot, ownerNodeId, catalogByVersion), liveSlot = nativeOwner && getChildSlots(nativeOwner, catalogByVersion).find(slot => slot.id === childSlot.id);
+      const plan = liveSlot && planSlotNavigation(currentFrames, currentScope?.owner ?? null, ownerNodeId, liveSlot, label, catalogByVersion);
+      if (!plan) return undefined;
+      flushSync(() => { parentAuthoring?.invalidateScope(); if (sourceContext) setBpmnSlotContext(sourceContext); setScopePath(plan.frames); setSelectedNodeId(plan.selectedNodeId); }); return undefined;
+    };
+    if (parentAuthoring) return parentAuthoring.transition("scope-change", apply).then(() => undefined);
+    apply();
+  }, [catalogByVersion, owner, parentAuthoring, root, scopeFrames, scopePath]);
 
   // The Activity Definition graph's answer to the workflow editor's drop routing: a graph with no root
   // yet adopts the first composition dropped on it, otherwise the activity appends to the open slot at
@@ -777,6 +850,7 @@ export function ActivityGraphImplementationEditor({
   };
   const duplicateSequenceActivity = (nodeId: string) => {
     if (readOnly || slot?.mode !== "sequence" || slot.cardinality !== "many") return;
+    try {
     const snapshot = snapshotSelectedActivities({
       selectedNodeIds: [nodeId],
       scopeActivities: activities,
@@ -803,6 +877,10 @@ export function ActivityGraphImplementationEditor({
     const duplicatedNodeId = plan.selectedNodeIds[0] ?? null;
     setSelectedNodeId(duplicatedNodeId);
     if (duplicatedNodeId) interactions.queueCanvasNodeFocus(duplicatedNodeId);
+    } catch (error) {
+      if (!(error instanceof ActivityCopyRefusal)) throw error;
+      setPreservationNotice(error.message);
+    }
   };
   const moveSelected = (offset: -1 | 1) => {
     if (!selected) return;
@@ -849,8 +927,7 @@ export function ActivityGraphImplementationEditor({
       current => replaceSlotActivities(current, targetSlot, [next]),
       catalogByVersion
     );
-    commitRoot(nextRoot);
-    enterChildSlot(ownerNodeId, { ...targetSlot, activities: [next] }, label);
+    if (commitRoot(nextRoot)) void enterChildSlot(ownerNodeId, { ...targetSlot, activities: [next] }, label);
   };
 
   const contributedPanelTabs = supportedPanels.map(panel => {
@@ -903,24 +980,7 @@ export function ActivityGraphImplementationEditor({
     },
     ...contributedPanelTabs.filter(tab => tab.side === "left")
   ].sort(compareWorkflowPanelTabs);
-  const rightPanelTabs: WorkflowEditorPanelTab[] = [
-    {
-      id: "inspector",
-      title: "Inspector",
-      order: 0,
-      icon: <ListTree size={15} />,
-      render: () => (
-        <>
-          {/* A pure BPMN structure element has no bound activity, but is still removable. */}
-          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
-            {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
-            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
-          </div> : null}
-          {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
-          {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
-          {bpmnInspectorProps && !selected ? <BpmnElementInspector {...bpmnInspectorProps} /> : <InspectorPanel
+  const nativeInspectorElement = (<InspectorPanel
             bpmnRoutingPanel={bpmnInspectorProps && selected ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
             key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
             context={context}
@@ -944,7 +1004,8 @@ export function ActivityGraphImplementationEditor({
             selectedSupportsScopedVariables={inspectedSupportsVariables}
             readOnly={readOnly}
             variablesPanel={!selected && scopePath.length === 0 ? (
-              <ActivityGraphVariablesEditor context={context} value={value} readOnly={readOnly} onChange={commitDocument} />
+              <ActivityGraphVariablesEditor context={context} value={value} readOnly={readOnly} onChange={(next, expected) => canvas.updateDocument(current =>
+                expected && activityGraphDocumentSignature(expected) !== activityGraphDocumentSignature(current) ? null : next)} />
             ) : undefined}
             propertyEditors={propertyEditors}
             expressionEditors={expressionEditors}
@@ -958,7 +1019,26 @@ export function ActivityGraphImplementationEditor({
             onSelectedActivityChange={updateSelected}
             onEnterSlot={(ownerNodeId, childSlot, label) => enterChildSlot(ownerNodeId, childSlot, label)}
             onReplaceSlotActivity={replaceInspectedSlotActivity}
-          />}
+          />);
+  const rightPanelTabs: WorkflowEditorPanelTab[] = [
+    {
+      id: "inspector",
+      title: "Inspector",
+      order: 0,
+      icon: <ListTree size={15} />,
+      render: () => (
+        <>
+          {/* A pure BPMN structure element has no bound activity, but is still removable. */}
+          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
+            {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
+            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
+            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
+            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+          </div> : null}
+          {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
+          {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
+          {bpmnInspectorProps && !selected ? <BpmnElementInspector {...bpmnInspectorProps} /> : bpmnSlotContextActive && !bpmnSlotQuery ? <p role="alert">The BPMN scope context changed. Return to the process before editing this native Slot.</p> : bpmnSlotQuery ? <BpmnDocumentQueryInspector context={context} workflowState={bpmnSlotQuery.state} selectedNodeId={inspectedNode.nodeId} catalog={catalog}
+            render={overrides => cloneElement(nativeInspectorElement, overrides)} /> : nativeInspectorElement}
         </>
       )
     },
@@ -985,15 +1065,16 @@ export function ActivityGraphImplementationEditor({
     />
   ) : null;
 
-  return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
+  const renderWorkbench = (surface?: BpmnDocumentSurfaceSlots) => <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
+    {preservationNotice ? <p role="alert">{preservationNotice}</p> : null}
     <GraphAuthoringWorkbench
       resourceKind="activity-definition-graph"
       className="ad-graph-workspace"
       layout={sidePanelLayout}
-      palette={{
+      palette={surface?.palette === null ? undefined : {
         ariaLabel: elements.length ? "Elements panel" : "Activities panel",
         tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
-        tabs: leftPanelTabs,
+        tabs: surface ? leftPanelTabs.map(tab => tab.id === "activities" ? { ...tab, title: "BPMN toolbox", render: () => surface.palette } : tab) : leftPanelTabs,
         activeTabId: activeLeftPanel.id,
         onSelect: setActiveLeftPanelId
       }}
@@ -1001,13 +1082,13 @@ export function ActivityGraphImplementationEditor({
         <ScopeBreadcrumb
           frames={scopeFrames}
           onNavigate={nextFrames => {
-            setScopePath(nextFrames);
-            setSelectedNodeId(null);
+            const apply = () => { flushSync(() => { parentAuthoring?.invalidateScope(); setScopePath(nextFrames); setSelectedNodeId(null); }); return undefined; };
+            if (parentAuthoring) void parentAuthoring.transition("scope-change", apply).catch(error => setPreservationNotice(String(error))); else apply();
           }}
         />
-        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
-        {isBpmnSlot ? <CanvasEditorChoice choice={canvasChoice} /> : null}
-        {isBpmnSlot && canvasChoice.active ? <CanvasEditorHost key={`${historyResetKey}:${owner.nodeId}:${canvasChoice.active.id}`}
+        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={() => historyAction("undo")} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={() => historyAction("redo")} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || !!surface || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
+        {!surface && isBpmnSlot ? <CanvasEditorChoice choice={canvasChoice} /> : null}
+        {surface ? surface.canvas : isBpmnSlot && canvasChoice.active ? <CanvasEditorHost key={`${historyResetKey}:${owner.nodeId}:${canvasChoice.active.id}`}
           editor={canvasChoice.active} onFallback={() => canvasChoice.choose("integrated")} context={{
             protocol: { id: "elsa.workflows.controlled-canvas", version: 1 }, resourceKind: "activity-definition-graph",
             documentId: `${definitionId}:${historyResetKey}`, scopeId: owner.nodeId, owner,
@@ -1102,12 +1183,21 @@ export function ActivityGraphImplementationEditor({
       inspector={{
         ariaLabel: "Inspector panel",
         tabLabel: "Inspector panel tabs",
-        tabs: rightPanelTabs,
+        tabs: surface ? rightPanelTabs.map(tab => tab.id === "inspector" ? { ...tab, render: () => surface.inspector } : tab) : rightPanelTabs,
         activeTabId: activeRightPanel.id,
         onSelect: setActiveRightPanelId
       }}
     />
   </div>;
+  return isBpmnDocumentSurface ? <Suspense fallback={renderWorkbench({ palette: null, canvas: <p role="status">Loading BPMN authoring…</p>, inspector: null, controlsBlocked: true })}>
+    <BpmnDocumentAuthoringSurface context={context} resourceKind="activity-definition-graph" documentId={`${definitionId}:${historyResetKey}`}
+      owner={owner} layout={activityGraphDocumentAdapter.readLayout(value)} workflowState={workflowState} host={bpmnSurfaceHost} readOnly={readOnly}
+      catalog={catalog} activityDescriptors={catalog.map(toActivityDescriptor)} presentation={value.activityPresentation}
+      editors={graphCanvasEditors} preferences={canvasEditorPreferences} onHistory={historyAction} onSelectNative={setSelectedNodeId}
+      onOpenNativeSlot={enterChildSlot} renderNativeInspector={overrides => cloneElement(nativeInspectorElement, { ...overrides, key: overrides.selectedNode?.nodeId ?? "bpmn-scope-owner" })}>
+      {slots => renderWorkbench(slots)}
+    </BpmnDocumentAuthoringSurface>
+  </Suspense> : renderWorkbench();
 }
 
 function ActivityGraphOutputMappingEditor({
@@ -1489,7 +1579,8 @@ function nodeIdAtJsonPointer(payload: ActivityGraphPayload, pointer: string | nu
 function activityGraphDocumentSignature(document: StudioActivityDefinitionImplementationEditorProps["value"]) {
   // Server normalization (trimmed strings and explicit nulls) acknowledges the same edit.
   // A different provider, layout, or presentation value still resets external-change history.
-  return JSON.stringify({ ...document, activityPresentation: normalizeActivityPresentation(document.activityPresentation) });
+  return JSON.stringify({ payload: document.payload, layout: document.layout,
+    activityPresentation: normalizeActivityPresentation(document.activityPresentation) });
 }
 
 function unsupportedGraphFocus(): StudioActivityDiagnosticFocusResult {

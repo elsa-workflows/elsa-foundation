@@ -26,5 +26,6 @@ const assetSize = await size(assets);
 if (eagerSize > 5_000 || jsSize > 650_000 || cssSize > 40_000 || assetSize > 300_000 || largest > 500_000) throw new Error(`Optional BPMN module budget exceeded: ${JSON.stringify({ eagerSize, jsSize, cssSize, assetSize, largest })}`);
 const notices = await readFile(resolve(output, "THIRD_PARTY_NOTICES.txt"), "utf8");
 if (!notices.includes("bpmn-js@18.31.1") || !notices.includes("watermark")) throw new Error("Pinned toolkit attribution is missing.");
-if (!entry || !manifest["src/BpmnJsCanvas.tsx"]?.isDynamicEntry) throw new Error("The canvas must remain a deferred entry.");
+const canvas = manifest["src/BpmnDocumentJsCanvas.tsx"];
+if (!entry || !canvas?.isDynamicEntry || eager.has(canvas.file)) throw new Error("The source2 canvas must remain a deferred entry.");
 console.log(JSON.stringify({ baseToolkitDependencies: 0, registrationBytes: eagerSize, javaScriptBytes: jsSize, stylesheetBytes: cssSize, assetBytes: assetSize, largestChunkBytes: largest, eagerStyles: styles.styles }, null, 2));

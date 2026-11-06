@@ -12,6 +12,8 @@ export interface WorkflowCanvasChange {
 export interface WorkflowCanvasState {
   status: "loading" | "ready" | "refused" | "failed";
   message?: string;
+  /** Cached local work may exist during an active gesture even while the visible canvas is ready. */
+  pending?: boolean;
 }
 
 export interface WorkflowCanvasEditorContext {

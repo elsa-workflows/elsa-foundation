@@ -49,8 +49,16 @@ function clearActivityDefinitionRecoveryOnAuthSessionEnded() {
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
 export type { WorkflowCanvasEditorContext, WorkflowCanvasChange, WorkflowCanvasState } from "./graph-authoring/canvasEditorContract";
+export type { AuthoringCheckpointToken, AuthoringParentReceipt, AuthoringParticipantWork } from "./graph-authoring/authoringCheckpoint";
+export type { BpmnDocumentSessionSource, BpmnDocumentSessionAcknowledgement, BpmnDocumentSessionCommit, BpmnDocumentSessionAdmission } from "./bpmn/bpmnDocumentSessionHost";
+export type { BpmnDocumentCanvasEditorContext, BpmnDocumentCanvasSession, BpmnDocumentCanvasParticipant } from "./bpmn/bpmnDocumentSurfacePort";
+export type { BpmnDocumentSyntaxPlan } from "./bpmn/bpmnDocumentSyntaxChange";
 export type { ActivityNode, DesignMetadataRecord } from "./workflowTypes";
 export type { BpmnElement, BpmnSequenceFlow } from "./bpmn/bpmnTypes";
+export { loadBpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { BpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { BpmnDocumentCommand, BpmnDocumentTransaction, BpmnDocumentConfigurationChange, BpmnXmlAddress, BpmnScopeAddress,
+  BpmnDocumentSelection, BpmnBounds, BpmnPoint, ParsedBpmnDocument } from "./bpmn/bpmnDocument";
 export type { GraphPaletteElement } from "./graph-authoring/graphPaletteElements";
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";

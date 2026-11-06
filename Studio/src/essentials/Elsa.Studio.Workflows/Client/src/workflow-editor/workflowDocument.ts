@@ -1,7 +1,7 @@
-import { useReducer, useMemo } from "react";
+import { useReducer, useMemo, useRef, useLayoutEffect, useCallback } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
-import { getDraftContentRevision } from "./editorHelpers";
+import { getDraftContentRevision, getDraftSignature } from "./editorHelpers";
 import { removeActivityPresentation } from "../activityPresentation";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
@@ -58,6 +58,8 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
+  // A module-owned view scope/plane changed without changing the persisted activity graph.
+  | { type: "authoringScopeChanged" }
   // A reviewed Weaver change (spec 1193 FR-008): applied only when the definition, the SHA-256 content revision, the
   // selection and the scope frame are still exactly what the change was bound to; otherwise refused with zero change.
   // The frames the caller computed keep the user's scope when it survives and fall back to its nearest ancestor.
@@ -146,10 +148,34 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
 
 // Hook wrapper exposing the reducer as a small set of intent-named methods. WorkflowEditor and its
 // extracted hooks drive the document exclusively through these, so no handler touches the raw setters.
+interface CommittedWorkflowDocument {
+  state: WorkflowDocumentState;
+  /** Local source/scope generation, independent of the server's persisted revision. */
+  revision: number;
+}
+
+function reduceWorkflowDocumentStore(previous: CommittedWorkflowDocument, action: WorkflowDocumentAction): CommittedWorkflowDocument {
+  if (action.type === "authoringScopeChanged") return { state: previous.state, revision: previous.revision + 1 };
+  const state = workflowDocumentReducer(previous.state, action);
+  if (state === previous.state) return previous;
+  const before = previous.state.draft;
+  const after = state.draft;
+  const sourceChanged = before !== after && (!before || !after || before.id !== after.id || before.definitionId !== after.definitionId
+    || getDraftSignature(before) !== getDraftSignature(after));
+  const scopeChanged = previous.state.frames !== state.frames && JSON.stringify(previous.state.frames) !== JSON.stringify(state.frames);
+  return { state, revision: previous.revision + (sourceChanged || scopeChanged ? 1 : 0) };
+}
+
 export function useWorkflowDocument() {
-  const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
+  const [snapshot, dispatch] = useReducer(reduceWorkflowDocumentStore, { state: initialWorkflowDocumentState, revision: 0 });
+  const { state } = snapshot;
+  const committed = useRef(snapshot);
+  useLayoutEffect(() => { committed.current = snapshot; }, [snapshot]);
+  const readCommitted = useCallback(() => committed.current, []);
 
   const actions = useMemo(() => ({
+    /** Invalidate late canvas callbacks across module-owned scope/plane changes, including ABA. */
+    invalidateAuthoringScope() { dispatch({ type: "authoringScopeChanged" }); },
     compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null,
       expectedFrames: ScopeFrame[], frames: ScopeFrame[]) {
       dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames });
@@ -200,7 +226,7 @@ export function useWorkflowDocument() {
     }
   }), []);
 
-  return { state, ...actions };
+  return { state, readCommitted, ...actions };
 }
 
 export type WorkflowDocumentApi = ReturnType<typeof useWorkflowDocument>;

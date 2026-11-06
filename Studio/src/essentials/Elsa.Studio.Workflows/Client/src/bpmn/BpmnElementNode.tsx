@@ -9,6 +9,7 @@ import type { BpmnNotationDescriptor } from "./bpmnNotation";
 import type { BpmnNodeData } from "./bpmnAdapter";
 import { useGraphPortLayout } from "../graph-authoring/useGraphPortLayout";
 import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
+import { bpmnAppearanceLabelStyle } from "./bpmnDocumentAppearance";
 
 const CompleteBpmnNotation = React.lazy(async () => ({ default: (await import("./bpmnNotation")).BpmnNotation }));
 
@@ -35,14 +36,14 @@ export function BpmnElementNode({ id, data, selected }: NodeProps) {
     >
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
-      {renderBpmnShape(nodeData)}
+      {renderBpmnShape(nodeData, selected)}
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
       {ports.sources.map(port => <Handle key={port.id} type="source" position={port.side} id={port.id} style={portPlacementStyle(port)} />)}
     </div>
   );
 }
 
-function renderBpmnShape(nodeData: BpmnNodeData) {
+function renderBpmnShape(nodeData: BpmnNodeData, selected?: boolean) {
   const element = nodeData.element;
   const explicit = nodeData.notation;
   const loop = element.loopCharacteristics as { isSequential?: boolean } | null | undefined;
@@ -57,7 +58,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
         eventSubProcess: element.triggeredByEvent === true, transaction: element.isTransaction === true,
         loop: loop ? loop.isSequential ? "sequential" : "parallel" : undefined,
         compensation: element.isForCompensation === true } satisfies BpmnNotationDescriptor : null;
-  if (advanced) return renderCompleteNotation(nodeData, advanced);
+  if (advanced) return renderCompleteNotation(nodeData, advanced, selected);
 
   if (isEventElementType(element.elementType)) {
     const isEnd = element.elementType === bpmnElementTypes.endEvent;
@@ -120,22 +121,22 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
   );
 }
 
-function renderCompleteNotation(nodeData: BpmnNodeData, descriptor: BpmnNotationDescriptor) {
+function renderCompleteNotation(nodeData: BpmnNodeData, descriptor: BpmnNotationDescriptor, selected?: boolean) {
   const type = bpmnNotationType(descriptor.type);
   const bound = nodeData.boundActivity;
   const activity = isActivityBearingElementType(type);
   const label = descriptor.name?.trim() || nodeData.element.name?.trim() || bound?.label || bpmnElementTypeLabel(nodeData.element);
   const ownsLabel = ["participant", "lane", "textAnnotation", "group"].includes(type);
   return <span className="wf-bpmn-notation-node">
-    <React.Suspense fallback={<span role="status">Loading BPMN notation…</span>}><CompleteBpmnNotation descriptor={descriptor} /></React.Suspense>
+    <React.Suspense fallback={<span role="status">Loading BPMN notation…</span>}><CompleteBpmnNotation descriptor={descriptor} selected={selected} faulted={nodeData.runtime?.hasBlockingIncident} /></React.Suspense>
     {activity ? <>
       {bound ? <span className="wf-node-icon wf-bpmn-notation-binding" data-tone={bound.iconTone ?? "accent"} aria-hidden="true">{renderActivityIcon(bound.icon, "activity")}</span> : null}
       <span className="wf-bpmn-notation-content">
-        <strong>{label}</strong>
+        <strong style={bpmnAppearanceLabelStyle(descriptor.appearance)}>{label}</strong>
         {!bound && nodeData.bindingLabel ? <small>{nodeData.bindingLabel}</small> : null}
         {bound ? <NodeSlotBadges ownerNodeId={bound.nodeId} ownerLabel={label} slots={nodeData.childSlots}
           collections={nodeData.collectionSlots} onEnterSlot={nodeData.onEnterSlot} /> : null}
       </span>
-    </> : !ownsLabel ? <small className="wf-bpmn-caption">{label}</small> : null}
+    </> : !ownsLabel ? <small className="wf-bpmn-caption" style={bpmnAppearanceLabelStyle(descriptor.appearance)}>{label}</small> : null}
   </span>;
 }

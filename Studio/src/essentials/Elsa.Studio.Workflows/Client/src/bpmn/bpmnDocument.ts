@@ -37,11 +37,24 @@ export interface BpmnDocumentPayload extends Record<string, unknown> {
   scopeHeaders?: BpmnScopeHeader[];
 }
 
-export interface BpmnXmlAddress {
-  elementId: string;
+/** Only disjoint Elsa configuration can accompany a standard XML edit. */
+export interface BpmnDocumentConfigurationChange {
+  activities?: ActivityNode[];
+  bindings?: BpmnDocumentBinding[];
+  variables?: VariableDefinition[];
+  scopeHeaders?: BpmnScopeHeader[];
+}
+
+export interface BpmnDocumentTransaction {
+  commands?: readonly BpmnDocumentCommand[];
+  configuration?: BpmnDocumentConfigurationChange;
+}
+
+/** Explicit root addressing never invents a persisted ID for idless definitions. */
+export type BpmnXmlAddress = ({ elementId: string; documentRoot?: never } | { documentRoot: true; elementId?: never }) & {
   /** Addresses idless standard properties without inventing persisted element identities. */
   path?: { namespaceURI: string; localName: string; index?: number }[];
-}
+};
 
 export interface BpmnScopeAddress {
   documentOwnerNodeId: string;
@@ -59,18 +72,19 @@ export interface BpmnBounds { x: number; y: number; width: number; height: numbe
 export interface BpmnPoint { x: number; y: number }
 
 export type BpmnDocumentCommand =
+  | { kind: "namespace"; target: BpmnXmlAddress; prefix: string; namespaceURI: string }
   | { kind: "attribute"; target: BpmnXmlAddress; name: string; namespaceURI?: string; value: string | null }
   | { kind: "text"; target: BpmnXmlAddress; value: string }
   | { kind: "append"; parent: BpmnXmlAddress; xml: string }
   | { kind: "insert"; parent: BpmnXmlAddress; xml: string; before?: BpmnXmlAddress }
   | { kind: "remove"; target: BpmnXmlAddress }
-  | { kind: "reparent"; target: BpmnXmlAddress; parent: BpmnXmlAddress }
+  | { kind: "reparent"; target: BpmnXmlAddress; parent: BpmnXmlAddress; before?: BpmnXmlAddress | null }
   | { kind: "replaceType"; target: BpmnXmlAddress; localName: string }
   | { kind: "reconnect"; elementId: string; sourceRef: string; targetRef: string }
   | { kind: "bounds"; shapeId: string; bounds: BpmnBounds }
   | { kind: "labelBounds"; diId: string; bounds: BpmnBounds | null }
   | { kind: "dataReferences"; elementId: string; sourceRefs: string[]; targetRef: string }
-  | { kind: "waypoints"; edgeId: string; points: BpmnPoint[] };
+  | { kind: "waypoints"; edgeId: string; points: BpmnPoint[]; sourceIndices?: (number | null)[] };
 
 export interface ParsedBpmnDocument {
   payload: BpmnDocumentPayload;
@@ -257,7 +271,9 @@ export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context
 }
 
 function resolve(parsed: ParsedBpmnDocument, address: BpmnXmlAddress): Element {
-  let element = parsed.byId.get(address.elementId);
+  if (address.documentRoot !== undefined && (address.documentRoot !== true || address.elementId !== undefined))
+    fail("XML address must select either the document root or an element identity");
+  let element = address.documentRoot ? parsed.document.documentElement : parsed.byId.get(requiredText(address.elementId, "XML address elementId"));
   if (!element) fail(`element '${address.elementId}' is unavailable`);
   for (const step of address.path ?? []) {
     element = children(element, step.namespaceURI, step.localName)[step.index ?? 0];
@@ -341,11 +357,16 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
   }
   for (const [reference, direction] of [[sourceRef, "outgoing"], [targetRef, "incoming"]]) {
     const endpoint = parsed.byId.get(reference)!;
-    const child = references.get(direction) ?? parsed.document.createElementNS(bpmnNamespaces.model, `bpmn:${direction}`);
+    const child = references.get(direction) ?? parsed.document.createElementNS(bpmnNamespaces.model, endpoint.prefix ? `${endpoint.prefix}:${direction}` : direction);
     if (!references.has(direction)) child.textContent = id;
     if (child.parentElement !== endpoint) {
       if (references.has(direction)) preserveNamespaceContext(child, endpoint);
-      endpoint.appendChild(child);
+      // FlowNode adds incoming* followed by outgoing* before the derived Activity/Event fields.
+      // A self-loop updates both on one owner, so append order would produce invalid BPMN.
+      const preceding = new Set(["extensionElements", "auditing", "monitoring", "categoryValueRef", "incoming",
+        ...(direction === "outgoing" ? ["outgoing"] : [])]);
+      const anchor = [...endpoint.children].find(element => element.namespaceURI === bpmnNamespaces.model && !preceding.has(element.localName));
+      endpoint.insertBefore(child, anchor ?? null);
     }
   }
 }
@@ -421,6 +442,27 @@ function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, next
 
 function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) {
   switch (command.kind) {
+    case "namespace": {
+      const target = resolve(parsed, command.target);
+      const namespace = requiredText(command.namespaceURI, "namespace URI");
+      if (!validNcName(parsed.document, command.prefix) || command.prefix === "xmlns"
+        || namespace === "http://www.w3.org/2000/xmlns/"
+        || namespace === "http://www.w3.org/XML/1998/namespace" && command.prefix !== "xml")
+        fail("namespace declaration needs a valid non-default prefix and namespace");
+      const previous = target.lookupNamespaceURI(command.prefix);
+      if (previous === namespace) return;
+      if (previous || command.prefix === "xml") fail("namespace declaration cannot rebind an existing prefix");
+      // A previously unresolved opaque QName must not acquire a new meaning as a side effect.
+      // Declare at the narrowest owner, or choose an unused prefix for the actual new field.
+      for (const element of [target, ...target.getElementsByTagName("*")]) {
+        if (element.lookupNamespaceURI(command.prefix)) continue;
+        const values = [...element.attributes].map(attribute => attribute.value);
+        values.push(...[...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE).map(node => node.textContent ?? ""));
+        if (values.some(value => value.includes(`${command.prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
+      }
+      target.setAttributeNS("http://www.w3.org/2000/xmlns/", `xmlns:${command.prefix}`, namespace);
+      return;
+    }
     case "attribute": {
       if (command.name === "id" || command.name === "xmlns" || command.name.startsWith("xmlns:") || command.namespaceURI === "http://www.w3.org/2000/xmlns/")
         fail("identity and namespace changes need an explicit reference-remapping operation");
@@ -430,7 +472,8 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
         else {
           const prefix = command.name.includes(":") ? command.name.split(":")[0] : null;
           const existingNamespace = prefix ? target.lookupNamespaceURI(prefix) : null;
-          if (existingNamespace && existingNamespace !== command.namespaceURI) fail("attribute prefix would change existing QName namespace context");
+          if (!prefix || existingNamespace !== command.namespaceURI)
+            fail("namespaced attributes require an explicitly declared matching prefix; introduce it with the namespace operation first");
           target.setAttributeNS(command.namespaceURI, command.name, command.value);
         }
       } else if (command.value === null) target.removeAttribute(command.name);
@@ -440,7 +483,11 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
     case "text": {
       const target = resolve(parsed, command.target);
       if (target.children.length) fail("text replacement would discard child configuration");
-      if (target.textContent !== command.value) target.textContent = command.value;
+      if (target.textContent !== command.value) {
+        if ([...target.childNodes].some(node => node.nodeType !== Node.TEXT_NODE && node.nodeType !== Node.CDATA_SECTION_NODE))
+          fail("text replacement needs explicit correspondence for retained comments or processing instructions");
+        target.textContent = command.value;
+      }
       return;
     }
     case "append":
@@ -465,9 +512,11 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const target = resolve(parsed, command.target);
       const parent = resolve(parsed, command.parent);
       if (target === parsed.process || target === parsed.document.documentElement || target.contains(parent)) fail("containment would be cyclic or remove the selected process");
-      if (target.parentElement === parent) return;
+      const before = command.before ? resolve(parsed, command.before) : null;
+      if (before && before.parentElement !== parent) fail("reparent anchor must be a direct child of its parent");
+      if (before === target || target.parentElement === parent && command.before === undefined) return;
       preserveNamespaceContext(target, parent);
-      parent.appendChild(target);
+      parent.insertBefore(target, before);
       return;
     }
     case "replaceType": {
@@ -562,25 +611,55 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const edge = resolve(parsed, { elementId: command.edgeId });
       if (!is(edge, bpmnNamespaces.diagram, "BPMNEdge") || command.points.length < 2) fail("edge needs at least two waypoints");
       const old = children(edge, bpmnNamespaces.coordinates, "waypoint");
-      if (old.length === command.points.length && old.every((waypoint, index) => Number(waypoint.getAttribute("x")) === command.points[index].x
+      const mapping = command.sourceIndices ?? command.points.map((_, index) => index < old.length ? index : null);
+      if (!Array.isArray(mapping) || mapping.length !== command.points.length) fail("waypoint source mapping must match the new route");
+      const retained = new Set<number>();
+      for (const index of mapping) {
+        if (index === null) continue;
+        if (!Number.isSafeInteger(index) || index < 0 || index >= old.length || retained.has(index)) fail("waypoint source mapping must use unique available vertices");
+        retained.add(index);
+      }
+      const hasMetadata = (waypoint: Element) => [...waypoint.attributes].some(attribute => attribute.namespaceURI !== "http://www.w3.org/2000/xmlns/"
+        && (attribute.namespaceURI !== null || !["x", "y"].includes(attribute.localName)))
+        || [...waypoint.childNodes].some(node => node.nodeType === 1 || node.nodeType === 7 || node.nodeType === 8 || node.textContent?.trim());
+      if (!command.sourceIndices && old.length !== command.points.length && old.slice(1).some(hasMetadata))
+        fail("route membership needs an explicit source mapping to retain waypoint metadata");
+      const sameSlots = old.length === mapping.length && mapping.every((source, index) => source === index);
+      if (sameSlots && old.every((waypoint, index) => Number(waypoint.getAttribute("x")) === command.points[index].x
         && Number(waypoint.getAttribute("y")) === command.points[index].y)) return;
-      // Preserve retained waypoint metadata. Removed points alone lose their own metadata.
+      // Empty temporary slots keep unowned siblings in their original order and namespace context.
+      // Explicitly omitted source vertices alone lose their own metadata; retained nodes travel intact.
+      const slots = old.map(waypoint => {
+        const slot = parsed.document.createTextNode(""); waypoint.replaceWith(slot); return slot;
+      });
       command.points.forEach((point, index) => {
-        const waypoint = old[index] ?? parsed.document.createElementNS(bpmnNamespaces.coordinates, "di:waypoint");
+        const source = mapping[index];
+        const waypoint = source === null ? parsed.document.createElementNS(bpmnNamespaces.coordinates, "di:waypoint") : old[source];
         waypoint.setAttribute("x", coordinate(point.x));
         waypoint.setAttribute("y", coordinate(point.y));
-        if (!old[index]) edge.insertBefore(waypoint, children(edge, bpmnNamespaces.diagram, "BPMNLabel")[0] ?? null);
+        edge.insertBefore(waypoint, slots[Math.min(index, slots.length - 1)] ?? children(edge, bpmnNamespaces.diagram, "BPMNLabel")[0] ?? null);
       });
-      for (const waypoint of old.slice(command.points.length)) waypoint.remove();
+      slots.forEach(slot => slot.remove());
       return;
     }
   }
 }
 
-/** Atomic immutable transaction. The host still owns revisions, history and persistence. */
-export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[]): ActivityNode {
-  if (!commands.length) return owner;
+/** Source and native ownership are validated together, before the host admits one history edit. */
+export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: BpmnDocumentTransaction): ActivityNode {
+  const commands = transaction.commands ?? [];
+  const configuration = transaction.configuration ?? {};
+  const configurationKeys = Object.keys(configuration);
+  if (configurationKeys.some(key => !["activities", "bindings", "variables", "scopeHeaders"].includes(key)))
+    fail("configuration changes must not introduce another semantic source");
+  if (configurationKeys.some(key => !Array.isArray(configuration[key as keyof BpmnDocumentConfigurationChange])))
+    fail("configuration changes must contain explicit arrays");
+  if (!commands.length && !configurationKeys.length) return owner;
   let parsed = readBpmnDocument(owner);
+  const configurationChanged = configurationKeys.some(key => JSON.stringify(configuration[key as keyof BpmnDocumentConfigurationChange]) !== JSON.stringify(parsed.payload[key]));
+  // A bound deletion/create can change both ownership lists and XML in this transaction. These
+  // intermediate arrays are not projected or persisted; only the final source is admitted below.
+  parsed = { ...parsed, payload: { ...parsed.payload, ...configuration } };
   const originalIds = parsed.byId;
   const before = new XMLSerializer().serializeToString(parsed.document);
   for (const command of commands) {
@@ -590,10 +669,16 @@ export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonl
   }
   rejectRemovedReferences(originalIds, parsed.byId, parsed.document);
   const documentXml = new XMLSerializer().serializeToString(parsed.document);
-  if (documentXml === before) return owner;
-  const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, documentXml } } };
+  if (documentXml === before && !configurationChanged) return owner;
+  const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, ...configuration,
+    documentXml: documentXml === before ? parsed.payload.documentXml : documentXml } } };
   readBpmnDocument(next);
   return next;
+}
+
+/** Atomic immutable XML-only transaction. The host owns revisions, history and persistence. */
+export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[]): ActivityNode {
+  return applyBpmnDocumentTransaction(owner, { commands });
 }
 
 export interface BpmnDocumentShape {

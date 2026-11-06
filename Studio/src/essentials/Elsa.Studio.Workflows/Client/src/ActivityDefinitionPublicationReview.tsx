@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -29,6 +29,7 @@ export function ActivityDefinitionPublicationReview({
   currentSignature,
   disabled,
   flushExactSavedRevision,
+  beforePublish,
   onPublicationPending,
   onPublished,
   onFocusDiagnostic,
@@ -44,8 +45,10 @@ export function ActivityDefinitionPublicationReview({
   currentSignature: string;
   disabled: boolean;
   flushExactSavedRevision(): Promise<ExactDraftBinding | null>;
+  /** Complete retained authoring work and acquire the parent's publication lock for this exact review. */
+  beforePublish?(binding: ExactDraftBinding): Promise<boolean>;
   onPublicationPending(pending: boolean): void;
-  onPublished(): void;
+  onPublished(): boolean | void;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onOpenVersion(versionId: string): void;
   onOpenWorkflows?: () => void;
@@ -65,6 +68,9 @@ export function ActivityDefinitionPublicationReview({
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
   const recommendationVerificationRef = useRef(0);
+  const publishingRef = useRef(false);
+  const latestMaterialRef = useRef({ revision: currentRevision, signature: currentSignature });
+  useLayoutEffect(() => { latestMaterialRef.current = { revision: currentRevision, signature: currentSignature }; }, [currentRevision, currentSignature]);
 
   useEffect(() => {
     if (!preflight || !binding || phase === "publishing" || phase === "success") return;
@@ -124,9 +130,14 @@ export function ActivityDefinitionPublicationReview({
         setFailure("The publication receipt did not contain an exact matching outcome. Reconcile the existing operation before starting another publication.");
         return;
       }
+      if (onPublished() === false) {
+        setPhase("unknown");
+        setFailure("Publication was applied to the reviewed draft, but its authoring state has changed. Reload the exact draft to confirm its status.");
+        onPublicationPending(false);
+        return;
+      }
       setPhase("success");
       setFailure(null);
-      onPublished();
       onPublicationPending(false);
       // Refresh the definition, drafts, and versions caches so the workbench's published-head and
       // recommendation panels reflect the new immutable version without a manual page reload.
@@ -186,7 +197,7 @@ export function ActivityDefinitionPublicationReview({
   };
 
   const publish = async () => {
-    if (!preflight || !binding || phase !== "review" || !preflight.isPublishable || !isExactVersionAtLeast(version, preflight.minimumVersion)) return;
+    if (publishingRef.current || !preflight || !binding || phase !== "review" || !preflight.isPublishable || !isExactVersionAtLeast(version, preflight.minimumVersion)) return;
     if (binding.revision !== currentRevision || binding.signature !== currentSignature) {
       setPreflight(null);
       setBinding(null);
@@ -195,30 +206,57 @@ export function ActivityDefinitionPublicationReview({
       operationKeyRef.current = null;
       return;
     }
-    const key = operationKeyRef.current ?? createOperationKey();
-    operationKeyRef.current = key;
-    onPublicationPending(true);
+    publishingRef.current = true;
     setPhase("publishing");
     setFailure(null);
+    let acquiredParentLock = false;
     try {
-      applyReceipt(await publishActivityDraft(context, draftId, {
-        expectedDraftRevision: preflight.draftRevision,
-        expectedDefinitionHeadVersionId: preflight.definitionHeadVersionId ?? null,
-        version,
-        reviewToken: preflight.reviewToken,
-        idempotencyKey: key
-      }));
-    } catch (error) {
-      if (isStalePublication(error)) {
+      // Mark in-flight before awaiting: two same-stack clicks must not prepare or publish twice.
+      if (beforePublish) {
+        let accepted = false;
+        try { accepted = await beforePublish({ ...binding }); } catch { /* A rejected barrier leaves this review stale. */ }
+        if (!accepted) {
+          setPreflight(null); setBinding(null); setPhase("stale");
+          setFailure("The draft changed or canvas edits could not be confirmed after review. Review the saved draft again before publishing.");
+          operationKeyRef.current = null;
+          return;
+        }
+        acquiredParentLock = true;
+      }
+      if (latestMaterialRef.current.revision !== binding.revision || latestMaterialRef.current.signature !== binding.signature) {
         setPreflight(null);
         setBinding(null);
         setPhase("stale");
-        setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
+        setFailure("The draft changed after review. Studio discarded the review without publishing.");
         operationKeyRef.current = null;
-        onPublicationPending(false);
+        if (acquiredParentLock) onPublicationPending(false);
         return;
       }
-      await reconcile(key);
+      const key = operationKeyRef.current ?? createOperationKey();
+      operationKeyRef.current = key;
+      onPublicationPending(true);
+      try {
+        applyReceipt(await publishActivityDraft(context, draftId, {
+          expectedDraftRevision: preflight.draftRevision,
+          expectedDefinitionHeadVersionId: preflight.definitionHeadVersionId ?? null,
+          version,
+          reviewToken: preflight.reviewToken,
+          idempotencyKey: key
+        }));
+      } catch (error) {
+        if (isStalePublication(error)) {
+          setPreflight(null);
+          setBinding(null);
+          setPhase("stale");
+          setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
+          operationKeyRef.current = null;
+          onPublicationPending(false);
+          return;
+        }
+        await reconcile(key);
+      }
+    } finally {
+      publishingRef.current = false;
     }
   };
 

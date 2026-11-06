@@ -211,3 +211,31 @@ mappings; retain mounted default editors so tab changes never discard unapplied
 text. Diagnostic links select the matching collection before focusing the exact
 member or field. Provider boundary editors can use the optional `contractSection`
 prop to show the corresponding output or outcome mappings.
+
+
+## Optional BPMN canvas contribution
+
+`Elsa.Studio.BpmnJs` registers the optional `bpmn-js` canvas. Workflows owns the
+`elsa.workflows.bpmn-document-canvas` version1 protocol, canonical draft, shared Elsa
+inspector, history and authoring checkpoints. Load the public Workflows authoring
+API through `loadBpmnDocumentAuthoring`; keep toolkit imports and styles at the
+optional rendering boundary. Both installed and packaged consumers must share the
+host React/ReactDOM instance and include the module's emitted assets and notices.
+The bpmn.io attribution must remain visible.
+
+Authors choose the BPMN editor beside the canvas. Both editors use the same process
+and native configuration. Opening an older draft prepares a view; the first actual
+edit migrates its standard BPMN source, and ordinary Save persists it. Standard
+subprocesses use the scope chooser; Elsa activity bodies use the shared inspector's
+Slots tab and ordinary nested editors. Permission, source ownership and historical
+version rules continue to govern edits.
+
+Complete-source authoring requires the backend's BPMN authoring capability. An
+unavailable or incompatible backend leaves the source readable and reports why
+editing is unavailable. The full toolbox can retain advanced drafts while the
+current backend rejects unsupported execution. Saving a draft does not establish
+that its process is runnable. XML export preserves standard source; separate Elsa
+native configuration follows the existing portability/omission policy.
+
+Maintenance and source-bound validation are in the
+[spec1217 validation guide](../../specs/1217-optional-bpmn-js-editor/quickstart.md).

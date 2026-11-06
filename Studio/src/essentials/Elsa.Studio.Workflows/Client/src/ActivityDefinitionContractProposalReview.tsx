@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
   type StudioActivityDiagnostic,
@@ -36,6 +36,7 @@ export function ActivityDefinitionContractProposalReview({
   context,
   draft,
   enabled,
+  beforeApply,
   onApplyingChange,
   onApplied,
   onFocusDiagnostic
@@ -43,8 +44,10 @@ export function ActivityDefinitionContractProposalReview({
   context: StudioEndpointContext;
   draft: ActivityDefinitionDraftView;
   enabled: boolean;
+  /** Checkpoint retained work and acquire the parent lock for this exact saved proposal binding. */
+  beforeApply?(binding: ActivityContractProposalBinding): Promise<boolean>;
   onApplyingChange(applying: boolean): void;
-  onApplied(draft: ActivityDefinitionDraftView): void;
+  onApplied(draft: ActivityDefinitionDraftView): boolean | void;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
 }) {
   const binding = useMemo<ActivityContractProposalBinding>(() => activityContractProposalBinding(draft), [draft]);
@@ -53,6 +56,9 @@ export function ActivityDefinitionContractProposalReview({
   const [decisions, setDecisions] = useState<Record<string, boolean>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [recompute, setRecompute] = useState(0);
+  const applyingRef = useRef(false);
+  const currentBindingRef = useRef(binding);
+  useLayoutEffect(() => { currentBindingRef.current = binding; }, [binding]);
 
   useEffect(() => {
     setProposal(null);
@@ -105,11 +111,29 @@ export function ActivityDefinitionContractProposalReview({
   const hasErrors = proposal?.diagnostics.some(diagnostic => diagnostic.severity === "Error") ?? false;
 
   const apply = async () => {
-    if (!proposal || phase !== "ready" || !proposalMatchesBinding(proposal, binding) || selectedChangeIds.length === 0 || hasErrors) return;
+    if (applyingRef.current || !enabled || !proposal || phase !== "ready" || !proposalMatchesBinding(proposal, binding) || selectedChangeIds.length === 0 || hasErrors) return;
+    applyingRef.current = true;
     setPhase("applying");
     setFailure(null);
-    onApplyingChange(true);
+    let ownsLock = false;
     try {
+      if (beforeApply) {
+        let accepted = false;
+        try { accepted = await beforeApply({ ...binding }); } catch { /* The parent retains failed checkpoint work. */ }
+        if (!accepted) {
+          setProposal(null); setDecisions({}); setPhase("stale");
+          setFailure("Canvas edits changed or could not be confirmed. Recompute suggestions against the exact saved draft.");
+          return;
+        }
+        ownsLock = true;
+      }
+      if (!proposalMatchesBinding(proposal, currentBindingRef.current)) {
+        setProposal(null); setDecisions({}); setPhase("stale");
+        setFailure("The proposal is stale. Recompute it against the latest exact saved revision.");
+        return;
+      }
+      onApplyingChange(true);
+      ownsLock = true;
       const saved = await applyActivityDefinitionContractProposal(context, draft.draftId, {
         ...proposalRequest(binding),
         proposalFingerprint: proposal.proposalFingerprint,
@@ -129,7 +153,10 @@ export function ActivityDefinitionContractProposalReview({
       }
       setProposal(null);
       setDecisions({});
-      onApplied(saved);
+      if (onApplied(saved) === false) {
+        setPhase("stale");
+        setFailure("The saved proposal could not be adopted by this authoring resource. Reload the exact draft before continuing.");
+      }
     } catch (error) {
       if (isStaleProposal(error)) {
         setProposal(null);
@@ -141,7 +168,8 @@ export function ActivityDefinitionContractProposalReview({
         setFailure(proposalApplyFailure(error));
       }
     } finally {
-      onApplyingChange(false);
+      if (ownsLock) onApplyingChange(false);
+      applyingRef.current = false;
     }
   };
 
@@ -179,7 +207,7 @@ export function ActivityDefinitionContractProposalReview({
       </section> : null}
       {reviews.length ? <footer className="ad-publication-actions">
         <span>{selectedChangeIds.length} of {reviews.length} changes selected. Destructive and unsupported changes start unselected.</span>
-        <button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={phase !== "ready" || selectedChangeIds.length === 0 || hasErrors}>
+        <button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={!enabled || phase !== "ready" || selectedChangeIds.length === 0 || hasErrors}>
           {phase === "applying" ? "Applying changes…" : "Apply selected changes"}
         </button>
       </footer> : null}

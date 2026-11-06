@@ -6,6 +6,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionContractProposalReview } from "../ActivityDefinitionContractProposalReview";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import type { ActivityContractProposalView, ActivityDefinitionDraftView } from "../activityDefinitionTypes";
+import type { ActivityContractProposalBinding } from "../activityContractProposalBinding";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -123,9 +124,43 @@ describe("Activity Definition contract proposal review", () => {
     ));
     await harness.unmount();
   });
+
+  it("awaits the parent's exact checkpoint once before a same-stack double Apply", async () => {
+    vi.useFakeTimers();
+    let finish!: (accepted: boolean) => void;
+    const gate = new Promise<boolean>(resolve => { finish = resolve; });
+    const beforeApply = vi.fn(() => gate), saved = exactDraft({ revision: 4, manifestFingerprint: "sha256:implementation-3" });
+    const postJson = vi.fn(async (url: string) => url.endsWith("/apply") ? saved : proposal());
+    const harness = renderReview({ context: endpoint(postJson), draft: exactDraft(), beforeApply });
+    await vi.advanceTimersByTimeAsync(900);
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input Currency"));
+    const apply = buttonByText(harness.container, "Apply selected changes");
+    flushSync(() => { apply.dispatchEvent(new MouseEvent("click", { bubbles: true })); apply.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(beforeApply).toHaveBeenCalledOnce();
+    expect(postJson.mock.calls.filter(([url]) => url.endsWith("/apply"))).toHaveLength(0);
+    finish(true); await vi.advanceTimersByTimeAsync(0);
+    expect(postJson.mock.calls.filter(([url]) => url.endsWith("/apply"))).toHaveLength(1);
+    expect(harness.onApplied).toHaveBeenCalledWith(saved);
+    await harness.unmount();
+  });
+
+  it.each(["false", "throw"])("retains source after a %s parent checkpoint without applying or unlocking another attempt", async kind => {
+    vi.useFakeTimers();
+    const beforeApply = vi.fn(async () => { if (kind === "throw") throw new Error("Native work retained"); return false; });
+    const postJson = vi.fn(async () => proposal());
+    const harness = renderReview({ context: endpoint(postJson), draft: exactDraft(), beforeApply });
+    await vi.advanceTimersByTimeAsync(900);
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input Currency"));
+    click(buttonByText(harness.container, "Apply selected changes")); await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("exact saved draft"));
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(harness.onApplyingChange).not.toHaveBeenCalled();
+    expect(harness.onApplied).not.toHaveBeenCalled();
+    await harness.unmount();
+  });
 });
 
-function renderReview({ context, draft }: { context: StudioEndpointContext; draft: ActivityDefinitionDraftView }) {
+function renderReview({ context, draft, beforeApply }: { context: StudioEndpointContext; draft: ActivityDefinitionDraftView; beforeApply?(binding: ActivityContractProposalBinding): Promise<boolean> }) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -137,6 +172,7 @@ function renderReview({ context, draft }: { context: StudioEndpointContext; draf
       context={context}
       draft={next}
       enabled={enabled}
+      beforeApply={beforeApply}
       onApplyingChange={onApplyingChange}
       onApplied={onApplied}
       onFocusDiagnostic={onFocusDiagnostic}

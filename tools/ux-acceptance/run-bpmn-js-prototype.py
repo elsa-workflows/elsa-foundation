@@ -87,9 +87,10 @@ def attachment_bytes(attachment: dict, output: Path) -> bytes:
     return value
 
 
-def validate_receipt(receipt: dict, attachments: dict, output: Path, sha: str, direction: str) -> None:
+def validate_receipt(receipt: dict, attachments: dict, output: Path, sha: str, direction: str, *, branches=None, passed_state='passed-prototype') -> None:
+    branches = BRANCHES if branches is None else branches
     if (receipt.get('source') != sha or receipt.get('firstEditor') != direction
-            or receipt.get('state') != 'passed-prototype' or receipt.get('browserErrors') != []):
+            or receipt.get('state') != passed_state or receipt.get('browserErrors') != []):
         raise ValueError(f'{direction}: receipt does not establish a clean source-bound prototype pass')
     for key in ('definitionId', 'draftId'):
         if not isinstance(receipt.get(key), str) or not receipt[key]:
@@ -99,12 +100,12 @@ def validate_receipt(receipt: dict, attachments: dict, output: Path, sha: str, d
         if not isinstance(publication.get(key), str) or not publication[key]:
             raise ValueError(f'{direction}: receipt is missing publication {key}')
     runs = receipt.get('runs', [])
-    if len(runs) != len(BRANCHES) or {run.get('route') for run in runs} != set(BRANCHES):
+    if len(runs) != len(branches) or {run.get('route') for run in runs} != set(branches):
         raise ValueError(f'{direction}: both runtime branches must execute exactly once')
     execution_ids = set()
     for run in runs:
         route = run['route']
-        expected, producer = BRANCHES[route]
+        expected, producer = branches[route]
         if (run.get('state') != 'passed' or run.get('expected') != expected
                 or run.get('actual') != expected or run.get('producer') != producer):
             raise ValueError(f'{direction} / {route}: runtime result receipt is incomplete')
@@ -126,6 +127,12 @@ def validate_receipt(receipt: dict, attachments: dict, output: Path, sha: str, d
                 or len(occurrences) != 1 or occurrences[0].get('activityExecutionId') != run['activityExecutionId']
                 or inspection.get('authoredActivityId') != producer or inspection.get('status') != 'Completed'):
             raise ValueError(f'{direction} / {route}: actual runtime inspection does not match the publication receipt')
+        output_value = instance.get('outputs', {}).get('result', {})
+        actual = output_value.get('value')
+        if isinstance(actual, dict):
+            actual = actual.get('preview') if actual.get('preview') is not None else actual.get('value')
+        if output_value.get('isRedacted') is not False or actual != expected:
+            raise ValueError(f'{direction} / {route}: recorded workflow output differs from the claimed bound result')
 
 
 def verdict(playwright: dict, output: Path, sha: str) -> list[dict]:
@@ -186,14 +193,14 @@ def configure_origins(backend: Path, studio_url: str) -> None:
     shells_path.write_text(json.dumps(shells), encoding='utf-8')
 
 
-def run(output: Path) -> None:
+def run(output: Path, *, playwright_config=PLAYWRIGHT_CONFIG, verdict_fn=None, kind='composed-prototype') -> None:
     output = output.resolve()
     if output.is_relative_to(ROOT):
         raise ValueError('Use a new evidence directory outside the checkout')
     output.mkdir(parents=True, exist_ok=False)
     report = {'sourceSha': None, 'headSha': None, 'dirty': None,
-              'kind': 'composed-prototype', 'status': 'failed', 'stage': 'prepare', 'startedAt': utc_now(),
-              'visualApproval': 'requires independent inspection; a prototype pass is not production acceptance'}
+              'kind': kind, 'status': 'failed', 'stage': 'prepare', 'startedAt': utc_now(),
+              'visualApproval': 'requires independent inspection; successful journeys alone do not complete production acceptance'}
     processes = []
     try:
         sha, dirty = source_state()
@@ -235,7 +242,7 @@ def run(output: Path) -> None:
                     if 'PLAYWRIGHT_BROWSERS_PATH' in os.environ:
                         browser_env['PLAYWRIGHT_BROWSERS_PATH'] = os.environ['PLAYWRIGHT_BROWSERS_PATH']
                     try:
-                        helpers.command(['pnpm', 'exec', 'playwright', 'test', '--config', PLAYWRIGHT_CONFIG],
+                        helpers.command(['pnpm', 'exec', 'playwright', 'test', '--config', playwright_config],
                                         output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
                     finally:
                         result_path = output / 'playwright.json'
@@ -247,7 +254,7 @@ def run(output: Path) -> None:
                     report['stage'] = 'evidence-verification'
                     assert_source(sha)
                     playwright = json.loads((output / 'playwright.json').read_text(encoding='utf-8'))
-                    report['journeys'] = verdict(playwright, output, sha)
+                    report['journeys'] = (verdict_fn or verdict)(playwright, output, sha)
                     report['executed'] = len(report['journeys'])
         assert_source(sha)
         report.update(stage='complete', status='passed')

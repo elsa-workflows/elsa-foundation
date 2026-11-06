@@ -185,6 +185,58 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await harness.unmount();
   });
 
+  it("waits for the exact parent checkpoint and ignores a second same-stack Publish click", async () => {
+    let finish!: (accepted: boolean) => void;
+    const admitted = new Promise<boolean>(resolve => { finish = resolve; });
+    const beforePublish = vi.fn(() => admitted), posts: string[] = [];
+    const harness = renderReview({ beforePublish, postJson: async (url, body) => {
+      posts.push(url); return url.endsWith("/publication-preflight") ? publicationPreflight() : publicationReceipt(body as Record<string, unknown>);
+    } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    const publish = buttonByText(harness.container, "Publish 1.0.0");
+    flushSync(() => {
+      publish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      publish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(beforePublish).toHaveBeenCalledOnce();
+    expect(beforePublish).toHaveBeenCalledWith({ revision: 3, signature: "signature-3" });
+    expect(posts.filter(url => url.endsWith("/publication"))).toEqual([]);
+    finish(true);
+    await waitFor(() => expect(harness.container.textContent).toContain("Published immutable version 1.0.0"));
+    expect(posts.filter(url => url.endsWith("/publication"))).toHaveLength(1);
+  });
+
+  it.each(["refused", "rejected"] as const)("discards the review on a %s parent checkpoint without publishing or releasing another lock", async kind => {
+    const beforePublish = vi.fn(async () => { if (kind === "rejected") throw new Error("Retained source failed"); return false; });
+    const publicationPending = vi.fn(), posts: string[] = [];
+    const harness = renderReview({ beforePublish, onPublicationPending: publicationPending, postJson: async (url, body) => {
+      posts.push(url); return url.endsWith("/publication-preflight") ? publicationPreflight() : publicationReceipt(body as Record<string, unknown>);
+    } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    click(buttonByText(harness.container, "Publish 1.0.0"));
+    await waitFor(() => expect(harness.container.textContent).toContain("Review the saved draft again"));
+    expect(posts.filter(url => url.endsWith("/publication"))).toEqual([]);
+    expect(publicationPending).not.toHaveBeenCalled();
+  });
+
+  it("does not publish an old review when canonical props change while its parent checkpoint awaits", async () => {
+    let finish!: (accepted: boolean) => void;
+    const admitted = new Promise<boolean>(resolve => { finish = resolve; });
+    const publicationPending = vi.fn(), posts: string[] = [];
+    const harness = renderReview({ beforePublish: () => admitted, onPublicationPending: publicationPending, postJson: async (url, body) => {
+      posts.push(url); return url.endsWith("/publication-preflight") ? publicationPreflight() : publicationReceipt(body as Record<string, unknown>);
+    } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    click(buttonByText(harness.container, "Publish 1.0.0"));
+    harness.material({ revision: 4, signature: "changed-after-review" }); finish(true);
+    await waitFor(() => expect(harness.container.textContent).toContain("discarded the review without publishing"));
+    expect(posts.filter(url => url.endsWith("/publication"))).toEqual([]);
+    expect(publicationPending).toHaveBeenCalledWith(false);
+  });
+
   it("keeps an unknown publication outcome in the open reconciliation-only dialog", async () => {
     const publicationPending = vi.fn();
     const harness = renderReview({
@@ -213,18 +265,41 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true]);
     await harness.unmount();
   });
+
+  it("keeps a delayed applied receipt distinct from adoption after its parent authority changes", async () => {
+    let finish!: (receipt: unknown) => void;
+    const response = new Promise<unknown>(resolve => { finish = resolve; });
+    const onPublished = vi.fn(() => false);
+    let request: Record<string, unknown> | undefined;
+    const harness = renderReview({ onPublished, postJson: async (url, body) => {
+      if (url.endsWith("/publication-preflight")) return publicationPreflight();
+      request = body as Record<string, unknown>; return response;
+    } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    click(buttonByText(harness.container, "Publish 1.0.0"));
+    await waitFor(() => expect(request).toBeDefined());
+    finish(publicationReceipt(request));
+    await waitFor(() => expect(harness.container.textContent).toContain("authoring state has changed"));
+    expect(onPublished).toHaveBeenCalledOnce();
+    expect(harness.container.textContent).not.toContain("Published immutable version 1.0.0");
+  });
 });
 
 function renderReview({
   postJson,
   getJson,
   flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" })),
-  onPublicationPending = vi.fn()
+  onPublicationPending = vi.fn(),
+  onPublished = vi.fn(),
+  beforePublish
 }: {
   postJson(url: string, body: unknown): Promise<unknown>;
   getJson?(url: string): Promise<unknown>;
   flushExactSavedRevision?: () => Promise<{ revision: number; signature: string } | null>;
   onPublicationPending?: (pending: boolean) => void;
+  onPublished?: () => boolean | void;
+  beforePublish?: (binding: { revision: number; signature: string }) => Promise<boolean>;
 }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const context = endpoint(postJson, getJson);
@@ -232,20 +307,23 @@ function renderReview({
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root: Root = createRoot(container);
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
+  let material = { revision: 3, signature: "signature-3" };
+  const render = () => flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
     context={context}
     definitionId="definition-1"
     draftId="draft-1"
-    currentRevision={3}
-    currentSignature="signature-3"
+    currentRevision={material.revision}
+    currentSignature={material.signature}
     disabled={false}
     flushExactSavedRevision={flushExactSavedRevision}
+    beforePublish={beforePublish}
     onPublicationPending={onPublicationPending}
-    onPublished={vi.fn()}
+    onPublished={onPublished}
     onFocusDiagnostic={onFocusDiagnostic}
     onOpenVersion={vi.fn()}
     mode="toolbar"
   /></QueryClientProvider>));
+  render();
   let mounted = true;
   const unmount = () => {
     if (!mounted) return;
@@ -255,7 +333,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount, onFocusDiagnostic };
+  return { container, unmount, onFocusDiagnostic, material(next: typeof material) { material = next; render(); } };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {

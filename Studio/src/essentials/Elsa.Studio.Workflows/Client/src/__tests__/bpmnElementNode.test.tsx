@@ -106,6 +106,21 @@ describe("NodeSlotBadges", () => {
 });
 
 describe("BpmnElementNode slot badges", () => {
+  it("styles the authored activity label while retaining the separate native Slot controls", async () => {
+    render(bpmnNode({ boundActivity: boundContainer, childSlots: [slot()], notation: {
+      type: "subProcess", name: "Authored label", appearance: { fill: "papayawhip", stroke: "navy", labelColor: "teal",
+        labelFont: { name: "Aptos", size: 18, bold: true, underline: true }, sources: {}, issues: [] }
+    } }), vi.fn());
+    await vi.waitFor(() => expect(container.querySelector("svg.wf-bpmn-notation")).not.toBeNull());
+    const label = container.querySelector<HTMLElement>(".wf-bpmn-notation-content strong")!;
+    expect(label.style.color).toBe("teal");
+    expect(label.style.fontSize).toBe("18px");
+    expect(label.style.fontWeight).toBe("700");
+    expect(label.style.textDecorationLine).toBe("underline");
+    expect(badges()[0].getAttribute("style")).toBeNull();
+    expect(badges()[0].textContent).toBe("Activities");
+  });
+
   it("retains the Elsa icon and actual activity slot navigation beside complete-source SVG notation", async () => {
     const navigate = vi.fn();
     render(bpmnNode({ boundActivity: boundContainer, childSlots: [slot()], notation: {

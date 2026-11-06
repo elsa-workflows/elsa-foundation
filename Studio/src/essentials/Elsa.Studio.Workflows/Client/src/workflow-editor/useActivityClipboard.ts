@@ -5,6 +5,7 @@ import { resolveScope, type ScopeFrame } from "../workflowAdapter";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import {
   pasteActivitiesIntoDraft,
+  ActivityCopyRefusal,
   snapshotSelectedActivities,
   type ActivityClipboardSnapshot
 } from "./duplicateActivities";
@@ -46,40 +47,48 @@ export function useActivityClipboard({
     if (!root) return null;
     const scope = resolveScope(root, frames, catalogByVersion);
     if (!scope) return null;
-    return snapshotSelectedActivities({
+    try { return snapshotSelectedActivities({
       selectedNodeIds: nodeIds,
       scopeActivities: scope.slot.activities,
       scopeOwner: scope.owner,
       catalog: catalogByVersion,
       layout: draft.layout,
       presentation: draft.activityPresentation ?? []
-    });
-  }, [catalogByVersion, disabled, draft, frames]);
+    }); } catch (error) {
+      if (!(error instanceof ActivityCopyRefusal)) throw error;
+      setStatus(error.message); return null;
+    }
+  }, [catalogByVersion, disabled, draft, frames, setStatus]);
 
   const applySnapshot = useCallback((snapshot: ActivityClipboardSnapshot, status: string, insertAfterNodeId?: string) => {
     if (disabled) return false;
     let selectedNodeId: string | null = null;
     let applied = false;
+    let refusal: string | null = null;
     // Window-level keydown is outside React's event system, so the document reducer
     // is scheduled instead of flushed. preventDefault and the status line need the
     // recipe result in this turn.
     flushSync(() => {
       editDraft(({ draft: current, frames: currentFrames }) => {
         if (!current) return null;
-        const result = pasteActivitiesIntoDraft({
+        let result: ReturnType<typeof pasteActivitiesIntoDraft>;
+        try { result = pasteActivitiesIntoDraft({
           draft: current,
           frames: currentFrames,
           snapshot,
           catalog: catalogByVersion,
           insertAfterNodeId
-        });
+        }); } catch (error) {
+          if (!(error instanceof ActivityCopyRefusal)) throw error;
+          refusal = error.message; return null;
+        }
         if (!result) return null;
         selectedNodeId = result.selectedNodeIds[0] ?? null;
         applied = true;
         return result.draft;
       });
     });
-    if (!applied) return false;
+    if (!applied) { if (refusal) setStatus(refusal); return false; }
     select(selectedNodeId);
     setStatus(status);
     return true;

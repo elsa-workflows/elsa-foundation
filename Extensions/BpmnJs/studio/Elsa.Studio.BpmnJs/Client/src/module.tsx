@@ -2,10 +2,10 @@ import type { ElsaStudioModuleApi, StudioWorkflowDesignerCanvasContribution } fr
 
 export const bpmnJsCanvasEditor: StudioWorkflowDesignerCanvasContribution = {
   id: "bpmn-js", title: "bpmn-js", order: 100,
-  protocol: { id: "elsa.workflows.controlled-canvas", version: 1 },
+  protocol: { id: "elsa.workflows.bpmn-document-canvas", version: 1 },
   supportedResourceKinds: ["workflow-definition", "activity-definition-graph"],
-  supportedStructures: [{ kind: "elsa.bpmn.structure", schemaVersions: ["1.0.0"] }],
-  load: () => import("./BpmnJsCanvas").then(module => ({ default: module.BpmnJsCanvasEditor }))
+  supportedStructures: [{ kind: "elsa.bpmn.structure", schemaVersions: ["2.0.0"] }],
+  load: () => import("./BpmnDocumentJsCanvas").then(module => ({ default: module.BpmnDocumentJsCanvasEditor }))
 };
 
 export function register(api: ElsaStudioModuleApi) {

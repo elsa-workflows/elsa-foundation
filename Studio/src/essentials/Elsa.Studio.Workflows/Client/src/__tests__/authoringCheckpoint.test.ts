@@ -31,7 +31,7 @@ function host() {
   const coordinator = createAuthoringCheckpoint({ readLive });
   const events: string[] = [];
   const replace = (changes: Partial<AuthoringCheckpointCapture<Snapshot>>) => { live = { ...live, ...changes }; };
-  function register(id = "canvas", initiallyPending = true) {
+  function register(id = "canvas", initiallyPending = true, order?: number) {
     const facts: { value: AuthoringParticipantWork } = { value: { pending: initiallyPending, sequence: initiallyPending ? 1 : 0, acceptedSequence: 0 } };
     const acquisitions: Acquisition[] = [];
     let fences = 0;
@@ -47,7 +47,7 @@ function host() {
       }),
       dispose: vi.fn()
     };
-    const registration = coordinator.register(id, participant);
+    const registration = coordinator.register(id, participant, order === undefined ? undefined : { order });
     return { id, facts, acquisitions, participant, registration, get fences() { return fences; } };
   }
   function acknowledge(control: ReturnType<typeof register>, acquisition: Acquisition, advance = true) {
@@ -68,6 +68,114 @@ async function acquisition(control: ReturnType<ReturnType<typeof host>["register
 }
 
 describe("resource-local authoring checkpoint", () => {
+  it("finishes native edits before inspector work regardless of mount order, then releases all fences in reverse", async () => {
+    const h = host(), inspector = h.register("inspector", true, 100), native = h.register("native", true, -100), later = h.register("later", false, 100);
+    const result = h.coordinator.capture("save");
+    const nativeLease = await acquisition(native);
+    expect(inspector.acquisitions).toHaveLength(0); expect(later.acquisitions).toHaveLength(0);
+    h.acknowledge(native, nativeLease);
+    const inspectorLease = await acquisition(inspector);
+    expect(inspectorLease.request.token.revision).toBe(1); expect(native.fences).toBe(1);
+    h.acknowledge(inspector, inspectorLease);
+    const laterLease = await acquisition(later); expect(laterLease.request.token.revision).toBe(2);
+    h.acknowledge(later, laterLease, false);
+    expect((await result).token.revision).toBe(2);
+    expect(h.events.filter(event => event.endsWith(":release"))).toEqual(["later:release", "inspector:release", "native:release"]);
+    expect(h.coordinator.probe()).toBe(false);
+  });
+
+  it("does not continue into inspector commits when the earlier native checkpoint refuses", async () => {
+    const h = host(), inspector = h.register("inspector"), native = h.register("native", true, -100);
+    const result = h.coordinator.capture("save"), refusal = new Error("Native source conflict");
+    const rejected = expect(result).rejects.toBe(refusal);
+    (await acquisition(native)).gate.reject(refusal);
+    await rejected;
+    expect(inspector.acquisitions).toHaveLength(0);
+    expect(h.coordinator.pendingParticipantIds()).toEqual(["inspector", "native"]);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0.5, Number.MAX_VALUE])("refuses an invalid checkpoint order %s without registering", order => {
+    const h = host();
+    expect(() => h.register("invalid", false, order)).toThrow("safe integer");
+    expect(h.coordinator.probe()).toBe(false);
+  });
+
+  it("runs an empty idle transition inline with a copied live snapshot and a reserved queue position", async () => {
+    const h = host();
+    let captured: AuthoringCheckpointCapture<Snapshot> | undefined;
+    const action = vi.fn((live: AuthoringCheckpointCapture<Snapshot>): undefined => {
+      expect(h.coordinator.probe()).toBe(true);
+      captured = live;
+      h.live.snapshot.configuration.expression = "later canonical mutation";
+    });
+    const result = h.coordinator.transition("view-change", action);
+    expect(action).toHaveBeenCalledOnce();
+    expect(captured!.snapshot.configuration.expression).toBe("original");
+    expect(captured!.lineage).not.toBe(h.live.lineage);
+    expect(h.coordinator.probe()).toBe(false);
+    await expect(result).resolves.toEqual({ applied: true });
+  });
+
+  it("does not skip the checkpoint of a registered clean canvas", async () => {
+    const h = host(), canvas = h.register("clean", false), action = vi.fn(() => undefined);
+    const result = h.coordinator.transition("view-change", action);
+    expect(action).not.toHaveBeenCalled();
+    const request = await acquisition(canvas);
+    expect(canvas.fences).toBe(1);
+    h.acknowledge(canvas, request, false); await result;
+    expect(action).toHaveBeenCalledOnce();
+    expect(request.release).toHaveBeenCalledOnce();
+  });
+
+  it("does not overtake an earlier queued capture when there are no canvases", async () => {
+    const h = host();
+    const saved = h.coordinator.capture("save");
+    const action = vi.fn((): undefined => { h.replace({ snapshot: { ...h.live.snapshot, name: "after transition" } }); });
+    const transitioned = h.coordinator.transition("view-change", action);
+    expect(action).not.toHaveBeenCalled();
+    expect((await saved).snapshot.name).toBe("before");
+    await transitioned;
+    expect(h.live.snapshot.name).toBe("after transition");
+  });
+
+  it("queues a reentrant empty transition after its already entered outer action", async () => {
+    const h = host(), events: string[] = [];
+    let nested!: Promise<unknown>;
+    const result = h.coordinator.transition("view-change", () => {
+      events.push("outer-start");
+      nested = h.coordinator.transition("scope-change", () => { events.push("nested"); return undefined; });
+      events.push("outer-end"); return undefined;
+    });
+    expect(events).toEqual(["outer-start", "outer-end"]);
+    await result; await nested;
+    expect(events).toEqual(["outer-start", "outer-end", "nested"]);
+  });
+
+  it("checkpoints a canvas registered by an empty action before a reentrant next transition", async () => {
+    const h = host(), action = vi.fn(() => undefined);
+    let canvas!: ReturnType<typeof h.register>, nested!: Promise<unknown>;
+    await h.coordinator.transition("view-change", () => {
+      canvas = h.register("new-view", false);
+      nested = h.coordinator.transition("scope-change", action);
+      expect(action).not.toHaveBeenCalled(); return undefined;
+    });
+    const request = await acquisition(canvas);
+    expect(action).not.toHaveBeenCalled();
+    h.acknowledge(canvas, request, false); await nested;
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an async empty transition and observes its rejection without leaving a queue marker", async () => {
+    const h = host();
+    const invalid = (() => Promise.reject(new Error("Detached invalid action"))) as unknown as (live: AuthoringCheckpointCapture<Snapshot>) => undefined;
+    await expect(h.coordinator.transition("undo", invalid)).rejects.toMatchObject({ code: "async-transition" });
+    expect(h.coordinator.probe()).toBe(false);
+    const abort = new AbortController(); abort.abort();
+    const action = vi.fn(() => undefined);
+    await expect(h.coordinator.transition("view-change", action, { signal: abort.signal })).rejects.toMatchObject({ name: "AbortError" });
+    expect(action).not.toHaveBeenCalled();
+  });
+
   it("captures the live canonical snapshot and lineage after delayed parent admission, then releases the fence", async () => {
     const h = host();
     const canvas = h.register();

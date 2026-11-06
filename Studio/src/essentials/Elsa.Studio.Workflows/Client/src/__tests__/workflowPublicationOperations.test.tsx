@@ -25,6 +25,54 @@ afterEach(() => {
 });
 
 describe("workflow publication operations", () => {
+  it("waits for native admission before freezing a publication snapshot and its history line", async () => {
+    const captured = draft();
+    captured.layout = [{ nodeId: "root", x: 42, y: 30 }];
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    const captureDraft = vi.fn(async () => { await pending; return { snapshot: captured, lineage: ["native-line"],
+      token: { authorityId: "authority", resourceId: "resource", scopeId: "scope", revision: 2 } }; });
+    const fixture = renderOperations({ captureDraft, lineage: () => ["old-line"] });
+    const preparing = fixture.current().preparePublication();
+    expect(fixture.flushPendingSave).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    finish(); await preparing; await flushUpdates();
+    expect(captureDraft).toHaveBeenCalledWith("publish");
+    expect(fixture.current().publicationReview?.draftSnapshot.layout).toEqual([{ nodeId: "root", x: 42, y: 30 }]);
+    expect(fixture.current().publicationReview?.draftLineage).toEqual(["native-line"]);
+    captured.layout[0].x = 999;
+    expect(fixture.current().publicationReview?.draftSnapshot.layout[0].x).toBe(42);
+  });
+
+  it("does not save or preflight publication after a refused native checkpoint", async () => {
+    const fixture = renderOperations({ captureDraft: async () => { throw new Error("Native work retained"); } });
+    await fixture.current().preparePublication(); await flushUpdates();
+    expect(fixture.flushPendingSave).not.toHaveBeenCalled();
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(JSON.stringify(fixture.setError.mock.calls.at(-1)?.[0])).toContain("Native work retained");
+  });
+
+  it("refuses Test Drive setup captured before a pending native edit instead of dropping it", async () => {
+    const changed = draft(); changed.layout = [{ nodeId: "root", x: 42, y: 30 }];
+    const captureDraft = vi.fn(async () => ({ snapshot: changed, lineage: [],
+      token: { authorityId: "authority", resourceId: "resource", scopeId: "scope", revision: 2 } }));
+    const fixture = renderOperations({ captureDraft });
+    expect(await fixture.current().runTestDrive(draft(), {}, { kind: "direct" }, "Direct", [])).toBeNull();
+    expect(captureDraft).toHaveBeenCalledWith("test-run");
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.startTestRun).not.toHaveBeenCalled();
+    expect(JSON.stringify(fixture.setError.mock.calls.at(-1)?.[0])).toContain("Review the updated Test Drive setup");
+  });
+
+  it("retains the canvas when its checkpoint refuses opening Test Drive", async () => {
+    const fixture = renderOperations({ captureDraft: async () => { throw new Error("Native work retained"); } });
+    await fixture.current().run();
+    expect(fixture.setActiveRightPanelId).not.toHaveBeenCalled();
+    expect(JSON.stringify(fixture.setError.mock.calls.at(-1)?.[0])).toContain("Native work retained");
+  });
+
   it("obtains authoritative snapshot preflight before rendering a mutation-free review", async () => {
     const fixture = renderOperations();
 
@@ -174,16 +222,16 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft.mock.calls[0][2]).toEqual({ lineage: ["batch-1"] });
   });
 
-  it("Save writes this render's draft with the line its caller captured at the click, or leaves the line to saveDraft", async () => {
+  it("Save checkpoints the current draft while publication retains its reviewed snapshot", async () => {
     const line = ["batch-1"];
     const fixture = renderOperations({ lineage: () => line });
 
     // Without a captured line, saveDraft compares this draft with the live one, so a stale render is never credited.
     await fixture.current().save();
-    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: undefined });
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: undefined, capture: "current" });
 
     await fixture.current().save({ lineage: ["captured-at-click"] });
-    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["captured-at-click"] });
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["captured-at-click"], capture: "current" });
   });
 
   it("publishes the immutable authoritative review through save, promote, and token-bound publish", async () => {
@@ -930,6 +978,7 @@ function renderOperations(options: {
   delayExactVersion?: string;
   saveDelayMs?: number;
   flushPendingSave?: () => Promise<void>;
+  captureDraft?: Parameters<typeof useWorkflowOperations>[0]["captureDraft"];
   resolveSideBySideAsReplace?: boolean;
   publicationPolicy?: PublicationPolicy;
   slots?: WorkflowActivationSlot[];
@@ -1085,6 +1134,7 @@ function renderOperations(options: {
       saveDraft,
       lineage: options.lineage,
       flushPendingSave,
+      captureDraft: options.captureDraft,
       ...callbacks
     }} />));
   renderHarness();

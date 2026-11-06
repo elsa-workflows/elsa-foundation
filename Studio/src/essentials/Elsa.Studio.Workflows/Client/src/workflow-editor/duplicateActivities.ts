@@ -4,8 +4,11 @@ import {
   resolveActivityLabel
 } from "../activityPresentation";
 import { flowchartStructureKind } from "../flowchartStartNode";
+import { inventoryBpmnDocument, remapBpmnDocumentNativeIdentities } from "../bpmn/bpmnDocumentInventory";
 import {
   collectActivityNodeIds,
+  getChildSlots,
+  readStructureDesignFacet,
   replaceSlotActivities,
   resolveScope,
   updateScopeOwner,
@@ -20,6 +23,14 @@ import type {
 } from "../workflowTypes";
 
 export const duplicatePositionOffset = { x: 40, y: 40 };
+
+/** A preservation refusal is shown by the editor without admitting a partial clipboard result. */
+export class ActivityCopyRefusal extends Error {}
+
+function bpmnInventory(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  try { return inventoryBpmnDocument(activity, catalog); }
+  catch (error) { throw new ActivityCopyRefusal(error instanceof Error ? error.message : "This BPMN source cannot be copied safely."); }
+}
 
 export interface ActivityClipboardSnapshot {
   activities: ActivityNode[];
@@ -93,8 +104,10 @@ export function snapshotSelectedActivities(options: {
   if (activities.length === 0) return null;
 
   const copiedIds = new Set<string>();
+  const inventory = clipboardNativeInventory(activities, options.catalog);
+  for (const id of inventory.ids) copiedIds.add(id);
   for (const activity of activities) {
-    for (const nodeId of collectActivityNodeIds(activity, options.catalog)) copiedIds.add(nodeId);
+    collectStructureIdentityIds(activity, options.catalog, copiedIds);
   }
 
   return {
@@ -123,6 +136,11 @@ export function planActivityDuplicate(options: {
   if (!scope || scope.slot.cardinality !== "many") return null;
   if (options.snapshot.activities.length === 0) return null;
 
+  // Inventory the whole selection before generic traversal, allocation or rewriting. A pair of
+  // individually valid BPMN documents can still share native identities in one draft.
+  const selectedInventory = clipboardNativeInventory(options.snapshot.activities, options.catalog);
+  if (options.draft.state.rootActivity) clipboardNativeInventory([options.draft.state.rootActivity], options.catalog);
+
   const usedIds = options.draft.state.rootActivity
     ? collectActivityNodeIds(options.draft.state.rootActivity, options.catalog)
     : new Set<string>();
@@ -136,11 +154,13 @@ export function planActivityDuplicate(options: {
   const offset = options.offset ?? duplicatePositionOffset;
   const topLevelIds = new Set(options.snapshot.activities.map(activity => activity.nodeId));
   const idMap = new Map<string, string>();
-  const activities = options.snapshot.activities.map(activity => {
+  const allocated = options.snapshot.activities.map(activity => {
     const remapped = remapActivityTree(activity, options.catalog, usedIds, allocateId);
     for (const [from, to] of remapped.idMap) idMap.set(from, to);
     return remapped.activity;
   });
+  const referenceMap = new Map([...idMap].filter(([id]) => selectedInventory.ids.has(id)));
+  const activities = allocated.map(activity => rewriteActivityIds(activity, idMap, options.catalog, referenceMap, selectedInventory.documents > 0));
 
   const takenNames = collectDisplayNames(options.draft.state.rootActivity, options.draft.activityPresentation, options.catalog);
   const presentationBySource = indexActivityPresentation(options.snapshot.presentation);
@@ -175,8 +195,8 @@ export function planActivityDuplicate(options: {
     return [{
       ...source,
       nodeId: to,
-      x: Math.round(source.x + (isTopLevel ? offset.x : 0)),
-      y: Math.round(source.y + (isTopLevel ? offset.y : 0))
+      x: source.x + (isTopLevel ? offset.x : 0),
+      y: source.y + (isTopLevel ? offset.y : 0)
     }];
   });
 
@@ -269,34 +289,144 @@ function remapActivityTree(
   collectStructureIdentityIds(clone, catalog, new Set()).forEach(identity => {
     if (!idMap.has(identity)) idMap.set(identity, allocateId(nodeIdPrefix(identity), usedIds));
   });
-  return { activity: rewriteActivityIds(clone, idMap), idMap };
+  return { activity: clone, idMap };
 }
 
-function rewriteActivityIds(activity: ActivityNode, idMap: Map<string, string>): ActivityNode {
+function completeBpmnSource(activity: ActivityNode) {
+  return activity.structure?.kind === "elsa.bpmn.structure" && activity.structure.schemaVersion === "2.0.0";
+}
+
+function clipboardNativeInventory(activities: readonly ActivityNode[], catalog: ActivityCatalogLookup) {
+  const ids = new Set<string>(), active = new Set<ActivityNode>(), seen = new Set<ActivityNode>();
+  let documents = 0;
+  const own = (id: string) => {
+    if (!id || ids.has(id)) throw new ActivityCopyRefusal(`Cannot copy activities: native identity '${id}' is missing or repeated.`);
+    ids.add(id);
+  };
+  const visit = (activity: ActivityNode) => {
+    if (active.has(activity) || seen.has(activity)) throw new ActivityCopyRefusal("Cannot copy activities: native ownership is cyclic or repeated.");
+    seen.add(activity); active.add(activity);
+    if (completeBpmnSource(activity)) {
+      const inventory = bpmnInventory(activity, catalog);
+      for (const id of inventory.nativeNodes.keys()) own(id);
+      documents += inventory.documents.size;
+    } else {
+      own(activity.nodeId);
+      for (const slot of getChildSlots(activity, catalog)) for (const child of slot.activities) visit(child);
+    }
+    active.delete(activity);
+  };
+  for (const activity of activities) visit(activity);
+  return { ids, documents };
+}
+
+function remapClipboardReferences(activity: ActivityNode, references: ReadonlyMap<string, string>, catalog: ActivityCatalogLookup): ActivityNode {
+  const targets = new Set(references.values());
+  const id = (value: unknown) => {
+    if (typeof value !== "string" || value === "workflow") return value;
+    if (!references.has(value) && targets.has(value)) throw new ActivityCopyRefusal(`Cannot copy the BPMN selection: a new identity would capture external reference '${value}'.`);
+    return references.get(value) ?? value;
+  };
+  const variable = (value: unknown) => {
+    if (!isRecord(value) || typeof value.referenceKey !== "string") throw new ActivityCopyRefusal("Cannot copy the BPMN selection: a native variable reference is unqualified.");
+    return { ...value, ...(Object.hasOwn(value, "declaringScopeId") ? { declaringScopeId: id(value.declaringScopeId) } : {}) };
+  };
+  const expression = (value: unknown): Record<string, unknown> => {
+    if (!isRecord(value) || typeof value.expressionType !== "string") throw new ActivityCopyRefusal("Cannot copy the BPMN selection: a native argument is unqualified.");
+    const type = value.expressionType.toLowerCase();
+    if (type === "variable") return { ...value, value: variable(value.value) };
+    if (type === "activityresult") {
+      const reference = value.value;
+      if (!isRecord(reference) || typeof reference.producerNodeId !== "string" || typeof reference.projectionKey !== "string")
+        throw new ActivityCopyRefusal("Cannot copy the BPMN selection: a native result reference is unqualified.");
+      return { ...value, value: { ...reference, producerNodeId: id(reference.producerNodeId),
+        ...(Object.hasOwn(reference, "producerScopeId") ? { producerScopeId: id(reference.producerScopeId) } : {}) } };
+    }
+    if (["literal", "object", "workflowrequest", "input", "secret", "connection"].includes(type)) return value;
+    throw new ActivityCopyRefusal(`Cannot copy the BPMN selection: expression type '${value.expressionType}' requires a qualified reference transform.`);
+  };
+  const arguments_ = (values: unknown[]) => values.map(value => {
+    if (!isRecord(value) || typeof value.referenceKey !== "string") throw new ActivityCopyRefusal("Cannot copy the BPMN selection: an authored argument is malformed.");
+    return { ...value, value: expression(value.value) };
+  });
+  let next: ActivityNode = { ...activity, inputs: arguments_(activity.inputs), outputs: arguments_(activity.outputs) };
+  if (activity.intrinsic?.variable) next.intrinsic = { ...activity.intrinsic, variable: variable(activity.intrinsic.variable) as typeof activity.intrinsic.variable };
+  const item = resolveCatalogItem(activity, catalog);
+  for (const descriptor of item?.inputs ?? []) {
+    if (!isRecord(descriptor) || typeof descriptor.referenceKey !== "string") continue;
+    const value = activity[descriptor.referenceKey];
+    if (!isRecord(value) || !isRecord(value.expression)) continue;
+    const mapped = expression({ expressionType: value.expression.type, value: value.expression.value });
+    next = { ...next, [descriptor.referenceKey]: { ...value, expression: { ...value.expression, value: mapped.value } } };
+  }
+  for (const descriptor of item?.outputs ?? []) {
+    if (!isRecord(descriptor) || typeof descriptor.referenceKey !== "string") continue;
+    const value = activity[descriptor.referenceKey];
+    if (isRecord(value) && Object.hasOwn(value, "target")) next = { ...next, [descriptor.referenceKey]: { ...value, target: variable(value.target) } };
+  }
+  if (activity.structure && (readStructureDesignFacet(item)?.payload.supportsScopedVariables
+    || ["elsa.sequence.structure", "elsa.flowchart.structure", "elsa.bpmn.structure"].includes(activity.structure.kind))) {
+    const variables = activity.structure.payload.variables;
+    if (variables !== undefined) {
+      if (!Array.isArray(variables)) throw new ActivityCopyRefusal("Cannot copy the BPMN selection: scoped variable declarations are malformed.");
+      next = { ...next, structure: { ...activity.structure, payload: { ...activity.structure.payload, variables: variables.map(value => {
+        if (!isRecord(value) || typeof value.referenceKey !== "string") throw new ActivityCopyRefusal("Cannot copy the BPMN selection: a scoped variable declaration is unqualified.");
+        return value.default == null ? value : { ...value, default: expression(value.default) };
+      }) } } };
+    }
+  }
+  return next;
+}
+
+function rewriteActivityIds(activity: ActivityNode, idMap: Map<string, string>, catalog: ActivityCatalogLookup, referenceMap: Map<string, string>, bpmnReferences: boolean): ActivityNode {
+  if (completeBpmnSource(activity)) {
+    const inventory = bpmnInventory(activity, catalog);
+    const owned = new Map([...inventory.nativeNodes.keys()].map(id => [id, idMap.get(id)!]));
+    try { return remapBpmnDocumentNativeIdentities(activity, owned, catalog, referenceMap); }
+    catch (error) { throw new ActivityCopyRefusal(error instanceof Error ? error.message : "This BPMN source cannot be copied safely."); }
+  }
   const next: ActivityNode = {
-    ...activity,
+    ...(bpmnReferences ? remapClipboardReferences(activity, referenceMap, catalog) : activity),
     nodeId: idMap.get(activity.nodeId) ?? activity.nodeId
   };
-  if (!activity.structure) return next;
+  if (!next.structure) return next;
+  if (bpmnReferences) {
+    if (!["elsa.sequence.structure", flowchartStructureKind].includes(next.structure.kind) || next.structure.schemaVersion !== "1.0.0")
+      throw new ActivityCopyRefusal(`Cannot copy the BPMN selection: structure '${next.structure.kind}@${next.structure.schemaVersion}' requires a qualified reference transform.`);
+    // Mixed source2 copies recurse through actual declared child slots. A vendor object that
+    // resembles an ActivityNode is opaque configuration, never an inferred ownership edge.
+    let result = next;
+    for (const slot of getChildSlots(activity, catalog)) result = replaceSlotActivities(result, slot,
+      slot.activities.map(child => rewriteActivityIds(child, idMap, catalog, referenceMap, true)));
+    if (next.structure.kind === flowchartStructureKind) {
+      const payload = result.structure!.payload;
+      result = { ...result, structure: { ...result.structure!, payload: { ...payload,
+        ...(Array.isArray(payload.connections) ? { connections: payload.connections.map(connection => isRecord(connection) ? rewriteConnection(connection, idMap) : connection) } : {}),
+        ...(typeof payload.startNodeId === "string" ? { startNodeId: idMap.get(payload.startNodeId) ?? payload.startNodeId } : {}),
+        ...(isRecord(payload.nodeMetadata) ? { nodeMetadata: remapRecordKeys(payload.nodeMetadata, idMap) } : {}),
+        ...(isRecord(payload.connectionMetadata) ? { connectionMetadata: remapRecordKeys(payload.connectionMetadata, idMap) } : {}) } } };
+    }
+    return result;
+  }
   return {
     ...next,
     structure: {
-      ...activity.structure,
-      payload: rewriteStructurePayload(activity.structure.payload, idMap)
+      ...next.structure,
+      payload: rewriteStructurePayload(next.structure.payload, idMap, catalog, referenceMap, bpmnReferences)
     }
   };
 }
 
 function rewriteStructurePayload(
   payload: Record<string, unknown>,
-  idMap: Map<string, string>
+  idMap: Map<string, string>, catalog: ActivityCatalogLookup, referenceMap: Map<string, string>, bpmnReferences: boolean
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...payload };
   if (Array.isArray(next.activities)) {
-    next.activities = next.activities.map(item => (isActivityNode(item) ? rewriteActivityIds(item, idMap) : item));
+    next.activities = next.activities.map(item => (isActivityNode(item) ? rewriteActivityIds(item, idMap, catalog, referenceMap, bpmnReferences) : item));
   }
-  if (isActivityNode(next.body)) next.body = rewriteActivityIds(next.body, idMap);
-  else if (Array.isArray(next.body)) next.body = next.body.map(item => isActivityNode(item) ? rewriteActivityIds(item, idMap) : item);
+  if (isActivityNode(next.body)) next.body = rewriteActivityIds(next.body, idMap, catalog, referenceMap, bpmnReferences);
+  else if (Array.isArray(next.body)) next.body = next.body.map(item => isActivityNode(item) ? rewriteActivityIds(item, idMap, catalog, referenceMap, bpmnReferences) : item);
   if (Array.isArray(next.connections)) {
     next.connections = next.connections.map(item =>
       isRecord(item) ? rewriteConnection(item, idMap) : item);
@@ -315,9 +445,9 @@ function rewriteStructurePayload(
 
   for (const [key, value] of Object.entries(next)) {
     if (ownedPayloadKeys.has(key)) continue;
-    if (isActivityNode(value)) next[key] = rewriteActivityIds(value, idMap);
+    if (isActivityNode(value)) next[key] = rewriteActivityIds(value, idMap, catalog, referenceMap, bpmnReferences);
     else if (Array.isArray(value) && value.length > 0 && value.every(isActivityNode)) {
-      next[key] = value.map(item => rewriteActivityIds(item, idMap));
+      next[key] = value.map(item => rewriteActivityIds(item, idMap, catalog, referenceMap, bpmnReferences));
     }
   }
   return next;
@@ -368,6 +498,10 @@ function collectStructureIdentityIds(
   result: Set<string>
 ) {
   if (!activity) return result;
+  if (completeBpmnSource(activity)) {
+    for (const id of bpmnInventory(activity, catalog).nativeNodes.keys()) result.add(id);
+    return result;
+  }
   const payload = activity.structure?.payload;
   if (payload) {
     if (Array.isArray(payload.elements)) {
@@ -436,21 +570,20 @@ function findCopiedActivity(
   catalog: ActivityCatalogLookup
 ): ActivityNode | null {
   for (const activity of activities) {
-    if (activity.nodeId === nodeId) return activity;
-    for (const child of collectActivityNodeIds(activity, catalog)) {
-      if (child === nodeId) {
-        const found = findInTree(activity, nodeId);
-        if (found) return found;
-      }
-    }
+    const found = findInTree(activity, nodeId, catalog);
+    if (found) return found;
   }
   return null;
 }
 
-function findInTree(activity: ActivityNode, nodeId: string): ActivityNode | null {
+function findInTree(activity: ActivityNode, nodeId: string, catalog: ActivityCatalogLookup): ActivityNode | null {
   if (activity.nodeId === nodeId) return activity;
+  if (completeBpmnSource(activity)) {
+    const native = bpmnInventory(activity, catalog).nativeNodes.get(nodeId);
+    return !native ? null : native.kind === "activity" ? native.activity : native.header;
+  }
   for (const child of readNestedActivities(activity)) {
-    const found = findInTree(child, nodeId);
+    const found = findInTree(child, nodeId, catalog);
     if (found) return found;
   }
   return null;

@@ -1,14 +1,14 @@
-# Optional BPMN editors — proposed production preservation design
+# Optional BPMN editors — production preservation design
 
-Status: **proposal for #3597, before production contract freeze**. This is research/design, not approval, implementation or product acceptance. The restricted prototype and its failed/passed witnesses keep their own evidence. Do not treat them as full-toolbox feasibility.
+Status: **implemented source checkpoint for #3597; production qualification and review pending**. The source uses option A below, authored schema `2.0.0`, the shared Elsa inspector and both actual authoring hosts. Focused controls and backend qualification are recorded in the [evidence ledger](evidence/prototype-ledger.md). Whole current-source frontend, composed-host, package-consumer and independent UX gates remain separate acceptance requirements. Earlier prototype evidence covers only its recorded source and profile.
 
 Owner correction: [5 November authorization and subsequent scope correction](https://github.com/elsa-workflows/elsa-foundation/issues/3597#issuecomment-6672569996) requires **both bpmn-js and Elsa's integrated editor to edit the full BPMN toolbox in this delivery**, with the shared Elsa inspector. A read-only fallback solely because a notation lacks integrated modeling support is superseded. Unsupported execution remains blocked; complete authored content remains editable and saveable.
 
-## Recommendation
+## Selected implementation
 
 Use **complete BPMN XML as the sole persisted authority for standard BPMN semantics, diagram interchange and vendor content**, inside a new version of the existing activity-owned authored structure. Keep Elsa activity configuration in a disjoint, identity-linked binding tree in that same authored document. Both canvases use transient complete syntax/graph views and apply normal authoring commands to this authority. XML is never a second editable copy of persisted `elements`, `sequenceFlows` or `diagram` arrays.
 
-Recommend option A for the first production integration because bpmn-js already imports/exports complete XML, .NET and browsers have mature XML APIs, and the neutral library consumes XML for its supported execution projection. It introduces one BPMN-owned authoring format without also introducing a second cross-language XML-infoset wire grammar. This recommendation remains conditional on the staged nested-scope/clone and two-editor proofs below; no architecture is frozen by this packet.
+The implementation uses option A because bpmn-js already imports/exports complete XML, .NET and browsers have mature XML APIs, and the neutral library consumes XML for its supported execution projection. It introduces one BPMN-owned authoring format without also introducing a second cross-language XML-infoset wire grammar. The nested-scope, identity-transform and two-editor proofs below remain required for acceptance; this document does not assert architecture approval.
 
 | Choice | Authority and advantages | Cost / risk |
 |---|---|---|

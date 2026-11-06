@@ -1,6 +1,6 @@
 # Validation Guide — Optional bpmn-js editor
 
-**Status**: planned prototype validation; commands below are not execution receipts.
+**Status**: validation procedure; commands below are not execution receipts. Source-bound results and failures are in the [evidence ledger](evidence/prototype-ledger.md).
 
 Use this worktree and an owned disposable host/store. Follow [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and existing [backend source setup](../../docs/contributing/backend-source-quickstart.md). Do not attach to shared/personal hosts.
 
@@ -9,10 +9,12 @@ Use this worktree and an owned disposable host/store. Follow [Studio UX acceptan
 3. Run affected Workflows typechecking/build and browser editor journeys. Isolated fixture hosts establish frontend regressions only; record them separately from composed-host acceptance.
 4. Commit the prototype before source acceptance. Build/run owned Workbench and Studio through the established acceptance runner or feature-specific equivalent that retains source identity, isolated stores, logs, screenshots and traces.
 
-   The feature-specific source runner is `python3 tools/ux-acceptance/run-bpmn-js-prototype.py /tmp/elsa-bpmn-js-<unique-run>`. It builds this checkout and owns fresh Studio/Workbench content roots/stores and process groups. Its first configuration executes both starting directions on desktop Light; other states remain unproved until separately added and executed.
+   The feature-specific source runner is `python3 tools/ux-acceptance/run-bpmn-js-prototype.py /tmp/elsa-bpmn-js-<unique-run>`. It builds this checkout and owns fresh Studio/Workbench content roots/stores and process groups. That runner retains the historical desktop Light/schema1 prototype witness. Production source2 uses `python3 tools/ux-acceptance/run-bpmn-document-editors.py /tmp/elsa-bpmn-document-<unique-run>`: both starting editors on Workflow and Activity Definition Graph surfaces, desktop Light/Dark and 1100px desktop, exactly18 cases with no retries. The verifier requires complete source/configuration evidence, published runtime outputs for the supported Workflow profile, advanced-source execution refusal and no unexpected canvas failures. Execute only on an owned, authorized validation host; the procedure is not a run receipt.
 5. In each starting editor direction: author a bound Decision with an outcome expression, a task binding with inputs/outputs/references, and a configured listener or nested body. Change routing/defaults and a supported binding, switch twice, Undo/Redo, save/reload and verify exact identity/configuration/layout.
 6. Publish the same saved process/version through ordinary native publication. Execute inputs selecting both paths, assert real bound results and inspect actual activity occurrences. Download XML and compare supported routing/DI while recording visible public-export limitations.
 7. Repeat relevant direct human/service, reusable/nested, unavailable catalog, unsupported constructs, read-only/source-owned, absent module/backend, failure recovery and dirty/history cases. Test themes/narrow/keyboard/focus and visible/unobstructed attribution. Capture actual optional network/assets in the composed host.
 8. Record passed/failed/unsupported/not-run/unavailable rows with exact source commit. Retain downloadable current-commit screenshots/traces and get independent UX acceptance before claiming feasibility or production completion.
+
+For shared review evidence, dispatch the existing `CI` workflow on the reviewed branch with `suite=bpmn-document`. It selects the dedicated composed job and retains `bpmn-document-acceptance-<SHA>-<attempt>` for14 days. Link its exact run/artifact in the PR and independently inspect its captures; a successful command is not visual approval.
 
 Production additionally requires complete affected suites, meaningful red/green controls, optional consumer packaging/assets/notices, architecture/maps/current-head CI/review/merge and resulting-main qualification. The feature remains open until these gates are satisfied.

@@ -68,7 +68,7 @@ export interface AuthoringTransitionOutcome {
 }
 
 export interface AuthoringCheckpointCoordinator<TSnapshot> {
-  register(id: string, participant: AuthoringCheckpointParticipant): AuthoringCheckpointRegistration;
+  register(id: string, participant: AuthoringCheckpointParticipant, options?: { readonly order?: number }): AuthoringCheckpointRegistration;
   capture(intent: AuthoringCheckpointIntent, options?: { signal?: AbortSignal }): Promise<AuthoringCheckpointCapture<TSnapshot>>;
   /** The callback commits synchronously while participant fences are held; cleanup failure never means retry the action. */
   transition(intent: AuthoringCheckpointIntent, action: (live: AuthoringCheckpointCapture<TSnapshot>) => undefined,
@@ -120,6 +120,7 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
     failedLeases: AuthoringCheckpointLease[];
     observedSequence: number;
     observedAcceptedSequence: number;
+    order: number;
   }
   type Result = AuthoringCheckpointCapture<TSnapshot> | AuthoringTransitionOutcome | undefined;
   interface Waiter {
@@ -169,6 +170,14 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
   const copyCapture = (live: AuthoringCheckpointCapture<TSnapshot>): AuthoringCheckpointCapture<TSnapshot> => Object.freeze({
     token: live.token, snapshot: structuredClone(live.snapshot), lineage: Object.freeze([...live.lineage])
   });
+  const applyTransition = (action: NonNullable<Job["action"]>, capture: AuthoringCheckpointCapture<TSnapshot>) => {
+    const result: unknown = action(capture);
+    if (result && (typeof result === "object" || typeof result === "function") && "then" in result) {
+      void Promise.resolve(result).catch(() => undefined);
+      throw new AuthoringCheckpointError("async-transition", "An authoring transition must finish synchronously while its canvas fence is held.");
+    }
+    return Object.freeze({ applied: true as const });
+  };
 
   async function execute(job: Job): Promise<Result> {
     const start = readLive();
@@ -178,7 +187,7 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
     const records = [...registrations.values()].filter(record => {
       const hasPending = recordPending(record);
       return record.attached || hasPending;
-    });
+    }).sort((left, right) => left.order - right.order);
     const held: { record: Registration; lease: AuthoringCheckpointLease }[] = [];
     let latest = start.token;
     const prepare = async () => {
@@ -223,13 +232,7 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
       const capture = copyCapture(live);
       job.completed = true;
       if (!job.action) return capture;
-      const result: unknown = job.action(capture);
-      if (result && (typeof result === "object" || typeof result === "function") && "then" in result) {
-        // Invalid callbacks must not leave a detached rejected promise behind the refused action.
-        void Promise.resolve(result).catch(() => undefined);
-        throw new AuthoringCheckpointError("async-transition", "An authoring transition must finish synchronously while its canvas fence is held.");
-      }
-      return Object.freeze({ applied: true as const });
+      return applyTransition(job.action, capture);
     };
     let result: Result;
     let failure: unknown;
@@ -280,6 +283,26 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
     if (signal?.aborted) return Promise.reject(abortError());
     let requested: AuthoringCheckpointToken;
     try { requested = readLive().token; } catch (error) { return Promise.reject(error); }
+    if (action && !registrations.size && !jobs.length && !draining) {
+      // The module-absent editor has nothing to checkpoint. Reserve its place before executing so
+      // reentrant captures/transitions still queue behind this action, rather than running inside it.
+      const job: Job = { intent, requested, action, waiters: [], sealed: true };
+      jobs.push(job);
+      try {
+        const live = readLive();
+        if (!sameIdentity(live.token, requested) || live.token.revision < requested.revision)
+          throw new AuthoringCheckpointError("stale-token", "The authoring authority or scope changed before this action could start.");
+        const capture = copyCapture(live);
+        if (registrations.size) throw new AuthoringCheckpointError("participants-changed", "An authoring canvas registered before this transition.");
+        if (signal?.aborted) throw abortError();
+        job.completed = true;
+        return Promise.resolve(applyTransition(action, capture));
+      } catch (error) { return Promise.reject(error); }
+      finally {
+        jobs.shift();
+        if (jobs.length) queueMicrotask(() => { void drain(); });
+      }
+    }
     const tail = jobs.at(-1);
     // Coalesce only adjacent automatic captures: never cross an intervening history/switch intent.
     const job = !action && intent === "autosave" && tail?.intent === "autosave" && !tail.action && !tail.sealed && sameIdentity(tail.requested, requested)
@@ -302,15 +325,17 @@ export function createAuthoringCheckpoint<TSnapshot>(options: {
   }).map(record => record.id);
 
   return {
-    register(id, participant) {
+    register(id, participant, request) {
       if (!id || registrations.has(id)) throw new AuthoringCheckpointError("registration-in-use", "A canvas registration with this identity already exists.");
+      const order = request?.order ?? 0;
+      if (!Number.isSafeInteger(order)) throw new AuthoringCheckpointError("invalid-work", "The canvas checkpoint order must be a safe integer.");
       const initial = readLive().token;
       const facts = work(participant);
       if (facts.acceptedSequence !== 0)
         throw new AuthoringCheckpointError("invalid-work", "A new canvas registration cannot claim prior parent acknowledgements.");
       const initialReceipt = Object.freeze({ token: initial, acceptedSequence: 0 });
       const record: Registration = { id, participant, identity: initial, receipt: initialReceipt, attached: true, checkpoints: 0,
-        failedLeases: [], observedSequence: facts.sequence, observedAcceptedSequence: facts.acceptedSequence };
+        failedLeases: [], observedSequence: facts.sequence, observedAcceptedSequence: facts.acceptedSequence, order };
       registrations.set(id, record); membership++;
       return {
         initialReceipt,

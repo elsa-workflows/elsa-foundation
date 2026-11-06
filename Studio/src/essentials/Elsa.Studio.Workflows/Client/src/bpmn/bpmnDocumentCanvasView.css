@@ -1,0 +1,105 @@
+.wf-bpmn-document-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+}
+
+.wf-bpmn-document-element {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.wf-bpmn-document-route-handle {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.wf-bpmn-document-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  color: var(--studio-text);
+  font-family: var(--studio-font-ui);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.wf-bpmn-document-label.embedded {
+  inset: 24px 8px 18px;
+}
+
+.wf-bpmn-document-label.external {
+  top: calc(100% + 4px);
+  left: -40px;
+  width: calc(100% + 80px);
+}
+
+.wf-bpmn-document-binding {
+  position: absolute;
+  inset: 8px 8px auto auto;
+}
+
+.wf-bpmn-document-slots {
+  position: absolute;
+  inset: auto 8px 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.wf-bpmn-document-open {
+  position: absolute;
+  inset: auto 8px 2px auto;
+  font-size: 10px;
+}
+
+.wf-bpmn-document-edge-label {
+  fill: currentColor;
+  color: var(--studio-text);
+  font-family: var(--studio-font-ui);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.wf-bpmn-document-edge-selection {
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 5;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.wf-bpmn-document-status,
+.wf-bpmn-document-notice,
+.wf-bpmn-document-diagnostics {
+  position: absolute;
+  z-index: 8;
+  max-width: calc(100% - 32px);
+  padding: 8px;
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 4px;
+}
+
+.wf-bpmn-document-status {
+  top: 8px;
+  left: 8px;
+}
+
+.wf-bpmn-document-notice {
+  bottom: 40px;
+  left: 8px;
+}
+
+.wf-bpmn-document-diagnostics {
+  top: 8px;
+  right: 8px;
+}

@@ -6,16 +6,17 @@
 }
 
 .wf-bpmn-notation-outline {
-  fill: var(--studio-surface);
+  fill: var(--wf-bpmn-fill, var(--studio-surface));
 }
 
 .wf-bpmn-notation .wf-bpmn-symbol-inverse {
-  stroke: var(--studio-surface);
+  stroke: var(--wf-bpmn-fill, var(--studio-surface));
 }
 
 .wf-bpmn-notation-label {
   font-family: var(--studio-font-ui);
   font-size: 12px;
+  fill: var(--wf-bpmn-label-color, var(--studio-text));
 }
 
 .wf-bpmn-notation-group {
@@ -62,10 +63,15 @@
   max-width: 180px;
 }
 
-.wf-bpmn-node.selected .wf-bpmn-notation {
-  color: var(--studio-accent);
+.wf-bpmn-notation-selection {
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 2;
 }
 
-.wf-bpmn-node-runtime.faulted .wf-bpmn-notation {
-  color: var(--studio-danger);
+.wf-bpmn-notation-fault {
+  fill: none;
+  stroke: var(--studio-danger);
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
 }

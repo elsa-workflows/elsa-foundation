@@ -1,3 +1,4 @@
+import { seedBpmnPrototype as seed } from "./bpmnDocumentAcceptanceFixtures";
 import { readFileSync, writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -27,7 +28,6 @@ const alternate = (page: Page) => page.getByRole("region", { name: "bpmn-js proc
 const routing = (page: Page) => page.getByRole("region", { name: "BPMN routing", exact: true });
 const shape = (page: Page, id: string) => alternate(page).locator(`.djs-shape[data-element-id='${id}']`);
 const payload = (draft: Draft) => draft.state.rootActivity.structure!.payload as unknown as { activities: Node[]; elements: Element[]; sequenceFlows: Flow[] };
-const literal = (referenceKey: string, value: unknown) => ({ referenceKey, value: { expressionType: "Literal", value } });
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -74,76 +74,6 @@ async function selectElement(page: Page, editor: "integrated" | "bpmn-js", id: s
   } else await page.locator(`.react-flow__node[data-id='${id}']`).click();
 }
 
-async function seed(api: Api, suffix: string) {
-  async function version(type: string) {
-    const list = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(type)}`);
-    const item = list.items.find(item => item.definition.activityTypeKey === type);
-    expect(item, `Real catalog supplies ${type}`).toBeTruthy();
-    return item!.definition.headVersionId;
-  }
-  const [bpmnVersion, decisionVersion, inlineVersion, sequenceVersion] = await Promise.all([
-    version("Elsa.Activities.Bpmn.Activities.BpmnProcess"), version("Elsa.Activities.Bpmn.Activities.BpmnDecision"),
-    version("Elsa.Activities.Primitives.Activities.Inline"), version("Elsa.Activities.Sequence.Activities.Sequence")
-  ]);
-  const inline = (nodeId: string, expression: string): Node => ({ nodeId, activityVersionId: inlineVersion, structure: null,
-    inputs: [{ referenceKey: "Expression", value: { expressionType: "JavaScript", value: expression } }], outputs: [] });
-  const captureResult = (nodeId: string, producerNodeId: string, producerScopeId: string): Node => ({
-    nodeId, activityVersionId: "elsa.intrinsic.set-output@1", structure: null, outputs: [],
-    intrinsic: { kind: "setOutput", valueType: { alias: "Elsa.Any", collectionKind: "single" } },
-    inputs: [literal("name", "result"), { referenceKey: "value", value: {
-      expressionType: "ActivityResult", value: { producerNodeId, producerScopeId, projectionKey: "$result" }
-    } }]
-  });
-  const nested: Node = { nodeId: "nested-low", activityVersionId: sequenceVersion, inputs: [], outputs: [],
-    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: {
-      activities: [inline("low-inline", '"Nested low"'), captureResult("capture-low", "low-inline", "nested-low")]
-    } } };
-  // Required ActivityResult ordering is currently established by Sequence, not by the BPMN
-  // validator. Keep the real Inline result/capture in that supported scope; attempt3 separately
-  // retains the rejected direct-BPMN-sibling case rather than making its reference optional.
-  const nestedHigh: Node = { nodeId: "nested-high", activityVersionId: sequenceVersion, inputs: [], outputs: [],
-    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: {
-      activities: [inline("high", '"Original high"'), captureResult("capture-high", "high", "nested-high")]
-    } } };
-  const elements: Element[] = [
-    { elementId: "start", elementType: "startEvent" },
-    { elementId: "gateway", elementType: "exclusiveGateway", name: "Order routing", childNodeId: "decision", defaultFlowId: "high-flow" },
-    { elementId: "high-task", elementType: "subProcess", name: "High", childNodeId: "nested-high" },
-    { elementId: "low-task", elementType: "subProcess", name: "Nested low", childNodeId: "nested-low" },
-    { elementId: "end-high", elementType: "endEvent" }, { elementId: "end-low", elementType: "endEvent" }
-  ];
-  const sequenceFlows: Flow[] = [
-    { flowId: "enter", sourceRef: "start", targetRef: "gateway" },
-    { flowId: "high-flow", sourceRef: "gateway", targetRef: "high-task", isDefault: true },
-    { flowId: "low-flow", sourceRef: "gateway", targetRef: "low-task", conditionOutcome: "Low" },
-    { flowId: "high-end-flow", sourceRef: "high-task", targetRef: "end-high" },
-    { flowId: "low-end-flow", sourceRef: "low-task", targetRef: "end-low" }
-  ];
-  const root: Node = { nodeId: "process", activityVersionId: bpmnVersion, inputs: [], outputs: [], structure: {
-    kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {
-      activities: [{ nodeId: "decision", activityVersionId: decisionVersion, structure: null, inputs: [{ referenceKey: "Outcome", value: {
-        expressionType: "WorkflowRequest", value: { memberKey: "route" }
-      } }], outputs: [] }, nestedHigh, nested],
-      elements, sequenceFlows
-    }
-  } };
-  const submitted = await api<Submitted>("/design/workflows/definitions/submit", "POST", {
-    name: `BPMN same-process ${suffix}`, state: { rootActivity: root, variables: [], outputs: [], inputs: [{
-      referenceKey: "route", name: "route", displayName: "Route", isNullable: true,
-      type: { alias: "String", collectionKind: "single" }, storageDriverType: null
-    }] }
-  });
-  const initial = await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`);
-  const layout: Layout[] = [
-    { nodeId: "start", x: 60, y: 220 }, { nodeId: "gateway", x: 240, y: 210 },
-    { nodeId: "high-task", x: 440, y: 100 },
-    { nodeId: "low-task", x: 440, y: 360 }, { nodeId: "end-high", x: 700, y: 120 }, { nodeId: "end-low", x: 700, y: 380 },
-    { nodeId: "high", x: 120, y: 120 }, { nodeId: "capture-high", x: 360, y: 120 },
-    { nodeId: "low-inline", x: 120, y: 120 }, { nodeId: "capture-low", x: 360, y: 120 }
-  ];
-  const baseline = await api<Draft>(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: initial.state, layout });
-  return { submitted, baseline };
-}
 
 function outputValue(instance: Instance) {
   const output = instance.outputs.result;
