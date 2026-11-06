@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-export const creationLimits = Object.freeze({ bytes: 1024 * 1024, catalogItems: 2000, responseReads: 6, responseMs: 1000 });
+export const creationLimits = Object.freeze({ bytes: 1024 * 1024, catalogItems: 2000, responseReads: 6, responseMs: 1000, choiceMs: 250 });
 const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const identity = value => typeof value === "string" && value.length > 0 && value.length <= 256 ? value : null;
 const boolean = value => typeof value === "boolean" ? value : null;
@@ -32,14 +32,24 @@ export async function selectFlowchartRoot(dialog, onState) {
   async function observe(phase) {
     emit({ phase });
     if (typeof onState !== "function") return;
+    let active = true;
+    let timer;
     try {
-      const state = await choice.evaluateAll(nodes => ({
-        count: Math.min(2, nodes.length), enabled: nodes.length === 1 ? !nodes[0].disabled : null,
-        checked: nodes.length === 1 ? nodes[0].checked : null,
-        version: nodes.length === 1 && nodes[0].value.length <= 256 ? nodes[0].value : null
-      }));
-      emit({ phase, ...state, enabledCardCount: await card.count() });
+      await Promise.race([
+        (async () => {
+          const state = await choice.evaluateAll(nodes => ({
+            count: Math.min(2, nodes.length), enabled: nodes.length === 1 ? !nodes[0].disabled : null,
+            checked: nodes.length === 1 ? nodes[0].checked : null,
+            version: nodes.length === 1 && nodes[0].value.length <= 256 ? nodes[0].value : null
+          }));
+          if (!active) return;
+          const enabledCardCount = await card.count();
+          if (active) emit({ phase, ...state, enabledCardCount });
+        })(),
+        new Promise(resolve => { timer = setTimeout(resolve, creationLimits.choiceMs); })
+      ]);
     } catch { /* Optional fixed-state observations cannot alter the journey. */ }
+    finally { active = false; clearTimeout(timer); }
   }
   await observe("card-visible");
   await card.waitFor({ state: "visible" });

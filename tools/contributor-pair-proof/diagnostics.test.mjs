@@ -650,7 +650,7 @@ function creationFixture({ enabled = true, checked = true, count = 1, cardCount 
     waitForFunction: async () => {}, evaluate: async () => "created-definition"
   };
   const observation = { observeChoice: state => states.push(state), select: value => { assert.equal(value, version); actions.push("observed-choice"); }, bindEditor: () => actions.push("bound-editor") };
-  return { dialog, page, observation, actions, states };
+  return { dialog, page, observation, actions, states, radio };
 }
 
 async function actualCreationBlock(f) {
@@ -720,6 +720,16 @@ test("R4 failed optional choice-state observation cannot prevent the normal nati
   const throwing = creationFixture();
   await selectFlowchartRoot(throwing.dialog, () => { throw new Error(secret); });
   assert.ok(throwing.actions.includes("card-click"));
+});
+
+test("R4 stalled optional choice observations expire and cannot overwrite the later selected phase", { timeout: 2000 }, async () => {
+  const f = creationFixture(); const gate = deferred();
+  f.radio.evaluateAll = () => gate.promise;
+  await actualCreationBlock(f);
+  assert.ok(f.actions.includes("create")); assert.equal(f.states.at(-1).phase, "selected");
+  const count = f.states.length;
+  gate.resolve({ count: 2, enabled: false, checked: false, version: secret }); await tick();
+  assert.equal(f.states.length, count); assert.equal(f.states.at(-1).phase, "selected");
 });
 
 test("R4 choice phase/count/identity observations retain only fixed safe fields", async t => {
