@@ -227,6 +227,81 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
             new Dictionary<string, string> { ["a-native"] = "partial-copy" }));
     }
 
+    [Fact]
+    public void Selected_process_query_view_uses_the_actual_owner_identity_configuration_and_root_variables()
+    {
+        var owner = Owner(otherProcess: true) with { Inputs = [Literal("setting", "root-argument")], Outputs = [Reference("owner")] };
+        var before = owner.Structure!.Payload.GetRawText();
+        var query = BpmnDocumentScopeProjection.CreateProcessView(owner, "P1");
+        Assert.Equal(BpmnDocumentScopeView.Kind, query.Structure!.Kind);
+        Assert.Equal(owner.NodeId, query.NodeId);
+        Assert.Equal(owner.ActivityVersionId, query.ActivityVersionId);
+        Assert.Equal(owner.Inputs, query.Inputs);
+        Assert.Equal(owner.Outputs, query.Outputs);
+        Assert.Equal("root", Assert.Single(_structures.ProjectScopedVariables(query)).ReferenceKey);
+        var visibility = new ScopedVariableResolver(_structures).Resolve([Variable("workflow-var")], query, 100);
+        Assert.Equal(new[] { "a-local", "root", "workflow-var" }, visibility.GetVisibleVariables("a-native").Select(item => item.Variable.ReferenceKey));
+        Assert.DoesNotContain("other-native", new ActivityTreeProjector(_structures).Project(query).Nodes.Select(node => node.NodeId));
+        Assert.Equal(before, BpmnDocumentScopeProjection.ReadView(query).Owner.Structure!.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("P1", "root")]
+    [InlineData("P2", "other-local")]
+    [InlineData("A", "a-local")]
+    public void Query_variables_and_children_are_derived_from_canonical_owner_instead_of_forged_projection_extras(string scope, string variable)
+    {
+        var owner = Owner(otherProcess: true);
+        var query = scope == "A" ? View(Children(owner), scope) : BpmnDocumentScopeProjection.CreateProcessView(owner, scope);
+        var payload = JsonSerializer.SerializeToNode(BpmnDocumentScopeProjection.ReadView(query), Json)!.AsObject();
+        payload["variables"] = JsonSerializer.SerializeToNode(new[] { Variable("forged-variable") }, Json);
+        payload["activities"] = JsonSerializer.SerializeToNode(new[] { new ActivityNode("forged-child", "forged-version", [], []) }, Json);
+        var forged = query with { Structure = new(BpmnDocumentScopeView.Kind, BpmnDocumentScopeView.SchemaVersion, JsonSerializer.SerializeToElement(payload, Json)) };
+        Assert.Equal(variable, Assert.Single(_structures.ProjectScopedVariables(forged)).ReferenceKey);
+        Assert.DoesNotContain(new ActivityTreeProjector(_structures).Project(forged).Nodes, node => node.NodeId == "forged-child");
+        AssertJson(owner.Structure!.Payload, BpmnDocumentScopeProjection.ReadView(forged).Owner.Structure!.Payload);
+    }
+
+    [Theory]
+    [InlineData("node-id")]
+    [InlineData("version")]
+    [InlineData("inputs")]
+    [InlineData("outputs")]
+    [InlineData("placement")]
+    [InlineData("view-schema")]
+    [InlineData("owner-schema")]
+    public void Selected_process_query_refuses_identity_configuration_or_schema_mismatches(string mutation)
+    {
+        var owner = Owner();
+        var query = BpmnDocumentScopeProjection.CreateProcessView(owner, "P1");
+        query = mutation switch
+        {
+            "node-id" => query with { NodeId = "invented-root" },
+            "version" => query with { ActivityVersionId = "invented-version" },
+            "inputs" => query with { Inputs = [Literal("setting", "unowned")] },
+            "outputs" => query with { Outputs = [Reference("foreign")] },
+            "placement" => query with { ExecutionPlacement = ActivityExecutionPlacement.Background },
+            "view-schema" => query with { Structure = new(BpmnDocumentScopeView.Kind, "99", query.Structure!.Payload) },
+            _ => query with { Structure = new(BpmnDocumentScopeView.Kind, BpmnDocumentScopeView.SchemaVersion,
+                JsonSerializer.SerializeToElement(BpmnDocumentScopeProjection.ReadView(query) with { Owner = owner with
+                { Structure = new(Process.StructureKind, "1.0.0", owner.Structure!.Payload) } }, Json)) }
+        };
+        Assert.Throws<InvalidOperationException>(() => _structures.ProjectChildren(query));
+    }
+
+    [Fact]
+    public async Task Selected_process_query_cannot_fold_persist_or_compile_as_an_authored_root()
+    {
+        var owner = Owner();
+        var query = BpmnDocumentScopeProjection.CreateProcessView(owner, "P1");
+        Assert.Throws<InvalidOperationException>(() => _structures.ReplaceChildren(query, _structures.ProjectChildren(query)));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await new BpmnScopeViewSourceValidator(_provider.GetServices<IActivityStructureHandler>()).Validate(new Draft(query), default));
+        var context = new ActivityStructureCompilationContext(owner, new Dictionary<string, ResolvedStructureInvocation>(),
+            new Dictionary<string, IReadOnlyCollection<ActivityChildProjection>>());
+        Assert.Throws<NotSupportedException>(() => new BpmnDocumentScopeViewHandler().CompileExecutableStructure(query, context));
+        Assert.Equal(Xml, Document(owner).DocumentXml);
+    }
+
     [Theory]
     [InlineData("foreign-native")]
     [InlineData("foreign-metadata")]

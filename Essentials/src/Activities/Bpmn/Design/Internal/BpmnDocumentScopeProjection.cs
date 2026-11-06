@@ -28,7 +28,7 @@ internal static class BpmnDocumentScopeProjection
         var index = Index(source);
         if (!index.TryGetValue(processId, out var process) || process.Name.LocalName != "process" || process.Parent?.Name.LocalName != "definitions")
             throw Invalid("an independent process view requires a direct definitions process");
-        return processId == source.ProcessId ? owner : CreateView(owner, processId);
+        return CreateView(owner, processId);
     }
 
     internal static IReadOnlyCollection<ActivityChildProjection> Project(ActivityNode owner, string scopeId)
@@ -110,14 +110,29 @@ internal static class BpmnDocumentScopeProjection
         catch (JsonException exception) { throw new InvalidOperationException("Invalid BPMN scope view context.", exception); }
         if (view.Owner is null || view.Variables is null) throw Invalid("a view requires its complete canonical owner and variables");
         var source = BpmnDocumentStructureHandler.Read(view.Owner);
-        if (source.ScopeHeaders.All(header => header.ScopeElementId != view.ScopeElementId))
+        if (view.ScopeElementId == source.ProcessId)
+        {
+            if (!Equal(activity with { Structure = null }, view.Owner with { Structure = null }))
+                throw Invalid("a selected-process query requires the exact physical owner identity and invocation configuration");
+        }
+        else if (source.ScopeHeaders.All(header => header.ScopeElementId != view.ScopeElementId))
             throw Invalid("the view's compact scope header is unavailable");
         return view;
+    }
+
+    internal static IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> QueryVariables(ActivityNode activity)
+    {
+        var view = ReadView(activity);
+        var source = BpmnDocumentStructureHandler.Read(view.Owner);
+        return view.ScopeElementId == source.ProcessId ? source.Variables
+            : source.ScopeHeaders.Single(header => header.ScopeElementId == view.ScopeElementId).Variables;
     }
 
     internal static ActivityNode ReplaceView(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children)
     {
         var view = ReadView(activity);
+        if (view.ScopeElementId == BpmnDocumentStructureHandler.Read(view.Owner).ProcessId)
+            throw Invalid("a selected-process query view cannot fold child edits; edit its physical owner");
         var owner = ApplyHeader(view.Owner, activity, view);
         return CreateView(Replace(owner, view.ScopeElementId, children), view.ScopeElementId);
     }
@@ -140,6 +155,9 @@ internal static class BpmnDocumentScopeProjection
     private static ActivityNode CreateView(ActivityNode owner, string scopeId)
     {
         var source = BpmnDocumentStructureHandler.Read(owner);
+        if (scopeId == source.ProcessId)
+            return owner with { Structure = new(BpmnDocumentScopeView.Kind, BpmnDocumentScopeView.SchemaVersion,
+                JsonSerializer.SerializeToElement(new BpmnDocumentScopeView(owner, scopeId, source.Variables), Json)) };
         var header = source.ScopeHeaders.SingleOrDefault(item => item.ScopeElementId == scopeId)
             ?? throw Invalid("the scope has no compact native header");
         return new(header.NodeId, header.ActivityVersionId, header.Inputs, header.Outputs,

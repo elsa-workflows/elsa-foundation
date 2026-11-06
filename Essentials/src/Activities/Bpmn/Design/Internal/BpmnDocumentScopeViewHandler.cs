@@ -20,7 +20,7 @@ internal sealed class BpmnDocumentScopeViewHandler : IActivityStructureHandler
     }
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
-        BpmnDocumentScopeProjection.ReadView(activity).Variables;
+        BpmnDocumentScopeProjection.QueryVariables(activity);
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) =>
         BpmnDocumentScopeProjection.ReplaceView(activity, childProjections);
@@ -35,6 +35,8 @@ internal sealed class BpmnDocumentScopeViewHandler : IActivityStructureHandler
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context)
     {
         var view = BpmnDocumentScopeProjection.ReadView(activity);
+        if (view.ScopeElementId == BpmnDocumentStructureHandler.Read(view.Owner).ProcessId)
+            throw new NotSupportedException("A selected-process BPMN query view is not an authored or executable source; compile its physical owner.");
         var header = BpmnDocumentStructureHandler.Read(view.Owner).ScopeHeaders.Single(item => item.ScopeElementId == view.ScopeElementId);
         if (activity.NodeId != header.NodeId || activity.ActivityVersionId != header.ActivityVersionId ||
             activity.ExecutionPlacement != header.ExecutionPlacement || !Same(activity.Inputs, header.Inputs) ||
