@@ -50,6 +50,8 @@ jobs:
           $family = 'Ground' + 'work'
           $leftovers = "tools/$family"
           $probeProject = 'tools/WindowsGuard2849'
+          $conditionalDirectory = '.claude/worktrees/tracked-guard-2849'
+          $conditionalProbe = "$conditionalDirectory/Conditional.csproj"
           $changedTests = @(
             'Essentials/tests/Architecture/Tests/PackageVersioningPackTests.cs',
             'Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs',
@@ -85,7 +87,7 @@ jobs:
             }
           }
 
-          if ((Test-Path $worktree) -or (Test-Path $leftovers) -or (Test-Path $probeProject)) { throw 'An owned proof path already exists.' }
+          if ((Test-Path $worktree) -or (Test-Path $leftovers) -or (Test-Path $probeProject) -or (Test-Path $conditionalDirectory)) { throw 'An owned proof path already exists.' }
           try {
             git worktree add --detach $worktree HEAD
             if ($LASTEXITCODE -ne 0) { throw 'Could not create the ignored Claude worktree.' }
@@ -122,12 +124,11 @@ jobs:
             [ordered]@{ source = (git rev-parse HEAD); listedMethods = $listed.Count; executedMethods = $executed.Count; executedCases = [int]$full.TestRun.ResultSummary.Counters.executed } |
               ConvertTo-Json | Set-Content (Join-Path $output 'architecture-source-and-counts.json')
 
-            $conditionalProbe = '.claude/worktrees/tracked-guard-2849/Conditional.csproj'
-            New-Item -ItemType Directory -Path (Split-Path $conditionalProbe) -Force | Out-Null
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
             Set-Content $conditionalProbe '<Project><ItemGroup Condition="''$(Configuration)'' == ''Debug''"><PackageReference Include="Contoso.Probe" /></ItemGroup></Project>'
             git add -f -- $conditionalProbe
             try { $null = Test-Run 'tracked-conditional' "FullyQualifiedName=$conditional" $true 'Conditional.csproj' }
-            finally { git rm --cached -f -- $conditionalProbe; Remove-OwnedDirectory (Split-Path $conditionalProbe) }
+            finally { git rm --cached -f -- $conditionalProbe; Remove-OwnedDirectory $conditionalDirectory }
 
             $retiredProject = "$probeProject/$family.csproj"
             New-Item -ItemType Directory -Path $probeProject | Out-Null
