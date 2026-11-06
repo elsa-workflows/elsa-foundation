@@ -1074,6 +1074,9 @@ jobs:
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 tools/ux-acceptance/run.py --feature "${{ matrix.feature }}" --output "$RUNNER_TEMP/ux-acceptance/${{ matrix.feature }}"
+      - name: Qualify shared decision execution and runtime-only restart
+        if: matrix.feature == 'baseline'
+        run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

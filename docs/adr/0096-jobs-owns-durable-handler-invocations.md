@@ -98,8 +98,8 @@ The owner adopted this additive amendment:
 1. Insert `Elsa.Jobs` in the alphabetically ordered pinned root domains in Elsa constitution §E2.1.
 2. Add its verb-led purpose above to `docs/reference/elsa-domain-tree.md`.
 3. Add a Sync Impact Report and minor version bump from the actual merged Elsa constitution;
-   the branch applies 6.3.0 → 6.4.0. ADR 0095/PR #3689 also proposes 6.4.0 for another domain, so reconcile
-   against the then-current version instead of overwriting that concurrent admission.
+   after merging ADR0095's Decisions admission from main, this amendment applies 6.4.0 → 6.5.0.
+   The earlier Decisions admission and its authority remain intact.
 4. Keep framework 6.1.0 and every existing domain purpose unchanged. Recheck derived templates;
    current templates contain no pinned domain list. Ratify no draft/provisional sections.
 

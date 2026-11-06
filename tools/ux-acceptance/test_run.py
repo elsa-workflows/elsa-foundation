@@ -46,6 +46,8 @@ class VerdictTests(unittest.TestCase):
                 for project in acceptance.PROJECTS]}
             for journey, captures in acceptance.JOBS_CAPTURES.items()]}]}
         self.assertEqual(24, acceptance.verdict(report, self.root, 'jobs'))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs', journeys=['jobs standalone reports'])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs', journeys=acceptance.JOBS_CAPTURES)
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, 'jobs')
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'baseline')
         for fault in ('missing-journey', 'retried', 'skipped', 'missing-network', 'duplicate'):
@@ -75,6 +77,18 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual('default', features['JobsWorkflowsRuntime']['TenantId'])
         self.assertTrue(features['ActivitiesBpmnHosting']['AdmitNewExecutions'])
         self.assertEqual('Data Source=jobs-ux.db;Pooling=False', features['JobsEntityFrameworkCore']['ConnectionString'])
+
+    def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
+        journey = sorted(acceptance.JOURNEYS)[0]
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == journey]
+        self.assertEqual(len(acceptance.PROJECTS), acceptance.verdict(report, self.root, [journey]))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+        with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, [journey])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['unknown'])
+        report['suites'][0]['specs'][0]['tests'].pop()
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
 
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
         for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):

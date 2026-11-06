@@ -19,7 +19,7 @@ application clocks on separate workers.
 ## M0 — Setup and design gates
 
 - [x] T001 Record scoped owner authorization, source/provider research and selected decisions in `docs/program-goals/standalone-jobs.md` and `specs/1218-standalone-jobs/research.md`.
-- [x] T002 Adopt ADR0096 on the owner's explicit 6 November authority and apply its additive domain/version/sync-impact delta in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; reconcile concurrent ADR0095 again before merge.
+- [x] T002 Adopt ADR0096 on the owner's explicit 6 November authority and apply its additive domain/version/sync-impact delta in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`; retain ADR0095's merged Decisions 6.4.0 admission and advance Jobs to 6.5.0.
 - [x] T003 Record reviewed engineering choices for continuation permission cutoff, scope-gate/provider-time arbitration and linked Retry as new run in `specs/1218-standalone-jobs/contracts/job-lifecycle.md`; coordinate shared paths through the existing #3582/#3583/#2892/#3815 records.
 - [x] T004 Review `specs/1218-standalone-jobs/spec.md`, `plan.md`, `data-model.md`, `tasks.md` and `ux-acceptance.md` together; record clean R3 at44c22f34f and scoped domain adoption before M1. Concrete code/package gates remain required.
 

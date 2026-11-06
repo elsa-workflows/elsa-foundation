@@ -2,7 +2,7 @@
 
 The suite composes the actual Jobs EF SQLite authority, its public migration/producer registration,
 Foundation normalized-principal validation, a controlled current-subject authorization provider and the
-actual NativeEndpoints HTTP surface in TestServer. It adds no provider internals access or fake Jobs
+actual MinimalEndpoints HTTP surface in TestServer. It adds no provider internals access or fake Jobs
 state machine. Claims carry a stale wildcard so revocation must be enforced by the current directory.
 
 Declared source cases cover tenant/partition/cursor isolation, canonical actor ownership, changing

@@ -46,11 +46,11 @@ progress of unrelated eligible work. Do not invent throughput or latency claims 
 ## Constitution Check
 
 Both constitutions and [review checklist](../../docs/contributing/review-checklist.md) apply. Current
-owning versions on this branch are framework 6.1.0 and Elsa 6.4.0; the AGENTS summary is not the version authority.
+owning versions on this branch are framework 6.1.0 and Elsa 6.5.0; the AGENTS summary is not the version authority.
 
 | Gate | Proposed treatment | State |
 |---|---|---|
-| Elsa §E2.1 and framework Governance | [ADR 0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) admits optional Jobs under explicit scoped owner adoption, propagated as Elsa6.4.0 | Passed for domain admission; reconcile concurrent version changes before merge |
+| Elsa §E2.1 and framework Governance | [ADR 0096](../../docs/adr/0096-jobs-owns-durable-handler-invocations.md) admits optional Jobs under explicit scoped owner adoption, propagated as Elsa 6.5.0 after retaining ADR0095's Decisions 6.4.0 admission | Passed for domain admission |
 | §2.1–§2.4, §2.13–§2.20 | Core only contracts/abstractions; concrete provider/operations adapters; one verb-led purpose; no universal Execution umbrella | Design review clean; M1 standalone closure passed; later adapters still require closure checks |
 | §2.5–§2.11 | Public inheritable features; scoped services, declared replacement kinds, diagnosed duplicate handlers and bounded CQS store transitions | Required in implementation |
 | §2.17 | Extract only demonstrated mechanics with concrete consumers; preserve existing workflow APIs through adapters | Review extraction before implementation |

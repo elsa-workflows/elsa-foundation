@@ -442,3 +442,5 @@ Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.TerminalStatus.get -> str
 Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Worker.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
 Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultDeliveryContributor
 Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultDeliveryContributor.CompleteAsync(Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.init -> void

@@ -6,6 +6,7 @@ import argparse
 from contextlib import contextmanager, nullcontext
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -21,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'business decisions authoring and explanations': ['reference', 'decisions-list', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
@@ -72,7 +74,21 @@ def command(args, log, *, cwd=ROOT, env=None):
             stop_group(process)
 
 
-def inventory(report, feature='baseline'):
+def selected_journeys(feature, journeys=None):
+    if feature not in FEATURE_CAPTURES:
+        raise ValueError('Unknown feature inventory')
+    available = set(FEATURE_CAPTURES[feature])
+    if journeys is None:
+        return available
+    if feature != 'baseline':
+        raise ValueError('Jobs requires its complete mandatory journey inventory')
+    selected = set(journeys)
+    if not selected or not selected <= available:
+        raise ValueError('Unknown or empty journey inventory')
+    return selected
+
+
+def inventory(report, feature='baseline', journeys=None):
     rows = []
     def walk(suites):
         for suite in suites:
@@ -81,8 +97,7 @@ def inventory(report, feature='baseline'):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    captures = FEATURE_CAPTURES[feature]
-    expected = {(project, journey) for project in PROJECTS for journey in captures}
+    expected = {(project, journey) for project in PROJECTS for journey in selected_journeys(feature, journeys)}
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -91,9 +106,15 @@ def inventory(report, feature='baseline'):
     return rows
 
 
-def verdict(report, artifacts, feature='baseline', source_sha=None):
+def verdict(report, artifacts, feature='baseline', source_sha=None, journeys=None):
     """An exit code alone cannot certify that every intended journey actually ran."""
-    rows = inventory(report, feature)
+    # Preserve the existing baseline tooling's positional journey selection alongside
+    # the Jobs feature selector; Jobs always requires all six journeys in all projects.
+    if not isinstance(feature, str):
+        if journeys is not None:
+            raise ValueError('Journey selection was supplied twice')
+        journeys, feature = feature, 'baseline'
+    rows = inventory(report, feature, journeys)
     captures = FEATURE_CAPTURES[feature]
     for project, title, test in rows:
         results = test.get('results', [])
@@ -450,21 +471,23 @@ def configure_jobs_shell(shells):
                     JobsWorkflowsRuntime={'PersistencePartition': 'default', 'TenantId': 'default'})
 
 
-def run(output, feature='baseline'):
+def run(output, feature='baseline', journey=None):
+    selection = [journey] if journey else None
+    journeys = selected_journeys(feature, selection)
     output.mkdir(parents=True, exist_ok=False)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
     report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty),
-              'kind': 'composed-source', 'feature': feature, 'intendedJourneys': sorted(FEATURE_CAPTURES[feature]), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+              'kind': 'composed-source', 'feature': feature, 'intendedJourneys': sorted(journeys), 'journeys': sorted(journeys), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review'}
     try:
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'] + (['-p:JobsUxAcceptance=true'] if feature == 'jobs' else []), output / 'backend-build.log')
+        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'] + (['-p:JobsUxAcceptance=true'] if feature == 'jobs' else []), output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             backend, studio = data / 'workbench', data / 'studio'
@@ -502,14 +525,17 @@ def run(output, feature='baseline'):
                         browser_env = dict(clean_environment(), UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_FEATURE=feature, ELSA_STUDIO_URL=studio_url,
                                            ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                            UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, **control)
+                        browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
+                        if journey:
+                            browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
                         report['stage'] = 'discovery'
-                        command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts', '--list', '--reporter=json'],
+                        command([*browser_command, '--list', '--reporter=json'],
                                 output / 'discovery.log', cwd=ROOT / 'Studio', env=dict(browser_env, PLAYWRIGHT_JSON_OUTPUT_FILE=str(output / 'discovery.json')))
-                        report['discovered'] = len(inventory(json.loads((output / 'discovery.json').read_text()), feature))
+                        report['discovered'] = len(inventory(json.loads((output / 'discovery.json').read_text()), feature, selection))
                         report['stage'] = 'journeys'
-                        command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
+                        command(browser_command,
                                 output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                        report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, feature, sha)
+                        report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, feature, sha, selection)
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
         if sha != end_sha or dirty != end_dirty:
@@ -530,8 +556,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--feature', choices=sorted(FEATURE_CAPTURES), default='baseline', help='Complete mandatory journey inventory to execute')
+    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete baseline journey across all four projects; Jobs always requires its complete inventory')
     args = parser.parse_args()
+    if args.feature == 'jobs' and args.journey is not None:
+        parser.error('Jobs requires every mandatory journey; --journey selects only baseline journeys.')
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.feature)
+    run(args.output.resolve(), args.feature, args.journey)

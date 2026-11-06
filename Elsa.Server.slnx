@@ -900,4 +900,35 @@
   <Folder Name="/Essentials/tests/Versioning/Publisher/">
     <Project Path="Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Evaluation/">
+    <Project Path="Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/">
+    <Project Path="Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
+    <Project Path="Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <Project Path="Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <Project Path="Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <Project Path="Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Api/">
+    <Project Path="Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Design/">
+    <Project Path="Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Workflows/">
+    <Project Path="Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Workflows/Api/">
+    <Project Path="Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/Persistence/">
+    <Project Path="Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
+    <Project Path="Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/Workflows/">
+    <Project Path="Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <Project Path="Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <Project Path="Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+  </Folder>
 </Solution>

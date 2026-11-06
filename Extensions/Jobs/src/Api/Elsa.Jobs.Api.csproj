@@ -6,7 +6,7 @@
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Jobs.Core.csproj" />

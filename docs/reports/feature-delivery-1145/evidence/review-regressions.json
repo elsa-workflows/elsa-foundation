@@ -1,0 +1,12 @@
+{
+  "cleanupFailureInjection": {
+    "withoutNestedFinally": 1,
+    "withFix": 0
+  },
+  "exactRemotePins": {
+    "withoutEnforcement": 1,
+    "withFix": 0
+  },
+  "tests": 3,
+  "rawTestValuesPublished": false
+}
