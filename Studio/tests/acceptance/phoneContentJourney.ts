@@ -89,7 +89,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect(themeSelect).not.toHaveValue(selectedId);
   await sectionSelect.selectOption({ label: "Features" });
-  await expect(page.getByRole("heading", { name: "Features", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Features", level: 2, exact: true })).toBeVisible();
   await capture(page, info, "phone-settings-navigation");
   await page.setViewportSize(original);
 }
