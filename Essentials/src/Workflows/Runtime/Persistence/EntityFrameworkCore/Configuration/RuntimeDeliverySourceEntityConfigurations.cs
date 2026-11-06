@@ -14,8 +14,7 @@ internal sealed class RuntimeIngressSourceEntityConfiguration : IEntityTypeConfi
         b.Property(row => row.AcceptanceOperationFingerprint).IsRequired();
         b.Property(row => row.OperationProofJson).IsRequired();
         b.HasIndex(row => new { row.ScopeKeyHash, row.SourceFamilyHash, row.SourceIdHash });
-        b.HasIndex(row => new { row.ScopeKeyHash, row.TenantIdHash, row.RunKind, row.TestScopeIdHash,
-            row.AuthorityPartitionKey, row.SourceFamilyHash, row.Status, row.RecordedAtUtcTicks });
+        b.HasIndex(row => new { row.FullDiscoveryIdentityHash, row.SourceFamilyHash, row.Status, row.RecordedAtUtcTicks });
     }
 }
 
@@ -35,8 +34,8 @@ internal sealed class RuntimeDeliveryWorkEntityConfiguration : IEntityTypeConfig
         b.HasIndex(row => new { row.ScopeKeyHash, row.SourceFamilyHash, row.SourceIdHash, row.WorkIdHash });
         // Only bounded hash/discriminator/time fields enter the discovery key on every provider. Full encoded
         // identities and canonical source joins still filter before Take; hashes never establish ownership.
-        b.HasIndex(row => new { row.ScopeKeyHash, row.TenantIdHash, row.RunKind, row.TestScopeIdHash,
-            row.AuthorityPartitionKey, row.SourceFamilyHash, row.WorkKindHash, row.Role, row.ClaimableIsEligible, row.ClaimableAtUtcTicks });
+        b.HasIndex(row => new { row.FullDiscoveryIdentityHash, row.SourceFamilyHash, row.WorkKindHash,
+            row.Role, row.ClaimableIsEligible, row.ClaimableAtUtcTicks });
     }
 }
 
@@ -54,5 +53,7 @@ file static class RuntimeDeliverySourceEntityConfiguration
         b.Property("TenantIdHash").HasMaxLength(64);
         b.Property("TestScopeIdHash").HasMaxLength(64);
         b.Property("AuthorityPartitionKey").HasMaxLength(64).IsRequired();
+        b.Property("FullDiscoveryIdentity").IsRequired();
+        b.Property("FullDiscoveryIdentityHash").HasMaxLength(64).IsRequired();
     }
 }

@@ -10589,3 +10589,18 @@ Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider
 Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.ProviderId.get -> string!
 Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.ModelProtocol.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol?
 Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.Describe(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! material) -> Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.RuntimeDeliveryDiscoveryPartition(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? tenantId, Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind runKind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition? executionPartition = null, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope? testScope = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.RunKind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.ExecutionPartition.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.TestScope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.AuthorityPartitionKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Matches(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RuntimeDeliveryClaimRequest(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Collections.Generic.IReadOnlyCollection<string!>! families, System.Collections.Generic.IReadOnlyCollection<string!>! workKinds, string! ownerId, System.TimeSpan visibility, int limit, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! partition) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RequirePartition(Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext! access, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! currentPartition, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.init -> void

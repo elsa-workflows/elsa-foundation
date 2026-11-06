@@ -131,7 +131,7 @@ file static class RuntimeProviderModel
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ContentJson").HasColumnType(type);
         foreach (var entity in new[] { typeof(RuntimeIngressSourceEntity), typeof(RuntimeDeliveryWorkEntity) })
         {
-            foreach (var property in new[] { "ScopeKey", "SourceFamily", "SourceId", "TenantId", "TestScopeId", "ContentJson", "OperationProofJson" })
+            foreach (var property in new[] { "ScopeKey", "SourceFamily", "SourceId", "TenantId", "TestScopeId", "FullDiscoveryIdentity", "ContentJson", "OperationProofJson" })
                 modelBuilder.Entity(entity).Property(property).HasColumnType(type);
         }
         foreach (var property in new[] { "HeaderFingerprint", "AcceptanceOperationId", "AcceptanceOperationFingerprint" })

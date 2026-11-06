@@ -20,6 +20,8 @@ internal sealed class RuntimeIngressSourceEntity
     public string? TestScopeId { get; set; }
     public string? TestScopeIdHash { get; set; }
     public string AuthorityPartitionKey { get; set; } = null!;
+    public string FullDiscoveryIdentity { get; set; } = null!;
+    public string FullDiscoveryIdentityHash { get; set; } = null!;
     public int HeaderVersion { get; set; }
     public long HeaderRevision { get; set; }
     public int RequiredParticipantVersion { get; set; }
@@ -57,6 +59,8 @@ internal sealed class RuntimeDeliveryWorkEntity
     public string? TestScopeId { get; set; }
     public string? TestScopeIdHash { get; set; }
     public string AuthorityPartitionKey { get; set; } = null!;
+    public string FullDiscoveryIdentity { get; set; } = null!;
+    public string FullDiscoveryIdentityHash { get; set; } = null!;
     public long SourceHeaderRevision { get; set; }
     public string SourceHeaderFingerprint { get; set; } = null!;
     public string WorkId { get; set; } = null!;

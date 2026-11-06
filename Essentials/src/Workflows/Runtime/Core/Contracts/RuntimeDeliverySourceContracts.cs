@@ -16,6 +16,10 @@ public interface IRuntimeDeliverySourceStore
 {
     bool CanParticipate(RuntimeDeliveryBoundary boundary) => false;
     ValueTask<RuntimeDeliverySourceSnapshot?> ReadAsync(RuntimeDeliverySourceAddress source, CancellationToken cancellationToken = default);
+    /// <summary>Claims only within an explicit checked discovery partition; unspecified requests refuse.</summary>
+    /// <remarks>RequirePartition is structural only. Resolve trusted canonical family/host authority and complete exact
+    /// scope/tenant/execution-partition/run/test/authority predicates before Take and before any claim mutation. Hashes
+    /// are query projections, never sufficient authority; no broad page followed by foreign-row filtering is supported.</remarks>
     ValueTask<IReadOnlyList<RuntimeDeliveryWorkClaim>> ClaimAsync(RuntimeDeliveryClaimRequest request, CancellationToken cancellationToken = default);
     ValueTask<RuntimeDeliveryWorkClaim?> RenewAsync(RuntimeDeliveryWorkClaim claim, TimeSpan visibility, CancellationToken cancellationToken = default);
     ValueTask<RuntimeSourceCommitResult> CommitAsync(RuntimeSourceCommit commit, CancellationToken cancellationToken = default);

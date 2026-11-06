@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -102,9 +103,17 @@ public sealed class RuntimeDeliveryContext
     public override string ToString() => nameof(RuntimeDeliveryContext);
 }
 
-/// <summary>Bounded claim request; unsupported family/work capabilities must refuse before claim mutation.</summary>
+/// <summary>Bounded claim request; unsupported or unspecified discovery context refuses before reads/claim mutation.</summary>
+/// <remarks>The preserved constructor leaves Partition unspecified, never a wildcard. Providers require the explicit
+/// trusted partition, full predicates and current canonical family authority before Take and again before mutation.
+/// This unregistered provider request is not persisted wire authority. Its original collection constructor/property
+/// types retain the pre-existing default JSON reader limitation; JsonConstructor selects the preserved constructor
+/// without providing a general serializer policy.</remarks>
 public sealed class RuntimeDeliveryClaimRequest
 {
+    private RuntimeDeliveryDiscoveryPartition? partition;
+
+    [JsonConstructor]
     public RuntimeDeliveryClaimRequest(PersistenceScope scope, IReadOnlyCollection<string> families,
         IReadOnlyCollection<string> workKinds, string ownerId, TimeSpan visibility, int limit = 100)
     {
@@ -114,12 +123,50 @@ public sealed class RuntimeDeliveryClaimRequest
         Scope = scope; Families = RuntimeDeliveryValues.Names(families); WorkKinds = RuntimeDeliveryValues.Names(workKinds);
         OwnerId = ownerId; Visibility = visibility; Limit = limit;
     }
+    /// <summary>Supplies an explicit exact discovery partition while preserving the original constructor shape.</summary>
+    public RuntimeDeliveryClaimRequest(PersistenceScope scope, IReadOnlyCollection<string> families,
+        IReadOnlyCollection<string> workKinds, string ownerId, TimeSpan visibility, int limit,
+        RuntimeDeliveryDiscoveryPartition partition)
+        : this(scope, families, workKinds, ownerId, visibility, limit)
+    {
+        ArgumentNullException.ThrowIfNull(partition);
+        Partition = partition;
+    }
+
     public PersistenceScope Scope { get; }
+    /// <summary>Null is an explicitly unsupported legacy request, never across-tenant/run/test/authority discovery.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeDeliveryDiscoveryPartition? Partition
+    {
+        get => partition;
+        init
+        {
+            if (value is not null && value.Scope != Scope)
+                throw new ArgumentException("Claim scope differs from its discovery partition.", nameof(Partition));
+            partition = value;
+        }
+    }
     public IReadOnlyList<string> Families { get; }
     public IReadOnlyList<string> WorkKinds { get; }
     public string OwnerId { get; }
     public TimeSpan Visibility { get; }
     public int Limit { get; }
+
+    /// <summary>Requires exact trusted current context, ordinary same-scope access and an unexpired test lifetime.</summary>
+    /// <remarks>This structural check grants no authority. The provider supplies checked canonical family/host context,
+    /// compares full authority metadata before Take, and rereads test-ledger/claim/source/schema state in its transaction.
+    /// C2 derives authority from CreateRoot(retained RequestedBy), never business metadata or a later ambient caller.</remarks>
+    public RuntimeDeliveryDiscoveryPartition RequirePartition(PersistenceAccessContext access,
+        RuntimeDeliveryDiscoveryPartition currentPartition, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(access); ArgumentNullException.ThrowIfNull(currentPartition);
+        var partition = Partition ?? throw new NotSupportedException("The claim request has no explicit discovery partition.");
+        partition.ValidateCurrent(access, observedAt);
+        if (!partition.Matches(currentPartition))
+            throw new InvalidOperationException("The claim request differs from its trusted current discovery context.");
+        return partition;
+    }
+
     public override string ToString() => nameof(RuntimeDeliveryClaimRequest);
 }
 
