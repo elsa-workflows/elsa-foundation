@@ -59,7 +59,12 @@ internal sealed class BpmnApiCaller(IHttpContextAccessor contexts, NormalizedPri
         var tenants = principal.FindAll(IdentityClaimTypes.TenantId).ToArray();
         if (subjects is not [{ Length: > 0 }] || tenants.Length > 1 || tenants.Any(claim => string.IsNullOrWhiteSpace(claim.Value)))
             throw new BpmnModelResourceMissingException();
-        return new(subjects[0], tenants.SingleOrDefault()?.Value);
+        var executionSubjects = principal.FindAll(IdentityClaimTypes.UserId).ToArray();
+        return new(subjects[0], tenants.SingleOrDefault()?.Value)
+        {
+            ExecutionSubjectId = executionSubjects.Length == 1 && !string.IsNullOrWhiteSpace(executionSubjects[0].Value)
+                ? executionSubjects[0].Value : null
+        };
     }
     public async ValueTask<bool> CanReadAsync(object resource, CancellationToken cancellationToken)
     {
