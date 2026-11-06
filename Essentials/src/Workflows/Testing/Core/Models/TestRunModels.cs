@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Workflows.Testing.Core.Serialization;
 
 namespace Elsa.Workflows.Testing.Core.Models;
 
@@ -25,7 +27,10 @@ public sealed record TestCandidateManifest
 public sealed record TestDiagnostic(string Code, string Message, string? Target = null, string? Member = null, string? Step = null);
 
 /// <summary>Missing/withheld evidence is explicit and cannot compare equal to JSON null.</summary>
-public sealed record TestObservationValue(TestEvidenceAvailability Availability, JsonElement? Value, string? Reason = null);
+public sealed record TestObservationValue(TestEvidenceAvailability Availability,
+    [property: JsonConverter(typeof(OptionalJsonElementConverter))]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Value,
+    string? Reason = null);
 
 /// <summary>Known absence differs from missing evidence. Interaction evidence is a complete invocation array; existence is derived from that array after settlement.</summary>
 public sealed record TestSubjectObservation(TestObservationValue Evidence, bool Exists, bool Settled, string? Reference = null);
@@ -37,7 +42,8 @@ public sealed record TestCheckResult(
     string DefinitionDigest,
     TestCheckVerdict Verdict,
     TestSubject Subject,
-    JsonElement? Expected,
+    [property: JsonConverter(typeof(OptionalJsonElementConverter))]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Expected,
     TestObservationValue Actual,
     string? Message = null);
 

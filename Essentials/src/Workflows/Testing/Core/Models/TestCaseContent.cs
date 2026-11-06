@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Workflows.Testing.Core.Serialization;
 
 namespace Elsa.Workflows.Testing.Core.Models;
 
@@ -104,5 +106,7 @@ public sealed record TestAssertion
     public string Profile { get; init; } = "elsa.workflow-test-assertion/1";
     public required TestSubject Subject { get; init; }
     public required TestAssertionOperator Operator { get; init; }
+    [JsonConverter(typeof(OptionalJsonElementConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Expected { get; init; }
 }
