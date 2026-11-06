@@ -3,7 +3,7 @@ import type {
   ActivityPresentationRecord
 } from "./workflowTypes";
 import { getActivityDisplay } from "./activityDisplay";
-import { shortTypeName } from "./workflowFormatting";
+import { humanizeTypeName, shortTypeName } from "./workflowFormatting";
 
 export const activityDisplayNameMaxLength = 200;
 export const activityDescriptionMaxLength = 2_000;
@@ -84,12 +84,40 @@ export function resolveActivityLabel(
   catalogItem: ActivityCatalogItem | null | undefined,
   technicalActivityType: string
 ) {
-  return normalizeActivityPresentationValue(
+  const authored = normalizeActivityPresentationValue(
     presentation?.displayName,
     activityDisplayNameMaxLength
-  ) ?? (catalogItem ? getActivityDisplay(catalogItem) : shortActivityType(technicalActivityType));
+  );
+  return (authored && !isTechnicalActivityLabel(authored) ? authored : undefined)
+    ?? (catalogItem ? getActivityDisplay(catalogItem) : friendlyShortActivityType(technicalActivityType));
 }
 
-function shortActivityType(value: string) {
-  return shortTypeName(value) ?? value;
+/**
+ * True when a presentation label or summary is an identity token (GUID, long hex, or a
+ * version+build hash such as `1.0.0+e26c11bd…` / `0+e26c11bd…`) rather than a human name.
+ */
+export function isTechnicalActivityLabel(value: string | null | undefined) {
+  const text = unwrapQuotedLabel(value);
+  if (!text) return false;
+  if (guidIdentityPattern.test(text)) return true;
+  if (hexIdentityPattern.test(text)) return true;
+  return versionBuildHashPattern.test(text);
 }
+
+function friendlyShortActivityType(value: string) {
+  const short = shortTypeName(value) ?? value;
+  if (short && !isTechnicalActivityLabel(short)) return short;
+  const humanized = humanizeTypeName(value);
+  if (humanized && !isTechnicalActivityLabel(humanized)) return humanized;
+  return "Activity";
+}
+
+function unwrapQuotedLabel(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? "";
+  const quoted = /^"(.*)"$/.exec(trimmed);
+  return (quoted ? quoted[1] : trimmed).trim();
+}
+
+const guidIdentityPattern = /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i;
+const hexIdentityPattern = /^[0-9a-f]{16,}$/i;
+const versionBuildHashPattern = /^(?:\d+\.)*\d+\+[0-9a-f]{12,}$/i;
