@@ -12,6 +12,54 @@ import { AgentContextChips } from "../../agent/AgentContextChips";
 import { beginAgentModuleRegistration, retireAgentModuleRegistration } from "../../agent/agentRegistrationOrigins";
 
 describe("WeaverSurface", () => {
+  it("refuses a queued module prompt whose fresh discovery removes its origin before explicit context disclosure", async () => {
+    const api = readyApi(); const client = readyClient();
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"] }] } } });
+    const module = beginAgentModuleRegistration(api, "Removed"); module.complete();
+    const request = { id: "queued-removed", requestId: "queued-removed", message: "Inspect", attachments: [{ id: "old", source: "Removed", label: "Old", contentType: "removed", sensitivity: "internal" as const, scope: "screen", content: { private: Math.random() } }] };
+    module.api.agent.dispatchPrompt(request);
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/unknown" }} variant="dock" client={client} incomingPrompt={request} />);
+    try {
+      await flushPromises(); expect(client.createSession).not.toHaveBeenCalled(); expect(client.sendMessage).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Module context changed");
+    } finally { unmount(); }
+  });
+
+  it("refreshes the actual hosts before a prompt, removes a nested origin and sends only an admitted inventory candidate", async () => {
+    const api = readyApi(); const client = readyClient(); const removed = vi.fn(async () => []);
+    const canary = `private-${Math.random()}`;
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [{ id: "Healthy", displayName: "Healthy", status: "available", manifest: { entry: canary }, diagnostics: [{ reason: canary }] }] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Agent", contextKinds: ["agent.host-support"], schemaVersions: ["1"] }] } } });
+    const missing = beginAgentModuleRegistration(api, "Removed.Satellite");
+    missing.api.agent.contextProviders.add({ id: "removed", moduleId: "Resource", displayName: "Removed", surfaces: ["*"], sensitivity: "internal", collect: removed }); missing.complete();
+    const healthy = beginAgentModuleRegistration(api, "Healthy");
+    healthy.api.agent.contextProviders.add({ id: "healthy", moduleId: "Resource", displayName: "Healthy", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ id: "healthy", source: "Resource", label: "Healthy", contentType: "sample", sensitivity: "internal", scope: "screen" }] }); healthy.complete();
+    const { unmount } = render(<WeaverSurface api={api} surface={{ route: "/unresolved-route" }} variant="dock" client={client} subscribeStream={() => ({ close() {} })} incomingPrompt={{ id: "support", message: "Inspect current support" }} />);
+    try {
+      await flushPromises(); expect(client.sendMessage).toHaveBeenCalledTimes(1); expect(removed).not.toHaveBeenCalled();
+      const sent = vi.mocked(client.sendMessage).mock.calls[0][1];
+      expect(sent.activeSurface?.route).toBe("/unresolved-route");
+      expect(sent.contextAttachments).toContainEqual(expect.objectContaining({ id: "healthy" }));
+      expect(sent.contextAttachments).toContainEqual(expect.objectContaining({ moduleId: "Elsa.Agent", contentType: "agent.host-support", origin: "clientSnapshot", agentScopes: [] }));
+      expect(JSON.stringify(sent.contextAttachments)).not.toContain(canary);
+    } finally { unmount(); }
+  });
+
+  it("refuses a stale discovery after the selected backend changes while its read is awaiting", async () => {
+    const api = readyApi(); const client = readyClient(); const collect = vi.fn(async () => []);
+    api.agent.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    let finish!: (value: unknown) => void;
+    vi.mocked(api.backend.http.getJson).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} incomingPrompt={{ id: "stale-support", requestId: "stale-support", message: "Inspect" }} />);
+    try {
+      await flushPromises(); Object.assign(api, { backend: createEndpointContext("https://replacement.example/") });
+      finish({ data: { support: { completeness: "complete", contexts: [] } } }); await flushPromises();
+      expect(client.createSession).not.toHaveBeenCalled(); expect(client.sendMessage).not.toHaveBeenCalled(); expect(collect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Module context changed");
+    } finally { unmount(); }
+  });
+
   it.each(["initial", "late"] as const)("refreshes an %s module's result presentation and excludes it after withdrawal", async timing => {
     const api = readyApi(); const client = readyClient();
     const supports = vi.fn(() => true);
@@ -1273,6 +1321,10 @@ function readyApi() {
     sdkVersion: "1.0.0",
     ...createEndpointContext("https://studio.example/")
   }, "https://foundation.example/");
+  // These resource/lifecycle tests use an older backend with no inventory-context contract.
+  // Keep both new discovery reads on the fixture's transport instead of issuing real HTTP.
+  vi.spyOn(api.host.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
+  vi.spyOn(api.backend.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
   api.agent.capabilities.add({
     id: "weaver.test",
     displayName: "Weaver test",

@@ -1,5 +1,5 @@
 import type {
-  ElsaStudioModuleApi, StudioAgentPromptDispatcher, StudioAgentRegistry, StudioContributionComposition,
+  ElsaStudioModuleApi, StudioAgentPromptDispatcher, StudioAgentPromptRequest, StudioAgentRegistry, StudioContributionComposition,
   StudioContributionListOptions
 } from "../../sdk";
 
@@ -16,6 +16,7 @@ type Registry = {
 };
 type Generation = {
   current: boolean;
+  revision: number;
   registrations: Map<string, Registration>;
   origins: WeakMap<object, Set<Registration>>;
   adds: Map<Registry, Registry["add"]>;
@@ -23,11 +24,12 @@ type Generation = {
 
 // Private lifetime observations. Resource moduleId is never used to infer who registered an object.
 const generations = new WeakMap<StudioAgentRegistry, Generation>();
+const promptOrigins = new WeakMap<StudioAgentPromptRequest, { generation: Generation; registration: Registration }>();
 
 export function initializeAgentRegistryGeneration(agent: StudioAgentRegistry) {
   const known = generations.get(agent);
   if (known) return known;
-  const generation: Generation = { current: true, registrations: new Map(), origins: new WeakMap(), adds: new Map() };
+  const generation: Generation = { current: true, revision: 0, registrations: new Map(), origins: new WeakMap(), adds: new Map() };
   generations.set(agent, generation);
   const direct: Registration = { status: "loaded", pending: new Set(), cleanup: new Set() };
   for (const value of Object.values(agent)) {
@@ -56,6 +58,7 @@ export function beginAgentModuleRegistration(api: ElsaStudioModuleApi, moduleId:
   if (previous) withdraw(api, previous, "retired");
   const registration: Registration = { moduleId, status: generation.current ? "registering" : "retired", pending: new Set(), cleanup: new Set() };
   generation.registrations.set(moduleId, registration);
+  generation.revision++;
   const scopedRegistries = new Map<Registry, Registry>();
   const dispatcher = scopeDispatcher(api.agent, generation, registration);
   const legacy = api.ai === api.agent ? dispatcher : scopeDispatcher(api.ai, generation, registration);
@@ -87,6 +90,7 @@ export function beginAgentModuleRegistration(api: ElsaStudioModuleApi, moduleId:
     complete() {
       if (!generation.current || registration.status !== "registering") return false;
       registration.status = "loaded";
+      generation.revision++;
       for (const activate of registration.pending) activate();
       registration.pending.clear();
       return true;
@@ -116,11 +120,40 @@ export function isAgentContributionCurrent(api: ElsaStudioModuleApi, contributio
   return !generation || available(generation, contribution);
 }
 
+/** Private discovery observations; registration identity is not a resource ownership declaration. */
+export function observeAgentRegistrations(api: ElsaStudioModuleApi) {
+  const generation = initializeAgentRegistryGeneration(api.agent);
+  return {
+    revision: generation.revision,
+    current: generation.current,
+    modules: [...generation.registrations].map(([moduleId, registration]) => ({ moduleId, status: registration.status }))
+  };
+}
+
+export function observeAgentContributionOrigin(api: ElsaStudioModuleApi, contribution: unknown) {
+  const generation = generations.get(api.agent);
+  const origins = contribution && typeof contribution === "object" ? generation?.origins.get(contribution) : undefined;
+  if (!origins || origins.size !== 1) return undefined;
+  const origin = [...origins][0];
+  return origin.moduleId ? { moduleId: origin.moduleId, status: origin.status } : undefined;
+}
+
+/** Host copies preserve private dispatch provenance without adding caller-controlled wire fields. */
+export function copyAgentPromptOrigin(source: StudioAgentPromptRequest, target: StudioAgentPromptRequest) {
+  const origin = promptOrigins.get(source);
+  if (origin) promptOrigins.set(target, origin);
+}
+
+export function isAgentPromptRequestCurrent(api: ElsaStudioModuleApi, request: StudioAgentPromptRequest) {
+  const origin = promptOrigins.get(request);
+  return !origin || origin.generation === generations.get(api.agent) && origin.generation.current && origin.registration.status === "loaded";
+}
+
 function scopeDispatcher(dispatcher: StudioAgentPromptDispatcher, generation: Generation, registration: Registration): StudioAgentPromptDispatcher {
   const current = () => generation.current && registration.status === "loaded";
   return {
     dispatchPrompt(request) {
-      if (current()) dispatcher.dispatchPrompt(request);
+      if (current()) { promptOrigins.set(request, { generation, registration }); dispatcher.dispatchPrompt(request); }
       else if (request.requestId) dispatcher.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
     },
     onPrompt(listener) { return subscribe(registration, () => dispatcher.onPrompt(listener)); },
@@ -151,6 +184,8 @@ function subscribe(registration: Registration, attach: () => () => void) {
 
 function withdraw(api: ElsaStudioModuleApi, registration: Registration, status: "failed" | "retired") {
   registration.status = status;
+  const generation = generations.get(api.agent);
+  if (generation) generation.revision++;
   let cleanupFailed = false;
   for (const release of registration.cleanup) {
     try { release(); } catch { cleanupFailed = true; }
@@ -169,6 +204,7 @@ function record(generation: Generation, contribution: unknown, registration: Reg
   let origins = generation.origins.get(contribution);
   if (!origins) { origins = new Set(); generation.origins.set(contribution, origins); }
   origins.add(registration);
+  generation.revision++;
 }
 
 function available(generation: Generation, contribution: unknown) {

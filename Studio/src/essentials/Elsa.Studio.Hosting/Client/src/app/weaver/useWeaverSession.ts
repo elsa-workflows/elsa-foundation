@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
 import { AgentExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createAgentClient, getAgentErrorCode, getAgentRetryAfterSeconds, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
 import { collectAgentContext, isAgentContextCollectionCurrent } from "../agent/agentContext";
+import { refreshStudioSupportInventory } from "../agent/agentSupportInventory";
+import { copyAgentPromptOrigin, isAgentPromptRequestCurrent } from "../agent/agentRegistrationOrigins";
 import { getActiveAgentCapabilities, getActivePromptStarters } from "../agent/agentContributions";
 import { getAgentErrorMessage } from "../agent/agentErrors";
 import { subscribeAgentSessionStream, type AgentStreamSubscription } from "../agent/agentStream";
@@ -663,7 +665,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
     let missingRequiredContext = false;
     try {
-      const collection = await collectAgentContext(api, surface, mode, sessionIdRef.current ?? undefined, request.attachments, turnAbort.signal);
+      const support = await refreshStudioSupportInventory(api, turnAbort.signal);
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
+      if (!isAgentPromptRequestCurrent(api, request)) throw new Error("Module context changed; try the request again.");
+      const collection = await collectAgentContext(api, surface, mode, sessionIdRef.current ?? undefined, request.attachments, turnAbort.signal, { support });
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       if (diagnosticGenerationRef.current === generation) setRequestContextDiagnostics(collection.diagnostics);
       const missing = collection.diagnostics.filter(item => item.required);
@@ -756,7 +761,9 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (request.requestId) publishTurnResult("failed", "", request.requestId);
       return;
     }
-    void startTurn({ ...request, message });
+    const contextualRequest = { ...request, message };
+    copyAgentPromptOrigin(request, contextualRequest);
+    void startTurn(contextualRequest);
   }, [chatState, publishTurnResult, ready, startTurn, steer]);
 
   const stop = useCallback(() => {

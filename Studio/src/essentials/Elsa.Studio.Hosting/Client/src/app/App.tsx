@@ -52,7 +52,7 @@ import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
-import { isAgentRegistryCurrent, retireAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
+import { copyAgentPromptOrigin, isAgentRegistryCurrent, retireAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
 import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
 import {watchStudioModuleChanges} from "./moduleReset";
 import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
@@ -221,6 +221,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
       // React may batch synchronous dispatches before the dock consumes either. Explicitly
       // settle the displaced intent; this transport slot is not a durable prompt queue.
       const incoming = { ...prompt, id: `prompt-${Date.now()}-${Math.random()}` };
+      copyAgentPromptOrigin(prompt, incoming);
       incomingPromptRef.current = incoming;
       setAssistantOpen(true);
       setIncomingPrompt(incoming);

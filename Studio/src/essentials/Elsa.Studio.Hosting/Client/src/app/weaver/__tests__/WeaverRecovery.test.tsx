@@ -738,6 +738,8 @@ function readyApi(subject: string, profile = "primary") {
     refreshCapabilities: async () => { throw new Error("unused"); }
   } as unknown as StudioBackendSession;
   const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") }, { backendBaseUrl: `https://${profile}.example/`, backendSession });
+  vi.spyOn(api.host.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
+  vi.spyOn(api.backend.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
   api.agent.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
   return api;
 }
