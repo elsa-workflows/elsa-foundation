@@ -18,6 +18,7 @@ stage() {
 }
 
 stage materialize
+python3 -m unittest discover -s "$script_dir/helpers" -p 'test_*.py' -v 2>&1 | tee "$1/evidence/linux-ownership-controls.log"
 stage prepare-postgres
 stage build --variant baseline
 stage sync-lock
