@@ -10436,3 +10436,4 @@ static Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity.ForScopedIn
 Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec
 static Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec.Decode(System.Text.Json.JsonElement header) -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource!
 static Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec.Encode(Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource! source) -> System.Text.Json.JsonElement
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeInvocationInput(int version, System.Text.Json.JsonElement semanticContent) -> string!

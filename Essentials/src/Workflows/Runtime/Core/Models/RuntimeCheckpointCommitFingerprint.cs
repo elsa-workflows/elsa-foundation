@@ -100,6 +100,39 @@ public static class RuntimeCheckpointCommitFingerprint
         return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
     }
 
+    /// <summary>Versioned semantic invocation-input identity, excluding its target and transport/event IDs.</summary>
+    /// <remarks>The receiver defines the complete semantic object and enforces its declared encoded-size/depth
+    /// limits before this operation. Every property participates; absent and explicit null differ. Duplicate property
+    /// names at any depth refuse rather than allowing a guard and fingerprint to read different values. This operation
+    /// does not persist values, resolve secrets, authorize a receiver or change any historical fingerprint format.</remarks>
+    public static string ComputeInvocationInput(int version, JsonElement semanticContent)
+    {
+        if (version != 1) throw new NotSupportedException("Unsupported invocation-input fingerprint version.");
+        if (semanticContent.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException("Invocation input semantics must be an object.", nameof(semanticContent));
+        RequireUniqueProperties(semanticContent);
+        var payload = JsonSerializer.SerializeToElement(new { Format = "elsa.invocation.input.v1", Content = semanticContent });
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
+    private static void RequireUniqueProperties(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+            {
+                if (!names.Add(property.Name))
+                    throw new InvalidDataException("Invocation input semantics contain duplicate JSON property names.");
+                RequireUniqueProperties(property.Value);
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var item in value.EnumerateArray()) RequireUniqueProperties(item);
+    }
+
     /// <summary>Semantic request identity for canonical ingress retries; transport options and selection are absent.</summary>
     public static string ComputeIngressRequest(StimulusIngressRequest request)
     {
