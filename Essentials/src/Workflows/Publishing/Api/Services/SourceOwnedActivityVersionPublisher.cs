@@ -18,6 +18,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.Logging;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -96,7 +97,18 @@ public sealed class SourceOwnedActivityVersionPublisher(
         }
         else
         {
-            template = CompileSourceOwnedTemplate(catalogVersion, version, now);
+            try
+            {
+                template = CompileSourceOwnedTemplate(catalogVersion, version, now);
+            }
+            catch (ActivityDataSelectionRejectedException refusal)
+            {
+                var subject = new ActivityDiagnosticSubject(SubjectKind, version.Id, definition.Id, version.Id);
+                return ActivitySourceVersionPublicationResult.Refused(refusal.Findings.Select(finding => new ActivityDiagnostic(
+                    finding.Type, ActivityDiagnosticSeverity.Error, finding.Message, subject,
+                    Location: Endpoints.ActivityDataSelectionPublicationProblems.Location(finding.Path, version.ProviderKey),
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["authoredPath"] = finding.Path })).ToArray());
+            }
             publication = CreatePublication(
                 catalogVersion,
                 persistedDefinition,
@@ -263,6 +275,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
         DateTimeOffset now)
     {
         var root = nodeCompiler.CompileSourceOwnedRoot(catalogVersion);
+        ActivityTemplateDataSelectionGuard.Validate(root, version.Inputs.Select(input => input.Name), hasSourceAnalysis: false);
         var resumeTargets = nodeCompiler.BuildResumeTargets(root)
             .ToDictionary(
                 x => x.Key,

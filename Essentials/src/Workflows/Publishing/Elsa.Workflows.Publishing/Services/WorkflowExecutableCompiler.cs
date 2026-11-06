@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Collections.Immutable;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Models;
@@ -44,6 +47,36 @@ public sealed class WorkflowExecutableCompiler(
     : IWorkflowExecutableCompiler
 {
     private readonly IWorkflowExecutableStore? _executableStore = executableStore;
+
+    private readonly IActivityDataSelectionAnalyzer? _dataSelectionAnalyzer;
+
+    /// <summary>Uses the required scoped source authority while preserving every existing constructor signature.</summary>
+    public WorkflowExecutableCompiler(
+        IActivityDataSelectionAnalyzer dataSelectionAnalyzer,
+        IWorkflowDefinitionVersionStore workflowVersions,
+        IActivityDefinitionVersionStore activityVersions,
+        IActivityDefinitionVersionPublicationStore activityPublications,
+        IExecutableActivityTemplateReader activityTemplates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        ActivityTemplatePlacer templatePlacer,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        WorkflowExecutableHasher hasher,
+        ActivityTreeProjector activityTreeProjector,
+        ExecutableNodeCompiler executableNodeCompiler,
+        WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null,
+        IWorkflowExecutableStore? executableStore = null,
+        ActivityResultConversionPlanLinker? activityResultConversionPlanLinker = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        : this(workflowVersions, activityVersions, activityPublications, activityTemplates, sourceReferences,
+            templatePlacer, inputBindingCompiler, outputCaptureCompiler, hasher, activityTreeProjector,
+            executableNodeCompiler, placementSidecars, metadataEnricher, executableStore,
+            activityResultConversionPlanLinker, incidentStrategyCatalog)
+    {
+        _dataSelectionAnalyzer = dataSelectionAnalyzer ?? throw new ArgumentNullException(nameof(dataSelectionAnalyzer));
+    }
+
 
     /// <summary>Preserves current main's pre-dependency-store primary-constructor signature.</summary>
     public WorkflowExecutableCompiler(
@@ -123,6 +156,30 @@ public sealed class WorkflowExecutableCompiler(
 
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
+
+            var sourceAuthority = _dataSelectionAnalyzer
+                ?? throw new InvalidOperationException("Workflow compilation requires the scoped activity data selection analyzer. Compose WorkflowDesignValidations and use the source-authority constructor.");
+            var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
+            {
+                source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,
+                source.DefinitionVersionId, state
+            });
+            var sourceAnalysis = await sourceAuthority.AnalyzeAsync(new ActivityDataSelectionDocument(
+                "Workflow", source.DefinitionId,
+                sourceRevision,
+                rootActivity, state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
+                state.Outputs.ToImmutableArray()), cancellationToken: cancellationToken);
+            if (!StringComparer.Ordinal.Equals(sourceAnalysis.ContractRevision, sourceRevision))
+                throw new InvalidOperationException("Activity data selection analysis does not match the actual workflow candidate.");
+            var sourceErrors = sourceAnalysis.Findings
+                .Where(finding => StringComparer.Ordinal.Equals(finding.Severity, ValidationSeverities.Error))
+                .ToImmutableArray();
+            if (!sourceErrors.IsEmpty)
+                throw new ActivityDataSelectionRejectedException(sourceErrors)
+                {
+                    ResourceKind = source.SourceKind,
+                    ResourceId = source.SourceId
+                };
 
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
@@ -208,6 +265,20 @@ public sealed class WorkflowExecutableCompiler(
 
             ValidatePinnedActivityContracts(compiledRoot);
 
+            try
+            {
+                ActivityTemplateDataSelectionGuard.Validate(compiledRoot, hasSourceAnalysis: true,
+                    activityTreeProjector.DescribeDataSelectionFacts(compiledRoot, state));
+            }
+            catch (ActivityDataSelectionRejectedException refusal)
+            {
+                throw new ActivityDataSelectionRejectedException(refusal.Findings)
+                {
+                    ResourceKind = source.SourceKind,
+                    ResourceId = source.SourceId
+                };
+            }
+
             // Direct result references can only be resolved once the complete executable tree (including
             // placed template boundaries and optional metadata enrichment) is available. Pin the producer
             // contract before computing the behavioral hash.
@@ -275,7 +346,7 @@ public sealed class WorkflowExecutableCompiler(
         }
         catch (Exception exception) when (
             exception is not WorkflowExecutableCompilationException &&
-            (exception is WorkflowExecutableDependencyGraphException or ArgumentException or InvalidOperationException))
+            (exception is WorkflowExecutableDependencyGraphException or ActivityDataSelectionRejectedException or ArgumentException or InvalidOperationException))
         {
             throw new WorkflowExecutableCompilationException(source?.DefinitionId, source?.DefinitionVersionId, exception.Message, exception);
         }

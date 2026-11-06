@@ -2,8 +2,9 @@
 
 **Input:** [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [binding](contracts/binding-contract.md) and [authoring](contracts/authoring-contract.md) contracts.
-**Status:** Reviewed M2 task plan; approval takes effect on M2 merge. All boxes are unexecuted. M1 research
-is closed; M2 merge and resulting-main qualification precede production dispatch. No pending CI is a pass.
+**Status:** Approved M2 task plan. M1 research and M2 closeout are complete; #3922 has begun the shared
+foundation implementation. Checked setup items have receipts below. Source changes alone do not complete
+test-bearing tasks or accept product journeys. No pending CI is a pass.
 
 Use existing projects and separate worker worktrees. Paths below are repository-relative; named new files
 are proposed locations within the plan's fixed package ownership. Coordinate shared files serially.
@@ -18,11 +19,19 @@ existing all-feature composition test. No tests assert these documents' text.
 
 ## Phase 1: Setup and gates
 
-- [ ] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`.
-- [ ] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`.
+- [x] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`. Receipt: [M2 qualification/closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3885#issuecomment-6676152380), qualified f6; fresh tracker/claim checks clear. Newer fd0 integration is not qualified by that receipt.
+- [x] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`. Native child [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922), closed blocker #3885, winning [claim6676170172](https://github.com/elsa-workflows/elsa-foundation/issues/3922#issuecomment-6676170172); no Ready promotion/assignment.
 - [ ] T003 Establish the finite criterion/evidence ledger from `specs/1215-activity-data-selection/quickstart.md`, including all M1 failures, exact host/head ownership and nine journey families; allocate disposable owned stores/ports before any product proof.
 
 **Checkpoint:** M1 and M2 merge/resulting-main receipts exist; workers have concrete claims and boundaries.
+
+Current #3922 ownership: the integrating worktree owns API transport, workflow/source-owned publication,
+Decisions constraints and the task/program records. Separate metadata worktree owns T004–T005 and its
+Core/CLR/profile files; structure/analysis worktree owns T006–T007, the shared validator and owning tests;
+Graph worktree owns provider projection, ActivityTemplateCompiler and Graph/template controls. Shared
+Core contracts are committed before dependent code. All heavy qualification uses owned Azure after
+candidate freeze. The finite evidence ledger is initialized with zero production passes; T003 remains
+open until its owned proof-host/store allocation obligations are met.
 
 ## Phase 2: Shared analysis and static admission
 

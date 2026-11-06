@@ -13,6 +13,14 @@ public sealed class ActivityTreeProjector(IActivityStructureService activityStru
 {
     public const string NoRootActivityMessage = "Workflow version has no root activity to publish.";
 
+    internal ActivityTemplateDataSelectionFacts DescribeDataSelectionFacts(
+        Elsa.Workflows.Runtime.Core.Models.ExecutableNode root, WorkflowDefinitionState state) =>
+        ActivityTemplatePlacer.DescribeDataSelectionFacts(root, state.Inputs.Select(input => input.Name),
+            new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal)
+            {
+                [Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId] = state.Variables.Select(variable => variable.ReferenceKey).ToArray()
+            }, state.RootActivity, activityStructureService);
+
     /// <summary>
     /// Traverses <paramref name="rootActivity"/> once, projecting each node's children through
     /// <see cref="IActivityStructureService.ProjectChildren"/> exactly once and reusing the result for both the

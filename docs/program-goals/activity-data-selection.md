@@ -1,7 +1,7 @@
 # Activity Data Selection
 
-- **Status:** Active; owner authorization, 5 November 2026. Establishment precedes the bounded proof;
-  reviewed production contracts/specification precede implementation.
+- **Status:** Active; shared-foundation implementation in #3922. Bounded M1 research and M2 production
+  agreement are closed; production acceptance remains outstanding.
 - **Area:** Foundation value binding/source discovery and Studio eligible-input authoring.
 - **Steward:** Sipke. Codex coordinates delivery through M5 under the owner's 5 November continuation;
   executable ownership is recorded by a valid claim per leaf.
@@ -70,10 +70,17 @@ after backend/full and Studio qualification passed at post-report descendant `e8
 failed/not-run product criteria and the newer-main qualification limit; cancelled runs are not passes.
 
 [Spec 1215](../../specs/1215-activity-data-selection/spec.md), its plan/contracts and 51 tasks completed
-sequential independent review. M2 approval takes effect on [PR #3897](https://github.com/elsa-workflows/elsa-foundation/pull/3897)
-merge after its exact-head review/checks. The [readiness receipt](../../specs/1215-activity-data-selection/plan.md#readiness-and-qualification)
-distinguishes fixed M1 evidence from newer-main CI. Production workers start only after M2 resulting-main
-qualification; the experiment adopts no production code. A separate Project board is optional.
+sequential independent review. [PR #3897](https://github.com/elsa-workflows/elsa-foundation/pull/3897) received
+formal approval, passed its required exact-head checks and merged as `f50b72075`. M2
+[closed after resulting-source qualification](https://github.com/elsa-workflows/elsa-foundation/issues/3885#issuecomment-6676152380)
+at exact descendant `f6ebd0e10`: all selected GitHub jobs succeeded and the unchanged aggregate predicates
+passed separately; the queued hosted aggregates were not relabelled passed. This does not qualify later main.
+
+Foundation [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922) now owns T004–T010 under
+its specific claim, with separate metadata, analysis, Graph and integrating transport/publication worktrees.
+Its initial base is qualified f6; newer Decisions/auth source is integrated but still needs candidate
+qualification. No production journey is accepted by these contracts or source changes. #3094 and the
+remaining runtime, Studio, expression/editing, causal/restart and final UX work retain their own gates.
 
 ## Completion
 

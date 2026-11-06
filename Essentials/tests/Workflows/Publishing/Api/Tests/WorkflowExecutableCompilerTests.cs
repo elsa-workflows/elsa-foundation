@@ -30,6 +30,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
@@ -63,6 +64,51 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class WorkflowExecutableCompilerTests
 {
+    [Fact]
+    public async Task Source_authority_revision_changes_with_the_actual_transient_candidate_under_the_same_source_ids()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService));
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
+            TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
+        var request = NewRequest(DateTimeOffset.UtcNow());
+        var first = new WorkflowExecutableCompileSource("definition-1", "version-1", "1.0.0", version.State!,
+            "WorkflowDraftSnapshot", "same-snapshot", "1.0.0");
+        await compiler.CompileAsync(request with { Source = first });
+        var changed = first with { State = WorkflowVersion(Node("consumer", Text("second"))).State! };
+        await compiler.CompileAsync(request with { Source = changed });
+        Assert.Equal(2, authority.Revisions.Count);
+        Assert.NotEqual(authority.Revisions[0], authority.Revisions[1]);
+    }
+
+    [Fact]
+    public async Task A_source_authority_response_for_another_candidate_is_refused_before_metadata_enrichment()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService)) { ReplaceRevision = true };
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
+            TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow())).AsTask());
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("actual workflow candidate", exception.Message);
+    }
+
+    private sealed class ObservingDataAuthority(IActivityDataSelectionAnalyzer inner) : IActivityDataSelectionAnalyzer
+    {
+        internal List<string> Revisions { get; } = [];
+        internal bool ReplaceRevision { get; init; }
+        public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null,
+            CancellationToken cancellationToken = default)
+        {
+            Revisions.Add(document.ContractRevision);
+            var result = await inner.AnalyzeAsync(document, target, query, cancellationToken);
+            return ReplaceRevision ? result with { ContractRevision = "another-candidate" } : result;
+        }
+    }
+
     [Fact]
     public void Compiler_preserves_the_current_main_pre_metadata_enricher_constructor()
     {
@@ -3322,6 +3368,9 @@ public sealed class WorkflowExecutableCompilerTests
         var outputCompiler = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry(
             [new JsonRuntimeDurableValueStorageDriver()]));
         return new WorkflowExecutableCompiler(
+            TestCompiler.SourceAuthority(
+                new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
+                _activityStructureService),
             new FakeVersionStore(workflow),
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             publications,
