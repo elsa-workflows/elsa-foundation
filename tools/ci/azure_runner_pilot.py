@@ -57,9 +57,10 @@ def context_errors(env: dict, event: dict, assignment: dict, actual_sha: str) ->
 
 
 def load_assignment() -> dict:
-    info = ASSIGNMENT.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-        raise ValueError("Assignment must be a root-owned regular file without group/other write access")
+    for path, expected_type in [(ASSIGNMENT.parent, stat.S_ISDIR), (ASSIGNMENT, stat.S_ISREG)]:
+        info = path.lstat()
+        if not expected_type(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError("Assignment and parent must be root-owned without group/other write access or symlinks")
     return json.loads(ASSIGNMENT.read_text())
 
 
@@ -72,7 +73,7 @@ def qualify(report_dir: Path) -> int:
         assignment = load_assignment()
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         report["errors"] = context_errors(dict(os.environ), event, assignment, actual_sha)
-        report.update({"sha": actual_sha, "run_id": os.environ.get("GITHUB_RUN_ID"), "runner_name": os.environ.get("RUNNER_NAME"), "assignment": assignment})
+        report.update({"sha": actual_sha, "run_id": os.environ.get("GITHUB_RUN_ID"), "runner_name": os.environ.get("RUNNER_NAME"), "assignment": {key: assignment.get(key) for key in ("sha", "label", "run_id")}})
         if report["errors"]:
             return result
         for index, argv in enumerate(COMMANDS):

@@ -4,6 +4,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import azure_runner_pilot as pilot
@@ -50,14 +51,21 @@ class PilotTests(unittest.TestCase):
             self.assertIn('"exit_code": 1', (directory / "proof.json").read_text())
 
     def test_assignment_rejects_non_root_writable_and_symlink_files(self):
+        parent = SimpleNamespace(st_mode=stat.S_IFDIR | 0o755, st_uid=0)
         for uid, mode in [(501, stat.S_IFREG | 0o444), (0, stat.S_IFREG | 0o664), (0, stat.S_IFLNK | 0o777)]:
-            with self.subTest(uid=uid, mode=mode), patch.object(pilot.Path, "lstat") as info:
-                info.return_value.st_mode = mode
-                info.return_value.st_uid = uid
+            file = SimpleNamespace(st_mode=mode, st_uid=uid)
+            with self.subTest(uid=uid, mode=mode), patch.object(pilot.Path, "lstat", side_effect=[parent, file]):
                 with self.assertRaises(ValueError):
                     pilot.load_assignment()
+        with patch.object(pilot.Path, "lstat", return_value=SimpleNamespace(st_mode=stat.S_IFDIR | 0o777, st_uid=0)):
+            with self.assertRaises(ValueError):
+                pilot.load_assignment()
+        file = SimpleNamespace(st_mode=stat.S_IFREG | 0o444, st_uid=0)
+        with patch.object(pilot.Path, "lstat", side_effect=[parent, file]), patch.object(pilot.Path, "read_text", return_value=json.dumps(self.assignment)):
+            self.assertEqual(self.assignment, pilot.load_assignment())
 
     def test_failed_command_stops_without_retry_and_retains_actual_exit_code(self):
+        self.assignment["unexpected_private_field"] = "must-not-be-in-public-artifact"
         with tempfile.TemporaryDirectory() as temporary, patch.object(pilot.subprocess, "check_output", return_value=self.sha), patch.object(pilot, "load_assignment", return_value=self.assignment), patch.dict(pilot.os.environ, {"GITHUB_EVENT_PATH": __file__}), patch.object(pilot.Path, "read_text", return_value=json.dumps(self.event)), patch.object(pilot, "context_errors", return_value=[]), patch.object(pilot.subprocess, "run") as run:
             run.return_value.returncode = 4
             directory = Path(temporary) / "proof"
@@ -67,10 +75,11 @@ class PilotTests(unittest.TestCase):
             report = json.loads((directory / "proof.json").read_bytes())
             self.assertEqual(4, report["commands"][0]["exit_code"])
             self.assertEqual(1, report["exit_code"])
+            self.assertNotIn("unexpected_private_field", report["assignment"])
 
     def test_workflow_keeps_trust_and_failure_contract(self):
         text = (pilot.ROOT / ".github/workflows/ci-azure-pilot.yml").read_text()
-        for required in ["  workflow_dispatch:", "github.ref == 'refs/heads/main'", "github.event.repository.fork == false", "group: elsa-foundation-ci-pilot", "contents: read", "persist-credentials: false", "timeout-minutes: 10", "if-no-files-found: error", "if: always()", "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"]:
+        for required in ["  workflow_dispatch:", "github.repository == 'elsa-workflows/elsa-foundation'", "github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "github.event.repository.fork == false", "ref: ${{ github.sha }}", "group: elsa-foundation-ci-pilot", "contents: read", "persist-credentials: false", "timeout-minutes: 10", "if-no-files-found: error", "if: always()", "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"]:
             self.assertIn(required, text)
         for prohibited in ["pull_request:", "pull_request_target:", "push:", "schedule:", "secrets.", "contents: write", "continue-on-error", "Build & test", "Generated maps fresh", "name: Full tier"]:
             self.assertNotIn(prohibited, text)
