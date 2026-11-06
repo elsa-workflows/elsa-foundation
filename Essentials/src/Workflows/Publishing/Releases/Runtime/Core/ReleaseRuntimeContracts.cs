@@ -64,7 +64,7 @@ public interface IReleaseRuntimeArtifactCodec
     ReleaseActivityVersion DecodeActivityVersion(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null);
 }
 
-/// <summary>Complete captured containing material for an owner occurrence inspector. Workflow and Template are mutually exclusive.</summary>
+/// <summary>Read-only captured owner input. Inspectors must not mutate nested legacy model collections. Workflow and Template are mutually exclusive.</summary>
 public sealed class ReleaseRuntimeNodeContext(ReleaseContentMember member, ReleaseRuntimeContentScope scope, ExecutableNode node,
     WorkflowExecutable? workflow, ExecutableActivityTemplate? template)
 {
@@ -75,7 +75,7 @@ public sealed class ReleaseRuntimeNodeContext(ReleaseContentMember member, Relea
     public ExecutableActivityTemplate? Template { get; } = template;
 }
 
-/// <summary>Replacement contract: one captured-site reader per shell. Reads indexed bundle content only, without source/target fallback.</summary>
+/// <summary>Replacement contract: one captured-site reader per shell. Reads indexed bundle content only, without source/target fallback. Returned typed views are read-only inspector inputs.</summary>
 public interface IReleaseRuntimeSiteReader
 {
     ReleaseRuntimeNodeContext ReadNode(ReleaseSemanticSite site, IReleaseContentReader content);
@@ -114,6 +114,7 @@ public static class ReleaseRuntimeSiteKinds
     public const string ModelProtocol = "runtime.model-protocol";
     public const string Compatibility = "runtime.compatibility";
     public const string InputMetadata = "runtime.input-metadata";
+    public const string ChildControlConsumer = "runtime.child-control-consumer";
 }
 
 /// <summary>Stable value-free owner-codec refusal; retained bytes and source identifiers are never included in exception text.</summary>

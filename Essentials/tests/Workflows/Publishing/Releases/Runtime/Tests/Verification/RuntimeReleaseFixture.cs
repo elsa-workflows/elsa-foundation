@@ -12,6 +12,8 @@ internal sealed class RuntimeReleaseFixture : IReleaseContentReader
 {
     public static ReleaseRuntimeContentScope Scope { get; } = new("source-authority", "source-tenant", null);
     public ReleaseRuntimeArtifactCodec Codec { get; } = new();
+    private RuntimeCapturedContentCache? _cache;
+    public RuntimeCapturedContentCache Cache => _cache ??= new(Codec);
     private readonly Dictionary<ReleaseMemberKey, ReleaseEncodedRuntimeMember> _encoded = [];
     public IReadOnlyList<ReleaseContentMember> Members => _encoded.Values.Select(x => new ReleaseContentMember(x.Descriptor, x.OwnerVersion)).ToArray();
     public ReleaseContentMember Add(ReleaseEncodedRuntimeMember value)
@@ -20,7 +22,7 @@ internal sealed class RuntimeReleaseFixture : IReleaseContentReader
     }
     public ReleaseContentMember GetMember(ReleaseMemberKey key) => _encoded.TryGetValue(key, out var value) ? new(value.Descriptor, value.OwnerVersion) : throw new KeyNotFoundException();
     public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) => _encoded[key].GetPayloadBytes();
-    public ReleaseRuntimeArtifactVerifier Verifier => new(Codec, new WorkflowExecutableHasher());
+    public ReleaseRuntimeArtifactVerifier Verifier => new(Cache, new WorkflowExecutableHasher());
     public ValueTask<ReleaseSemanticFacts> Verify(ReleaseContentMember member) => Verifier.VerifyAsync(member, GetPayload(member.Key), this);
 
     public static ExecutableNode Node(string id = "root", IReadOnlyDictionary<string, RuntimeInputBinding>? bindings = null,

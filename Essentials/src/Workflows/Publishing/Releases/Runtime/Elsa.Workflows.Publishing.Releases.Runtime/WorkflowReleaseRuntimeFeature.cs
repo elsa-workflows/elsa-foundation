@@ -18,8 +18,10 @@ public class WorkflowReleaseRuntimeFeature : IShellFeature, IPostConfigureShellS
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.TryAddScoped<IReleaseRuntimeArtifactCodec, ReleaseRuntimeArtifactCodec>();
+        services.TryAddScoped<RuntimeCapturedContentCache>();
         services.TryAddScoped<IReleaseRuntimeSiteReader, ReleaseRuntimeSiteReader>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IReleaseArtifactSemanticVerifier, ReleaseRuntimeArtifactVerifier>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IReleaseOccurrenceInspector, RuntimeIntrinsicReleaseInspector>());
     }
     public virtual void PostConfigureServices(IServiceCollection services)
     {

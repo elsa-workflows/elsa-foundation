@@ -22,8 +22,8 @@ Every behavioral delivery needs a meaningful red/green mutation or before/after 
 Foundation checkpoint: transport validity is distinct from owner semantic validity/readiness; no bundle may activate without owner verification.
 The shared semantic orchestration now has 133 passing focused tests and red/green exact-fact and root-pair/action mutations.
 It installs no native/BPMN/ETL adapters; T009/T013 remain open until actual owner capture and complete inspection are delivered.
-The staged Runtime codec/profile bridge has 54 passing focused cases (including the existing 17 hash goldens), with
-full-pin, raw JSON preservation and bounded-allocation/projection controls. It still refuses unclaimed module/provider/policy surfaces; actual
+The staged Runtime codec/profile bridge has 74 passing focused cases (including the existing 17 hash goldens), with
+full-pin, raw JSON preservation, bounded-allocation/projection, captured-reader cache and paired metadata controls. It still refuses unclaimed module/provider/policy surfaces; actual
 published native/BPMN/ETL acceptance and source/import operations remain open.
 
 ## Phase 3 — US1: Frozen exact release content (P1; M1)

@@ -80,7 +80,7 @@ public sealed class RuntimeReleaseVerificationTests
         Assert.Equal(ReleaseSemanticStatus.Verified, facts.Status);
         Assert.Equal(modelMember.Key, Assert.Single(facts.Edges).To);
         Assert.Contains(facts.Sites, x => x.Site.SiteKind == ReleaseRuntimeSiteKinds.Metadata && x.Site.Discriminator == "bpmn.model.v1");
-        var context = new ReleaseRuntimeSiteReader(fixture.Codec).ReadNode(facts.Sites[0], fixture);
+        var context = new ReleaseRuntimeSiteReader(fixture.Cache).ReadNode(facts.Sites[0], fixture);
         Assert.Equal("untouched-source-locator", context.Node.Metadata["bpmn.model.v1"]);
         Assert.Single(context.Workflow!.Dependencies);
         Assert.Empty(facts.RootCapabilities);
@@ -95,7 +95,7 @@ public sealed class RuntimeReleaseVerificationTests
         Assert.Equal(ReleaseSemanticStatus.Verified, facts.Status);
         var site = Assert.Single(facts.Sites); Assert.Equal(new ReleaseSiteKey(ReleaseRuntimeSiteKinds.ModelProtocol, "elsa.bpmn", 1), site.Site);
         Assert.Empty(facts.RootCapabilities);
-        Assert.Equal("fixture-profile", new ReleaseRuntimeSiteReader(fixture.Codec).ReadModel(site, fixture).Model.Profile);
+        Assert.Equal("fixture-profile", new ReleaseRuntimeSiteReader(fixture.Cache).ReadModel(site, fixture).Model.Profile);
     }
 
     [Fact]

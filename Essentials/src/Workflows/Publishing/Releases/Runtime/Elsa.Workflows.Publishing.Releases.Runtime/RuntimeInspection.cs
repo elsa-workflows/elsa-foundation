@@ -10,7 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Publishing.Releases.Runtime;
 
 /// <summary>Runtime-owned inventory only; opaque module facts are mandatory independently dispatched sites.</summary>
-internal sealed class RuntimeInspection(ReleaseMemberKey member, IReleaseRuntimeArtifactCodec codec, IReleaseContentReader content, CancellationToken token)
+internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCapturedContentCache cache, IReleaseContentReader content, CancellationToken token)
 {
     private readonly HashSet<ReleaseSemanticEdge> _edges = [];
     private readonly HashSet<ReleaseSemanticPrerequisite> _prerequisites = [];
@@ -37,17 +37,7 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, IReleaseRuntime
 
     public (ReleaseMemberKey Key, WorkflowExecutableIdentity Pin) RuntimePin(string artifactId, ReleaseRuntimeContentScope scope)
     {
-        var candidates = content.Members.Where(x => x.Key.Identity == artifactId && x.Key.Kind is ReleaseRuntimeCodecs.WorkflowKind or ReleaseRuntimeCodecs.ModelKind).ToArray();
-        if (candidates.Length != 1) throw ReleaseRuntimeArtifactCodec.Refuse(candidates.Length == 0 ? "captured_runtime_pin_missing" : "captured_runtime_identity_conflict");
-        var target = candidates[0]; WorkflowExecutableIdentity pin; ReleaseRuntimeContentScope targetScope;
-        if (target.Codec == new ReleaseCodecKey(ReleaseRuntimeCodecs.WorkflowKind, ReleaseRuntimeCodecs.Workflow, 1))
-        { var decoded = codec.DecodeWorkflow(content.GetPayload(target.Key)); pin = decoded.Executable.Identity; targetScope = decoded.Scope; }
-        else if (target.Codec == new ReleaseCodecKey(ReleaseRuntimeCodecs.ModelKind, ReleaseRuntimeCodecs.Model, 1))
-        { var decoded = codec.DecodeModel(content.GetPayload(target.Key)); pin = decoded.Model.Identity; targetScope = decoded.Scope; }
-        else throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_codec_unsupported");
-        if (pin.ArtifactId != target.Key.Identity || target.OwnerVersion != new ReleaseOwnerVersion(target.Key.Kind == ReleaseRuntimeCodecs.ModelKind ? "opaque" : "semver", pin.ArtifactVersion, null) || targetScope != scope)
-            throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_identity_conflict");
-        return (target.Key, pin);
+        return cache.RuntimePin(content, artifactId, scope);
     }
 
     public void Workflow(WorkflowExecutable workflow, ReleaseRuntimeContentScope scope)
@@ -137,18 +127,18 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, IReleaseRuntime
 
     private ExecutableActivityTemplate TemplateByPin(string id, string hash, ReleaseRuntimeContentScope scope)
     {
-        var descriptor = content.GetMember(new(ReleaseRuntimeCodecs.TemplateKind, id));
+        var descriptor = cache.Member(content, new(ReleaseRuntimeCodecs.TemplateKind, id));
         if (descriptor.Codec != new ReleaseCodecKey(ReleaseRuntimeCodecs.TemplateKind, ReleaseRuntimeCodecs.Template, 1)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_template_codec_unsupported");
-        var target = codec.DecodeTemplate(content.GetPayload(descriptor.Key));
+        var target = cache.Template(content, descriptor.Key);
         if (target.Template.TemplateId != id || target.Template.TemplateHash != hash || target.Scope != scope || descriptor.OwnerVersion is not null)
             throw ReleaseRuntimeArtifactCodec.Refuse("captured_template_identity_conflict");
         return target.Template;
     }
     private ReleaseActivityVersion ActivityByVersion(string id, ReleaseRuntimeContentScope scope)
     {
-        var descriptor = content.GetMember(new(ReleaseRuntimeCodecs.ActivityVersionKind, id));
+        var descriptor = cache.Member(content, new(ReleaseRuntimeCodecs.ActivityVersionKind, id));
         if (descriptor.Codec != new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 1)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_codec_unsupported");
-        var target = codec.DecodeActivityVersion(content.GetPayload(descriptor.Key));
+        var target = cache.ActivityVersion(content, descriptor.Key);
         if (target.VersionId != id || target.Scope != scope || descriptor.OwnerVersion != new ReleaseOwnerVersion("semver", target.Version, null))
             throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_identity_conflict");
         return target;
@@ -171,10 +161,12 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, IReleaseRuntime
             foreach (var slot in node.ChildSlots)
                 if (slot.OperatorSchedulingCapability is { } capability)
                 { Require("operator-policy", capability.PolicyKey, "exact", capability.SchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)); Site(node, origin, slot.Name, ReleaseRuntimeSiteKinds.Operator, capability.PolicyKey); }
+            ChildControl(node, origin);
             foreach (var (key, value) in node.Metadata)
             {
                 if (key == "authoredNodeId") { if (value != node.AuthoredActivityId) Invalid("authored_node_alias_mismatch"); continue; }
                 if (key == TriggerNodeMetadata.ExecutionTypeKey && value is "Action" or "Trigger") continue;
+                if (key is RuntimeMetadataKeys.ChildControlConsumerKey or RuntimeMetadataKeys.ChildControlConsumerVersion) continue;
                 Site(node, origin, null, ReleaseRuntimeSiteKinds.Metadata, key);
             }
             Placement(node, origin, scope);
@@ -202,6 +194,20 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, IReleaseRuntime
             }
         }
         if (compatibility.Count != 0) Site(root, NodeOrigin(root), null, ReleaseRuntimeSiteKinds.Compatibility, "artifact");
+    }
+
+    private void ChildControl(ExecutableNode node, IReadOnlyList<string> origin)
+    {
+        var hasKey = node.Metadata.TryGetValue(RuntimeMetadataKeys.ChildControlConsumerKey, out var key);
+        var hasVersion = node.Metadata.TryGetValue(RuntimeMetadataKeys.ChildControlConsumerVersion, out var rawVersion);
+        if (!hasKey && !hasVersion) return;
+        if (!hasKey || !hasVersion || string.IsNullOrWhiteSpace(key) ||
+            !int.TryParse(rawVersion, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version) || version <= 0 ||
+            rawVersion != version.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        { Invalid("invalid_child_control_consumer"); return; }
+        if (_sites.Count >= MaximumSites) throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_limit");
+        _sites.Add(new(member, origin, node.ExecutableNodeId, null, new(ReleaseRuntimeSiteKinds.ChildControlConsumer, key, version),
+            JsonSerializer.SerializeToElement(new { nodeId = node.ExecutableNodeId })));
     }
 
     private bool Intrinsic(ExecutableNode node)

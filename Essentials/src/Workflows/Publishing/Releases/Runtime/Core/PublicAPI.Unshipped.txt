@@ -124,6 +124,7 @@ const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Templ
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Version = 1 -> int
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Workflow = "elsa.workflow-executable" -> string!
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.WorkflowKind = "workflow-executable" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.ChildControlConsumer = "runtime.child-control-consumer" -> string!
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.ClrActivity = "runtime.clr-activity" -> string!
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Compatibility = "runtime.compatibility" -> string!
 const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Conversion = "runtime.conversion" -> string!
