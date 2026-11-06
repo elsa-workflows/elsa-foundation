@@ -20,6 +20,7 @@ The owner-selected requirements are carried forward without reopening them:
 8. On 5 November, the owner selected durable acceptance receipts with delivery status separately. Immediate-only unmatched outcomes are explicit; lost responses are uncertain and reconciled by retrying the same producer ID.
 9. On 5 November, the owner excluded brand-new logical definitions from buffered history. Only definitions eligible at acceptance may receive it; their later waits and eligible replacement versions remain possible until expiry.
 10. On 5 November, the owner selected ready waits before starts within each definition. Start a new run only when no matching wait is ready and message-started admission for the key is free.
+11. On 6 November, the owner selected cancellation of an unaccepted workflow send when cancellation wins the durable race. Already accepted messages remain committed; cancelling the sender cannot recall them.
 
 [Research](research.md), [draft delivery design](contracts/delivery-design.md) and [acceptance matrix](acceptance-matrix.md) distinguish observations, engineering proposals and not-run qualification. Owner product decisions do not establish implemented runtime behavior or adopt a persisted ABI.
 
@@ -147,6 +148,7 @@ An author configures message sends, receives and starts. An operator finds a rec
 - **FR-024**: Freeze eligible logical definitions at acceptance; exclude brand-new definitions from historical messages. Support late waits and eligible replacement versions in that cohort through Runtime-owned publication/active-material interest declarations, including receive-only definitions without an open bookmark or start. Define dynamic-name declarations, retirement and publication changes without querying Design data for execution authority.
 - **FR-025**: Recover lost wakeups using existing Runtime scheduling/delivery ownership; MUST NOT create a competing broker, scheduler, execution store or message authority.
 - **FR-026**: API and authored activities MUST share semantic/access contracts; authored sends MUST respect the committed-effect boundary.
+- **FR-026a**: Workflow cancellation that wins before durable acceptance MUST stop the pending send and fence stale claims. Acceptance that wins first MUST preserve the message and every recipient obligation. The actual source/checkpoint transaction MUST determine and retain the result; cancellation requests or missing sender state are insufficient proof.
 - **FR-027**: Expose overall/per-definition pending, selected/in-progress, delivered, expired and failed outcomes, effective lifetimes and sanitized diagnostics. Recovery actions MUST be separately authorized/audited.
 - **FR-028**: Authorize payload access separately. Lists/logs/errors MUST exclude protected payloads/resolved secret values; cross-tenant probes MUST fail without disclosure.
 - **FR-029**: Document defaults/bounds, capacity/backpressure, retry/failure and retention. Diagnose unsupported durable/provider compositions before advertising durable capability.
@@ -154,6 +156,7 @@ An author configures message sends, receives and starts. An operator finds a rec
 - **FR-031**: Native/BPMN/participating genuine-model adapters MUST preserve model-owned starts, exact subscriptions, compatibility and terminal/recovery contracts. Unsupported shapes MUST be explicit rather than silently treated as Events.
 - **FR-032**: Qualify every claimed provider/multi-node mode with composed adverse-path evidence; mocks/fixtures alone MUST NOT qualify production modes.
 - **FR-033**: Studio journeys MUST meet [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md), including current-commit downloadable composed evidence and independent inspection.
+- **FR-034**: Producer and target capabilities MUST enforce actual source/row/wire/participant versions before effects. Protect Message source outcomes from unknown-kind claims/field loss and target conditions from old decoders; preserve legacy Event writes during dormant rollout. State supported homogeneous/quiesced versus qualified rolling-fleet modes explicitly rather than assuming metadata is a physical writer fence.
 
 ### Key Entities
 
@@ -179,13 +182,14 @@ Use the [Elsa glossary](../../docs/glossary/elsa.md) for existing execution/publ
 - **SC-009**: Every claimed provider/multi-node mode has executed evidence, and agreed Studio states have current downloadable independently inspected evidence. Skipped/unavailable/incomplete cases do not count as passing.
 - **SC-010**: Current-head review/checks and resulting-main qualification pass; canonical issue/program/spec/configuration/examples agree before closeout.
 
-## Product Decisions Recorded 5 November
+## Product Decisions Recorded 5–6 November
 
 The owner answered each question separately in this chat. Record links on #3583 are added with the decision receipt; none reopens the earlier selections.
 
 - **Q1 — Acceptance, accepted**: Durable receipt; separate delivery status. Immediate-only unmatched is explicit. Timeout is uncertain and the sender retries the same ID.
 - **Q2 — Historical eligibility, accepted**: Existing eligible definitions only. Late waits and eligible replacement versions may receive while buffered; new logical definitions do not consume history. An open-bookmark snapshot alone is insufficient.
 - **Q3 — Arbitration, accepted**: Ready wait first. Consider a published start only with no ready matching wait and free message-start admission. Deterministic competing-wait/message ordering is an engineering requirement for review.
+- **Q4 — Sender cancellation, accepted 6 November**: Stop unaccepted sends when cancellation wins; keep accepted messages. The source/actor transaction determines the winner and preserves an immutable outcome. A lost response remains uncertain, and cancellation cannot recall accepted deliveries.
 
 Remaining engineering review covers physical atomicity/capabilities, Runtime-owned interest declarations and dynamic names, producer namespace mapping, configuration defaults/bounds/quotas, precise model mappings and failure/recovery policy. These proposals must be concrete before approval; they are not additional unanswered product cards by default.
 

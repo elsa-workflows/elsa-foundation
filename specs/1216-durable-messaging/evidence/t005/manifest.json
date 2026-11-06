@@ -1,0 +1,148 @@
+{
+  "date": "2026-11-06",
+  "baseCommit": "6e4440d7298d7adec07544f7622087680c692420",
+  "scope": "Core identity, SDK and unregistered source contracts only; physical product acceptance not run",
+  "runs": {
+    "sdk-boundary-red": {
+      "counters": {
+        "total": "27",
+        "executed": "27",
+        "passed": "25",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "2d8732b96622e6a54615fd766c48bd85013fe08d75e0ca684f960d791d1c21db",
+      "gzipSha256": "edc6b5c158d82dbb4e4890f2d0a6b1080ef7d7339a5fcb1a29c9fe597d22ba17"
+    },
+    "sdk-boundary-green": {
+      "counters": {
+        "total": "27",
+        "executed": "27",
+        "passed": "27",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "667238be28508e1c3e61f0ca6ad57f797a1798d84fb363d557626e812ae9bf80",
+      "gzipSha256": "3387bc2238081df3fe9c0848010703f8f2b5342876836055f677fc6f2a768eb3"
+    },
+    "contract-mutation-red": {
+      "counters": {
+        "total": "39",
+        "executed": "39",
+        "passed": "31",
+        "failed": "8",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "34b73389e7fe5f67858e7649ad3dce1ff5c56e845d2f18298b751edbb9e9e29f",
+      "gzipSha256": "f0d8d64a6a4c1c25864cf08c8883b9b91cbce7434ac7083f005ad03f75af827e"
+    },
+    "contract-green": {
+      "counters": {
+        "total": "39",
+        "executed": "39",
+        "passed": "39",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "86250d6ad1c41632096db8629eb8048c071a3b40c085bec4518c57a13dc982d0",
+      "gzipSha256": "1168b15c14cf239cde1fedebaaa6bc88aaf8c3e84f32827a616d7b2256bb6dbb"
+    },
+    "whole-runtime": {
+      "counters": {
+        "total": "3469",
+        "executed": "3469",
+        "passed": "3469",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "558f8547f1f1cb0bff66594429c5cb91c22291b05336e43669c6d7f77e0d1910",
+      "gzipSha256": "d5a0a66c89525eb2818279e6763029bc2bcb286787306fd9f369f3c0983b40f5"
+    }
+  },
+  "sourceSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Messaging/MessageIdentity.cs": "1141979caa99824554c3acc5c7b12dfa60807b06a0a9b17e407bd2fe2df59356",
+    "Essentials/src/Workflows/Runtime/Core/Messaging/MessageSubmission.cs": "c6bba5afb86185422c5953426e0e6880f19a172071e39948ebd8a0f3eb8c2e97",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/RuntimeDeliverySourceContracts.cs": "ca2aa646f21067c06b9103744c3b3878fb6b599ee57fa6975e0e1fdf0acde6d4",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeDeliverySources.cs": "77239bac64417579dc0a1ff395e5cdcfc420de2adde4874126d69a4c11413d2d",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "12f2fc32659515397e90858d7e44336f1502a446d129307b21c8ea116cd3ec95",
+    "Essentials/tests/Workflows/Runtime/Tests/MessageIdentityTests.cs": "cf6461d0e97a729891121524190965c056546d132e1236169b12b5a729064417",
+    "Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionContractTests.cs": "20eaf024607ab769d49b708bf8089d2d3843926efa1b119782095badbc29f048",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeDeliverySourceContractTests.cs": "7025eb92ebf566c69f5eda2e7aa90e0ff9ae72e7c637793e599d6694c87608f8",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageSubmissionRules.cs": "7dd4c011cde1eca671a754e17aa4b06ddc044ec4690fa84951de3abf2efa16fa",
+    "Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionRulesTests.cs": "0d33a14cfd20192fd774e5d39fc373f0a9615be59d1a8cf98709aad83a4db4e5"
+  },
+  "sdkRedSourceSha256": "89645d90bfcbf0251476cf0680f371e276380b8a4d67b390499dbaccc1d96631",
+  "contractMutation": {
+    "mutations": [
+      "collapse definition namespaces",
+      "optimistically qualify an unimplemented source store",
+      "silently succeed on a bare completion-aware path"
+    ],
+    "original": {
+      "Essentials/src/Workflows/Runtime/Core/Messaging/MessageIdentity.cs": "1141979caa99824554c3acc5c7b12dfa60807b06a0a9b17e407bd2fe2df59356",
+      "Essentials/src/Workflows/Runtime/Core/Contracts/RuntimeDeliverySourceContracts.cs": "ca2aa646f21067c06b9103744c3b3878fb6b599ee57fa6975e0e1fdf0acde6d4"
+    },
+    "mutated": {
+      "Essentials/src/Workflows/Runtime/Core/Messaging/MessageIdentity.cs": "e5b8dd64a7ed74ac80230f2480f217ebcc2950bd350105d2b488bc41cadf7f83",
+      "Essentials/src/Workflows/Runtime/Core/Contracts/RuntimeDeliverySourceContracts.cs": "0b635f817674feebb29102d85b77359cbe0cc5d887f85ae3301330d15f8ec39d"
+    },
+    "exitCode": 1,
+    "restored": true
+  },
+  "sdkRedTestsUnchanged": true
+}

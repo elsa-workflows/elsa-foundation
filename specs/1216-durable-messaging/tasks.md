@@ -8,15 +8,17 @@ Elsa declares no blanket greenfield test cadence; framework §2.21.2 leaves that
 ## Phase 1 — Setup and design
 
 - [x] T001 Refresh rules, claim #3583, preserve isolation and record owner authorization in `docs/program-goals/durable-messaging.md` and ADR0080.
-- [x] T002 Record owner Q1–Q3, refresh actual gaps and independently review requirements in `specs/1216-durable-messaging/spec.md`, `research.md` and `acceptance-matrix.md`.
+- [x] T002 Record owner Q1–Q4, refresh actual gaps and independently review requirements in `specs/1216-durable-messaging/spec.md`, `research.md` and `acceptance-matrix.md`.
 - [ ] T003 Finalize/review concrete shared standalone-source and checkpoint participant signatures in `specs/1216-durable-messaging/contracts/runtime-mapping.md`; reconcile on #3904/#2892/#3820 before dependent shared ABI edits.
 
 ## Phase 2 — Foundations
 
-T004 is independent of T003; it does not register a producer, persist a new format or change shared contracts. All physical/delivery story work requires the corresponding reviewed source/capability mapping.
+T004 and the pure identity/submission SDK portions of T005 are independent of T003; they do not register a producer, persist a new format or change the shared source/actor ABI. All physical/delivery story work requires the corresponding reviewed source/capability mapping.
 
 - [x] T004 [P] Implement internal immutable submission validation, versioned canonical fingerprint and fixed lifetime snapshot in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageSubmissionRules.cs`; prove equality/conflict/limits/default changes and independent clocks in `Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionRulesTests.cs`. Evidence: `evidence/t004/README.md`, 52 focused/3,403 complete Runtime passing; no producer enabled.
 - [ ] T005 Define justified public domain/provider contracts under `Essentials/src/Workflows/Runtime/Core/Messaging/`, with scope/logical identity and exact capability/reservation/outcome versions; review `PublicAPI.Unshipped.txt` and test identity collision boundaries in Runtime tests.
+
+T005 component progress: immutable identity/submission SDK and unregistered common source/preparation contracts are implemented; [retained evidence](evidence/t005/README.md) records 3,469 complete Runtime passes and causal controls. Exact Message capability/reservation/outcome participants, physical source ownership and registration remain open. The new contracts enable no producer or durable capability by themselves.
 - [ ] T006 Implement material-only declared interest extraction and canonical native/direct BPMN provenance in Runtime `Messaging/` and `Essentials/src/Activities/Bpmn/`; test receive-only/no-bookmark roots, bounded dynamic names and native/BPMN model-neutral identity.
 - [ ] T007 Extend the selected Runtime source/backend family, verified ingress context and existing `Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs`; preserve old constructors/fingerprints/Event cohorts and test actual registration rollback/foreign replacement.
 - [ ] T008 Add typed optional Message checkpoint participation to Core `Models/RuntimeCheckpointCommit.cs`, validator/fingerprint, physical stores and coalescing forwarding; prove null old fingerprints, actual store-tuple refusal and physical boundaries.
@@ -62,7 +64,7 @@ T004 is independent of T003; it does not register a producer, persist a new form
 **Independent proof:** real catalog authoring/publication and API/activity sends lead to receipt and per-definition operator diagnosis/recovery with protected payloads.
 
 - [ ] T025 [US5] Implement SendMessage invocation staging/private receipt wait and actual committed source handler in `Essentials/src/Activities/Primitives/` plus `Services/WorkHandlers/WorkflowInvokeActivitySchedulerWorkHandler.cs`; commit intent/wait together, reset transient staging on faults and preserve physical source identity.
-- [ ] T026 [US5] Implement create-only Accepted/Rejected native SourceOutcome and exact guarded sender continuation in Runtime `Messaging/`; fault permanent rejection without fictitious receipt, retain callback/retirement proof, and qualify B30 with no ID/beyond dedup expiry.
+- [ ] T026 [US5] Implement create-only Accepted/Rejected/Cancelled native SourceOutcome and exact guarded sender continuation in Runtime `Messaging/`; fault permanent rejection without fictitious receipt, serialize cancellation with acceptance at the actual source/checkpoint revision, retain callback/retirement proof, and qualify B30/B32 with no ID/beyond dedup expiry and both cancellation race orders.
 - [ ] T027 [US5] Implement ReceiveMessage wait/start authoring/catalog metadata, declared names and exact typed output under `Activities/Primitives/`; test persisted authoring, key binding and native/direct-model result mapping.
 - [ ] T028 [US5] Implement scoped list/detail/per-definition/payload/retry/abandon endpoints and permissions in `Api/Messaging/`; open Selected attempts alone offer Retry, closed terminal failures remain closed; test stale operations/unknown outcomes/access in API tests.
 - [ ] T029 [US5] Add domain-owned `Studio/src/essentials/Elsa.Studio.Messages/` contribution using current module packaging, capability links and shared collection/detail UI; retain backend/tenant/focus/page state appropriately and clear protected values on scope changes.
@@ -74,7 +76,7 @@ T004 is independent of T003; it does not register a producer, persist a new form
 
 - [ ] T033 Implement bounded pending/retry/release/cleanup contributions through existing `Services/Recovery/RuntimeResumptionService.cs`/`Resumption/RuntimeResumptionPumpTask.cs`; prove lost-wakeup recovery and fairness with no new hosted pump.
 - [ ] T034 Complete source/material/payload/test-scope retention and independent audit/dedup cleanup, including retained SourceOutcome/receipt capacity, in Runtime/EF/garbage-collection ownership and provider tests.
-- [ ] T035 Execute all B01–B30 under native/direct BPMN and every advertised SQLite/PostgreSQL/SQL Server/MySQL and two-worker server-provider mode; retain source/schema/topology/actual outcome in `specs/1216-durable-messaging/evidence/`.
+- [ ] T035 Execute all B01–B32 under native/direct BPMN and every advertised SQLite/PostgreSQL/SQL Server/MySQL and two-worker server-provider mode; retain source/schema/topology/actual outcome in `specs/1216-durable-messaging/evidence/`.
 - [ ] T036 Run whole affected backend/Studio projects, applicable architecture/registration/API/migration/maps checks and relevant backend source e2e on rebuilt owned hosts; update actual `EXTENSION_POINTS.md`, public API manifests and configuration documentation.
 - [ ] T037 Run composed Studio on the committed candidate with downloadable current-source screenshots/traces; obtain independent acceptance reviewer inspection and fix/retest U01–U07 until UX is passed.
 - [ ] T038 Complete independent correctness/standards/acceptance review of full current #3904 diff, fix findings in new commits and satisfy exact-head required checks under current org/repo merge rules.

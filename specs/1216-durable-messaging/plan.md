@@ -1,7 +1,7 @@
 # Implementation Plan: Durable Messaging
 
 **Branch:** `agent/codex/3583-durable-messaging` | **Date:** 2026-11-06 | **Spec:** [spec.md](spec.md)
-**State:** Independently reviewed plan; owner Q1–Q3 recorded. Independent T004 submission-rule implementation may proceed. Resolve T003 concrete shared source/participant mapping before dependent ABI edits; no takeover of another claim is implied.
+**State:** Independently reviewed plan; owner Q1–Q4 recorded. T004 submission rules and the independent Core identity/submission/source-contract slice are implemented. Resolve T003 concrete shared source/participant mapping before dependent ABI edits; no takeover of another claim is implied.
 **Delivery:** [#3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583), draft [#3904](https://github.com/elsa-workflows/elsa-foundation/pull/3904).
 
 ## Summary
@@ -53,6 +53,7 @@ These are implementation choices for review, not already delivered behavior. Det
 | Native terminal/model settled release | Native Completed/Faulted/Cancelled are terminal and terminal retry is refused. Models release after authoritative settlement. Incidents/requested cancellation do not unlock; stale release cannot clear a successor generation. |
 | Immutable winner plus exclusive reservation | Select/reserve/dispatch atomically. Target admission AND consumption check Message owner/fence. Failed/abandoned unconsumed work durably closes old target authority before reuse of a still-live wait. |
 | Send activity waits for acceptance | Commit send intent and private receipt bookmark together. Outbox accepts once, persists source binding/callback, resumes exact private wait; completion means accepted, not business delivered. |
+| Cancellation competes with acceptance | Owner Q4. The actual sender cancellation checkpoint and source finalization compare one retained resolution revision. Cancellation-first seals Cancelled; acceptance-first preserves message/recipient work and retires only the sender continuation with proof. |
 | Capability-gated operator module | Follow User Tasks discovery and shared collection/detail controls, separate current metadata/payload/recovery authorization, no new shell/manual-send console. |
 
 ## Project Structure
@@ -91,6 +92,7 @@ Keep one implementation leaf active under #3583; file-level subtasks within it m
 
 - Add an additive genuine Runtime standalone-source interface implemented by the existing backend. Preserve old WorkflowExecutionId-required outbox intent/context rather than making it optional. A verified source context carries actual family/address/scope/fence/authority.
 - Extend RuntimePostCommitOutboxProcessor orchestration and normal resumption with the source family. Source completion, domain progress and callback work share provider authority. Preserve old constructors, workflow-owned path, source fingerprints and Event snapshot rules.
+- Native Message/finalization requires existing outbox family v3 and a checkpoint producer dormancy guard. Replace the current write-version shortcut with explicit row minimums: legacy Event source v2, Message/finalization v3. Guarded target delivery uses distinct DeliverMessage kind 22 plus scheduler v4; optional fields alone cannot stop an older decoder. Current code with the Message feature disabled refuses before claim. Validate the actual older binary's unknown-kind/stamp refusal and every relevant state/checkpoint/model version; default upgrades are quiesced homogeneous fleets, not in-process membership presented as rolling-fleet proof.
 - Add versioned Message participation to RuntimeCheckpointCommit/validator/fingerprint, EF staging, coherent in-memory application and coalescing forwarding. Null preserves existing fingerprints; tracked selection/consumption/release forces a physical boundary while Balanced remains default.
 - Maintain interests coherently in activation switching and initial/terminal native/model checkpoints. Notifications only wake reconciliation. Current in-memory checkpoints reject model state, so native support cannot imply direct-model capability.
 - Extend direct BPMN's existing publication provenance with canonical authored logical identity. Preserve executable hashes, explicitly validate/upcast persisted provenance and qualify old data; do not infer definition from content hash.
@@ -100,7 +102,7 @@ Keep one implementation leaf active under #3583; file-level subtasks within it m
 
 Elsa currently declares no blanket greenfield test cadence (§2.21.2). Record that application-level gap; this feature uses risk-based behavior tests plus the causal controls required by current org review, without inventing a mandatory repository TDD sequence.
 
-The [acceptance matrix](acceptance-matrix.md) is the coverage source: all B01–B30, U01–U07 and provider/model/consumer modes remain **NOT RUN**. Findings add causal cases rather than weaken old objectives. Configuration/support values are in the proposed API contract and need provider/workload validation.
+The [acceptance matrix](acceptance-matrix.md) is the coverage source: all B01–B32, U01–U07 and provider/model/consumer modes remain **NOT RUN**. Findings add causal cases rather than weaken old objectives. Configuration/support values are in the proposed API contract and need provider/workload validation.
 
 Run scoped builds/whole affected projects after coherent changes, through build slots. Preserve causal red/green for risky behavior, then real provider/process failure proof. Refresh actual extension catalogs/maps/architecture checks; generated maps stay uncommitted. Broaden to relevant backend/Studio/architecture suites as integration requires; leave whole-solution runs to required CI.
 

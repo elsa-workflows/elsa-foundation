@@ -534,13 +534,22 @@ any acceptance criterion, provider topology, product journey or protected delive
 ## Native sender outcome and scoped execution clarification
 
 The source-to-message binding is the accepted branch of a create-only native SourceOutcome:
-Accepted(original receipt and duplicate result) or PermanentlyRejected(safe reason). A definitive
+Accepted(original receipt and duplicate result), PermanentlyRejected(safe reason) or
+Cancelled(authoritative sender cancellation proof). A definitive
 post-checkpoint refusal records rejection and an exact private continuation even though no inbox
 message exists. The callback guards against that source outcome, consumes the sender wait and
 faults the same send invocation atomically. Temporary/unknown failures cannot become rejection.
 A rejected source never later accepts after authority changes; a new invocation is a new source.
 Continue owed callbacks until consumed or authoritative sender retirement; missing state is not
 retirement. Source proof survives independent producer windows and source/terminal collection.
+
+Owner Q4 requires cancellation and acceptance to serialize on the actual source/checkpoint
+resolution. Cancellation-first seals Cancelled without accepting an inbox message, so stale source
+claims cannot send later. Acceptance-first keeps the accepted message and every recipient
+obligation; sender cancellation can retire only its own continuation with durable proof. Before
+the original send checkpoint commits, cancellation discards transient staging. A requested
+cancellation, missing sender or lost acknowledgement cannot decide this race; recovery reads the
+committed outcome. B32 qualifies both orders and stale claims through real checkpoint boundaries.
 
 Production business identity is persistence scope + tenant + canonical definition namespace/ID.
 Finite test scopes are isolated; source run-kind/partition are retained and validated authority,

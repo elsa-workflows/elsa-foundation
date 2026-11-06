@@ -70,6 +70,13 @@ adapters validate and translate the selected context at their own persistence bo
 
 ## Overridable replacement contracts
 
+### `IMessagePublisher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+
+- **Kind:** Single scoped replacement, declared by `[MessagePublisherReplacementContract]`; never consumed as `IEnumerable<IMessagePublisher>`.
+- **Signature:** `SubmitAsync(MessageSubmission, CancellationToken)` returns `MessageSubmissionResult` after durable acceptance or resolution of an original accepted duplicate, separately from delivery.
+- **Usage/override:** API and workflow adapters consume the same port. A host replacement must preserve trusted ambient producer/scope/current authorization, complete-cohort acceptance, independent deduplication and committed-source replay obligations; client models and receipts are not capabilities.
+- **Default/owning project:** No implementation or DI registration is supplied by this SDK-only slice. The Runtime messaging implementation owns future composition; it must refuse duplicate publisher registrations and unsupported physical boundaries before enabling the capability. This entry establishes no implemented acceptance/provider guarantee.
+
 ### Model protocol drivers and contributions *(Core contracts, implementation-owned dispatch)*
 
 [`IRuntimeExecutionProtocolDriver` / `IRuntimeExecutionProtocolSource`](../Core/Contracts/IRuntimeExecutionProtocolDriver.cs) define scoped model decisions and exact protocol registrations. `AddRuntimeModelHosting` opts into the existing command executor and drainer. Public Core [`RuntimeExecutionProtocolsInitializing`](../Core/Events/RuntimeExecutionProtocolsInitializing.cs) is a named Sequential event; one `RegisterRuntimeExecutionProtocols` handler aggregates protocol sources, and its startup task freezes the registry after checking duplicate protocol/version keys, input kinds and exactly one scoped driver registration.
@@ -1216,3 +1223,13 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### Runtime delivery source contracts *(Core, spec 1216 T005; unregistered SPI)*
+
+| Contract | Kind/lifetime | Boundary |
+|---|---|---|
+| `IRuntimeDeliverySourceStore` | Scoped replacement facet; `RuntimeDeliverySourceStoreReplacementContractAttribute` | Future facet of the selected Runtime checkpoint/outbox backend, with no default or registration here. `CanParticipate` is false by default; actual source/checkpoint/material/reference/value/scheduler/execution/activity/bookmark instances and optional model reader must qualify together. Read/claim/renew/commit never create another message authority or pump. |
+| `IRuntimeDeliverySourcePlanner` / `IRuntimeDeliverySourceHandler` | Scoped additive family contributions | Planning has no target effects. Only a committed exact Dispatch child reaches handling; completion proposes a typed plan and canonical target evidence determines progress. `RuntimeDeliverySourceFamilyContribution` captures exact family/header/participant versions and sealed plan types; no registry adoption is implied. |
+| `IRuntimePostCommitCompletionAwareIntentHandler` / `IRuntimePostCommitCompletionAwareDispatcher` | Explicit native sibling capabilities; unregistered | Prepare a typed finalization for the existing atomic claim-completion transaction. Both inherited bare dispatch paths refuse by default; processor/contribution/participant wiring is future work. An old dispatcher does not learn this capability merely because the interface exists. |
+
+Source snapshots/claims/contexts are immutable values, not capabilities. Providers must reread current scope, content, claims and exact registered family-plan evidence before effects or mutation; transport acknowledgement never proves semantic consumption. Native Event retains its actual outbox/context and immutable cohort. Family-specific Message selection and #3820 C2 manifest/seal semantics remain separate. See the [source mapping](../../../../../specs/1216-durable-messaging/contracts/runtime-mapping.md); no producer, existing ABI field, enum value, backend or scheduler behavior changes in this contract slice.
