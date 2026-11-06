@@ -43,12 +43,15 @@ internal sealed class ActivityDataSelectionContextService(
             if (!await catalog.CanReadAsync(cancellationToken)) return Reply("denied", "activity-data.denied");
             var draft = await drafts.FindAsync(request.DraftId, cancellationToken);
             if (draft is null || draft.Id != request.DraftId || !Visible(draft.TenantId)) return Reply("unavailable", "activity-data.resource-unavailable");
+            // Stores may return the same tracked object on both reads; retain lifecycle values before awaiting.
+            var initialRevision = draft.Revision;
+            var initialStatus = draft.Status;
             if (!await actor.CanReadProviderPayloadAsync(draft.State.Provider.ProviderKey, cancellationToken))
                 return Reply("denied", "activity-data.denied");
             var ownership = await authoring.FindAsync(draft.DefinitionId, cancellationToken);
             if (ownership is null || ownership.DefinitionId != draft.DefinitionId || !Visible(ownership.TenantId)) return Reply("unavailable", "activity-data.resource-unavailable");
-            revision = draft.Revision.ToString(CultureInfo.InvariantCulture);
-            if (draft.Revision != request.ExpectedBaseRevision) return Reply("stale", "activity-data.base-stale");
+            revision = initialRevision.ToString(CultureInfo.InvariantCulture);
+            if (initialRevision != request.ExpectedBaseRevision) return Reply("stale", "activity-data.base-stale");
             var state = request.CurrentSnapshot is { } proposed ? ActivityDataSelectionSnapshot.Read(proposed) : draft.State;
             if (!StringComparer.Ordinal.Equals(state.Provider.ProviderKey, draft.State.Provider.ProviderKey) ||
                 !StringComparer.Ordinal.Equals(state.Provider.SchemaVersion, draft.State.Provider.SchemaVersion) ||
@@ -57,7 +60,7 @@ internal sealed class ActivityDataSelectionContextService(
             snapshotHash = ActivityDataSelectionSnapshot.Hash(state);
             var savedHash = ActivityDataSelectionSnapshot.Hash(draft.State);
             if (request.CurrentSnapshot is not null && snapshotHash != savedHash &&
-                (draft.Status != ActivityDefinitionDraftStatus.Active || ownership.ContentAuthority.Kind != ActivityContentAuthorityKind.Design ||
+                (initialStatus != ActivityDefinitionDraftStatus.Active || ownership.ContentAuthority.Kind != ActivityContentAuthorityKind.Design ||
                  !await actor.CanAuthorProviderAsync(state.Provider.ProviderKey, cancellationToken) ||
                  !await actor.CanManageActivityDefinitionsAsync(cancellationToken)))
             {
@@ -89,7 +92,8 @@ internal sealed class ActivityDataSelectionContextService(
             if (analysis.ContractRevision != snapshotHash) return Reply("unavailable", "activity-data.analysis-invalid");
             // Recheck after asynchronous metadata work; browsing never refreshes or writes the draft.
             var latest = await drafts.FindAsync(draft.Id, cancellationToken);
-            if (latest is null || latest.Id != draft.Id || !Visible(latest.TenantId) || latest.Revision != draft.Revision || ActivityDataSelectionSnapshot.Hash(latest.State) != savedHash)
+            if (latest is null || latest.Id != draft.Id || !Visible(latest.TenantId) || latest.Revision != initialRevision ||
+                latest.Status != initialStatus || ActivityDataSelectionSnapshot.Hash(latest.State) != savedHash)
                 return Reply("stale", "activity-data.base-stale");
             if (!await actor.CanReadProviderPayloadAsync(state.Provider.ProviderKey, cancellationToken))
             { snapshotHash = null; revision = null; return Reply("denied", "activity-data.denied"); }
@@ -99,9 +103,9 @@ internal sealed class ActivityDataSelectionContextService(
             if (ActivityDataSelectionSnapshot.Hash(latestCatalog) != catalogRevision)
                 return Reply("stale", "activity-data.catalog-stale");
             var context = ActivityDataSelectionSnapshot.Hash(new ActivityDataSelectionContextIdentity(
-                draft.Id, draft.Revision, request.DocumentRevision, snapshotHash, request.Target, request.Query,
+                draft.Id, initialRevision, request.DocumentRevision, snapshotHash, request.Target, request.Query,
                 actor.ActorId, actor.TenantId, await actor.GetAuthorizationProfileAsync(cancellationToken),
-                catalogSnapshot, ActivityValueJsonProfile.Revision, analysis));
+                catalogSnapshot, ActivityValueJsonProfile.Revision, analysis) { DraftStatus = initialStatus });
             var invalid = analysis.Findings.Any(x => x.Severity == ValidationSeverities.Error);
             return Reply(invalid ? "invalid" : analysis.Sources.Length == 0 ? "empty" : "supported",
                 invalid ? "activity-data.selection-invalid" : null, analysis, context);

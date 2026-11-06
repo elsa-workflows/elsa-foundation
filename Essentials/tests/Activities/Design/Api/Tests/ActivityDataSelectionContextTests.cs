@@ -151,6 +151,40 @@ public sealed class ActivityDataSelectionContextTests
     }
 
     [Fact]
+    public async Task Publication_during_analysis_discards_a_changed_snapshot_even_without_a_revision_increment()
+    {
+        using var fixture = new Fixture(store => store.Draft.Status = ActivityDefinitionDraftStatus.Published);
+        var savedState = fixture.Store.Draft.State;
+        var result = await fixture.Service.ResolveAsync(fixture.Request("changed") with { CurrentSnapshot = Element(State("changed")) }, default);
+        Assert.Equal("stale", result.State);
+        Assert.Equal("activity-data.base-stale", result.Code);
+        Assert.Null(result.Analysis);
+        Assert.Null(result.ContextRevision);
+        Assert.Equal(5, fixture.Store.Draft.Revision);
+        Assert.Equal(ActivityDefinitionDraftStatus.Published, fixture.Store.Draft.Status);
+        Assert.Same(savedState, fixture.Store.Draft.State);
+        Assert.True(fixture.Lookup.Reads > 0);
+    }
+
+    [Fact]
+    public async Task An_unchanged_published_draft_remains_browsable_with_a_distinct_context_identity()
+    {
+        using var fixture = new Fixture();
+        var active = await fixture.Service.ResolveAsync(fixture.Request(), default);
+        fixture.Store.Draft.Status = ActivityDefinitionDraftStatus.Published;
+        var published = await fixture.Service.ResolveAsync(fixture.Request(), default);
+        Assert.Equal("empty", active.State);
+        Assert.Equal("empty", published.State);
+        Assert.NotNull(published.Analysis);
+        Assert.NotNull(published.ContextRevision);
+        Assert.NotEqual(active.ContextRevision, published.ContextRevision);
+        Assert.Equal(active.SnapshotHash, published.SnapshotHash);
+        var changed = await fixture.Service.ResolveAsync(fixture.Request("changed") with { CurrentSnapshot = Element(State("changed")) }, default);
+        Assert.Equal("activity-data.read-only", changed.Code);
+        Assert.Null(changed.Analysis);
+    }
+
+    [Fact]
     public async Task Malformed_owned_snapshots_and_client_authority_fields_are_rejected()
     {
         using var fixture = new Fixture();
@@ -279,7 +313,7 @@ public sealed class ActivityDataSelectionContextTests
         internal ActivityDataSelectionContextService Service { get; }
         internal IActivityDataSelectionAnalyzer Analyzer { get; }
         internal IActivityDataSelectionDocumentProjector Projector { get; }
-        internal Fixture()
+        internal Fixture(Action<Store>? afterAnalysis = null)
         {
             var services = new ServiceCollection();
             services.AddOptions();
@@ -291,7 +325,8 @@ public sealed class ActivityDataSelectionContextTests
             var projector = new GraphActivityProvider(structures, new ActivityContractAuthoringValidator(new Capabilities()));
             Projector = projector;
             Analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
-            Service = new(Store, Store, Actor, [Catalog], [projector], [Analyzer], structures);
+            var contextAnalyzer = afterAnalysis is null ? Analyzer : new CompletingAnalyzer(Analyzer, () => afterAnalysis(Store));
+            Service = new(Store, Store, Actor, [Catalog], [projector], [contextAnalyzer], structures);
         }
         internal ActivityDataSelectionContextRequest Request(string node = "saved-node") => new("draft", "1", 5, "edit-7", new(node, "value"));
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }
@@ -355,6 +390,17 @@ public sealed class ActivityDataSelectionContextTests
     {
         public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document, ActivityDataSelectionTarget? target = null,
             ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException("No provider graph was claimed.");
+    }
+
+    private sealed class CompletingAnalyzer(IActivityDataSelectionAnalyzer inner, Action completed) : IActivityDataSelectionAnalyzer
+    {
+        public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document, ActivityDataSelectionTarget? target = null,
+            ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default)
+        {
+            var analysis = await inner.AnalyzeAsync(document, target, query, cancellationToken);
+            completed();
+            return analysis;
+        }
     }
 
     private sealed class OtherOwnerCapability : IApiCapabilitySource

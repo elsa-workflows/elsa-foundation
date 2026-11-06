@@ -32,4 +32,7 @@ public sealed record ActivityDataSelectionContextResponse(
 internal sealed record ActivityDataSelectionContextIdentity(
     string ResourceId, long BaseRevision, string DocumentRevision, string SnapshotHash,
     ActivityDataSelectionTarget Target, ActivityDataSelectionQuery? Query, string Actor, string? TenantId,
-    string Authorization, ActivityAuthoringCatalogResult Catalog, string Profile, ActivityDataSelectionAnalysis Analysis);
+    string Authorization, ActivityAuthoringCatalogResult Catalog, string Profile, ActivityDataSelectionAnalysis Analysis)
+{
+    public ActivityDefinitionDraftStatus DraftStatus { get; init; }
+}
