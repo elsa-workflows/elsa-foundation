@@ -220,8 +220,8 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or ':' or '*');
     private static bool Identifier(string? value) => value is { Length: > 0 and <= 160 }
         && Regex.IsMatch(value, @"^@?[A-Za-z0-9_-]+(?:[./:-][A-Za-z0-9_-]+)*$");
-    private static bool Label(string? value) => value is { Length: > 0 and <= 256 } && value == value.Trim()
-        && !value.Any(char.IsControl) && !value.Contains("://", StringComparison.Ordinal) && !value.StartsWith('/') && !value.Contains('\\');
+    private static bool Label(string? value) => value is { Length: > 0 and <= 256 } && !string.IsNullOrWhiteSpace(value)
+        && !value.Any(character => character <= 0x1f || character == 0x7f);
     private static bool HasDuplicateProperties(JsonElement value)
     {
         if (value.ValueKind == JsonValueKind.Object)
