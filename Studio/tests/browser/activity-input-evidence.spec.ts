@@ -182,30 +182,44 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test("input evidence wraps within narrow inspectors without horizontal scrolling", async ({ page }) => {
-  await mockInputEvidence(page);
-  for (const width of [320, 390, 700, 1200]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto("/?mode=input-evidence");
-    if (width < 1000) await page.getByRole("button", { name: "Select activity" }).click();
-    const inspector = page.getByRole("complementary", { name: "Run details" });
-    await expect(inspector).toBeVisible();
-    await expect(page.locator(".wf-input-inspection-value").filter({ hasText: "POL-1042" })).toBeVisible();
-    const row = page.locator(".wf-input-inspection-row").filter({ hasText: "Premium" });
-    const source = row.getByRole("button", { name: "Technical details for Premium", exact: true });
-    const bounds = await source.boundingBox();
-    const rowBounds = await row.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(rowBounds).not.toBeNull();
-    expect(bounds!.width).toBeGreaterThanOrEqual(24);
-    expect(bounds!.x).toBeGreaterThanOrEqual(rowBounds!.x);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width);
-    await source.click();
-    await expect(page.getByText("variables.annualPremium * 1.05", { exact: true })).toBeVisible();
-    expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-  }
-});
+for (const theme of ["light", "dark"]) {
+  test(`input evidence wraps within narrow inspectors without horizontal scrolling in ${theme} theme`, async ({ page }) => {
+    await mockInputEvidence(page);
+    for (const width of [320, 390, 700, 1200]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/?mode=input-evidence&theme=${theme}`);
+      if (width < 1000) await page.getByRole("button", { name: "Select activity" }).click();
+      const inspector = page.getByRole("complementary", { name: "Run details" });
+      await expect(inspector).toBeVisible();
+      await expect(page.locator(".wf-input-inspection-value").filter({ hasText: "POL-1042" })).toBeVisible();
+      const row = page.locator(".wf-input-inspection-row").filter({ hasText: "Premium" });
+      const source = row.getByRole("button", { name: "Technical details for Premium", exact: true });
+      const bounds = await source.boundingBox();
+      const rowBounds = await row.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(rowBounds).not.toBeNull();
+      expect(bounds!.width).toBeGreaterThanOrEqual(24);
+      expect(bounds!.x).toBeGreaterThanOrEqual(rowBounds!.x);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width);
+      async function captureVisibleInputs(state: string) {
+        if (width !== 320 && width !== 390) return;
+        await row.scrollIntoViewIfNeeded();
+        await test.info().attach(`compact-inputs-${theme}-${width}-${state}.png`, {
+          body: await page.screenshot({ fullPage: true }), contentType: "image/png"
+        });
+        await test.info().attach(`compact-inputs-${theme}-${width}-${state}.aria.yml`, {
+          body: await inspector.ariaSnapshot(), contentType: "text/yaml"
+        });
+      }
+      await captureVisibleInputs("closed");
+      await source.click();
+      await expect(page.getByText("variables.annualPremium * 1.05", { exact: true })).toBeVisible();
+      expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+      await captureVisibleInputs("open");
+    }
+  });
+}
 
 test("long captured text expands separately from source diagnostics", async ({ page }) => {
   const text = "Renewal terms\n" + "Confirm coverage before processing. ".repeat(20);
