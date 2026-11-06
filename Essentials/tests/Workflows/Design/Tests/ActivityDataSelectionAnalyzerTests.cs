@@ -285,6 +285,34 @@ public sealed class ActivityDataSelectionAnalyzerTests
         Assert.Contains((await Analyzer(provider).AnalyzeAsync(document)).Findings, finding => finding.Type == ConnectionInputBinding.RuleId);
     }
 
+    [Theory]
+    [InlineData("Secret")]
+    [InlineData("Connection")]
+    public async Task Reference_rules_never_serialize_an_unknown_CLR_business_instance(string syntax)
+    {
+        var business = new ReferenceGetterTrap();
+        var definition = Definition("CustomerId") with { IsCredential = syntax == "Secret" ? true : null,
+            ConnectionType = syntax == "Connection" ? "test-connection" : null };
+        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(business, syntax))))));
+        Assert.Contains(result.Findings, finding => finding.Type == (syntax == "Secret" ? CredentialInputBinding.RuleId : ConnectionInputBinding.RuleId));
+        Assert.Equal(0, business.Reads);
+    }
+
+    [Theory]
+    [InlineData("Secret")]
+    [InlineData("Connection")]
+    public async Task Actual_sealed_reference_records_are_read_only_through_their_canonical_members(string syntax)
+    {
+        var definition = Definition("CustomerId") with { IsCredential = syntax == "Secret" ? true : null,
+            ConnectionType = syntax == "Connection" ? "test-connection" : null };
+        object reference = syntax == "Secret"
+            ? SecretReferencePayload.Read(JsonSerializer.SerializeToElement(new { name = "test-secret" })).Reference!
+            : ConnectionReferencePayload.Read(JsonSerializer.SerializeToElement(new { connection = "test-connection" })).Reference!;
+        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
+        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(reference, syntax))))))).Findings);
+    }
+
     [Fact]
     public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions()
     {
@@ -357,6 +385,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
     private static int Count(ActivitySerializedShape shape) => shape.Members.Sum(member => 1 + Count(member.Shape))
         + (shape.Element is { } element ? 1 + Count(element) : 0) + (shape.MapValue is { } map ? 1 + Count(map) : 0);
     private sealed class ThrowingBusinessValue { public string Value => throw new InvalidOperationException("Business getter must not run."); }
+    private sealed class ReferenceGetterTrap
+    {
+        public int Reads;
+        public string Name { get { Reads++; throw new InvalidOperationException("Business getter must not run."); } }
+    }
     private sealed class Constraint(ImmutableArray<string> allowed) : IActivityInputSourceConstraintProvider
     {
         public ValueTask<ActivityDataInputConstraint?> GetConstraintAsync(IActivityDefinitionVersion activityVersion, string inputKey, CancellationToken cancellationToken = default) =>

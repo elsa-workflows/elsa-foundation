@@ -48,9 +48,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var facts = await Target(context, new(node.Node.NodeId, input.ReferenceKey), cancellationToken);
-                if (facts?.IsCredential == true && !CredentialInputBinding.IsAccepted(true, input))
+                if (facts?.IsCredential == true && (CanonicalReferenceState(input, CredentialInputBinding.SecretExpressionType) is not { } secretState ||
+                    !CredentialInputBinding.IsAccepted(true, secretState)))
                     findings.Add(new(Path(node, input.ReferenceKey), CredentialInputBinding.RuleId, "A credential input accepts only a secret reference."));
-                if (context.ConnectionTargets.Contains(new(node.Node.NodeId, input.ReferenceKey)) && !ConnectionInputBinding.IsAccepted(input))
+                if (context.ConnectionTargets.Contains(new(node.Node.NodeId, input.ReferenceKey)) &&
+                    (CanonicalReferenceState(input, ConnectionInputBinding.ConnectionExpressionType) is not { } connectionState || !ConnectionInputBinding.IsAccepted(connectionState)))
                     findings.Add(new(Path(node, input.ReferenceKey), ConnectionInputBinding.RuleId, "A connection input accepts only a connection reference."));
                 if (facts?.Constraint is { } constraint && input.IsBound() &&
                     !constraint.AllowedExpressionTypes.Contains(input.Value.ExpressionType, StringComparer.OrdinalIgnoreCase))
@@ -344,6 +346,20 @@ internal sealed class ActivityDataSelectionAnalyzer(
     private static bool RequiresReturn(ActivityDataSelectionGraph.Location producer) => producer.Node.Structure?.Kind is
         "elsa.sequence.structure" or "elsa.parallel.structure" or "elsa.flowchart.structure";
     private static string Path(ActivityDataSelectionGraph.Location location, string key) => $"{location.Node.NodeId}/inputs/{key}";
+    private static ArgumentState? CanonicalReferenceState(ArgumentState state, string role)
+    {
+        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value?.ExpressionType, role) || !state.IsBound()) return state;
+        // Existing acceptance predicates serialize non-JSON objects. Never hand them an arbitrary CLR instance.
+        object? payload = state.Value.Value switch {
+            JsonElement json => json,
+            SecretReferenceMembers secret when role == CredentialInputBinding.SecretExpressionType =>
+                JsonSerializer.SerializeToElement(new { name = secret.Name, typeName = secret.TypeName, scope = secret.Scope }),
+            ConnectionReferenceMembers connection when role == ConnectionInputBinding.ConnectionExpressionType =>
+                JsonSerializer.SerializeToElement(new { connection = connection.Name, type = connection.Type }),
+            _ => null
+        };
+        return payload is null ? null : state with { Value = state.Value with { Value = payload } };
+    }
     private static bool Valid(ActivityDataSelectionQuery query) => query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100
         && (query.Search?.Length ?? 0) <= 256 && !query.MemberPath.IsDefault && query.MemberPath.Length <= 64 && query.MemberPath.All(segment => segment is not null)
         && query.ShapeLimits is { MaximumDepth: >= 0 and <= 16, MaximumMembers: >= 0 and <= 512 };
