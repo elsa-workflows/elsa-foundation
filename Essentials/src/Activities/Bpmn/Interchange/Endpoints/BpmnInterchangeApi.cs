@@ -1,5 +1,5 @@
 using Elsa.Activities.Bpmn.Interchange.Models;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Workflows.Design.Core.Models;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;

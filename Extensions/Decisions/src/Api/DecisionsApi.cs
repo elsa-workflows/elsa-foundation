@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Decisions.Api;
 

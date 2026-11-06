@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Buffers;
 using System.Text.Json;
 
