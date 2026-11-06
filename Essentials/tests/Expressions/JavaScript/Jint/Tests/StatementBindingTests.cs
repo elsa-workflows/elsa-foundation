@@ -166,6 +166,39 @@ public sealed class StatementBindingTests
     }
 
     [Fact]
+    public async Task Statement_body_evaluator_forwards_cancellation_after_request_validation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var services = new ServiceCollection();
+        new JintFeature
+        {
+            ExecutionTimeout = null,
+            MaxMemoryBytes = null,
+            MaxStatements = 1_000
+        }.ConfigureServices(services);
+
+        // Options resolve after the evaluator's entry cancellation check. Cancelling there proves the
+        // request token still reaches Jint, rather than only exercising that early return.
+        services.Configure<FeatureOptions>(_ => cancellation.Cancel());
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableJavaScriptEvaluator>();
+        var values = new Dictionary<string, JsonElement>();
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "while (true) { }",
+            new Elsa.Primitives.Models.TypeReference("Any"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+
+        Assert.False(cancellation.IsCancellationRequested);
+        await Assert.ThrowsAsync<ExecutionCanceledException>(() =>
+            evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, cancellation.Token)).AsTask());
+        Assert.True(cancellation.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task Statement_body_stripped_capability_error_keeps_the_binding_diagnostic()
     {
         var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(() =>
