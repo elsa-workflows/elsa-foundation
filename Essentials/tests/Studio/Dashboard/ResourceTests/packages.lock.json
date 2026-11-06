@@ -514,7 +514,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.api.capabilities": {
@@ -527,7 +527,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.api.capabilities.core": {
@@ -604,7 +604,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
           "Elsa.Studio.Dashboard.Management": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.studio.dashboard.core": {
@@ -729,12 +729,6 @@
           "ZstdSharp.Port": "0.8.8"
         }
       },
-      "NativeEndpoints": {
-        "type": "CentralTransitive",
-        "requested": "[1.0.0-preview.6, )",
-        "resolved": "1.0.0-preview.6",
-        "contentHash": "3TeUmdG8kjVZYj2NJeYc53kmP0M9Qj6sTBfhJjQMqrLGXgIBGdme9ivE7vlshRAqM79mRLmjICQJPAIBcdEQQw=="
-      },
       "Newtonsoft.Json": {
         "type": "CentralTransitive",
         "requested": "[13.0.4, )",
@@ -756,6 +750,12 @@
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
         }
+      },
+      "ValenceWorks.MinimalEndpoints": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
       }
     }
   }

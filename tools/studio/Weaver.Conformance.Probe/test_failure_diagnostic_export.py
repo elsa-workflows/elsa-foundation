@@ -82,6 +82,25 @@ class FailureDiagnosticExportTests(unittest.TestCase):
         self.assertEqual("failed", exported["status"])
         self.assertNotIn(self.canary, (destination / "report.json").read_text())
 
+    def test_preserves_only_the_two_exact_manifest_run_browser_stages(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                self.report["stage"] = provider + "-workflow-run-browser"
+                self.write_report()
+                destination = self.root / provider
+                export_failure_diagnostic(self.source, destination)
+                selected = json.loads((destination / "report.json").read_text())
+                self.assertEqual(self.report["stage"], selected["stage"])
+                self.assertFalse(selected["independentPackageWitness"])
+        for i, stage in enumerate(("other-workflow-run-browser", "copilot-workflow-run-browser-private", self.jwt)):
+            with self.subTest(stage=stage):
+                self.report["stage"] = stage
+                self.write_report()
+                destination = self.root / f"unknown-{i}"
+                export_failure_diagnostic(self.source, destination)
+                selected = json.loads((destination / "report.json").read_text())
+                self.assertEqual("Unavailable", selected["stage"])
+
     def test_full_export_still_refuses_bad_references_while_safe_diagnostic_survives(self):
         outside = self.root / "foreign.txt"
         outside.write_text("outside owning run")

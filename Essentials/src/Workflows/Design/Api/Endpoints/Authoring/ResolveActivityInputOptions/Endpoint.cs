@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.ResolveActivityInputOptions;
 

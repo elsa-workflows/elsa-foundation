@@ -108,7 +108,7 @@
       "acme.processing": {
         "type": "Project",
         "dependencies": {
-          "Acme.Processing.Core": "[1.0.0, )",
+          "Acme.Processing.Core": "[4.0.0-dev, )",
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",

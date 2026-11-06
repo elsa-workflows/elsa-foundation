@@ -754,6 +754,31 @@
       "project": "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     }
   ],
   "splits": {
@@ -855,7 +880,9 @@
           "Essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
           "Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
           "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
-          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj"
+          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
+          "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
+          "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj"
         ]
       },
       {
@@ -894,7 +921,9 @@
           "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
           "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
-          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"
+          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj",
+          "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
+          "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj"
         ]
       },
       {
@@ -930,7 +959,8 @@
           "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
           "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
           "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
-          "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj"
+          "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj",
+          "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj"
         ]
       }
     ],

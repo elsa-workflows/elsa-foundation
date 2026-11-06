@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Studio.Dashboard.Api;
 

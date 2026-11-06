@@ -273,4 +273,13 @@
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+  </ItemGroup>
 </Project>
