@@ -110,7 +110,7 @@ internal static class MessageSubmissionRules
         writer.WriteEndObject();
     }
 
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value, int depth)
+    internal static void WriteCanonical(Utf8JsonWriter writer, JsonElement value, int depth)
     {
         switch (value.ValueKind)
         {
