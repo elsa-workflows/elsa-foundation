@@ -370,3 +370,5 @@ override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.GetHashCode() -> int
 override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ToString() -> string!
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator !=(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator ==(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ExecutionSubjectId.init -> void

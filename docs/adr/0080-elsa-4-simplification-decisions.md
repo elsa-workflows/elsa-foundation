@@ -42,6 +42,20 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 6 November 2026:** [Entity-aware integrations #3608](../program-goals/entity-aware-integrations.md)
+is authorized for research, necessary product/architecture design and specification, scoped implementation,
+verification, applicable review/merge and resulting-main qualification. The [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429)
+supersedes its intake-only delivery state. Entity-aware integrations come first, with external applications
+retaining record authority. The owner selected service connections first and, after the bounded assessment,
+the optional business-record backend as an explicit [follow-on #3916](https://github.com/elsa-workflows/elsa-foundation/issues/3916).
+The current production scope is external entity-aware integration; no record store is claimed. Domain
+applications remain separate compositions. Follow the [staged critical path](../plans/entity-aware-integrations.md):
+assessment/source proof and applicable design/spec agreement precede production implementation. Run beside
+active programs, preserve consolidation's priority one, coordinate shared ownership and keep one active
+implementation leaf. This authorization reactivates no unrelated paused/parked work and approves no unresolved
+architecture. Production/shared-system deployment, production credentials, package release, mandatory CRM,
+wholesale mirroring, arbitrary database access and an unbounded application platform are outside scope.
+
 **Owner amendment, 5 November 2026:** [Durable Messaging #3583](../program-goals/durable-messaging.md)
 is authorized for end-to-end delivery, including necessary brainstorming and design, by the
 [owner instruction recorded on the canonical feature](https://github.com/elsa-workflows/elsa-foundation/issues/3583#issuecomment-6671359620).
