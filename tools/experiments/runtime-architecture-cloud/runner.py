@@ -69,8 +69,38 @@ class Runner:
                           'archiveSha256': ARCHIVE_SHA, 'variants': {}, 'stages': {}, 'qualifiedForBenchmarks': False}
 
     def save(self):
-        write(self.state_path, self.state)
-        write(self.evidence / 'state.json', self.state)
+        try:
+            self.export_evidence()
+        except BaseException as error:
+            self.state.setdefault('evidenceExportFailures', []).append({'type': type(error).__name__})
+            raise
+        finally:
+            write(self.state_path, self.state)
+            write(self.evidence / 'state.json', self.state)
+
+    def export_evidence(self):
+        from evidence_exports import source as export_source, build as export_build, immutable
+        for variant, item in self.state['variants'].items():
+            item['sourceExport'] = export_source(item, self.evidence, variant)
+            # Preserve even an exploratory failed restore's generated lock, without qualifying it.
+            lock = Path(item['worktree']) / PROBE_LOCK
+            if lock.is_file():
+                content = lock.read_bytes()
+                target = self.evidence / 'diagnostic-locks' / variant / (sha(content) + '.json')
+                immutable(target, content)
+                item['probeLockSnapshot'] = {'path': str(target), 'sha256': sha(content), 'diagnosticSnapshotOnly': True}
+            if item.get('buildStatus') == 'PASSED':
+                item['binaryExport'] = export_build(item['buildReceipt'], self.evidence, variant, 'probe')
+            if item.get('providerBuild', {}).get('status') == 'PASSED':
+                record = item['providerBuild']
+                record['binaryExport'] = export_build(record['buildReceipt'], self.evidence, variant, 'provider')
+            if item.get('focusedTests', {}).get('receiptPath'):
+                focused = json.loads(Path(item['focusedTests']['receiptPath']).read_bytes())
+                exports = {}
+                for group in focused['groups']:
+                    if group.get('status') == 'PASSED' and 'phaseReceipt' in group:
+                        exports[group['name']] = export_build(group['phaseReceipt'], self.evidence, variant, 'focused-' + group['name'])
+                item['focusedBinaryExports'] = exports
 
     def refresh_source(self, variant):
         item = self.state['variants'][variant]
@@ -277,7 +307,13 @@ def main():
         print(type(error).__name__ + ': ' + str(error), file=sys.stderr)
         return 1
     finally:
-        runner.save()
+        try:
+            runner.save()
+        except BaseException as error:
+            runner.state['stages'][name].update(status='FAILED', evidenceExportFailureType=type(error).__name__)
+            write(runner.state_path, runner.state)
+            write(runner.evidence / 'state.json', runner.state)
+            raise
 
 
 if __name__ == '__main__':

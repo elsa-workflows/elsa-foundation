@@ -65,3 +65,10 @@ connection/env files, protected provider exceptions and SQLite database files ar
 An export inventory preserves original paths and byte hashes, so downloaded receipts can be resolved without
 rewriting their immutable contents. Unknown resources are preserved by the existing controller, with an incomplete
 receipt; they are never globally removed. The process helper explicitly retains its polling limitations.
+
+Uploaded evidence contains actual committed source objects in per-variant Git bundles (prerequisite production
+base f4), binary-safe patches, and every committed dependency lock. Each successful probe/provider/focused build
+also retains every byte of its captured output closure with an inventory and hashes. Failed exploratory restores'
+generated probe locks are retained separately as diagnostic snapshots, without being called committed or qualified.
+These exports include explicit Linux/native image adaptations and later committed compilation repairs, so recorded
+source commits and compiled bytes remain inspectable after the temporary hosted worktrees disappear.
