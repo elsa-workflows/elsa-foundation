@@ -243,6 +243,23 @@ describe("adaptive workflow side-panel layout", () => {
     expect(layout.inspectorExpanded).toBe(true);
   });
 
+  it("keeps canvas priority without a palette and restores an explicitly opened inspector", async () => {
+    renderLayout(false);
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(364));
+    expect(layout.paletteWidth).toBe(0);
+    expect(layout.inspectorCollapsed).toBe(true);
+    expect(364 - layout.inspectorWidth - 10).toBeGreaterThanOrEqual(260);
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorExpanded).toBe(true);
+    flushSync(() => layout.toggleSidePanelMaximized("inspector"));
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(layout.inspectorExpanded).toBe(true);
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorCollapsed).toBe(true);
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
+  });
+
   it("retains an explicitly saved single inspector on phones", async () => {
     window.localStorage.setItem(workflowPaletteCollapsedStorageKey, "true");
     renderLayout();

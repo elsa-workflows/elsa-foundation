@@ -56,6 +56,15 @@ it("keeps the current Settings form mounted and moves navigation focus across br
   expect(container.querySelector("input")).toBe(field);
 });
 
+it("restores navigation focus to an available section when the requested section is unavailable", async () => {
+  const groups = getSettingsSectionGroups([{ id: "appearance", label: "Appearance", path: "/settings/appearance", placement: "settings" }], { canReadAdmin: true });
+  compact = true;
+  await update(() => root.render(<SettingsShell groups={groups} activeId="unavailable" onNavigate={() => {}}><p>Unavailable section</p></SettingsShell>));
+  container.querySelector<HTMLSelectElement>("select")!.focus();
+  await resize(false);
+  expect(document.activeElement).toBe(container.querySelector(".settings-nav-link"));
+});
+
 it("preserves a dirty theme and content focus while changing between catalog and current-theme selection", async () => {
   const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "compact-custom", name: "A long custom theme name for narrow selection", source: "custom", enabled: true, published: true };
   const context = { http: { getJson: async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: custom.id, assets: [] }) } } as unknown as StudioEndpointContext;

@@ -12,6 +12,10 @@ for (const host of ["workflow", "activity"]) for (const theme of ["light", "dark
     await expect(page.getByRole("button", { name: "Expand activities panel", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
     await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+    await page.getByRole("button", { name: "Expand inspector panel", exact: true }).focus();
+    await page.setViewportSize({ width: 400, height: 844 });
+    await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
     await page.getByRole("button", { name: "Expand inspector panel", exact: true }).press("Enter");
@@ -65,5 +69,23 @@ for (const appearance of ["light", "dark"]) {
       if (width === 1280) await expect(page.getByRole("navigation", { name: "Settings sections", exact: true }).getByRole("link", { name: "Modules", exact: true })).toBeFocused();
     }
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+for (const theme of ["light", "dark"]) {
+  test(`${theme} inline authoring without an Activities pane also starts on the phone canvas`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/?mode=activity-duplicate-editor&composition=sequence&theme=${theme}`);
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme-layout", "editorial"));
+    await expect(page.locator(".wf-palette")).toHaveCount(0);
+    const canvas = page.locator(".wf-canvas-shell");
+    await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+    const open = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+    await open.focus(); await page.setViewportSize({ width: 400, height: 844 }); await expect(open).toBeVisible();
+    await open.press("Enter");
+    await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    await expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
+    await open.focus(); await page.setViewportSize({ width: 390, height: 844 }); await expect(open).toBeVisible();
   });
 }

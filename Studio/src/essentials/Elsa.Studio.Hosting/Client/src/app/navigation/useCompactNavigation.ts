@@ -28,7 +28,11 @@ export function useCompactNavigation() {
     if (!restoreFocus.current) return;
     restoreFocus.current = false;
     if (compact) selectRef.current?.focus();
-    else navigationElement.current?.querySelector<HTMLElement>('[aria-current="page"], button.active')?.focus();
+    else {
+      const navigation = navigationElement.current;
+      (navigation?.querySelector<HTMLElement>('[aria-current="page"], button.active')
+        ?? navigation?.querySelector<HTMLElement>('a[href], button:not(:disabled)'))?.focus();
+    }
   }, [compact]);
 
   return { compact, navigationRef, selectRef };

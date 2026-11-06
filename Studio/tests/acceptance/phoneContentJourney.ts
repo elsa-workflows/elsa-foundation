@@ -6,6 +6,11 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.goto("/workflows/activity-definitions");
   await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Phone authoring ${info.project.name} ${Date.now()}`);
+  const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
+  if (await provider.count()) {
+    const graph = provider.locator('option[value^="elsa.activity-graph|"]');
+    await provider.selectOption((await graph.first().getAttribute("value"))!);
+  }
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
   await page.getByRole("button", { name: "Create definition", exact: true }).click();
   await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
