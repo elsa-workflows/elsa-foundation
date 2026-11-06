@@ -48,6 +48,10 @@ internal sealed class ActivityDataSelectionAnalyzer(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var facts = await Target(context, new(node.Node.NodeId, input.ReferenceKey), cancellationToken);
+                if (facts?.IsCredential == true && !CredentialInputBinding.IsAccepted(true, input))
+                    findings.Add(new(Path(node, input.ReferenceKey), CredentialInputBinding.RuleId, "A credential input accepts only a secret reference."));
+                if (context.ConnectionTargets.Contains(new(node.Node.NodeId, input.ReferenceKey)) && !ConnectionInputBinding.IsAccepted(input))
+                    findings.Add(new(Path(node, input.ReferenceKey), ConnectionInputBinding.RuleId, "A connection input accepts only a connection reference."));
                 if (facts?.Constraint is { } constraint && input.IsBound() &&
                     !constraint.AllowedExpressionTypes.Contains(input.Value.ExpressionType, StringComparer.OrdinalIgnoreCase))
                     findings.Add(new(Path(node, input.ReferenceKey), constraint.ReasonCode, constraint.Message));
@@ -164,6 +168,13 @@ internal sealed class ActivityDataSelectionAnalyzer(
         if (definition.IsCredential == true)
             constraints.Add(new("Credential", [CredentialInputBinding.SecretExpressionType], CredentialInputBinding.RuleId,
                 "A credential input accepts only a secret reference."));
+        // Match the existing compiler's canonical connection declaration without adding a Design-to-Runtime dependency.
+        if (!string.IsNullOrWhiteSpace(definition.ConnectionType) || definition.Type.Alias == "Elsa.Activities.Runtime.Core.Models.ConnectionReference")
+        {
+            context.ConnectionTargets.Add(target);
+            constraints.Add(new("Connection", [ConnectionInputBinding.ConnectionExpressionType], ConnectionInputBinding.RuleId,
+                "A connection input accepts only a connection reference."));
+        }
         if (version is not null)
             foreach (var provider in constraintProviders)
                 if (await provider.GetConstraintAsync(version, target.InputKey, ct) is { } constraint) constraints.Add(constraint);
@@ -335,6 +346,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public Dictionary<ActivityDataSelectionTarget, ActivityDataSelectionTargetFacts?> Targets { get; } = [];
         public Dictionary<string, IReadOnlyList<VisibleVariable>> Variables { get; } = new(StringComparer.Ordinal);
         public ScopedVariableVisibility? WholeVisibility { get; set; }
+        public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
     }
 
     /// <summary>Defends the single response budget even when a contribution returns more than requested.</summary>

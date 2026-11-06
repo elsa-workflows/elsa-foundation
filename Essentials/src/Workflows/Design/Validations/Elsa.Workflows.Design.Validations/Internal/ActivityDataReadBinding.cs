@@ -51,8 +51,9 @@ internal sealed record ActivityDataReadBinding(
         }
     }
 
-    public static ActivityDataReadBinding Direct(string role, object? value, bool portable = false)
+    public static ActivityDataReadBinding Direct(string? role, object? value, bool portable = false)
     {
+        if (string.IsNullOrWhiteSpace(role)) return new("", Error: "InvalidSource");
         if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         var json = value is JsonElement element ? element : default;
         if (json.ValueKind == JsonValueKind.Object &&

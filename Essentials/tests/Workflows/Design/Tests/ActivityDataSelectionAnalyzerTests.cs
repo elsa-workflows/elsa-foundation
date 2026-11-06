@@ -212,6 +212,31 @@ public sealed class ActivityDataSelectionAnalyzerTests
     }
 
     [Fact]
+    public async Task A_credential_default_request_uses_the_existing_rule_even_when_it_has_no_value()
+    {
+        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(Definition("CustomerId") with { IsCredential = true }));
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(null, "Default"))))));
+        Assert.Contains(result.Findings, finding => finding.Type == CredentialInputBinding.RuleId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Actual_connection_declarations_remain_connection_only(bool declaresConnectionType)
+    {
+        var definition = Definition("CustomerId") with {
+            Type = new(declaresConnectionType ? "String" : "Elsa.Activities.Runtime.Core.Models.ConnectionReference"),
+            ConnectionType = declaresConnectionType ? "test-connection" : null
+        };
+        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
+        var document = Document(Sequence(Node("producer"), Node("consumer", Input(new("fixed-text", "Literal")))));
+        var browser = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
+        Assert.Equal(new[] { "Connection" }, browser.Target!.Constraint!.AllowedExpressionTypes);
+        Assert.Empty(browser.Sources);
+        Assert.Contains((await Analyzer(provider).AnalyzeAsync(document)).Findings, finding => finding.Type == ConnectionInputBinding.RuleId);
+    }
+
+    [Fact]
     public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions()
     {
         using var provider = Provider();
