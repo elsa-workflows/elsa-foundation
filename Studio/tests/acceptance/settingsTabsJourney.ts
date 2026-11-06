@@ -32,6 +32,19 @@ async function selectByKey(list: Locator, key: string, label: RegExp) {
 }
 
 export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
+  // The app scrolls inside its viewport. Keep keyboard-state screenshots and also expose
+  // actual panel content for visual review without changing the focused control.
+  const read = async (name: string, target: Locator) => {
+    const focused = await page.evaluateHandle(() => document.activeElement);
+    await target.scrollIntoViewIfNeeded();
+    await target.evaluate(element => {
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) parent.scrollLeft = 0;
+    });
+    await expect(target).toBeInViewport();
+    expect(await focused.evaluate(element => element === document.activeElement)).toBe(true);
+    await capture(page, info, name);
+    await focused.dispose();
+  };
   for (const [route, selector, prefix] of [
     ["modules", ".modules-page", "modules"],
     ["package-feeds", ".package-feeds-page", "feeds"],
@@ -46,13 +59,30 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
       await expect(section.getByRole("button", { name: /^Refresh/ }).first()).toBeEnabled();
       await assertLinkedTabs(section);
       await capture(page, info, `${prefix}-${host}`);
+      if (prefix === "modules" && host === "server") await read("modules-unavailable-content", section.locator(".studio-alert").filter({ hasText: /module registry is unavailable/ }));
+      if (prefix === "feeds" && host === "studio") {
+        await read("feeds-operations-content", section.getByRole("heading", { name: "Operations", exact: true }));
+        await read("feeds-retention-content", section.getByRole("heading", { name: "Retention", exact: true }));
+        await read("feeds-ledger-content", section.getByRole("heading", { name: "Change ledger", exact: true }));
+      }
+      if (prefix === "feeds" && host === "server") await read("feeds-unavailable-content", section.locator(".studio-alert").filter({ hasText: /module registry is unavailable/ }));
+      if (prefix === "features") {
+        const feature = section.locator(".feature-management-feature-button").first();
+        await read(`features-${host}-list-content`, feature);
+        await feature.click();
+        await read(`features-${host}-inspector-content`, section.locator(".feature-management-inspector-heading"));
+      }
       const inspector = section.getByRole("tablist", { name: "Inspector", exact: true });
       if (prefix === "modules" && await inspector.count()) {
         await selectByKey(inspector, "Home", /^Overview$/);
+        if (host === "studio") await read("modules-overview-content", section.getByRole("heading", { name: "Overview", exact: true }));
         for (const label of ["Contributions", "Package", "Manifest", "Diagnostics"]) {
           await selectByKey(inspector, "ArrowRight", new RegExp(`^${label}$`));
           await assertLinkedTabs(section);
-          if (host === "studio" && ["Manifest", "Diagnostics"].includes(label)) await capture(page, info, `modules-${label.toLowerCase()}`);
+          if (host === "studio" && ["Manifest", "Diagnostics"].includes(label)) {
+            await capture(page, info, `modules-${label.toLowerCase()}`);
+            await read(`modules-${label.toLowerCase()}-content`, section.getByRole("heading", { name: label, exact: true }));
+          }
         }
       }
     }
@@ -93,6 +123,7 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await expect(views).toBeVisible();
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-overview");
+  await read("theme-overview-content", theme.getByRole("textbox", { name: "Name", exact: true }));
   await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
   const name = theme.getByRole("textbox", { name: "Name", exact: true });
   await expect(name).toBeEditable();
@@ -104,12 +135,14 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await primary.fill(editedPrimary);
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-tokens");
+  await read("theme-tokens-content", primary);
   const modes = theme.getByRole("tablist", { name: "Theme mode", exact: true });
   for (const [key, label] of [["Home", "Light"], ["ArrowRight", "Dark"], ["ArrowRight", "Dim"], ["End", "High contrast"]]) {
     await selectByKey(modes, key, new RegExp(`^${label}$`));
     await assertLinkedTabs(theme);
   }
   await capture(page, info, "theme-mode-last");
+  await read("theme-mode-last-content", primary);
   await selectByKey(modes, "Home", /^Light$/);
   await expect(primary).toHaveValue(editedPrimary);
   await selectByKey(views, "ArrowRight", /^Assets$/);
@@ -118,6 +151,8 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await selectByKey(views, "End", /^Preview$/);
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-preview");
+  await read("theme-preview-content", theme.locator(".theme-preview-card"));
+  await read("theme-preview-validation", theme.getByRole("button", { name: "Apply preview", exact: true }));
   await selectByKey(views, "Home", /^Overview$/);
   await expect(name).toHaveValue(edited);
   await assertLinkedTabs(theme);
