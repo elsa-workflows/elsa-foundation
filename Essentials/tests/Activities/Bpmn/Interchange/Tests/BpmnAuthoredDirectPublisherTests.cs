@@ -39,6 +39,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         Assert.Equal(new BpmnModelCaller("author", null), fixture.Caller);
         Assert.Equal("version-1", fixture.Source!.VersionId);
         Assert.Equal("1.0.0", fixture.Source.Version);
+        Assert.Equal("process-definition", fixture.Source.DefinitionId);
         Assert.Equal("Frozen process label", Assert.Single(fixture.Source.ActivityPresentation).DisplayName);
         Assert.Contains(fixture.Source.Layout, record => record.NodeId == "bpmn-diagram:root" &&
             record.AdditionalProperties!.Value.GetProperty("shapes").GetProperty("human").GetProperty("x").GetInt32() == 20);

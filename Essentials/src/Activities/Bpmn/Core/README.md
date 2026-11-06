@@ -24,11 +24,24 @@ A duration must also produce a representable UTC `DateTimeOffset` deadline. New 
 Definition format, `elsa.bpmn/1` protocol, material schema and private execution-state version are separate boundaries. Earlier definition formats omit later optional fields and retain their wire/hashes. The [hosting contract](../../../../../specs/1017-direct-bpmn-hosting/contracts/hosting.md) records the detailed refusal, outcome and settlement rules. [Source-bound evidence](../../../../../specs/1017-direct-bpmn-hosting/tasks.md) qualifies the implemented journeys; spec1017 and the wider program remain in progress.
 
 
+## Optional authored logical provenance
+
+Trusted authored publication can carry a canonical `DefinitionId` in the model-neutral
+`WorkflowDefinition` namespace. `BpmnModel.Authored.v1` source references retain that identity
+separately from the unchanged content-addressed executable pin/hash. Start, inspection, catalog
+and native embedding recognize this explicit BPMN-owned format; recovery follows the exact
+retained source reference without Design queries. Legacy `BpmnModel` sources and the existing
+publication-provenance constructor retain absent logical identity; never infer one from
+`bpmn-model:<hash>`. New sources require homogeneous upgraded readers: older BPMN readers
+filter/refuse the new kind, so mixed-fleet compatibility and provider/host qualification are
+not established by this additive provenance change. A legacy source is not silently upgraded
+under the same publication operation identity.
+
 ## Native graph and authoring boundary
 
 The `Models/` DTOs retain the native composite graph's JSON names without an interpreter or Design
 reference. `BpmnActivityIdentities` holds the existing activity/structure/slot/input vocabulary used by
 both authoring and execution. The concrete runtime forwards the moved neutral CLR types.
 `BpmnAuthoredStructure` belongs to [Design](../Design/README.md), because it owns authored `ActivityNode` children.
-Private embedding wire plumbing is shared only with the BPMN runtime/Design siblings through same-domain
-friend grants; it is not a new third-party extension surface.
+Private embedding/source-provenance plumbing stays within the BPMN runtime/Design/API siblings through
+same-domain friend grants; it is not a new third-party extension surface.

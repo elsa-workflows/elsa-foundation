@@ -23,6 +23,38 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     private static readonly DateTimeOffset Now = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Unavailable_source_finalization_preserves_the_physical_claim_and_legacy_completion()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        RuntimePostCommitOutboxClaim claim;
+        string originalJson;
+        long originalRevision;
+        await using (var context = database.Open("tenant-a"))
+        {
+            var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+            await store.SavePendingAsync(Pending("prepared", "workflow-a"));
+            claim = Assert.Single(await store.ClaimAsync(new("worker", Now, TimeSpan.FromMinutes(1), 1)));
+            var original = await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
+            originalJson = original.ContentJson; originalRevision = original.Revision;
+            var participant = new RuntimePostCommitSourceFinalization(1, "operation", "fingerprint", new PreparedSourcePlan());
+
+            await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => store.CompleteClaimAsync(
+                RuntimePostCommitOutboxClaimCompletion.PrepareSourceFinalization(claim,
+                    new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(1)), participant)).AsTask());
+        }
+        await using var reopened = database.Open("tenant-a");
+        var retained = await reopened.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
+        Assert.Equal(originalJson, retained.ContentJson);
+        Assert.Equal(originalRevision, retained.Revision);
+        var ordinary = new EfRuntimePostCommitOutboxStore(reopened, new FixedAccessor("tenant-a"));
+        Assert.True(claim.Item.IsEquivalentTo(await ordinary.FindAsync(claim.OutboxItemId)));
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await ordinary.CompleteClaimAsync(new(claim,
+            new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddSeconds(2)))));
+    }
+
+    private sealed class PreparedSourcePlan : IRuntimeSourcePlan { public string Family => "test"; public int Version => 1; }
+
+    [Fact]
     public async Task Pending_replay_is_exactly_idempotent_and_conflicting_intent_is_refused()
     {
         await using var database = await TestDatabase.CreateAsync();

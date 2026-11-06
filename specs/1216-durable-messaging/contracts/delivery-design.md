@@ -543,13 +543,15 @@ A rejected source never later accepts after authority changes; a new invocation 
 Continue owed callbacks until consumed or authoritative sender retirement; missing state is not
 retirement. Source proof survives independent producer windows and source/terminal collection.
 
-Owner Q4 requires cancellation and acceptance to serialize on the actual source/checkpoint
-resolution. Cancellation-first seals Cancelled without accepting an inbox message, so stale source
-claims cannot send later. Acceptance-first keeps the accepted message and every recipient
-obligation; sender cancellation can retire only its own continuation with durable proof. Before
-the original send checkpoint commits, cancellation discards transient staging. A requested
-cancellation, missing sender or lost acknowledgement cannot decide this race; recovery reads the
-committed outcome. B32 qualifies both orders and stale claims through real checkpoint boundaries.
+Owner Q4 requires cancellation and acceptance to serialize through one retained sender control
+inside their actual transactions. The first send checkpoint provisions it and reserves outcome/
+continuation capacity. Cancellation seals that control under the sender checkpoint fence, without
+enumerating source history or taking transport claims. New finalization locks/rereads the control;
+sealed derives Cancelled without acceptance/callback, while existing Accepted remains immutable.
+Callbacks consume or retire using the same control and exact target proof. Retain the cancellation
+proof beyond sender deletion. Before the original send checkpoint, cancellation discards staging.
+A request, missing sender or lost acknowledgement cannot decide the race. B32 qualifies both
+orders, pre-reserved rejection capacity and stale claims through real checkpoint boundaries.
 
 Production business identity is persistence scope + tenant + canonical definition namespace/ID.
 Finite test scopes are isolated; source run-kind/partition are retained and validated authority,

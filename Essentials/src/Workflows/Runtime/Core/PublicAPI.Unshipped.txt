@@ -10567,3 +10567,9 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.Plann
 Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.DispatchHandlerType.get -> System.Type!
 Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.PlanTypes.get -> System.Collections.Generic.IReadOnlyList<System.Type!>!
 override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RuntimePostCommitIntentHandlerContribution(string! intentKind, System.Type! handlerType, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion, bool requiresSuccessfulFinalization) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RequiresSuccessfulFinalization.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxClaimCompletionStore.CanFinalizeSource(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary! boundary, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization! finalization) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.PrepareSourceFinalization(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaim! claim, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult! deliveryResult, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization! successfulFinalization) -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.SuccessfulFinalization.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.SuccessfulFinalization.init -> void

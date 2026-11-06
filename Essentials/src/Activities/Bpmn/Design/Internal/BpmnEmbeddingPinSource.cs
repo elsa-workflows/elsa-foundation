@@ -23,12 +23,12 @@ internal sealed class BpmnEmbeddingPinSource(IWorkflowExecutableStore materials,
                 string.IsNullOrWhiteSpace(literal.GetString()))
                 throw Refused(node, "requires a literal published BPMN model source reference.");
             var source = await sources.FindAsync(literal.GetString()!, cancellationToken);
-            if (source is null || source.TenantId != context.TenantId || source.SourceKind != "BpmnModel" || !source.IsLive(clock.GetUtcNow()))
+            if (source is null || source.TenantId != context.TenantId || !BpmnModelSourceProvenance.IsSupported(source) || !source.IsLive(clock.GetUtcNow()))
                 throw Refused(node, "requires an accessible live published BPMN model source.");
             var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
             if (material?.Model is not { Profile: BpmnModelProtocol.Profile or BpmnModelProtocol.NativeWorkProfile } model ||
-                model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.Identity.DefinitionId != source.DefinitionId ||
-                material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
+                model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) ||
+                !BpmnModelSourceProvenance.MatchesMaterial(source, material.Identity))
                 throw Refused(node, "requires a qualified published BPMN human-work or native-service profile.");
             var pin = new BpmnEmbeddingPin(source.SourceReferenceId, material.Identity, material.IncarnationId);
             metadata.Add(new(node.ExecutableNodeId, BpmnEmbeddingJson.PinKey, BpmnEmbeddingJson.Serialize(pin)));

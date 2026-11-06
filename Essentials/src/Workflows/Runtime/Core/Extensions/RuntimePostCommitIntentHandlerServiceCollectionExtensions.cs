@@ -48,7 +48,8 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
 
         if (matchingKind.Any(contribution =>
                 contribution.HandlerType != handlerType ||
-                !contribution.RetryPolicy.IsEquivalentTo(retryPolicy) || contribution.RequiresDurableSource != requiresDurableSource || contribution.StimulusDeliveryProtocolVersion != stimulusDeliveryProtocolVersion))
+                !contribution.RetryPolicy.IsEquivalentTo(retryPolicy) || contribution.RequiresDurableSource != requiresDurableSource ||
+                contribution.RequiresSuccessfulFinalization || contribution.StimulusDeliveryProtocolVersion != stimulusDeliveryProtocolVersion))
         {
             var contributionIdentities = matchingKind
                 .Select(ContributionIdentity)
@@ -71,5 +72,5 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
     private static string ContributionIdentity(RuntimePostCommitIntentHandlerContribution contribution) =>
         $"{HandlerIdentity(contribution.HandlerType)} " +
         $"[maxAttempts={contribution.RetryPolicy.MaxAttempts}, delay={contribution.RetryPolicy.Delay}, " +
-        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}, stimulusDeliveryProtocolVersion={contribution.StimulusDeliveryProtocolVersion}]";
+        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}, requiresSuccessfulFinalization={contribution.RequiresSuccessfulFinalization}, stimulusDeliveryProtocolVersion={contribution.StimulusDeliveryProtocolVersion}]";
 }

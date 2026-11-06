@@ -128,6 +128,44 @@ public sealed class BpmnCatalogTests
         Assert.All(f.Authorized, c => { Assert.Equal("bpmn:read", c.Permission); Assert.Equal("tenant", c.TenantId); });
     }
 
+    [Fact]
+    public async Task Canonical_authored_catalog_identity_is_separate_from_the_material_pin_and_legacy_absence()
+    {
+        var fixture = new Fixture();
+        fixture.SourceItems = [fixture.Source() with { SourceKind = "BpmnModel.Authored.v1", DefinitionId = "orders" }];
+        var authored = Assert.Single((await fixture.Catalog.PublicationsAsync(new(), default)).Items);
+        Assert.Equal("orders", authored.DefinitionId);
+        Assert.Equal("definition", authored.Executable.DefinitionId);
+        fixture.SourceItems = [fixture.Source()];
+        var legacy = Assert.Single((await fixture.Catalog.PublicationsAsync(new(), default)).Items);
+        Assert.Null(legacy.DefinitionId);
+        Assert.False(JsonSerializer.SerializeToElement(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            .TryGetProperty("definitionId", out _));
+    }
+
+    [Theory]
+    [InlineData("unknown-kind")]
+    [InlineData("definition-version")]
+    [InlineData("artifact-version")]
+    [InlineData("artifact")]
+    [InlineData("blank-definition")]
+    [InlineData("legacy-mismatch")]
+    public async Task Authored_kind_does_not_admit_unknown_or_mismatched_material_provenance(string invalid)
+    {
+        var fixture = new Fixture();
+        var source = fixture.Source() with { SourceKind = "BpmnModel.Authored.v1", DefinitionId = "orders" };
+        fixture.SourceItems = [invalid switch
+        {
+            "unknown-kind" => source with { SourceKind = "BpmnModel.Authored.v99" },
+            "definition-version" => source with { DefinitionVersionId = "another" },
+            "artifact-version" => source with { ArtifactVersion = "another" },
+            "artifact" => source with { ArtifactId = "another" },
+            "blank-definition" => source with { DefinitionId = " " },
+            _ => source with { SourceKind = "BpmnModel" }
+        }];
+        Assert.Empty((await fixture.Catalog.PublicationsAsync(new(), default)).Items);
+    }
+
     [Theory]
     [InlineData("subject")]
     [InlineData("tenant")]

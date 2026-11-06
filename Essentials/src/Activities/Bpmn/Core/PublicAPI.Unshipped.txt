@@ -165,6 +165,10 @@ Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.Version.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
 Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.BpmnModelPublicationProvenance(string! versionId, string! version, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>? layout = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>? activityPresentation = null) -> void
+static Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.ForAuthoredDefinition(string! definitionId, string! versionId, string! version, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>? layout = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>? activityPresentation = null) -> Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.DefinitionId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.DefinitionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.DefinitionId.get -> string?
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt.AttemptId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt.AttemptNumber.get -> int?

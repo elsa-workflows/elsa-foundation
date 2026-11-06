@@ -53,7 +53,7 @@ These are implementation choices for review, not already delivered behavior. Det
 | Native terminal/model settled release | Native Completed/Faulted/Cancelled are terminal and terminal retry is refused. Models release after authoritative settlement. Incidents/requested cancellation do not unlock; stale release cannot clear a successor generation. |
 | Immutable winner plus exclusive reservation | Select/reserve/dispatch atomically. Target admission AND consumption check Message owner/fence. Failed/abandoned unconsumed work durably closes old target authority before reuse of a still-live wait. |
 | Send activity waits for acceptance | Commit send intent and private receipt bookmark together. Outbox accepts once, persists source binding/callback, resumes exact private wait; completion means accepted, not business delivered. |
-| Cancellation competes with acceptance | Owner Q4. The actual sender cancellation checkpoint and source finalization compare one retained resolution revision. Cancellation-first seals Cancelled; acceptance-first preserves message/recipient work and retires only the sender continuation with proof. |
+| Cancellation competes with acceptance | Owner Q4. The actual sender cancellation checkpoint and source finalization serialize through one retained sender control. Cancellation-first seals it; current source replay derives Cancelled; acceptance-first preserves message/recipient work and retires only the sender continuation with proof. |
 | Capability-gated operator module | Follow User Tasks discovery and shared collection/detail controls, separate current metadata/payload/recovery authorization, no new shell/manual-send console. |
 
 ## Project Structure

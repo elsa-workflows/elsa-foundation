@@ -413,6 +413,9 @@ public sealed class RuntimePostCommitOutboxClaim
 /// <summary>One fenced outbox completion plus its optional atomic dispatch lifecycle projection.</summary>
 public sealed class RuntimePostCommitOutboxClaimCompletion
 {
+    private RuntimePostCommitSourceFinalization? successfulFinalization;
+
+    [JsonConstructor]
     public RuntimePostCommitOutboxClaimCompletion(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult deliveryResult,
@@ -491,10 +494,33 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
         FollowUpOutboxItem = followUpOutboxItem;
     }
 
+    /// <summary>Prepares a successful typed source participant for the owning atomic completion transaction.</summary>
+    /// <remarks>The value grants no capability. Legacy transition/store paths must refuse a prepared participant,
+    /// rather than acknowledge the source while discarding its proposed domain writes.</remarks>
+    public static RuntimePostCommitOutboxClaimCompletion PrepareSourceFinalization(
+        RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult deliveryResult,
+        RuntimePostCommitSourceFinalization successfulFinalization)
+    {
+        ArgumentNullException.ThrowIfNull(successfulFinalization);
+        return new(claim, deliveryResult) { SuccessfulFinalization = successfulFinalization };
+    }
+
     public RuntimePostCommitOutboxClaim Claim { get; }
     public RuntimePostCommitOutboxDeliveryResult DeliveryResult { get; }
     public WorkflowDispatchRecord? WorkflowDispatch { get; }
     public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePostCommitSourceFinalization? SuccessfulFinalization
+    {
+        get => successfulFinalization;
+        init
+        {
+            if (value is not null &&
+                (DeliveryResult.Status != RuntimePostCommitOutboxStatus.Delivered || WorkflowDispatch is not null || FollowUpOutboxItem is not null))
+                throw new ArgumentException("A successful source participant cannot be combined with failure delivery or projections.", nameof(SuccessfulFinalization));
+            successfulFinalization = value;
+        }
+    }
 }
 
 /// <summary>Which outcome a <see cref="RuntimePostCommitOutboxClaimCompletion"/> actually persisted.</summary>
@@ -736,6 +762,12 @@ public static class RuntimePostCommitOutboxClaimTransitions
     {
         ArgumentNullException.ThrowIfNull(completion);
         ArgumentNullException.ThrowIfNull(current);
+
+        // This shared legacy reducer cannot stage a typed domain participant. All existing physical and overlay
+        // callers must preserve that responsibility instead of acknowledging the source and dropping its plan.
+        if (completion.SuccessfulFinalization is not null)
+            throw new RuntimePostCommitSourceBoundaryException(completion.Claim.OutboxItemId, completion.Claim.Item.Intent.Kind,
+                new NotSupportedException("Source finalization requires its recognized atomic provider participant."), false);
 
         // Validate the claim and its fence before lifecycle precedence. A stale claimant cannot turn a newer generation into
         // an acknowledgement merely because the deterministic child is now visible.
