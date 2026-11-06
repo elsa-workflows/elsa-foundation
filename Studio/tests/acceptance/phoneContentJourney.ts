@@ -47,7 +47,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/settings/theme-builder");
   const sections = page.getByRole("navigation", { name: "Settings sections", exact: true });
-  await sections.getByRole("link", { name: "Theme Builder", exact: true }).focus();
+  await sections.getByRole("link", { name: "Theme builder", exact: true }).focus();
   await page.setViewportSize({ width: 390, height: 844 });
   const sectionSelect = page.getByRole("combobox", { name: "Settings section", exact: true });
   await expect(sectionSelect).toBeFocused();
