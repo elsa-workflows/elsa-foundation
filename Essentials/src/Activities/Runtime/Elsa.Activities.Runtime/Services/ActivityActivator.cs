@@ -19,11 +19,16 @@ namespace Elsa.Activities.Runtime.Services;
 /// that asked for the activation releases once it has recorded the outcome.
 /// </remarks>
 public sealed class ActivityActivator(
+    IRuntimeTestEffectGate? testEffects,
     IEnumerable<IActivityActivationStrategy> strategies,
     ActivityInputHydrator inputHydrator,
     ActivitySecretInputResolver secretInputResolver,
     IExternalPayloadStore? externalPayloadStore = null) : IActivityActivator
 {
+    public ActivityActivator(IEnumerable<IActivityActivationStrategy> strategies, ActivityInputHydrator inputHydrator,
+        ActivitySecretInputResolver secretInputResolver, IExternalPayloadStore? externalPayloadStore = null)
+        : this(null, strategies, inputHydrator, secretInputResolver, externalPayloadStore) { }
+
     private readonly IReadOnlyDictionary<string, IReadOnlyCollection<IActivityActivationStrategy>> _strategies =
         strategies
             .GroupBy(strategy => strategy.ConsumerKey, StringComparer.Ordinal)
@@ -37,6 +42,12 @@ public sealed class ActivityActivator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // The Runtime composition supplies this gate before strategy activation can construct activity services.
+        // The legacy direct library constructor remains useful outside an admitted runtime execution.
+        var invocation = testEffects is null ? null : await testEffects.ValidateActivityAsync(
+            new(request.WorkflowExecutionId, request.ActivityExecutionId, request.Attempt.AttemptId, request.Contract, request.Descriptor),
+            cancellationToken);
 
         var consumerKey = request.Descriptor?.ConsumerKey ?? request.Contract.DescriptorKind;
         var schemaVersion = request.Descriptor?.SchemaVersion ?? "1";
@@ -75,7 +86,7 @@ public sealed class ActivityActivator(
         {
             var inputs = await DereferenceInputsAsync(request.Inputs, cancellationToken);
             if (secretInputs is not null)
-                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, request.ActivityExecutionId, inputs, cancellationToken);
+                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, request.ActivityExecutionId, inputs, invocation, cancellationToken);
             inputHydrator.Hydrate(lease.Activity, request.Contract, inputs);
             return lease;
         }

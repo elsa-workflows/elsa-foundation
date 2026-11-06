@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Jint" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

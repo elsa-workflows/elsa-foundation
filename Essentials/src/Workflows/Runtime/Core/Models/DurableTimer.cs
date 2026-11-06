@@ -32,4 +32,12 @@ public sealed record DurableTimer(
     ValueTypeDescriptor? PayloadType = null,
     string? ProviderId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityExecutionId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutionScopeId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutionScopeId = null)
+{
+    /// <summary>
+    /// Exact business-clock read used to compute this timer. Controlled scheduling validates this stamp against
+    /// admitted context and retained clock revision evidence; arbitrary metadata cannot select clock ownership.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowBusinessTime? BusinessTime { get; init; }
+}

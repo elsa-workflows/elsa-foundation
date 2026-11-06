@@ -45,6 +45,10 @@ phase (or as a hosted service in plain hosts), according to the host-wide `EfMig
 
 ## D02-D03 command-stream and transport persistence
 
+Selected test entry adds the command-transport format `2.0.0`. Ordinary streams retain `1.0.0` until the actual schema gate advances them. The first selected Start fences both item and stream head; later controls, new items, lease/release and the retained empty head cannot lower that format. A predecessor reader refuses the physical stamp before decoding or claiming. The strict predecessor upcaster refuses selected entry/context hidden inside a v1 item.
+
+`IExecutionCommandTransportTestBoundary` is a scoped single-owner module contribution with no generic fallback. The EF owner checks the exact transport instance, its actual context, the selected partition and the live admitted write gate. The Distributed runtime's replacement `IRuntimeTestExecutionRoutingBoundary` opens the actual actor provider's normal partition operation scope and requires one matching transport owner before placement or mailbox work. Missing or duplicate owners refuse selected routing; duplicate registration also fails startup. A durability flag alone is insufficient. This qualification creates no execution or scope records. Controlled child-workflow profiles need a separately persisted qualified lineage before they are supported; ordinary Test Drive scope alone never implies one.
+
 The opt-in D02-D03 provider replaces exactly `IExecutionCommandTransport` with the EF command
 transport adapter. It owns both the per-execution stream-head and ordered transport-item entities in
 one dedicated EF context, so send, lease, early lease release, and acknowledgement can update the

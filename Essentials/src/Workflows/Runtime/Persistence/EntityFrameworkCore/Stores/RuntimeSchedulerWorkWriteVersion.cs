@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal static class RuntimeSchedulerWorkWriteVersion
 {
-    public static string For(RuntimeDbContext context, RuntimeSchedulerWorkItem item, string? storedVersion = null)
+    public static string For(RuntimeDbContext context, RuntimeSchedulerWorkItem item, string? storedVersion = null, bool testExecution = false)
     {
         var gate = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
@@ -20,10 +20,11 @@ internal static class RuntimeSchedulerWorkWriteVersion
         if (state is { WritesRefused: true })
             throw new EfSchemaFamilyWritesRefusedException(RuntimeSchedulerWorkEfModule.SchemaFamily,
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
-        var minimum = IsModelWorker(item) ? RuntimeSchedulerWorkEfModule.SchemaVersion :
+        var minimum = testExecution || RuntimeTestEntryWriteVersion.Requires(item) ? RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion :
+            IsModelWorker(item) ? RuntimeSchedulerWorkEfModule.SchemaVersion :
             item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel ? RuntimeSchedulerWorkEfModule.ModelSchemaVersion : "1.0.0";
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum)) minimum = storedVersion;
-        var version = state?.WriteVersion ?? (minimum == RuntimeSchedulerWorkEfModule.SchemaVersion ? minimum : RuntimeSchedulerWorkEfModule.ModelSchemaVersion);
+        var version = state?.WriteVersion ?? (Version.Parse(minimum) > Version.Parse(RuntimeSchedulerWorkEfModule.ModelSchemaVersion) ? minimum : RuntimeSchedulerWorkEfModule.ModelSchemaVersion);
         if (Version.Parse(version) < Version.Parse(minimum))
             throw new EfSchemaWriteRefusedException(RuntimeSchedulerWorkEfModule.SchemaFamily, version,
                 minimum);

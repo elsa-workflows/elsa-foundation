@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -48,6 +49,18 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     public DbSet<WorkflowActivationSlotEntity> WorkflowActivationSlots => Set<WorkflowActivationSlotEntity>();
     public DbSet<RecurringTriggerScheduleEntity> RecurringTriggerSchedules => Set<RecurringTriggerScheduleEntity>();
     public DbSet<RecurringTriggerScheduleProjectionStateEntity> RecurringTriggerScheduleProjectionStates => Set<RecurringTriggerScheduleProjectionStateEntity>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        RuntimeTestEntrySchemaGuard.PrepareAsync(this, synchronous: true, CancellationToken.None).GetAwaiter().GetResult();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        await RuntimeTestEntrySchemaGuard.PrepareAsync(this, synchronous: false, cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

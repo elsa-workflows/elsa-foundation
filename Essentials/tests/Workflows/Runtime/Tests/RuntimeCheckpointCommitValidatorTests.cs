@@ -200,7 +200,16 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         })),
         ["root variable"] = new("WorkflowExecutionState.RootVariableFrame.Values[]", $"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
             new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, WorkflowState(Frame(VariableFrameKind.Root, value)), new Dictionary<string, string>()),
-            null, [], [], [], [], []))
+            null, [], [], [], [], [])),
+        ["test frame variable"] = new("WorkflowExecutionState.TestContext.Frames[].Frame.Values[]", $"Workflow execution '{WorkflowExecutionId}' test context frame 'frame-1' variable 'token'",
+            value => TestContextChanges(new("context", "fingerprint",
+                [new(Frame(VariableFrameKind.Container, value), false, true, new Dictionary<string, ValueEnvelope>(), new Dictionary<string, string>())], [], ["selected"]))),
+        ["test frame input"] = new("WorkflowExecutionState.TestContext.Frames[].Inputs[]", $"Workflow execution '{WorkflowExecutionId}' test context frame 'frame-1' input 'apiKey'",
+            value => TestContextChanges(new("context", "fingerprint",
+                [new(new("frame-1", "scope-1", "context", null, VariableFrameKind.Root, new Dictionary<string, ValueEnvelope>()), true, true,
+                    new Dictionary<string, ValueEnvelope> { ["apiKey"] = value }, new Dictionary<string, string>())], [], ["selected"]))),
+        ["test prior result"] = new("WorkflowExecutionState.TestContext.Results[].Result", $"Workflow execution '{WorkflowExecutionId}' test context prior result 'outside' in scope 'scope-1'",
+            value => TestContextChanges(new("context", "fingerprint", [], [new("outside", "scope-1", value)], ["selected"])))
     };
 
     public static TheoryData<string, string> EncryptionRequiredRows() => Rows(Payloads.Keys);
@@ -225,6 +234,11 @@ public sealed class RuntimeCheckpointCommitValidatorTests
 
     private static RuntimeCheckpointStateChangeSet ActivityChanges(ActivityExecutionState state) =>
         new(null, null, [new RuntimeStateChange<ActivityExecutionState>(ActivityExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>())], [], [], [], []);
+
+    private static RuntimeCheckpointStateChangeSet TestContextChanges(RuntimeTestContextState context) =>
+        new(new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert,
+            WorkflowState(new("root", "workflow", "activation", null, VariableFrameKind.Root, new Dictionary<string, ValueEnvelope>())) with { TestContext = context },
+            new Dictionary<string, string>()), null, [], [], [], [], []);
 
     private static RuntimeCheckpointStateChangeSet DurableValueChanges(
         DurableValueState state,

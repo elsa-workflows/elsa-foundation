@@ -1,11 +1,14 @@
 using Elsa.Activities.Http.Activities;
-using Elsa.Activities.Http.Connections;
+using Elsa.Activities.Http;
+using System.Text.Json;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Contracts;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Workflows.Extensions;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -26,8 +29,11 @@ public sealed class SendHttpRequestRetryTests
     public async Task ApiKey_connection_getting_401_sends_exactly_one_request()
     {
         var handler = new CountingUnauthorizedHandler();
-        await using var provider = ConnectionsTestComposition.CreateProvider(workflows: true, configure: services =>
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
         {
+            new ActivitiesHttpFeature().ConfigureServices(services);
+            services.AddConnectionsWorkflows();
+            services.AddSingleton<IRuntimeTestEffectGate, OrdinaryEffectGate>();
             services.AddOptions<HttpActivityOptions>();
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionPartitionAccessor>(_ => new FixedPartition(Tenant)));
             services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
@@ -59,9 +65,8 @@ public sealed class SendHttpRequestRetryTests
         });
 
         var activity = new SendHttpRequest(
-            scope.ServiceProvider.GetRequiredService<IHttpClientFactory>(),
             scope.ServiceProvider.GetRequiredService<IOptions<HttpActivityOptions>>(),
-            scope.ServiceProvider.GetRequiredService<IHttpConnectionApplicator>())
+            scope.ServiceProvider.GetRequiredService<IHttpActivityRequestExecutor>())
         {
             Url = new Uri("https://api.example/resource"),
             Method = "GET",
@@ -89,5 +94,20 @@ public sealed class SendHttpRequestRetryTests
     private sealed class FixedPartition(string value) : IWorkflowExecutionPartitionAccessor
     {
         public WorkflowExecutionPartition Current { get; } = new(value);
+    }
+
+    // This isolated Connections fixture has no Runtime execution rows. Its explicit ordinary-only gate stands
+    // in for normal Runtime admission; it is not a controlled policy provider or an advertised test profile.
+    private sealed class OrdinaryEffectGate : IRuntimeTestEffectGate
+    {
+        public ValueTask<RuntimeTestInvocation> ValidateActivityAsync(RuntimeTestActivationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeTestInvocation(request.WorkflowExecutionId, request.ActivityExecutionId, request.AttemptId, "node-1"));
+        public ValueTask<RuntimeSecretReference> MapSecretAsync(RuntimeTestInvocation invocation, string inputKey, RuntimeSecretReference reference,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(reference);
+        public ValueTask<RuntimeTestEffectAdmission> BeginAsync(RuntimeTestEffectRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeTestEffectAdmission(request, RuntimeTestEffectMode.Ordinary, "ordinary-http-fixture/1",
+                JsonSerializer.SerializeToElement(new { }), null, null, null, 0, true));
+        public ValueTask RevalidateAsync(RuntimeTestEffectAdmission admission, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask CompleteAsync(RuntimeTestEffectCompletion completion, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 }

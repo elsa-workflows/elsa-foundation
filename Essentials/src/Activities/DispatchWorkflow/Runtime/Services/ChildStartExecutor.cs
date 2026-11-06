@@ -90,6 +90,16 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             throw new InvalidOperationException($"DispatchWorkflow child-start intent '{intent.IntentId}' does not match its deterministic dispatch identity.");
         }
 
+        if (payload.RunKind == WorkflowRunKind.TestRun || payload.TestScope is not null)
+        {
+            var parent = _workflowExecutionStateStore is null ? null :
+                await _workflowExecutionStateStore.FindAsync(payload.ParentWorkflowExecutionId, cancellationToken);
+            if (parent?.TestEntry is not null || payload.TestScope is not null && parent is null)
+                throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Permanent,
+                    "test-child-context-unavailable",
+                    "A selected test entry requires a qualified child-specific context, policy and routing boundary before starting a called workflow.");
+        }
+
         var admittedBeforeDispatch = false;
         WorkflowDispatchRecord? durableDispatch = null;
         if (_workflowDispatchStore is not null)

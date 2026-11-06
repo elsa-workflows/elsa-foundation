@@ -24,6 +24,9 @@ public sealed class EfSchedulerWorkQueueStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection,
     IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
 {
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
+
     private const string CursorPurpose = "ef-runtime-scheduler-work-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
@@ -53,7 +56,8 @@ public sealed class EfSchedulerWorkQueueStore(
         await using var transaction = context.Database.CurrentTransaction is null
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
-        if (await IsDeletedExecutionAsync(scope, workItem.WorkflowExecutionId, cancellationToken))
+        var execution = await ReadExecutionBoundaryAsync(scope, workItem.WorkflowExecutionId, cancellationToken);
+        if (execution.IsDeleted)
         {
             if (transaction is not null)
                 await transaction.CommitAsync(cancellationToken);
@@ -71,7 +75,7 @@ public sealed class EfSchedulerWorkQueueStore(
             return existingItem;
         }
 
-        var entity = ToEntity(workItem, scope, id, 1);
+        var entity = ToEntity(workItem, scope, id, 1, execution.RequiresTestFormat);
         context.SchedulerWorkItems.Add(entity);
         try
         {
@@ -105,7 +109,7 @@ public sealed class EfSchedulerWorkQueueStore(
         }
     }
 
-    private async ValueTask<bool> IsDeletedExecutionAsync(
+    private async ValueTask<(bool IsDeleted, bool RequiresTestFormat)> ReadExecutionBoundaryAsync(
         string scope,
         string workflowExecutionId,
         CancellationToken cancellationToken)
@@ -119,11 +123,11 @@ public sealed class EfSchedulerWorkQueueStore(
         {
             // Standalone queue stores historically accept work before an execution root exists. The ownership query
             // still matters here: a previously deleted execution can have a sticky tombstone after its root is gone.
-            return await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+            return (await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
                 context,
                 scope,
                 workflowExecutionId,
-                cancellationToken);
+                cancellationToken), false);
         }
 
         // Keep tenant validation and the sticky deletion-tombstone read in one query. DeleteCoreAsync takes the same
@@ -147,10 +151,10 @@ public sealed class EfSchedulerWorkQueueStore(
             .SingleAsync(cancellationToken);
         var state = EfWorkflowExecutionStateStore.ReadChecked(execution.Root, scope, workflowExecutionId);
         accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
-        return EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(
+        return (EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(
             execution.Ownership,
             scope,
-            workflowExecutionId);
+            workflowExecutionId), RuntimeTestEntryWriteVersion.Requires(state));
     }
 
     public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
@@ -651,7 +655,7 @@ public sealed class EfSchedulerWorkQueueStore(
         return await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
     }
 
-    private SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision) => new()
+    private SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision, bool testExecution) => new()
     {
         Id = id,
         ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
@@ -667,7 +671,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
         RecordedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(item.RecordedAt),
         ContentJson = RuntimeArtifactJson.Serialize(item),
-        SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, item),
+        SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, item, testExecution: testExecution),
         Revision = revision
     };
 

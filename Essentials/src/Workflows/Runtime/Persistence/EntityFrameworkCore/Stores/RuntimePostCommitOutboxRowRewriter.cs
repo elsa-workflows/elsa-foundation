@@ -13,14 +13,14 @@ internal sealed class RuntimePostCommitOutboxRowRewriter(RuntimeDbContext contex
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Entity != typeof(RuntimePostCommitOutboxEntity) || request.Key.Count != 1 || request.Key[0] is not string id ||
-            request.TargetVersion != RuntimePostCommitOutboxEfModule.SchemaVersion)
+            !RuntimePostCommitOutboxEfModule.Chain.IsReadable(request.TargetVersion))
             throw new ArgumentException("The outbox rewriter requires one exact outbox key and its current target.", nameof(request));
         var row = await context.RuntimePostCommitOutbox.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (row is null) return EfSchemaRewriteOutcome.Missing;
         var scope = EfRelationalIdentity.Decode(row.ScopeKey);
         var item = EfRuntimePostCommitOutboxStore.ReadChecked(row, scope);
         if (row.SchemaVersion == request.TargetVersion) return EfSchemaRewriteOutcome.AlreadyCurrent;
-        var version = RuntimePostCommitOutboxWriteVersion.For(context, item);
+        var version = RuntimePostCommitOutboxWriteVersion.For(context, item, row.SchemaVersion);
         if (version != request.TargetVersion)
             throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version, request.TargetVersion);
         EfRuntimePostCommitOutboxStore.Copy(row, item, scope, checked(row.Revision + 1), version);

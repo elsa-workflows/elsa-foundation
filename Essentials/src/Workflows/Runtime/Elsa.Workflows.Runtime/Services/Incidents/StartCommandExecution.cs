@@ -65,7 +65,8 @@ internal static class StartCommandExecution
             Partition = payload.Partition,
             Authority = payload.Authority,
             DispatchNestingDepth = payload.DispatchNestingDepth,
-            TestScope = payload.TestScope
+            TestScope = payload.TestScope,
+            TestEntry = payload.TestEntry
         };
     }
 

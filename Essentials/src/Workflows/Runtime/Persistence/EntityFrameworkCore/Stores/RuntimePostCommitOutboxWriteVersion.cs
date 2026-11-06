@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Emit the gate's observed format; new protocol data never fits a predecessor family.</summary>
 internal static class RuntimePostCommitOutboxWriteVersion
 {
-    public static string For(RuntimeDbContext context, RuntimePostCommitOutboxItem item)
+    public static string For(RuntimeDbContext context, RuntimePostCommitOutboxItem item, string? storedVersion = null, bool testExecution = false)
     {
         var gate = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
@@ -21,8 +21,12 @@ internal static class RuntimePostCommitOutboxWriteVersion
             throw new EfSchemaFamilyWritesRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily,
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
         // Direct ungated provider construction is used by tools/tests; normal hosts always select their admitted gate.
-        var version = state?.WriteVersion ?? RuntimePostCommitOutboxEfModule.SchemaVersion;
-        if ((item.StimulusDeliveryProtocolVersion is not null || item.StimulusDeliverySourceScope is not null) && version != RuntimePostCommitOutboxEfModule.SchemaVersion)
+        var minimum = testExecution || RuntimeTestEntryWriteVersion.Requires(item) ? RuntimePostCommitOutboxEfModule.TestEntrySchemaVersion : "1.0.0";
+        minimum = RuntimeTestEntryWriteVersion.Preserve(minimum, storedVersion);
+        var version = state?.WriteVersion ?? RuntimeTestEntryWriteVersion.Preserve(RuntimePostCommitOutboxEfModule.SchemaVersion, minimum);
+        if (Version.Parse(version) < Version.Parse(minimum))
+            throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version, minimum);
+        if ((item.StimulusDeliveryProtocolVersion is not null || item.StimulusDeliverySourceScope is not null) && Version.Parse(version) < Version.Parse(RuntimePostCommitOutboxEfModule.SchemaVersion))
             throw new EfSchemaWriteRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily, version,
                 RuntimePostCommitOutboxEfModule.SchemaVersion);
         return version;

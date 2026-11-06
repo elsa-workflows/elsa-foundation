@@ -9,6 +9,8 @@ public static class RuntimeWorkflowExecutionEfModule
     public const string SchemaVersion = "1.0.0";
     /// <summary>Protects native workers whose terminal delivery is owned by a model invocation.</summary>
     public const string ModelWorkSchemaVersion = "2.0.0";
+    /// <summary>Predecessor readers must refuse selected test entry and its owned context.</summary>
+    public const string TestEntrySchemaVersion = "3.0.0";
     public const string SchemaFamily = "RuntimeWorkflowExecution";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

@@ -52,11 +52,11 @@ public sealed class StimulusDeliverySchemaGateTests
         await using var context = fixture.Open();
         await new EfRuntimeCheckpointCommitStore(context, new Accessor()).CommitAsync(Commit(Pending("new-protocol", true)), new(RuntimeCheckpointPersistenceMode.Immediate));
         var row = await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
-        Assert.Equal("2.0.0", row.SchemaVersion);
+        Assert.Equal(RuntimePostCommitOutboxEfModule.Chain.CurrentVersion, row.SchemaVersion);
         var source = (await new EfRuntimePostCommitOutboxStore(context, new Accessor()).FindAsync("new-protocol:send"))!;
         Assert.Equal(1, source.StimulusDeliveryProtocolVersion); Assert.Equal(Scope, source.StimulusDeliverySourceScope);
         Assert.Null(source.RecipientSnapshot); // protected before first selection, not merely after install.
-        Assert.Equal("2.0.0", fixture.Gate.StateOf(Family)!.WriteVersion);
+        Assert.Equal(RuntimePostCommitOutboxEfModule.Chain.CurrentVersion, fixture.Gate.StateOf(Family)!.WriteVersion);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class StimulusDeliverySchemaGateTests
         var saved = (await store.FindDurableAsync(scoped.OutboxItemId))!;
         Assert.Equal(Scope, saved.StimulusDeliverySourceScope);
         Assert.Null(saved.StimulusDeliveryProtocolVersion); Assert.Null(saved.RecipientSnapshot);
-        Assert.Equal("2.0.0", (await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimePostCommitOutboxEfModule.Chain.CurrentVersion, (await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).SchemaVersion);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class StimulusDeliverySchemaGateTests
         });
         await using var verify = fixture.Open();
         var row = await verify.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
-        Assert.Equal(physical, row.Id); Assert.Equal("2.0.0", row.SchemaVersion); Assert.Equal(2, row.Revision);
+        Assert.Equal(physical, row.Id); Assert.Equal(RuntimePostCommitOutboxEfModule.Chain.CurrentVersion, row.SchemaVersion); Assert.Equal(2, row.Revision);
         var item = (await new EfRuntimePostCommitOutboxStore(verify, new Accessor()).FindAsync("legacy:send"))!;
         Assert.Null(item.StimulusDeliveryProtocolVersion); Assert.Null(item.StimulusDeliverySourceScope); Assert.Null(item.RecipientSnapshot);
     }
@@ -139,8 +139,8 @@ public sealed class StimulusDeliverySchemaGateTests
         await using (var verify = fixture.Open()) Assert.Empty(await verify.SchedulerWorkItems.ToArrayAsync());
         await fixture.Finalize();
         await store.EnqueueAsync(Input("model", WorkflowExecutionCommandKind.ExecuteModel));
-        Assert.Equal(RuntimeSchedulerWorkEfModule.SchemaVersion, (await context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal("1.0.0", fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);
+        Assert.Equal(RuntimeSchedulerWorkEfModule.Chain.CurrentVersion, (await context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);
     }
 
     private sealed class NoTokens : IRuntimeRecoveryContinuationCodec
@@ -188,7 +188,7 @@ public sealed class StimulusDeliverySchemaGateTests
             [], new Dictionary<string, string>()) { ExpectedBookmarkResume = expected, RetainSchedulerWork = true };
         await new EfRuntimeCheckpointCommitStore(context, new Accessor()).CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Immediate));
         var written = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
-        Assert.Equal(finalize ? "2.0.0" : "1.0.0", written.SchemaVersion);
+        Assert.Equal(finalize ? RuntimeWorkflowExecutionEfModule.Chain.CurrentVersion : "1.0.0", written.SchemaVersion);
         Assert.Equal(content, written.ContentJson); Assert.Equal(checked(originalRevision + 1), written.Revision);
         Assert.Null(await bookmark.FindAsync("target", "wait"));
         Assert.Equal(ActivityExecutionStatus.Running, (await new EfActivityExecutionStateStore(context, new Accessor(), new NoTokens()).FindAsync("target", "activity"))!.Status);
@@ -250,8 +250,9 @@ public sealed class StimulusDeliverySchemaGateTests
             var fixture = new Fixture(family); await fixture.connection.OpenAsync();
             await using var context = fixture.Open(); await context.Database.EnsureCreatedAsync();
             var store = new EfSchemaFinalizationStore(context);
-            var record = await store.GetOrCreateAsync(family, "1.0.0", ["1.0.0", "2.0.0"], SchemaFinalizationActor.OfOperator("test"));
-            await store.PlaceHoldAsync(family, record.Revision, null, "controlled v1 rollout", "test", ["1.0.0", "2.0.0"]);
+            var chain = fixture.Gate.Families.Chains.Single(x => x.Family == family).ReadableVersions;
+            var record = await store.GetOrCreateAsync(family, chain[0], chain, SchemaFinalizationActor.OfOperator("test"));
+            await store.PlaceHoldAsync(family, record.Revision, null, "controlled v1 rollout", "test", chain);
             await fixture.Gate.ActivateAsync(context); fixture.gates.Register(typeof(RuntimeDbContext), fixture.Gate);
             return fixture;
         }
@@ -266,7 +267,11 @@ public sealed class StimulusDeliverySchemaGateTests
             await using var context = Open(); var store = new EfSchemaFinalizationStore(context);
             var record = (await store.FindAsync(family))!;
             await store.ReleaseHoldAsync(family, record.Revision, null, "test");
-            await Gate.EvaluateAsync(context); await Gate.RefreshAsync(context);
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                await Gate.EvaluateAsync(context); await Gate.RefreshAsync(context);
+                if (Gate.StateOf(family)!.WriteVersion == Gate.Families.Chains.Single(chain => chain.Family == family).CurrentVersion) break;
+            }
             Assert.Equal(Gate.Families.Chains.Single(chain => chain.Family == family).CurrentVersion, Gate.StateOf(family)!.WriteVersion);
         }
         public async ValueTask DisposeAsync() { await services.DisposeAsync(); await connection.DisposeAsync(); }

@@ -14,6 +14,15 @@ public sealed class RuntimeInputBindingResolutionContext
         IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
         IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null,
         string? correlationId = null)
+        : this(workflowExecutionId, activityExecutionId, consumerInvocation, runtimeView, executable,
+            workflowInputEnvelopes, variableEnvelopes, visibleVariablesByName, correlationId, null) { }
+
+    public RuntimeInputBindingResolutionContext(string workflowExecutionId, string activityExecutionId,
+        ActivityExecutionState? consumerInvocation, IReadOnlyCollection<ActivityExecutionState>? runtimeView,
+        WorkflowExecutable? executable, IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes,
+        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes,
+        IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName, string? correlationId,
+        RuntimeTestContextState? testContext)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -27,6 +36,7 @@ public sealed class RuntimeInputBindingResolutionContext
         VariableEnvelopes = SnapshotEnvelopes(variableEnvelopes);
         VisibleVariablesByName = SnapshotEnvelopes(visibleVariablesByName);
         CorrelationId = correlationId;
+        TestContext = testContext;
     }
 
     public string WorkflowExecutionId { get; }
@@ -51,6 +61,9 @@ public sealed class RuntimeInputBindingResolutionContext
     /// <c>WorkflowInstance</c> expression parameter binding. Null when the instance has none.
     /// </summary>
     public string? CorrelationId { get; }
+
+    /// <summary>Trusted persisted test-owned context; absent during ordinary execution.</summary>
+    public RuntimeTestContextState? TestContext { get; }
 
     private static IReadOnlyDictionary<string, ValueEnvelope> SnapshotEnvelopes(
         IReadOnlyDictionary<string, ValueEnvelope>? values) =>

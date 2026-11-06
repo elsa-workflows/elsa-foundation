@@ -179,7 +179,22 @@ public static class RuntimeCheckpointCommitValidator
     private static IEnumerable<(string Location, ValueEnvelope Value)> WorkflowExecutionEnvelopes(RuntimeStateChange<WorkflowExecutionState>? change) =>
         change is null
             ? []
-            : FrameEnvelopes($"Workflow execution '{change.StateId}' root variable", change.State.RootVariableFrame);
+            : FrameEnvelopes($"Workflow execution '{change.StateId}' root variable", change.State.RootVariableFrame)
+                .Concat(TestContextEnvelopes(change.StateId, change.State.TestContext));
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> TestContextEnvelopes(string stateId, RuntimeTestContextState? context)
+    {
+        var subject = $"Workflow execution '{stateId}' test context";
+        foreach (var owner in context?.Frames ?? [])
+        {
+            foreach (var item in FrameEnvelopes($"{subject} frame '{owner.Frame.FrameId}' variable", owner.Frame))
+                yield return item;
+            foreach (var input in owner.Inputs)
+                yield return ($"{subject} frame '{owner.Frame.FrameId}' input '{input.Key}'", input.Value);
+        }
+        foreach (var result in context?.Results ?? [])
+            yield return ($"{subject} prior result '{result.ProducerNodeId}' in scope '{result.ProducerScopeId}'", result.Result);
+    }
 
     private static IEnumerable<(string Location, ValueEnvelope Value)> ActivityExecutionEnvelopes(string stateId, ActivityExecutionState state)
     {

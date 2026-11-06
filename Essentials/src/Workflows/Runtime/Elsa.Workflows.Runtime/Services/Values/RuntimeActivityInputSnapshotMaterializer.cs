@@ -42,6 +42,14 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
                 materializedAt,
                 cancellationToken);
 
+        // The built-in literal/withheld-reference copy above performs no expression, secret lookup or
+        // constructor work. Preserve that execution-independent path; activation still qualifies its node.
+        var testHeaders = workflowExecutionStateStore ?? serviceProvider.GetService<IWorkflowExecutionStateStore>();
+        var testHeader = testHeaders is null ? null : await testHeaders.FindAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        if (testHeader?.TestEntry is not null || testHeader?.TestContext is not null)
+            await serviceProvider.GetRequiredService<IRuntimeTestEffectGate>().ValidateNodeAsync(
+                new(state.Execution.WorkflowExecutionId, state.InvocationId, executable.Identity, executableNode), cancellationToken);
+
         var resolvedDurableValueStateStore = durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
         var durableValues = await resolvedDurableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
@@ -59,7 +67,9 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         // Below a closed activity execution scope the request inputs are the boundary's own.
         var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
-            : projections.WorkflowInputEnvelopes;
+            : visibleFrames.TestClosedScopeBoundary?.Inputs ?? projections.WorkflowInputEnvelopes;
+        var workflowState = await resolvedWorkflowExecutionStateStore.FindAsync(state.Execution.WorkflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException("The invocation's workflow state is unavailable.");
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
@@ -71,7 +81,8 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             // Issue #984: expose the lexically visible variables to JavaScript value expressions
             // (variables.X / getVariable('X') / get<Name>()) through the isolated engine's ambient read surface.
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames, visibleFrames.RootVariableNames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId,
+            testContext: RuntimeTestContextOwner.RequireContext(workflowState));
 
         return await inputMaterializer.MaterializeSnapshotAsync(
             executableNode,

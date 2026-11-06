@@ -139,7 +139,7 @@ public sealed class EfDurableValueStateStore(
     internal static void Copy(DurableValueStateEntity row, DurableValueState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, row.Id, revision);
-        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.DurableValueId = replacement.DurableValueId; row.DurableValueIdHash = replacement.DurableValueIdHash; row.DurableValueIdOrderKey = replacement.DurableValueIdOrderKey; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.DurableValueId = replacement.DurableValueId; row.DurableValueIdHash = replacement.DurableValueIdHash; row.DurableValueIdOrderKey = replacement.DurableValueIdOrderKey; row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion); row.Revision = revision;
     }
 
     internal static DurableValueState Read(DurableValueStateEntity row, string scope, string? expectedWorkflow = null, string? expectedValue = null)

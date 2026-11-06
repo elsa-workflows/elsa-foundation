@@ -120,6 +120,148 @@ public sealed class SourceRevisionTests
     }
 
     [Fact]
+    public async Task Domain_transaction_captures_distinct_sources_and_pins_as_one_immutable_set()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        string captured;
+        await using (var db = await Open(file))
+        {
+            var store = new EfSourceRevisions(db, Workflow);
+            await store.CreateAsync("case-a", "saved", "A", "case/1", "first-a");
+            await store.CreateAsync("case-b", "saved", "B", "case/1", "first-b");
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var first = await store.StageCaptureAsync("case-a", "saved", 0, "run-1");
+            var second = await store.StageCaptureAsync("case-b", "saved", 0, "run-1");
+            Assert.Same(first, await store.StageCaptureAsync("case-a", "saved", 0, "run-1"));
+            Assert.Equal("first-b", second.Content);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            captured = first.Key;
+        }
+        await using (var db = await Open(file))
+        {
+            var store = new EfSourceRevisions(db, Workflow);
+            await store.SaveAsync("case-a", "saved", 0, "A", "case/1", "later-a");
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var retry = await store.StageCaptureAsync("case-a", "saved", 0, "run-1");
+            Assert.Equal(captured, retry.Key);
+            Assert.Equal("first-a", retry.Content);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            Assert.Equal(2, await db.Set<SourceSnapshot>().CountAsync());
+            Assert.Equal(2, await db.Set<SourceSnapshotPin>().CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task A_late_member_conflict_rolls_back_earlier_saved_capture_and_pin_sql()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using (var db = await Open(file))
+        {
+            var store = new EfSourceRevisions(db, Workflow);
+            await store.CreateAsync("a", "saved", "A", "case/1", "a");
+            await store.CreateAsync("b", "saved", "B", "case/1", "b");
+            await store.SaveAsync("b", "saved", 0, "B", "case/1", "new-b");
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await store.StageCaptureAsync("a", "saved", 0, "run-conflict");
+            await db.SaveChangesAsync(); // Actual SQL happened; rollback must remove every partial pin/capture.
+            var error = await Assert.ThrowsAsync<SourceRevisionException>(() => store.StageCaptureAsync("b", "saved", 0, "run-conflict"));
+            Assert.Equal("revision-conflict", error.Code);
+            await transaction.RollbackAsync();
+        }
+        await using (var db = await Open(file))
+        {
+            Assert.Empty(await db.Set<SourceSnapshot>().ToListAsync());
+            Assert.Empty(await db.Set<SourceSnapshotPin>().ToListAsync());
+            Assert.All(await db.Set<SourceWorkingCopy>().ToListAsync(), copy => Assert.Equal(0, copy.Fence));
+            Assert.Equal("new-b", (await new EfSourceRevisions(db, Workflow).FindAsync("b", "saved"))!.Content);
+        }
+    }
+
+    [Fact]
+    public async Task Staged_capture_requires_an_owner_transaction_and_never_detaches_pending_source_edits()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Workflow);
+        await store.CreateAsync("a", "saved", "A", "case/1", "saved");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.StageCaptureAsync("a", "saved", 0, "missing-owner"));
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var row = await db.Set<SourceWorkingCopy>().SingleAsync();
+        row.Content = "pending-edit";
+        var error = await Assert.ThrowsAsync<SourceRevisionException>(() => store.StageCaptureAsync("a", "saved", 0, "refused"));
+        Assert.Equal("pending-source-changes", error.Code);
+        Assert.Equal(EntityState.Modified, db.Entry(row).State);
+        Assert.Equal("pending-edit", row.Content);
+        Assert.Empty(await db.Set<SourceSnapshot>().ToListAsync());
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task Cached_staged_capture_revalidates_authority_without_losing_its_capture_fence()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Workflow);
+        await store.CreateAsync("a", "saved", "A", "case/1", "private-a");
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var captured = await store.StageCaptureAsync("a", "saved", 0, "run");
+        var other = new EfSourceRevisions(db, Workflow with { Authority = "different-owner" });
+        var error = await Assert.ThrowsAsync<SourceRevisionException>(() => other.StageCaptureAsync("a", "saved", 0, "run"));
+        Assert.Equal("identity-conflict", error.Code);
+        Assert.Same(captured, await store.StageCaptureAsync("a", "saved", 0, "run"));
+        var row = Assert.Single(db.ChangeTracker.Entries<SourceWorkingCopy>());
+        Assert.Equal(0L, row.Property(x => x.Fence).OriginalValue);
+        Assert.Equal(1L, row.Entity.Fence);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        Assert.Single(await db.Set<SourceSnapshot>().ToListAsync());
+        Assert.Single(await db.Set<SourceSnapshotPin>().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Exact_staged_replay_keeps_original_content_and_later_edit_buffer()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using var db = await Open(file);
+        var store = new EfSourceRevisions(db, Workflow);
+        await store.CreateAsync("a", "saved", "A", "case/1", "original");
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var captured = await store.StageCaptureAsync("a", "saved", 0, "run");
+        var row = Assert.Single(db.ChangeTracker.Entries<SourceWorkingCopy>()).Entity;
+        EfSourceRevisions.StageSave(db, row, Workflow, "a", "saved", 0, "A", "case/1", "later-edit");
+        Assert.Same(captured, await store.StageCaptureAsync("a", "saved", 0, "run"));
+        Assert.Equal("original", captured.Content);
+        Assert.Equal("later-edit", row.Content);
+        Assert.Equal(EntityState.Modified, db.Entry(row).State);
+        Assert.Equal(0L, db.Entry(row).Property(x => x.Fence).OriginalValue);
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task Staged_capture_explicitly_persists_its_fence_when_automatic_detection_is_disabled()
+    {
+        await using var file = new TemporarySqliteDatabase();
+        await using (var db = await Open(file))
+        {
+            var store = new EfSourceRevisions(db, Workflow);
+            await store.CreateAsync("a", "saved", "A", "case/1", "original");
+            db.ChangeTracker.AutoDetectChangesEnabled = false;
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await store.StageCaptureAsync("a", "saved", 0, "run");
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        await using (var db = await Open(file))
+        {
+            Assert.Equal(1L, (await db.Set<SourceWorkingCopy>().SingleAsync()).Fence);
+            Assert.Single(await db.Set<SourceSnapshot>().ToListAsync());
+            Assert.Single(await db.Set<SourceSnapshotPin>().ToListAsync());
+        }
+    }
+
+    [Fact]
     public async Task Pins_and_discard_retain_immutable_history_until_references_are_released()
     {
         await using var file = new TemporarySqliteDatabase();

@@ -285,6 +285,10 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// <summary>Authoritative finite test-run scope. Null for non-test and legacy starts.</summary>
     public WorkflowTestScope? TestScope { get; }
 
+    /// <summary>Trusted selected-node test entry; ordinary endpoint DTOs never populate this field.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
@@ -706,6 +710,10 @@ public sealed class WorkflowExecutionStartCommandPayload
 
     /// <summary>Authoritative finite test-run scope. Null for non-test and legacy commands.</summary>
     public WorkflowTestScope? TestScope { get; }
+
+    /// <summary>Trusted selected-node test entry; ordinary endpoint DTOs never populate this field.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(

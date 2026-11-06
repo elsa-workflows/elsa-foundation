@@ -14,6 +14,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// Executes graph-visible engine value operations without activating CLR activities or creating activity DI scopes.
 /// </summary>
 public sealed class WorkflowIntrinsicExecutor(
+    IRuntimeTestEffectGate? testEffects,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IRuntimeInputBindingResolver inputBindingResolver,
@@ -25,6 +26,15 @@ public sealed class WorkflowIntrinsicExecutor(
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
     IWorkflowExecutableInputValidator? inputValidator = null)
 {
+    public WorkflowIntrinsicExecutor(IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IActivityExecutionStateStore activityExecutionStateStore, IRuntimeInputBindingResolver inputBindingResolver,
+        IDurableValueStateStore durableValueStateStore, IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+        TimeProvider timeProvider, IExternalPayloadStore? externalPayloadStore = null,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null, IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+        IWorkflowExecutableInputValidator? inputValidator = null)
+        : this(null, workflowExecutionStateStore, activityExecutionStateStore, inputBindingResolver, durableValueStateStore,
+            inspectionAccumulator, timeProvider, externalPayloadStore, portableExpressionEvaluator, valueConversionExecutor, inputValidator) { }
+
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
@@ -43,6 +53,15 @@ public sealed class WorkflowIntrinsicExecutor(
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(intrinsicState);
         cancellationToken.ThrowIfCancellationRequested();
+
+        var testHeader = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        if (testHeader?.TestEntry is not null || testHeader?.TestContext is not null)
+        {
+            if (testEffects is null)
+                throw new RuntimeTestEffectUnavailableException("runtime.test-effects.gate-missing", "Test intrinsic work requires its admitted effect policy.");
+            await testEffects.ValidateNodeAsync(new(startWorkItem.WorkflowExecutionId, intrinsicState.InvocationId,
+                executable.Identity, node), cancellationToken);
+        }
 
         if (node.IntrinsicKind is null)
             throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' is not an engine intrinsic.");
@@ -129,6 +148,12 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState? changedActivityOwner = null;
         if (frameOwner.WorkflowOwned)
             changedWorkflow = workflowState with { RootVariableFrame = changedFrame };
+        else if (frameOwner.TestFrameId is { } testFrameId)
+            changedWorkflow = workflowState with
+            {
+                TestContext = RuntimeTestContextOwner.RequireContext(workflowState)!.Set(
+                    testFrameId, target.VariableKey, value, frameOwner.Frame.Revision)
+            };
         else
             changedActivityOwner = frameOwner.ActivityOwner! with { VariableFrame = changedFrame };
 
@@ -599,16 +624,16 @@ public sealed class WorkflowIntrinsicExecutor(
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var (visibleFrames, boundary) = BuildVisibleFrames(workflowState, intrinsicState, runtimeView, durableValues);
+        var (visibleFrames, boundary, testBoundary) = BuildVisibleFrames(workflowState, intrinsicState, runtimeView, durableValues);
         var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
-        if (boundary is not null)
+        if (boundary is not null || testBoundary is not null)
             RuntimeClosedScope.AliasWorkflowScope(visibleFrames[0], frameEnvelopes);
         // Below a closed activity execution scope the request inputs and root variables are the boundary's.
         var workflowInputEnvelopes = boundary is null
-            ? projections.WorkflowInputEnvelopes
+            ? testBoundary?.Inputs ?? projections.WorkflowInputEnvelopes
             : RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable);
         var rootVariableNames = boundary is null
-            ? null
+            ? testBoundary?.VariableNames
             : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId);
 
         var context = new RuntimeInputBindingResolutionContext(
@@ -620,7 +645,8 @@ public sealed class WorkflowIntrinsicExecutor(
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId,
+            testContext: RuntimeTestContextOwner.RequireContext(workflowState));
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -831,6 +857,22 @@ public sealed class WorkflowIntrinsicExecutor(
         if (readOnlyIteration is not null)
             throw new InvalidOperationException($"Iteration variable scope '{declaringScopeId}' is read-only and cannot be targeted by a Set, merge, or reduce intrinsic.");
 
+        if (!insideClosedScope && workflowState.RootVariableFrame is { } testRoot &&
+            RuntimeTestContextOwner.RequireContext(workflowState) is { } testContext)
+        {
+            var visible = RuntimeTestContextOwner.EnclosingFrames(workflowState, testRoot, out _);
+            var supplied = visible.LastOrDefault(x => x.ScopeId == declaringScopeId && x.FrameId != testRoot.FrameId);
+            if (supplied is not null)
+            {
+                var owner = testContext.Frames.Single(x => x.Frame.FrameId == supplied.FrameId);
+                if (!owner.Writable || supplied.Kind == VariableFrameKind.Iteration)
+                    throw new InvalidOperationException("The supplied iteration/context frame is read-only.");
+                return new(supplied, false, null, supplied.FrameId);
+            }
+            if (visible[0].FrameId != testRoot.FrameId)
+                throw new InvalidOperationException("The workflow root is outside the selected closed test boundary.");
+        }
+
         if (!insideClosedScope &&
             workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
             StringComparer.Ordinal.Equals(root.ScopeId, declaringScopeId))
@@ -840,7 +882,7 @@ public sealed class WorkflowIntrinsicExecutor(
             $"Variable scope '{declaringScopeId}' is not visible to intrinsic execution '{intrinsicState.InvocationId}'.");
     }
 
-    private static (List<VariableFrameState> Frames, ActivityExecutionState? ClosedScopeBoundary) BuildVisibleFrames(
+    private static (List<VariableFrameState> Frames, ActivityExecutionState? ClosedScopeBoundary, RuntimeTestContextFrame? TestBoundary) BuildVisibleFrames(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
@@ -861,10 +903,11 @@ public sealed class WorkflowIntrinsicExecutor(
         var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
         var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
         var ordered = new List<VariableFrameState>();
+        RuntimeTestContextFrame? testBoundary = null;
         if (boundary is not null)
             ordered.Add(RuntimeClosedScope.CreateFrame(boundary, durableValues));
         else if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
-            ordered.Add(root);
+            ordered.AddRange(RuntimeTestContextOwner.EnclosingFrames(workflowState, root, out testBoundary));
 
         foreach (var ancestor in chain.Skip(boundaryIndex + 1))
         {
@@ -877,7 +920,7 @@ public sealed class WorkflowIntrinsicExecutor(
         if (intrinsicState.IterationVariableFrame is { Status: VariableFrameStatus.Active } currentIteration)
             ordered.Add(currentIteration);
 
-        return (ordered, boundary);
+        return (ordered, boundary, testBoundary);
     }
 
     private static Dictionary<RuntimeVariableValueAddress, ValueEnvelope> ToAddressEnvelopes(
@@ -945,5 +988,6 @@ public sealed class WorkflowIntrinsicExecutor(
     private sealed record FrameOwner(
         VariableFrameState Frame,
         bool WorkflowOwned,
-        ActivityExecutionState? ActivityOwner);
+        ActivityExecutionState? ActivityOwner,
+        string? TestFrameId = null);
 }

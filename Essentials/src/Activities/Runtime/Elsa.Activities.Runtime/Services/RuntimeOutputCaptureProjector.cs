@@ -44,7 +44,14 @@ public sealed class RuntimeOutputCaptureProjector
         ActivityCompletionProjection completion,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default,
-        ActivityExecutionState? closedScopeBoundary = null)
+        ActivityExecutionState? closedScopeBoundary = null) =>
+        await ProjectAsync(workflowExecutionId, activityExecutionId, node, transition, completion, capturedAt,
+            cancellationToken, closedScopeBoundary, null);
+
+    public async ValueTask<RuntimeOutputCaptureProjection> ProjectAsync(string workflowExecutionId, string activityExecutionId,
+        ExecutableNode node, IActivityCompletionTransition transition, ActivityCompletionProjection completion,
+        DateTimeOffset capturedAt, CancellationToken cancellationToken, ActivityExecutionState? closedScopeBoundary,
+        IReadOnlyDictionary<string, RuntimeTestCaptureTarget>? testCaptureTargets)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -57,6 +64,7 @@ public sealed class RuntimeOutputCaptureProjector
         var contract = node.ActivityContract
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has output captures but no pinned activity contract.");
         var changes = new List<RuntimeStateChange<DurableValueState>>();
+        var testWrites = new List<RuntimeTestFrameWrite>();
         var workflowVariableWrites = new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal);
         foreach (var capture in node.OutputCaptures.Values
                      .Where(item => item.CaptureOnSuccessfulCompletion)
@@ -70,6 +78,12 @@ public sealed class RuntimeOutputCaptureProjector
                 continue;
             if (capture.Metadata.TryGetValue(RuntimeMetadataKeys.CaptureTargetScopeId, out var targetScopeId))
             {
+                if (closedScopeBoundary is null && testCaptureTargets?.GetValueOrDefault(targetScopeId) is { } testTarget)
+                {
+                    testWrites.Add(await ProjectTestVariableAsync(capture, projectionContract, projected,
+                        transition, testTarget, cancellationToken));
+                    continue;
+                }
                 changes.Add(await ProjectGraphVariableAsync(
                     workflowExecutionId, activityExecutionId, capture, projectionContract, projected, transition, targetScopeId,
                     closedScopeBoundary, capturedAt, cancellationToken));
@@ -141,7 +155,29 @@ public sealed class RuntimeOutputCaptureProjector
                 state.Metadata));
         }
 
-        return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites);
+        return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites) { TestFrameWrites = testWrites };
+    }
+
+    private async ValueTask<RuntimeTestFrameWrite> ProjectTestVariableAsync(RuntimeOutputCapture capture,
+        ActivityResultProjectionContract projection, ValueEnvelope projected, IActivityCompletionTransition transition,
+        RuntimeTestCaptureTarget target, CancellationToken cancellationToken)
+    {
+        if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
+            throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
+        ValidateDurableCaptureBoundary(capture, projected);
+        var converted = capture.ConversionPlan is null ? projected : _valueConversionExecutor.Convert(projected, capture.ConversionPlan);
+        var value = capture.ConversionPlan is null && projection.Path == "$" ? transition.Result : ToEncodedValue(converted);
+        var encoding = await _storageDrivers.GetRequired(capture.StorageDriverKey).EncodeAsync(value, capture.Type, cancellationToken);
+        if (capture.Storage != DurableValueStorage.Custom && capture.Storage != encoding.Storage)
+            throw new InvalidOperationException("The test variable capture storage differs from its declared policy.");
+        var policy = new ValueProtectionPolicy(capture.Lifecycle, encoding.Storage, converted.Policy.IsSensitive,
+            converted.Policy.RequiresEncryption, converted.Policy.RedactionMode, converted.Policy.RetentionPolicy, converted.Policy.Metadata);
+        var envelope = encoding.ExternalReference is { } external
+            ? ValueEnvelope.External(converted.Type, external, policy)
+            : encoding.InlineValue is { ValueKind: not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined) } inline
+                ? ValueEnvelope.Inline(converted.Type, inline, policy)
+                : ValueEnvelope.Null(converted.Type, policy);
+        return new(target, capture.Metadata[RuntimeMetadataKeys.TargetVariableReferenceKey], envelope);
     }
 
     /// <summary>

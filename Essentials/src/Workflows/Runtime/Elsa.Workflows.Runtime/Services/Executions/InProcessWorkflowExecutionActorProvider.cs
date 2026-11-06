@@ -105,6 +105,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         WorkflowExecutionActorCapabilities.InProcessMailbox |
         WorkflowExecutionActorCapabilities.Passivation;
 
+    internal bool SupportsCurrentTestEntryExecutor(IWorkflowExecutionCommandExecutor selected, IPersistenceOperationScopeFactory scopes) =>
+        ReferenceEquals(_commandProcessor, selected) && selected is ScopedWorkflowExecutionCommandExecutor executor && executor.Uses(scopes);
+
     public async ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

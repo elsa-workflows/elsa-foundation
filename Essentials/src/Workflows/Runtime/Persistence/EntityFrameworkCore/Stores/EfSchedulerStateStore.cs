@@ -103,7 +103,7 @@ public sealed class EfSchedulerStateStore(
     internal static void Copy(SchedulerStateEntity row, SchedulerState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, row.Id, revision);
-        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion); row.Revision = revision;
     }
 
     // #2108: the version check must run before EfSchedulerStateJson.Deserialize ever sees this row's

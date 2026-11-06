@@ -51,10 +51,16 @@ public sealed class ChildStartExecutorTests
             DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(-1));
         var dispatchStore = new InMemoryWorkflowDispatchStore(state);
         await dispatchStore.SaveAsync(NewDispatchRecord(WorkflowRunKind.TestRun, scope));
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(NewChildExecutionState() with
+        {
+            WorkflowExecutionId = "parent-handler", ParentWorkflowExecutionId = null,
+            RunKind = WorkflowRunKind.TestRun, TestScope = scope
+        });
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)), executions);
 
         await executor.HandleAsync(NewOutboxItem(runKind: WorkflowRunKind.TestRun, testScope: scope).Intent);
 
@@ -65,6 +71,38 @@ public sealed class ChildStartExecutorTests
         Assert.Equal(scope.ExpiresAt, request.TestScope.ExpiresAt);
         Assert.Equal(scope.TenantId, request.TestScope.TenantId);
         Assert.Equal(scope.Partition.Value, request.TestScope.Partition.Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Selected_test_scope_only_child_is_refused_before_admission_or_external_dispatch(bool parentAvailable)
+    {
+        var scope = NewTestScope();
+        var startDispatcher = new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted);
+        var shared = new InMemoryRuntimeCheckpointStoreState();
+        await new InMemoryWorkflowTestScopeStore(shared).CreateAsync(scope, DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(-1));
+        var dispatches = new InMemoryWorkflowDispatchStore(shared);
+        await dispatches.SaveAsync(NewDispatchRecord(WorkflowRunKind.TestRun, scope));
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        if (parentAvailable)
+        {
+            var authority = new WorkflowExecutionAuthoritySnapshot("tests", "tests");
+            await executions.SaveAsync(NewChildExecutionState() with
+            {
+                WorkflowExecutionId = "parent-handler", ParentWorkflowExecutionId = null, RunKind = WorkflowRunKind.TestRun,
+                TestScope = scope, Partition = scope.Partition, Authority = authority,
+                TestEntry = new("context", "fingerprint", DispatchWorkflowRuntimeTestFixture.ChildIdentity, "selected", scope, authority)
+            });
+        }
+        var executor = new ChildStartExecutor(startDispatcher, dispatches,
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)), executions);
+        var failure = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(() =>
+            executor.HandleAsync(NewOutboxItem(runKind: WorkflowRunKind.TestRun, testScope: scope).Intent).AsTask());
+        Assert.Equal("test-child-context-unavailable", failure.Code);
+        Assert.Equal(PostCommitFailureKind.Permanent, failure.Kind);
+        Assert.Empty(startDispatcher.Requests);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatches.FindAsync(NewIdentity().DispatchId))!.Status);
     }
 
     [Fact]

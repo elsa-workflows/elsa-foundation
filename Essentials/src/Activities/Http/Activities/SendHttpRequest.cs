@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net.Http;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Contracts;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
@@ -57,11 +59,17 @@ namespace Elsa.Activities.Http.Activities;
 [ActivityOutcome(HttpActivityOutcomes.Failed)]
 [ActivityOutcome(HttpActivityOutcomes.Timeout)]
 [ActivityValueOutcomes(nameof(ExpectedStatusCodes), UnmatchedOutcome = HttpActivityOutcomes.UnmatchedStatusCode)]
-public sealed class SendHttpRequest(
-    IHttpClientFactory httpClientFactory,
-    IOptions<HttpActivityOptions> httpActivityOptions,
-    IHttpConnectionApplicator connectionApplicator) : Activity<SendHttpRequestResult>
+public sealed class SendHttpRequest : Activity<SendHttpRequestResult>
 {
+    private readonly IOptions<HttpActivityOptions> _httpActivityOptions;
+    private readonly IHttpActivityRequestExecutor _requestExecutor;
+
+    public SendHttpRequest(IOptions<HttpActivityOptions> httpActivityOptions, IHttpActivityRequestExecutor requestExecutor)
+    {
+        _httpActivityOptions = httpActivityOptions ?? throw new ArgumentNullException(nameof(httpActivityOptions));
+        _requestExecutor = requestExecutor ?? throw new ArgumentNullException(nameof(requestExecutor));
+    }
+
     /// <summary>The absolute request URL. Required.</summary>
     [ActivityInput(Key = nameof(Url), Tier = InputTier.Essential)]
     [Required]
@@ -105,36 +113,17 @@ public sealed class SendHttpRequest(
         var method = Method;
         method = string.IsNullOrWhiteSpace(method) ? "GET" : method.Trim();
 
-        var client = httpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
-        var effectiveTimeout = Timeout is { } t && t > TimeSpan.Zero ? t : httpActivityOptions.Value.DefaultTimeout;
+        var request = new HttpActivityRequest(url, method, Content, ContentType, RequestHeaders, Connection, Timeout);
+        var effectiveTimeout = Timeout is { } t && t > TimeSpan.Zero ? t : _httpActivityOptions.Value.DefaultTimeout;
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         timeoutCts.CancelAfter(effectiveTimeout);
 
         try
         {
-            using var first = await CreateRequestAsync(url, method, refreshCredentials: false, context, timeoutCts.Token);
-            var canRetry = first.Options.TryGetValue(HttpConnectionApplyOptions.HasRefreshableState, out var refreshable) && refreshable;
-            if (canRetry && first.Content is not null)
-                await first.Content.LoadIntoBufferAsync(timeoutCts.Token);
-
-            var response = await client.SendAsync(first, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
-            if ((int)response.StatusCode == 401 && canRetry)
-            {
-                response.Dispose();
-                using var retry = await CreateRequestAsync(url, method, refreshCredentials: true, context, timeoutCts.Token);
-                response = await client.SendAsync(retry, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
-            }
-
-            using (response)
-            {
-                var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
-                var status = (int)response.StatusCode;
-
-                return ActivityTransition.Complete(
-                    new SendHttpRequestResult(status, body, CollectHeaders(response)),
-                    DetermineResponseOutcome(status, response.IsSuccessStatusCode));
-            }
+            var response = await _requestExecutor.ExecuteAsync(request, context, timeoutCts.Token);
+            var status = response.StatusCode ?? throw new InvalidOperationException("The HTTP request executor returned no response status.");
+            return ActivityTransition.Complete(response, DetermineResponseOutcome(status, status is >= 200 and <= 299));
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
@@ -152,41 +141,6 @@ public sealed class SendHttpRequest(
         }
     }
 
-    private async ValueTask<HttpRequestMessage> CreateRequestAsync(
-        Uri url,
-        string method,
-        bool refreshCredentials,
-        ActivityExecutionContext context,
-        CancellationToken cancellationToken)
-    {
-        var request = new HttpRequestMessage(new HttpMethod(method), url);
-        AddHeaders(request);
-        AddContent(request);
-        if (refreshCredentials)
-            request.Options.Set(HttpConnectionApplyOptions.RefreshCredentials, true);
-        await connectionApplicator.ApplyAsync(request, Connection, context, cancellationToken);
-        return request;
-    }
-
-    private void AddHeaders(HttpRequestMessage request)
-    {
-        if (RequestHeaders is null)
-            return;
-
-        foreach (var (name, value) in RequestHeaders)
-            request.Headers.TryAddWithoutValidation(name, value);
-    }
-
-    private void AddContent(HttpRequestMessage request)
-    {
-        if (string.IsNullOrEmpty(Content))
-            return;
-
-        var contentType = ContentType;
-        contentType = string.IsNullOrWhiteSpace(contentType) ? "text/plain" : contentType.Trim();
-        request.Content = new StringContent(Content, System.Text.Encoding.UTF8, contentType);
-    }
-
     private string DetermineResponseOutcome(int status, bool isSuccess)
     {
         // With expected codes authored, branch on the matched code's own outcome port (named after the numeric
@@ -198,19 +152,6 @@ public sealed class SendHttpRequest(
                 : HttpActivityOutcomes.UnmatchedStatusCode;
 
         return isSuccess ? ActivityOutcomes.Done : HttpActivityOutcomes.Failed;
-    }
-
-    private static IDictionary<string, string[]> CollectHeaders(HttpResponseMessage response)
-    {
-        var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (name, values) in response.Headers)
-            result[name] = values.ToArray();
-
-        foreach (var (name, values) in response.Content.Headers)
-            result[name] = values.ToArray();
-
-        return result;
     }
 }
 

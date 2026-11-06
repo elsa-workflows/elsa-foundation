@@ -11,7 +11,8 @@ internal static class ModelWorkWriteVersion
 {
     public static string For(RuntimeDbContext context, WorkflowExecutionState state, string? storedVersion = null)
     {
-        var minimum = state.ModelWorkOrigin is null ? RuntimeWorkflowExecutionEfModule.SchemaVersion : RuntimeWorkflowExecutionEfModule.ModelWorkSchemaVersion;
+        var minimum = RuntimeTestEntryWriteVersion.Requires(state) ? RuntimeWorkflowExecutionEfModule.TestEntrySchemaVersion :
+            state.ModelWorkOrigin is null ? RuntimeWorkflowExecutionEfModule.SchemaVersion : RuntimeWorkflowExecutionEfModule.ModelWorkSchemaVersion;
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum)) minimum = storedVersion;
         var gate = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());

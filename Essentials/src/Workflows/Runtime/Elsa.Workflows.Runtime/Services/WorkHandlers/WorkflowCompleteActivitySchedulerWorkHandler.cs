@@ -226,7 +226,25 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         CancellationToken cancellationToken)
     {
         if (continuationSchedulingPayload.OutcomeNames.Count == 0)
+        {
+            // An explicitly admitted parentless test boundary completes even when its model emits no outcome.
+            // Ordinary zero-outcome propagation retains its existing nonterminal behavior.
+            var workflow = _workflowExecutionStateStore is null ? null :
+                await _workflowExecutionStateStore.FindAsync(continuationSchedulingWorkItem.WorkflowExecutionId, cancellationToken);
+            if (workflow is { RunKind: WorkflowRunKind.TestRun, TestEntry: { } entry } &&
+                continuationSchedulingPayload.ParentActivityExecutionId is null &&
+                entry.ExecutableNodeId == continuationSchedulingPayload.ExecutableNodeId &&
+                WorkflowTestScope.ContextEquals(entry.Scope, workflow.TestScope) &&
+                WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(entry.Executable, continuationSchedulingPayload.PinnedExecutable))
+            {
+                var target = await _activityExecutionStateStore.FindAsync(workflow.WorkflowExecutionId,
+                    continuationSchedulingPayload.ActivityExecutionId, cancellationToken);
+                if (target is { Status: ActivityExecutionStatus.Completed, ParentActivityExecutionId: null } &&
+                    target.Execution.ExecutableNodeId == entry.ExecutableNodeId)
+                    return DownstreamSchedulingResult.Terminal();
+            }
             return DownstreamSchedulingResult.NotTerminal([]);
+        }
 
         if (_workflowExecutableStore is null)
             return DownstreamSchedulingResult.Terminal();

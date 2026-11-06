@@ -27,6 +27,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly StimulusDeliveryRequestProjector _stimulusRequests;
     private readonly IWorkflowExecutableInputValidator? _inputValidator;
+    private readonly WorkflowTestEntryAdmission _testEntries;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -139,6 +140,39 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IStimulusDeliveryStore? stimulusDeliveryStore,
         IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
         IWorkflowExecutableInputValidator? inputValidator)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore,
+            stimulusIntentAdapters, inputValidator, [], null) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
+        IWorkflowExecutableInputValidator? inputValidator,
+        IEnumerable<IWorkflowTestEntryContextResolver> testEntryResolvers,
+        IWorkflowTestScopeStore? testScopeStore)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore,
+            stimulusIntentAdapters, inputValidator, testEntryResolvers, testScopeStore, null) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider, IRuntimeExecutionIdGenerator idGenerator, TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor, IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore, IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver, IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters, IWorkflowExecutableInputValidator? inputValidator,
+        IEnumerable<IWorkflowTestEntryContextResolver> testEntryResolvers, IWorkflowTestScopeStore? testScopeStore,
+        IServiceProvider? serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -160,6 +194,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _stimulusDeliveryStore = stimulusDeliveryStore;
         _stimulusRequests = new(stimulusIntentAdapters);
         _inputValidator = inputValidator;
+        _testEntries = new(testEntryResolvers, testScopeStore, timeProvider,
+            serviceProvider is null ? null : new RuntimeTestExecutionBoundary(serviceProvider));
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -171,6 +207,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(request);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
+        if (request.TestEntry is not null)
+        {
+            if (requiredScope != WorkflowExecutableReferenceScope.TestRun ||
+                request.ProvenanceRequirement != WorkflowExecutableProvenanceRequirement.RequireLiveReference ||
+                request.SourceSelection?.SourceReferenceId is null || request.TriggerMetadata.Count != 0 ||
+                request.StimulusInput is not null)
+                throw AuthorityRejected("test-entry-source-required", "Selected test entry requires an exact live TestRun source and no trigger stimulus.");
+        }
         var saved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery
             ? await ReadStimulusStartAsync(request, requiredScope, cancellationToken) : null;
 
@@ -182,6 +226,10 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
             return duplicate;
         }
+
+        if (request.WorkflowExecutionId is { } explicitId && _workflowExecutionStateStore is not null &&
+            await _workflowExecutionStateStore.FindAsync(explicitId, cancellationToken) is { } existingExecution)
+            ValidateTestEntryDuplicate(request, existingExecution);
 
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
@@ -207,6 +255,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
                     resolved.Source,
                     request.DispatchNestingDepth);
             }
+        }
+
+        if (request.TestEntry is { } testEntry)
+        {
+            await _testEntries.ValidateAsync(testEntry, executable, request.RunKind, request.TestScope, request.Authority,
+                request.TenantId, partition, request.ParentWorkflowExecutionId, request.TriggerNodeId,
+                request.StartAuthority, cancellationToken);
         }
 
         var inputs = ApplyInputContract(executable, request.Inputs);
@@ -243,6 +298,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var existing = await _workflowExecutionStateStore.FindAsync(keyed.WorkflowExecutionId, cancellationToken);
         if (existing is null)
             return null;
+        ValidateTestEntryDuplicate(request, existing);
         if (request.StartAuthority?.ModelWork is { } modelWork &&
             (!modelWork.IsEquivalentTo(existing.ModelWorkOrigin) || existing.TenantId != request.TenantId ||
              existing.Partition != request.Partition || existing.Authority is null || request.Authority is null ||
@@ -267,6 +323,17 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         }
 
         return DuplicateStartResult(existing, keyed.EnvelopeId, existing.PinnedExecutable, existing.PinnedSource);
+    }
+
+    private void ValidateTestEntryDuplicate(WorkflowExecutionStartDispatchRequest request, WorkflowExecutionState existing)
+    {
+        if (request.TestEntry is null && existing.TestEntry is null) return;
+        if (request.TestEntry is null || !request.TestEntry.Matches(existing.TestEntry) ||
+            existing.RunKind != request.RunKind || !WorkflowTestScope.ContextEquals(existing.TestScope, request.TestScope) ||
+            existing.TenantId != request.TenantId || existing.Partition != (request.Partition ?? CurrentPartition()) ||
+            !AuthorityEquals(existing.Authority, request.Authority) || request.ParentWorkflowExecutionId is not null ||
+            request.TriggerNodeId is not null || request.StimulusInput is not null || request.TriggerMetadata.Count != 0)
+            throw AuthorityRejected("test-entry-duplicate-mismatch", "The existing execution belongs to a different admitted test entry or authority.");
     }
 
     private async ValueTask<StimulusStartRecipient> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
@@ -514,7 +581,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata));
+            triggerMetadata: request.TriggerMetadata) { TestEntry = request.TestEntry });
+        if (request.TestEntry is { } entry && !entry.Matches(payload.Deserialize<WorkflowExecutionStartCommandPayload>()?.TestEntry))
+            throw AuthorityRejected("test-entry-command-unrepresentable", "The start command cannot preserve the exact admitted test entry.");
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 

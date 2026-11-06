@@ -142,30 +142,73 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
     public Task<SourceSnapshot> CaptureAsync(string sourceId, string copyId, long expectedRevision, string operationId, CancellationToken cancellationToken = default)
     {
         Identity(operationId);
-        return Write(async ct =>
+        return Write(ct => CaptureCoreAsync(sourceId, copyId, expectedRevision, operationId, ct), cancellationToken);
+    }
+
+    /// <summary>
+    /// Stages one exact saved source and its retention pin in the caller's existing transaction. The caller owns
+    /// SaveChanges, commit, rollback and unknown-outcome reconciliation for its complete domain operation.
+    /// New captures refuse targeted pending edits. Exact staged retries retain their original snapshot and later buffer.
+    /// </summary>
+    public async Task<SourceSnapshot> StageCaptureAsync(string sourceId, string copyId, long expectedRevision,
+        string operationId, CancellationToken cancellationToken = default)
+    {
+        Identity(operationId);
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Staged capture requires a domain-owned transaction.");
+        db.ChangeTracker.DetectChanges();
+        var copyKey = CopyKey(scope, sourceId, copyId);
+        var snapshotKey = EfRelationalIdentity.HashLengthFramed(copyKey, operationId);
+        var staged = db.ChangeTracker.Entries<SourceSnapshot>()
+            .SingleOrDefault(x => x.State == EntityState.Added && x.Entity.Key == snapshotKey)?.Entity;
+        if (staged is not null)
         {
-            var copy = await RequireCopy(sourceId, copyId, ct, true);
-            var key = EfRelationalIdentity.HashLengthFramed(copy.Key, operationId);
-            var stamped = await db.Set<SourceSnapshot>().AsNoTracking().Where(x => x.Key == key)
-                .Select(x => new { Row = x, Stamp = EF.Property<string>(x, EfSchemaVersion.ColumnName) }).SingleOrDefaultAsync(ct);
-            if (stamped is not null) EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, stamped.Stamp);
-            var existing = stamped?.Row;
-            if (existing is not null)
-            {
-                VerifySnapshot(existing, copy.Key);
-                if (existing.OperationId != operationId || existing.Revision != expectedRevision) throw new SourceRevisionException("operation-conflict");
-                return existing;
-            }
-            if (copy.Discarded) throw new SourceRevisionException("not-found");
-            if (copy.Revision != expectedRevision) throw new SourceRevisionException("revision-conflict");
-            Touch(copy);
-            var snapshot = new SourceSnapshot { Key = key, WorkingCopyKey = copy.Key, OperationId = operationId,
-                Profile = copy.Profile, Content = copy.Content, Revision = copy.Revision, BaseSnapshotId = copy.BaseSnapshotId,
-                Fingerprint = EfRelationalIdentity.HashLengthFramed(copy.Profile, copy.Content) };
-            Add(snapshot);
-            Add(NewPin(key, "capture:" + operationId));
-            return snapshot;
-        }, cancellationToken);
+            var owner = db.ChangeTracker.Entries<SourceWorkingCopy>().SingleOrDefault(x => x.Entity.Key == copyKey)
+                ?? throw new SourceRevisionException("pending-source-changes");
+            if (owner.State == EntityState.Added)
+                throw new SourceRevisionException("pending-source-changes");
+            // ScopeHash deliberately excludes Authority. A cached snapshot must validate both the actual
+            // loaded owner and its immutable scope before returning, without detaching its staged fence.
+            ValidateCopy((SourceWorkingCopy)owner.OriginalValues.ToObject(), scope, sourceId, copyId);
+            ValidateCopy(owner.Entity, scope, sourceId, copyId);
+            VerifySnapshot(staged, copyKey);
+            if (staged.OperationId != operationId || staged.Revision != expectedRevision)
+                throw new SourceRevisionException("operation-conflict");
+            return staged;
+        }
+        if (db.ChangeTracker.Entries<SourceWorkingCopy>().Any(x => x.Entity.Key == copyKey &&
+            x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            throw new SourceRevisionException("pending-source-changes");
+        try { return await CaptureCoreAsync(sourceId, copyId, expectedRevision, operationId, cancellationToken); }
+        catch (Exception exception) when (ProviderFailure(exception))
+        { throw new SourceRevisionException("storage-unavailable", exception); }
+    }
+
+    private async Task<SourceSnapshot> CaptureCoreAsync(string sourceId, string copyId, long expectedRevision,
+        string operationId, CancellationToken ct)
+    {
+        var copy = await RequireCopy(sourceId, copyId, ct, true);
+        var key = EfRelationalIdentity.HashLengthFramed(copy.Key, operationId);
+        var stamped = await db.Set<SourceSnapshot>().AsNoTracking().Where(x => x.Key == key)
+            .Select(x => new { Row = x, Stamp = EF.Property<string>(x, EfSchemaVersion.ColumnName) }).SingleOrDefaultAsync(ct);
+        if (stamped is not null) EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, stamped.Stamp);
+        var existing = stamped?.Row;
+        if (existing is not null)
+        {
+            VerifySnapshot(existing, copy.Key);
+            if (existing.OperationId != operationId || existing.Revision != expectedRevision) throw new SourceRevisionException("operation-conflict");
+            return existing;
+        }
+        if (copy.Discarded) throw new SourceRevisionException("not-found");
+        if (copy.Revision != expectedRevision) throw new SourceRevisionException("revision-conflict");
+        Touch(copy);
+        db.Entry(copy).Property(x => x.Fence).IsModified = true;
+        var snapshot = new SourceSnapshot { Key = key, WorkingCopyKey = copy.Key, OperationId = operationId,
+            Profile = copy.Profile, Content = copy.Content, Revision = copy.Revision, BaseSnapshotId = copy.BaseSnapshotId,
+            Fingerprint = EfRelationalIdentity.HashLengthFramed(copy.Profile, copy.Content) };
+        Add(snapshot);
+        Add(NewPin(key, "capture:" + operationId));
+        return snapshot;
     }
     public Task PinAsync(string sourceId, string copyId, string snapshotId, string owner, CancellationToken cancellationToken = default) => ChangePin(sourceId, copyId, snapshotId, owner, false, cancellationToken);
     public Task UnpinAsync(string sourceId, string copyId, string snapshotId, string owner, CancellationToken cancellationToken = default) => ChangePin(sourceId, copyId, snapshotId, owner, true, cancellationToken);

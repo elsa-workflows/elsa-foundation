@@ -269,7 +269,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
         row.IncidentCount = projection.IncidentCount;
         row.IncidentBearingCount = projection.IncidentBearingCount;
         row.ContentJson = RuntimeArtifactJson.Serialize(projection);
-        row.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion;
+        row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(RuntimeOperationalStateEfModule.SchemaVersion, row.SchemaVersion);
         row.Revision = revision;
     }
 
