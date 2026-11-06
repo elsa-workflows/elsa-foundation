@@ -11,7 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Bpmn.Api.Endpoints;
 
@@ -25,7 +25,7 @@ internal static class BpmnHostingApi
     public const string Cancel = "bpmn:cancel";
     public const string RetryService = "bpmn:retry-service";
     public static void Map(IEndpointRouteBuilder endpoints) =>
-        NativeEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
+        MinimalEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
             endpoints.MapEndpointGroup(Owner, BpmnHostingJsonContext.Default, jsonContentType: "application/json; charset=utf-8", tag: "BPMN"));
     public static string Route(HttpContext context, string key) =>
         context.Request.RouteValues[key]?.ToString() ?? throw new ArgumentException("A required route identity is missing.");
