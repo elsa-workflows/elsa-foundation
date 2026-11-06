@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -71,6 +72,45 @@ class Runner:
     def save(self):
         write(self.state_path, self.state)
         write(self.evidence / 'state.json', self.state)
+
+    def refresh_source(self, variant):
+        item = self.state['variants'][variant]
+        source = Path(item['worktree'])
+        if git(source, 'status', '--porcelain', '--untracked-files=all'):
+            raise ValueError('Source must be clean before qualification: ' + variant)
+        current = git(source, 'rev-parse', 'HEAD')
+        if item['commit'] != current:
+            self.invalidate_probe(variant)
+        item.update(commit=current, tree=git(source, 'rev-parse', 'HEAD^{tree}'))
+        return source
+
+    def invalidate_probe(self, variant):
+        item = self.state['variants'][variant]
+        if 'buildReceipt' in item:
+            item.setdefault('supersededBuildReceipts', []).append(item.pop('buildReceipt'))
+        item.pop('binary', None)
+        item.update(buildStatus='NOT_RUN', qualificationStatus='NOT_RUN')
+        self.state['qualifiedForBenchmarks'] = False
+
+    def sync_lock(self):
+        baseline = self.refresh_source('baseline')
+        lock = baseline / PROBE_LOCK
+        git(baseline, 'ls-files', '--error-unmatch', PROBE_LOCK)
+        content = lock.read_bytes()
+        for variant in ('runview', 'snapshot'):
+            source = self.refresh_source(variant)
+            target = source / PROBE_LOCK
+            if not target.is_file() or target.read_bytes() != content:
+                target.write_bytes(content)
+                commit(source, 'Use the common baseline probe dependency lock for matched execution')
+                self.refresh_source(variant)
+        self.state['commonProbeLockSha256'] = sha(content)
+        self.save()
+
+    def focused(self, variant):
+        from focused_tests import run_focused_tests
+        self.refresh_source(variant)
+        run_focused_tests(self, variant)
 
     def materialize(self):
         if self.state['variants']:
@@ -143,7 +183,9 @@ class Runner:
 
     def build(self, variant):
         item = self.state['variants'][variant]
-        source = Path(item['worktree'])
+        source = self.refresh_source(variant)
+        if variant != 'baseline':
+            self.sync_lock()
         binary_dir = source / 'tools/experiments/runtime-architecture/bin/Release/net10.0'
         flags = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
         if not (source / PROBE_LOCK).exists():
@@ -154,9 +196,10 @@ class Runner:
                  'timeoutSeconds': 360, 'captureArtifactDirectories': [str(binary_dir)]}], generated=[PROBE_LOCK])
             commit(source, 'Commit generated runtime probe dependency lock before qualification')
         item.update(commit=git(source, 'rev-parse', 'HEAD'), tree=git(source, 'rev-parse', 'HEAD^{tree}'))
-        item['buildReceipt'] = self.phase(variant, 'qualified-build', [
+        self.invalidate_probe(variant)
+        item['buildReceipt'] = self.phase(variant, 'qualified-build-' + item['commit'][:12], [
             {'name': 'locked-restore', 'argv': ['dotnet', 'restore', PROBE, '--locked-mode', '--disable-parallel'] + flags, 'timeoutSeconds': 120},
-            {'name': 'build-complete-probe', 'argv': ['dotnet', 'build', PROBE, '-c', 'Release', '--no-restore'] + flags,
+            {'name': 'build-complete-probe', 'argv': ['dotnet', 'build', PROBE, '-c', 'Release', '--no-restore', '--no-incremental'] + flags,
              'timeoutSeconds': 420, 'captureArtifactDirectories': [str(binary_dir)]}])
         item.update(buildStatus='PASSED', binary=str(binary_dir / 'RuntimeArchitectureProbe.dll'))
         self.save()
@@ -167,15 +210,25 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     sub = parser.add_subparsers(dest='stage', required=True)
     sub.add_parser('materialize')
+    sub.add_parser('sync-lock')
     build = sub.add_parser('build')
     build.add_argument('--variant', choices=VARIANTS, required=True)
+    focused = sub.add_parser('focused')
+    focused.add_argument('--variant', choices=('runview', 'snapshot'), required=True)
     args = parser.parse_args()
     runner = Runner(args.root)
     name = args.stage + (('-' + args.variant) if hasattr(args, 'variant') else '')
     runner.state['stages'][name] = {'status': 'RUNNING'}
     runner.save()
     try:
-        runner.materialize() if args.stage == 'materialize' else runner.build(args.variant)
+        if args.stage == 'materialize':
+            runner.materialize()
+        elif args.stage == 'sync-lock':
+            runner.sync_lock()
+        elif args.stage == 'focused':
+            runner.focused(args.variant)
+        else:
+            runner.build(args.variant)
         runner.state['stages'][name] = {'status': 'PASSED'}
         return 0
     except BaseException as error:
