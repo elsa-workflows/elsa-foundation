@@ -71,6 +71,7 @@ export async function exerciseConnectionConflict({ page, admin, componentUrl, ex
   const refresh = page.getByRole("button", { name: "Refresh connections", exact: true });
   await refresh.click();
   const discard = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
+  await expect(discard).toBeVisible();
   await capture(page, "discard-conflicting-draft", { region: '[role="dialog"]', action: "request-draft-discard" });
   await discard.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(refresh).toBeFocused(); await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");

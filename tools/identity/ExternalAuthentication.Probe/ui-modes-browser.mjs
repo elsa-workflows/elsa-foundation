@@ -48,6 +48,7 @@ try {
     await page.getByLabel("Client secret reference", { exact: true }).fill(metadata.CompanySecret); await page.getByLabel("Secret scope (optional)", { exact: true }).fill("identity/external");
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Save draft", exact: true });
+    await expect(dialog).toBeVisible();
     await uiEvidence.capture(page, "first-draft-confirmation", { region: '[role="dialog"]', action: "save-first-disabled-draft" });
     await dialog.getByRole("button", { name: "Save draft", exact: true }).click();
     const row = page.locator(".external-auth-row").filter({ hasText: "First fixture" }); await expect(row).toBeEnabled(); await row.focus(); await page.keyboard.press("Enter");

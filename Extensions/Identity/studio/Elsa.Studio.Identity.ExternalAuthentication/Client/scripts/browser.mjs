@@ -237,7 +237,9 @@ try {
   if (settings.studioUrl) {
     const beforeCancel = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();
     const enable = page.getByRole("button", { name: "Enable sign-in", exact: true });
-    await enable.click(); await capture(page, "enable-before-escape", { region: '[role="dialog"]', action: "open-enable-confirmation" });
+    await enable.click();
+    await expect(page.getByRole("dialog", { name: "Enable sign-in", exact: true })).toBeVisible();
+    await capture(page, "enable-before-escape", { region: '[role="dialog"]', action: "open-enable-confirmation" });
     await page.keyboard.press("Escape"); await expect(page.getByRole("dialog", { name: "Enable sign-in", exact: true })).toHaveCount(0);
     await expect(enable).toBeFocused(); await capture(page, "enable-escape-focus", { action: "escape-return-to-enable" });
     await enable.click();
