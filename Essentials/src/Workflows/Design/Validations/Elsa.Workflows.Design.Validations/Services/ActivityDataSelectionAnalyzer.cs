@@ -132,8 +132,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
             }
         }
 
-        var allowed = candidates.Where(source => targetFacts.Constraint is null ||
-            targetFacts.Constraint.AllowedExpressionTypes.Contains((source.Binding?.ExpressionType ?? "ActivityResult"), StringComparer.OrdinalIgnoreCase));
+        var allowed = candidates.Where(source => targetFacts.Constraint is not { } constraint ||
+            (source.Binding is { } binding
+                ? constraint.AllowedExpressionTypes.Contains(binding.ExpressionType, StringComparer.OrdinalIgnoreCase)
+                : source.ActivityResultSource is not null &&
+                  constraint.AllowedExpressionTypes.Contains("ActivityResult", StringComparer.OrdinalIgnoreCase)));
         if (!string.IsNullOrWhiteSpace(query.Search))
             allowed = allowed.Where(source => source.DisplayName.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
                 || source.Id.Contains(query.Search, StringComparison.OrdinalIgnoreCase));
