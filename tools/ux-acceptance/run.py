@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
@@ -33,7 +34,7 @@ CAPTURES = {
 }
 JOURNEYS = set(CAPTURES)
 ADDITIONAL_ARTIFACTS = {
-    'native dashboard questions and sharing': {'reader-trace', 'native-agent-boundary.json', 'reader-agent-boundary.json', 'dashboard-native-oracle.json'},
+    'native dashboard questions and sharing': {'native-agent-boundary.json', 'reader-agent-boundary.json', 'dashboard-native-oracle.json'},
     'existing home widgets and layout defaults': {'native-agent-boundary.json'},
 }
 
@@ -86,6 +87,18 @@ def command(args, log, *, cwd=ROOT, env=None):
             stop_group(process)
 
 
+def recorded_browser_contexts(path):
+    contexts = set()
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if name.endswith('.trace'):
+                for line in archive.read(name).splitlines():
+                    event = json.loads(line)
+                    if event.get('type') == 'context-options' and event.get('origin') == 'library' and event.get('contextId'):
+                        contexts.add(event['contextId'])
+    return contexts
+
+
 def verdict(report, artifacts, journeys=None):
     """An exit code alone cannot certify that every intended journey actually ran."""
     journeys = JOURNEYS if journeys is None else set(journeys)
@@ -120,6 +133,10 @@ def verdict(report, artifacts, journeys=None):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
+        if title == 'native dashboard questions and sharing':
+            trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
+            if len(recorded_browser_contexts(trace)) < 2:
+                raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
     return len(rows)
 
 

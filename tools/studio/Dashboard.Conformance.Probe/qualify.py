@@ -404,7 +404,7 @@ class Probe:
             def field_denied():
                 result = expect(base, "/_elsa/studio/dashboard-datasets", "bob-no-category")
                 require(all(field["id"] != "customerCategory" for item in result["items"] for field in item["fields"]), "Denied field remained discoverable")
-                problem = expect(base, "/_elsa/studio/dashboard-queries/preview", "bob-no-category", 400, question, "POST")
+                problem = expect(base, "/_elsa/studio/dashboard-queries/preview", "bob-no-category", 422, question, "POST")
                 require(problem.get("code") == "UNSUPPORTED_QUERY" and "restricted-category" not in json.dumps(problem), "Wrong-cause field denial")
                 record = expect(base, "/_acme/processing/records/" + ids["shared-retail"], "bob-no-category")
                 require(record["customerCategory"] is None and not record["categoryAvailable"], "Ordinary record view leaked category")
@@ -434,7 +434,7 @@ class Probe:
             def absent():
                 result = expect(base, "/_elsa/studio/dashboard-datasets", "alice")
                 require(result["items"] == [], "Disabled contribution remained available")
-                problem = expect(base, "/_elsa/studio/dashboard-queries/preview", "alice", 400, question, "POST")
+                problem = expect(base, "/_elsa/studio/dashboard-queries/preview", "alice", 404, question, "POST")
                 require(problem.get("code") == "DATASET_UNAVAILABLE", "Disabled source silently substituted or failed for another cause")
                 return {"catalog": result, "problem": problem}
             self.case("disabled-contribution-control", absent)

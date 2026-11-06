@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
@@ -20,14 +21,24 @@ class VerdictTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.artifact = self.root / 'proof'
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         self.report = {'suites': [{'specs': [
             {'title': journey, 'tests': [
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
-                        {'name': name, 'path': str(self.artifact)} for name in
+                        {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)} for name in
                         ['trace'] + sorted(acceptance.ADDITIONAL_ARTIFACTS.get(journey, set())) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in acceptance.PROJECTS]}
             for journey in acceptance.JOURNEYS]}]}
+
+    def test_native_reader_must_be_recorded_in_the_combined_trace(self):
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            archive.writestr('owner.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': 'owner'}) + '\n')
+        with self.assertRaisesRegex(ValueError, 'independent owner and reader'):
+            acceptance.verdict(self.report, self.root)
 
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
@@ -67,6 +78,10 @@ class VerdictTests(unittest.TestCase):
         self.artifact.write_text('')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root / 'different-run')
 
     def test_each_intermediate_capture_is_required(self):
