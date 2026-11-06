@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.AspNetCore;
@@ -39,6 +40,9 @@ public sealed class ActivityDataContextEndpointTests
         var result = await host.Invoke(host.Request());
         Assert.Equal("supported", result.Body.State);
         Assert.Equal("no-store", result.CacheControl);
+        using var wire = JsonDocument.Parse(result.Json);
+        Assert.Equal("unknown", wire.RootElement.GetProperty("analysis").GetProperty("sources")[0].GetProperty("shape").GetProperty("state").GetString());
+        Assert.Equal("definite", wire.RootElement.GetProperty("analysis").GetProperty("sources")[0].GetProperty("availability").GetString());
         Assert.Equal("Customer ID", result.Body.Analysis!.Target!.DisplayName);
         Assert.Equal(new TypeReference("String"), result.Body.Analysis.Target.Type);
         Assert.Contains(result.Body.Analysis.Sources, source => source.Id == "activity:producer:$result" && source.Shape.State == ActivitySerializedShapeState.Unknown);
@@ -279,7 +283,16 @@ public sealed class ActivityDataContextEndpointTests
     }
 
     private static ActivityNode Node(string id) => new(id, "test", [], []);
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = CreateWeb();
+    private static JsonSerializerOptions CreateWeb()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter<ActivitySerializedShapeState>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActivitySerializedValueKind>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActivitySerializedPresence>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActivityChildResultAvailability>(JsonNamingPolicy.CamelCase));
+        return options;
+    }
     private static ActivityNode Sequence(params ActivityNode[] children) => new("root", "sequence", [], [], new("elsa.sequence.structure", "1.0.0",
         JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<VariableDefinition>() }, Web)));
     private static WorkflowDefinitionState State(ActivityNode root) => new([], root, [], [], null);
