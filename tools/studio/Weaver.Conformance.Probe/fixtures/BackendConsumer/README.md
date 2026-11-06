@@ -39,6 +39,28 @@ The optional `Qualification:DiagnosticGateDirectory` pauses immediately before s
 
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
 
+An optional profile `contentRoot` selects an existing absolute runtime directory under the owned run root. Without it,
+the published directory remains the content root and working directory as before. A separate content root must have no
+symlink component under the run root and must not overlap any published binary directory. Initialize it from fresh,
+normal owned configuration and key/state generation; these helpers never copy historical private configuration or
+credentials. Generate database connections for that root (using `backend_features(content_root)` for the ordinary
+feature settings), and point `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` there.
+`configure_runtime`, protocol selection, privilege configuration and durable-store selection write only that runtime
+root, refusing linked configuration files. They do not relocate existing data or rewrite database connection strings.
+The driver still launches the exact DLL from `published` with the same published working directory and passes the
+selected root explicitly to ASP.NET. Process and restart receipts retain both paths, the executable hash and runtime
+directory identity. Generation closeout rejects a changed executable or replaced runtime directory. Switching binary
+profiles belongs only in `RestartableServer.restart(..., while_stopped=...)`, after normal closeout; each new generation
+gets a separate receipt and empty runtime package caches. This capability alone is not upgrade qualification.
+
+The current consumer references the normal `Elsa.Attention.Api` package, discovers its assembly and selects
+`AttentionApi` plus `ModularityAttention` beside `ApiCapabilities` and `ModularityApi`. Attention keeps its ordinary
+`attention:read` endpoint permission and the modularity contributor's ModuleManagement read permission. The normal
+Identity administrator seed converges the catalog's permissions through its existing administrator role; no claims,
+permission bypass or additional fixture grant is added here. Explicit non-admin qualification principals still need
+their exact native grants and fresh normal login. Package/feature selection is not evidence of an available endpoint:
+the native held/finalized matrix must observe the catalog, Attention and capabilities with the actual signed-in user.
+
 The application also discovers `FoundationAgentEntityFrameworkCore`, `FoundationAgentEfEffects` and `Secrets` from their
 existing package assemblies; the baseline shell does not select them. For the #3441 restart inventory,
 `consumers.enable_durable_agent_store(run, database, key)` removes common effects and selects EF effects alongside the store

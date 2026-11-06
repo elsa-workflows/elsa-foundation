@@ -16,7 +16,7 @@ FIXTURES = TOOL / "fixtures"
 BACKEND_PACKAGES = [
     "Elsa.Primitives.Hosting", "Elsa.Locking.FileSystem", "Elsa.Events", "Elsa.Mediator",
     "Elsa.Tasks", "Elsa.Serialization.SystemText", "Elsa.Expressions", "Elsa.Expressions.Api",
-    "Elsa.Api.Capabilities", "Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Api",
+    "Elsa.Api.Capabilities", "Elsa.Attention.Api", "Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Api",
     "Elsa.Foundation.Identity.AspNetCoreIdentity", "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
     "Elsa.Foundation.Identity.OpenIddict", "Elsa.Studio.Preferences.Api",
     "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore", "Elsa.Workflows.Design.Api",

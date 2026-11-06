@@ -11,8 +11,10 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 import zipfile
 
+from artifacts import BACKEND_PACKAGES
 from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE, backend_features,
-                       configure_agent_privileges, configure_runtime, select_native_archives, stage_native_archives)
+                       configure_agent_privileges, configure_runtime, enable_durable_agent_store, references,
+                       select_native_archives, stage_native_archives)
 
 DI = "Microsoft.Extensions.DependencyInjection.Abstractions"
 
@@ -187,6 +189,61 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         self.assertIn("FoundationAgentApi", features)
         self.assertIn("FoundationWorkflowsAgent", features)
 
+    def test_attention_composition_requires_its_exact_product_candidate(self):
+        products = {name: {"version": "4.0.0-fixture.1"} for name in BACKEND_PACKAGES}
+        run = SimpleNamespace(packages=products)
+        document = ET.fromstring("<Project>" + references(run, BACKEND_PACKAGES, ()) + "</Project>")
+        attention = [reference for reference in document if reference.attrib["Include"] == "Elsa.Attention.Api"]
+        self.assertEqual(1, len(attention))
+        self.assertEqual("[4.0.0-fixture.1]", attention[0].attrib["Version"])
+        features = backend_features(self.backend)
+        self.assertTrue({"ApiCapabilities", "ModularityApi", "AttentionApi", "ModularityAttention"}.issubset(features))
+        self.assertTrue(all(features[name] == {} for name in ("AttentionApi", "ModularityAttention")))
+        del products["Elsa.Attention.Api"]
+        with self.assertRaisesRegex(RuntimeError, "Missing genuine consumer candidate: Elsa.Attention.Api"):
+            references(run, BACKEND_PACKAGES, ())
+
+    def test_runtime_configuration_and_policy_target_fresh_content_without_editing_publishes(self):
+        content = self.root / "fresh-runtime-content"
+        content.mkdir(mode=0o700)
+        settings = dict(self.settings, Qualification={"StudioOrigin": "http://127.0.0.1:18002"})
+        (content / "appsettings.json").write_text(json.dumps(settings))
+        (content / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(content)}}}}))
+        protocol = content / "protocol"
+        protocol.mkdir()
+        profile = self.run.profiles["backend"]
+        profile.update(contentRoot=content, commandFile=protocol / "command.json",
+                       traceFiles={"copilot": protocol / "copilot.jsonl", "anthropic": protocol / "anthropic.jsonl"})
+        (self.studio / "shells.json").write_text("{}")
+        (self.studio / "appsettings.json").write_text(json.dumps({"Studio": {}, "Qualification": {}}))
+        before = {path.name: path.read_bytes() for path in self.backend.iterdir()}
+        configure_runtime(self.run, backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
+                          admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1")
+        configure_agent_privileges(self.run, administrative=False, irrecoverable=True, activation=False)
+        self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
+        observed = json.loads((content / "appsettings.json").read_text())
+        self.assertEqual({"Administrative": False, "Irrecoverable": True, "Activation": False}, observed["Elsa"]["Agent"]["Privileges"])
+        features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
+        self.assertEqual(str(protocol / "command.json"), features["AcmeCopilotProtocolFixture"]["CommandFile"])
+        selected = enable_durable_agent_store(self.run, content / "agent.db", secrets.token_urlsafe(48))
+        features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
+        self.assertEqual(str(content / "agent.db"), selected["database"])
+        self.assertIn(DURABLE_EFFECTS_FEATURE, features)
+        self.assertNotIn(COMMON_EFFECTS_FEATURE, features)
+        self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
+        for name in ("appsettings.json", "shells.json"):
+            self.assertEqual(0, (content / name).stat().st_mode & 0o077)
+
+    def test_separate_content_configuration_symlink_cannot_rewrite_a_binary_publish(self):
+        content = self.root / "fresh-runtime-content"
+        content.mkdir()
+        (content / "appsettings.json").symlink_to(self.path)
+        self.run.profiles["backend"]["contentRoot"] = content
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "ordinary file"):
+            configure_agent_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+        self.assertEqual(before, self.path.read_bytes())
+
     def test_private_policy_profiles_preserve_other_configuration_and_studio(self):
         private_value = secrets.token_urlsafe(48)
         self.settings["PrivateFixtureValue"] = private_value
@@ -229,7 +286,7 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         foreign_path = foreign / "appsettings.json"
         foreign_path.write_text("{}")
         self.run.profiles["backend"]["published"] = foreign
-        with self.assertRaisesRegex(RuntimeError, "owned backend"):
+        with self.assertRaisesRegex(RuntimeError, "owned"):
             configure_agent_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
         self.assertEqual("{}", foreign_path.read_text())
         self.run.profiles["backend"]["published"] = self.backend

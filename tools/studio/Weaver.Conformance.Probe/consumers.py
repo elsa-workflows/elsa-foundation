@@ -12,6 +12,7 @@ from xml.sax.saxutils import escape
 import zipfile
 
 from artifacts import BACKEND_PACKAGES, STUDIO_PACKAGES, check
+from runtime import owned_content_root
 
 
 BACKEND_EXTERNAL = (
@@ -173,7 +174,7 @@ def backend_features(published):
     published = Path(published)
     features = {name: {} for name in (
         "Primitives", "FileSystemDistributedLocking", "Events", "Mediator", "Tasks", "Serialization",
-        "Expressions", "ExpressionsApi", "ApiCapabilities", "FoundationIdentityAbstractions", "FoundationIdentityApi",
+        "Expressions", "ExpressionsApi", "ApiCapabilities", "AttentionApi", "ModularityAttention", "FoundationIdentityAbstractions", "FoundationIdentityApi",
         "StudioPreferences", "StudioPreferencesApi", "WorkflowsDesignApi", "WorkflowDesignValidations",
         "ActivitiesDesignApi", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
         "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
@@ -198,6 +199,13 @@ def backend_features(published):
     return features
 
 
+def _runtime_configuration(run, profile, name):
+    path = owned_content_root(run, profile) / name
+    check(path.is_file() and not path.is_symlink() and path.resolve().parent == path.parent,
+          "Runtime configuration must be an ordinary file in the owned backend or Studio content root")
+    return path
+
+
 def select_protocol_profile(run, name):
     """Select one actual adapter/fixture pair in runtime JSON, without rebuilding either consumer.
 
@@ -205,7 +213,7 @@ def select_protocol_profile(run, name):
     """
     check(name in PROTOCOL_FEATURES, "Unknown protocol profile: " + name)
     profile = run.profiles["backend"]
-    path = profile["published"] / "shells.json"
+    path = _runtime_configuration(run, profile, "shells.json")
     document = json.loads(path.read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
     for provider, fixture in PROTOCOL_FEATURES.values():
@@ -239,7 +247,7 @@ def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=1
     check(isinstance(encryption_key, str) and len(encryption_key) >= 32, "The durable store needs a private Secrets key")
     check(type(lease_seconds) is int and 15 <= lease_seconds <= 86400, "The store's lease is 15 to 86400 seconds")
     profile = run.profiles["backend"]
-    path = profile["published"] / "shells.json"
+    path = _runtime_configuration(run, profile, "shells.json")
     document = json.loads(path.read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
     check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features
@@ -267,9 +275,7 @@ def configure_agent_privileges(run, *, administrative, irrecoverable, activation
     """
     privileges = {"Administrative": administrative, "Irrecoverable": irrecoverable, "Activation": activation}
     check(all(type(value) is bool for value in privileges.values()), "Fixture privilege classes need explicit boolean values")
-    path = run.profiles["backend"]["published"] / "appsettings.json"
-    check(path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(run.root.resolve()),
-          "Fixture privilege configuration must remain in the owned backend")
+    path = _runtime_configuration(run, run.profiles["backend"], "appsettings.json")
     settings = json.loads(path.read_text())
     settings.setdefault("Elsa", {}).setdefault("Agent", {})["Privileges"] = privileges
     temporary = None
@@ -296,8 +302,11 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
               "Runtime URL must be an explicit owned loopback origin")
     check(backend_url.rstrip("/") != studio_url.rstrip("/"), "Backend and Studio require separate owned origins")
     check(bool(admin_username.strip()) and bool(admin_password), "Explicit private native administrator seed inputs are required")
-    backend = run.profiles["backend"]["published"]
-    studio = run.profiles["studio"]["published"]
+    backend = owned_content_root(run, run.profiles["backend"])
+    studio = owned_content_root(run, run.profiles["studio"])
+    for profile in (run.profiles["backend"], run.profiles["studio"]):
+        for name in ("appsettings.json", "shells.json"):
+            _runtime_configuration(run, profile, name)
     settings = json.loads((backend / "appsettings.json").read_text())
     settings["Qualification"].pop("EnrollOwnedStore", None)
     settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), DiagnosticGateDirectory="")

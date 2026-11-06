@@ -14,6 +14,91 @@ from unittest.mock import patch
 import runtime
 
 
+class RuntimeContentRootTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.published = self.root / "published"
+        self.published.mkdir()
+        (self.published / "host.py").write_text("immutable host input")
+        self.content = self.root / "runtime-content"
+        self.content.mkdir(mode=0o700)
+        self.profile = {"published": self.published, "assembly": "host.py", "env": {}}
+        self.run = SimpleNamespace(root=self.root, dotnet=sys.executable, profiles={"backend": self.profile})
+
+    def test_default_and_separate_content_keep_binary_command_and_working_directory(self):
+        for selected in (None, self.content):
+            with self.subTest(selected=selected):
+                if selected is not None:
+                    self.profile["contentRoot"] = selected
+                expected = self.published if selected is None else selected
+                with patch.object(runtime.subprocess, "Popen") as launch:
+                    launch.return_value.pid = 123
+                    owned = runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                    receipt = owned.spawn()
+                    command = launch.call_args.args[0]
+                    self.assertEqual([sys.executable, str(self.published / "host.py"), "--contentRoot", str(expected),
+                                      "--urls", "http://127.0.0.1:18001"], command)
+                    self.assertEqual(self.published, launch.call_args.kwargs["cwd"])
+                    self.assertEqual(str(self.published), receipt["publishedDirectory"])
+                    self.assertEqual(str(expected), receipt["contentRoot"])
+                    self.assertEqual({"device": expected.stat().st_dev, "inode": expected.stat().st_ino}, receipt["contentRootIdentity"])
+                    self.assertEqual(runtime.sha(self.published / "host.py"), receipt["assemblySha256"])
+                    self.assertEqual("immutable host input", (self.published / "host.py").read_text())
+
+    def test_invalid_or_overlapping_content_root_refuses_before_process_or_receipt(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        nested = self.published / "data"
+        nested.mkdir()
+        invalid = (Path(outside.name).resolve(), self.root / "missing", self.published / "host.py", Path("relative"),
+                   self.root, nested, None, 1)
+        for selected in invalid:
+            with self.subTest(selected=selected), patch.object(runtime.subprocess, "Popen") as launch:
+                self.profile["contentRoot"] = selected
+                with self.assertRaisesRegex(RuntimeError, "content root"):
+                    runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                launch.assert_not_called()
+                self.assertFalse((self.root / "backend-process.json").exists())
+
+    def test_symlink_leaf_and_parent_are_rejected_even_when_the_target_is_owned(self):
+        link = self.root / "content-link"
+        link.symlink_to(self.content, target_is_directory=True)
+        child = self.content / "nested"
+        child.mkdir()
+        for selected in (link, link / "nested"):
+            with self.subTest(selected=selected), patch.object(runtime.subprocess, "Popen") as launch:
+                self.profile["contentRoot"] = selected
+                with self.assertRaisesRegex(RuntimeError, "symlink"):
+                    runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                launch.assert_not_called()
+
+    def test_custom_content_cannot_overlap_another_profile_binary_publish(self):
+        other = self.root / "other-published"
+        other.mkdir()
+        self.run.profiles["other"] = {"published": other}
+        self.profile["contentRoot"] = other
+        with self.assertRaisesRegex(RuntimeError, "overlap"):
+            runtime.owned_content_root(self.run, self.profile)
+
+    def test_replaced_data_directory_or_changed_binary_refuses_generation_provenance(self):
+        self.profile["contentRoot"] = self.content
+        with patch.object(runtime.subprocess, "Popen") as launch:
+            launch.return_value.pid = 123
+            owned = runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+            owned.spawn()
+        self.content.rename(self.root / "retained-original-content")
+        self.content.mkdir()
+        with self.assertRaisesRegex(RuntimeError, "directory was replaced"):
+            owned.require_unchanged_inputs()
+        self.content.rmdir()
+        (self.root / "retained-original-content").rename(self.content)
+        (self.published / "host.py").write_text("changed binary input")
+        with self.assertRaisesRegex(RuntimeError, "assembly changed"):
+            owned.require_unchanged_inputs()
+
+
 class RuntimeObservationTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "Requires a real POSIX SIGTERM handler")
     def test_pending_shutdown_keeps_the_signalled_process_until_it_exits(self):
@@ -315,6 +400,40 @@ server.serve_forever()
                 host.restart("unclean")
         self.assertFalse((self.root / "backend-process-g2.json").exists())
         self.assertEqual(3, json.loads((self.root / "backend-process.json").read_text())["exitCode"])
+
+    def test_two_immutable_publishes_share_content_only_across_a_closed_generation(self):
+        content = self.root / "fresh-runtime-content"
+        content.mkdir(mode=0o700)
+        (content / "fixture-state").write_text("fresh owned state")
+        second = self.root / "second-published"
+        second.mkdir()
+        (second / "host.py").write_text(self.HOST + "\n# independently published second generation\n")
+        before = {directory: {path.name: runtime.sha(path) for path in directory.iterdir()} for directory in (self.published, second)}
+        self.run.profiles["backend"]["contentRoot"] = content
+
+        def switch():
+            with self.assertRaises(OSError):
+                runtime.Http(self.origin).request("/health/live")
+            self.run.profiles["backend"]["published"] = second
+            return {"publishedDirectory": str(second)}
+
+        with runtime.RestartableServer(self.run, "backend", self.origin) as host:
+            first_pid = self.pid()
+            transition = host.restart("switch normal binary publish", while_stopped=switch)
+            self.assertNotEqual(first_pid, self.pid())
+        self.assertEqual("fresh owned state", (content / "fixture-state").read_text())
+        self.assertEqual(before, {directory: {path.name: runtime.sha(path) for path in directory.iterdir()} for directory in before})
+        old, new = transition["stoppedProcess"], transition["startedProcess"]
+        self.assertEqual((str(self.published), str(second)), (old["publishedDirectory"], new["publishedDirectory"]))
+        self.assertEqual(str(content), old["contentRoot"])
+        self.assertEqual((old["contentRoot"], old["contentRootIdentity"]), (new["contentRoot"], new["contentRootIdentity"]))
+        self.assertNotEqual(old["assemblySha256"], new["assemblySha256"])
+        self.assertEqual(0, old["exitCode"])
+        self.assertIs(True, old["inputsUnchangedAtCloseout"])
+        final = json.loads((self.root / "backend-process-g2.json").read_text())
+        self.assertEqual((0, new["publishedDirectory"], new["contentRootIdentity"]),
+                         (final["exitCode"], final["publishedDirectory"], final["contentRootIdentity"]))
+        self.assertIs(True, final["inputsUnchangedAtCloseout"])
 
     def test_a_failure_inside_a_phase_keeps_its_cause_and_still_stops_the_running_generation(self):
         original = RuntimeError("Original restart-phase failure")
