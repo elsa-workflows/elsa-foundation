@@ -35,6 +35,7 @@ function HistoryFact({ label, value }: { label: string; value?: string | number 
 
 const metadataLabels: Record<string, string> = {
   "history.reasonCode": "Reason code", "history.outcomeNames": "Recorded outcomes", "history.stimulusType": "Stimulus type",
+  "history.outcomeCaptureState": "Outcome capture", "history.outcomeCount": "Outcome count", "history.outcomeContentHash": "Outcome content hash",
   "history.resumeTargetId": "Resume target", "history.selectedBookmarkId": "Selected bookmark", "history.timerId": "Timer",
   "history.scheduledAt": "Scheduled instant", "history.controlKind": "Control kind", "history.incidentFailureType": "Failure type",
   "history.relatedActivityExecutionId": "Related execution", "history.compensationEntryId": "Compensation entry",
@@ -73,6 +74,7 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
       {!isKnownHistoryEvent(event) ? <p className="wf-history-note">This event kind is unrecognized. Its safe common recorded fields remain inspectable.</p> : null}
       {event.schemaVersion !== 1 ? <p className="wf-history-note">This event uses an unrecognized schema version. Only its safe common recorded fields are available here.</p> : null}
       {explanation ? <p>{explanation}</p> : null}
+      {event.metadata["history.outcomeCaptureState"] === "size-omitted" ? <p className="wf-history-note" role="status">Full outcome detail was not captured within the metadata size policy. This completion remains recorded; its outcome count and content hash are available in recorded metadata.</p> : null}
       <dl className="wf-history-facts"><HistoryFact label="Recorded position" value={event.sequence} />
         <HistoryFact label="Occurred" value={historyInstant(event.occurredAt)} />
         {event.metadata["history.status"] ? <HistoryFact label="Recorded status" value={event.metadata["history.status"]} /> : null}

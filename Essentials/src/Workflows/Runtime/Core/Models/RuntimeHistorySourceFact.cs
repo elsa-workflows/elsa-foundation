@@ -51,13 +51,19 @@ public sealed record RuntimeHistorySourceFact
         ArgumentException.ThrowIfNullOrWhiteSpace(subjectId);
         if (new[] { subjectId, activityExecutionId, attemptId, relatedWorkflowExecutionId, relatedActivityExecutionId, timerId, incidentId, compensationEntryId }
             .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)) ||
-            reasonCode?.Length > 128 || outcomeNames?.Count > 64 || outcomeNames?.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 230) == true)
-            throw new ArgumentException("History source facts require bounded semantic identities and outcomes.");
+            reasonCode?.Length > 128)
+            throw new ArgumentException("History source facts require bounded semantic identities.");
+        // Native outcomes remain exact source data. The public history projection applies
+        // its metadata budget without imposing another limit on a valid native completion.
+        var outcomes = (outcomeNames ?? []).ToArray();
+        foreach (var window in outcomes.Chunk(128))
+            if (window.Any(string.IsNullOrWhiteSpace))
+                throw new ArgumentException("History source outcomes require nonblank names.", nameof(outcomeNames));
         Kind = kind; SubjectId = subjectId; OccurredAt = occurredAt; ActivityExecutionId = activityExecutionId;
         AttemptId = attemptId; Causation = causation; RelatedWorkflowExecutionId = relatedWorkflowExecutionId;
         RelatedActivityExecutionId = relatedActivityExecutionId; TimerId = timerId; IncidentId = incidentId;
         CompensationEntryId = compensationEntryId; ReasonCode = reasonCode;
-        OutcomeNames = Array.AsReadOnly((outcomeNames ?? []).ToArray());
+        OutcomeNames = Array.AsReadOnly(outcomes);
     }
     public RuntimeHistorySourceFactKind Kind { get; }
     public string SubjectId { get; }

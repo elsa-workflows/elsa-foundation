@@ -82,6 +82,25 @@ it("keeps event meaning and exact navigation ahead of collapsed technical identi
   click("Inspect owning execution"); expect(activity).toHaveBeenLastCalledWith("activity-1");
   expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled();
 });
+it("discloses omitted outcome text while retaining completion provenance without fetching current values", async () => {
+  const hash = "a".repeat(64);
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(2, {
+    name: "ActivityContinuationCompleted", physicalCommitId: "completion-commit", metadata: {
+      "history.outcomeCaptureState": "size-omitted", "history.outcomeCount": "1", "history.outcomeContentHash": hash
+    }
+  }), readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-2" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("Full outcome detail was not captured within the metadata size policy"));
+  expect(container.querySelector("h3")?.textContent).toBe("Continuation completed");
+  expect(container.textContent).toContain("Atomic commit groupcompletion-commit");
+  expect(container.textContent).toContain("Outcome count1");
+  expect(container.textContent).toContain(`Outcome content hash${hash}`);
+  expect(container.querySelector('[aria-label="Copy outcome content hash"]')).toBeTruthy();
+  expect(container.textContent).not.toContain("Recorded outcomes");
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled();
+  expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled();
+});
 it("labels committed responsibilities, source observations, settlement and incident decisions as distinct recorded events", () => {
   const labels = [
     ["ChildWorkflowDispatchRequested", "Child run dispatch requested"], ["StimulusPublicationCommitted", "Stimulus publication committed"],

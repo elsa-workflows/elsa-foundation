@@ -275,7 +275,17 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             if (fact.TimerId is { } timer) metadata["history.timerId"] = timer;
             if (fact.CompensationEntryId is { } entry) metadata["history.compensationEntryId"] = entry;
             if (fact.ReasonCode is { } reason) metadata["history.reasonCode"] = reason;
-            if (fact.OutcomeNames.Count > 0) metadata["history.outcomeNames"] = JsonSerializer.Serialize(fact.OutcomeNames);
+            if (fact.OutcomeNames.Count > 0)
+            {
+                var outcomes = JsonSerializer.Serialize(fact.OutcomeNames);
+                if (outcomes.Length <= 2048) metadata["history.outcomeNames"] = outcomes;
+                else
+                {
+                    metadata["history.outcomeCaptureState"] = "size-omitted";
+                    metadata["history.outcomeCount"] = fact.OutcomeNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    metadata["history.outcomeContentHash"] = RuntimeHistoryIdentity.CreateBinding(fact.OutcomeNames);
+                }
+            }
             if (IsIncidentFact(fact.Kind))
             {
                 incidents.TryGetValue(fact.IncidentId ?? "", out var incident);

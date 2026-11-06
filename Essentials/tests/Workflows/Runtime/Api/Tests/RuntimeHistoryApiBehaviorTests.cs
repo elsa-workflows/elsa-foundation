@@ -62,6 +62,29 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         Assert.False(string.IsNullOrWhiteSpace(source.Query.AccessBinding));
     }
 
+    [Fact]
+    public async Task Exact_event_and_page_preserve_explicit_outcome_omission_without_disclosing_other_metadata()
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["history.outcomeCaptureState"] = "size-omitted", ["history.outcomeCount"] = "1",
+            ["history.outcomeContentHash"] = RuntimeHistoryIdentity.CreateBinding([new string('a', 2045)]),
+            ["private"] = "private-sentinel"
+        };
+        await using var host = await HistoryHostAsync(new HistorySource { EventMetadata = metadata });
+        var page = (await host.Client.GetFromJsonAsync<RuntimeHistoryPageView>(HistoryPath))!;
+        var exact = (await host.Client.GetFromJsonAsync<RuntimeHistoryEventDetailsView>(HistoryPath + "/events/future-event"))!;
+        foreach (var item in new[] { Assert.Single(page.Items), exact.Event })
+        {
+            Assert.Equal("size-omitted", item.Metadata["history.outcomeCaptureState"]);
+            Assert.Equal("1", item.Metadata["history.outcomeCount"]);
+            Assert.Equal(metadata["history.outcomeContentHash"], item.Metadata["history.outcomeContentHash"]);
+            Assert.False(item.Metadata.ContainsKey("history.outcomeNames"));
+            Assert.False(item.Metadata.ContainsKey("private"));
+            Assert.Equal(("physical", "logical", "ae-1"), (item.PhysicalCommitId, item.CheckpointId, item.ActivityExecutionId));
+        }
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("/events/future-event")]
@@ -366,6 +389,7 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         internal bool Uncaptured { get; init; }
         internal bool Invalid { get; init; }
         internal RuntimeHistoryEvent? DeliverySource { get; init; }
+        internal IReadOnlyDictionary<string, string>? EventMetadata { get; init; }
         internal bool MoreSourceHistory { get; init; }
         internal bool AdvanceAfterSourceInspection { get; init; }
         internal List<RuntimeHistoryQuery> SourceQueries { get; } = [];
@@ -395,9 +419,9 @@ public sealed partial class RuntimeMinimalApiBehaviorTests
         { Calls++; return ValueTask.FromResult(new RuntimeHistoryBookmarkPage(Head, [Bookmark()], null)); }
         public ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
         { Calls++; return ValueTask.FromResult<RuntimeHistoryBookmark?>(Bookmark()); }
-        private static RuntimeHistoryEvent Event() => new("future-event", "wf-1", 1, RuntimeHistoryEventCategory.ActivityLifecycle,
+        private RuntimeHistoryEvent Event() => new("future-event", "wf-1", 1, RuntimeHistoryEventCategory.ActivityLifecycle,
             "FutureActivityKind", DateTimeOffset.UnixEpoch, "ae-1", "node", "logical", payload: JsonSerializer.SerializeToElement("private-sentinel"),
-            metadata: new Dictionary<string, string> { ["private"] = "private-sentinel", ["history.status"] = "Suspended" })
+            metadata: EventMetadata ?? new Dictionary<string, string> { ["private"] = "private-sentinel", ["history.status"] = "Suspended" })
             { SchemaVersion = 2, Authority = RuntimeHistoryAuthority.CommittedTransition, PhysicalCommitId = "physical", CheckpointOrdinal = 3 };
         private static RuntimeHistoryBookmark Bookmark() => new(new(new("bookmark", "wf-1", "ae-1", "continue"), "task", "hash",
             DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMinutes(1)), "node", RuntimeHistoryBookmarkStatus.Active,
