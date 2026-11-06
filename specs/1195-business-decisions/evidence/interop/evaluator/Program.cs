@@ -65,6 +65,26 @@ foreach(var item in cases) {
 var options=new JsonSerializerOptions {WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping};
 File.WriteAllText(Path.Combine(root,"differential-results.json"),JsonSerializer.Serialize(new {cases=cases.Count,elsaFailures=failures,referencePackage="ScratchyDisk.DmnEngine/2.0.1",referenceSourceCommit="67bae6927a28f77138aae98dcd35d93b1af39838",profile="elsa-dmn-table-v1",semantics="elsa-dmn-table-v1.0",adapter="Typed inputs map exactly into CLR decimal/string/bool/null. Reference variable wrappers unwrap only. Native empty-list no-match and normalized output names remain visible. COLLECT order compared as multiset.",reports},options)+"\n");
 Console.WriteLine($"Elsa normative expectations: {cases.Count-failures}/{cases.Count} passed. See differential-results.json for actual reference outcomes and limits.");
+// Actual Studio editor output is compiled and evaluated, independently of DOM-shape assertions.
+var editorCases = new[] {
+ new { File = "declaredRenamed.dmn", Inputs = "{\"total\":{\"kind\":\"number\",\"value\":\"900\"}}", Expected = "{\"kind\":\"string\",\"value\":\"Approved\"}" },
+ new { File = "declaredRetyped.dmn", Inputs = "{\"total\":{\"kind\":\"string\",\"value\":\"ordinary\"}}", Expected = "{\"kind\":\"string\",\"value\":\"Approved\"}" },
+ new { File = "declaredOutputs.dmn", Inputs = "{\"amount\":{\"kind\":\"number\",\"value\":\"900\"}}", Expected = "{\"result\":{\"kind\":\"string\",\"value\":\"Approved\"},\"result2\":{\"kind\":\"string\",\"value\":\"\"}}" },
+ new { File = "declaredScalar.dmn", Inputs = "{\"amount\":{\"kind\":\"number\",\"value\":\"900\"}}", Expected = "{\"kind\":\"number\",\"value\":\"12\"}" },
+ new { File = "uniqueInput.dmn", Inputs = "{\"input2\":{\"kind\":\"number\",\"value\":\"900\"},\"input3\":{\"kind\":\"string\",\"value\":\"ordinary\"}}", Expected = "{\"kind\":\"string\",\"value\":\"Approved\"}" }
+};
+var editorReports = new List<object>();
+foreach (var c in editorCases) {
+ var bytes = File.ReadAllBytes(Path.Combine(root,"roundtrip",c.File));
+ var compiled = engine.Compile(Encoding.UTF8.GetString(bytes));
+ var inputs = JsonSerializer.Deserialize<Dictionary<string,DecisionValue>>(c.Inputs,new JsonSerializerOptions { PropertyNameCaseInsensitive=true })!;
+ var evaluated = compiled.Artifact is {} artifact ? engine.Evaluate(artifact,inputs) : null;
+ var passed = evaluated?.Status == "Success" && JsonNode.DeepEquals(JsonNode.Parse(c.Expected),evaluated is null ? null : JsonNode.Parse(evaluated.Result.GetRawText()));
+ if (!passed) failures++;
+ editorReports.Add(new {file=c.File,sourceSha256=Convert.ToHexStringLower(SHA256.HashData(bytes)),passed,status=evaluated?.Status,diagnostics=compiled.Diagnostics.Select(d=>d.Code),result=evaluated?.Result});
+}
+File.WriteAllText(Path.Combine(root,"editor-mutations.json"),JsonSerializer.Serialize(editorReports,options)+"\n");
+Console.WriteLine($"Actual editor mutations: {editorCases.Length} checked; aggregate failures {failures}.");
 return failures==0?0:1;
 
 static JsonNode Tag(object? value) {

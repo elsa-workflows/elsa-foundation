@@ -34,6 +34,33 @@ describe("targeted decision XML authoring", () => {
     expect(parseTable(xml).rules[0].outputs).toEqual(['"Manager"']);
     expect(parseTable(xml).rules.every(rule => rule.inputs.length === 1)).toBe(true);
   });
+  it("keeps imported input declarations consistent when renaming or retyping a column", () => {
+    const xml = newDecisionXml().replace("<decision ", '<inputData id="source" name="Purchase amount"><variable id="source_variable" name="amount" typeRef="number"/></inputData><decision '), table = parseTable(xml);
+    const changed = editTable(xml, { kind: "clause", id: table.inputs[0].id, output: false, name: "total", type: "string" });
+    const doc = new DOMParser().parseFromString(changed, "application/xml"), data = doc.getElementsByTagNameNS(dmnNamespace, "inputData")[0];
+    expect(data.getAttribute("name")).toBe("Purchase amount"); expect(data.id).toBe("source");
+    expect(data.firstElementChild?.getAttribute("name")).toBe("total"); expect(data.firstElementChild?.getAttribute("typeRef")).toBe("string");
+    expect(data.firstElementChild?.id).toBe("source_variable");
+  });
+  it("refuses deletion of a declaration-backed input rather than leaving stale declarations or dropping diagrams", () => {
+    const original = newDecisionXml().replace("<decision ", '<inputData id="source" name="amount"><variable id="source_variable" typeRef="number"/></inputData><decision ');
+    const xml = editTable(original, { kind: "add-clause", output: false });
+    expect(() => editTable(xml, { kind: "delete-clause", id: parseTable(xml).inputs[0].id, output: false })).toThrow("input-data declaration");
+    expect(parseTable(xml).inputs[0].name).toBe("amount");
+  });
+  it("keeps an optional decision variable consistent across scalar type and result-shape changes", () => {
+    const xml = newDecisionXml().replace("<decisionTable", '<variable id="decision_variable" name="approval" typeRef="string"/><decisionTable'), table = parseTable(xml);
+    const scalar = editTable(xml, { kind: "clause", id: table.outputs[0].id, output: true, name: "result", type: "number" });
+    const variable = (source: string) => new DOMParser().parseFromString(source, "application/xml").getElementsByTagNameNS(dmnNamespace, "variable")[0];
+    expect(variable(scalar).getAttribute("typeRef")).toBe("number");
+    const multiple = editTable(scalar, { kind: "add-clause", output: true });
+    expect(variable(multiple).hasAttribute("typeRef")).toBe(false); expect(variable(multiple).id).toBe("decision_variable");
+  });
+  it("generates a distinct input symbol after existing columns have been renamed", () => {
+    const xml = newDecisionXml(), table = parseTable(xml);
+    const renamed = editTable(xml, { kind: "clause", id: table.inputs[0].id, output: false, name: "input2", type: "number" });
+    expect(parseTable(editTable(renamed, { kind: "add-clause", output: false })).inputs.map(input => input.name)).toEqual(["input2", "input3"]);
+  });
   it("refuses ambiguous tables and entities while retaining the source", () => {
     const xml = newDecisionXml();
     expect(() => parseTable(xml.replace("<definitions", '<!DOCTYPE definitions [<!ENTITY foo SYSTEM "file:///etc/passwd">]><definitions'))).toThrow("entities");

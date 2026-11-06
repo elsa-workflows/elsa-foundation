@@ -63,7 +63,7 @@ function setPlainText(element: Element, value: string) {
 function entry(doc: Document, output: boolean, value: string) { const element = doc.createElementNS(dmnNamespace, output ? "outputEntry" : "inputEntry"); element.setAttribute("id", `cell_${crypto.randomUUID().replaceAll("-", "")}`); element.append(textElement(doc, "text", value)); return element; }
 const defaultOutput = (type: string | null) => type === "number" ? "0" : type === "boolean" ? "false" : '""';
 export function editTable(xml: string, edit: TableEdit): string {
-  const { doc, table } = read(xml);
+  const { doc, decision, table } = read(xml);
   const rules = children(table, "rule");
   if (edit.kind === "cell") {
     const rule = rules.find(item => item.id === edit.ruleId);
@@ -77,7 +77,16 @@ export function editTable(xml: string, edit: TableEdit): string {
     const clause = children(table, edit.output ? "output" : "input").find(item => item.id === edit.id);
     if (!clause) throw new Error("The selected column no longer exists.");
     if (edit.output) { clause.setAttribute(children(table, "output").length === 1 ? "label" : "name", edit.name); clause.setAttribute("typeRef", edit.type); }
-    else { const expression = required(clause, "inputExpression"); setPlainText(required(expression, "text"), edit.name); expression.setAttribute("typeRef", edit.type); }
+    else {
+      const expression = required(clause, "inputExpression"), text = required(expression, "text"), oldName = text.textContent?.trim();
+      for (const data of children(doc.documentElement, "inputData")) {
+        const variable = required(data, "variable");
+        if ((variable.getAttribute("name") ?? data.getAttribute("name")) !== oldName) continue;
+        variable.setAttribute("name", edit.name);
+        if (variable.hasAttribute("typeRef")) variable.setAttribute("typeRef", edit.type);
+      }
+      setPlainText(text, edit.name); expression.setAttribute("typeRef", edit.type);
+    }
   } else if (edit.kind === "annotation") {
     const rule = rules.find(item => item.id === edit.ruleId);
     if (!rule) throw new Error("The selected rule no longer exists.");
@@ -105,7 +114,11 @@ export function editTable(xml: string, edit: TableEdit): string {
       let suffix = columns.length + 1; while (existingNames.has(`result${suffix}`)) suffix++;
       clause.setAttribute("name", `result${suffix}`); clause.setAttribute("typeRef", "string");
     }
-    else { const expression = doc.createElementNS(dmnNamespace, "inputExpression"); expression.setAttribute("id", `${id}_expression`); expression.setAttribute("typeRef", "string"); expression.append(textElement(doc, "text", `input${columns.length + 1}`)); clause.append(expression); }
+    else {
+      const names = new Set(columns.map(column => required(required(column, "inputExpression"), "text").textContent?.trim()));
+      let suffix = columns.length + 1; while (names.has(`input${suffix}`)) suffix++;
+      const expression = doc.createElementNS(dmnNamespace, "inputExpression"); expression.setAttribute("id", `${id}_expression`); expression.setAttribute("typeRef", "string"); expression.append(textElement(doc, "text", `input${suffix}`)); clause.append(expression);
+    }
     const anchor = edit.output ? rules[0] : children(table, "output")[0] ?? rules[0]; table.insertBefore(clause, anchor ?? null);
     rules.forEach(rule => { const cell = entry(doc, edit.output, edit.output ? '""' : "-"); rule.insertBefore(cell, edit.output ? null : children(rule, "outputEntry")[0] ?? null); });
   } else {
@@ -113,6 +126,11 @@ export function editTable(xml: string, edit: TableEdit): string {
     if (columns.length <= 1) throw new Error("Keep at least one input and output column.");
     const index = columns.findIndex(item => item.id === edit.id);
     if (index < 0) throw new Error("The selected column no longer exists.");
+    if (!edit.output) {
+      const name = required(required(columns[index], "inputExpression"), "text").textContent?.trim();
+      if (children(doc.documentElement, "inputData").some(data => (required(data, "variable").getAttribute("name") ?? data.getAttribute("name")) === name))
+        throw new Error("This input has a retained DMN input-data declaration. Delete it in a DMN modeler so its references and diagrams remain consistent.");
+    }
     columns[index].remove();
     if (edit.output && columns.length === 2) {
       const remaining = columns[index === 0 ? 1 : 0];
@@ -120,6 +138,13 @@ export function editTable(xml: string, edit: TableEdit): string {
       remaining.removeAttribute("name");
     }
     rules.forEach(rule => children(rule, edit.output ? "outputEntry" : "inputEntry")[index]?.remove());
+  }
+  if (edit.kind === "clause" && edit.output || edit.kind === "add-clause" && edit.output || edit.kind === "delete-clause" && edit.output) {
+    const variable = children(decision, "variable")[0], outputs = children(table, "output");
+    if (variable?.hasAttribute("typeRef")) {
+      if (outputs.length === 1) variable.setAttribute("typeRef", outputs[0].getAttribute("typeRef") ?? "");
+      else variable.removeAttribute("typeRef");
+    }
   }
   return new XMLSerializer().serializeToString(doc);
 }
