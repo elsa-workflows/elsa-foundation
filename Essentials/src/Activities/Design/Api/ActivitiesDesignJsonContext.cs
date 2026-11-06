@@ -67,6 +67,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(GetActivityAuthoringCapabilities))]
 [JsonSerializable(typeof(ActivityDataSelectionContextRequest))]
 [JsonSerializable(typeof(ActivityDataSelectionContextResponse))]
+[JsonSerializable(typeof(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding))]
 [JsonSerializable(typeof(ActivityDefinitionDraftState))]
 [JsonSerializable(typeof(ActivityDataSelectionContextIdentity))]
 [JsonSerializable(typeof(ActivityAuthoringCatalogResult))]

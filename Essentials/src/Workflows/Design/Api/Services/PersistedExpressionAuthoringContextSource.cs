@@ -134,17 +134,17 @@ public sealed class PersistedExpressionAuthoringContextSource(
         IReadOnlyDictionary<string, string> inputNames, ActivityNode? root, CancellationToken ct)
     {
         var shape = ToShape(source.Shape);
-        if (source.Binding.ExpressionType == "Input")
+        if (source.Binding?.ExpressionType == "Input")
         {
             var key = source.Id["input:".Length..];
             return new(source.Id, inputNames.GetValueOrDefault(key, source.DisplayName), ExpressionSymbolKind.WorkflowInput, shape);
         }
-        if (source.Binding.ExpressionType == "Variable")
+        if (source.Binding?.ExpressionType == "Variable")
             return new(source.Id, source.DisplayName, ExpressionSymbolKind.Variable, shape);
-        if (source.Binding.ExpressionType != "ActivityResult" || source.Availability != Elsa.Workflows.Design.Core.Models.ActivityChildResultAvailability.Definite ||
-            source.Binding.Value is not JsonElement binding) return null;
-        var producer = binding.GetProperty("producerNodeId").GetString()!;
-        var projection = binding.GetProperty("projectionKey").GetString()!;
+        if (source.ActivityResultSource is not { } result ||
+            source.Availability != Elsa.Workflows.Design.Core.Models.ActivityChildResultAvailability.Definite) return null;
+        var producer = result.ProducerNodeId;
+        var projection = result.ProjectionKey;
         // An unproven whole result was never an existing named output. Do not invent a symbol for it.
         if (projection == "$result" && source.Shape.State != ActivitySerializedShapeState.Known) return null;
         var name = projection;

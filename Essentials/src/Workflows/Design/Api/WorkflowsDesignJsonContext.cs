@@ -128,6 +128,7 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(ActivityDataContextRequest))]
 [JsonSerializable(typeof(ActivityDataContextResponse))]
 [JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis))]
+[JsonSerializable(typeof(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding))]
 [JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery))]
 [JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionSourceFacts))]
 [JsonSerializable(typeof(PromotionPreflightAssessmentView))]

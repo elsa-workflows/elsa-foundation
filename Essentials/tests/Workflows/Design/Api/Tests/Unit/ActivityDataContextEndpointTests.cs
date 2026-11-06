@@ -43,6 +43,12 @@ public sealed class ActivityDataContextEndpointTests
         using var wire = JsonDocument.Parse(result.Json);
         Assert.Equal("unknown", wire.RootElement.GetProperty("analysis").GetProperty("sources")[0].GetProperty("shape").GetProperty("state").GetString());
         Assert.Equal("definite", wire.RootElement.GetProperty("analysis").GetProperty("sources")[0].GetProperty("availability").GetString());
+        var resultSource = wire.RootElement.GetProperty("analysis").GetProperty("sources").EnumerateArray()
+            .Single(source => source.GetProperty("id").GetString() == "activity:producer:$result");
+        Assert.Equal(JsonValueKind.Null, resultSource.GetProperty("binding").ValueKind);
+        Assert.Equal("RuntimeScopeBindingUnavailable", resultSource.GetProperty("reasonCode").GetString());
+        Assert.Equal("producer", resultSource.GetProperty("activityResultSource").GetProperty("producerNodeId").GetString());
+        Assert.Equal("$result", resultSource.GetProperty("activityResultSource").GetProperty("projectionKey").GetString());
         Assert.Equal("Customer ID", result.Body.Analysis!.Target!.DisplayName);
         Assert.Equal(new TypeReference("String"), result.Body.Analysis.Target.Type);
         Assert.Contains(result.Body.Analysis.Sources, source => source.Id == "activity:producer:$result" && source.Shape.State == ActivitySerializedShapeState.Unknown);

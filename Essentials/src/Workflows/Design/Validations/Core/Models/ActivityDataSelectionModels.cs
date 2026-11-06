@@ -51,15 +51,19 @@ public sealed record ActivityDataSelectionTargetFacts(
     bool? IsSensitive = null,
     bool? IsCredential = null);
 
-/// <summary>Metadata for an existing role binding; Id and labels are presentation, not runtime identities.</summary>
+/// <summary>Authorized source metadata; a null Binding and its ReasonCode mean no safe direct runtime binding is available.</summary>
 public sealed record ActivityDataSelectionSourceFacts(
     string Id,
     string DisplayName,
     string? ScopeId,
-    ArgumentValue Binding,
+    ArgumentValue? Binding,
     Elsa.Workflows.Design.Core.Models.ActivityChildResultAvailability Availability,
     ActivitySerializedShape Shape,
-    string? ReasonCode = null);
+    string? ReasonCode = null)
+{
+    /// <summary>Authorized producer identity for the existing portable-expression contract, independent of direct runtime scope binding.</summary>
+    public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
+}
 
 /// <summary>One source analysis, used independently by discovery, diagnostics and publication.</summary>
 public sealed record ActivityDataSelectionAnalysis(

@@ -61,7 +61,7 @@ public sealed class ActivityDataSelectionContextTests
         { Inputs = [new("declared", "Declared", new("String"), false, true, null, "elsa.json")] } };
         var result = await fixture.Service.ResolveAsync(fixture.Request(), default);
         Assert.Equal("supported", result.State);
-        Assert.IsType<VariableReference>(Assert.Single(result.Analysis!.Sources).Binding.Value);
+        Assert.IsType<VariableReference>(Assert.Single(result.Analysis!.Sources).Binding!.Value);
         var json = JsonSerializer.Serialize(result, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!);
         Assert.Contains("\"referenceKey\":\"declared\"", json);
         Assert.DoesNotContain("producerNodeId", json);

@@ -122,8 +122,10 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 if (version is null) continue;
                 foreach (var projection in new[] { "$result" }.Concat(version.Outputs.Select(output => output.ReferenceKey)).Distinct(StringComparer.Ordinal))
                 {
+                    // Static order facts do not establish a runtime execution-scope constraint. Keep the
+                    // source inspectable without inventing a direct binding; portable identity is separate.
                     var source = await Resolve(context, consumer,
-                        new("ActivityResult", producer.Node.NodeId, ResultScope(producer), projection),
+                        new("ActivityResult", producer.Node.NodeId, Projection: projection),
                         Path(consumer, target.InputKey), findings, cancellationToken, admitOccurrence: false);
                     if (source is not null) candidates.Add(source);
                 }
@@ -131,7 +133,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         }
 
         var allowed = candidates.Where(source => targetFacts.Constraint is null ||
-            targetFacts.Constraint.AllowedExpressionTypes.Contains(source.Binding.ExpressionType, StringComparer.OrdinalIgnoreCase));
+            targetFacts.Constraint.AllowedExpressionTypes.Contains((source.Binding?.ExpressionType ?? "ActivityResult"), StringComparer.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(query.Search))
             allowed = allowed.Where(source => source.DisplayName.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
                 || source.Id.Contains(query.Search, StringComparison.OrdinalIgnoreCase));
@@ -142,7 +144,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         {
             var shape = await Shape(source, document, query.MemberPath, new(query.ShapeLimits.MaximumDepth, budget.Remaining), cancellationToken);
             shape = budget.Bound(shape);
-            factsBuilder.Add(new(source.Id, source.DisplayName, source.ScopeId, source.Binding, source.Availability, shape, source.ReasonCode));
+            factsBuilder.Add(new(source.Id, source.DisplayName, source.ScopeId, source.Binding, source.Availability, shape, source.ReasonCode) { ActivityResultSource = source.ActivityResultSource });
         }
         if (query.Source is not null && candidates.Count > 0 && !factsBuilder.Any())
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/SourceRestricted", "The owning input contract does not accept this source role."));
@@ -279,15 +281,15 @@ internal sealed class ActivityDataSelectionAnalyzer(
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
         return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
             output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
-            new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
-                producerScopeId = binding.Scope ?? ResultScope(producer), isOptional = binding.IsOptional }), "ActivityResult"),
+            binding.Scope is null ? null : new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult"),
             availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
-            availability switch {
+            binding.Scope is null ? "RuntimeScopeBindingUnavailable" : availability switch {
                 ActivityChildResultAvailability.Definite => null,
                 ActivityChildResultAvailability.Conditional => "ConditionalOccurrence",
                 ActivityChildResultAvailability.Unknown => "AvailabilityUnknown",
                 _ => "UnavailableProducer"
-            });
+            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
     }
 
     private async ValueTask<ActivitySerializedShape> Shape(Source source, ActivityDataSelectionDocument document,
@@ -342,12 +344,6 @@ internal sealed class ActivityDataSelectionAnalyzer(
             ? VariableReference.WorkflowScopeId : scope;
     private static string AuthoredScope(ActivityDataSelectionDocument document, string scope) =>
         document.ResourceKind == "ActivityDefinition" && scope == VariableReference.WorkflowScopeId ? "activity-graph" : scope;
-    private static string ResultScope(ActivityDataSelectionGraph.Location producer)
-    {
-        for (var ancestor = producer.Parent; ancestor is not null; ancestor = ancestor.Parent)
-            if (ancestor.Node.Structure?.Kind == "elsa.flowchart.structure") return "scope:root";
-        return producer.Parent?.Node.NodeId ?? VariableReference.WorkflowScopeId;
-    }
     private static bool RequiresReturn(ActivityDataSelectionGraph.Location producer) => producer.Node.Structure?.Kind is
         "elsa.sequence.structure" or "elsa.parallel.structure" or "elsa.flowchart.structure";
     private static string Path(ActivityDataSelectionGraph.Location location, string key) => $"{location.Node.NodeId}/inputs/{key}";
@@ -381,9 +377,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
     private static ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
         ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
         new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore);
-    private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue Binding,
+    private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
-        bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null);
+        bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
+    {
+        public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
+    }
     private sealed class Request(ActivityDataSelectionDocument document, ActivityDataSelectionGraph graph, int maxDepth)
     {
         public ActivityDataSelectionDocument Document { get; } = document;

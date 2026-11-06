@@ -16,6 +16,41 @@ namespace Elsa.Workflows.Design.Tests;
 public sealed class ActivityDataSelectionAnalyzerTests
 {
     [Theory]
+    [InlineData("sequence")]
+    [InlineData("flowchart")]
+    [InlineData("flowchart-cycle")]
+    [InlineData("flowchart-in-for")]
+    public async Task Automatic_result_metadata_never_invents_a_runtime_scope_constraint(string placement)
+    {
+        using var provider = Provider();
+        var root = Sequence(Node("producer"), Node("consumer"));
+        if (placement != "sequence")
+        {
+            var edges = new List<Elsa.Activities.Flowchart.Models.FlowchartConnection> { new(new("producer"), new("consumer")) };
+            if (placement == "flowchart-cycle") edges.Add(new(new("consumer"), new("producer")));
+            root = new("chart", "test", [], [], new("elsa.flowchart.structure", "1.0.0",
+                JsonSerializer.SerializeToElement(new Elsa.Activities.Flowchart.Models.FlowchartAuthoredStructure(
+                    [Node("producer"), Node("consumer")], edges, "producer"), Web)));
+            if (placement == "flowchart-in-for")
+                root = new("loop", "test", [], [], new(Elsa.Activities.For.Activities.For.StructureKind, "1.0.0",
+                    JsonSerializer.SerializeToElement(new Elsa.Activities.ControlFlow.Loops.LoopAuthoredStructure(root), Web)));
+        }
+        var result = await Analyzer(provider).AnalyzeAsync(Document(root), new("consumer", "CustomerId"));
+        Assert.Empty(result.Findings);
+        var source = Assert.Single(result.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
+        Assert.Null(source.Binding);
+        Assert.Equal("RuntimeScopeBindingUnavailable", source.ReasonCode);
+        Assert.Equal(new ActivityResultExpressionParameterBinding("producer", "$result"), source.ActivityResultSource);
+        Assert.NotNull(source.Shape);
+        var focused = await Analyzer(provider).AnalyzeAsync(Document(root), new("consumer", "CustomerId"),
+            new() { Source = Result("producer", optional: true, scope: "opaque-scope:do-not-rewrite") });
+        var supplied = Assert.Single(focused.Sources);
+        Assert.Equal("opaque-scope:do-not-rewrite", Assert.IsType<JsonElement>(supplied.Binding!.Value).GetProperty("producerScopeId").GetString());
+        Assert.True(supplied.ActivityResultSource!.IsOptional);
+    }
+
+    [Theory]
     [InlineData("Workflow", "PublicName", "stable-key")]
     [InlineData("WorkflowDefinition", "PublicName", "stable-key")]
     [InlineData("ActivityDefinition", "stable-key", "PublicName")]
@@ -27,7 +62,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
         var query = new ActivityDataSelectionQuery { Source = new(JsonSerializer.SerializeToElement(new { memberKey = accepted }), "WorkflowRequest") };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
         Assert.Empty(result.Findings);
-        var canonical = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding.Value);
+        var canonical = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding!.Value);
         Assert.Equal(accepted, canonical.GetProperty("memberKey").GetString());
         var invalid = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
             { Source = new(JsonSerializer.SerializeToElement(new { memberKey = rejected }), "WorkflowRequest") });
@@ -169,8 +204,8 @@ public sealed class ActivityDataSelectionAnalyzerTests
         Assert.Empty(result.Findings);
         var source = Assert.Single(result.Sources);
         Assert.Equal("root", source.ScopeId);
-        Assert.Equal("scope:root", Assert.IsType<JsonElement>(source.Binding.Value).GetProperty("producerScopeId").GetString());
-        Assert.Equal("producer", Assert.IsType<JsonElement>(source.Binding.Value).GetProperty("producerNodeId").GetString());
+        Assert.Equal("scope:root", Assert.IsType<JsonElement>(source.Binding!.Value).GetProperty("producerScopeId").GetString());
+        Assert.Equal("producer", Assert.IsType<JsonElement>(source.Binding!.Value).GetProperty("producerNodeId").GetString());
     }
 
     [Fact]
@@ -183,7 +218,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
         }), "ActivityResult");
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer"))),
             new("consumer", "CustomerId"), new() { Source = binding });
-        var payload = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding.Value);
+        var payload = Assert.IsType<JsonElement>(Assert.Single(result.Sources).Binding!.Value);
         Assert.False(payload.TryGetProperty("privateBusinessData", out _));
         Assert.Equal("scope:root", payload.GetProperty("producerScopeId").GetString());
     }
@@ -232,7 +267,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
         Assert.Empty(result.Findings);
         var sources = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         var variable = Assert.Single(sources.Sources, source => source.Id.StartsWith("variable:", StringComparison.Ordinal));
-        Assert.Equal("activity-graph", Assert.IsType<VariableReference>(variable.Binding.Value).DeclaringScopeId);
+        Assert.Equal("activity-graph", Assert.IsType<VariableReference>(variable.Binding!.Value).DeclaringScopeId);
     }
 
     [Fact]
@@ -407,8 +442,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
         using var provider = Provider(services => new Elsa.Activities.Compensation.ActivitiesCompensationFeature().ConfigureServices(services));
         Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(scope))).Findings);
         var browser = await Analyzer(provider).AnalyzeAsync(Document(scope), new("cancel", "CustomerId"));
-        var results = browser.Sources.Where(source => source.Binding.ExpressionType == "ActivityResult" &&
-            Assert.IsType<JsonElement>(source.Binding.Value).GetProperty("projectionKey").GetString() == "$result").ToArray();
+        var results = browser.Sources.Where(source => source.ActivityResultSource?.ProjectionKey == "$result").ToArray();
         Assert.Equal(new[] { "activity:deliver:$result", "activity:reserve:$result" }, results.Take(2).Select(source => source.Id));
         Assert.All(results.Take(2), source => Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability));
     }
