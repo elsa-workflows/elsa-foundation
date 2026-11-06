@@ -83,12 +83,12 @@ def main():
                 report['packages'].append({'id': values['id'], 'sha256': hashlib.sha256(package.read_bytes()).hexdigest()})
         if len(ids) != len(projects) or len(set(ids)) != len(ids):
             raise ValueError('The complete production package closure was not produced')
-        config = ET.parse(producer / 'NuGet.Config')
+        config = ET.parse(producer / 'NuGet.config')
         ET.SubElement(config.getroot().find('packageSources'), 'add', key='owned-candidate', value=str(feed))
         mapping = ET.SubElement(config.getroot().find('packageSourceMapping'), 'packageSource', key='owned-candidate')
         for package_id in ids:
             ET.SubElement(mapping, 'package', pattern=package_id)
-        config.write(consumer / 'NuGet.Config', encoding='unicode')
+        config.write(consumer / 'NuGet.config', encoding='unicode')
         shutil.copy2(producer / 'global.json', consumer / 'global.json')
         project = ET.Element('Project', Sdk='Microsoft.NET.Sdk')
         props = ET.SubElement(project, 'PropertyGroup')
