@@ -38,3 +38,6 @@ These are offline model checks and SQLite component tests. They do not qualify l
 PostgreSQL, SQL Server or MySQL engines, migration upgrade preservation, full physical
 participation, producer acceptance, recipient delivery, registration or product journeys.
 The subsequent local header and read/claim/renew drafts are outside this frozen source.
+
+The later [R3 continuation](../t007-forwarding-r3/README.md) finishes only the unfinished
+EF check and retains this original failed/incomplete result unchanged.

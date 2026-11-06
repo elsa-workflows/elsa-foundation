@@ -6,6 +6,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
 {
     private readonly Dictionary<string, WorkflowExecutable> _executables = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _messageInterestIncarnations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, RootWriteLeaseState>> _rootWriteLeases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DeletionGuardState> _deletionGuards = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
@@ -37,10 +38,18 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
             // Idempotent by artifact id: artifacts are content-addressed and immutable, so an already-stored
             // artifact is authoritative — a behaviorally identical republish must not overwrite it.
             foreach (var executable in executables)
-                _executables.TryAdd(executable.Identity.ArtifactId, executable);
+                if (_executables.TryAdd(executable.Identity.ArtifactId, executable))
+                    _messageInterestIncarnations.Add(executable.Identity.ArtifactId, Guid.NewGuid().ToString("N"));
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    // Actual volatile per-insert identity for the unregistered Message publication participant; no model capability.
+    internal RuntimeExecutionMaterial? ReadNativeMaterialForMessageInterest(string artifactId)
+    {
+        lock (_gate) return _executables.TryGetValue(artifactId, out var executable)
+            ? new RuntimeExecutionMaterial(executable, _messageInterestIncarnations[artifactId]) : null;
     }
 
     public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -51,6 +60,7 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         {
             _rootWriteLeases.Remove(artifactId);
             _deletionGuards.Remove(artifactId);
+            _messageInterestIncarnations.Remove(artifactId);
             return ValueTask.FromResult(_executables.Remove(artifactId));
         }
     }
@@ -193,6 +203,7 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
                 return ValueTask.FromResult(false);
 
             _deletionGuards.Remove(guard.ArtifactId);
+            _messageInterestIncarnations.Remove(guard.ArtifactId);
             return ValueTask.FromResult(_executables.Remove(guard.ArtifactId));
         }
     }

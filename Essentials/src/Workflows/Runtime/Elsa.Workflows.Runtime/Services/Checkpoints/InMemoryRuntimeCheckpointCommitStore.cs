@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Messaging;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -19,6 +20,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     private readonly AsyncLocal<int> _writeGateDepth = new();
 
     internal object SyncRoot { get; } = new();
+    internal InMemoryMessagePublicationInterestStore.SharedState? MessagePublicationInterests { get; set; }
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
