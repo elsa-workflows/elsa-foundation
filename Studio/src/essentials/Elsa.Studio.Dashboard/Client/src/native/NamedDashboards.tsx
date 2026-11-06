@@ -34,6 +34,7 @@ function ResourceCollection({ native, kind, navigate }: RouteProps & { native: D
   const [ownership, setOwnership] = useState("mine");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const submittedSearch = useRef("");
   const [items, setItems] = useState<DashboardResource[]>([]);
   const [cursor, setCursor] = useState<string | null>();
   const [error, setError] = useState<string>();
@@ -43,12 +44,14 @@ function ResourceCollection({ native, kind, navigate }: RouteProps & { native: D
   const title = kind === "question" ? "Questions" : "Dashboards";
   const load = useCallback(async (query: string, next?: string | null) => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
-    setLoading(true); setError(undefined);
-    try { const page = await native.list(kind, ownership, query, next, controller.signal); if (controller.signal.aborted) return; setItems(current => next ? [...current, ...page.items] : page.items); setCursor(page.continuationToken); setAppliedSearch(query); }
+    // Ownership may change before this request resolves. Keep the latest submitted query,
+    // rather than reverting to either an empty search or the last successful response.
+    submittedSearch.current = query; setAppliedSearch(query); setLoading(true); setError(undefined);
+    try { const page = await native.list(kind, ownership, query, next, controller.signal); if (controller.signal.aborted) return; setItems(current => next ? [...current, ...page.items] : page.items); setCursor(page.continuationToken); }
     catch (cause) { if (!controller.signal.aborted) { setItems([]); setCursor(null); setError(errorMessage(cause)); } }
     finally { if (!controller.signal.aborted) setLoading(false); }
   }, [native, kind, ownership]);
-  useEffect(() => { setItems([]); void load(""); return () => request.current?.abort(); }, [load]);
+  useEffect(() => { setItems([]); void load(submittedSearch.current); return () => request.current?.abort(); }, [load]);
   return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={title} description={kind === "question" ? "Save a question once. Reuse it with your current data access." : "Arrange saved questions into personal and shared views."} actions={<>{canCreate ? <StudioButton variant="primary" onClick={() => navigate(`${resourcePath(kind)}/new`)}>Create {kind}</StudioButton> : null}<StudioButton disabled={loading} onClick={() => void load(appliedSearch)}>Refresh</StudioButton></>} />
     <StudioCollectionToolbar><form className="named-search" onSubmit={event => { event.preventDefault(); void load(search); }}><StudioSearchInput aria-label={`Search ${title.toLowerCase()}`} value={search} onChange={event => setSearch(event.target.value)} /><StudioButton type="submit">Search</StudioButton></form><div className="studio-filter-group" role="group" aria-label="Ownership"><StudioButton aria-pressed={ownership === "mine"} onClick={() => setOwnership("mine")}>Mine</StudioButton><StudioButton aria-pressed={ownership === "shared"} onClick={() => setOwnership("shared")}>Shared with me</StudioButton></div></StudioCollectionToolbar>
     {loading && !items.length ? <SkeletonRows label={`Loading ${title.toLowerCase()}`} /> : error ? <StudioResultState tone="danger" title={`${title} could not be loaded`} description={error} actions={<StudioButton onClick={() => void load(appliedSearch)}>Retry</StudioButton>} /> : !items.length ? <StudioResultState title={appliedSearch ? "No matching definitions" : ownership === "shared" ? "Nothing has been shared with you" : `No ${title.toLowerCase()} yet`} description={appliedSearch ? "Change your search to see other definitions." : kind === "question" ? "Create a supported question using ordinary controls or Weaver." : "Create a dashboard and add accessible saved questions."} actions={appliedSearch ? <StudioButton onClick={() => { setSearch(""); void load(""); }}>Clear search</StudioButton> : canCreate ? <StudioButton onClick={() => navigate(`${resourcePath(kind)}/new`)}>Create {kind}</StudioButton> : undefined} /> : <StudioTableContainer role="region" aria-label={title} tabIndex={0}><table className="studio-table"><thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Access</th><th scope="col">Updated</th></tr></thead><tbody>{items.map(item => <tr key={item.id}><td><a href={resourcePath(kind, item.id)} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); navigate(resourcePath(kind, item.id)); } }}>{item.name}</a></td><td>{item.description}</td><td>{item.capabilities.canShare ? "Owner" : item.capabilities.canEdit ? "Can edit" : "Can view"}</td><td><time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time></td></tr>)}</tbody></table></StudioTableContainer>}
@@ -284,7 +287,12 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
     });
   }, [authoring, draft, saved, generationId, kind, native, lifetime, accessUnavailable, review.state, revisionConflict, denyProtectedContent, withholdResults, setDraft]);
   const notify = (title: string) => api.notifications?.notify({ level: "success", title });
-  const accepted = (resource: DashboardResource) => { setRevisionConflict(false); setReplacing(false); savedRef.current = resource; setSaved(resource); setDraft(resource); setProposalUndo(undefined); setDialog(null); };
+  const accepted = (resource: DashboardResource) => {
+    // Every successful write establishes a new exact revision. Retire its previous preview,
+    // drill binding and in-flight reads; ordinary Refresh will bind the newly saved revision.
+    withholdResults(); resultRef.current = undefined; setResultWithheld(false); setDrillError(undefined);
+    setRevisionConflict(false); setReplacing(false); savedRef.current = resource; setSaved(resource); setDraft(resource); setProposalUndo(undefined); setDialog(null);
+  };
   const validateDraft = async (report = true) => {
     const definition = draftRef.current.definition;
     if (!definition) return;

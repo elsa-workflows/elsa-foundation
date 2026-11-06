@@ -83,6 +83,50 @@ public sealed class WorkflowDashboardQueryTests
         Assert.Empty((await host.Queries.ExecuteAsync(Caller, question)).Rows);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Mixed_current_metric_visualization_bindings_fail_before_retained_run_reads(bool acrossAxes)
+    {
+        using var host = new Host();
+        await host.Add(Run("run", "definition", Current, WorkflowExecutionStatus.Completed));
+        var question = Aggregate();
+        question = question with { Query = question.Query with { GroupBy = ["definitionId"] },
+            Visualization = new() { Kind = "bar", X = acrossAxes ? "started" : "definitionId",
+                Y = acrossAxes ? ["current.started"] : ["started", "current.started"] } };
+
+        var validation = await host.Queries.ValidateAsync(Caller, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == "UNSUPPORTED_QUERY" && problem.Path == "visualization");
+        var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
+        Assert.Equal("UNSUPPORTED_QUERY", failure.Code);
+        Assert.Empty(host.Store.Requests);
+    }
+
+    [Theory]
+    [InlineData("started", false)]
+    [InlineData("current.started", false)]
+    [InlineData("started", true)]
+    [InlineData("current.started", true)]
+    public async Task One_current_metric_spelling_returns_the_bound_native_columns_and_values(string binding, bool metricOnBothAxes)
+    {
+        using var host = new Host();
+        await host.Add(Run("run-a", "definition", Current, WorkflowExecutionStatus.Completed));
+        await host.Add(Run("run-b", "definition", Current, WorkflowExecutionStatus.Faulted));
+        var question = Aggregate();
+        question = question with { Query = question.Query with { GroupBy = ["definitionId"] },
+            Visualization = new() { Kind = "bar", X = metricOnBothAxes ? binding : "definitionId", Y = [binding] } };
+
+        Assert.True((await host.Queries.ValidateAsync(Caller, question)).IsValid);
+        var result = await host.Queries.ExecuteAsync(Caller, question);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(2m, Number(row, binding));
+        Assert.Contains(result.Columns, column => column.Id == binding);
+        Assert.DoesNotContain(result.Columns, column => column.Id == (binding == "started" ? "current.started" : "started"));
+        Assert.True(row.Values.ContainsKey(question.Visualization.X!));
+        Assert.All(question.Visualization.Y, reference => Assert.True(row.Values.ContainsKey(reference)));
+    }
+
     [Fact]
     public async Task Novel_comparison_filters_and_current_folder_groups_match_independent_counts()
     {

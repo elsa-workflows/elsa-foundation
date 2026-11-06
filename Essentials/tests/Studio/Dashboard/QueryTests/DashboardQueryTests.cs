@@ -164,6 +164,36 @@ public sealed class DashboardQueryTests
         Assert.False((await host.Service.ValidateAsync(Caller, question)).IsValid);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Mixed_plain_and_current_metric_visualization_bindings_are_rejected_before_module_validation(bool acrossAxes)
+    {
+        var source = new ExampleSource();
+        using var host = new Host(source);
+        var question = Question() with { Visualization = new() { Kind = "bar",
+            X = acrossAxes ? "total" : "current.total",
+            Y = acrossAxes ? ["current.total"] : ["total", "current.total"] } };
+
+        var validation = await host.Service.ValidateAsync(Caller, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == "UNSUPPORTED_QUERY" && problem.Path == "visualization");
+        var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Service.ExecuteAsync(Caller, question).AsTask());
+        Assert.Equal("UNSUPPORTED_QUERY", failure.Code);
+        Assert.Equal(0, source.ValidationCalls);
+        Assert.Equal(0, source.ExecutionCalls);
+    }
+
+    [Fact]
+    public async Task Distinct_metric_aliases_can_choose_different_current_spellings()
+    {
+        using var host = new Host(new ExampleSource());
+        var question = Question();
+        question = question with { Query = question.Query with { Metrics = [new("total", "amount-total", "v1"), new("other", "amount-total", "v1")] },
+            Visualization = new() { Kind = "bar", X = "total", Y = ["current.other"] } };
+        Assert.True((await host.Service.ValidateAsync(Caller, question)).IsValid);
+    }
+
     [Fact]
     public async Task Time_periods_are_resolved_once_and_exposed_with_their_meaning()
     {

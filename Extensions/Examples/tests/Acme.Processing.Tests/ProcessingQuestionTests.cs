@@ -62,6 +62,49 @@ public sealed class ProcessingQuestionTests
         Assert.Equal(expectedRows, (await host.Query.ExecuteAsync(host.Scope, question)).Rows.Count);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Mixed_current_metric_visualization_bindings_are_rejected_by_the_native_query_path(bool acrossAxes)
+    {
+        using var host = new Host();
+        await host.Create("retail", 60);
+        var question = Question([new("count", "processing.record-count", "v1")]);
+        question = question with { Query = question.Query with { GroupBy = ["customerCategory"] },
+            Visualization = new() { Kind = "bar", X = acrossAxes ? "count" : "customerCategory",
+                Y = acrossAxes ? ["current.count"] : ["count", "current.count"] } };
+
+        var validation = await host.Query.ValidateAsync(host.Scope, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == "UNSUPPORTED_QUERY" && problem.Path == "visualization");
+        var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Query.ExecuteAsync(host.Scope, question).AsTask());
+        Assert.Equal("UNSUPPORTED_QUERY", failure.Code);
+    }
+
+    [Theory]
+    [InlineData("count", false)]
+    [InlineData("current.count", false)]
+    [InlineData("count", true)]
+    [InlineData("current.count", true)]
+    public async Task One_current_metric_spelling_returns_bound_processing_columns_and_values(string binding, bool metricOnBothAxes)
+    {
+        using var host = new Host();
+        await host.Create("retail", 60);
+        await host.Create("retail", 120);
+        var question = Question([new("count", "processing.record-count", "v1")]);
+        question = question with { Query = question.Query with { GroupBy = ["customerCategory"] },
+            Visualization = new() { Kind = "bar", X = metricOnBothAxes ? binding : "customerCategory", Y = [binding] } };
+
+        Assert.True((await host.Query.ValidateAsync(host.Scope, question)).IsValid);
+        var result = await host.Query.ExecuteAsync(host.Scope, question);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(2m, Number(row, binding));
+        Assert.Contains(result.Columns, column => column.Id == binding);
+        Assert.DoesNotContain(result.Columns, column => column.Id == (binding == "count" ? "current.count" : "count"));
+        Assert.True(row.Values.ContainsKey(question.Visualization.X!));
+        Assert.All(question.Visualization.Y, reference => Assert.True(row.Values.ContainsKey(reference)));
+    }
+
     [Fact]
     public async Task Explicit_business_dimension_has_independently_checked_values_for_each_actor_and_tenant()
     {

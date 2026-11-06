@@ -158,6 +158,11 @@ internal static class DashboardQueryValidator
         foreach (var sort in query.Sort)
             if (!outputs.Contains(sort.Reference) || fields.TryGetValue(sort.Reference, out var field) && !field.Sortable)
                 Add("query.sort", "A sort reference is unavailable or not part of the output.");
+        var visualizationBindings = request.Visualization.Y.ToHashSet(StringComparer.Ordinal);
+        if (request.Visualization.X is { } axis) visualizationBindings.Add(axis);
+        foreach (var metric in query.Metrics)
+            if (visualizationBindings.Contains(metric.Alias) && visualizationBindings.Contains("current." + metric.Alias))
+                Add("visualization", "Use one spelling of each current metric across the visualization's X and Y bindings.");
         if (request.Visualization.X is { } x && !outputs.Contains(x) || request.Visualization.Y.Any(y => !outputs.Contains(y)))
             Add("visualization", "A visualization column is not part of the validated result.");
         foreach (var y in request.Visualization.Y)
