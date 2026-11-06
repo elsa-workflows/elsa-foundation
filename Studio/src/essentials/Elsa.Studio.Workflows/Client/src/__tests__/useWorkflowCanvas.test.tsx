@@ -56,6 +56,19 @@ describe("useWorkflowCanvas BPMN placement", () => {
     expect(layout).toMatchObject({ x: 640, y: 480 });
   });
 
+  it("keeps fractional BPMN positions identical in the layout and retained DI", () => {
+    const draft = bpmnDraft();
+    draft.state.rootActivity!.structure!.payload.diagram = { shapes: { start: { x: 0, y: 0, width: 36, height: 36 } }, edges: {} };
+    const harness = renderCanvas({ draft, catalog: [bpmnCatalogItem(), writeLineCatalogItem()], isBpmnDesigner: true });
+    const position = { x: 344.26829268292687, y: 216.9512195121951 };
+
+    harness.dragStop({ id: "start", position });
+
+    const saved = harness.committedDraft();
+    expect(saved.layout.find(record => record.nodeId === "start")).toMatchObject(position);
+    expect((saved.state.rootActivity!.structure!.payload.diagram as { shapes: { start: unknown } }).shapes.start).toMatchObject(position);
+  });
+
   it("persists every node of a multi-selection drag", () => {
     const harness = renderBpmnCanvas();
     const added = harness.addActivity(writeLineCatalogItem(), { x: 100, y: 100 });

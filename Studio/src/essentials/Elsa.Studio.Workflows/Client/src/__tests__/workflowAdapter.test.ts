@@ -511,6 +511,12 @@ describe("workflow adapter", () => {
     expect(layout.find(record => record.nodeId === "fresh")).not.toHaveProperty("width");
   });
 
+  it("keeps ordinary layout pixel rounding while allowing a BPMN mirror to retain exact positions", () => {
+    const nodes = [{ id: "shape", position: { x: 344.26829268292687, y: 216.9512195121951 }, data: {} }];
+    expect(updateLayout([], nodes)[0]).toMatchObject({ x: 344, y: 217 });
+    expect(updateLayout([], nodes, { roundPositions: false })[0]).toMatchObject(nodes[0].position);
+  });
+
   it("preserves authored Sequence order regardless of saved horizontal positions", () => {
     const root = sequenceRoot([node("b"), node("a")]);
     const scope = firstScope(root);
