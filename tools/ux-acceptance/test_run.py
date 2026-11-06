@@ -30,14 +30,15 @@ class VerdictTests(unittest.TestCase):
             for journey in acceptance.JOURNEYS]}]}
 
     def test_complete_evidence(self):
-        self.assertEqual(36, acceptance.verdict(self.report, self.root))
+        self.assertEqual(40, acceptance.verdict(self.report, self.root))
 
     def test_named_baseline_and_secret_journeys_remain_required(self):
         self.assertTrue({'collections and connection creation', 'agent authoring and navigation',
                          'executable designer parity', 'compact Secret create journey',
                          'user tasks inbox and response', 'feature filtering and settings dialogs',
                          'workflow template metadata defaults', 'save template toast',
-                         'publication blockers explain how to correct agent settings'} <= acceptance.JOURNEYS)
+                         'publication blockers explain how to correct agent settings',
+                         'business decisions authoring and explanations'} <= acceptance.JOURNEYS)
 
     def test_existing_designer_capture_contract_cannot_shrink(self):
         self.assertTrue({'reference', 'definition-sequence', 'executable-sequence', 'nested-sequence',
