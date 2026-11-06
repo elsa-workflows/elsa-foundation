@@ -1,8 +1,10 @@
-# Proposed owner semantic verification
+# Owner semantic verification
 
-**Status: Proposed.** Companion to [release-bundle](release-bundle.md), [model-artifacts](model-artifacts.md) and [promotion](promotion.md).
-The existing transport contracts establish captured bytes and the declared graph only; this document proposes the next owner ports.
-No transport result, design record or proposed interface is an activatable release or completed acceptance evidence.
+**Status: Shared orchestration implemented; owner adapters and integrated qualification pending.** Companion to
+[release-bundle](release-bundle.md), [model-artifacts](model-artifacts.md) and [promotion](promotion.md).
+The transport contracts establish captured bytes and the declared graph. The optional verification feature dispatches
+installed owner adapters and compares their complete actual facts. It installs no owner adapters itself.
+No transport result, design record or semantic verdict is an activatable release or completed promotion acceptance evidence.
 
 ## Distinct results
 
@@ -18,34 +20,41 @@ Apply still repeats current target checks; tests/evidence retain their own exact
 
 ## Neutral ports and dispatch
 
-Proposed names live under `Elsa.Workflows.Publishing.Releases.Core`; signatures are design sketches, not existing public API.
+The ports live under `Elsa.Workflows.Publishing.Releases.Core`; see
+[the public contracts](../../../Essentials/src/Workflows/Publishing/Releases/Core/ReleaseSemanticContracts.cs).
 
 ```csharp
 public interface IReleaseArtifactSemanticVerifier
 {
+    ReleaseSemanticAdapterIdentity Identity { get; }
     IReadOnlyCollection<ReleaseCodecKey> SupportedCodecs { get; }
-    ValueTask<ReleaseSemanticFacts> VerifyAsync(ReleaseBundleMember member,
-        ReadOnlyMemory<byte> payload, IReleaseBundleTransport bundle,
+    ValueTask<ReleaseSemanticFacts> VerifyAsync(ReleaseContentMember member,
+        ReadOnlyMemory<byte> payload, IReleaseContentReader content,
         CancellationToken cancellationToken = default);
 }
 
 public interface IReleaseOccurrenceInspector
 {
+    ReleaseSemanticAdapterIdentity Identity { get; }
     IReadOnlyCollection<ReleaseSiteKey> SupportedSites { get; }
     ValueTask<ReleaseOccurrenceFacts> InspectAsync(ReleaseSemanticSite site,
-        IReleaseBundleTransport bundle, CancellationToken cancellationToken = default);
+        IReleaseContentReader content, CancellationToken cancellationToken = default);
 }
 ```
 
 `ReleaseCodecKey` is the exact `(kind, codec, codecVersion)` tuple; `ReleaseSiteKey` is `(siteKind, discriminator, schemaVersion)`.
-Registries reject blank/duplicate claims at composition and missing claims at verification; no first-registration-wins fallback.
+Resolving the scoped framework verifier validates blank/duplicate registry claims; missing claims refuse at verification.
+`WorkflowReleaseVerificationFeature` depends on transport and checks one canonical framework verifier and codec during shell
+post-configuration. It does not build a temporary provider or eagerly instantiate scoped adapters during registration.
 Artifact verifiers own payload decoding. They return actual identity, owner-hash result, required edges/requirements, associations,
-dependency sites and located diagnostics with `Verified`, `Invalid`, `Unsupported` or `Incomplete` status.
+dependency sites, explicit root content/action capabilities and located diagnostics with `Verified`, `Invalid`, `Unsupported` or `Incomplete` status.
 Occurrence facts return actual required edges/requirements and an explicit completeness verdict for their claimed site.
 A site carries containing member key, semantic origin/occurrence path, node/input identity, discriminator/schema and owner payload JSON.
 Different facets of one occurrence are separate sites, allowing a reusable boundary and a module-owned activity to both be inspected.
 Inspection views never replace or reserialize retained bundle bytes. Ports contain no Design entities, compiler types or service locators.
-`IReleaseBundleTransport` is a bounded read-only bundle view; resolving omitted content from a target/source store is forbidden here.
+`IReleaseContentReader` indexes captured members, including their tagged owner version, and returns fresh payload copies.
+Resolving omitted content from a target/source store is forbidden here. The orchestration revalidates the transport before
+creating this indexed reader; adapters cannot supply a replacement declared manifest.
 Source export capture, target prerequisite assessment and staging are separate operations; verification writes nothing and executes nothing.
 
 ## Complete actual facts, then graph comparison
@@ -55,10 +64,21 @@ Source export capture, target prerequisite assessment and staging are separate o
 3. Inspect actual semantic references, not only manifest edges or generic dependency arrays. Every required site needs a complete answer.
 4. Normalize full typed edge identities, relation, occurrence/dispatch-node path and semantic requirements using ordinal exact identities.
 5. Compare actual and declared sets in both directions: omitted, invented, conflicting or incorrectly scoped facts are named refusals.
-6. Resolve the complete closure from actual verified edges, check full pins, shared-member consistency, cycles and unrelated extras.
+6. Require each selected root owner's explicit capability for the exact content/action pair. Same-member roots need the
+   same explicit allowance. A capability grants no serving authority: it establishes the owner-recognized role only.
+   Start actual reachability at selected members, following verified edges/associations to their content; do not seed the
+   requested content independently. Resolve the complete closure and check full pins, shared-member consistency, cycles and unrelated extras.
 7. Return an immutable verified-subject result bound to transport digest and verifier/codec capabilities; it grants no start authority.
 
+The default status is `Incomplete`; only explicit complete answers become `Verified`. `Invalid` takes precedence over
+`Unsupported`, then `Incomplete`. Adapter exceptions become stable, located incomplete diagnostics without exception text;
+cancellation propagates. Site/fact/diagnostic bounds apply independently of transport bounds. Declared-set comparison waits
+for complete owner answers, so an unsupported codec cannot masquerade as an observed empty closure.
+
 Each supported owner profile declares its closed inspection surface, including supported no-artifact-dependency leaf sites.
+The selected owner independently validates its source/publication association before allowing that exact root content;
+the existence of two valid captured members does not establish that they belong together. Root capabilities are not a
+request for every capable dependency to be selected, and selecting a dependency never implicitly makes it a serving root.
 No inspector claim must not mean "no dependency". Unknown/dynamic module references refuse unless the owner supplies a bounded resolver.
 Installed activity consumers prove descriptor support, not that arbitrary CLR code has no hidden dependencies or external effects.
 Package provenance/policy constraints are classified separately from payload-derived semantic requirements; compare each against its
@@ -75,7 +95,9 @@ Diagnostics identify safe member/occurrence/input paths and stable codes; do not
 | ETL | Artifact format 1/2, definition/positive integer version, hash/framed artifact ID and canonical pipeline; RunEtl literal selection must match embedded `etl.pipeline.v1` metadata and its separate ETL member |
 
 Native hashing uses the Runtime-owned hasher, including explicitly supported historical coverage; do not restamp old bodies as new hashes.
-Template hashing uses [ExecutableActivityTemplateBehaviorHasher](../../../Essentials/src/Workflows/Publishing/Core/Services/ExecutableActivityTemplateBehaviorHasher.cs).
+Template hashing uses Runtime-owned [ActivityTemplateHasher](../../../Essentials/src/Workflows/Runtime/Core/Models/ActivityTemplateHasher.cs).
+The existing Publishing `ExecutableActivityTemplateBehaviorHasher` forwards to that unchanged algorithm. Fixed vectors
+captured from the original helper before extraction preserve historical template identities.
 Model hashing uses [RuntimeModelMaterial.ComputeContentHash](../../../Essentials/src/Workflows/Runtime/Core/Models/RuntimeExecutionMaterial.cs), not the native hasher.
 ETL uses [EtlArtifactJson](../../../Extensions/Etl/src/Core/EtlArtifactJson.cs)/v2 owner codecs: typed compact property order,
 unprefixed lowercase SHA-256 and owner-framed artifact IDs. Generic JSON sorting or ETL draft recompilation is not verification.

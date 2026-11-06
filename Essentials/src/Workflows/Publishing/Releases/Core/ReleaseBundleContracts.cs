@@ -46,6 +46,9 @@ public interface IReleaseBundleTransport
 public interface IReleaseBundleCodec
 {
     IReleaseBundleTransport Validate(ReadOnlyMemory<byte> manifestUtf8, IReadOnlyDictionary<string, ReadOnlyMemory<byte>> blobs, ReleaseBundleLimits? limits = null);
+    /// <summary>Validates captured expanded parts directly; attachments are preserved outside the release digest.</summary>
+    IReleaseBundleTransport ValidateParts(ReadOnlyMemory<byte> manifestUtf8, IReadOnlyDictionary<string, ReadOnlyMemory<byte>> blobs,
+        IReadOnlyDictionary<string, ReadOnlyMemory<byte>> attachments, ReleaseBundleLimits? limits);
     ValueTask<IReleaseBundleTransport> ReadZipAsync(Stream input, ReleaseBundleLimits? limits = null, CancellationToken cancellationToken = default);
     ValueTask<IReleaseBundleTransport> ReadDirectoryAsync(string directory, ReleaseBundleLimits? limits = null, CancellationToken cancellationToken = default);
     ValueTask WriteZipAsync(IReleaseBundleTransport bundle, Stream output, ReleaseBundleLimits? limits = null, CancellationToken cancellationToken = default);

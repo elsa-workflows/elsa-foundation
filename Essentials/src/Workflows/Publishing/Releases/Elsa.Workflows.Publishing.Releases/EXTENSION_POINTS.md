@@ -1,4 +1,4 @@
-# Workflow release transport extension points
+# Workflow release transport and verification extension points
 
 ## IReleaseBundleCodec
 
@@ -13,11 +13,42 @@
 - **Known implementations:** `ReleaseBundleCodec` *(intra-domain — default)*. No cross-domain contributions are registered.
 
 The contract does not compile source, recognize installed owner codecs, prove actual dependency completeness, authenticate
-origin, write owner catalogs or activate workflows. Those gates precede any later release application capability.
+origin, write owner catalogs or activate workflows. `ValidateParts` revalidates manifest, blobs and optional opaque attachments
+from an archive store without re-encoding a ZIP. Those bytes remain transport-only input.
+
+## IReleaseSemanticVerifier
+
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseSemanticVerifier`.
+- **Kind:** Replacement; one selected verifier per shell. Register before the feature or use `services.Replace`.
+- **Default and lifetime:** `ReleaseSemanticVerifier`, internal, scoped, registered by `WorkflowReleaseVerificationFeature`.
+- **Purpose:** Revalidate captured transport/expected digest, dispatch exact owner codecs/sites, compare complete actual
+  identities, hashes, edges, scoped resource requirements and prerequisites, require each selected owner's explicit
+  content/action capability, and validate the actual graph from selected roots.
+- **Failure:** Immutable `Incomplete`, `Unsupported` or `Invalid` result with bounded stable diagnostics. Cancellation
+  propagates. A verified result grants no origin confidence, target readiness, catalog write or start authority.
+- **Known implementations:** `ReleaseSemanticVerifier` *(intra-domain — default)*.
+
+## IReleaseArtifactSemanticVerifier and IReleaseOccurrenceInspector
+
+- **Contracts:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier` and
+  `Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector`.
+- **Kind:** Exact-key strategy contributions. Each installed adapter claims immutable codec/site keys and an adapter
+  identity/version. Select exactly one implementation for each full key; different versions may coexist.
+- **Composition:** Resolving the scoped framework verifier rejects blank/duplicate claims. Registration does not build
+  a temporary service provider. Missing claims return unsupported results during verification.
+- **Purpose:** The artifact owner decodes retained bytes and enumerates complete actual facts and occurrence facets.
+  It explicitly allows exact root content/action pairs only after validating their owner association. Capable dependencies
+  are not selected automatically; root capabilities establish a semantic role and confer no start authority.
+  Site inspectors return complete actual facts for their claimed facets, including an explicit supported leaf answer.
+  `IReleaseContentReader` exposes only indexed captured members and fresh payload copies; no target fallback is permitted.
+- **Failure:** Unknown/incomplete inspection refuses semantic success; adapter exceptions yield sanitized incomplete
+  diagnostics. A diagnostic contains a stable code and member/origin/input location, never raw payload or exception text.
+- **Known implementations:** None installed by this feature. Native, BPMN and ETL owner adapters remain separate work.
 
 ## Feature inheritance
 
-`WorkflowReleaseTransportFeature` is public/inheritable with virtual `ConfigureServices`. Derived features can retain the
-default parsing contract or replace its codec deliberately; host composition still enforces one selected implementation.
+Both features are public/inheritable with virtual `ConfigureServices` and `PostConfigureServices`.
+`WorkflowReleaseVerificationFeature` declares its transport dependency. Derived features can replace the canonical services
+deliberately; host composition still enforces one selected implementation.
 
-There are no events, contribution loops, startup tasks or recurring tasks in this transport feature.
+There are no events, startup tasks or recurring tasks. The scoped exact-key registry is the semantic strategy composition seam.

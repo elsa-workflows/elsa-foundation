@@ -31,6 +31,48 @@ public sealed class ReleaseTransportTests
         Assert.Equal(captured.GetAttachmentBytes("attachments/report.json"), reopened.GetAttachmentBytes("attachments/report.json"));
     }
 
+    [Fact]
+    public void Expanded_parts_validate_without_recompression_and_snapshot_opaque_attachments()
+    {
+        var fixture = new ReleaseBundleFixture(); var bytes = new byte[] { 255, 0, 10 };
+        var attachments = new Dictionary<string, ReadOnlyMemory<byte>> { ["attachments/report.bin"] = bytes };
+        IReleaseBundleCodec codec = _codec;
+        var captured = codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, new() { MaxArchiveBytes = 1 });
+        Assert.Equal(codec.Validate(fixture.Bytes, fixture.Blobs, null).Digest, captured.Digest);
+        bytes[0] = 0; attachments.Clear();
+        Assert.Equal(new[] { "attachments/report.bin" }, captured.AttachmentPaths);
+        var returned = captured.GetAttachmentBytes("attachments/report.bin"); returned[0] = 0;
+        Assert.Equal(new byte[] { 255, 0, 10 }, captured.GetAttachmentBytes("attachments/report.bin"));
+    }
+
+    [Theory]
+    [InlineData("../escape", "unsafe_transport_path")]
+    [InlineData("manifest.json", "invalid_attachment_path")]
+    [InlineData("blobs/0000000000000000000000000000000000000000000000000000000000000000.json", "invalid_attachment_path")]
+    [InlineData("attachments/", "invalid_attachment_path")]
+    public void Expanded_attachment_paths_are_checked_without_archive_encoding(string path, string expected)
+    {
+        var fixture = new ReleaseBundleFixture();
+        Assert.Equal(expected, Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs,
+            new Dictionary<string, ReadOnlyMemory<byte>> { [path] = "opaque"u8.ToArray() }, null)).Code);
+    }
+
+    [Fact]
+    public void Expanded_parts_check_attachment_count_bytes_collisions_and_blob_hash()
+    {
+        var fixture = new ReleaseBundleFixture();
+        var attachments = new Dictionary<string, ReadOnlyMemory<byte>> { ["attachments/A"] = new byte[128] };
+        Assert.Equal("entry_limit_exceeded", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, new() { MaxEntries = 3 })).Code);
+        Assert.Equal("byte_limit_exceeded", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, new() { MaxBlobBytes = 127 })).Code);
+        var total = fixture.Bytes.Length + fixture.Blobs.Sum(x => x.Value.Length) + 127;
+        Assert.Equal("byte_limit_exceeded", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, new() { MaxExpandedBytes = total })).Code);
+        attachments.Add("attachments/a", new byte[1]);
+        Assert.Equal("duplicate_transport_path", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, null)).Code);
+        attachments.Clear();
+        var key = fixture.Blobs.Keys.First(); var tampered = fixture.Blobs[key].ToArray(); tampered[0] = (byte)'['; fixture.Blobs[key] = tampered;
+        Assert.Equal("blob_digest_mismatch", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, null)).Code);
+    }
+
     [Theory]
     [InlineData("../escape")]
     [InlineData("/absolute")]

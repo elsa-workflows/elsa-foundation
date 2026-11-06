@@ -17,9 +17,11 @@ Every behavioral delivery needs a meaningful red/green mutation or before/after 
 - [x] T005 Create lightweight release target Core/engine projects under `Essentials/src/Workflows/Publishing/Releases/`, excluding Design-bearing Publishing dependencies; prepare the packed consumer witness under `tools/releases/` (execution belongs to T008).
 - [x] T006 Implement compiler-free immutable manifest/member/root/requirement identities and bounded transport/hash/declared-graph validation in `Essentials/src/Workflows/Publishing/Releases/Core/` and `Elsa.Workflows.Publishing.Releases/`.
 - [x] T007 Prove canonical vectors, original blob preservation, duplicate/conflicting keys, malformed/oversized transport, cycles, missing/unrelated members and tamper rejection in `Essentials/tests/Workflows/Publishing/Releases/`; 51 passed, 0 failed/skipped. Digest-bypass mutation failed; restored green. I/O boundary controls failed 9 before fix and passed afterward.
-- [ ] T008 Add optional feature composition, public API/owner extension catalogs, package boundary and generated solution/filter/tier registration for the new projects in `EXTENSION_POINTS.md`, `Elsa.Server.slnx` and `tools/ci/test-tiers.json`.
+- [x] T008 Add optional feature composition, public API/extension catalogs and solution/tier/PR-shard registration in `EXTENSION_POINTS.md`, `Elsa.Server.slnx` and `tools/ci/test-tiers.json`; structural generators passed. Clean exact-package consumer passed at `582248ac81d688a5a6db54f499ec09dd1ed15c55`; see `evidence/transport-582248ac8.json`. Full Architecture/hosted checks remain T036.
 
 Foundation checkpoint: transport validity is distinct from owner semantic validity/readiness; no bundle may activate without owner verification.
+The shared semantic orchestration now has 133 passing focused tests and red/green exact-fact and root-pair/action mutations.
+It installs no native/BPMN/ETL adapters; T009/T013 remain open until actual owner capture and complete inspection are delivered.
 
 ## Phase 3 — US1: Frozen exact release content (P1; M1)
 

@@ -3,3 +3,7 @@ Elsa.Workflows.Publishing.Releases.WorkflowReleaseTransportFeature
 virtual Elsa.Workflows.Publishing.Releases.WorkflowReleaseTransportFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 virtual Elsa.Workflows.Publishing.Releases.WorkflowReleaseTransportFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Workflows.Publishing.Releases.WorkflowReleaseTransportFeature.WorkflowReleaseTransportFeature() -> void
+Elsa.Workflows.Publishing.Releases.WorkflowReleaseVerificationFeature
+Elsa.Workflows.Publishing.Releases.WorkflowReleaseVerificationFeature.WorkflowReleaseVerificationFeature() -> void
+virtual Elsa.Workflows.Publishing.Releases.WorkflowReleaseVerificationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Workflows.Publishing.Releases.WorkflowReleaseVerificationFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
