@@ -146,3 +146,46 @@ for (const width of [320, 360, 1280]) {
     await close.press("Escape"); await expect(dialog).toHaveCount(0); await expect(open).toBeFocused();
   });
 }
+
+for (const width of [320, 360, 1280]) {
+  test(`long saved-question Add labels remain readable and operable inside ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/dashboard-checkboxes.html?questionPicker");
+    const name = `Metric${"A".repeat(164)}`;
+    const open = page.getByRole("button", { name: "Add a saved question", exact: true });
+    await open.click();
+    const dialog = page.getByRole("dialog", { name: "Add saved question", exact: true });
+    const add = dialog.getByRole("button", { name: `Add ${name}`, exact: true });
+    await expect(add).toBeEnabled();
+    await info.attach(`dashboard-question-picker-${width}px`, { body: await page.screenshot({ path: info.outputPath(`dashboard-question-picker-${width}px.png`) }), contentType: "image/png" });
+    const geometry = await dialog.evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth, scrollLeft: element.scrollLeft }));
+    expect(geometry.scrollWidth, "The picker must fit its modal without horizontal panning").toBeLessThanOrEqual(geometry.width + 1);
+    expect(geometry.scrollLeft).toBe(0);
+    const labelFits = await add.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const button = element.getBoundingClientRect();
+      const modal = element.closest('[role="dialog"]')!.getBoundingClientRect();
+      return element.scrollWidth <= element.clientWidth + 1 && [...range.getClientRects()].every(rect => rect.left >= button.left && rect.right <= button.right && rect.top >= button.top && rect.bottom <= button.bottom && rect.left >= modal.left && rect.right <= modal.right);
+    });
+    expect(labelFits, "The complete Add label must be readable inside its clickable button").toBe(true);
+    await expect(add).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Close Add saved question", exact: true })).toBeInViewport();
+    await add.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByLabel("Added question name", { exact: true })).toHaveText(name);
+    await expect(page.getByLabel("Added question count", { exact: true })).toHaveText("1");
+    await expect(open).toBeFocused();
+
+    await open.press("Enter");
+    await expect(add).toBeEnabled();
+    await dialog.getByRole("button", { name: "Close Add saved question", exact: true }).focus();
+    await page.keyboard.press("Tab"); await expect(dialog.getByRole("textbox", { name: "Search accessible questions", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab"); await expect(dialog.getByRole("button", { name: "Search questions", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab"); await expect(add).toBeFocused();
+    expect(await dialog.evaluate(element => element.scrollLeft)).toBe(0);
+    await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByLabel("Added question count", { exact: true })).toHaveText("2");
+    await expect(open).toBeFocused();
+  });
+}

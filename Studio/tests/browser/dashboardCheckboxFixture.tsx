@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { QueryControls } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
-import { NativeDialog, ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
+import { NativeDialog, QuestionPickerDialog, ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
 import { ResultView } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResultView";
 import type { DashboardApi } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/api";
 import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
@@ -81,5 +81,20 @@ function SourceRecordsFixture() {
     {showRecords ? <NativeDialog title="Matching source records" onClose={() => setShowRecords(false)}><ResultView result={result} visualization={{ kind: "table", y: [] }} /></NativeDialog> : null}
   </main>;
 }
+const pickerQuestion: DashboardResource = {
+  id: "long-named-question", kind: "question", revision: "1", name: `Metric${"A".repeat(164)}`, description: "A legal saved question name", ownerId: "viewer", definition: initialDefinition(dataset),
+  capabilities: { canRead: true, canEdit: true, canCopy: true, canDelete: true, canShare: true }, createdAt: "", updatedAt: ""
+};
+const pickerApi = { list: async (_kind: string, ownership: string) => ({ items: ownership === "mine" ? [pickerQuestion] : [] }) } as unknown as DashboardApi;
+function QuestionPickerFixture() {
+  const [showPicker, setShowPicker] = useState(false);
+  const [picked, setPicked] = useState<DashboardResource>();
+  const [count, setCount] = useState(0);
+  return <main className="named-workspace" style={{ padding: 24 }}>
+    <StudioButton onClick={() => setShowPicker(true)}>Add a saved question</StudioButton>
+    <output aria-label="Added question name">{picked?.name}</output><output aria-label="Added question count">{count}</output>
+    {showPicker ? <QuestionPickerDialog api={pickerApi} onClose={() => setShowPicker(false)} onCreate={() => setShowPicker(false)} onPick={question => { setPicked(question); setCount(value => value + 1); setShowPicker(false); }} /> : null}
+  </main>;
+}
 const params = new URLSearchParams(window.location.search);
-createRoot(document.getElementById("root")!).render(<ThemeProvider>{params.has("sourceRecords") ? <SourceRecordsFixture /> : params.has("longName") ? <LongNameFixture /> : <Fixture />}</ThemeProvider>);
+createRoot(document.getElementById("root")!).render(<ThemeProvider>{params.has("questionPicker") ? <QuestionPickerFixture /> : params.has("sourceRecords") ? <SourceRecordsFixture /> : params.has("longName") ? <LongNameFixture /> : <Fixture />}</ThemeProvider>);

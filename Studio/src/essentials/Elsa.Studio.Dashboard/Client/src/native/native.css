@@ -68,6 +68,7 @@
 .named-dialog-heading > button { flex-shrink: 0; }
 .named-dialog-heading h3, .named-dialog p { margin: 0; }
 .named-dialog :is(p, label) { overflow-wrap: anywhere; }
+.named-dialog .studio-button { overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 .named-dialog form { display: grid; gap: .75rem; }
 .named-picker-list { display: grid; gap: .75rem; list-style: none; padding: 0; margin: 0; }
 .named-picker-list li { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); }

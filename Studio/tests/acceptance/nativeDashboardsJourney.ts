@@ -529,6 +529,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       // The source requires no grouping for a single-value metric. Refine the independent
       // recovered question through ordinary controls, rather than forcing an invalid tile.
       await page.goto(`/questions/${recovered.id}`);
+      const longQuestionName = `Metric${"Q".repeat(140)}${suffix.replaceAll("-", "")}`;
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(longQuestionName);
       const metricGrouping = page.getByRole("group", { name: "Group by", exact: true });
       await metricGrouping.getByRole("checkbox", { name: "Current status", exact: true }).uncheck();
       await metricGrouping.getByRole("checkbox", { name: "Run kind", exact: true }).uncheck();
@@ -551,6 +553,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const metricPicker = page.getByRole("dialog", { name: "Add saved question", exact: true });
       await metricPicker.getByLabel("Search accessible questions", { exact: true }).fill(metricQuestion.name);
       await metricPicker.getByRole("button", { name: "Search questions", exact: true }).click();
+      await expect(metricPicker.getByRole("button", { name: `Add ${metricQuestion.name}`, exact: true })).toBeVisible();
+      await capture(page, info, "dashboard-long-question-picker");
+      await expect.poll(() => metricPicker.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await metricPicker.getByRole("button", { name: `Add ${metricQuestion.name}`, exact: true }).click();
       const metricDashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
       await page.getByRole("button", { name: "Save layout", exact: true }).click();

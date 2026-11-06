@@ -42,7 +42,7 @@ CAPTURES['native dashboard questions and sharing'] += (
     + [f'dashboard-and-dependency-dialogs-appearance-{appearance}-{dialog}-end'
        for appearance in (1, 2) for dialog in ('share-review', 'copy-review')]
     + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
-       'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
+       'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
 JOURNEYS = set(CAPTURES)
 ADDITIONAL_ARTIFACTS = {
