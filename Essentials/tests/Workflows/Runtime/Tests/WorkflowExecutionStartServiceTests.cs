@@ -88,6 +88,51 @@ public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CapturesOnlyCanonicalPersistedSubjectWithoutChangingSystemAttributionOrSavingGrants()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher,
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
+            new Claim(IdentityClaimTypes.UserId, "persisted-user"),
+            new Claim(ClaimTypes.NameIdentifier, "alternate-id"),
+            new Claim("sub", "alternate-sub"),
+            new Claim(IdentityClaimTypes.Permission, "arbitrary-saved-grant")
+        ]);
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal("runtime-api", request.RequestedBy);
+        Assert.Equal("runtime-api", request.Authority.SystemIdentity);
+        Assert.Equal("runtime-api", request.Authority.RootInitiator);
+        Assert.Equal("persisted-user", request.Authority.Metadata["elsa.identity.subject-id"]);
+        Assert.Equal("persisted-user", request.Authority.Metadata["elsa.identity.subject-kind"]);
+        Assert.Equal(2, request.Authority.Metadata.Count);
+        Assert.Equal("tenant-a", request.TenantId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectsAmbiguousOrBlankCanonicalSubjectBeforeDispatch(bool duplicate)
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var claims = new List<Claim> { new(IdentityClaimTypes.Normalized, "v1"), new(IdentityClaimTypes.UserId, duplicate ? "user" : " ") };
+        if (duplicate) claims.Add(new(IdentityClaimTypes.UserId, "user"));
+        await AssertHttpIdentityRefusedAsync(HttpHandler(dispatcher, claims), dispatcher);
+    }
+
+    [Fact]
+    public async Task AlternateSubjectClaimsDoNotCreateAnExecutionPrincipal()
+    {
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = HttpHandler(dispatcher,
+        [new Claim(IdentityClaimTypes.Normalized, "v1"), new Claim(ClaimTypes.NameIdentifier, "user"), new Claim("sub", "user")]);
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+        Assert.Empty(Assert.Single(dispatcher.Requests).Authority.Metadata);
+    }
+
+    [Fact]
     public async Task AllowsAnExplicitNormalizedGlobalIdentityWithoutTenantClaim()
     {
         var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());

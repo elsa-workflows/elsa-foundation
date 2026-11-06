@@ -4,7 +4,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../../Api/Elsa.Etl.Api.csproj" />
     <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />

@@ -1,0 +1,102 @@
+{
+  "sourceCommit": "0718297e031c8b63f2043631c64e4358d7fd07f1",
+  "recordRef": "origin/publish-state",
+  "recordRefCommit": "3471a61245a2088b4ba8d2ab197c2b460d32c0c6",
+  "lastPublishCommit": "b3653923e9683c775907262b58d3c923a6b313ec",
+  "libraries": [
+    "CShells.Abstractions/0.0.31",
+    "Elsa.Decisions.Core/4.0.0-branch-agent-codex-3602-business-decisions",
+    "Elsa.Decisions/4.0.0-branch-agent-codex-3602-business-decisions",
+    "JetBrains.Annotations/2025.2.4",
+    "Microsoft.Extensions.Configuration.Abstractions/10.0.10",
+    "Microsoft.Extensions.Configuration/10.0.10",
+    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.12",
+    "Microsoft.Extensions.Options/10.0.10",
+    "Microsoft.Extensions.Primitives/10.0.12"
+  ],
+  "onlyPackageReferences": true,
+  "noWorkflowEfAspNetStudioDependencies": true,
+  "frameworkReferences": [
+    "Microsoft.NETCore.App"
+  ],
+  "nupkgs": [
+    {
+      "name": "Elsa.Decisions.Core.4.0.0-branch-agent-codex-3602-business-decisions.nupkg",
+      "sha256": "a23b2914f28c4d10c8dc6f3ba90b38930fdf82ae440970a41bfd682928df9bfb",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/elsa-workflows/elsa-foundation.git",
+        "commit": "0718297e031c8b63f2043631c64e4358d7fd07f1"
+      },
+      "fingerprint": {
+        "schema_version": 1,
+        "fingerprint": "sha256:57c16b9c15e7c837c83513ad9da6fac1c4a9cd9a413427fe05e7ae9b4f6a51c2"
+      },
+      "nuspecDependencies": []
+    },
+    {
+      "name": "Elsa.Decisions.4.0.0-branch-agent-codex-3602-business-decisions.nupkg",
+      "sha256": "a4057f6ca404cb41e80c7b041d43f04cd9f254f4c9b74efa9dca68aec918c849",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/elsa-workflows/elsa-foundation.git",
+        "commit": "0718297e031c8b63f2043631c64e4358d7fd07f1"
+      },
+      "fingerprint": {
+        "schema_version": 1,
+        "fingerprint": "sha256:f2348549cccdaddfd237d2ed1577d7cd833113d324edb47c4097007c2ba4fa19"
+      },
+      "nuspecDependencies": [
+        {
+          "id": "Elsa.Decisions.Core",
+          "version": "[4.0.0-branch-agent-codex-3602-business-decisions, 5.0.0)",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "CShells.Abstractions",
+          "version": "0.0.31",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10",
+          "exclude": "Build,Analyzers"
+        },
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12",
+          "exclude": "Build,Analyzers"
+        }
+      ]
+    }
+  ],
+  "consumer": {
+    "sourceCommit": "0718297e031c8b63f2043631c64e4358d7fd07f1",
+    "assertions": 46,
+    "status": "passed",
+    "ContentHash": "a73bcc2c361767fd21678f99ad51f8c51d6229c082a2ca38e2af93e12606d5af"
+  },
+  "consumerSourceSha256": "24e326fd6613a347cdd3e0c48a12c4c0f531bf1024f0385d8a3ec5c5414e673e",
+  "sourceIsolation": "Private local clone, detached committed source, shared git objects readonly; all build/restore/pack/run outputs private. Original checkout not mutated.",
+  "wholeEvaluationSuite": {
+    "discovered": 96,
+    "passed": 96,
+    "skipped": 0
+  },
+  "scope": "Pure Core/default package component at this exact source; no production host/provider/Studio or fullDMN claim."
+}
