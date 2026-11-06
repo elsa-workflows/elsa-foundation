@@ -36,7 +36,7 @@ public sealed class ActivityTemplateDataSelectionTests
         var projector = new Projector();
         var compiler = new ActivityTemplateCompiler(null!, null!, null!, null!, null!, null!, TimeProvider.System, [projector], analyzer);
         var rejected = await Assert.ThrowsAsync<ActivityDataSelectionRejectedException>(() => compiler.CompileAsync(Request()).AsTask());
-        Assert.Equal(findings, rejected.Findings);
+        Assert.Collection(rejected.Findings, finding => Assert.Equal(findings[0], finding));
         Assert.Equal("actual-source", analyzer.Document!.ResourceId);
         Assert.Equal(projector.Revision, analyzer.Document.ContractRevision);
         Assert.Equal("ActivitySourceVersion", rejected.ResourceKind);
