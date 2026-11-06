@@ -12,15 +12,15 @@ afterEach(() => {
   mounted = null;
 });
 
-function render(editor: string, initial: string | null, alias = "String", kind = "List") {
+function render(editor: string, initial: string | null, alias = "String", kind = "List", editors?: Record<string, string>) {
   const changed = vi.fn();
   function Harness() {
     const [items, setItems] = useState<Record<string, unknown>[]>([{
       referenceKey: "items", name: "Items", type: { alias, collectionKind: kind },
       storageDriverType: null, default: initial === null ? null : { expressionType: "Literal", value: initial }
     }]);
-    return <VariablesEditor items={items} typeOptions={[{ value: alias, label: alias }]}
-      storageOptions={null} editorForAlias={() => editor} onChange={next => {
+    return <VariablesEditor items={items} typeOptions={Object.keys(editors ?? { [alias]: editor }).map(value => ({ value, label: value }))}
+      storageOptions={null} editorForAlias={selected => editors?.[selected] ?? editor} onChange={next => {
         changed(next);
         setItems(next as Record<string, unknown>[]);
       }} />;
@@ -116,6 +116,21 @@ describe("collection variable starting values", () => {
     flushSync(() => raw.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(item(container, 1).getAttribute("type")).toBe("checkbox");
     expect((item(container, 1) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("rechecks an edited token against the newly selected element type", () => {
+    const { container, changed } = render("text", '["start"]', "String", "List", { String: "text", Boolean: "checkbox" });
+    edit(item(container, 1), "true");
+    const type = container.querySelector<HTMLSelectElement>("select[aria-label='Variable type']")!;
+    flushSync(() => {
+      type.value = "Boolean";
+      type.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(item(container, 1).tagName).toBe("TEXTAREA");
+    expect(item(container, 1).value).toBe('"true"');
+    expect(item(container, 1).getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("JSON boolean");
+    expect(saved(changed)).toEqual({ expressionType: "Literal", value: '["true"]' });
   });
 
   it("keeps an incomplete numeric edit focused and exposes the stored token until recovery", () => {

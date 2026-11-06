@@ -314,8 +314,8 @@ function CollectionDefaultValueCell({ value, editor, alias, ariaLabel, onChange 
     return tokens?.map(token => ({ id: ++nextId.current, token })) ?? null;
   }, [value]);
   // Keep an item's incomplete JSON draft in its own field while the parent retains the authored text.
-  const [edited, setEdited] = useState<{ value: string; rows: CollectionDefaultItem[] } | null>(null);
-  const rows = edited?.value === value ? edited.rows : parsed;
+  const [edited, setEdited] = useState<{ value: string; editor: string; alias: string; rows: CollectionDefaultItem[] } | null>(null);
+  const rows = edited?.value === value && edited.editor === editor && edited.alias === alias ? edited.rows : parsed;
   useEffect(() => {
     if (focusAfter.current === null) return;
     const target = focusAfter.current === "add"
@@ -334,7 +334,7 @@ function CollectionDefaultValueCell({ value, editor, alias, ariaLabel, onChange 
   }
   const change = (next: CollectionDefaultItem[]) => {
     const text = `[${next.map(row => row.token).join(",")}]`;
-    setEdited({ value: text, rows: next });
+    setEdited({ value: text, editor, alias, rows: next });
     onChange(text);
   };
   const add = () => {
@@ -361,7 +361,7 @@ function CollectionDefaultValueCell({ value, editor, alias, ariaLabel, onChange 
               onChange={event => change(rows.map(current => current.id === row.id
                 ? { ...current, token: event.target.value, rawEditing: true } : current))}
               onBlur={() => {
-                if (!error) setEdited({ value, rows: rows.map(current => current.id === row.id
+                if (!error) setEdited({ value, editor, alias, rows: rows.map(current => current.id === row.id
                   ? { ...current, rawEditing: false } : current) });
               }} /> : <DefaultValueCell value={row.text ?? collectionItemText(row.token, editor)} editor={editor}
               ariaLabel={`${ariaLabel} item ${index + 1}`}
