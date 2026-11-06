@@ -40,3 +40,40 @@ Use existing focused xUnit projects/classes plus the owning behavior at risk. Th
 Record passed, failed, skipped, cancelled, unavailable and not-run separately. Fix and re-run failures attributable to the change. Complete required architecture/composition/maps/CI, independent correctness/security/product review, and resulting-main qualification.
 
 C01–C12 may close the catalog unit only after every applicable outcome is observed. Source-private production enablement still requires complete deployed-reader/Runtime-inspection coverage and actual source/workload policy. M1/provider SDK, entity Studio authoring, User Tasks, source-schema/concurrency/uncertain-write cases, durable event start/resume and business projections remain full-feature obligations.
+
+## Foundation execution ledger — 6 November 2026
+
+The first coding batch is isolated in `/tmp/elsa-entity-3608-catalog`, branch
+`agent/codex/3608-catalog-disclosure`, based on reviewed plan head `87225a83bb4af00f4aa5eadaecd53c373359ff90`
+and merged ownership fix `cdfc79a0c3c181b0782719437cab5466d961690f`. The existing #3608 claim remains
+the winning claim. The Ready backlog exceeds its cap, so no new issue or Ready promotion is created.
+The final implementation head, review and CI receipts belong on its PR; this ledger records scoped evidence.
+
+- The independently composed Disclosure project builds, with its public surface tracked. C01's 19
+  focused cases pass. The affected Activities Design project passes **806/806**, zero skips.
+- Three temporary causal mutations fail their intended tests: accepting unknown classification as
+  Public, bypassing exact producer binding identity, and publishing the registry before final DI
+  validation. All mutated source bytes were restored; the final post-restoration and API-tracked runs
+  pass 806/806. The architecture suite passes 617/617; locked Release/Debug graph restores, maps
+  generation/check and the 222-file catalog link check pass. Required hosted CI remains pending.
+- Initial failures remain visible: one test-construction compile error was fixed; the first whole
+  project run was 800/802 because a serialization fixture contained Undefined JSON and a duplicate
+  replacement test called its intentional unsupported stub. Both test defects were fixed before the
+  806-case passing run. The initial architecture run was 614/617: three guards correctly caught the new project
+  missing from the architecture test host; its full project reference/lock was added before the
+  617-case passing run. No production failure was hidden or relabeled.
+- Independent correctness/security, standards and acceptance review is clean at
+  `c649dd17d6323c3ecd4ac881bac226d522f66e54`. Standards findings were resolved with Core-only API
+  tracking (2,518 existing baseline entries and 255 additions) and complete owning catalogs. Test
+  discovery lists 783 entries; two dynamic Theories expand into 25 executed cases. Every listed method
+  ran, accounting for the 806 executed cases without omitted/skipped tests.
+- Allowlisted local evidence is under `/tmp/entity-3608-catalog-foundation-results` and
+  `/tmp/entity-3608-catalog-foundation-mutations`. This component batch starts no HTTP host and changes
+  no store/schema. The ownership repair's separate resulting-main SQLite/global HTTP evidence is on
+  [#3919](https://github.com/elsa-workflows/elsa-foundation/pull/3919#issuecomment-6677079165).
+
+This batch covers values, policy/producer composition and standalone admission only. Existing catalog
+writers/readers, retained lineage, format-2 persistence, complete counts/history and source profiles are
+not yet integrated; C02's before-all-writes routes and every remaining C01–C12 outcome remain incomplete.
+No private-source production profile is enabled. The full-feature checklist retains its open gates;
+the owner's explicit catalog decision authorizes this reviewed scoped batch independently.

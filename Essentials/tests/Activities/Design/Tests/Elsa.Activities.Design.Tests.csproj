@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <!-- Retained only for the historical FastEndpoints oracle and coexistence canary. Production Activities Design no longer references it. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Design\Disclosure\Elsa.Activities.Design.Disclosure.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />

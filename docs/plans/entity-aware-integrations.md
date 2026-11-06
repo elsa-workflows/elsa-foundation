@@ -92,21 +92,26 @@ source values; event-time snapshots remain labeled and governed by their own ret
 Use ordinary catalog activities and module-contributed editors for read/operation/event authoring.
 Reuse existing portable value types. Keep provider metadata, workflow adapters, transport and Studio
 composition separate. The SDK's activities-only package does not acquire hosted endpoints or persistence.
-Evaluate whether these contracts fit an Integrations subdomain or need a new domain; a new root domain
-requires the applicable ADR and narrow §E2.1 admission before production, not an incidental addition to
-Primitives. No constitution amendment or unratified execution proposal is assumed by this plan.
+The [catalog decision](https://github.com/elsa-workflows/elsa-foundation/pull/3923#issuecomment-6675758688)
+keeps entity integration in the existing Integrations family and retains one Activities-owned catalog.
+The activities-only SDK does not acquire hosted services. No new root domain, constitution amendment
+or unratified execution proposal is selected.
 
-**Private source catalog admission remains unresolved.** A disposable public-extension experiment preserved
+**The catalog boundary is approved; implementation and qualification remain incomplete.** A disposable public-extension experiment preserved
 separately typed operation inputs, exact decimals and immutable schemas through normal catalog/publication
 and runtime paths. That does not establish safe source-specific metadata exposure. The private-tenant
 case failed: [source publication](../../Essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs)
 copied explicit tenant-owned entities through factories that dropped tenant ownership, producing a global
 definition visible to another tenant. Narrow prerequisite [#3917](https://github.com/elsa-workflows/elsa-foundation/issues/3917)
-owns that existing ownership defect. Availability filtering is also addability, not a source-disclosure
-policy; construct/detail/assistant paths must be covered as well as the picker. Before private operation
-versions are adopted, M2 must agree tenant-preserving provisioning and a common source-aware disclosure
-decision through the existing catalog. No second catalog, nested binding language or entity-specific core
-switch is justified. Experimental evidence stays on #3907; source privacy remains failed/incomplete.
+merged through [#3919](https://github.com/elsa-workflows/elsa-foundation/pull/3919); actual SQLite ownership,
+publication/reopen/isolation and an ordinary global HTTP restart journey passed on the resulting main.
+That does not qualify private-tenant HTTP/run or source-specific disclosure. The owner approved explicit
+Public/Protected requirements, trusted admission, retained protection through forks/missing providers and
+explicit legacy classification. The reviewed [catalog plan](../../specs/1219-entity-aware-integrations/plan.md)
+and [tasks](../../specs/1219-entity-aware-integrations/tasks.md) cover C01–C12, including construct/detail,
+options/expression tooling, counts and required assistant history admission. Availability/addability alone
+supplies no disclosure grant. No private production profile is enabled by a marker or foundation batch.
+Experimental evidence stays on #3907; full source privacy and A01–A13 remain incomplete.
 
 ### Event and recovery obligations
 
