@@ -172,3 +172,21 @@ Child/publication owners now use the truthful committed names ChildWorkflowDispa
 The expanded native diagnostics source now has two additional sequential projects (14 total with12primary), a bounded ordinary-port preparation consumer and strict private ownership guards. Planned visible states include real repeated/nested/parallel and completed runs,≥10k produced events with bounded lookup, stock CompensationScope child-fault absorption to0active incidents, explicit retention purge, metadata/restricted payload access, foreign exact targets, disabled new admission and real transport loading/stale/retry. Passive expiry is explicitly a supported lower-level legacy CreateBookmark creation/inspection fixture using an actual pin/fence/owner; it does not activate or claim resumability of the modern Event activity and is not an authorable-expiry feature. No history/query rows or synthetic API responses are injected. The previous clean358 binary-only consumer syntax check is supporting ABI evidence only; finalprofile compilation and the14actual journeys remain unrun.
 
 An additional old-binary nonempty unstamped intent export was produced from pristine prefeature074 source, with original intent/native hashes and a separate safe fixture. Current typed decoding/replay remains to be qualified with the new intent-causation seam; the original inspection upgrade fixture is unchanged.
+
+## Frozen 2fed backend controls completed on 6 November
+
+The nine separate original controls on clean published `2fed` are now complete and
+author-assessed: 27 intended historical failures and 22 preserved historical passes
+become 49 restored passes, zero skips. Full original TRX/log/source/process archives
+are retained; 88 phase-source bindings match original Git objects and 12 required
+implementation DLL pairs differ. Original 600-second bounds, finite C06 ownership
+limits and the separately unretained negative-DLL-byte limitation remain. No Mac
+heavy work, product retry or duplicate local UI64 phase was used. See the
+[complete source-bound matrix and limits](azure-2fed-causal-controls.md).
+
+This completes those targeted backend controls, not all-provider, whole-suite,
+current Studio or delivery acceptance. Following local commit `1dd531667` faithfully
+adds canonical #3938's one-line canvas-first short-editor QA setup; production
+geometry and current-source browser acceptance are unchanged. The original
+Fields75 source is separately undergoing one seed-1 diagnostic run with unchanged
+assertions and call-origin tracing. Review remains 3/6; final gates remain open.
