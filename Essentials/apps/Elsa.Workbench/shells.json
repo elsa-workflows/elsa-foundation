@@ -41,6 +41,7 @@
           "ExpressionsApi": {},
           "FileSystemDistributedLocking": {},
           "FoundationAgentAbstractions": {},
+          "FoundationAgentEffects": {},
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityApi": {},

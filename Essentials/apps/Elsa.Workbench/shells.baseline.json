@@ -73,6 +73,7 @@
           "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardEntityFrameworkCore": {},
           "FoundationAgentAbstractions": {},
+          "FoundationAgentEffects": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
           "FoundationWorkflowsRuntimeAgent": {},
