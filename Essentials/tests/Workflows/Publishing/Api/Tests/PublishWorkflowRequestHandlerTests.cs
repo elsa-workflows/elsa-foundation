@@ -98,7 +98,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var value = form switch
         {
             "direct" => new ArgumentValue(JsonSerializer.SerializeToElement(new
-                { producerNodeId = "missing-producer", projectionKey = "$result", isOptional = true }), "ActivityResult"),
+                { producerNodeId = "missing-producer", projectionKey = "$result", producerScopeId = "workflow", isOptional = true }), "ActivityResult"),
             "typed-portable" => new ArgumentValue(expression, "JavaScript"),
             _ => new ArgumentValue(JsonSerializer.SerializeToElement(expression, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript")
         };
