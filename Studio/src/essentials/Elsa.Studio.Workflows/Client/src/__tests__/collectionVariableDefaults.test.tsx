@@ -88,6 +88,55 @@ describe("collection variable starting values", () => {
     expect(saved(changed)).toEqual({ expressionType: "Literal", value: "[true,true]" });
   });
 
+  it.each([
+    ["checkbox", "Boolean", '["true"]', '"true"', "JSON boolean"],
+    ["number", "Int32", '["bad"]', '"bad"', "JSON number"],
+    ["text", "String", "[1]", "1", "JSON string"]
+  ])("shows loaded %s item type mismatches as their exact JSON token", (editor, alias, initial, token, expected) => {
+    const { container, changed } = render(editor, initial, alias);
+    const input = item(container, 1);
+    expect(input.tagName).toBe("TEXTAREA");
+    expect(input.value).toBe(token);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const error = container.querySelector("[role='alert']")!;
+    expect(error.textContent).toContain(expected);
+    expect(input.getAttribute("aria-describedby")).toBe(error.id);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("recovers a loaded Boolean string without coercing or replacing its focused raw editor", () => {
+    const { container, changed } = render("checkbox", '["true"]', "Boolean");
+    const raw = item(container, 1);
+    raw.focus();
+    edit(raw, "true");
+    expect(item(container, 1)).toBe(raw);
+    expect(document.activeElement).toBe(raw);
+    expect(saved(changed)).toEqual({ expressionType: "Literal", value: "[true]" });
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    flushSync(() => raw.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(item(container, 1).getAttribute("type")).toBe("checkbox");
+    expect((item(container, 1) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("keeps an incomplete numeric edit focused and exposes the stored token until recovery", () => {
+    const { container, changed } = render("number", "[1,2]", "Int32");
+    const input = item(container, 2);
+    input.focus();
+    edit(input, "");
+    expect(item(container, 2)).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute("type")).toBe("number");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector("[role='alert']")?.textContent).toContain('Stored JSON: ""');
+    expect(saved(changed)).toEqual({ expressionType: "Literal", value: '[1,""]' });
+    edit(input, "3");
+    expect(item(container, 2)).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(saved(changed)).toEqual({ expressionType: "Literal", value: "[1,3]" });
+  });
+
   it("keeps invalid legacy text visible until it is corrected to an array", () => {
     const { container, changed } = render("text", "a, b");
     const raw = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Variable default value']")!;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -239,10 +239,12 @@ function fitsEditor(editor: string, value: string): boolean {
 // (checkbox for bool, number, date, else text). Unknown hints fall back to text; `none` renders a
 // disabled field so a non-editable type's stored default is preserved but not edited. A stored value
 // that doesn't fit the specialized control degrades to text so it stays visible and isn't clobbered.
-function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
+function DefaultValueCell({ value, editor, ariaLabel, invalid, describedBy, onChange }: {
   value: string;
   editor: string;
   ariaLabel: string;
+  invalid?: boolean;
+  describedBy?: string;
   onChange(value: string): void;
 }) {
   if (editor === "json") {
@@ -252,7 +254,8 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
     }
     return <div>
       <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
-        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+        aria-invalid={error || invalid ? true : undefined} aria-describedby={describedBy}
+        onChange={event => onChange(event.target.value)} />
       {error ? <span role="alert">{error}</span> : null}
     </div>;
   }
@@ -262,6 +265,7 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
       <input
         type="checkbox"
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined} aria-describedby={describedBy}
         checked={value === "true" || value === "True"}
         onChange={event => onChange(event.target.checked ? "true" : "false")}
       />
@@ -272,6 +276,7 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
       <input
         type={editor}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined} aria-describedby={describedBy}
         value={value}
         placeholder="(empty)"
         onChange={event => onChange(event.target.value)}
@@ -282,6 +287,7 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
     <input
       type="text"
       aria-label={ariaLabel}
+      aria-invalid={invalid || undefined} aria-describedby={describedBy}
       value={value}
       placeholder="(empty)"
       disabled={editor === "none"}
@@ -290,18 +296,20 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   );
 }
 
-interface CollectionDefaultItem { id: number; token: string }
+interface CollectionDefaultItem { id: number; token: string; text?: string; rawEditing?: boolean }
 
-function CollectionDefaultValueCell({ value, editor, ariaLabel, onChange }: {
+function CollectionDefaultValueCell({ value, editor, alias, ariaLabel, onChange }: {
   value: string;
   editor: string;
+  alias: string;
   ariaLabel: string;
   onChange(value: string): void;
 }) {
+  const errorId = useId();
   const nextId = useRef(0);
   const container = useRef<HTMLDivElement>(null);
   const focusAfter = useRef<number | "add" | null>(null);
-  const parsed = useMemo(() => {
+  const parsed = useMemo<CollectionDefaultItem[] | null>(() => {
     const tokens = collectionDefaultTokens(value);
     return tokens?.map(token => ({ id: ++nextId.current, token })) ?? null;
   }, [value]);
@@ -340,22 +348,55 @@ function CollectionDefaultValueCell({ value, editor, ariaLabel, onChange }: {
   };
   return <div ref={container} className="wf-collection-editor" role="group" aria-label={ariaLabel}>
     {rows.length === 0 ? <p className="wf-collection-empty">No items yet.</p> : <ul className="wf-collection-items">
-      {rows.map((row, index) => <li key={row.id} className="wf-collection-item" data-default-item-id={row.id}>
-        <div className="wf-collection-item-editor">
-          <DefaultValueCell value={collectionItemText(row.token, editor)} editor={editor}
-            ariaLabel={`${ariaLabel} item ${index + 1}`}
-            onChange={text => change(rows.map(current => current.id === row.id
-              ? { ...current, token: collectionItemToken(text, editor) } : current))} />
-        </div>
-        <button type="button" className="wf-collection-item-button danger" disabled={editor === "none"}
-          aria-label={`Remove ${ariaLabel} item ${index + 1}`} onClick={() => remove(index)}>
-          <Trash2 size={13} aria-hidden="true" />
-        </button>
-      </li>)}
+      {rows.map((row, index) => {
+        const error = collectionItemError(row.token, editor, alias);
+        // A loaded token must fit its control before decoding it. In particular, "true" is not true.
+        // Keep a raw correction in its textarea until blur, and an incomplete typed edit in its input.
+        const raw = row.rawEditing || (row.text === undefined && collectionItemNeedsRaw(row.token, editor, error));
+        const description = error ? `${errorId}-${row.id}` : undefined;
+        return <li key={row.id} className="wf-collection-item" data-default-item-id={row.id}>
+          <div className="wf-collection-item-editor">
+            {raw ? <textarea aria-label={`${ariaLabel} item ${index + 1}`} value={row.token} rows={2}
+              aria-invalid={error ? true : undefined} aria-describedby={description} disabled={editor === "none"}
+              onChange={event => change(rows.map(current => current.id === row.id
+                ? { ...current, token: event.target.value, rawEditing: true } : current))}
+              onBlur={() => {
+                if (!error) setEdited({ value, rows: rows.map(current => current.id === row.id
+                  ? { ...current, rawEditing: false } : current) });
+              }} /> : <DefaultValueCell value={row.text ?? collectionItemText(row.token, editor)} editor={editor}
+              ariaLabel={`${ariaLabel} item ${index + 1}`}
+              invalid={!!error} describedBy={description}
+              onChange={text => change(rows.map(current => current.id === row.id
+                ? { ...current, token: collectionItemToken(text, editor), text } : current))} />}
+            {error ? <span id={description} role="alert">{error} Stored JSON: <code>{row.token}</code></span> : null}
+          </div>
+          <button type="button" className="wf-collection-item-button danger" disabled={editor === "none"}
+            aria-label={`Remove ${ariaLabel} item ${index + 1}`} onClick={() => remove(index)}>
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+        </li>;
+      })}
     </ul>}
     <button type="button" className="wf-collection-add" aria-label={`Add ${ariaLabel} item`}
       disabled={editor === "none"} onClick={add}><Plus size={13} aria-hidden="true" /> Add item</button>
   </div>;
+}
+
+function collectionItemError(token: string, editor: string, alias: string): string | null {
+  if (editor === "json") return null;
+  let value: unknown;
+  try { value = JSON.parse(token); } catch { return "Enter a valid JSON value."; }
+  if (editor === "checkbox" && typeof value !== "boolean") return "Enter a JSON boolean (true or false).";
+  if (editor === "number" && typeof value !== "number") return "Enter a JSON number.";
+  // Null handling and custom type conversion remain the publisher's responsibility.
+  if ((alias === "String" || editor === "date") && value !== null && typeof value !== "string") return "Enter a JSON string.";
+  return null;
+}
+
+function collectionItemNeedsRaw(token: string, editor: string, error: string | null): boolean {
+  if (error) return true;
+  if (editor === "json" || editor === "number" || editor === "checkbox") return false;
+  try { return typeof JSON.parse(token) !== "string"; } catch { return true; }
 }
 
 // Validate once, then retain each top-level token's source. JSON.parse is never used to save numbers.
@@ -528,12 +569,13 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td>
+              <td className={isCollection ? "wf-properties-collection-default" : undefined}>
                 {/* Only Variables render this column; the value is their ArgumentValue default. */}
                 {isCollection ? <CollectionDefaultValueCell
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
                   editor={typeEditor}
+                  alias={argType.alias}
                   onChange={value => update(index, { default: literalDefault(value) })}
                 /> : <DefaultValueCell
                   ariaLabel={`${namePrefix} default value`}

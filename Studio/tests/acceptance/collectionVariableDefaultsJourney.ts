@@ -61,6 +61,7 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     // A draft can retain an unfinished legacy value; publication must not silently split it.
     const draft = await api<{ state: State }>(`/design/workflows/drafts/${submitted.draftId}`);
     draft.state.variables.find(item => item.referenceKey === "legacy")!.default = { expressionType: "Literal", value: "a, b" };
+    draft.state.variables.find(item => item.referenceKey === "flags")!.default = { expressionType: "Literal", value: '["true",false]' };
     await api(`/design/workflows/drafts/${submitted.draftId}`, "PUT", { state: draft.state, layout: [] });
     await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
     await showVariables();
@@ -79,6 +80,20 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     await capture(page, info, "collection-invalid");
     await legacy.getByRole("textbox", { name: "Variable default value", exact: true }).fill('["kept,as one item"]');
 
+    const flags = row("Flags");
+    const rawFlag = flags.getByRole("textbox", { name: "Variable default value item 1", exact: true });
+    await rawFlag.scrollIntoViewIfNeeded();
+    await expect(rawFlag).toHaveValue('"true"');
+    await expect(rawFlag).toHaveAttribute("aria-invalid", "true");
+    await expect(flags.getByRole("alert")).toContainText('JSON boolean (true or false). Stored JSON: "true"');
+    await expect(flags.getByRole("checkbox", { name: "Variable default value item 1", exact: true })).toHaveCount(0);
+    await capture(page, info, "collection-invalid-items");
+    await rawFlag.fill("true");
+    await expect(rawFlag).toBeFocused();
+    await expect(flags.getByRole("alert")).toHaveCount(0);
+    await rawFlag.press("Tab");
+    await expect(flags.getByRole("checkbox", { name: "Variable default value item 1", exact: true })).toBeChecked();
+
     const strings = row("Items");
     const add = strings.getByRole("button", { name: "Add Variable default value item", exact: true });
     await add.press("Enter");
@@ -89,8 +104,16 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     await add.click();
     await strings.getByRole("button", { name: "Remove Variable default value item 3", exact: true }).press("Enter");
     await expect(strings.getByRole("textbox", { name: "Variable default value item 2", exact: true })).toBeFocused();
-    await row("Counts").getByRole("spinbutton", { name: "Variable default value item 2", exact: true }).fill("3");
-    await row("Flags").getByRole("checkbox", { name: "Variable default value item 2", exact: true }).check();
+    const number = row("Counts").getByRole("spinbutton", { name: "Variable default value item 2", exact: true });
+    await number.fill("");
+    await expect(number).toBeFocused();
+    await expect(number).toHaveAttribute("aria-invalid", "true");
+    await expect(row("Counts").getByRole("alert")).toContainText('Stored JSON: ""');
+    await capture(page, info, "collection-incomplete-number");
+    await number.fill("3");
+    await expect(number).toBeFocused();
+    await expect(row("Counts").getByRole("alert")).toHaveCount(0);
+    await flags.getByRole("checkbox", { name: "Variable default value item 2", exact: true }).check();
     await strings.scrollIntoViewIfNeeded();
     await capture(page, info, "collection-populated");
     const json = row("JSON");
@@ -102,6 +125,7 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     await expect.poll(async () => (await api<{ state: State }>(`/design/workflows/drafts/${submitted.draftId}`)).state.variables.find(item => item.referenceKey === "strings")!.default?.value).toBe(JSON.stringify(["first,second", 'quoted "value"']));
     const saved = await api<{ state: State }>(`/design/workflows/drafts/${submitted.draftId}`);
     expect(saved.state.variables.find(item => item.referenceKey === "numbers")!.default).toEqual({ expressionType: "Literal", value: "[1,3]" });
+    expect(saved.state.variables.find(item => item.referenceKey === "flags")!.default).toEqual({ expressionType: "Literal", value: "[true,true]" });
     expect(saved.state.variables.find(item => item.referenceKey === "json")!.default?.value).toBe(`[${exactJson}]`);
     await page.reload();
     await showVariables();
@@ -113,12 +137,16 @@ export async function collectionVariableDefaultsJourney(page: Page, info: TestIn
     const version = await api<{ id: string }>(`/design/workflows/drafts/${submitted.draftId}/promote`, "POST", {});
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${version.id}/publish`, "POST", {});
     const run = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${published.artifactId}/execute`, "POST", { sourceReferenceId: published.sourceReferenceId });
-    type Instance = { instance: { status: string }; incidents: unknown[]; outputs: Record<string, { value: { value: unknown } }> };
+    type Instance = { instance: { status: string }; incidents: unknown[]; outputs: Record<string, {
+      value: { kind: string; truncated: boolean; itemCount: number; items: { preview?: string; value?: number }[] }
+    }> };
     await expect.poll(async () => (await api<Instance>(`/runtime/workflows/instances/${run.workflowExecutionId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
     const completed = await api<Instance>(`/runtime/workflows/instances/${run.workflowExecutionId}`);
     expect(completed.incidents).toHaveLength(0);
-    expect(completed.outputs.strings.value.value).toEqual(["first,second", 'quoted "value"']);
-    expect(completed.outputs.numbers.value.value).toEqual([1, 3]);
+    expect(completed.outputs.strings.value).toMatchObject({ kind: "array", truncated: false, itemCount: 2 });
+    expect(completed.outputs.strings.value.items.map(item => item.preview)).toEqual(["first,second", 'quoted "value"']);
+    expect(completed.outputs.numbers.value).toMatchObject({ kind: "array", truncated: false, itemCount: 2 });
+    expect(completed.outputs.numbers.value.items.map(item => item.value)).toEqual([1, 3]);
     await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy&version=${version.id}`);
     await showVariables();
     await expect(row("Items").getByRole("textbox", { name: "Variable default value item 1", exact: true })).toBeDisabled();
