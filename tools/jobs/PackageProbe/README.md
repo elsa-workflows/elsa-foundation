@@ -43,3 +43,60 @@ Both scripts refuse optimized Python execution because their witness assertions 
 
 The C# probe is a trusted qualification host, not a product CLI or operational API. Its JSON command
 files are created by the controller and must not be exposed as a service to untrusted callers.
+
+## Bounded control groups
+
+The driver keeps `--witness-group m1` as its default. Additional groups may be selected explicitly
+after the corresponding runtime/provider source has been committed:
+
+| Group | Controls |
+|---|---|
+| `schedules` | Provider-time delayed grants; actual default interval/cron pump; held catch-up, restart and bounded explicit replay. |
+| `coordination` | Four-scope overlapping holds and version coverage; two live workers; each authorized-lease capacity scope; healthy work past 1,001 held jobs. |
+| `attempts` | Paused automatic retry; cancellation and absolute provider deadline; graceful drain and grace-expired recovery; linked idempotent Retry as new run. |
+| `chaos` | Real post-COMMIT store-response failures; controlled pause/start order; stale physical overlap and durable downstream effect deduplication. |
+| `all` | The original M1 slice followed by all bounded groups. |
+
+New controls use a distinct registered v2 input/result schema and implementation pin. They do not
+add chaos fields to the accepted v1 report input or change the v1 handler's semantics. Synthetic
+`qualified-model` addresses test Jobs association gates only. Native and BPMN model integration and
+operational authorization still require their own qualification.
+
+The fault observer uses public EF `DiagnosticListener` events and public change-tracker metadata.
+It records a classified write at `SaveChangesStarting`, correlates the exact context/transaction at
+`TransactionCommitted`, and throws one controlled nontransient `DbException`. Each reply-loss case
+requires the identical exception instance at the matching `TransactionError`, a fresh durable read,
+one observed propagation and no barrier timeout. This is a post-COMMIT store-response fault; it does
+not claim that an actual network acknowledgement packet was dropped.
+
+PostgreSQL's pause-before-grant control blocks after selection and before saving. SQLite starts its
+write transaction with `BEGIN IMMEDIATE`, so the comparable control blocks an explicit direct claim
+at public `TransactionStarting`, armed after host validation. Its receipt states that selection has
+not occurred. Both require an external Pause to commit before the barrier is released. A timeout or
+rolled-back claim cannot satisfy the evidence gate.
+
+The controller also supports deliberately failing evidence controls, for example:
+
+```sh
+python3 tools/jobs/PackageProbe/run_witness.py \
+  --entry /absolute/deployment/Jobs.PackageProbe.dll \
+  --evidence-dir /tmp/jobs-marker-only-claim \
+  --provider sqlite --group chaos --negative-control marker-only-claim
+```
+
+This removes the throw while retaining the committed marker and normal progress. The controller must
+exit nonzero and record `FAILED` because no exact exception propagation occurred. Matching controls
+exist for `admit`, `renew` and `complete`. Negative receipts remain failed evidence controls; they are
+never relabeled as a passing product run.
+
+The downstream destination is a separate owned loopback HTTP process with a durable SQLite ledger.
+Its unique invocation-key row and request rows commit together. The overlap case restarts that
+destination, lets two physical attempts submit the same invocation key, and requires two requests,
+one effect and an unchanged authoritative job result after the stale attempt exits. This proves the
+explicit destination's idempotency behavior, not universal exactly-once external effects.
+
+For an admitted remote qualification unit, set `ELSA_JOBS_QUALIFICATION_OWNER` to its bounded,
+nonsecret owner identity. Every owned PostgreSQL container records namespace/program/owner/run labels
+and its exact ID in `owned-container.json`. An abrupt-unit cleanup can use those recorded identities
+and verify their labels; the controller never performs broad container cleanup. The local default is
+`local-elsa-3586`.

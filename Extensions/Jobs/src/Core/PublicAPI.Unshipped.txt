@@ -735,17 +735,21 @@ Elsa.Jobs.Core.JobScheduleSnapshot
 Elsa.Jobs.Core.JobScheduleSnapshot.<Clone>$() -> Elsa.Jobs.Core.JobScheduleSnapshot!
 Elsa.Jobs.Core.JobScheduleSnapshot.CreatedAt.get -> System.DateTimeOffset
 Elsa.Jobs.Core.JobScheduleSnapshot.CreatedAt.init -> void
-Elsa.Jobs.Core.JobScheduleSnapshot.Deconstruct(out Elsa.Jobs.Core.JobScheduleDefinition! Definition, out long Revision, out System.DateTimeOffset NextOccurrence, out bool Enabled, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
-Elsa.Jobs.Core.JobScheduleSnapshot.Definition.get -> Elsa.Jobs.Core.JobScheduleDefinition!
+Elsa.Jobs.Core.JobScheduleSnapshot.Deconstruct(out Elsa.Jobs.Core.JobScheduleDefinition? Definition, out long Revision, out System.DateTimeOffset NextOccurrence, out bool Enabled, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt, out string! ScheduleId, out Elsa.Jobs.Core.JobDiagnostic? UnavailableDiagnostic) -> void
+Elsa.Jobs.Core.JobScheduleSnapshot.Definition.get -> Elsa.Jobs.Core.JobScheduleDefinition?
 Elsa.Jobs.Core.JobScheduleSnapshot.Definition.init -> void
 Elsa.Jobs.Core.JobScheduleSnapshot.Enabled.get -> bool
 Elsa.Jobs.Core.JobScheduleSnapshot.Enabled.init -> void
 Elsa.Jobs.Core.JobScheduleSnapshot.Equals(Elsa.Jobs.Core.JobScheduleSnapshot? other) -> bool
-Elsa.Jobs.Core.JobScheduleSnapshot.JobScheduleSnapshot(Elsa.Jobs.Core.JobScheduleDefinition! Definition, long Revision, System.DateTimeOffset NextOccurrence, bool Enabled, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Jobs.Core.JobScheduleSnapshot.JobScheduleSnapshot(Elsa.Jobs.Core.JobScheduleDefinition? Definition, long Revision, System.DateTimeOffset NextOccurrence, bool Enabled, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt, string! ScheduleId, Elsa.Jobs.Core.JobDiagnostic? UnavailableDiagnostic = null) -> void
 Elsa.Jobs.Core.JobScheduleSnapshot.NextOccurrence.get -> System.DateTimeOffset
 Elsa.Jobs.Core.JobScheduleSnapshot.NextOccurrence.init -> void
 Elsa.Jobs.Core.JobScheduleSnapshot.Revision.get -> long
 Elsa.Jobs.Core.JobScheduleSnapshot.Revision.init -> void
+Elsa.Jobs.Core.JobScheduleSnapshot.ScheduleId.get -> string!
+Elsa.Jobs.Core.JobScheduleSnapshot.ScheduleId.init -> void
+Elsa.Jobs.Core.JobScheduleSnapshot.UnavailableDiagnostic.get -> Elsa.Jobs.Core.JobDiagnostic?
+Elsa.Jobs.Core.JobScheduleSnapshot.UnavailableDiagnostic.init -> void
 Elsa.Jobs.Core.JobScheduleSnapshot.UpdatedAt.get -> System.DateTimeOffset
 Elsa.Jobs.Core.JobScheduleSnapshot.UpdatedAt.init -> void
 Elsa.Jobs.Core.JobSchema

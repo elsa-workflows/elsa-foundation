@@ -750,6 +750,7 @@ public class JobRuntimeBehaviorTests
         services.AddElsaJobs(options =>
         {
             options.EnableWorker = true;
+            options.MaterializeSchedules = false;
             options.WorkerScopes.Add(selectedScope);
             options.MaximumConcurrentAttempts = 1;
             options.LeaseDuration = TimeSpan.FromSeconds(9);
@@ -780,21 +781,6 @@ public class JobRuntimeBehaviorTests
             throw new InvalidOperationException("This script does not report progress.");
     }
 
-    /// <summary>Observes timer installation while delegating every clock/timer operation to FakeTimeProvider.</summary>
-    private sealed class ObservingTimeProvider(FakeTimeProvider inner, Action<TimeSpan> observe) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
-        public override long GetTimestamp() => inner.GetTimestamp();
-        public override long TimestampFrequency => inner.TimestampFrequency;
-        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = inner.CreateTimer(callback, state, dueTime, period);
-            observe(dueTime);
-            return timer;
-        }
-    }
-
     private sealed record RuntimeHarness(ServiceProvider Provider, JobsWorker Worker, ScriptedJobTransport Transport, FakeTimeProvider Clock) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
@@ -816,11 +802,13 @@ internal sealed class ScriptedJobTransport : IJobCommands, IJobQueries
     internal Func<JobScope, string, JobPhysicalReceipt, CancellationToken, ValueTask<JobTransition>>? PhysicalReceipt { get; set; }
     internal Func<JobAttemptLease, JobProgress, CancellationToken, ValueTask<JobTransition>>? Progress { get; set; }
     internal Func<JobScope, string, CancellationToken, ValueTask<JobSnapshot?>>? Find { get; set; }
+    internal Func<JobMaterializationRequest, CancellationToken, ValueTask<JobMaterializationResult>>? Materialization { get; set; }
     internal ConcurrentQueue<JobAdmission> Admissions { get; } = new();
     internal ConcurrentQueue<JobClaimRequest> Claims { get; } = new();
     internal ConcurrentQueue<JobAttemptLease> Renewals { get; } = new();
     internal ConcurrentQueue<JobPhysicalReceipt> Completions { get; } = new();
     internal ConcurrentQueue<JobProgress> ProgressReports { get; } = new();
+    internal ConcurrentQueue<JobMaterializationRequest> Materializations { get; } = new();
     internal TaskCompletionSource<JobPhysicalReceipt> Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource<JobPhysicalReceipt> ReceiptRecorded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -872,7 +860,11 @@ internal sealed class ScriptedJobTransport : IJobCommands, IJobQueries
     public ValueTask<JobTransition> SetCapacityAsync(JobSetCapacityRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
     public ValueTask<JobTransition> SaveScheduleAsync(JobSaveScheduleRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
     public ValueTask<JobTransition> SetScheduleEnabledAsync(JobSetScheduleEnabledRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
-    public ValueTask<JobMaterializationResult> MaterializeDueAsync(JobMaterializationRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
+    public ValueTask<JobMaterializationResult> MaterializeDueAsync(JobMaterializationRequest request, CancellationToken cancellationToken = default)
+    {
+        Materializations.Enqueue(request);
+        return (Materialization ?? throw Unexpected())(request, cancellationToken);
+    }
     public ValueTask<JobContinuationResult> GrantContinuationAsync(JobContinuationRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
     public ValueTask<JobTransition> AcknowledgeDeliveryAsync(JobAcknowledgeDeliveryRequest request, CancellationToken cancellationToken = default) => throw Unexpected();
     public ValueTask<JobPage<JobSnapshot>> ListJobsAsync(JobScope scope, JobListQuery query, CancellationToken cancellationToken = default) => throw Unexpected();

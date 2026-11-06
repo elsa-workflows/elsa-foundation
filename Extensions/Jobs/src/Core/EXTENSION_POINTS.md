@@ -12,7 +12,7 @@ These contracts do not qualify a provider or authorize a second lifecycle author
 | `IJobClient`: `ValueTask<JobAcceptance> SubmitAsync(JobScope, JobSubmission, CancellationToken = default)` | Internal scoped `JobClient`, `Elsa.Jobs`; registered with `TryAddScoped` by `AddElsaJobs`. | Replace the ordinary producer facade while preserving bounded immutable admission, scope and protected-key replay. Used by standalone producers; trusted model adapters use their own saved-origin admission. |
 | [`IJobCommands`](JobCommands.cs): the linked declaration supplies every exact request/lease and `ValueTask<T>` command signature, with optional cancellation. | Internal scoped `EfJobStore`, `Elsa.Jobs.Persistence.EntityFrameworkCore`; registered by `AddJobsEntityFrameworkCore`. | Supply another durable authority implementing the complete atomic admission/gate/start/capacity/attempt/result/origin/delivery contract. Used by client, worker and trusted model/operations adapters. |
 | [`IJobQueries`](JobQueries.cs): the linked declaration supplies every exact scope/filter/page and `ValueTask<T>` query signature, with optional cancellation. | The same scoped `EfJobStore` selected as `IJobCommands`, unless explicitly replaced. | Supply read-only bounded inspection against the same durable authority. Used by workers and code/API/Studio inspection; cursors must bind exact scope and filters. |
-| `IJobRecurrenceCalculator`: `DateTimeOffset? Next(JobRecurrence, DateTimeOffset after)` | No runtime default in the M1 slice; the EF store accepts zero or one host contribution and refuses duplicates. | Supply pure UTC arithmetic for schedule materialization. The command provider depends on it; the calculator never owns schedule cursors, missed policy or job acceptance. The concrete default remains an M2 obligation. |
+| `IJobRecurrenceCalculator`: `DateTimeOffset? Next(JobRecurrence, DateTimeOffset after)` | Internal singleton `JobRecurrenceCalculator` in `Elsa.Jobs`, registered with `TryAddSingleton` by `AddElsaJobs`; it adapts pure UTC math from `Elsa.Tasks.Schedules`. EF-only composition accepts zero or one host contribution and refuses duplicates. | Supply pure UTC arithmetic for schedule materialization. The command provider depends on it; the calculator never owns schedule cursors, missed policy or job acceptance. Jobs startup requires exactly one calculator; accepted occurrences and cursor/missed policy remain provider-owned. |
 
 An override is one explicit scoped service registration of the interface, replacing its prior
 registration rather than adding a second authority. `AddJobsEntityFrameworkCore` uses `TryAdd` so an
@@ -53,7 +53,7 @@ Jobs currently publishes no domain events and registers no event handlers or fan
 Its runtime contributes `JobsConfigurationValidator` to `IStartupTask` (**cross-domain**, `Elsa.Tasks.Core`)
 and optionally `JobsWorker` to `IBackgroundTask` (**cross-domain**, `Elsa.Tasks.Core`). Both are also hosted
 services for plain .NET hosts; the shared instances start once. Validation runs before background startup;
-the worker polls at configured `JobsOptions.PollInterval` (default 250ms). See the
+the worker polls at configured `JobsOptions.PollInterval` (default 250ms). Its optional bounded materialization loop has an independent interval (default 250ms), fresh command scopes and no physical-attempt slots. See the
 [Tasks catalog](../../../../Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md) for those contracts.
 
 ## Durable composition obligations

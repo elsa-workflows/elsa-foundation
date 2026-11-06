@@ -2017,7 +2017,8 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Jobs.Core": "[4.0.0-dev, )",
-          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )"
         }
       },
       "elsa.jobs.core": {

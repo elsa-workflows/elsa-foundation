@@ -44,12 +44,31 @@ authority requests cooperative cancellation. The local slot
 remains occupied until the actual handler exits, even if a successor runs elsewhere. Lease expiry
 does not establish physical exclusion or exactly-once external effects.
 
+The default `IJobRecurrenceCalculator` uses the pure `UtcRecurrence` arithmetic in `Elsa.Tasks.Schedules`.
+Intervals use its positive ISO-duration/invariant-TimeSpan rules; cron uses five fields or an optional
+seconds field in UTC. Each calculation advances strictly after the supplied cursor without consulting
+a host clock. A valid recurrence with no representable next instant returns null. Invalid expressions
+produce `jobs.recurrence.invalid` with the original cause. Register a replacement before `AddElsaJobs`
+or explicitly replace its descriptor; startup requires exactly one calculator.
+
+An enabled worker also runs one schedule-materialization loop by default. `MaterializeSchedules=false`
+disables that loop, while producer-only registration starts neither background loop. The materializer
+rotates the same trusted scopes in fresh command scopes, independently of physical handler slots.
+It requests at most `MaximumOccurrencesPerMaterialization` (default 32, range 1–1000), then waits
+`MaterializationInterval` (default 250ms, range 10ms–1min) after every call, including arithmetic-only
+progress. `MaterializationTimeout` bounds cooperative provider I/O (default 30s, range 100ms–10min).
+The provider owns pause arbitration, occurrence/origin identities, accepted jobs, catch-up/replay and
+cursor commits. An uncertain response resumes that bounded provider drain; the host never recreates
+or resubmits an occurrence job. Malformed retained schedules and temporary calculator unavailability
+remain provider-owned inspection/recovery concerns; the host emits fixed safe diagnostics.
+
 The same worker is an `IHostedService` in an ordinary host and an `IBackgroundTask` under the optional
 `JobsFeature` (Tasks lifecycle). It starts once per service provider. Plain hosting waits for application
 startup; shell activation already follows its Prepare-phase migrations. Activation cancellation does
 not own an activated worker. A shared configuration validator is both an ordinary hosted service and
 a shell `IStartupTask`; Tasks awaits startup tasks before starting background tasks, so missing or
-duplicate authorities fail activation before polling. Stopping halts claims, renews existing attempts through the configured
+duplicate authorities/calculators fail activation before polling. Stopping immediately halts claims
+and materialization, renews existing attempts through the configured
 grace period, then requests cooperative stopping and waits for actual exit. A caller's shutdown token
 can stop waiting without proving exit. Cancellation-ignoring code retains its scope and slot.
 
@@ -59,7 +78,8 @@ the worker only appends exact late physical evidence; it cannot replace a select
 successor-owned permits. Handler exceptions are retryable by default; unreadable input/unretainable
 results are non-retryable. The accepted provider policy remains the sole retry/budget authority.
 
-This project implements the initial standalone runtime slice. Schedules, native/BPMN adapters,
+This project implements standalone execution and the default schedule adapter/materialization loop.
+Native/BPMN adapters,
 operations API/Studio, provider/deployment guarantees and full #3586 qualification require their own
 implementation and evidence. See the [Core catalog](../Core/EXTENSION_POINTS.md) and
 [specification](../../../../specs/1218-standalone-jobs/spec.md).

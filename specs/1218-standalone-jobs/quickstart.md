@@ -1,8 +1,8 @@
 # Jobs validation quickstart
 
 The standalone Core/runtime and SQLite/PostgreSQL EF authority are implemented; their complete first
-release is still in progress. The commands below run the actual qualification host. Scheduling defaults,
-native/BPMN adapters, operations API/Studio and complete failure/security qualification remain open.
+release is still in progress. The commands below run the actual qualification host. Default scheduling and its current-source process qualification are in progress; native/BPMN adapters,
+operations API/Studio and complete failure/security qualification remain open.
 
 ## Run the packaged standalone witness
 
@@ -17,7 +17,7 @@ python3 tools/jobs/verify-packaged-jobs.py \
 ```
 
 Repeat with `--provider postgresql` to use an owned PostgreSQL container. Both commands create an
-isolated clean source clone, compute and pack the eight-module standalone closure, restore/publish
+isolated clean source clone, compute and pack its standalone closure, restore/publish
 an external PackageReference application with a fresh cache, and launch separate producer, worker
 and inspector processes. The SQLite host explicitly carries the source's reviewed native bundle pin;
 it does not inherit ambient central package settings. The receipt records actual package versions,

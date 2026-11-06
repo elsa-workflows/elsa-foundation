@@ -825,6 +825,9 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.Sqlite
                         .HasMaxLength(16)
                         .HasColumnType("BLOB");
 
+                    b.Property<string>("UnavailableDiagnosticJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 

@@ -305,26 +305,43 @@ def publish_consumer(receipt, evidence, source, feed, run, environment, provider
     receipt['consumerPublishState'] = 'PASSED'
 
 
-def execute_consumer(receipt, evidence, source, run, environment, provider):
+def execute_consumer(receipt, evidence, source, run, environment, provider, witness_group):
     controller = source / 'tools/jobs/PackageProbe/run_witness.py'
     if not controller.is_file():
         raise ValueError('The immutable source has no committed standalone witness controller.')
     witness_directory = evidence / 'standalone-witness'
     receipt['consumerControllerSha256'] = sha256(controller)
+    receipt['consumerControllerFilesSha256'] = {
+        str(path.relative_to(source)): sha256(path) for path in sorted(controller.parent.glob('*.py'))}
+    receipt['witnessGroup'] = witness_group
     receipt['consumerExecutionState'] = 'IN PROGRESS'
-    run([sys.executable, controller, '--entry', receipt['consumer']['entryAssembly'],
-         '--evidence-dir', witness_directory, '--provider', provider],
-        cwd=Path(receipt['consumer']['deployment']), env=environment)
-    witness = json.loads((witness_directory / 'witness-receipt.json').read_text())
+    witness_path = witness_directory / 'witness-receipt.json'
+
+    def capture():
+        witness = json.loads(witness_path.read_text())
+        receipt['standaloneWitnessReceipt'] = str(witness_path)
+        receipt['standaloneWitnessReceiptSha256'] = sha256(witness_path)
+        receipt['standaloneCases'] = witness['cases']
+        receipt['executedProviderVersion'] = witness.get('providerVersion')
+        return witness
+
+    try:
+        run([sys.executable, controller, '--entry', receipt['consumer']['entryAssembly'],
+             '--evidence-dir', witness_directory, '--provider', provider, '--group', witness_group],
+            cwd=Path(receipt['consumer']['deployment']), env=environment)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        receipt['consumerExecutionState'] = 'FAILED'
+        receipt['standaloneSliceState'] = 'FAILED'
+        receipt['standaloneAcceptanceState'] = 'INCOMPLETE'
+        if witness_path.is_file():
+            capture()
+        raise
+    witness = capture()
     if witness['state'] != 'PASSED' or not witness['ownedResourcesCleaned']:
         raise ValueError('Standalone witness failed or left owned resources uncleaned.')
     receipt['consumerExecutionState'] = 'PASSED'
     receipt['standaloneSliceState'] = 'PASSED'
     receipt['standaloneAcceptanceState'] = 'INCOMPLETE'
-    receipt['standaloneWitnessReceipt'] = str(witness_directory / 'witness-receipt.json')
-    receipt['standaloneWitnessReceiptSha256'] = sha256(witness_directory / 'witness-receipt.json')
-    receipt['standaloneCases'] = witness['cases']
-    receipt['executedProviderVersion'] = witness['providerVersion']
     receipt['proofScope'] = ('Immutable packages, clean external publish and focused independent-process standalone '
                              'slice. Full retry/schedule/security/model/UI qualification remains separate.')
 
@@ -338,6 +355,7 @@ def main():
     parser.add_argument('--evidence-dir', required=True, type=Path)
     parser.add_argument('--stage', choices=('pack', 'publish', 'execute'), default='pack')
     parser.add_argument('--provider', choices=tuple(PROVIDERS), default='sqlite')
+    parser.add_argument('--witness-group', choices=('m1', 'schedules', 'coordination', 'attempts', 'chaos', 'all'), default='m1')
     parser.add_argument('--command-timeout-seconds', type=int, default=3600,
                         help='Includes build-slot queue time; no queue bypass is used.')
     args = parser.parse_args()
@@ -447,7 +465,7 @@ def main():
         if args.stage in ('publish', 'execute'):
             publish_consumer(receipt, evidence, source, feed, run, environment, args.provider)
         if args.stage == 'execute':
-            execute_consumer(receipt, evidence, source, run, environment, args.provider)
+            execute_consumer(receipt, evidence, source, run, environment, args.provider, args.witness_group)
         if git('status', '--porcelain', cwd=source):
             raise ValueError('Immutable source changed during package verification.')
         receipt['sourceCleanAfterVerification'] = True

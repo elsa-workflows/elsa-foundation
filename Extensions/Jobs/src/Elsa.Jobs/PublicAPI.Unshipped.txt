@@ -2,6 +2,14 @@
 Elsa.Jobs.JobsFeature
 Elsa.Jobs.JobsFeature.EnableWorker.get -> bool
 Elsa.Jobs.JobsFeature.EnableWorker.set -> void
+Elsa.Jobs.JobsFeature.MaterializeSchedules.get -> bool
+Elsa.Jobs.JobsFeature.MaterializeSchedules.set -> void
+Elsa.Jobs.JobsFeature.MaximumOccurrencesPerMaterialization.get -> int
+Elsa.Jobs.JobsFeature.MaximumOccurrencesPerMaterialization.set -> void
+Elsa.Jobs.JobsFeature.MaterializationIntervalMilliseconds.get -> int
+Elsa.Jobs.JobsFeature.MaterializationIntervalMilliseconds.set -> void
+Elsa.Jobs.JobsFeature.MaterializationTimeoutSeconds.get -> int
+Elsa.Jobs.JobsFeature.MaterializationTimeoutSeconds.set -> void
 Elsa.Jobs.JobsFeature.JobsFeature() -> void
 Elsa.Jobs.JobsFeature.LeaseDurationSeconds.get -> int
 Elsa.Jobs.JobsFeature.LeaseDurationSeconds.set -> void
@@ -22,6 +30,14 @@ Elsa.Jobs.JobsFeature.TenantId.set -> void
 Elsa.Jobs.JobsOptions
 Elsa.Jobs.JobsOptions.EnableWorker.get -> bool
 Elsa.Jobs.JobsOptions.EnableWorker.set -> void
+Elsa.Jobs.JobsOptions.MaterializeSchedules.get -> bool
+Elsa.Jobs.JobsOptions.MaterializeSchedules.set -> void
+Elsa.Jobs.JobsOptions.MaximumOccurrencesPerMaterialization.get -> int
+Elsa.Jobs.JobsOptions.MaximumOccurrencesPerMaterialization.set -> void
+Elsa.Jobs.JobsOptions.MaterializationInterval.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.MaterializationInterval.set -> void
+Elsa.Jobs.JobsOptions.MaterializationTimeout.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.MaterializationTimeout.set -> void
 Elsa.Jobs.JobsOptions.JobsOptions() -> void
 Elsa.Jobs.JobsOptions.JsonSerializerOptions.get -> System.Text.Json.JsonSerializerOptions!
 Elsa.Jobs.JobsOptions.JsonSerializerOptions.set -> void

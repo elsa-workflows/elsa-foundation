@@ -175,16 +175,34 @@ internal sealed partial class EfJobStore
         }, cancellationToken);
     }
 
-    private static JobScheduleSnapshot Schedule(JobScheduleRecord row) => new(JobStoreCodec.ReadRetained<JobScheduleDefinition>(row.DefinitionJson), row.Revision,
-        JobStoreCodec.At(row.NextOccurrence), row.Enabled, JobStoreCodec.At(row.CreatedAt), JobStoreCodec.At(row.UpdatedAt));
+    private JobScheduleSnapshot Schedule(JobScope scope, JobScheduleRecord row)
+    {
+        var id = ScheduleId(scope, row);
+        JobScheduleDefinition? definition = null; JobDiagnostic? unavailable = null;
+        if (row.SchemaVersion != JobsEfModule.Version)
+            unavailable = new("jobs.schedule.schema-unavailable", "This provider cannot interpret the retained schedule schema; its identity and owed cursor remain protected.");
+        else if (row.UnavailableDiagnosticJson is not null) unavailable = ScheduleUnavailable();
+        else
+        {
+            try
+            {
+                definition = Definition(scope, row);
+                _ = Next(definition.Recurrence, JobStoreCodec.At(row.NextOccurrence));
+            }
+            catch (JobException error) when (error.Code == "jobs.recurrence.unavailable") { unavailable = RecurrenceUnavailable(); }
+            catch (Exception error) when (InvalidSchedule(error)) { definition = null; unavailable = ScheduleUnavailable(); }
+        }
+        return new(definition, row.Revision, JobStoreCodec.At(row.NextOccurrence), row.Enabled,
+            JobStoreCodec.At(row.CreatedAt), JobStoreCodec.At(row.UpdatedAt), id, unavailable);
+    }
 
     public ValueTask<JobScheduleSnapshot?> FindScheduleAsync(JobScope scope, string scheduleId, CancellationToken cancellationToken = default) =>
         Read<JobScheduleSnapshot?>("find-schedule", async (db, ct) =>
         {
+            JobStoreCodec.Name(scheduleId);
             var key = JobStoreCodec.Key(scope, "schedule", scheduleId);
             var row = await db.Schedules.AsNoTracking().SingleOrDefaultAsync(x => x.Key == key, ct);
-            if (row is not null) JobStoreCodec.Exact(row, scope, "schedule", scheduleId);
-            return row is null ? null : Schedule(row);
+            return row is null ? null : Schedule(scope, row);
         }, cancellationToken);
 
     public ValueTask<JobPage<JobScheduleSnapshot>> ListSchedulesAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default)
@@ -195,7 +213,7 @@ internal sealed partial class EfJobStore
             var query = db.Schedules.AsNoTracking().Where(x => x.ScopeKey == scopeKey);
             if (after is not null) query = query.Where(x => string.Compare(x.Key, after) > 0);
             var rows = await query.OrderBy(x => x.Key).Take(page.Limit + 1).ToArrayAsync(ct);
-            return new JobPage<JobScheduleSnapshot>(rows.Take(page.Limit).Select(Schedule).ToArray(), rows.Length > page.Limit ? CursorFor(scope, "schedules", "", rows[page.Limit - 1].Key) : null);
+            return new JobPage<JobScheduleSnapshot>(rows.Take(page.Limit).Select(row => Schedule(scope, row)).ToArray(), rows.Length > page.Limit ? CursorFor(scope, "schedules", "", rows[page.Limit - 1].Key) : null);
         }, cancellationToken);
     }
 

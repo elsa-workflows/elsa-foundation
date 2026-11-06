@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Jobs.Core;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,27 +9,126 @@ internal sealed partial class EfJobStore
     private DateTimeOffset? Next(JobRecurrence expression, DateTimeOffset after)
     {
         if (recurrence is null) throw new JobException("jobs.recurrence.unavailable", "The host has not installed a Jobs recurrence calculator.");
-        var next = recurrence.Next(expression, after);
-        if (next <= after) throw new InvalidOperationException("The Jobs recurrence calculator did not advance its UTC cursor.");
-        return next?.ToUniversalTime();
+        try
+        {
+            var next = recurrence.Next(expression, after);
+            if (next <= after) throw new JobException("jobs.recurrence.unavailable", "The Jobs recurrence calculator could not advance its UTC cursor.");
+            return next?.ToUniversalTime();
+        }
+        catch (Exception error) when (error is FormatException or ArgumentException or OverflowException)
+        { throw new JobException("jobs.recurrence.invalid", "The Jobs UTC recurrence expression is invalid or unsupported.", error); }
+        catch (NotSupportedException error)
+        { throw new JobException("jobs.recurrence.unavailable", "The host cannot currently calculate this Jobs recurrence.", error); }
+    }
+
+    private static JobDiagnostic ScheduleUnavailable() => new("jobs.schedule.unavailable", "The retained schedule definition is unavailable; its original bytes and owed cursor remain protected.");
+    private static JobDiagnostic RecurrenceUnavailable() => new("jobs.recurrence.unavailable", "The host cannot currently calculate this schedule; its owed cursor remains available for retry.");
+    private static bool InvalidSchedule(Exception error) => error is InvalidDataException or JsonException or NotSupportedException or ArgumentException or FormatException or OverflowException
+        || JobStoreCodec.SerializationFailure(error) || error is JobException { Code: "jobs.recurrence.invalid" };
+
+    private static string ScheduleId(JobScope scope, JobScheduleRecord row)
+    {
+        try
+        {
+            // Legacy identities already contain the ID. Check every kind/length before indexing;
+            // a corrupted definition must never supply the identity used for its metadata projection.
+            if (row.Identity.Length > 8192) throw new InvalidDataException("The retained Jobs schedule identity exceeds its bound.");
+            using var json = JsonDocument.Parse(row.Identity, new JsonDocumentOptions { MaxDepth = 8 });
+            var frame = json.RootElement;
+            if (frame.ValueKind != JsonValueKind.Array || frame.GetArrayLength() != 4
+                || frame[0].ValueKind != JsonValueKind.String || frame[1].ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
+                || frame[2].ValueKind != JsonValueKind.String || frame[3].ValueKind != JsonValueKind.Array || frame[3].GetArrayLength() != 1
+                || frame[3][0].ValueKind != JsonValueKind.String)
+                throw new InvalidDataException("The retained Jobs schedule identity has an invalid frame.");
+            JobStoreCodec.Name(frame[0].GetString()!);
+            if (frame[1].ValueKind == JsonValueKind.String) JobStoreCodec.Name(frame[1].GetString()!);
+            JobStoreCodec.Name(frame[2].GetString()!);
+            var id = frame[3][0].GetString()!; JobStoreCodec.Name(id);
+            JobStoreCodec.ExactIdentity(row, scope, "schedule", id);
+            if (row.Key != JobStoreCodec.Key(scope, "schedule", id)) throw new InvalidDataException("The retained Jobs schedule identity does not match its address.");
+            return id;
+        }
+        catch (Exception error) when (error is ArgumentException or JsonException)
+        { throw new InvalidDataException("The retained Jobs schedule identity is invalid.", error); }
+    }
+
+    private static void ValidateDefinition(JobScheduleDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition); ArgumentNullException.ThrowIfNull(definition.Recurrence);
+        JobStoreCodec.Name(definition.ScheduleId); JobStoreCodec.Request(definition.Template);
+        if (!Enum.IsDefined(definition.MissedPolicy) || !Enum.IsDefined(definition.Recurrence.Kind)
+            || string.IsNullOrWhiteSpace(definition.Recurrence.Expression) || definition.Recurrence.Expression.Length > 1024)
+            throw new ArgumentException("The Jobs schedule policy or recurrence is invalid.");
+        if (definition.Template.Association is { Mode: JobAssociationMode.Awaited }) throw new ArgumentException("A recurring schedule cannot reuse one awaited model address.");
+    }
+
+    private static JobScheduleDefinition Definition(JobScope scope, JobScheduleRecord row)
+    {
+        var id = ScheduleId(scope, row);
+        var definition = JobStoreCodec.ReadRetained<JobScheduleDefinition>(row.DefinitionJson, ValidateDefinition);
+        if (definition.ScheduleId != id) throw new InvalidDataException("The retained Jobs schedule definition differs from its exact identity.");
+        return definition;
+    }
+
+    private sealed record PlannedOccurrence(long Due, long Count, long? Through);
+    private sealed record SchedulePlan(IReadOnlyList<PlannedOccurrence> Occurrences, DateTimeOffset? Next,
+        bool Counting, long? CoalesceNext = null, long? Cutoff = null, long Count = 0, long? Through = null);
+
+    private SchedulePlan Plan(JobScheduleRecord schedule, JobScheduleDefinition definition, long now, int maximum, CancellationToken ct)
+    {
+        // Calculate the entire bounded slice before mutating tracked rows or accepting an occurrence.
+        // Invalid arithmetic at any position cannot leave a partly accepted replay or advanced cursor.
+        ct.ThrowIfCancellationRequested();
+        DateTimeOffset? CalculateNext(DateTimeOffset after)
+        {
+            ct.ThrowIfCancellationRequested();
+            var calculated = Next(definition.Recurrence, after);
+            ct.ThrowIfCancellationRequested();
+            return calculated;
+        }
+        if (definition.MissedPolicy == JobMissedOccurrencePolicy.CoalesceOne)
+        {
+            var cutoff = schedule.CoalesceCutoff ?? now;
+            var count = schedule.CoalesceCount; var through = schedule.CoalesceThrough;
+            var next = schedule.CoalesceNext is { } c ? JobStoreCodec.At(c) : CalculateNext(JobStoreCodec.At(schedule.NextOccurrence));
+            var arithmetic = 0;
+            while (next is { } due && due.UtcTicks <= cutoff && arithmetic++ < settings.MaximumClaimScan)
+            {
+                ct.ThrowIfCancellationRequested();
+                count = checked(count + 1); through = due.UtcTicks;
+                next = CalculateNext(due);
+            }
+            return next is { } remaining && remaining.UtcTicks <= cutoff
+                ? new([], null, true, remaining.UtcTicks, cutoff, count, through)
+                : new([new(schedule.NextOccurrence, count, through)], next, false);
+        }
+        var occurrences = new List<PlannedOccurrence>();
+        DateTimeOffset? cursor = JobStoreCodec.At(schedule.NextOccurrence);
+        while (cursor is { } due && due.UtcTicks <= now && occurrences.Count < maximum)
+        {
+            ct.ThrowIfCancellationRequested();
+            var next = CalculateNext(due);
+            occurrences.Add(new(due.UtcTicks, 0, null)); cursor = next;
+        }
+        return new(occurrences, cursor, false);
     }
 
     public ValueTask<JobTransition> SaveScheduleAsync(JobSaveScheduleRequest request, CancellationToken cancellationToken = default)
     {
         var frozen = JobStoreCodec.Preflight(() =>
         {
-            JobStoreCodec.Name(request.Definition.ScheduleId); JobStoreCodec.Request(request.Definition.Template); JobStoreCodec.Operation(request.Operation);
-            if (!Enum.IsDefined(request.Definition.MissedPolicy) || !Enum.IsDefined(request.Definition.Recurrence.Kind)
-                || request.Definition.Recurrence.Expression.Length > 1024 || request.ExpectedRevision < 0)
-                throw new ArgumentException("The Jobs schedule policy or recurrence is invalid.");
-            if (request.Definition.Template.Association is { Mode: JobAssociationMode.Awaited }) throw new ArgumentException("A recurring schedule cannot reuse one awaited model address.");
-            _ = Next(request.Definition.Recurrence, request.Definition.FirstOccurrence);
+            ValidateDefinition(request.Definition); JobStoreCodec.Operation(request.Operation);
+            if (request.ExpectedRevision < 0) throw new ArgumentOutOfRangeException(nameof(request));
             return JobStoreCodec.Read<JobSaveScheduleRequest>(JobStoreCodec.Json(request));
         }, "jobs.request.invalid");
         var digest = JobStoreCodec.Preflight(() => JobStoreCodec.Hash(JobStoreCodec.Json(new { kind = "save-schedule", request = frozen })), "jobs.request.invalid");
         return Write("save-schedule", async (db, now, ct) =>
         {
             if (await Replay<JobTransition>(db, frozen.Scope, frozen.Operation, digest, ct) is { } replay) return replay with { Status = replay.Status == JobCommandStatus.Applied ? JobCommandStatus.Replayed : replay.Status };
+            // Recognition of a committed operation must not depend on today's calculator availability.
+            ct.ThrowIfCancellationRequested();
+            _ = Next(frozen.Definition.Recurrence, frozen.Definition.FirstOccurrence);
+            ct.ThrowIfCancellationRequested();
             var key = JobStoreCodec.Key(frozen.Scope, "schedule", frozen.Definition.ScheduleId);
             var row = await db.Schedules.SingleOrDefaultAsync(x => x.Key == key, ct);
             JobTransition result;
@@ -53,7 +153,7 @@ internal sealed partial class EfJobStore
                     row.CoalesceNext = null; row.CoalesceCutoff = null; row.CoalesceCount = 0; row.CoalesceThrough = null;
                     db.Memberships.RemoveRange(await db.Memberships.Where(x => x.JobKey == row.Key).ToArrayAsync(ct));
                 }
-                row.DefinitionJson = definitionJson; row.Revision = checked(row.Revision + 1); row.UpdatedAt = now;
+                row.DefinitionJson = definitionJson; row.UnavailableDiagnosticJson = null; row.Revision = checked(row.Revision + 1); row.UpdatedAt = now;
                 foreach (var gate in await Gates(db, frozen.Scope, JobStoreCodec.Gates(frozen.Definition.Template), ct))
                 {
                     var membershipKey = JobStoreCodec.Key(frozen.Scope, "membership", row.Key, gate.Key);
@@ -104,59 +204,61 @@ internal sealed partial class EfJobStore
             var cursor = await db.ClaimCursors.SingleOrDefaultAsync(x => x.Key == cursorKey, ct);
             if (cursor is null) { cursor = JobStoreCodec.New<JobClaimCursorRecord>(request.Scope, "schedule-cursor"); db.ClaimCursors.Add(cursor); }
             else JobStoreCodec.Exact(cursor, request.Scope, "schedule-cursor");
-            var query = db.Schedules.Where(s => s.ScopeKey == scopeKey && s.Enabled && s.NextOccurrence <= now
+            var query = db.Schedules.Where(s => s.ScopeKey == scopeKey && s.SchemaVersion == JobsEfModule.Version && s.UnavailableDiagnosticJson == null && s.Enabled && s.NextOccurrence <= now
                 && !db.Memberships.Any(m => m.JobKey == s.Key && db.Gates.Any(g => g.Key == m.GateKey && g.ActiveHolds > 0)));
             if (cursor.AfterKey is { } after) query = query.Where(x => string.Compare(x.Key, after) > 0);
             var schedules = await query.OrderBy(x => x.Key).Take(request.MaximumOccurrences).ToArrayAsync(ct);
             var receipts = new List<JobOccurrenceReceipt>();
             var madeProgress = false;
+            var recurrenceUnavailable = false;
+            var visited = 0;
             foreach (var schedule in schedules)
             {
+                ct.ThrowIfCancellationRequested();
                 cursor.AfterKey = schedule.Key;
-                var definition = JobStoreCodec.ReadRetained<JobScheduleDefinition>(schedule.DefinitionJson);
-                JobStoreCodec.Exact(schedule, request.Scope, "schedule", definition.ScheduleId);
+                visited++;
+                JobScheduleDefinition definition; SchedulePlan plan;
+                try
+                {
+                    definition = Definition(request.Scope, schedule);
+                    plan = Plan(schedule, definition, now, request.MaximumOccurrences - receipts.Count, ct);
+                }
+                catch (JobException error) when (error.Code == "jobs.recurrence.unavailable")
+                {
+                    // Commit discovery progress, not a permanent quarantine. Reinstallation can retry
+                    // this exact owed cursor; another schedule in the same scope can still progress.
+                    recurrenceUnavailable = true; continue;
+                }
+                catch (Exception error) when (InvalidSchedule(error))
+                {
+                    schedule.UnavailableDiagnosticJson = JobStoreCodec.Json(ScheduleUnavailable());
+                    schedule.Revision = checked(schedule.Revision + 1); schedule.UpdatedAt = now;
+                    madeProgress = true; continue;
+                }
                 var gates = await Gates(db, request.Scope, JobStoreCodec.Gates(definition.Template), ct);
                 if (await Availability(db, gates, now, permits: false, ct) is not null) continue;
                 Touch(gates);
-                if (definition.MissedPolicy == JobMissedOccurrencePolicy.CoalesceOne)
+                if (plan.Counting)
                 {
-                    // Freeze one finite owed interval. Later wall time is responsibility for the NEXT
-                    // cycle, not a moving target that can starve this catch-up forever.
-                    schedule.CoalesceCutoff ??= now;
-                    var cutoff = schedule.CoalesceCutoff.Value;
-                    var next = schedule.CoalesceNext is { } c ? JobStoreCodec.At(c) : Next(definition.Recurrence, JobStoreCodec.At(schedule.NextOccurrence));
-                    var arithmetic = 0;
-                    // Count an arbitrarily long outage in durable finite slices; no silent replay cap or accepted-job deletion.
-                    while (next is { } dueNext && dueNext.UtcTicks <= cutoff && arithmetic++ < settings.MaximumClaimScan)
-                    {
-                        schedule.CoalesceCount = checked(schedule.CoalesceCount + 1); schedule.CoalesceThrough = next.Value.UtcTicks;
-                        next = Next(definition.Recurrence, next.Value);
-                    }
-                    schedule.CoalesceNext = next?.UtcTicks;
-                    if (next is { } remaining && remaining.UtcTicks <= cutoff)
-                    {
-                        schedule.Revision = checked(schedule.Revision + 1); schedule.UpdatedAt = now; madeProgress = true;
-                        continue;
-                    }
-                    var receipt = await Materialize(db, request.Scope, schedule, definition, schedule.NextOccurrence,
-                        schedule.CoalesceCount, schedule.CoalesceThrough, now, ct);
-                    receipts.Add(receipt);
-                    schedule.CoalesceNext = null; schedule.CoalesceCutoff = null; schedule.CoalesceCount = 0; schedule.CoalesceThrough = null;
-                    Advance(schedule, next, now); madeProgress = true;
+                    schedule.CoalesceNext = plan.CoalesceNext; schedule.CoalesceCutoff = plan.Cutoff;
+                    schedule.CoalesceCount = plan.Count; schedule.CoalesceThrough = plan.Through;
+                    schedule.Revision = checked(schedule.Revision + 1); schedule.UpdatedAt = now;
                 }
                 else
                 {
-                    while (schedule.Enabled && schedule.NextOccurrence <= now && receipts.Count < request.MaximumOccurrences)
-                    {
-                        var due = schedule.NextOccurrence;
-                        receipts.Add(await Materialize(db, request.Scope, schedule, definition, due, 0, null, now, ct));
-                        Advance(schedule, Next(definition.Recurrence, JobStoreCodec.At(due)), now); madeProgress = true;
-                    }
+                    foreach (var occurrence in plan.Occurrences)
+                        receipts.Add(await Materialize(db, request.Scope, schedule, definition, occurrence.Due,
+                            occurrence.Count, occurrence.Through, now, ct));
+                    schedule.CoalesceNext = null; schedule.CoalesceCutoff = null; schedule.CoalesceCount = 0; schedule.CoalesceThrough = null;
+                    Advance(schedule, plan.Next, now);
                 }
+                madeProgress = true;
                 if (receipts.Count >= request.MaximumOccurrences) break;
             }
-            if (schedules.Length < request.MaximumOccurrences) cursor.AfterKey = null;
-            return new JobMaterializationResult(madeProgress ? JobCommandStatus.Applied : JobCommandStatus.NoEligibleWork, receipts);
+            // A replay schedule can consume the occurrence budget before later fetched rows are visited.
+            // Preserve that discovery position until the fetched page and the query are both exhausted.
+            if (visited == schedules.Length && schedules.Length < request.MaximumOccurrences) cursor.AfterKey = null;
+            return new JobMaterializationResult(madeProgress ? JobCommandStatus.Applied : recurrenceUnavailable ? JobCommandStatus.Unavailable : JobCommandStatus.NoEligibleWork, receipts);
         }, cancellationToken);
     }
 

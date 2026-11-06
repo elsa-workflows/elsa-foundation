@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 // committed packaging driver. It must not reference a source project or a test double.
 return await Probe.RunAsync(args);
 
-internal static class Probe
+internal static partial class Probe
 {
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -30,6 +30,9 @@ internal static class Probe
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(command.TimeoutSeconds));
         try
         {
+            if (command.Fault is { Event: "before-transaction" } && command.Mode != "claim")
+                throw new InvalidDataException("A pre-transaction barrier is only supported by the explicit direct claim probe.");
+            using var faults = command.Fault is { } fault ? new ProbeEfFaults(fault) : null;
             var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
                 Args = [], ContentRootPath = AppContext.BaseDirectory, DisableDefaults = true
@@ -48,17 +51,34 @@ internal static class Probe
             {
                 options.EnableWorker = worker;
                 options.WorkerScopes.Add(command.Scope);
-                options.MaximumConcurrentAttempts = 1;
+                options.MaximumConcurrentAttempts = command.MaximumConcurrentAttempts;
                 options.PollInterval = TimeSpan.FromMilliseconds(50);
-                options.LeaseDuration = TimeSpan.FromSeconds(3);
-                options.RenewalInterval = TimeSpan.FromMilliseconds(500);
-                options.ShutdownGracePeriod = TimeSpan.FromMilliseconds(250);
+                options.LeaseDuration = TimeSpan.FromSeconds(command.LeaseSeconds);
+                options.RenewalInterval = TimeSpan.FromMilliseconds(command.RenewalMilliseconds);
+                options.ShutdownGracePeriod = TimeSpan.FromMilliseconds(command.ShutdownGraceMilliseconds);
+                options.MaterializeSchedules = command.MaterializeSchedules;
+                options.MaximumOccurrencesPerMaterialization = command.MaximumOccurrences;
+                options.MaterializationInterval = TimeSpan.FromMilliseconds(100);
+                options.MaterializationTimeout = TimeSpan.FromSeconds(5);
+                if (command.Queues is { } queues)
+                {
+                    options.Queues.Clear();
+                    foreach (var queue in queues) options.Queues.Add(queue);
+                }
             });
             if (worker)
+            {
                 builder.Services.AddJobHandler<ReportHandler, ReportInput, ReportResult>(
                     command.UnrelatedHandler ? Support with { Handler = new("package.unrelated", "1") } : Support);
+                if (!command.UnrelatedHandler)
+                {
+                    builder.Services.AddJobHandler<ControlledReportHandler, ControlledReportInput, ControlledReportResult>(ControlledSupport);
+                    builder.Services.AddJobHandler<ReportHandler, ReportInput, ReportResult>(Support with { Handler = new("package.unrelated", "1") });
+                }
+            }
             using var host = builder.Build();
             await host.StartAsync(timeout.Token);
+            faults?.ArmAfterHostValidation();
             await using var scope = host.Services.CreateAsyncScope();
             var services = scope.ServiceProvider;
             var commands = services.GetRequiredService<IJobCommands>();
@@ -81,16 +101,27 @@ internal static class Probe
                     break;
                 case "submit":
                 case "submit-discard-ack":
-                    var input = command.Input ?? throw new InvalidDataException("Report input required.");
-                    var request = new JobRequest(Support.Handler,
-                        new(Support.InputSchema, JsonSerializer.SerializeToElement(input, Json)), Support.ResultSchema,
-                        "default", new(new(3, TimeSpan.FromMilliseconds(25), TimeSpan.FromSeconds(1), 2, 0, true),
-                            TimeSpan.FromMinutes(2), TimeSpan.FromDays(30)), null, null);
+                    var request = Request(command);
                     var accepted = await services.GetRequiredService<IJobClient>().SubmitAsync(command.Scope,
                         new(command.ClientKey, request), timeout.Token);
                     // Deliberately discard the successful response before the controller can see JobId.
                     // This simulates a producer response loss, not a database commit-ack fault.
                     result = command.Mode == "submit-discard-ack" ? new { responseDiscarded = true } : accepted;
+                    break;
+                case "submit-batch":
+                    if (command.BatchCount is < 1 or > 1500) throw new InvalidDataException("The qualification batch exceeds its bound.");
+                    var confirmations = new List<JobAcceptance>();
+                    for (var index = 0; index < command.BatchCount; index++)
+                        confirmations.Add(await services.GetRequiredService<IJobClient>().SubmitAsync(command.Scope,
+                            new(command.ClientKey + "-" + index, Request(command)), timeout.Token));
+                    result = confirmations;
+                    break;
+                case "admit-associated":
+                    var associated = Request(command);
+                    if (associated.Association is null) throw new InvalidDataException("A trusted qualification association is required.");
+                    var digest = JobRequestDigest.Compute(associated);
+                    result = await commands.AdmitAsync(new(command.Scope, Guid.NewGuid().ToString("N"), command.ClientKey,
+                        digest, associated, new("package-witness", "controlled-probe", command.ClientKey, digest)), timeout.Token);
                     break;
                 case "inspect":
                     result = await queries.FindAsync(command.Scope, command.JobId, timeout.Token);
@@ -98,24 +129,59 @@ internal static class Probe
                 case "attempts":
                     result = await queries.ListAttemptsAsync(command.Scope, command.JobId, new(100, null), timeout.Token);
                     break;
+                case "receipts":
+                    result = await queries.ListPhysicalReceiptsAsync(command.Scope, command.JobId, new(100, null), timeout.Token);
+                    break;
                 case "list":
                     result = await queries.ListJobsAsync(command.Scope, new(new(100, null), null, null, null), timeout.Token);
                     break;
                 case "pause":
-                    result = await commands.PauseAsync(new(command.Scope, new(JobGateKind.Queue, "default"),
+                    result = await commands.PauseAsync(new(command.Scope, Gate(command),
                         command.HoldId, new(command.OperationId, "package-witness", "Verify durable start cutoff")), timeout.Token);
                     break;
                 case "holds":
-                    result = await queries.ListHoldsAsync(command.Scope, new(JobGateKind.Queue, "default"), new(100, null), timeout.Token);
+                    result = await queries.ListHoldsAsync(command.Scope, Gate(command), new(100, null), timeout.Token);
                     break;
                 case "release":
-                    result = await commands.ReleaseHoldAsync(new(command.Scope, new(JobGateKind.Queue, "default"),
+                    result = await commands.ReleaseHoldAsync(new(command.Scope, Gate(command),
                         command.HoldId, command.ExpectedRevision,
                         new(command.OperationId, "package-witness", "Resume package witness")), timeout.Token);
                     break;
+                case "capacity":
+                    result = await commands.SetCapacityAsync(new(command.Scope, Gate(command), command.Capacity,
+                        command.ExpectedRevision, new(command.OperationId, "package-witness", "Verify authorized lease capacity")), timeout.Token);
+                    break;
+                case "cancel":
+                    result = await commands.CancelAsync(new(command.Scope, command.JobId,
+                        new(command.OperationId, "package-witness", "Verify cooperative cancellation")), timeout.Token);
+                    break;
+                case "retry-as-new":
+                    result = await commands.RetryAsNewRunAsync(new(command.Scope, command.JobId, command.ExpectedRevision,
+                        Guid.NewGuid().ToString("N"), command.ClientKey,
+                        new(command.OperationId, "package-witness", "Verify linked retry as new run")), timeout.Token);
+                    break;
+                case "save-schedule":
+                    result = await commands.SaveScheduleAsync(new(command.Scope,
+                        new(command.ScheduleId, Request(command), command.Recurrence ?? throw new InvalidDataException("Recurrence required."),
+                            command.FirstOccurrence ?? throw new InvalidDataException("First occurrence required."), command.MissedPolicy),
+                        command.ExpectedRevision, new(command.OperationId, "package-witness", "Verify recurring materialization")), timeout.Token);
+                    break;
+                case "schedule":
+                    result = await queries.FindScheduleAsync(command.Scope, command.ScheduleId, timeout.Token);
+                    break;
+                case "schedules":
+                    result = await queries.ListSchedulesAsync(command.Scope, new(100, null), timeout.Token);
+                    break;
+                case "schedule-enabled":
+                    result = await commands.SetScheduleEnabledAsync(new(command.Scope, command.ScheduleId, command.Enabled,
+                        command.ExpectedRevision, new(command.OperationId, "package-witness", "Verify retained schedule control")), timeout.Token);
+                    break;
+                case "materialize":
+                    result = await commands.MaterializeDueAsync(new(command.Scope, command.MaximumOccurrences), timeout.Token);
+                    break;
                 case "claim":
                     result = await commands.ClaimAsync(new(command.Scope, "package-witness-lost-owner", ["default"],
-                        [Support], TimeSpan.FromSeconds(1), command.ClaimRequestId), timeout.Token);
+                        [Support, ControlledSupport], TimeSpan.FromSeconds(command.LeaseSeconds), command.ClaimRequestId), timeout.Token);
                     break;
                 case "complete-stale":
                     var lease = command.Lease ?? throw new InvalidDataException("The original lease is required.");
@@ -160,7 +226,15 @@ internal sealed record ProbeCommand(string Mode, string Provider, string Connect
     JobScope Scope, string OutputFile, string JobId = "", string ClientKey = "", ReportInput? Input = null,
     bool UnrelatedHandler = false, string ReadyFile = "", string StopFile = "", string HoldId = "",
     string OperationId = "", long ExpectedRevision = 0, string ClaimRequestId = "",
-    JobAttemptLease? Lease = null, string ReceiptId = "", int TimeoutSeconds = 120);
+    JobAttemptLease? Lease = null, string ReceiptId = "", int TimeoutSeconds = 120,
+    ControlledReportInput? ControlledInput = null, JobExecutionPolicy? Policy = null,
+    JobAssociation? Association = null, string Queue = "default", DateTimeOffset? NotBefore = null,
+    JobGateKey? Gate = null, int? Capacity = null, string ScheduleId = "", JobRecurrence? Recurrence = null,
+    DateTimeOffset? FirstOccurrence = null, JobMissedOccurrencePolicy MissedPolicy = JobMissedOccurrencePolicy.CoalesceOne,
+    bool Enabled = true, bool MaterializeSchedules = true, int MaximumOccurrences = 4,
+    string[]? Queues = null, int MaximumConcurrentAttempts = 1, int LeaseSeconds = 3,
+    int RenewalMilliseconds = 500, int ShutdownGraceMilliseconds = 250, ProbeFaultOptions? Fault = null,
+    bool SubmitUnrelated = false, int BatchCount = 1);
 
 internal sealed record ReportLine(string Product, int Quantity, decimal UnitPrice);
 internal sealed record ReportInput(string Name, ReportLine[] Lines, string EntryDirectory, string? ReleaseFile = null);

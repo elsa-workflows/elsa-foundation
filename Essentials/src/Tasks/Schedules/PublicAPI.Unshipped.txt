@@ -12,6 +12,9 @@ Elsa.Tasks.Schedules.BackoffSweepWorkerTask.Logger.get -> Microsoft.Extensions.L
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Schedules.TaskSchedule
+Elsa.Tasks.Schedules.UtcRecurrence
+static Elsa.Tasks.Schedules.UtcRecurrence.ParseInterval(string! expression) -> System.TimeSpan
+static Elsa.Tasks.Schedules.UtcRecurrence.NextCron(string! expression, System.DateTimeOffset after, bool allowSeconds = true) -> System.DateTimeOffset?
 static Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ComputeBackoff(System.TimeSpan baseInterval, System.TimeSpan maxInterval, int failures) -> System.TimeSpan
 static Elsa.Tasks.Schedules.TaskSchedule.Cron(string! expression, Elsa.Primitives.Contracts.ISystemClock! systemClock, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!
 static Elsa.Tasks.Schedules.TaskSchedule.Every(System.TimeSpan interval, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!

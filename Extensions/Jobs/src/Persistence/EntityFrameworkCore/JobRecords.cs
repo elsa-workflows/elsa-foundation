@@ -193,6 +193,7 @@ internal sealed class JobScheduleRecord : IJobRecord
     public byte[] Token { get; set; } = [];
     public string SchemaVersion { get; set; } = JobsEfModule.Version;
     public string DefinitionJson { get; set; } = null!;
+    public string? UnavailableDiagnosticJson { get; set; }
     public long Revision { get; set; }
     public long DefinitionRevision { get; set; }
     public long NextOccurrence { get; set; }

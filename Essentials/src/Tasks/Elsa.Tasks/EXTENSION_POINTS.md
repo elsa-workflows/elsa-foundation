@@ -137,6 +137,7 @@ maximum failure backoff. See the [specialist runtime catalog](../../../../Extens
 
 ## Cross-references
 
+- `UtcRecurrence` in `Elsa.Tasks.Schedules` supplies pure arithmetic to local Tasks cron and the workflow/Jobs recurring adapters. `ParseInterval` accepts positive ISO-8601 or invariant durations; `NextCron` returns a UTC instant strictly after the supplied cursor, optionally allowing seconds. The caller owns its cursor and missed-occurrence policy. Tasks keeps its five-field cron contract; the existing workflow calculator remains a compatibility wrapper.
 - `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal and reached through `TaskSchedule`.
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

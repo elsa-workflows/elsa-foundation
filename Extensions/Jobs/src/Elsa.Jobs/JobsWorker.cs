@@ -10,7 +10,7 @@ namespace Elsa.Jobs;
 
 /// <summary>One host/shell lifecycle and bounded physical slots; no local queue, retry or result authority.</summary>
 internal sealed class JobsWorker(IServiceScopeFactory scopes, JobRuntimeSettings settings, JobHandlerRegistry handlers,
-    TimeProvider clock, ILogger<JobsWorker> logger, IHostApplicationLifetime? lifetime = null)
+    TimeProvider clock, ILogger<JobsWorker> logger, IHostApplicationLifetime? lifetime = null, JobSchedulePump? materializer = null)
     : IHostedService, IBackgroundTask, IDisposable
 {
     private readonly object _lifecycle = new();
@@ -79,8 +79,17 @@ internal sealed class JobsWorker(IServiceScopeFactory scopes, JobRuntimeSettings
             {
                 _ = JobAuthority.Commands(scope.ServiceProvider);
                 _ = JobAuthority.Queries(scope.ServiceProvider);
+                _ = JobAuthority.Recurrence(scope.ServiceProvider);
             }
-            await Task.WhenAll(Enumerable.Range(0, settings.MaximumConcurrentAttempts).Select(_ => RunSlotAsync()));
+            // A synchronous provider/handler must not delay starting another physical slot or
+            // the independent materializer. The number of host loops remains fixed and bounded.
+            var pump = settings.MaterializeSchedules
+                ? materializer ?? throw new JobException("jobs.materializer.missing", "Schedule materialization is enabled without its host component.")
+                : null;
+            var loops = Enumerable.Range(0, settings.MaximumConcurrentAttempts).Select(_ => Task.Run(RunSlotAsync)).ToList();
+            if (pump is not null)
+                loops.Add(Task.Run(() => pump.RunAsync(_stopClaims.Token)));
+            await Task.WhenAll(loops);
         }
         catch (OperationCanceledException) when (_stopClaims.IsCancellationRequested) { }
     }

@@ -876,6 +876,9 @@ namespace Elsa.Jobs.Persistence.EntityFrameworkCore.Migrations.Jobs.PostgreSql
                         .HasMaxLength(16)
                         .HasColumnType("bytea");
 
+                    b.Property<string>("UnavailableDiagnosticJson")
+                        .HasColumnType("text");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("bigint");
 

@@ -50,6 +50,8 @@ public sealed class JobPayload
     public JobPayload(JobSchema schema, JsonElement value)
     {
         ArgumentNullException.ThrowIfNull(schema);
+        if (value.ValueKind == JsonValueKind.Undefined)
+            throw new ArgumentException("A Jobs payload requires a defined JSON value; JSON null remains supported.", nameof(value));
         Schema = schema;
         Value = value.Clone();
     }

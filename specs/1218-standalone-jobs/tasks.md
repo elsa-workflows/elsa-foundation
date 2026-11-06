@@ -3,8 +3,8 @@
 **Input**: [spec](spec.md), [provisional plan](plan.md), [research](research.md),
 [data model](data-model.md), [lifecycle](contracts/job-lifecycle.md) and [acceptance matrix](acceptance-matrix.md).
 
-**Status**: M1 packaged standalone checkpoint passed at b706023ddd on both profiles; M2 scheduling and full failure qualification is next. Final feature delivery remains incomplete.
-Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 68/68, with exact discovery/execution identity matches. The eight-module packaged boundary and five standalone cases are qualified by evidence/m1-packaged-standalone.json; complete deployment/model guarantees remain open. Tests are risk-based; application TDD cadence is undeclared,
+**Status**: M1 packaged standalone checkpoint passed at b706023ddd on both profiles; M2 scheduling and failure controls are implemented and awaiting current-candidate Azure qualification. Final feature delivery remains incomplete.
+Core/runtime source checks pass 45/45 and real SQLite/PostgreSQL provider checks pass 68/68, with exact discovery/execution identity matches. T011 ordinary-key expiry and pending-obligation controls remain open after independent checkpoint audit; durable-origin replay does not cover those branches. The eight-module packaged boundary and five standalone cases are qualified by evidence/m1-packaged-standalone.json; complete deployment/model guarantees remain open. Tests are risk-based; application TDD cadence is undeclared,
 so the template does not invent it. Required behavioral red/green bite-proofs remain obligations.
 
 ## M0 — Setup and design gates
@@ -27,7 +27,7 @@ so the template does not invent it. Required behavioral red/green bite-proofs re
 
 - [x] T009 [US1] Implement pinned handler registration, idempotent durable client and bounded request/result dispatch in `Extensions/Jobs/src/Elsa.Jobs/`.
 - [x] T010 [US1] Implement independent worker hosting, fenced lease renewal, physical receipts and terminal/result responsibility in `Extensions/Jobs/src/Elsa.Jobs/` and its job-owned EF transitions.
-- [x] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
+- [ ] T011 [US1] Cover equal/conflicting ordinary-key replay/expiry/cleanup, pending-obligation extension, separately protected durable-origin receipts/tombstones, lost acknowledgements, missing handler/schema support and restart in `Extensions/Jobs/tests/Tests/` and `tests/Persistence/ProviderTests/`.
 - [x] T012 [US1] Add immutable clean PackageReference producer/worker witness in `tools/jobs/`; record dependency closure, actual versions/hashes and useful result/restart evidence in `specs/1218-standalone-jobs/evidence/`.
 
 ## M2 — US1 schedules and US2 outage controls

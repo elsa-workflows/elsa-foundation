@@ -13,14 +13,16 @@ public sealed record JobScheduleDefinition(
     DateTimeOffset FirstOccurrence,
     JobMissedOccurrencePolicy MissedPolicy);
 
-/// <summary>Schedule cursor remains due while held; revision protects replacement against concurrent materialization.</summary>
+/// <summary>Retained schedule metadata. An unavailable definition remains protected with its exact identity and owed cursor.</summary>
 public sealed record JobScheduleSnapshot(
-    JobScheduleDefinition Definition,
+    JobScheduleDefinition? Definition,
     long Revision,
     DateTimeOffset NextOccurrence,
     bool Enabled,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string ScheduleId,
+    JobDiagnostic? UnavailableDiagnostic = null);
 
 /// <summary>Creates or revision-checks a schedule without discarding accepted jobs or unmaterialized due responsibility.</summary>
 public sealed record JobSaveScheduleRequest(
@@ -73,5 +75,6 @@ public enum JobMissedOccurrencePolicy
 /// <summary>Replacement contract: pure UTC recurrence arithmetic; schedule authority owns cursors, missed policy and acceptance.</summary>
 public interface IJobRecurrenceCalculator
 {
+    /// <exception cref="JobException">The recurrence is invalid, or its arithmetic is temporarily unavailable; unavailable arithmetic retains retryable schedule responsibility.</exception>
     DateTimeOffset? Next(JobRecurrence recurrence, DateTimeOffset after);
 }

@@ -12,10 +12,20 @@ import json
 import os
 from pathlib import Path
 import signal
+import runpy
+import re
 import subprocess
 import sys
 import time
 import uuid
+
+
+M1_CASE_NAMES = (
+    'durable-admission-replay-conflict',
+    'missing-handler-preserves-accepted-job',
+    'useful-typed-result-and-restart-inspection',
+    'durable-pause-cutoff-and-accept-while-held',
+    'killed-worker-recovery-stale-fence-stable-effect-key')
 
 
 def write_json(path, value):
@@ -47,10 +57,18 @@ class Witness:
         self.entry, self.evidence, self.provider = entry, evidence, provider
         self.steps, self.processes = [], []
         self.cases = []
+        self.active_case = None
         self.number = 0
         self.container = None
         self.container_log = {'state': 'NOT APPLICABLE'}
         self.run_id = uuid.uuid4().hex
+        self.owner = os.environ.get('ELSA_JOBS_QUALIFICATION_OWNER', 'local-elsa-3586')
+        if re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', self.owner) is None:
+            raise ValueError('The Jobs qualification owner must be a bounded nonsecret label identity.')
+        self.container_labels = {'elsa.qualification.namespace': 'background-workflows',
+                                 'elsa.qualification.program': '3586',
+                                 'elsa.qualification.owner': self.owner,
+                                 'elsa.qualification.run': self.run_id}
         self.base = {'provider': 'Sqlite' if provider == 'sqlite' else 'PostgreSql',
                      'scope': {'persistencePartition': 'package-' + self.run_id, 'tenantId': 'tenant-a'}}
 
@@ -69,10 +87,13 @@ class Witness:
             env_file.chmod(0o600)
             # --name reserves this exact owned name; failure never causes removal
             # of a pre-existing container. Only retain the returned container ID.
-            self.container = self.docker(['run', '--detach', '--rm', '--name', name,
+            labels = [argument for key, value in sorted(self.container_labels.items())
+                      for argument in ('--label', key + '=' + value)]
+            self.container = self.docker(['run', '--detach', '--rm', '--name', name, *labels,
                                           '--publish', '127.0.0.1::5432', '--env-file', str(env_file),
                                           'postgres:16-alpine'])
-            write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name})
+            write_json(self.evidence / 'owned-container.json', {'id': self.container, 'name': name,
+                       'labels': self.container_labels, 'image': 'postgres:16-alpine'})
             deadline = time.monotonic() + 45
             while True:
                 # The official image starts a temporary socket-only server during
@@ -116,6 +137,7 @@ class Witness:
         except subprocess.TimeoutExpired:
             terminate_owned(process)
             raise TimeoutError('Probe operation timed out: ' + mode)
+        self.completed(process)
         result_path = Path(command['outputFile'])
         result = json.loads(result_path.read_text()) if result_path.is_file() else None
         self.steps[-1]['exitCode'] = code
@@ -123,11 +145,18 @@ class Witness:
             raise RuntimeError('Probe operation failed: ' + mode + '; inspect owned log and result.')
         return result
 
-    def worker(self, label, unrelated=False):
+    def completed(self, process):
+        if process.poll() is not None:
+            for candidate, log in self.processes:
+                if candidate is process:
+                    log.close()
+                    break
+
+    def worker(self, label, unrelated=False, **arguments):
         ready = self.evidence / (label + '-ready.json')
         stop = self.evidence / (label + '-stop')
         process, _ = self.command('worker', readyFile=str(ready), stopFile=str(stop),
-                                  unrelatedHandler=unrelated)
+                                  unrelatedHandler=unrelated, **arguments)
         self.until(lambda: ready.is_file(), 'worker readiness', process=process)
         return process, stop
 
@@ -135,7 +164,10 @@ class Witness:
         process, stop = worker
         stop.touch()
         try:
-            if process.wait(timeout=10):
+            code = process.wait(timeout=10)
+            self.completed(process)
+            next(item for item in self.steps if item['processId'] == process.pid)['exitCode'] = code
+            if code:
                 raise RuntimeError('Owned worker failed while stopping.')
         except subprocess.TimeoutExpired:
             terminate_owned(process)
@@ -197,6 +229,7 @@ class Witness:
         provider_version = self.call('provider-version')
         assert provider_version['ok'] and provider_version['value']['version']
         self.provider_version = provider_version['value']
+        self.active_case = M1_CASE_NAMES[0]
         report = self.report('invoice-total')
         assert self.submit('lost-response', report, 'submit-discard-ack')['responseDiscarded']
         accepted = self.submit('lost-response', report)
@@ -209,6 +242,7 @@ class Witness:
         cases.append({'name': 'durable-admission-replay-conflict', 'state': 'PASSED', 'jobId': job_id,
                       'responseLoss': 'Producer deliberately discarded the successful acceptance response.'})
 
+        self.active_case = M1_CASE_NAMES[1]
         missing = self.worker('missing-handler', unrelated=True)
         time.sleep(0.75)  # Deliberate observation window; a positive start is separately file-barrier controlled.
         assert self.attempts(job_id) == []
@@ -216,6 +250,7 @@ class Witness:
         self.stop(missing)
         cases.append({'name': 'missing-handler-preserves-accepted-job', 'state': 'PASSED', 'jobId': job_id})
 
+        self.active_case = M1_CASE_NAMES[2]
         worker = self.worker('report-worker')
         complete = self.terminal(job_id)
         result_id = self.check_report(complete, report)
@@ -227,6 +262,7 @@ class Witness:
         cases.append({'name': 'useful-typed-result-and-restart-inspection', 'state': 'PASSED',
                       'jobId': job_id, 'resultId': result_id, 'subtotal': 52.0})
 
+        self.active_case = M1_CASE_NAMES[3]
         # A hold before permission prevents entry; a hold after durable permission
         # allows the already-running report to finish and preserves the next JobId.
         assert self.call('pause', holdId='before-start', operationId='pause-before')['value']['status'] == 'Applied'
@@ -256,6 +292,7 @@ class Witness:
         cases.append({'name': 'durable-pause-cutoff-and-accept-while-held', 'state': 'PASSED',
                       'permittedJobId': held, 'laterJobId': following, 'grantedAttemptId': granted['attemptId']})
 
+        self.active_case = M1_CASE_NAMES[4]
         recovery_report = self.report('crash-recovery', blocked=True)
         recover = self.submit('crash-recovery', recovery_report)['jobId']
         crashed = self.worker('crashing-worker')
@@ -266,6 +303,7 @@ class Witness:
         # SIGKILL deliberately bypasses drain. We only signal this Popen-created session.
         os.killpg(crashed[0].pid, signal.SIGKILL)
         crashed[0].wait(timeout=5)
+        self.completed(crashed[0])
         successor = self.worker('successor-worker')
         self.until(lambda: len(list(entries.glob('*.json'))) >= 2, 'successor entry after lease expiry')
         Path(recovery_report['releaseFile']).touch()
@@ -322,7 +360,11 @@ def main():
     parser.add_argument('--entry', required=True, type=Path)
     parser.add_argument('--evidence-dir', required=True, type=Path)
     parser.add_argument('--provider', required=True, choices=('sqlite', 'postgresql'))
+    parser.add_argument('--group', choices=('m1', 'schedules', 'coordination', 'attempts', 'chaos', 'all'), default='m1')
+    parser.add_argument('--negative-control', choices=('marker-only-admit', 'marker-only-claim', 'marker-only-renew', 'marker-only-complete'))
     args = parser.parse_args()
+    if args.negative_control is not None and args.group not in ('chaos', 'all'):
+        parser.error('The reply-loss negative control requires the chaos group.')
     entry = args.entry.resolve(strict=True)
     evidence = args.evidence_dir.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
@@ -333,13 +375,33 @@ def main():
     receipt = {'schemaVersion': 1, 'provider': args.provider, 'entryAssembly': str(entry),
                'entrySha256': hashlib.sha256(entry.read_bytes()).hexdigest(),
                'controllerSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-               'state': 'NOT RUN', 'fullJobsAcceptanceState': 'NOT RUN', 'cases': []}
+               'state': 'NOT RUN', 'fullJobsAcceptanceState': 'NOT RUN', 'cases': [],
+               'witnessGroup': args.group, 'negativeControl': args.negative_control}
+    receipt['ownership'] = {'owner': witness.owner, 'containerLabels': witness.container_labels}
     exit_code = 1
+    planned = list(M1_CASE_NAMES) if args.group in ('m1', 'all') else []
+    body_failed = False
     try:
-        receipt['cases'] = witness.run()
+        controls = None
+        if args.group != 'm1':
+            controls = runpy.run_path(str(Path(__file__).with_name('m2_witness.py')))
+            planned.extend(controls['planned_names'](witness, args.group, args.negative_control))
+        receipt['plannedCaseNames'] = planned
+        if args.group in ('m1', 'all'):
+            receipt['cases'] = witness.run()
+        else:
+            witness.initialize_store()
+            version = witness.call('provider-version')
+            assert version['ok'] and version['value']['version']
+            witness.provider_version = version['value']
+        if args.group != 'm1':
+            controls['run_group'](witness, args.group, args.negative_control)
+        receipt['witnessGroup'] = args.group
+        receipt['negativeControl'] = args.negative_control
         receipt['state'] = 'PASSED'
         exit_code = 0
     except (AssertionError, OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        body_failed = True
         receipt['state'] = 'FAILED'
         receipt['error'] = str(error) or type(error).__name__
         print(receipt['error'], file=sys.stderr)
@@ -353,7 +415,11 @@ def main():
             receipt['state'] = 'FAILED'
             exit_code = 1
         receipt['processes'] = witness.steps
-        receipt['cases'] = witness.cases
+        actual = {item['name']: item for item in witness.cases}
+        if body_failed and witness.active_case is not None and witness.active_case not in actual:
+            actual[witness.active_case] = {'name': witness.active_case, 'state': 'FAILED'}
+        receipt['cases'] = [actual.pop(name, {'name': name, 'state': 'NOT RUN'}) for name in planned]
+        receipt['cases'].extend(actual.values())
         receipt['providerVersion'] = getattr(witness, 'provider_version', None)
         receipt['ownedContainerLog'] = witness.container_log
         write_json(evidence / 'witness-receipt.json', receipt)

@@ -55,12 +55,19 @@ handler/integrator idempotency. Pause never cancels an already permitted attempt
 Schedules use the host's `IJobRecurrenceCalculator` for arithmetic, with no workflow dependency or second
 scheduler authority. The provider accepts zero or one calculator and refuses multiple replacements when
 the authority resolves. Without a calculator, schedule arithmetic reports `jobs.recurrence.unavailable`;
-this provider does not install a calculator or a materialization pump. Materialization checks the same holds, commits origin-protected acceptance with
+the due cursor remains retryable. `AddElsaJobs` supplies default UTC interval/cron arithmetic and its
+bounded worker schedule loop; the EF provider alone installs neither. Materialization checks the same holds, commits origin-protected acceptance with
 cursor/occurrence receipt, and consumes no execution permit. Default coalescing counts long outages in
 persisted finite arithmetic slices; it accepts the oldest owed occurrence once counting reaches the
 persisted first-slice cutoff. Time elapsed during counting remains due for the next cycle. Explicit replay
 materializes bounded pages. Accepted JobIds are never coalesced.
 Updating a definition with already due responsibility is refused rather than silently discarding it.
+Each schedule's bounded arithmetic slice is calculated before occurrence admission or cursor changes.
+Malformed supported definitions receive a durable unavailable marker while their definition bytes,
+owed cursor, partial catch-up state and accepted occurrences remain protected. Unsupported schemas and
+marked schedules are filtered before bounded selection. A missing calculator advances fair discovery
+without permanent quarantine. Inspection returns a nullable definition, stable validated schedule ID
+and safe diagnostic; legacy identities supply that ID without a schema backfill or v1 serialization change.
 
 Awaited results create retained delivery responsibility in the result transaction. Workflow holds gate
 new continuation permission; queue/type holds do not. Replaying a prior grant resolves the same result

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 namespace Elsa.Jobs.Persistence.ProviderTests;
 
 [Collection("jobs-postgresql")]
-public sealed class JobsProviderContracts(JobsPostgreSqlFixture postgres)
+public sealed partial class JobsProviderContracts(JobsPostgreSqlFixture postgres)
 {
     private static readonly JobScope Scope = new("jobs", "tenant-a");
     private static readonly JobHandlerSupport Handler = new(new("reports", "1"), new("report-input", 1), new("report-result", 1), "reports-build-1");
@@ -32,14 +32,14 @@ public sealed class JobsProviderContracts(JobsPostgreSqlFixture postgres)
         return new(Guid.NewGuid().ToString("N"), lease.AttemptId, lease.Owner, lease.Fence, outcome, payload,
             JobPayloadDigest.Compute(payload), null, retryable, DateTimeOffset.UtcNow);
     }
-    private async Task<JobsProviderDatabase> Database(string provider)
+    private async Task<JobsProviderDatabase> Database(string provider, bool defaultArithmetic = false)
     {
         if (provider == "PostgreSql" && postgres.ConnectionString is null)
         {
             if (Environment.GetEnvironmentVariable("ELSA_JOBS_REQUIRE_POSTGRESQL") == "1") throw new InvalidOperationException(postgres.Unavailable);
             Skip.If(true, postgres.Unavailable);
         }
-        return await JobsProviderDatabase.Create(provider, postgres.ConnectionString);
+        return await JobsProviderDatabase.Create(provider, postgres.ConnectionString, defaultArithmetic);
     }
 
     [SkippableTheory]

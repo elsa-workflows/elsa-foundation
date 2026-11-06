@@ -17,6 +17,6 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobPhysicalReceiptRecord), nameof(JobPhysicalReceiptRecord.ReceiptJson))]
 [assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobHoldRecord), nameof(JobHoldRecord.HoldJson))]
 [assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobOperationRecord), nameof(JobOperationRecord.ResultJson))]
-[assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobScheduleRecord), nameof(JobScheduleRecord.DefinitionJson))]
+[assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobScheduleRecord), nameof(JobScheduleRecord.DefinitionJson), nameof(JobScheduleRecord.UnavailableDiagnosticJson))]
 [assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobOccurrenceRecord), nameof(JobOccurrenceRecord.ReceiptJson))]
 [assembly: EfSchemaContent(JobsEfModule.Name, typeof(JobDeliveryRecord), nameof(JobDeliveryRecord.AssociationJson), nameof(JobDeliveryRecord.PermissionJson), nameof(JobDeliveryRecord.ProofJson))]
