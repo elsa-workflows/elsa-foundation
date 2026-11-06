@@ -11,6 +11,10 @@
   Target readiness, publisher origin, catalog writes and admission remain separate.
 - **Known implementations:** `EtlReleaseArtifactCodec` *(intra-domain — default)*.
 
+`DecodeOwnerArtifact` separately reads a naked embedded owner envelope within its original owner byte bound.
+It uses the same strict format/hash/identity/canonical pipeline checks and supplies no source scope or provenance.
+Release-member encoding and decoding continue to use the explicit `source`/`artifact` wrapper.
+
 ## IReleaseArtifactSemanticVerifier
 
 - **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier`.

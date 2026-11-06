@@ -26,7 +26,7 @@ The staged Runtime codec/profile bridge has 74 passing focused cases (including 
 full-pin, raw JSON preservation, bounded-allocation/projection, captured-reader cache and paired metadata controls. It still refuses unclaimed module/provider/policy surfaces; actual
 published native/BPMN/ETL acceptance and source/import operations remain open.
 The ETL v1/v2 owner-codec and semantic foundation passes 40 focused cases plus 54 affected Runtime reader cases.
-A serving-root mutation fails as intended; restored cases pass. Historical import, target binding readiness and native RunEtl integration remain open.
+A serving-root mutation fails as intended; restored cases pass. The optional native RunEtl bridge brings the focused ETL suite to 86 passing cases; a full-selection-hash mutation fails before restoration. Historical import, target binding readiness and actual retained-run integration remain open.
 
 ## Phase 3 — US1: Frozen exact release content (P1; M1)
 

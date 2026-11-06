@@ -210,6 +210,7 @@ not automatic constitution violations.
 | Safe scoped binding discovery | [`Extensions/Etl/src/Core/EXTENSION_POINTS.md`](Extensions/Etl/src/Core/EXTENSION_POINTS.md) |
 | ETL release contracts — exact retained owner artifacts | [`Extensions/Etl/src/Releases/Core/EXTENSION_POINTS.md`](Extensions/Etl/src/Releases/Core/EXTENSION_POINTS.md) |
 | ETL release verification — compiler-free v1/v2 semantics and scoped requirements | [`Extensions/Etl/src/Releases/Elsa.Etl.Releases/EXTENSION_POINTS.md`](Extensions/Etl/src/Releases/Elsa.Etl.Releases/EXTENSION_POINTS.md) |
+| Native RunEtl release inspection — exact captured selections and embedded owner artifacts | [`Extensions/Etl/src/Releases/Workflows/EXTENSION_POINTS.md`](Extensions/Etl/src/Releases/Workflows/EXTENSION_POINTS.md) |
 | Draft and immutable publication metadata | [`Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md) |
 | Shared ETL API transport | [`Extensions/Etl/src/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Api/EXTENSION_POINTS.md) |
 | Runtime inspection and cancellation API | [`Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md) |

@@ -15,6 +15,7 @@ Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact.GetPayloadBytes() -> byte[]!
 Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec
 Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec.Encode(Elsa.Etl.Releases.Core.EtlReleaseArtifact! artifact, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Etl.Releases.Core.EtlEncodedReleaseArtifact!
 Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec.Decode(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Etl.Releases.Core.EtlReleaseArtifact!
+Elsa.Etl.Releases.Core.IEtlReleaseArtifactCodec.DecodeOwnerArtifact(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Etl.Core.EtlArtifact!
 Elsa.Etl.Releases.Core.EtlReleaseCodecs
 const Elsa.Etl.Releases.Core.EtlReleaseCodecs.MemberKind = "etl-artifact" -> string!
 const Elsa.Etl.Releases.Core.EtlReleaseCodecs.Artifact = "elsa.etl-artifact" -> string!

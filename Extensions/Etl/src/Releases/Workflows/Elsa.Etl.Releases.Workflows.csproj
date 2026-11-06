@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Compiler-free native RunEtl occurrence inspection for captured workflow releases.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <ProjectReference Include="../Core/Elsa.Etl.Releases.Core.csproj" />
+    <ProjectReference Include="../../Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Etl.Releases.Tests" />
+  </ItemGroup>
+</Project>

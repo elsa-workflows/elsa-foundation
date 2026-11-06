@@ -68,6 +68,7 @@
   <Folder Name="/Extensions/Etl/src/Releases/">
     <Project Path="Extensions/Etl/src/Releases/Core/Elsa.Etl.Releases.Core.csproj" />
     <Project Path="Extensions/Etl/src/Releases/Elsa.Etl.Releases/Elsa.Etl.Releases.csproj" />
+    <Project Path="Extensions/Etl/src/Releases/Workflows/Elsa.Etl.Releases.Workflows.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/src/Persistence/">
     <Project Path="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />

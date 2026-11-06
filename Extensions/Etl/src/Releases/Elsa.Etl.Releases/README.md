@@ -36,5 +36,6 @@ credentials remain separate readiness/admission checks.
 Prerequisite keys include the original artifact ID so several retained ETL versions can coexist in one bundle.
 
 This foundation does not yet capture source catalogs, import historical versions, translate target mappings, retain
-rollback roots or activate deployments. Native `RunEtl` occurrence inspection is a separate workflow bridge.
+rollback roots or activate deployments. Native `RunEtl` occurrence inspection is supplied by the optional
+[workflow bridge](../Workflows/README.md); the standalone codec keeps its original dependency closure.
 The first complete native/BPMN/ETL promotion delivery remains open until those owner integrations and composed witnesses pass.

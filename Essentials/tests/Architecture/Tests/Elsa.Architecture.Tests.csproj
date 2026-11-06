@@ -73,6 +73,7 @@
     <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Releases/Elsa.Etl.Releases/Elsa.Etl.Releases.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Releases/Workflows/Elsa.Etl.Releases.Workflows.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />

@@ -63,7 +63,29 @@ internal sealed class EtlReleaseArtifactCodec : IEtlReleaseArtifactCodec
     private static void Validate(EtlReleaseArtifact release, ReleaseBundleLimits settings)
     {
         ValidateEnvelopeBounds(release, settings);
-        var artifact = release.Artifact;
+        ValidateOwner(release.Artifact, settings);
+    }
+
+    public EtlArtifact DecodeOwnerArtifact(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null)
+    {
+        var settings = Settings(limits);
+        if (payload.Length > Math.Min(settings.MaxBlobBytes, EtlArtifact.MaximumByteLength)) throw Invalid("etl_release_payload_too_large");
+        try
+        {
+            using var document = JsonDocument.Parse(payload, new() { MaxDepth = settings.MaxJsonDepth });
+            CheckJson(document.RootElement, settings.MaxJsonDepth);
+            var artifact = document.RootElement.Deserialize<EtlArtifact>(Options(settings)) ?? throw Invalid("etl_release_envelope_invalid");
+            ValidateOwner(artifact, settings);
+            return artifact;
+        }
+        catch (EtlReleaseArtifactException) { throw; }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or NotSupportedException or InvalidOperationException)
+        { throw Invalid("etl_release_envelope_invalid"); }
+    }
+
+    private static void ValidateOwner(EtlArtifact artifact, ReleaseBundleLimits settings)
+    {
+        ValidateOwnerBounds(artifact, settings);
         CheckJson(artifact.Pipeline, settings.MaxJsonDepth);
         var hash = EtlArtifactJson.Hash(artifact.Pipeline);
         if (artifact.ContentHash != hash || artifact.ArtifactId != EtlArtifactJson.CreateArtifactId(
@@ -80,7 +102,11 @@ internal sealed class EtlReleaseArtifactCodec : IEtlReleaseArtifactCodec
             !Text(release.Source.Authority) || !Text(release.Source.Scope.PersistencePartition) ||
             release.Source.Scope.TenantId is not null && !Text(release.Source.Scope.TenantId))
             throw Invalid("etl_release_scope_invalid");
-        var artifact = release.Artifact;
+        ValidateOwnerBounds(release.Artifact, settings);
+    }
+
+    private static void ValidateOwnerBounds(EtlArtifact artifact, ReleaseBundleLimits settings)
+    {
         if (artifact.FormatVersion is not (EtlArtifact.CurrentFormatVersion or EtlArtifactV2Json.FormatVersion))
             throw new EtlReleaseArtifactException("etl_artifact_format_unsupported", true);
         if (artifact.Pipeline.ValueKind != JsonValueKind.Object) throw Invalid("etl_release_envelope_invalid");

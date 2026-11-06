@@ -31,6 +31,8 @@ public interface IEtlReleaseArtifactCodec
 {
     EtlEncodedReleaseArtifact Encode(EtlReleaseArtifact artifact, ReleaseBundleLimits? limits = null);
     EtlReleaseArtifact Decode(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null);
+    /// <summary>Decodes a naked embedded owner envelope without supplying or inferring source scope.</summary>
+    EtlArtifact DecodeOwnerArtifact(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null);
 }
 
 public static class EtlReleaseCodecs

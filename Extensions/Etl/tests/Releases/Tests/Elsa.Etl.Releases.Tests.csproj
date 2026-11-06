@@ -7,6 +7,9 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../../src/Releases/Elsa.Etl.Releases/Elsa.Etl.Releases.csproj" />
+    <ProjectReference Include="../../../src/Releases/Workflows/Elsa.Etl.Releases.Workflows.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 </Project>

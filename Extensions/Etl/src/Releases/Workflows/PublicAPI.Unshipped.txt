@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Etl.Releases.Workflows.EtlReleaseWorkflowsFeature
+Elsa.Etl.Releases.Workflows.EtlReleaseWorkflowsFeature.EtlReleaseWorkflowsFeature() -> void
+virtual Elsa.Etl.Releases.Workflows.EtlReleaseWorkflowsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
