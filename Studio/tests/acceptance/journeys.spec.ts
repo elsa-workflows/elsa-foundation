@@ -1,7 +1,7 @@
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 
@@ -25,18 +25,61 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
-const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
+type CreatedWorkflow = { url: string; authorization?: string; id: string };
+const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
-test("user task authoring and workflow result", async ({ page }, info) => userTaskAuthoringJourney(page, info, capture));
+test("user task authoring and workflow result", async ({ page }, info) => {
+  const creations: CreatedWorkflow[] = [];
+  createdWorkflows.set(page, creations);
+  await userTaskAuthoringJourney(page, info, capture, id => {
+    creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
+  });
+});
 
-test.afterEach(async ({ page }) => {
-  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
-  for (const creation of createdWorkflows.get(page) ?? []) {
-    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
-    expect(removed.ok()).toBe(true);
+test.afterEach(async ({ page, playwright }, info) => {
+  const creations = createdWorkflows.get(page) ?? [];
+  const failures: Error[] = [];
+  const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
+  let cleanup: APIRequestContext | undefined;
+  // This hook and request context outlive a timed-out body. Delete only registered, case-owned IDs.
+  try {
+    if (creations.length) {
+      cleanup = await playwright.request.newContext({ storageState: await page.context().storageState(), timeout: 5_000 });
+      for (const creation of creations) {
+        const url = `${creation.url}/${encodeURIComponent(creation.id)}`;
+        try {
+          const removed = await cleanup.delete(url, {
+            timeout: 5_000,
+            headers: creation.authorization ? { Authorization: creation.authorization } : undefined
+          });
+          outcomes.push({ id: creation.id, url, status: removed.status() });
+          if (!removed.ok()) failures.push(new Error(`Cleanup for owned workflow ${creation.id} returned HTTP ${removed.status()}`));
+        } catch (error) {
+          const details = String(error);
+          const message = creation.authorization ? details.replaceAll(creation.authorization, "[redacted]") : details;
+          outcomes.push({ id: creation.id, url, error: message });
+          failures.push(new Error(`Cleanup for owned workflow ${creation.id} failed: ${message}`, { cause: error }));
+        }
+      }
+    }
+  } catch (error) {
+    failures.push(new Error(`Could not initialize cleanup for owned workflows ${creations.map(item => item.id).join(", ")}`, { cause: error }));
+  } finally {
+    if (cleanup) {
+      try { await cleanup.dispose(); }
+      catch (error) { failures.push(new Error("Could not dispose the workflow cleanup request context", { cause: error })); }
+    }
   }
-  expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
+  if (creations.length) {
+    try {
+      await info.attach("workflow-cleanup.json", { body: JSON.stringify({ requestTimeoutMs: 5_000, ownedIds: creations.map(item => item.id), primaryErrors: info.errors, outcomes }, null, 2), contentType: "application/json" });
+    } catch (error) { failures.push(new Error("Could not retain the workflow cleanup results", { cause: error })); }
+  }
+  try { expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]); }
+  catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
+  // Playwright retains the body failure separately; cleanup failures must also fail the case.
+  if (failures.length) throw new AggregateError(failures, failures.map(error => error.message).join("; "));
 });
 
 test.beforeEach(async ({ page }, info) => {
