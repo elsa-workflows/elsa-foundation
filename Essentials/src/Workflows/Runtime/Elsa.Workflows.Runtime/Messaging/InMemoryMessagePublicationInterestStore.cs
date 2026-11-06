@@ -10,7 +10,7 @@ using Elsa.Workflows.Runtime.Services.Triggers;
 namespace Elsa.Workflows.Runtime.Messaging;
 
 /// <summary>Unregistered volatile publication projection, driven only by the actual activation switch.</summary>
-/// <remarks>Active/checkpoint/BPMN/EF coverage and low-level owner-write fencing are incomplete. It cannot freeze
+/// <remarks>Complete active/checkpoint/BPMN/EF coverage and low-level owner-write fencing are incomplete. It cannot freeze
 /// accepted cohorts or advertise Message capability. Existing in-memory authorities are unpartitioned, so this
 /// composition is bound to one actual scope and refuses scope drift rather than claiming multi-scope isolation.</remarks>
 internal sealed class InMemoryMessagePublicationInterestStore : IInMemoryActivationProjection, IMessagePublicationInterestProjection
@@ -172,6 +172,7 @@ internal sealed class InMemoryMessagePublicationInterestStore : IInMemoryActivat
     internal ValueTask<(long Epoch, IReadOnlyList<string> Names)> ObservePublicationAsync(MessageScope scope, CancellationToken ct = default) =>
         UnderWriteGateAsync(() =>
         {
+            checkpointState.MessageActiveInterests?.RequireHealthy();
             if (scope.PersistenceScope != boundScope) throw new InvalidOperationException("The publication scope differs.");
             lock (authority.Gate)
             lock (gate)

@@ -208,6 +208,7 @@ public sealed class EfWorkflowActivationAuthority(
 
     /// <summary>The context every staged transition writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
 
     /// <summary>Saves one staged slot transition on its own, retrying a lost race.</summary>
     private ValueTask<WorkflowActivationTransition> CommitAsync(

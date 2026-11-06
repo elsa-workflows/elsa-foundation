@@ -344,6 +344,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     /// <summary>The context every staged change writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
 
     public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
     {

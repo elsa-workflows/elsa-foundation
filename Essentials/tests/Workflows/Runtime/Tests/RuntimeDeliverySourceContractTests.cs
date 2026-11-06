@@ -157,7 +157,7 @@ public sealed class RuntimeDeliverySourceContractTests
     private class OpenPlan : IRuntimeSourcePlan { public string Family => "family"; public int Version => 1; }
     private sealed class Planner : IRuntimeDeliverySourcePlanner
     { public ValueTask<RuntimeSourceCommit> PrepareAsync(RuntimeDeliveryContext source, CancellationToken cancellationToken) => throw new NotSupportedException(); }
-    private sealed class DispatchHandler : IRuntimeDeliverySourceHandler
+    private sealed class DispatchHandler : IRuntimeDeliveryDispatchHandler
     {
         public ValueTask<RuntimeDeliveryAttempt> HandleAsync(RuntimeDeliveryContext child, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<RuntimeSourceCommit> PrepareCompletionAsync(RuntimeDeliveryContext child, RuntimeDeliveryAttempt attempt, CancellationToken cancellationToken) => throw new NotSupportedException();

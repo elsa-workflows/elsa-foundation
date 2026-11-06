@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Messaging;
 using System.Transactions;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
@@ -27,6 +28,18 @@ public sealed class EfRuntimeCheckpointCommitStore(
     IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null) : IRuntimeCheckpointCommitStore
 {
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
+
+    internal void RequireMessageActiveTuple(EfWorkflowExecutionStateStore executions, EfExecutionLivenessStateStore liveness, EfWorkflowExecutableStore material,
+        IPersistenceAccessContextAccessor selectedAccess, TimeProvider clock)
+    {
+        if (!executions.UsesMessageActiveTuple(context, selectedAccess, clock) || !liveness.UsesMessageActiveTuple(context, selectedAccess) ||
+            !ReferenceEquals(accessContextAccessor, selectedAccess) || !ReferenceEquals(_timeProvider, clock) ||
+            executions.AccessContext.RequireScope() != selectedAccess.Current.RequireScope() ||
+            liveness.CurrentAccess.RequireScope() != selectedAccess.Current.RequireScope() ||
+            rootWriteLeaseManager is not Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableRootWriteLeaseManager manager ||
+            !manager.UsesMessageInterestTuple(material, clock))
+            throw new NotSupportedException("Native Message interests require the actual checkpoint/execution/ownership/access/clock/lease tuple.");
+    }
 
     private const int MaxFenceRenewalAttempts = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -151,6 +164,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        NativeMessageSendCheckpointPreparation.RefuseUnqualified(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
         catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
             (exception is IOException or DbUpdateConcurrencyException or
@@ -244,6 +258,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return replay;
         }
 
+        var messageActive = await EfMessageActiveInterestStore.RequireNativeParticipantAsync(context, this, scope, commit, cancellationToken);
+
         if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
             commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
             commit.ExpectedModelExecution is null)
@@ -263,7 +279,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // The session only hints that a root was persisted. The actual row must still exist with the exact
             // same pin inside the fenced transaction, and its revision CAS must succeed. Never turn this path
             // into an unprotected insert if retention, alteration or another writer changed that row.
-            if (commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
+            if (messageActive is null && commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
                 commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is null && commit.ExpectedFence is not null &&
                 CoalescingSessions?.Current is { HasDurableRecord: true } session && session.WorkflowExecutionId == commit.WorkflowExecutionId &&
                 !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
@@ -330,6 +346,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try
             {
+                if (commit.StateChanges.WorkflowExecution is not null)
+                    await EfMessageActiveInterestStore.RecheckSelectionAsync(context, scope, messageActive, writeCancellationToken);
+
                 // Stage against the rows as they are now. An unchanged tracked entity is only a snapshot from earlier
                 // work on this context, and one execution commits from more than one scope (a nested drain commits in
                 // its own scope between two commits of the outer one); a stale snapshot would carry a superseded
@@ -338,7 +357,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 foreach (var entry in context.ChangeTracker.Entries().Where(entry => entry.State == EntityState.Unchanged).ToArray())
                     entry.State = EntityState.Detached;
 
-                // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
+                // Managed native interests serialize scope first, then material/source, then ownership/execution.
+                // Every SQL fence and canonical root remains in this same rollback transaction.
+                if (messageActive is not null) await messageActive.StageAsync(commit, writeCancellationToken);
+
+                // Ownership validation/touch precedes ordinary participant staging. The workflow and scheduler rows then join the same
                 // transaction, and the immutable marker is added only after every supported participant is staged.
                 if (commit.ExpectedFence is { } expectedFence)
                 {

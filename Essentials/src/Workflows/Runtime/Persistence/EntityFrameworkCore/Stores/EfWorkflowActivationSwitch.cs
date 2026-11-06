@@ -39,6 +39,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
     private readonly EfWorkflowTriggerBindingStore _bindings;
     private readonly EfRecurringTriggerScheduleStore? _schedules;
     private readonly EfWorkflowExecutableSourceReferenceStore _references;
+    private readonly EfMessagePublicationInterestStore? _messageInterests;
 
     public EfWorkflowActivationSwitch(
         IWorkflowActivationAuthority authority,
@@ -57,6 +58,46 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
+    internal EfWorkflowActivationSwitch(EfMessagePublicationInterestStore interests,
+        IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider timeProvider, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, triggerBindingStore, sourceReferenceStore, accessContextAccessor, timeProvider, recurringScheduleStore)
+    {
+        if (!ReferenceEquals(interests.Context, _context)) throw new NotSupportedException("Interest staging requires the same RuntimeDbContext.");
+        interests.RequireComposition(authority, sourceReferenceStore); _messageInterests = interests; RequireMessageInterestTuple();
+    }
+    internal bool UsesMessageInterests(EfMessagePublicationInterestStore interests) => ReferenceEquals(_messageInterests, interests);
+    internal void RequireModelPublicationTuple(EfMessagePublicationInterestStore interests, IWorkflowTriggerBindingStore bindings,
+        IRecurringTriggerScheduleStore? schedules, TimeProvider clock)
+    {
+        RequireMessageInterestTuple();
+        if (!ReferenceEquals(_messageInterests, interests) || !ReferenceEquals(_bindings, bindings) ||
+            !ReferenceEquals(_schedules, schedules) || !ReferenceEquals(_timeProvider, clock))
+            throw new NotSupportedException("Model publication requires the actual selected switch/projection/clock tuple.");
+    }
+    internal void RequireMessageInterestTuple()
+    {
+        var scope = _accessContextAccessor.Current.RequireScope();
+        if (_authority.AccessContext.RequireScope() != scope || _references.AccessContext.RequireScope() != scope ||
+            _bindings.AccessContext.RequireScope() != scope || _schedules is not null && _schedules.AccessContext.RequireScope() != scope)
+            throw new NotSupportedException("Message publication requires one actual scoped owner tuple.");
+        _ = MessageInterestWriteVersion.For(_context);
+        _ = MessageInterestWriteVersion.Require(_context, RuntimeActivationSlotEfModule.SchemaFamily, RuntimeActivationSlotEfModule.SchemaVersion);
+        _ = MessageInterestWriteVersion.Require(_context, RuntimeTriggerBindingEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SchemaVersion);
+        _ = MessageInterestWriteVersion.Require(_context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.SchemaVersion);
+        if (_schedules is not null) _ = MessageInterestWriteVersion.Require(_context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.SchemaVersion);
+    }
+    private async ValueTask<bool> LockMessageRootsAsync(string scope, string? definition, string? slot,
+        IReadOnlyCollection<string> activations, bool allowMissing, string? admittedActivation, CancellationToken ct)
+    {
+        if (_messageInterests is null) return true;
+        RequireMessageInterestTuple();
+        var ids = activations.ToList();
+        if (definition is not null && slot is not null && await _authority.FindAsync(definition, slot, ct) is { ActiveActivationId: { } current }) ids.Add(current);
+        return await _messageInterests.StageLockAsync(scope, ids, allowMissing, admittedActivation, ct);
+    }
+
     public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -64,6 +105,8 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             $"Activation '{request.ActivationId}' of definition '{request.WorkflowDefinitionId}' slot '{request.SlotName}'",
             async scope =>
             {
+                if (!await LockMessageRootsAsync(scope, request.WorkflowDefinitionId, request.SlotName, [request.ActivationId], false, request.ActivationId, cancellationToken))
+                    return Step.Moved<WorkflowActivationTransition>();
                 var transition = await _authority.StageActivationAsync(request, cancellationToken);
                 if (!transition.Succeeded)
                     return Step.Discard(transition);
@@ -89,6 +132,8 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             $"Revert of activation '{candidate}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}'",
             async scope =>
             {
+                if (!await LockMessageRootsAsync(scope, slot.WorkflowDefinitionId, slot.SlotName, replaced is null ? [candidate] : [candidate, replaced], false, replaced, cancellationToken))
+                    return Step.Moved<bool>();
                 var reverted = replaced is null
                     ? await _authority.StageDeactivationAsync(new(slot.WorkflowDefinitionId, slot.SlotName, revert.Source, slot.Revision, revert.UpdatedAt), cancellationToken)
                     : await _authority.StageActivationAsync(
@@ -120,6 +165,8 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             $"Deactivation of definition '{request.WorkflowDefinitionId}' slot '{request.SlotName}'",
             async scope =>
             {
+                if (!await LockMessageRootsAsync(scope, request.WorkflowDefinitionId, request.SlotName, alsoServing, true, null, cancellationToken))
+                    return Step.Moved<WorkflowActivationTransition>();
                 var transition = await _authority.StageDeactivationAsync(request, cancellationToken);
                 if (!transition.Succeeded)
                     return Step.Discard(transition);
@@ -140,6 +187,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             $"Discard of activation '{activationId}'",
             async scope =>
             {
+                if (!await LockMessageRootsAsync(scope, null, null, [activationId], true, null, cancellationToken)) return Step.Moved<bool>();
                 switch (await StageDeletionAsync(scope, activationId, unlessServing: true, cancellationToken))
                 {
                     case ProjectionStaging.Moved:
@@ -163,6 +211,8 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             $"Repair of activation '{plan.ActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}'",
             async scope =>
             {
+                if (!await LockMessageRootsAsync(scope, slot.WorkflowDefinitionId, slot.SlotName, [plan.ActivationId, .. plan.ServingInItsPlace], true, plan.ActivationId, cancellationToken))
+                    return Step.Moved<bool>();
                 // The slot row is read, not written: an operation that moves the slot off this activation writes a
                 // projection state this repair writes too, so the two serialize on that state's revision.
                 if (!plan.AppliesTo(
@@ -183,15 +233,22 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
     }
 
     /// <summary>The activation's projection state in each store, read in the transaction.</summary>
-    private async ValueTask<WorkflowActivationProjectionState[]> StageStatesAsync(string scope, string activationId, CancellationToken cancellationToken) =>
-        _schedules is null
-            ? [await _bindings.StageStateAsync(scope, activationId, cancellationToken)]
-            : [await _bindings.StageStateAsync(scope, activationId, cancellationToken), await _schedules.StageStateAsync(scope, activationId, cancellationToken)];
+    private async ValueTask<WorkflowActivationProjectionState[]> StageStatesAsync(string scope, string activationId, CancellationToken cancellationToken)
+    {
+        var values = new List<WorkflowActivationProjectionState> { await _bindings.StageStateAsync(scope, activationId, cancellationToken) };
+        if (_schedules is not null) values.Add(await _schedules.StageStateAsync(scope, activationId, cancellationToken));
+        if (_messageInterests is not null) values.Add(await _messageInterests.StageStateAsync(scope, activationId, repairResumeFailed: true, cancellationToken));
+        return values.ToArray();
+    }
 
-    /// <summary>Stages a projection switch in both stores; whether a state moved while it was read.</summary>
-    private async ValueTask<bool> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken) =>
-        await _bindings.StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced, cancellationToken) == ProjectionStaging.Moved ||
-        _schedules is not null && await _schedules.StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced, cancellationToken) == ProjectionStaging.Moved;
+    private async ValueTask<bool> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken)
+    {
+        // Interest canonical validation/staging occurs before legacy projection changes. All changes still share
+        // the one owning transaction; subsequent failure rolls back control/reference fences and every projection.
+        if (_messageInterests is not null && await _messageInterests.StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced, cancellationToken) == ProjectionStaging.Moved) return true;
+        return await _bindings.StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced, cancellationToken) == ProjectionStaging.Moved ||
+            _schedules is not null && await _schedules.StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced, cancellationToken) == ProjectionStaging.Moved;
+    }
 
     /// <summary>
     /// Stages the deletion of an activation's projections in both stores: <see cref="ProjectionStaging.Moved"/> when a state
@@ -201,9 +258,13 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
     private async ValueTask<ProjectionStaging> StageDeletionAsync(string scope, string activationId, bool unlessServing, CancellationToken cancellationToken)
     {
         var triggers = await _bindings.StageDeletionAsync(scope, activationId, unlessServing, cancellationToken);
-        if (triggers is ProjectionStaging.Moved or ProjectionStaging.Serves || _schedules is null)
-            return triggers;
-        return await _schedules.StageDeletionAsync(scope, activationId, unlessServing, cancellationToken);
+        if (triggers is ProjectionStaging.Moved or ProjectionStaging.Serves) return triggers;
+        if (_schedules is not null)
+        {
+            var schedules = await _schedules.StageDeletionAsync(scope, activationId, unlessServing, cancellationToken);
+            if (schedules is ProjectionStaging.Moved or ProjectionStaging.Serves) return schedules;
+        }
+        return _messageInterests is null ? triggers : await _messageInterests.StageCloseAsync(scope, activationId, unlessServing, cancellationToken);
     }
 
     /// <summary>
@@ -217,6 +278,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var scope = EfRuntimeOperationalStoreSupport.RequireScope(_accessContextAccessor);
+                if (_messageInterests is not null) RequireMessageInterestTuple();
                 _context.ChangeTracker.Clear();
                 await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 Step<T> step;

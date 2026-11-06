@@ -16,6 +16,11 @@ public sealed class EfExecutionLivenessStateStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutionLivenessStateStore, IRuntimeRecoveryLivenessPageSource
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext CurrentAccess => accessContextAccessor.Current;
+    internal bool UsesMessageActiveTuple(RuntimeDbContext selected, IPersistenceAccessContextAccessor selectedAccess) =>
+        ReferenceEquals(context, selected) && ReferenceEquals(accessContextAccessor, selectedAccess);
+
     private const string RecoveryCursorPurpose = "ef-runtime-recovery-liveness-v1";
     private const string GlobalCursorPurpose = "ef-runtime-liveness-global-v1";
     private const string WorkflowCursorPurpose = "ef-runtime-liveness-workflow-v1";
@@ -25,6 +30,7 @@ public sealed class EfExecutionLivenessStateStore(
         ValidateState(state);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        await EfMessageActiveInterestStore.RefuseOrdinaryDeletionTombstoneAsync(context, scope, state, cancellationToken);
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
         if (entity is null)
             context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
@@ -61,6 +67,7 @@ public sealed class EfExecutionLivenessStateStore(
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        await EfMessageActiveInterestStore.RefuseOrdinaryDeletionTombstoneAsync(context, scope, state, cancellationToken);
         context.ChangeTracker.Clear();
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
 

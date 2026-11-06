@@ -37,7 +37,7 @@ public interface IRuntimeDeliverySourcePlanner // Source discovery/selection: re
 {
     ValueTask<RuntimeSourceCommit> PrepareAsync(RuntimeDeliveryContext source, CancellationToken ct = default);
 }
-public interface IRuntimeDeliverySourceHandler // Only an already-committed exact child may enter this path.
+public interface IRuntimeDeliveryDispatchHandler // Only an already-committed exact child may enter this path.
 {
     ValueTask<RuntimeDeliveryAttempt> HandleAsync(RuntimeDeliveryContext child, CancellationToken ct = default);
     ValueTask<RuntimeSourceCommit> PrepareCompletionAsync(RuntimeDeliveryContext child, RuntimeDeliveryAttempt attempt, CancellationToken ct = default);

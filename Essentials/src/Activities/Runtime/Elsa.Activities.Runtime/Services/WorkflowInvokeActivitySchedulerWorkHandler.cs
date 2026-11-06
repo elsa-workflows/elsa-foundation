@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Messaging;
+using Elsa.Workflows.Runtime.Messaging;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -151,6 +153,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         // seam, mirroring the dispatch stager one-for-one (reset here, drain at the clean exits, reset on fault below).
         var publishStimulusStaging = serviceProvider.GetService<IPublishStimulusStagingAccessor>();
         publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+        var nativeSendStaging = serviceProvider.GetService<INativeMessageSendStagingAccessor>();
+        var nativeSendScope = nativeSendStaging is null ? null : serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
+        if (nativeSendScope is not null) nativeSendStaging!.Reset(nativeSendScope, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
@@ -303,6 +308,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         ActivityCompletionProjection? valueFlowCompletion = null;
         ActivityExecutionState? typedSuspendedState = null;
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
+        NativeMessageSendRequest? stagedNativeSend = null;
         IReadOnlyList<RuntimePostCommitIntent> stagedPublishIntents = [];
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
@@ -524,6 +530,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 }
             }
 
+            if (nativeSendScope is not null)
+            {
+                stagedNativeSend = nativeSendStaging!.Take(nativeSendScope, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+                if (serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope() != nativeSendScope)
+                    throw new InvalidOperationException("The native send scope changed during activity execution.");
+            }
+            var privateSendWait = typedSuspendedState?.TriggerRegistrations?.Any(item => item.StimulusType == NativeMessageSendCheckpointPlan.WaitStimulusType) == true;
+            if (stagedNativeSend is not null && (typedSuspendedState is null || stagedWorkflowDispatch is not null || pendingChildScheduling is not null || structuralContinuation is not null) ||
+                privateSendWait && stagedNativeSend is null)
+                throw new InvalidOperationException("A native Message send requires its exact standalone typed suspension proposal.");
+
             // Drain the invocation's staged publish intents at the same clean exit the dispatch stager is
             // drained. They fold onto PostCommitIntents only (no dispatch record), so a fire-and-continue send rides the
             // activity's own commit and delivers post-commit. Staging is valid only with a completion or suspension
@@ -541,6 +558,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         {
             workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+            if (nativeSendScope is not null) nativeSendStaging!.Reset(nativeSendScope, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity execution cancellation and disposal both failed.", faultMasking.Mask) is { } cleanupFailure)
                 throw cleanupFailure;
             throw;
@@ -549,6 +567,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         {
             workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+            if (nativeSendScope is not null) nativeSendStaging!.Reset(nativeSendScope, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
             if (exception is RuntimeSchedulerWorkUnavailableException && disposalException is null) throw;
@@ -665,6 +684,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 valueSnapshots,
                 stagedWorkflowDispatch,
                 stagedPublishIntents,
+                stagedNativeSend,
+                executable,
+                nativeSendScope,
                 cancellationToken);
             return;
         }
@@ -803,9 +825,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         IReadOnlyList<RuntimePostCommitIntent> publishIntents,
+        NativeMessageSendRequest? nativeSend,
+        WorkflowExecutable executable,
+        PersistenceScope? nativeSendScope,
         CancellationToken cancellationToken)
     {
         var occurredAt = TimeProvider.GetUtcNow();
+        var commitId = $"commit:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}";
+        var sendPlan = nativeSend is null ? null : new NativeMessageSendCheckpointPreparation().Prepare(nativeSend, invokePayload,
+            executable, suspendedState, commitId, nativeSendScope ?? throw new InvalidOperationException("The native send scope is unavailable."));
         var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}";
         var metadata = new Dictionary<string, string>
         {
@@ -840,7 +868,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         RuntimeStateChange<WorkflowDispatchRecord>[] workflowDispatches = [];
         RuntimePostCommitIntent[] workflowDispatchIntents = [];
         RuntimeSchedulerWorkItem[] bookmarkWorkItems;
-        if (workflowDispatch is null)
+        if (workflowDispatch is null && sendPlan is null)
         {
             bookmarkWorkItems = NewBookmarkCreationWorkItems(
                     invokeWorkItem,
@@ -850,9 +878,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
         else
         {
-            var waitBookmark = workflowDispatch.WaitBookmark
-                ?? throw new InvalidOperationException("A suspended workflow dispatch requires its canonical wait bookmark.");
-            var registration = AssertSingleDispatchRegistration(suspendedState, waitBookmark);
+            var waitBookmark = workflowDispatch is not null
+                ? workflowDispatch.WaitBookmark ?? throw new InvalidOperationException("A suspended workflow dispatch requires its canonical wait bookmark.")
+                : new ActivityBookmarkRequest(sendPlan!.BookmarkId, sendPlan.ResumeTargetId,
+                    NativeMessageSendCheckpointPlan.WaitStimulusType, sendPlan.StimulusHash);
+            var registration = sendPlan is null ? AssertSingleDispatchRegistration(suspendedState, waitBookmark) : suspendedState.TriggerRegistrations!.Single();
             var reboundRegistration = new Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration(
                 waitBookmark.BookmarkId,
                 registration.InvocationId,
@@ -892,22 +922,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     occurredAt,
                     waitBookmark.ExpiresAt)
             ];
-            workflowDispatches =
-            [
-                new RuntimeStateChange<WorkflowDispatchRecord>(
-                    workflowDispatch.Record.DispatchId,
-                    RuntimeStateChangeOperation.Upsert,
-                    workflowDispatch.Record,
-                    metadata)
-            ];
-            workflowDispatchIntents = [workflowDispatch.StartIntent];
+            if (workflowDispatch is not null)
+            {
+                workflowDispatches =
+                [
+                    new RuntimeStateChange<WorkflowDispatchRecord>(workflowDispatch.Record.DispatchId,
+                        RuntimeStateChangeOperation.Upsert, workflowDispatch.Record, metadata)
+                ];
+                workflowDispatchIntents = [workflowDispatch.StartIntent];
+            }
+            else workflowDispatchIntents = [sendPlan!.Intent];
             bookmarkWorkItems = [];
         }
         var commit = new RuntimeCheckpointCommit(
-            CommitId: $"commit:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}",
+            CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: checkpointId,
-                Name: workflowDispatch is null
+                Name: workflowDispatch is null && sendPlan is null
                     ? RuntimeCheckpointNames.ActivitySuspended
                     : RuntimeCheckpointNames.BookmarkCreated,
                 WorkflowExecutionId: invokeWorkItem.WorkflowExecutionId,
@@ -955,7 +986,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 .Concat(workflowDispatchIntents)
                 .Concat(publishIntents)
                 .ToArray(),
-            Metadata: metadata);
+            Metadata: metadata) { NativeMessageSend = sendPlan };
 
         var commitResult = await checkpointCommitter.CommitAsync(commit, cancellationToken);
         if (!commitResult.Succeeded || bookmarkLifecycleNotifier is null)

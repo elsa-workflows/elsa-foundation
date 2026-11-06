@@ -10435,7 +10435,7 @@ Elsa.Workflows.Runtime.Core.Contracts.RuntimeDeliverySourceStoreReplacementContr
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeDeliverySourceStoreReplacementContractAttribute.RuntimeDeliverySourceStoreReplacementContractAttribute() -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourcePlanner
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceHandler
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareIntentHandler
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareDispatcher
@@ -10445,8 +10445,8 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.ClaimAsync(Els
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.RenewAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim! claim, System.TimeSpan visibility, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim?>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.CommitAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult!>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourcePlanner.PrepareAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit!>
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceHandler.HandleAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt!>
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceHandler.PrepareCompletionAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt! attempt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler.HandleAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler.PrepareCompletionAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt! attempt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit!>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan.Family.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan.Version.get -> int
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareIntentHandler.PrepareCompletionAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization!>
@@ -10604,3 +10604,51 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RuntimeDeliveryCl
 Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition?
 Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RequirePartition(Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext! access, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! currentPartition, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition!
 Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.init -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.NativeMessageSendRequest(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId, string! attemptId, string! executableNodeId, string! operationKey, string? targetOperationKey, System.DateTimeOffset originatedAt, Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission! submission) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.AttemptId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.OperationKey.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.TargetOperationKey.get -> string?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.OriginatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.Submission.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.NativeMessageSendWaitState(string! intentId, string! bookmarkId, string! stimulusHash) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.IntentId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.StimulusHash.get -> string!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.NativeMessageSendResult(Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult? acceptance, Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind? rejection) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.Acceptance.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.Rejection.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind?
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStager
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStager.Stage(Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest! request) -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState!
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor.Reset(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId) -> void
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor.Take(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId) -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.NativeMessageSendCheckpointPlan(int version, Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest! request, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent! intent, string! bookmarkId, string! stimulusHash, string! resumeTargetId, string! outboxItemId, string! authoredFingerprint, string! intentFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Version.get -> int
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Request.get -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.PinnedExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Intent.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.StimulusHash.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ResumeTargetId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.OutboxItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.AuthoredFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.IntentFingerprint.get -> string!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ToString() -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.CurrentVersion = 1 -> int
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ActivityType = "Elsa.SendMessage" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.IntentKind = "Elsa.Message.NativeSend.v1" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ResumeTargetKey = "resume-target:message-send-receipt" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.WaitStimulusType = "Elsa.Message.PrivateSendReceipt.v1" -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.NativeMessageSend.get -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.NativeMessageSend.init -> void

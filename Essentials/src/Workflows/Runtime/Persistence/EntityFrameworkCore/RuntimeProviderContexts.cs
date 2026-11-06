@@ -84,6 +84,15 @@ file static class RuntimeProviderModel
     {
         modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        foreach (var entity in new[] { typeof(MessagePublicationInterestEntity), typeof(MessageInterestScopeControlEntity) })
+            foreach (var property in new[] { "ScopeKey", "TenantId", "ContentJson" }) modelBuilder.Entity(entity).Property(property).HasColumnType(type);
+        foreach (var property in new[] { "ActivationId", "SlotId", "DescriptorFingerprint" })
+            modelBuilder.Entity<MessagePublicationInterestEntity>().Property(property).HasColumnType(type);
+        modelBuilder.Entity<MessageInterestScopeControlEntity>().Property(row => row.FullIdentity).HasColumnType(type);
+        foreach (var property in new[] { "ScopeKey", "TenantId", "WorkflowExecutionId", "DescriptorFingerprint", "ContentJson" })
+            modelBuilder.Entity<MessageActiveInterestEntity>().Property(property).HasColumnType(type);
+        foreach (var property in new[] { "ScopeKey", "ContentJson" })
+            modelBuilder.Entity<MessageActiveInterestOwnerEntity>().Property(property).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.PayloadJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);

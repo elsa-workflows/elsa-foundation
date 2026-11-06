@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Messaging;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -70,6 +71,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        NativeMessageSendCheckpointPreparation.RefuseUnqualified(commit);
         ArgumentNullException.ThrowIfNull(decision);
 
         if (commit.ExpectedModelParentWait is not null)
@@ -355,6 +357,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
+        commit.NativeMessageSend is not null ||
         commit.ExpectedModelExecution is not null ||
         commit.ExpectedBookmarkResume is not null ||
         commit.StateChanges.Operational.Count > 0 ||

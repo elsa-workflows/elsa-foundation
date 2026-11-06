@@ -23,6 +23,8 @@ public sealed class EfWorkflowExecutionStateStore(
 {
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
+    internal bool UsesMessageActiveTuple(RuntimeDbContext selected, IPersistenceAccessContextAccessor selectedAccess, TimeProvider clock) =>
+        ReferenceEquals(context, selected) && ReferenceEquals(accessContextAccessor, selectedAccess) && ReferenceEquals(_timeProvider, clock);
     private const string HistoryCursorPurpose = "ef-runtime-workflow-execution-history-v1";
     private const string HealthCursorPurpose = "ef-runtime-workflow-execution-health-history-v1";
     private const string CaptureCursorPurpose = "ef-runtime-workflow-execution-capture-v1";
@@ -50,6 +52,7 @@ public sealed class EfWorkflowExecutionStateStore(
         Validate(state);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
+        await EfMessageActiveInterestStore.RefuseOrdinarySaveAsync(context, scope, cancellationToken);
         accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
         var id = CreateId(scope, state.WorkflowExecutionId);
         context.ChangeTracker.Clear();
@@ -58,6 +61,7 @@ public sealed class EfWorkflowExecutionStateStore(
             await using var transaction = context.Database.CurrentTransaction is null
                 ? await context.Database.BeginTransactionAsync(cancellationToken)
                 : null;
+            await EfMessageActiveInterestStore.RefuseOrdinarySaveAsync(context, scope, cancellationToken);
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -408,14 +412,27 @@ public sealed class EfWorkflowExecutionStateStore(
             try
             {
                 context.ChangeTracker.Clear();
+                var messageHint = await EfMessageActiveInterestStore.ReadDeletionScopeHintAsync(context, scope, workflowExecutionId, cancellationToken);
+                if (messageHint.Selected && messageHint.Scope is null) return WorkflowExecutionDeletionResult.NotFound;
+                HashSet<string>? retiredControlLinks = null;
+                IReadOnlyList<(string WorkflowId, string DispatchHint)>? hintedChildren = null;
+                if (messageHint.Selected)
+                {
+                    // Discovery must not retain Serializable ownership/header shared locks while waiting on the
+                    // Message scope. Sticky retired-parent evidence and child hints are checked again below.
+                    retiredControlLinks = await ReadRetiredControlLinksAsync(workflowExecutionId, scope, cancellationToken);
+                    if (retiredControlLinks is null) return WorkflowExecutionDeletionResult.DependencyRetained;
+                    hintedChildren = await ReadHintedControlChildrenAsync(workflowExecutionId, scope, cancellationToken);
+                }
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                await EfMessageActiveInterestStore.StageDeletionScopeAsync(context, scope, workflowExecutionId, messageHint, cancellationToken);
                 // Refuse retained control callers before acquiring this candidate's write lock. Sticky caller
                 // tombstones cannot revert; this avoids caller->child / child->caller deletion lock cycles.
-                var retiredControlLinks = await ReadRetiredControlLinksAsync(workflowExecutionId, scope, cancellationToken);
+                retiredControlLinks ??= await ReadRetiredControlLinksAsync(workflowExecutionId, scope, cancellationToken);
                 if (retiredControlLinks is null) return WorkflowExecutionDeletionResult.DependencyRetained;
                 // A scope-wide header traversal must also precede write locks: two unrelated deletions
                 // must not hold their own root while each scans the other's row under READ COMMITTED.
-                var hintedChildren = await ReadHintedControlChildrenAsync(workflowExecutionId, scope, cancellationToken);
+                hintedChildren ??= await ReadHintedControlChildrenAsync(workflowExecutionId, scope, cancellationToken);
                 // Lock the root before touching any owned rows. Root saves and scheduler enqueue take this same
                 // lock, so a deletion cannot purge the queue and then lose the race to a late enqueue.
                 await LockWorkflowExecutionForWriteAsync(context, scope, workflowExecutionId, cancellationToken);
@@ -437,6 +454,7 @@ public sealed class EfWorkflowExecutionStateStore(
                 // Capture the ownership revision before the final dependency read. An activity-only fenced
                 // checkpoint can add its first dispatch without updating the workflow row: either the guard sees
                 // it, or final SaveChanges conflicts this captured revision and rolls back the entire deletion.
+                await EfMessageActiveInterestStore.ValidateDeletionOwnerAsync(context, scope, state, messageHint, cancellationToken);
                 ownershipTombstoneInserted = await RevokeExecutionOwnershipAsync(workflowExecutionId, scope, cancellationToken);
                 var taskScopeHash = Hash(scope);
                 var taskScopeKey = Encode(scope);

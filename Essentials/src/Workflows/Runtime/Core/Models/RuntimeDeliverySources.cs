@@ -286,7 +286,7 @@ public sealed class RuntimeDeliverySourceFamilyContribution
         if (headerVersion <= 0) throw new ArgumentOutOfRangeException(nameof(headerVersion));
         if (participantVersion <= 0) throw new ArgumentOutOfRangeException(nameof(participantVersion));
         RuntimeDeliveryValues.Implementation(plannerType, typeof(IRuntimeDeliverySourcePlanner));
-        RuntimeDeliveryValues.Implementation(dispatchHandlerType, typeof(IRuntimeDeliverySourceHandler));
+        RuntimeDeliveryValues.Implementation(dispatchHandlerType, typeof(IRuntimeDeliveryDispatchHandler));
         ArgumentNullException.ThrowIfNull(planTypes);
         var plans = planTypes.ToArray();
         if (plans.Length == 0 || plans.Distinct().Count() != plans.Length) throw new ArgumentException("Plan types must be nonempty and unique.", nameof(planTypes));

@@ -13,3 +13,7 @@ using System.Runtime.CompilerServices;
 
 // The same Runtime domain EF aggregate replaces only the owned volatile journal default.
 [assembly: InternalsVisibleTo("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore")]
+
+// Dormant BPMN model-publication owner and its actual EF component tests; no public plugin SPI.
+[assembly: InternalsVisibleTo("Elsa.Activities.Bpmn")]
+[assembly: InternalsVisibleTo("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests")]

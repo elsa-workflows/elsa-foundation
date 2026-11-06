@@ -10,6 +10,11 @@ internal interface IMessagePublicationInterestProjection
 {
     void RequireActualComposition(IWorkflowActivationAuthority authority, IWorkflowActivationSwitch activationSwitch,
         IWorkflowExecutableSourceReferenceStore references);
+    void RequireModelComposition(IWorkflowExecutableStore material, IWorkflowExecutableRootWriteLeaseManager leases,
+        TimeProvider clock, IWorkflowActivationSwitch activationSwitch, IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore? schedules, IPersistenceAccessContextAccessor access) =>
+        throw new NotSupportedException("This publication owner does not support model material.");
+    ValueTask PrepareModelAsync(RuntimeModelMaterial requested, WorkflowExecutableSourceReference expected,
+        string slotName, CancellationToken ct) => ValueTask.FromException(new NotSupportedException("This publication owner does not support model material."));
     ValueTask PrepareAsync(WorkflowExecutable requested, string activationId, string slotId, string slotName, CancellationToken ct);
     ValueTask<WorkflowActivationProjectionState> FindStateAsync(string activationId, CancellationToken ct);
     ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken ct);

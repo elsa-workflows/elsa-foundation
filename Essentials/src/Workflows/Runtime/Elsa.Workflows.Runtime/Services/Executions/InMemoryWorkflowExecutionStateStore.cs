@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Messaging;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
@@ -47,6 +48,10 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
 
         return await _checkpointState.ExecuteWriteGateAsync(async token =>
         {
+            // Managed physical history has exactly one write owner. Read-model/copy stores with their own
+            // checkpoint state retain the ordinary Save behavior; sharing this state is not enrollment authority.
+            if (_checkpointState.MessageActiveInterests is not null)
+                throw new NotSupportedException("Managed native history must be saved through its actual checkpoint owner.");
             if (_executionLivenessStateStore is not InMemoryExecutionLivenessStateStore livenessStore)
                 return Save(state.WorkflowExecutionId, state);
 
@@ -134,6 +139,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
             if (Find(workflowExecutionId) is not { } current || await HasControlDependenciesAsync(current, token))
                 return false;
 
+            _checkpointState.MessageActiveInterests?.EnsureDeletionCanProceed(current);
             if (_executionLivenessStateStore is InMemoryExecutionLivenessStateStore inMemoryLivenessStore)
                 return await inMemoryLivenessStore.ExecuteWorkflowDeletionAtomicAsync(
                     workflowExecutionId,
@@ -142,6 +148,15 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
 
             return DeleteExecutionAndCancelOutstandingWork(workflowExecutionId);
         }, cancellationToken);
+    }
+
+    internal bool HasMessageInterestHistory => SnapshotAll().Count != 0;
+    internal WorkflowExecutionState? ReadForMessageInterest(string id) => Find(id);
+    internal void SaveForMessageInterest(WorkflowExecutionState state, InMemoryMessageActiveInterestStore owner)
+    {
+        if (!_checkpointState.IsWriteGateHeld || !ReferenceEquals(_checkpointState.MessageActiveInterests, owner))
+            throw new InvalidOperationException("The managed physical execution write is outside its selected owner boundary.");
+        Save(state.WorkflowExecutionId, state);
     }
 
     internal InMemoryRuntimeCheckpointStoreState CheckpointState => _checkpointState;
@@ -179,6 +194,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
                 if (await HasControlDependenciesAsync(current, token))
                     return WorkflowExecutionDeletionResult.DependencyRetained;
 
+                _checkpointState.MessageActiveInterests?.EnsureDeletionCanProceed(current);
                 return await livenessStore.ExecuteWorkflowDeletionAtomicAsync(
                     current.WorkflowExecutionId,
                     _ =>

@@ -16,6 +16,7 @@ public sealed class CoalescingWorkflowExecutionStateStore(
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowExecutionStateStore
 {
     private readonly IWorkflowExecutionStateStore _inner = inner.Value;
+    internal IWorkflowExecutionStateStore PhysicalStore => _inner;
 
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);

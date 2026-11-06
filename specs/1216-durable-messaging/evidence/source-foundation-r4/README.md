@@ -1,0 +1,7 @@
+# Message foundation — EF correction proved, Runtime build timeout retained
+
+**FAILED / INCOMPLETE.** Exact source `aea457472d25261b4d085417f1fa249f68ade3c3`, tree `133826cbff149c1600fbfec06d391a9a21549cb4`, changes only the two detached-row test arrangements documented in R3. Focused EF actually executed all 37 cases, all passed with every other counter zero and no RunInfo Error. Production code and assertions were unchanged.
+
+The actual deliberate Runtime library mutation built successfully in 20.20 seconds. The subsequent Runtime test project build hit its 32-second ceiling with an empty log before the mutation test ran. The source file was restored byte-exact by the exit trap. A compiled library could still contain the deliberate defect; later continuations must rebuild and bind the actual product, never treat source restoration alone as binary restoration. Mutation, restored regression and complete Runtime/EF test projects were not run in this attempt.
+
+All 96 original archive members and 95 manifest entries are retained. Actual source and own-unit/cgroup/process cleanup are separately VERIFIED; no source/cache/store or other task was deleted. Primary remains FAILED. The 103.353370-second attempt brings the conservative cumulative debit to 729.353370 seconds (730 for continuation) within the existing 1800-second source cohort. The earlier failures and original Runtime86 TRX remain retained, without repeating those tests. No Message feature or physical acceptance capability is enabled.

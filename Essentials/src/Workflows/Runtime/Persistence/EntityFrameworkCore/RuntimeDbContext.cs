@@ -18,6 +18,11 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     // Canonical new families only. Existing C2 ingress and native outbox sources keep their own physical rows.
     internal DbSet<RuntimeIngressSourceEntity> RuntimeIngressSources => Set<RuntimeIngressSourceEntity>();
     internal DbSet<RuntimeDeliveryWorkEntity> RuntimeDeliveryWorks => Set<RuntimeDeliveryWorkEntity>();
+    internal Stores.EfMessageActiveInterestStore? MessageActiveInterests { get; set; }
+    internal DbSet<MessageActiveInterestEntity> MessageActiveInterestsRows => Set<MessageActiveInterestEntity>();
+    internal DbSet<MessageActiveInterestOwnerEntity> MessageActiveInterestOwners => Set<MessageActiveInterestOwnerEntity>();
+    internal DbSet<MessagePublicationInterestEntity> MessagePublicationInterests => Set<MessagePublicationInterestEntity>();
+    internal DbSet<MessageInterestScopeControlEntity> MessageInterestScopeControls => Set<MessageInterestScopeControlEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
@@ -60,6 +65,10 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new UserTaskFormConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeIngressSourceEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeDeliveryWorkEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new MessageActiveInterestEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new MessageActiveInterestOwnerEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new MessagePublicationInterestEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new MessageInterestScopeControlEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());

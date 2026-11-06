@@ -208,3 +208,17 @@ Elsa.Activities.Primitives.Activities.ReceiveMessageWaitState.MessageName.get ->
 Elsa.Activities.Primitives.Activities.ReceiveMessageWaitState.BusinessKey.get -> string!
 Elsa.Activities.Primitives.Activities.ReceiveMessageWaitState.DeclaredMessageNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
 override Elsa.Activities.Primitives.Activities.ReceiveMessageWaitState.ToString() -> string!
+Elsa.Activities.Primitives.Activities.SendMessage
+Elsa.Activities.Primitives.Activities.SendMessage.SendMessage(Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStager! stager, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities) -> void
+Elsa.Activities.Primitives.Activities.SendMessage.MessageName.get -> string!
+Elsa.Activities.Primitives.Activities.SendMessage.MessageName.set -> void
+Elsa.Activities.Primitives.Activities.SendMessage.BusinessKey.get -> string!
+Elsa.Activities.Primitives.Activities.SendMessage.BusinessKey.set -> void
+Elsa.Activities.Primitives.Activities.SendMessage.Payload.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Primitives.Activities.SendMessage.Payload.set -> void
+Elsa.Activities.Primitives.Activities.SendMessage.ProducerMessageId.get -> string?
+Elsa.Activities.Primitives.Activities.SendMessage.ProducerMessageId.set -> void
+Elsa.Activities.Primitives.Activities.SendMessage.LifetimeSeconds.get -> int?
+Elsa.Activities.Primitives.Activities.SendMessage.LifetimeSeconds.set -> void
+const Elsa.Activities.Primitives.Activities.SendMessage.ActivityType = "Elsa.SendMessage" -> string!
+const Elsa.Activities.Primitives.Activities.SendMessage.ResumeTargetId = "resume-target:message-send-receipt" -> string!

@@ -46,6 +46,13 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         }
     }
 
+    // Explicit dormant profile entry; the public legacy publication/runtime paths remain unchanged.
+    internal ValueTask<BpmnMessageServingPublicationBridge.Publication> PublishMessageFromSourceAsync(RuntimeModelMaterial material,
+        BpmnModelPublicationProvenance source, string requestId, BpmnModelCaller caller, string slotName, long expectedRevision,
+        Elsa.Workflows.Runtime.Messaging.MessageModelPublicationCoordinator publications, CancellationToken ct = default) =>
+        new BpmnMessageServingPublicationBridge(materials, sources, access, clock, publications)
+            .PublishAsync(material, source, requestId, caller, slotName, expectedRevision, ct);
+
     private async ValueTask<BpmnPublishedModel> PublishCoreAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken, BpmnModelPublicationProvenance? source = null)
     {

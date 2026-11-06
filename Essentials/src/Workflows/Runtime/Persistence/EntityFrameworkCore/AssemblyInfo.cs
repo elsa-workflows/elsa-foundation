@@ -33,6 +33,9 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(RuntimeOperationalStateEfModule.SchemaFamily, "Workflows.Runtime", RuntimeOperationalStateEfModule.SchemaVersion, Entities = [typeof(DurableValueStateEntity), typeof(SchedulerStateEntity), typeof(DurableTimerEntity), typeof(ExecutionLivenessStateEntity), typeof(WorkflowHoldStateEntity), typeof(IncidentStateEntity), typeof(WorkflowRunHealthStateEntity), typeof(RuntimeCheckpointCommitEntity), typeof(RecurringTriggerScheduleEntity), typeof(RecurringTriggerScheduleProjectionStateEntity)])]
 [assembly: EfSchemaFamily(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, "Workflows.Runtime", RuntimeBackgroundActivityWorkEfModule.SchemaVersion, Entities = [typeof(BackgroundActivityWorkEntity)])]
 [assembly: EfSchemaFamily(RuntimeDeliverySourceEfModule.SchemaFamily, "Workflows.Runtime", RuntimeDeliverySourceEfModule.SchemaVersion, Entities = [typeof(RuntimeIngressSourceEntity), typeof(RuntimeDeliveryWorkEntity)])]
+[assembly: EfSchemaFamily(RuntimeMessageInterestEfModule.SchemaFamily, "Workflows.Runtime", RuntimeMessageInterestEfModule.SchemaVersion, Entities = [typeof(MessagePublicationInterestEntity), typeof(MessageInterestScopeControlEntity), typeof(MessageActiveInterestEntity), typeof(MessageActiveInterestOwnerEntity)])]
+[assembly: EfSchemaContent(RuntimeMessageInterestEfModule.SchemaFamily, typeof(MessagePublicationInterestEntity), nameof(MessagePublicationInterestEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeMessageInterestEfModule.SchemaFamily, typeof(MessageInterestScopeControlEntity), nameof(MessageInterestScopeControlEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimePostCommitOutboxEfModule.SchemaFamily, "Workflows.Runtime", RuntimePostCommitOutboxEfModule.SchemaVersion, Entities = [typeof(RuntimePostCommitOutboxEntity)], Upcasters = [typeof(RuntimePostCommitOutboxV1Upcaster)], Rewriter = typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.RuntimePostCommitOutboxRowRewriter))]
 [assembly: EfSchemaFamily(RuntimeSchedulerWorkEfModule.SchemaFamily, "Workflows.Runtime", RuntimeSchedulerWorkEfModule.SchemaVersion, Entities = [typeof(SchedulerWorkItemEntity)], Upcasters = [typeof(RuntimeSchedulerWorkV1Upcaster), typeof(RuntimeSchedulerWorkV2Upcaster)])]
 [assembly: EfSchemaFamily(RuntimeSchedulerPoisonEfModule.SchemaFamily, "Workflows.Runtime", RuntimeSchedulerPoisonEfModule.SchemaVersion, Entities = [typeof(WorkflowSchedulerPoisonEntity)])]
@@ -92,3 +95,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(UserTasksEfModule.SchemaFamily, "Workflows.Runtime", UserTasksEfModule.SchemaVersion, Entities = [typeof(UserTaskEntity), typeof(UserTaskFormEntity)])]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskEntity), nameof(UserTaskEntity.ContentJson))]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskFormEntity), nameof(UserTaskFormEntity.ContentJson))]
+
+[assembly: EfSchemaContent(RuntimeMessageInterestEfModule.SchemaFamily, typeof(MessageActiveInterestEntity), nameof(MessageActiveInterestEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeMessageInterestEfModule.SchemaFamily, typeof(MessageActiveInterestOwnerEntity), nameof(MessageActiveInterestOwnerEntity.ContentJson))]

@@ -34,7 +34,7 @@ public interface IRuntimeDeliverySourcePlanner
 /// <summary>Scoped additive family handler for an already-committed exact Dispatch child, never discovery work.</summary>
 /// <remarks>Revalidate the canonical child/source/recipient capability before effects. Transport diagnostics are not
 /// delivery proof; completion proposes a plan which the provider validates against canonical target evidence.</remarks>
-public interface IRuntimeDeliverySourceHandler
+public interface IRuntimeDeliveryDispatchHandler
 {
     ValueTask<RuntimeDeliveryAttempt> HandleAsync(RuntimeDeliveryContext child, CancellationToken cancellationToken = default);
     ValueTask<RuntimeSourceCommit> PrepareCompletionAsync(RuntimeDeliveryContext child, RuntimeDeliveryAttempt attempt, CancellationToken cancellationToken = default);

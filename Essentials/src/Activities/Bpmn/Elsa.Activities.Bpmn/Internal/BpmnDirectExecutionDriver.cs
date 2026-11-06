@@ -452,6 +452,9 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 ? failure with { Status = "Retired", ResolutionInputId = inputId } : failure).ToArray() };
     }
 
+    // Pure legacy shape check reused by the dormant material-interest strategy; no new runtime profile is admitted.
+    internal static void ValidateLegacyInterestMaterial(RuntimeModelMaterial material) => _ = Graph(material);
+
     private static BpmnGraph Graph(RuntimeModelMaterial material)
     {
         if (material.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) ||
