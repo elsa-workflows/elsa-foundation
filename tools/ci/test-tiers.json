@@ -460,7 +460,7 @@
     },
     {
       "project": "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
-      "tier": "integration",
+      "tier": "pr",
       "medianMinutes": null
     },
     {
@@ -957,6 +957,7 @@
           "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
           "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj",
           "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+          "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
           "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
           "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj",
@@ -990,8 +991,7 @@
           "Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
           "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest",
-          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
-          "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj"
+          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
         ]
       }
     ],

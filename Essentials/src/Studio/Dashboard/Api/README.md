@@ -4,6 +4,10 @@
 
 Enable Dashboard persistence as well. The API diagnoses missing or duplicate actor, store, definition-validator and audience-directory registrations. Existing Home routes, contributed widgets and preferences keep their current behavior.
 
+## Cross-domain contributions
+
+`DashboardResourcesApiFeature.ConfigureServices` registers [`DashboardResourcePermissionContributor`](DashboardApiActor.cs) through `services.AddPermissionContributor<DashboardResourcePermissionContributor>()`. It contributes the ten question/dashboard resource-operation permission declarations through `IPermissionContributor` to Foundation Identity's `CompositePermissionCatalog`. The [Identity extension-points catalog](../../../Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor) owns the shared contract, registration and aggregation rules. Native resource ownership and source-data authorization govern each operation independently.
+
 ## Identity and access
 
 Requests require one trusted normalized identity with an unambiguous canonical Elsa user ID and tenant. External authentication subjects and display names are never IAM user IDs. Weaver correlation uses the separately retained authentication subject; resource ownership uses the canonical user.

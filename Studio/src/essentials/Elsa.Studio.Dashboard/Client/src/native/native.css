@@ -1,8 +1,9 @@
 .named-workspace { min-width: 0; color: var(--studio-text); }
 .named-editor-content { display: grid; gap: 1rem; min-width: 0; }
 .named-workspace label, .named-dialog label { display: grid; gap: .35rem; min-width: 0; font-weight: 550; }
-.named-workspace input:not([type="checkbox"]), .named-workspace select, .named-workspace textarea, .named-dialog input, .named-dialog select { min-width: 0; max-width: 100%; padding: .5rem .65rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); font: inherit; }
-.named-workspace input[type="checkbox"] { accent-color: var(--studio-accent); }
+.named-workspace input:not([type="checkbox"]), .named-workspace select, .named-workspace textarea, .named-dialog input:not([type="checkbox"]), .named-dialog select { min-width: 0; max-width: 100%; padding: .5rem .65rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); font: inherit; }
+/* Keep native checkbox geometry stable when the host's text-input focus style changes. */
+.named-workspace input[type="checkbox"], .named-dialog input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; flex: 0 0 auto; accent-color: var(--studio-accent); }
 .named-workspace :is(input, select, textarea, button, a):focus-visible, .named-dialog :is(input, select, textarea, button, a):focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .named-workspace textarea { min-height: 4rem; resize: vertical; }
 .named-workspace a { color: var(--studio-accent); overflow-wrap: anywhere; }

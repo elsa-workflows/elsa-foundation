@@ -5,7 +5,7 @@ import { createHomeLayoutScope } from "../homeLayout";
 import { DashboardApi } from "./api";
 import { QueryControls } from "./QueryControls";
 import { ResultView } from "./ResultView";
-import { HistoryDialog, NativeDialog, ShareDialog, TileOptionsDialog, QuestionPickerDialog } from "./ResourceDialogs";
+import { DashboardDependencyReview, HistoryDialog, NativeDialog, ShareDialog, TileOptionsDialog, QuestionPickerDialog } from "./ResourceDialogs";
 import { accessLost, errorMessage, initialDefinition, resourcePath, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult, type QueryRow, type QuestionDefinition, type QueryProblem } from "./types";
 import { useRequestLifetime } from "./useRequestLifetime";
 import { dashboardActorScope } from "./requestScheduler";
@@ -55,6 +55,21 @@ function ResourceCollection({ native, kind, navigate }: RouteProps & { native: D
     {!error && items.length ? <StudioCollectionFooter>{items.length} loaded {title.toLowerCase()}{cursor ? <StudioButton disabled={loading} onClick={() => void load(appliedSearch, cursor)}>Load more</StudioButton> : null}</StudioCollectionFooter> : null}
     <p className="named-help">Existing Home widgets and layout remain available from Home. Saved questions refresh without AI.</p>
   </StudioPage>;
+}
+
+// Current disclosure can change while the saved layout revision stays the same. Keep local
+// order/size/removal edits, but replace any retained binding that the server now withholds.
+function reconcileTileDisclosure(local: DashboardTile[] | undefined, previous: DashboardTile[] | undefined, current: DashboardTile[] | undefined) {
+  return local?.map(tile => {
+    const before = previous?.find(item => item.id === tile.id);
+    const fresh = current?.find(item => item.id === tile.id);
+    if (!before || !fresh) return tile;
+    const retained = tile.referenceState === "unavailable" || tile.preserveReference || tile.questionId === before.questionId;
+    if (!retained) return tile; // A deliberate local replacement has its own validation on save.
+    if (fresh.referenceState === "unavailable" || !fresh.questionId)
+      return { ...fresh, size: tile.size };
+    return tile.referenceState === "unavailable" || tile.preserveReference ? { ...fresh, size: tile.size } : tile;
+  });
 }
 
 type AccessReview = { state: "checking" | "available" | "unavailable" | "denied"; message?: string };
@@ -107,7 +122,8 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [accessUnavailable, setAccessUnavailable] = useState(false);
   const accessUnavailableRef = useRef(false);
-  const [dialog, setDialog] = useState<"share" | "history" | "questions" | null>(null);
+  const [dialog, setDialog] = useState<"share" | "history" | "questions" | "copy" | null>(null);
+  const [copyDependenciesReady, setCopyDependenciesReady] = useState(false);
   const [result, setResult] = useState<QueryResult>();
   const resultRef = useRef(result); resultRef.current = result;
   const [resultDefinition, setResultDefinition] = useState<QuestionDefinition>();
@@ -188,9 +204,17 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
     }
     if (persisted.revision !== initial.revision) {
       savedRef.current = initial; setSaved(initial); setDraft(initial); setProposalUndo(undefined); setRevisionConflict(false); withholdResults();
-    } else if (JSON.stringify(persisted.capabilities) !== JSON.stringify(initial.capabilities) || JSON.stringify(persisted.uses) !== JSON.stringify(initial.uses)) {
-      const updated = { ...persisted, capabilities: initial.capabilities, uses: initial.uses }; savedRef.current = updated; setSaved(updated);
-      setDraft({ ...draftRef.current, capabilities: initial.capabilities, uses: initial.uses });
+    } else {
+      const local = draftRef.current;
+      const restored = persisted.definitionState === "withheld" && local.definitionState === "withheld";
+      const updated = initial;
+      const next = { ...local, capabilities: initial.capabilities, uses: initial.uses,
+        ...(initial.kind === "dashboard" ? { tiles: reconcileTileDisclosure(local.tiles, persisted.tiles, initial.tiles) } : {}),
+        ...(restored ? { definition: initial.definition, definitionState: initial.definitionState } : {}) };
+      savedRef.current = updated; setSaved(updated);
+      if (JSON.stringify(local) !== JSON.stringify(next)) setDraft(next);
+      if (JSON.stringify(local.tiles) !== JSON.stringify(next.tiles)) setEditingTile(undefined);
+      if (restored) { setProposalUndo(undefined); setReplacing(false); }
     }
   }, [initial, review, denyProtectedContent, withholdResults, setDraft, replacing]);
   useEffect(() => {
@@ -284,13 +308,56 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
     finally { if (operation.current === controller) { operation.current = undefined; busyRef.current = false; setBusy(false); } }
   };
   const saveCurrent = async () => {
-    const current = lifetime.capture(); const revision = workingRevision.current;
-    if (kind === "question" && saved.uses?.length && definitionDirty) {
-      const confirmed = await api.dialogs.confirm({ title: "Update reused question", message: "This question is used by dashboards you can access. Saving changes updates what their question references will run on refresh. Choose Save draft as new question to keep an independent private definition instead. Update this saved question?" });
-      if (!confirmed || !current()) return;
-      if (workingRevision.current !== revision) { setError("The draft changed during confirmation. Review it before saving."); return; }
-    }
-    await runMutation(signal => native.save(draftRef.current, createKey.current, signal), kind === "question" ? "Question saved" : "Dashboard saved");
+    const revision = workingRevision.current;
+    const request = lifetime.begin("save-review");
+    try {
+      // Uses belong to dashboards, so another editor can add a reference without changing this
+      // question's revision. Read current authority and reuse before reviewing an update.
+      if (kind === "question" && savedRef.current.id && definitionDirty) {
+        const baseline = savedRef.current;
+        const current = await native.get("question", baseline.id, request.signal);
+        if (!request.current()) return;
+        if (!current.capabilities.canRead) { denyProtectedContent(); return; }
+        if (workingRevision.current !== revision) { setError("The draft changed while current access was checked. Review it before saving."); return; }
+        if ((current.definitionState === "withheld" || !current.definition) && !replacing) {
+          const redacted = { ...baseline, capabilities: current.capabilities, uses: current.uses, definition: undefined, definitionState: "withheld" as const };
+          savedRef.current = redacted; setSaved(redacted);
+          setDraft({ ...draftRef.current, capabilities: current.capabilities, uses: current.uses, definition: undefined, definitionState: "withheld" });
+          setProposalUndo(undefined); withholdResults();
+          setError("The current question definition is withheld. Its protected query has been cleared; permitted metadata changes remain available."); return;
+        }
+        const updated = { ...baseline, capabilities: current.capabilities, uses: current.uses };
+        savedRef.current = updated; setSaved(updated);
+        const local = { ...draftRef.current, capabilities: current.capabilities, uses: current.uses };
+        draftRef.current = local; replaceDraft(local);
+        if (current.revision !== baseline.revision) {
+          withholdResults(); setRevisionConflict(true); setError("The saved question changed. Your unsaved draft and original revision remain here. Reload it or save the draft as a new question."); return;
+        }
+        if (!current.capabilities.canEdit) { withholdResults(); setError("Current access makes this question read-only. Save the draft as a new question if permitted."); return; }
+        if (current.uses?.length) {
+          const uses = current.uses.map(use => `${use.name} (${use.tileCount} ${use.tileCount === 1 ? "tile" : "tiles"})`).join(", ");
+          const confirmed = await api.dialogs.confirm({ title: "Update reused question", message: `This question is currently used by dashboards you can access: ${uses}. Saving changes updates what their question references will run on refresh. Choose Save draft as new question to keep an independent private definition instead. Update this saved question?` });
+          if (!confirmed || !request.current()) return;
+        }
+      }
+      if (!request.current()) return;
+      if (workingRevision.current !== revision) { setError("The draft changed during review. Review it before saving."); return; }
+      await runMutation(signal => native.save(draftRef.current, createKey.current, signal), kind === "question" ? "Question saved" : "Dashboard saved");
+    } catch (cause) {
+      if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) denyProtectedContent(); else withholdResults(); }
+    } finally { request.finish(); }
+  };
+  const copySavedVersion = () => {
+    const current = lifetime.capture();
+    const source = savedRef.current;
+    void api.dialogs.prompt({ title: "Save a private copy", message: kind === "dashboard" ? "The copy retains the reviewed saved question references. Source access is still required." : "Copies the exact saved definition, with no audience, history or results. Use Save draft as new question to keep unsaved question edits.", defaultValue: `${source.name} copy` }).then(name => {
+      if (!name?.trim() || !current()) return;
+      const fingerprint = `saved-copy:${source.id}:${source.revision}:${name}`;
+      let operationKey = draftCreateAttempts.current.get(fingerprint);
+      if (!operationKey) { operationKey = uuid(); draftCreateAttempts.current.set(fingerprint, operationKey); }
+      const key = operationKey;
+      void runMutation(signal => native.copy(source, name, key, signal), "Private copy saved", true);
+    });
   };
   const replaceUnavailableQuery = async () => {
     if (!canEdit || busy || draftRef.current.definitionState !== "withheld") return;
@@ -381,7 +448,7 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
   if (accessUnavailable) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title="Definition unavailable" /><StudioResultState tone="danger" title="Current access could not authorize this definition" description={error || "Protected definition and result content has been cleared. Reload to check your current access."} actions={<><StudioButton onClick={onReload}>Reload current access</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
   return <StudioPage className="named-workspace"><div className="named-editor-content" ref={pageRef}><StudioPageHeader headingLevel={2} title={draft.id ? draft.name : `Create ${kind}`} description={draft.id ? `Revision ${saved.revision}${dirty ? " · Unsaved changes" : ""}` : "Personal until you explicitly share it."} actions={<>
     {canEdit ? <StudioButton variant="primary" disabled={busy || !draft.name.trim() || kind === "question" && !draft.definition && draft.definitionState !== "withheld"} onClick={() => void saveCurrent()}>{busy ? "Saving…" : kind === "question" ? "Save question" : "Save layout"}</StudioButton> : null}
-    {saved.id && saved.capabilities.canCopy ? <StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.prompt({ title: "Save a private copy", message: kind === "dashboard" ? "The copy keeps the saved question references. Source access is still required." : "Copies the exact saved definition, with no audience, history or results. Use Save draft as new question to keep unsaved question edits.", defaultValue: `${saved.name} copy` }).then(name => { if (name?.trim() && current()) { const fingerprint = `saved-copy:${saved.id}:${saved.revision}:${name}`; let operationKey = draftCreateAttempts.current.get(fingerprint); if (!operationKey) { operationKey = uuid(); draftCreateAttempts.current.set(fingerprint, operationKey); } const key = operationKey; void runMutation(signal => native.copy(saved, name, key, signal), "Private copy saved", true); } }); }}>Copy saved version</StudioButton> : null}
+    {saved.id && saved.capabilities.canCopy ? <StudioButton disabled={busy} onClick={() => { if (kind === "dashboard") { setCopyDependenciesReady(false); setDialog("copy"); } else copySavedVersion(); }}>Copy saved version</StudioButton> : null}
     {saved.id && kind === "question" && dirty && draft.definition && draft.definitionState !== "withheld" && canCreateQuestion ? <StudioButton disabled={busy} onClick={() => void saveDraftAsNew()}>Save draft as new question</StudioButton> : null}
     {saved.id && saved.capabilities.canShare ? <StudioButton disabled={busy || dirty} onClick={() => setDialog("share")}>Share</StudioButton> : null}
     {saved.id ? <StudioButton disabled={busy || dirty} onClick={() => setDialog("history")}>History</StudioButton> : null}
@@ -405,6 +472,7 @@ function ResourceEditor({ api, native, initial, review, datasets, sourceError, o
     </>}
     {saved.id && saved.capabilities.canDelete ? <div className="named-danger-actions"><StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ title: `Delete ${kind}`, message: kind === "question" ? "Delete this question? Dashboard references will become unavailable. Underlying records will remain." : "Delete this dashboard? Its saved questions will remain.", tone: "danger" }).then(yes => { if (yes && current()) void deleteResource(); }); }}>Delete {kind}</StudioButton></div> : null}
     {editingTile ? <TileOptionsDialog api={native} tile={editingTile} onClose={() => setEditingTile(undefined)} onApply={tile => { setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? tile : item) }); setEditingTile(undefined); }} /> : null}
+    {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}><DashboardDependencyReview api={native} resource={saved} mode="copy" onReadyChange={setCopyDependenciesReady} /><StudioButton disabled={!copyDependenciesReady || busy} onClick={() => { setDialog(null); copySavedVersion(); }}>Continue with retained references</StudioButton></NativeDialog> : null}
     {dialog === "share" ? <ShareDialog api={native} resource={saved} onClose={() => setDialog(null)} onSaved={resource => { accepted(resource); notify("Audience saved"); }} /> : null}
     {dialog === "history" ? <HistoryDialog api={native} resource={saved} onClose={() => setDialog(null)} onRestored={resource => { accepted(resource); notify("Definition restored as a new revision"); }} /> : null}
     {dialog === "questions" ? <QuestionPickerDialog api={native} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => navigate("/questions/new")} /> : null}

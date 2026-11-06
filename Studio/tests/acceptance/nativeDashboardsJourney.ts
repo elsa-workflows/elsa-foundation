@@ -3,13 +3,17 @@ import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observ
 
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
 export async function nativeDashboardsJourney(page: Page, info: TestInfo, capture: Capture) {
-  info.setTimeout(240_000);
+  info.setTimeout(300_000);
+  const requestedViewport = info.project.use.viewport;
+  if (requestedViewport && requestedViewport.width < 700) await page.setViewportSize({ width: 320, height: requestedViewport.height });
+  await capture(page, info, "dashboard-native-reference");
   const backend = await dashboardBackend(page.request);
   const suffix = `${info.project.name}-${Date.now()}`;
   // Own the independent reader browser; trace:on records both contexts in the runner trace.
   const readerBrowser = await chromium.launch();
   try {
-    const readerContext = await readerBrowser.newContext({ baseURL: process.env.ELSA_STUDIO_URL, viewport: info.project.use.viewport, colorScheme: info.project.use.colorScheme });
+    const readerContext = await readerBrowser.newContext({ baseURL: process.env.ELSA_STUDIO_URL, viewport: page.viewportSize() ?? undefined, colorScheme: info.project.use.colorScheme });
+    await readerContext.addInitScript(mode => { localStorage.removeItem("elsa-studio-theme"); localStorage.setItem("elsa-studio-workspace-style", "linen"); localStorage.setItem("elsa-studio-theme-mode", mode); }, info.project.use.colorScheme ?? "light");
     // A separate browser context provides a real independent password identity and cookie/token scope.
     const reader = await readerContext.newPage();
     // Set up the independent reader before creating records; setup failure leaves the store clean.
@@ -33,6 +37,13 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await dialog.getByRole("button", { name: "Search audience", exact: true }).click();
         const candidate = dialog.getByRole("listitem").filter({ hasText: "dashboard-reader" });
         await candidate.getByRole("button", { name: "Add audience", exact: true }).click();
+      }
+      if (kind === "dashboards") {
+        const dependencies = dialog.getByRole("region", { name: "Included question access review", exact: true });
+        await expect(dependencies).toContainText("Tiles 1, 2, 3, 4");
+        await expect(dependencies).toContainText("Current question audience: 1 user grants and 0 role grants.");
+        await expect(dialog.getByRole("button", { name: "Save audience", exact: true })).toBeEnabled();
+        await capture(page, info, "dashboard-share-dependency-review");
       }
       await capture(page, info, revoke ? "question-revoke" : kind === "questions" ? "question-share" : "dashboard-share");
       await dialog.getByRole("button", { name: "Save audience", exact: true }).click();
@@ -146,6 +157,12 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect(refreshed.rows[0].values.started.value).toBe("4");
       await expect(page.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
       await capture(page, info, "question-refreshed");
+      await captureDashboardAppearances(page, info, capture, "question-editor-preview", async name => {
+        await expect(page.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("elsa.workflows.runs");
+        await expect(page.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Save question", exact: true })).toBeEnabled();
+        await capture(page, info, name);
+      });
       const savedDrill = page.waitForResponse(response => response.url().endsWith(`/questions/${saved.id}/drill`));
       await page.getByRole("button", { name: "View matching records for result 1", exact: true }).click();
       expect((await savedDrill).ok()).toBe(true); await expect(drill.getByRole("cell", { name: seeded.executionIds[0], exact: true })).toBeVisible(); await drill.press("Escape");
@@ -234,6 +251,35 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveValue("wide");
       await capture(page, info, "dashboard-reopened");
       await capture(page, info, "dashboard-multi-tile");
+      await page.getByRole("button", { name: "Back to dashboards", exact: true }).click();
+      await expect(page.getByRole("link", { name: dashboard.name, exact: true })).toBeVisible();
+      await captureDashboardAppearances(page, info, capture, "dashboards-collection", async name => {
+        await expect(page.getByRole("button", { name: "Create dashboard", exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: dashboard.name, exact: true })).toBeVisible();
+        await capture(page, info, name);
+      });
+      await page.getByRole("link", { name: dashboard.name, exact: true }).click();
+      await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
+      await captureDashboardAppearances(page, info, capture, "dashboard-and-dependency-dialogs", async name => {
+        await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
+        await capture(page, info, `${name}-dashboard`);
+        const shareButton = page.getByRole("button", { name: "Share", exact: true });
+        await shareButton.click();
+        const shareReview = page.getByRole("dialog", { name: `Share ${dashboard.name}`, exact: true });
+        await expect(shareReview.getByRole("region", { name: "Included question access review", exact: true })).toContainText("Tiles 1, 2, 3, 4");
+        await expect(shareReview.getByRole("button", { name: "Save audience", exact: true })).toBeEnabled();
+        await capture(page, info, `${name}-share-review`);
+        await shareReview.getByRole("button", { name: `Close Share ${dashboard.name}`, exact: true }).press("Escape");
+        await expect(shareButton).toBeFocused();
+        const copyButton = page.getByRole("button", { name: "Copy saved version", exact: true });
+        await copyButton.click();
+        const copyReview = page.getByRole("dialog", { name: "Review dashboard copy dependencies", exact: true });
+        await expect(copyReview.getByRole("region", { name: "Included question access review", exact: true })).toContainText(saved.name);
+        await expect(copyReview.getByRole("button", { name: "Continue with retained references", exact: true })).toBeEnabled();
+        await capture(page, info, `${name}-copy-review`);
+        await copyReview.getByRole("button", { name: "Close Review dashboard copy dependencies", exact: true }).press("Escape");
+        await expect(copyButton).toBeFocused();
+      });
       // CDP adds controlled network latency only: all requests and result data still reach real APIs.
       // This qualifies visible UI cancellation and late-network-result rejection, not server compute cancellation.
       const network = await page.context().newCDPSession(page);
@@ -271,6 +317,20 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect((await tileDrill).ok()).toBe(true); await expect(drill.getByRole("cell", { name: seeded.executionIds[0], exact: true })).toBeVisible();
       await capture(page, info, "dashboard-drill"); await drill.press("Escape");
       await page.getByRole("button", { name: "Copy saved version", exact: true }).click();
+      const dependencyReview = page.getByRole("dialog", { name: "Review dashboard copy dependencies", exact: true });
+      const dependencies = dependencyReview.getByRole("region", { name: "Included question access review", exact: true });
+      await expect(dependencies).toContainText(saved.name); await expect(dependencies).toContainText("Tiles 1, 2, 3, 4");
+      await expect(dependencies).toContainText("This question is personal; it has no audience grants.");
+      await capture(page, info, "dashboard-copy-dependency-review");
+      await dependencies.getByRole("button", { name: `Copy ${saved.name} as an independent question`, exact: true }).click();
+      await dependencies.getByLabel(`Name for private copy of ${saved.name}`, { exact: true }).fill(`Independent dependency ${suffix}`);
+      const independentCopyResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved.id}/copies`));
+      await dependencies.getByRole("button", { name: "Create independent private question", exact: true }).click();
+      const independentCopy = await (await independentCopyResponse).json() as Resource; resources.push({ kind: "questions", id: independentCopy.id });
+      await expect(dependencies.getByRole("status")).toContainText("This dashboard still references the original question.");
+      expect((await backend.api<Resource>(`/_elsa/studio/dashboards/${dashboard.id}`)).tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]);
+      await capture(page, info, "dashboard-copy-independent-question");
+      await dependencyReview.getByRole("button", { name: "Continue with retained references", exact: true }).click();
       await copy.getByRole("textbox").fill(`Private dashboard copy ${suffix}`);
       const dashboardCopyResponse = page.waitForResponse(response => response.url().endsWith(`/dashboards/${dashboard.id}/copies`));
       await copy.getByRole("button", { name: "Confirm", exact: true }).click();
@@ -345,17 +405,38 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await reader.goto(`/dashboards/${dashboardId}`);
       await expect(reader.getByText("This question is unavailable under your current access. Its reference is preserved during layout saves.", { exact: true })).toHaveCount(4);
       await expect(reader.locator(".named-result")).toHaveCount(0); await capture(reader, info, "dashboard-unavailable-tiles");
+      // A dashboard reference added after the question editor opened must still earn confirmation.
+      await page.goto(`/questions/${copied.id}`);
+      await expect(page.getByLabel("Name", { exact: true })).toHaveValue(copied.name);
+      await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toHaveCount(0);
+      const lateReference = await backend.api<Resource>("/_elsa/studio/dashboards", "POST", { name: `Late question reference ${suffix}`, description: "Added after opening the question editor", operationKey: `late-reference-${suffix}`, tiles: [{ id: "late-reference", questionId: copied.id, size: "medium" }] });
+      resources.push({ kind: "dashboards", id: lateReference.id });
+      await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("23");
+      await page.getByRole("button", { name: "Save question", exact: true }).click();
+      const lateReuse = page.getByRole("dialog", { name: "Update reused question", exact: true });
+      await expect(lateReuse).toContainText("Save draft as new question");
+      await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toContainText(lateReference.name);
+      await capture(page, info, "question-new-reuse-confirmation");
+      await lateReuse.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(page.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("23");
+      expect((await backend.api<Resource>(`/_elsa/studio/questions/${copied.id}`)).revision).toBe(copied.revision);
+      const discardLateDraft = page.waitForEvent("dialog"); const closeLateDraft = page.getByRole("button", { name: "Back to questions", exact: true }).click();
+      const discardLate = await discardLateDraft; expect(discardLate.type()).toBe("confirm"); await discardLate.accept(); await closeLateDraft;
+      await expect(page.getByRole("link", { name: saved.name, exact: true })).toBeVisible();
+      await captureDashboardAppearances(page, info, capture, "questions-collection", async name => {
+        await expect(page.getByRole("button", { name: "Create question", exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: saved.name, exact: true })).toBeVisible();
+        await capture(page, info, name);
+      });
       // A current saved revision mismatch is rejected instead of silently overwriting the editor's draft.
       await page.goto(`/questions/${questionId}`); const current = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
       await page.getByLabel("Description", { exact: true }).fill("Keep this local conflicted draft");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("24");
       await backend.api(`/_elsa/studio/questions/${questionId}`, "PUT", { name: current.name, description: "Concurrent saved edit", definition: current.definition }, tag(current.revision));
       await page.getByRole("button", { name: "Save question", exact: true }).click();
-      const reuse = page.getByRole("dialog", { name: "Update reused question", exact: true });
-      await expect(reuse).toContainText("Save draft as new question");
+      await expect(page.getByRole("dialog", { name: "Update reused question", exact: true })).toHaveCount(0);
+      await expect(page.locator(".named-inline-error")).toContainText("The saved question changed. Your unsaved draft and original revision remain here.");
       await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toContainText(`Private operations ${suffix}`);
-      await capture(page, info, "question-reuse-confirmation");
-      await reuse.getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(page.locator(".named-inline-error")).toBeVisible(); await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Keep this local conflicted draft");
       await expect(page.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("24");
       await capture(page, info, "question-conflict");
@@ -377,4 +458,73 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await readerContext.close();
     }
   } finally { await readerBrowser.close(); }
+}
+
+type DashboardAppearance = { style: string; mode: string; navigation: string; layout: string };
+const dashboardAppearanceStyles: Record<string, string> = { linen: "Linen", minimal: "Minimal", quiet: "Quiet Studio", focus: "Focus Canvas", open: "Open Studio", theme: "Theme default" };
+const dashboardAppearanceModes: Record<string, string> = { light: "Light", dark: "Dark", dim: "Dim", "high-contrast": "High contrast" };
+const dashboardAppearanceNavigation: Record<string, string> = { theme: "Theme default", left: "Left", top: "Top" };
+
+/** Supplement the full Linen light/dark journeys with every public workspace style, four modes
+ * and both navigation arrangements at desktop and 320px. This changes live supported UI state;
+ * it never substitutes CSS, html attributes, responses or another host for the composed app. */
+export async function captureDashboardAppearances(page: Page, info: TestInfo, capture: Capture, surface: string, observe?: (name: string) => Promise<void>) {
+  const original = await page.evaluate(() => ({
+    style: localStorage.getItem("elsa-studio-workspace-style"), mode: localStorage.getItem("elsa-studio-theme-mode"), navigation: localStorage.getItem("elsa-studio-nav-mode"),
+    attributes: { style: document.documentElement.getAttribute("data-workspace-style"), mode: document.documentElement.getAttribute("data-theme-appearance"), navigation: document.documentElement.getAttribute("data-nav-mode"), layout: document.documentElement.getAttribute("data-theme-layout") }
+  }));
+  const profiles: DashboardAppearance[] = info.project.use.colorScheme === "dark"
+    ? [{ style: "quiet", mode: "high-contrast", navigation: "left", layout: "classic" }, { style: "open", mode: "light", navigation: "top", layout: "editorial" }]
+    : [{ style: "minimal", mode: "dim", navigation: "left", layout: "classic" }, { style: "focus", mode: "dark", navigation: "top", layout: "floating" }];
+  const observed: (DashboardAppearance & { capturePrefix: string })[] = [];
+  let completed = false; let restored = false;
+  async function choose(group: string, label: string) {
+    const trigger = page.getByRole("button", { name: "Select theme", exact: true });
+    await trigger.focus(); await trigger.press("Enter");
+    const menu = page.locator(".theme-dropdown"); await expect(menu).toBeVisible();
+    const choice = menu.getByRole("group", { name: group, exact: true }).getByRole("menuitemradio", { name: label, exact: true });
+    await expect(choice).toBeEnabled(); await choice.press("Enter");
+    await page.keyboard.press("Escape"); await expect(menu).toBeHidden();
+    await expect(page.getByRole("button", { name: "Select theme", exact: true })).toBeFocused();
+  }
+  async function apply(style: string, mode: string, navigation: string) {
+    if (!dashboardAppearanceStyles[style] || !dashboardAppearanceNavigation[navigation] || mode !== "system" && !dashboardAppearanceModes[mode]) throw new Error("Unsupported Dashboard appearance preference");
+    await choose("Workspace style", dashboardAppearanceStyles[style]);
+    if (mode === "system") {
+      await page.getByRole("button", { name: "Select theme", exact: true }).click();
+      await page.locator(".theme-dropdown").getByRole("menuitem", { name: "Follow system appearance", exact: true }).click();
+      await page.keyboard.press("Escape");
+    } else await choose("Appearance", dashboardAppearanceModes[mode]);
+    await choose("Navigation", dashboardAppearanceNavigation[navigation]);
+  }
+  try {
+    for (const [index, profile] of profiles.entries()) {
+      await apply(profile.style, profile.mode, profile.navigation);
+      await expect(page.locator("html")).toHaveAttribute("data-workspace-style", profile.style);
+      await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", profile.mode);
+      await expect(page.locator("html")).toHaveAttribute("data-theme-layout", profile.layout);
+      await expect(page.locator("html")).toHaveAttribute("data-nav-mode", profile.navigation);
+      const name = `${surface}-appearance-${index + 1}`;
+      if (observe) await observe(name); else await capture(page, info, name);
+      // Record a profile only after its product assertions and every required screenshot complete.
+      observed.push({ ...profile, capturePrefix: name });
+    }
+    completed = true;
+  } finally {
+    try {
+      await apply(original.style ?? "theme", original.mode ?? original.attributes.mode ?? "system", original.navigation ?? "theme");
+      for (const [attribute, expected] of [["data-workspace-style", original.attributes.style], ["data-theme-appearance", original.attributes.mode], ["data-nav-mode", original.attributes.navigation], ["data-theme-layout", original.attributes.layout]] as const) {
+        if (expected === null) await expect(page.locator("html")).not.toHaveAttribute(attribute); else await expect(page.locator("html")).toHaveAttribute(attribute, expected);
+      }
+      // Preserve the exact original storage representation after restoring its live UI state.
+      await page.evaluate(values => {
+        for (const [key, value] of [["elsa-studio-workspace-style", values.style], ["elsa-studio-theme-mode", values.mode], ["elsa-studio-nav-mode", values.navigation]]) {
+          if (value === null) localStorage.removeItem(key!); else localStorage.setItem(key!, value!);
+        }
+      }, original);
+      restored = true;
+    } finally {
+      await attachDashboardJson(info, `${surface}-appearance-matrix.json`, { surface, source: process.env.UX_SOURCE_SHA ?? "unknown", viewport: page.viewportSize(), baseline: original.attributes, requested: profiles, observed, completed, originalPreferencesRestored: restored, mechanism: "Supported Select theme menu, keyboard-operated workspace/mode/navigation choices", exclusions: [], independentVisualAcceptance: "Not implied by assertions; inspect attached screenshots" });
+    }
+  }
 }

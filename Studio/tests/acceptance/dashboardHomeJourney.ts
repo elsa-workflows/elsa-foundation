@@ -1,10 +1,13 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { dashboardBackend, observeNativeAgentBoundary, type Capture } from "./dashboardJourneySupport";
+import { captureDashboardAppearances } from "./nativeDashboardsJourney";
 
 type Layout = { source: string; revision?: string; schemaVersion: number; value: { widgets: { id: string; size: string; visible: boolean; options?: unknown }[] } };
 
 /** Existing module-contributed Home widgets and preference/default authorities remain the native Home. */
 export async function dashboardHomeJourney(page: Page, info: TestInfo, capture: Capture) {
+  const viewport = info.project.use.viewport;
+  if (viewport && viewport.width < 700) await page.setViewportSize({ width: 320, height: viewport.height });
   const backend = await dashboardBackend(page.request);
   const boundary = observeNativeAgentBoundary(page);
   const initialRead = page.waitForResponse(response => response.request().method() === "GET" && /\/_elsa\/studio\/home-layout$/.test(response.url()));
@@ -39,6 +42,12 @@ export async function dashboardHomeJourney(page: Page, info: TestInfo, capture: 
     await expect(homeWidgets.nth(1)).toHaveAttribute("data-widget-id", firstId!);
     await expect(page.locator(`[data-widget-id="${firstId}"]`)).toHaveAttribute("data-size", chosen);
     await capture(page, info, "home-layout-reopened");
+    await captureDashboardAppearances(page, info, capture, "home-populated", async name => {
+      await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+      await expect(page.locator(`[data-widget-id="${firstId}"]`)).toHaveAttribute("data-size", chosen);
+      await expect(page.getByRole("button", { name: "Edit home", exact: true })).toBeVisible();
+      await capture(page, info, name);
+    });
     await page.getByRole("button", { name: "Edit home", exact: true }).click();
     const target = homeWidgets.filter({ has: page.getByRole("button", { name: /^Hide / }) }).first();
     const hiddenId = await target.getAttribute("data-widget-id"); const hide = target.getByRole("button", { name: /^Hide / });

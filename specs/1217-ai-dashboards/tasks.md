@@ -2,6 +2,8 @@
 
 **Status:** Active dependency-ordered delivery plan after owner resume. Native and Weaver implementation is in progress; Copilot/options configuration is selected, usable live access remains unqualified. Completed code tasks are not feature acceptance.
 
+**Checkpoint:** Frozen 23058692a passed Architecture 618/618 and package 005 with 20 archives / 19 native cases. T011/T012 include the local R2 tier/catalog corrections; T042 is supported by that package witness. The R2 frontend passed 177/177 locally. These checkmarks do not claim a final correction commit, generator/current CI pass, composed UX or live-provider acceptance; native 004 remains failed with its checkbox fix underway. See the [evidence index](evidence/README.md) and [R2 checkpoint](evidence/2026-11-06-review-r2-checkpoint.md).
+
 **Cadence:** ADR 0080 risk-based behavior tests apply. The constitutions do not mandate greenfield TDD; use test-after or test-first where useful, and retain red/green bite-proof for behavior claims before completion. Do not add mirror tests or unrelated runtime runs for this docs checkpoint.
 
 ## Phase 1 — Setup and design gates
@@ -19,8 +21,8 @@
 - [x] T008 Create provider-neutral command/query definition persistence contracts in Essentials/src/Studio/Dashboard/Core/ and EF mappings in Persistence/EntityFrameworkCore/.
 - [x] T009 Implement trusted tenant/canonical actor/identity audience mapping and coarse/resource capability evaluation in Essentials/src/Studio/Dashboard/Management/.
 - [x] T010 Wire native API capabilities/error contracts in Essentials/src/Studio/Dashboard/Api/; never accept a saved author principal.
-- [ ] T011 Add risk-based query/auth/composition tests in Essentials/tests/Studio/ and classify new projects in tools/ci/test-tiers.json; registration tests only for logic-bearing wiring.
-- [ ] T012 Update extension-point catalogs, root EXTENSION_POINTS.md, package manifests and solution entries for the new contracts/features.
+- [x] T011 Add risk-based query/auth/composition tests in Essentials/tests/Studio/ and classify new projects in tools/ci/test-tiers.json; registration tests only for logic-bearing wiring.
+- [x] T012 Update extension-point catalogs, root EXTENSION_POINTS.md, package manifests and solution entries for the new contracts/features.
 
 ## Phase 3 — US1: Ask, preview and save a novel question
 
@@ -75,7 +77,7 @@
 
 - [x] T040 [US5] Create separately packaged Acme.Processing record/store/dataset/metric fixtures under Extensions/Examples/src/Acme.Processing/ with explicit customer category and duration.
 - [x] T041 [US5] Implement its declaration/validation/execution/drill/disclosure contributions through the same public contracts in Extensions/Examples/src/Acme.Processing/.
-- [ ] T042 [US5] Build/install the independent package into an owned host and prove processing-time grouping with independent math, tenant/field/aggregate controls and no generic dataset branch in tools/studio/Dashboard.Conformance.Probe/.
+- [x] T042 [US5] Build/install the independent package into an owned host and prove processing-time grouping with independent math, tenant/field/aggregate controls and no generic dataset branch in tools/studio/Dashboard.Conformance.Probe/.
 - [ ] T043 [US5] Qualify the actual-provider business question and native save/reopen/refresh/drill journey in Studio/tests/acceptance/ with safe numerical evidence.
 
 ## Phase 8 — Documentation, review, merge and resulting main

@@ -5,6 +5,8 @@ import type { DashboardApi } from "./api";
 import type { AudienceCandidate, AudienceGrant, DashboardResource, DashboardTile, DefinitionRevision, QueryValue, Visualization } from "./types";
 import { errorMessage, accessLost } from "./types";
 import { useRequestLifetime } from "./useRequestLifetime";
+import { DashboardDependencyReview } from "./DashboardDependencyReview";
+export { DashboardDependencyReview } from "./DashboardDependencyReview";
 
 export function NativeDialog({ title, onClose, children }: { title: string; onClose(): void; children: React.ReactNode }) {
   const ref = useRef<HTMLElement>(null);
@@ -28,6 +30,7 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
   const [audienceLoaded, setAudienceLoaded] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [dependenciesReady, setDependenciesReady] = useState(resource.kind !== "dashboard");
   useEffect(() => { const request = lifetime.begin("load"); setLoading(true); setAudienceLoaded(false); setError(undefined); void api.audience(resource, request.signal).then(value => { if (request.current()) { setGrants(value.items); setAudienceLoaded(true); } }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(() => { if (request.current()) setLoading(false); request.finish(); }); return () => lifetime.cancel("load"); }, [api, resource, lifetime, loadAttempt]);
   const searchAudience = async (query: string, kind: string, cursor?: string | null) => {
     const request = lifetime.begin("search"); setError(undefined); setSearching(true); setSearched(false);
@@ -41,13 +44,14 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
     finally { if (request.current()) setSearching(false); request.finish(); }
   };
   return <NativeDialog title={`Share ${resource.name}`} onClose={onClose}><p>Viewers see data using their own access. Sharing a dashboard does not share its questions automatically.</p>
+    {resource.kind === "dashboard" ? <DashboardDependencyReview api={api} resource={resource} mode="share" onReadyChange={setDependenciesReady} /> : null}
     {error ? <p role="alert">{error}</p> : null}{loading ? <p role="status">Loading current audience…</p> : !audienceLoaded ? <><p role="status">The current audience is unknown. Load it successfully before changing sharing.</p><StudioButton onClick={() => setLoadAttempt(value => value + 1)}>Retry current audience</StudioButton></> : <>
       <form onSubmit={event => { event.preventDefault(); void searchAudience(search, audienceKind); }}><label>Audience kind<select value={audienceKind} onChange={event => { lifetime.cancel("search"); setAudienceKind(event.target.value); setCandidates([]); setCandidateCursor(null); setSearched(false); setSearching(false); }}><option value="user">Users</option><option value="role">Roles</option></select></label><label>Find authorized users or roles<input value={search} onChange={event => setSearch(event.target.value)} /></label><StudioButton type="submit" disabled={searching || saving}>{searching ? "Searching…" : "Search audience"}</StudioButton></form>
       {searched && !candidates.length && !candidateCursor ? <p role="status">No authorized audience entries matched this search.</p> : null}
       {candidates.length ? <ul className="named-picker-list">{candidates.map(candidate => <li key={`${candidate.kind}:${candidate.id}`}><span>{candidate.displayName || candidate.name || candidate.id} ({candidate.kind})</span><StudioButton type="button" disabled={grants.some(grant => grant.id === candidate.id && grant.kind === candidate.kind)} onClick={() => setGrants(current => [...current, { kind: candidate.kind, id: candidate.id, access: "viewer" }])}>Add audience</StudioButton></li>)}</ul> : null}
       {candidateCursor ? <StudioButton type="button" disabled={searching || saving} onClick={() => void searchAudience(appliedCandidateSearch.query, appliedCandidateSearch.kind, candidateCursor)}>More audience entries</StudioButton> : null}
       <h4>Current audience</h4>{grants.length ? <ul className="named-picker-list">{grants.map((grant, index) => <li key={`${grant.kind}:${grant.id}`}><span>{grant.id} ({grant.kind})</span><label>Access for {grant.id}<select value={grant.access} onChange={event => setGrants(current => current.map((item, at) => at === index ? { ...item, access: event.target.value as AudienceGrant["access"] } : item))}><option value="viewer">Can view</option><option value="editor">Can edit content</option></select></label><StudioButton type="button" onClick={() => setGrants(current => current.filter((_, at) => at !== index))}>Remove {grant.id}</StudioButton></li>)}</ul> : <p>Personal. No audience grants.</p>}
-      <p className="named-help">Only the owner manages sharing and deletion. Editors cannot change the audience.</p><StudioButton type="button" variant="primary" disabled={saving} onClick={() => { if (saving) return; const request = lifetime.begin("save"); setSaving(true); setError(undefined); void api.share(resource, grants, request.signal).then(value => { if (request.current()) onSaved(value); }).catch(cause => { if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setGrants([]); setCandidates([]); } } }).finally(() => { if (request.current()) setSaving(false); request.finish(); }); }}>{saving ? "Saving audience…" : "Save audience"}</StudioButton>
+      <p className="named-help">Only the owner manages sharing and deletion. Editors cannot change the audience.</p><StudioButton type="button" variant="primary" disabled={saving || !dependenciesReady} onClick={() => { if (saving || !dependenciesReady) return; const request = lifetime.begin("save"); setSaving(true); setError(undefined); void api.share(resource, grants, request.signal).then(value => { if (request.current()) onSaved(value); }).catch(cause => { if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setGrants([]); setCandidates([]); } } }).finally(() => { if (request.current()) setSaving(false); request.finish(); }); }}>{saving ? "Saving audience…" : "Save audience"}</StudioButton>
     </>}
   </NativeDialog>;
 }
