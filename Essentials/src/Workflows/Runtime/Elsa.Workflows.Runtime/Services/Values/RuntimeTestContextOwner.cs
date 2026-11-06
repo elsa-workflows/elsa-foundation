@@ -282,13 +282,32 @@ internal sealed class RuntimeTestContextOwner(
         {
             var projection = node.ActivityContract?.Result.Projections.GetValueOrDefault(capture.OutputName);
             var resultType = capture.ConversionPlan?.TargetType ?? projection?.Type;
-            if (resultType is null || !SameType(declaration.Type, resultType) || capture.Type.Kind != resultType.Alias ||
+            if (projection is null || resultType is null || !SameType(declaration.Type, resultType) || capture.Type.Kind != resultType.Alias ||
                 capture.StorageDriverKey != WellKnownRuntimeDurableValueStorageDrivers.Json ||
                 capture.Storage != DurableValueStorage.Custom && capture.Storage != declaration.Policy.Storage ||
                 capture.Lifecycle != declaration.Policy.Lifecycle || declaration.Policy.RequiresEncryption)
                 throw Refused("An enclosing capture target has an unavailable type, storage or protection contract.");
-            var minimum = ValuePolicyCombiner.RequireMinimum(ValueProtectionPolicy.InstanceInline, projection!.Policy, "Test capture");
-            minimum = ValuePolicyCombiner.RequireMinimum(minimum, node.ActivityContract!.Result.Policy, "Test capture result");
+            // Completion first protects the entire atomic result, including sibling projections. The
+            // capture owner then rebases those protection fields onto its destination lifecycle/storage.
+            // A normal Result lifetime is not a demand that an Instance variable have that same lifetime.
+            var contract = node.ActivityContract!.Result;
+            Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy sourcePolicy;
+            try
+            {
+                sourcePolicy = contract.Projections.Values.Aggregate(contract.Policy,
+                    (policy, member) => ValuePolicyCombiner.Combine(policy, member.Policy, "Test capture atomic result"));
+                sourcePolicy = ValuePolicyCombiner.Combine(sourcePolicy, projection.Policy, "Test capture projection");
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new RuntimeTestContextUnavailableException("runtime.test-context.capture-policy-unavailable",
+                    "The atomic captured result has incompatible protection requirements.", memberKey: capture.OutputName, innerException: exception);
+            }
+            if (!sourcePolicy.IsPersistable || sourcePolicy.RequiresEncryption || sourcePolicy.Storage != Elsa.Activities.Runtime.Core.Models.ActivityValueStorage.Inline ||
+                !string.IsNullOrWhiteSpace(sourcePolicy.StorageProfile) ||
+                (capture.ConversionPlan?.SourceRepresentation ?? projection.EffectiveSourceRepresentation) == Elsa.Primitives.Models.ValueRepresentation.TransientResource)
+                throw Refused("The captured result requires an unavailable persistence or protection profile.");
+            var minimum = ValuePolicyCombiner.ToProtectionPolicy(sourcePolicy);
             var effective = new ValueProtectionPolicy(capture.Lifecycle, declaration.Policy.Storage, minimum.IsSensitive,
                 minimum.RequiresEncryption, minimum.RedactionMode, minimum.RetentionPolicy, minimum.Metadata);
             if (!effective.Satisfies(declaration.Policy))

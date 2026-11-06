@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Contracts;
@@ -309,6 +310,69 @@ public sealed class RuntimeTestContextTests
     }
 
     [Fact]
+    public async Task Compiler_style_atomic_result_lifecycle_can_capture_into_the_canonical_instance_variable()
+    {
+        var selected = ResultLifecycleCaptureNode();
+        await using var fixture = await Fixture.CreateAsync(selected, workflowVariables: [CaptureDeclaration()]);
+        RegisterCaptureActivity(fixture);
+
+        var prepared = await fixture.PrepareAsync();
+
+        Assert.True(prepared.IsAvailable, JsonSerializer.Serialize(prepared.Findings));
+        Assert.Empty(prepared.Findings);
+        Assert.Equal(ActivityValueLifecycle.Result, selected.ActivityContract!.Result.Policy.Lifecycle);
+        Assert.Equal(DurableValueLifecycle.Instance, prepared.RootVariableFrame!.Values["captured"].Policy.Lifecycle);
+        Assert.Empty(await fixture.ActivitiesAsync());
+        Assert.Null(await fixture.Harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(fixture.Harness.ExecutionId));
+
+        await fixture.StartAsync();
+
+        var state = await fixture.StateAsync();
+        Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
+        Assert.Equal(23, state.RootVariableFrame!.Values["captured"].InlineValue!.Value.GetInt32());
+        Assert.Equal(DurableValueLifecycle.Instance, state.RootVariableFrame.Values["captured"].Policy.Lifecycle);
+        Assert.Equal("selected", Assert.Single(await fixture.ActivitiesAsync()).Execution.ExecutableNodeId);
+    }
+
+    [Theory]
+    [InlineData("encryption")]
+    [InlineData("external")]
+    [InlineData("nonpersistable")]
+    [InlineData("incompatible-retention")]
+    public async Task Complete_atomic_sibling_policy_refuses_capture_as_typed_unavailable_before_any_activity(string restriction)
+    {
+        var sibling = restriction switch
+        {
+            "encryption" => ActivityValuePolicy.Default with { RequiresEncryption = true },
+            "external" => ActivityValuePolicy.Default with { Storage = ActivityValueStorage.External },
+            "nonpersistable" => ActivityValuePolicy.Default with { IsPersistable = false },
+            _ => ActivityValuePolicy.Default with { RetentionPolicy = "private-provider-retention-b" }
+        };
+        var atomic = ActivityValuePolicy.Default with
+        {
+            Lifecycle = ActivityValueLifecycle.Result,
+            RetentionPolicy = restriction == "incompatible-retention" ? "private-provider-retention-a" : null
+        };
+        var selected = ResultLifecycleCaptureNode(sibling, atomic);
+        await using var fixture = await Fixture.CreateAsync(selected, workflowVariables: [CaptureDeclaration()]);
+        RegisterCaptureActivity(fixture);
+        // Only the uncaptured sibling carries the added requirement. The selected projection remains ordinary.
+        Assert.Equal(ActivityValuePolicy.Default, selected.ActivityContract!.Result.Projections["value"].Policy);
+
+        var prepared = await fixture.PrepareAsync();
+
+        Assert.False(prepared.IsAvailable);
+        Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(prepared.Findings).Kind);
+        if (restriction == "incompatible-retention")
+            Assert.Equal("runtime.test-context.capture-policy-unavailable", prepared.Findings[0].Code);
+        Assert.DoesNotContain("private-provider-retention", JsonSerializer.Serialize(prepared), StringComparison.Ordinal);
+        Assert.Empty(await fixture.ActivitiesAsync());
+        Assert.Null(await fixture.Harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(fixture.Harness.ExecutionId));
+        await Record.ExceptionAsync(() => fixture.StartAsync());
+        Assert.Empty(await fixture.ActivitiesAsync());
+    }
+
+    [Fact]
     public async Task Preparation_distinguishes_expected_refusal_from_sanitized_infrastructure_failure_and_cancellation()
     {
         await using var fixture = await Fixture.CreateAsync(SetNode(Literal(9)));
@@ -478,6 +542,40 @@ public sealed class RuntimeTestContextTests
     private static RuntimeInputBinding Literal(int value) => new("value", IntType, ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.Literal, literal: Number(value));
     private static ValueEnvelope Number(int value) => ValueEnvelope.Inline(IntType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
+    private static RuntimeVariableDeclaration CaptureDeclaration() => new("captured", "captured", IntType,
+        ValueProtectionPolicy.InstanceInline, new RuntimeInputBinding("captured", IntType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal, literal: Number(1)));
+
+    private static ExecutableNode ResultLifecycleCaptureNode(ActivityValuePolicy? siblingPolicy = null, ActivityValuePolicy? atomicPolicy = null)
+    {
+        var descriptor = new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1",
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EchoActivity)))));
+        var projections = new List<ActivityResultProjectionContract>
+        { new("value", "value", IntType, true, ActivityValuePolicy.Default) };
+        if (siblingPolicy is not null)
+            projections.Add(new("sibling", "value", IntType, true, siblingPolicy));
+        // ExecutableNodeCompiler pins atomic results with Result lifetime. The destination variable remains Instance.
+        var contract = new ActivityContract(typeof(EchoActivity).FullName!, "1", typeof(ClrActivityDescriptor).FullName!, descriptor.Payload,
+            [new("value", "Value", IntType, false, false, false, null, ActivityValuePolicy.Default)],
+            new(new(TypeAliasConvention.CanonicalAlias(typeof(EchoResult))), true,
+                atomicPolicy ?? (ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result }), projections),
+            ["Done"], new(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(EchoActivity))));
+        var capture = new RuntimeOutputCapture("value", RuntimeWorkflowStateSeed.VariableValueIdPrefix + "captured",
+            new(IntType.Alias, WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+            DurableValueLifecycle.Instance, DurableValueStorage.Custom, true,
+            new Dictionary<string, string> { [RuntimeMetadataKeys.TargetVariableReferenceKey] = "captured" });
+        return new("selected", "selected", typeof(EchoActivity).FullName!, "1", descriptor,
+            new Dictionary<string, RuntimeInputBinding> { ["value"] = Literal(23) },
+            new Dictionary<string, RuntimeOutputCapture> { ["value"] = capture }, new Dictionary<string, string>(), activityContract: contract);
+    }
+
+    private static void RegisterCaptureActivity(Fixture fixture)
+    {
+        var types = fixture.Harness.Services.GetRequiredService<IWellKnownTypeRegistry>();
+        types.RegisterType(typeof(EchoActivity), TypeAliasConvention.CanonicalAlias(typeof(EchoActivity)));
+        types.RegisterType(typeof(EchoResult), TypeAliasConvention.CanonicalAlias(typeof(EchoResult)));
+    }
+
     private static ExecutableNode IntProducer(string id) => new(id, id, typeof(IntProducerActivity).FullName!, "1", "test.int-producer",
         JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
 
