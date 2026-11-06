@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -341,6 +343,62 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
             _refreshedAt = _time.GetUtcNow();
         if (changed)
             await PublishQuietlyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Confirms one admitted family's durable write version on its own registered context and database, without
+    /// publishing membership, re-admitting the module or refreshing other families. Suitable inside the caller's
+    /// transaction before a write that bypasses SaveChanges. A row's stamp is not finalization authority.
+    /// A read older than this family's checked state at adoption is refused without changing that state or observation.
+    /// </summary>
+    public async ValueTask<EfSchemaFamilyWriteState> ConfirmAsync(DbContext context, string family, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(family);
+        cancellationToken.ThrowIfCancellationRequested();
+        var registry = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
+            .GetService<EfSchemaFinalizationGates>();
+        var declared = EfSchemaModuleFamilies.ForContext(context.GetType());
+        var chain = Families.Chains.SingleOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Family, family));
+        if (registry is null || !ReferenceEquals(registry.FindModuleGate(context.GetType()), this) ||
+            !ReferenceEquals(registry.Find(Module), this) || declared is null || declared.Module != Module ||
+            !declared.Chains.Any(candidate => StringComparer.Ordinal.Equals(candidate.Family, family)) || chain is null)
+            throw new InvalidOperationException("Schema confirmation requires this module's actual registered gate and an owned family.");
+        var identity = DatabaseIdentity;
+        var state = StateOf(family);
+        if (identity is null || state is null)
+            throw new InvalidOperationException("Schema confirmation requires an admitted module and family.");
+        if (state.WritesRefused)
+            throw new EfSchemaFamilyWritesRefusedException(family, state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
+
+        var store = new EfSchemaFinalizationStore(context, _time);
+        var persistedIdentity = await store.FindDatabaseIdentityAsync(cancellationToken);
+        if (!StringComparer.Ordinal.Equals(identity, persistedIdentity))
+            throw new InvalidOperationException("The context's persisted module database identity differs from its admitted gate.");
+        // Adopt exactly this checked record, never a second unchecked read after identity validation.
+        var record = await store.FindAsync(family, cancellationToken);
+        if (record is null || !StringComparer.Ordinal.Equals(family, record.Family) ||
+            !StringComparer.Ordinal.Equals(identity, record.DatabaseIdentity))
+            throw new InvalidOperationException("The family's durable record is missing or differs from the exact requested family or admitted database.");
+        if (!chain.IsReadable(record.FinalizedVersion))
+            throw new EfSchemaFamilyWritesRefusedException(family, state.WriteVersion, record.FinalizedVersion, chain.ReadableVersions);
+        lock (_lock)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_deactivated || _databaseIdentity != identity || !ReferenceEquals(registry.FindModuleGate(context.GetType()), this) ||
+                !ReferenceEquals(registry.Find(Module), this) || !_states.TryGetValue(family, out state))
+                throw new InvalidOperationException("The context's gate admission changed before schema confirmation.");
+            if (state.WritesRefused)
+                throw new EfSchemaFamilyWritesRefusedException(family, state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
+            // The same database can have advanced while this read awaited I/O, or this context
+            // can hold an older valid snapshot. Neither may overwrite a newer checked observation.
+            if (!_observed.TryGetValue(family, out var observed) || record.Revision < observed.Record.Revision ||
+                !chain.IsAtOrAfter(record.FinalizedVersion, observed.Record.FinalizedVersion) ||
+                !chain.IsAtOrAfter(record.FinalizedVersion, state.WriteVersion))
+                throw new InvalidOperationException("Schema confirmation read a record older than the gate's current checked family state.");
+            Adopt(identity, new Dictionary<string, SchemaFinalizationRecord> { [family] = record }, MayAdvanceNow());
+            return _states[family];
+        }
     }
 
     /// <summary>

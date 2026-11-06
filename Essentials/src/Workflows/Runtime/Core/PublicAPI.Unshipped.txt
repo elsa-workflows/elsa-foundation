@@ -10714,3 +10714,6 @@ virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationMaterialPin.PrintM
 virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.EqualityContract.get -> System.Type!
 virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot? other) -> bool
 virtual Elsa.Workflows.Runtime.Core.Models.WorkflowPreparationRoot.PrintMembers(System.Text.StringBuilder! builder) -> bool
+
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference.PublicationScope.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference.PublicationScope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?

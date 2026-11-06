@@ -110,6 +110,8 @@ public sealed partial class EfExecutableActivityTemplateStore
             if (tracked.State != EntityState.Modified)
             {
                 tracked.Entity.Revision = checked(row.Revision + 1);
+                tracked.Entity.SchemaVersion = RuntimeSchemaWriteVersion.Artifact(owner, tracked.Entity.SchemaVersion);
+                tracked.Property(entity => entity.SchemaVersion).IsModified = true;
                 tracked.Property(entity => entity.Revision).IsModified = true;
             }
         }

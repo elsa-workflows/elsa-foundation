@@ -34,6 +34,7 @@ public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore : IWo
     public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        if (reference.PublicationScope is not null) throw new NotSupportedException("Generic source saves cannot assert protected logical publication scope.");
         ArgumentException.ThrowIfNullOrWhiteSpace(reference.SourceReferenceId);
 
         lock (_gate)

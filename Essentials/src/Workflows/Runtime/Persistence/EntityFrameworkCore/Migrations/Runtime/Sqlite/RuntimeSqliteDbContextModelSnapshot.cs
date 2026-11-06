@@ -2900,6 +2900,68 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_workflow_hold_state", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.WorkflowPreparationRetentionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IncarnationId")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerAddress")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreparationOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "PreparationOrderKey")
+                        .IsUnique();
+
+                    b.ToTable("elsa_runtime_workflow_preparation_retention", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.WorkflowRunHealthStateEntity", b =>
                 {
                     b.Property<string>("Id")

@@ -150,7 +150,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Single(secrets.GetProperty("holds").EnumerateArray());
         var runtime = families.Single(family => family.GetProperty("family").GetString() == RuntimeArtifactEfModule.SchemaFamily);
         Assert.Equal(JsonValueKind.Null, runtime.GetProperty("finalizedVersion").ValueKind);
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion, RuntimeArtifactEfModule.PreparationSchemaVersion], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var background = families.Single(family => family.GetProperty("family").GetString() == RuntimeBackgroundActivityWorkEfModule.SchemaFamily);
         Assert.Equal(JsonValueKind.Null, background.GetProperty("finalizedVersion").ValueKind);
         Assert.Equal([RuntimeBackgroundActivityWorkEfModule.SchemaVersion], background.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));

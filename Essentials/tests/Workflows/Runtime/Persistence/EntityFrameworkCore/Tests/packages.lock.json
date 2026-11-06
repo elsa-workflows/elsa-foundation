@@ -401,6 +401,15 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.cluster.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.cluster.inprocess": {
         "type": "Project",
         "dependencies": {
