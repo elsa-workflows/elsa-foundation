@@ -275,10 +275,10 @@ export function useSidePanelLayout(
   }, [containerElement]);
 
   useEffect(() => {
-    if (!adaptiveLayout.autoCollapsePalette && !adaptiveLayout.phoneLayout && !maximizedSidePanel && responsiveExpandedSide) {
+    if (containerWidth > 0 && !adaptiveLayout.autoCollapsePalette && !adaptiveLayout.phoneLayout && !maximizedSidePanel && responsiveExpandedSide) {
       setResponsiveExpandedSide(null);
     }
-  }, [adaptiveLayout.autoCollapsePalette, adaptiveLayout.phoneLayout, maximizedSidePanel, responsiveExpandedSide]);
+  }, [containerWidth, adaptiveLayout.autoCollapsePalette, adaptiveLayout.phoneLayout, maximizedSidePanel, responsiveExpandedSide]);
 
   useEffect(() => {
     writeStoredValue(storageKeys.paletteWidth, String(paletteWidth));

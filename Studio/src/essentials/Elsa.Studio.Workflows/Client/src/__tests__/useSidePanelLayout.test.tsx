@@ -194,6 +194,21 @@ describe("adaptive workflow side-panel layout", () => {
     expect(layout.paletteCollapsed).toBe(true);
   });
 
+  it.each(["palette", "inspector"] as const)("retains the chosen phone %s when its workspace is temporarily hidden", async side => {
+    renderLayout();
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(364));
+    flushSync(() => layout.toggleSidePanelCollapsed(side));
+    expect(side === "palette" ? layout.paletteExpanded : layout.inspectorExpanded).toBe(true);
+
+    flushSync(() => resize?.(0));
+    flushSync(() => resize?.(364));
+
+    await vi.waitFor(() => expect(side === "palette" ? layout.paletteExpanded : layout.inspectorExpanded).toBe(true));
+    expect(window.localStorage.getItem(workflowPaletteCollapsedStorageKey)).toBe("false");
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
+  });
+
   it("leaves enough room for both preferred panels at a standard desktop width", () => {
     const resolved = resolveAdaptiveSidePanelLayout({
       containerWidth: 1440,
