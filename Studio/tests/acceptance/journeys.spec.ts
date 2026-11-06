@@ -1,3 +1,4 @@
+import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
@@ -35,6 +36,7 @@ test("existing home widgets and layout defaults", async ({ page }, info) => dash
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
+  await cleanupDashboardJourney(page);
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
   for (const creation of createdWorkflows.get(page) ?? []) {
     const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });

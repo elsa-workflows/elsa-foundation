@@ -21,7 +21,7 @@ export async function dashboardHomeJourney(page: Page, info: TestInfo, capture: 
     const widgetIds = await homeWidgets.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-widget-id")));
     expect(widgetIds).toContain("workflows.run-health"); expect(widgetIds).toContain("workflows.portfolio");
     await capture(page, info, "home-widgets");
-    await page.getByLabel("Refresh", { exact: true }).selectOption("0");
+    await page.getByRole("combobox", { name: "Refresh", exact: true }).selectOption("0");
     await page.getByRole("button", { name: "Edit home", exact: true }).press("Enter");
     const first = homeWidgets.first(); const firstId = await first.getAttribute("data-widget-id"); expect(firstId).toBeTruthy();
     const move = first.getByRole("button", { name: /^Move .+ later$/ });

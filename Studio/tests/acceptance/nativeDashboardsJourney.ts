@@ -1,5 +1,5 @@
 import { chromium, expect, type Page, type TestInfo } from "@playwright/test";
-import { attachDashboardJson, dashboardBackend, observeNativeAgentBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
+import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeAgentBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
 export async function nativeDashboardsJourney(page: Page, info: TestInfo, capture: Capture) {
@@ -38,6 +38,20 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await dialog.getByRole("button", { name: "Save audience", exact: true }).click();
       await expect(dialog).toBeHidden();
     }
+    registerDashboardCleanup(page, async () => {
+      try {
+        await profile("dashboard-native-reader");
+        for (const resource of [...resources].reverse()) {
+          const response = await backend.response(`/_elsa/studio/${resource.kind}/${resource.id}`);
+          if (response.status() === 404) continue;
+          expect(response.ok()).toBe(true); const current = await response.json() as Resource;
+          await backend.api(`/_elsa/studio/${resource.kind}/${resource.id}`, "DELETE", undefined, tag(current.revision));
+        }
+      } finally {
+        const response = await backend.response(`/design/workflows/definitions/${seeded.definitionId}`, "DELETE");
+        expect(response.ok() || response.status() === 404).toBe(true);
+      }
+    });
     try {
       await page.goto("/questions");
       await page.getByRole("searchbox", { name: "Search questions", exact: true }).fill(suffix);
@@ -47,39 +61,39 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Create question", exact: true }).first().press("Enter");
       await page.getByLabel("Name", { exact: true }).fill(`Started run quality ${suffix}`);
       await page.getByLabel("Description", { exact: true }).fill("A native question over this journey's three actual published workflow runs.");
-      await page.getByLabel("Dataset", { exact: true }).selectOption("elsa.workflows.runs");
+      await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption("elsa.workflows.runs");
       await page.getByRole("group", { name: "Group by", exact: true }).getByLabel("Current status", { exact: true }).check();
       await page.getByRole("group", { name: "Group by", exact: true }).getByLabel("Run kind", { exact: true }).check();
-      await page.getByLabel("Metric 1", { exact: true }).selectOption("workflow.started-count");
+      await page.getByRole("combobox", { name: "Metric 1", exact: true }).selectOption("workflow.started-count");
       await page.getByLabel("Result name", { exact: true }).fill("started");
       await page.getByRole("button", { name: "Add metric", exact: true }).click();
-      await page.getByLabel("Metric 2", { exact: true }).selectOption("workflow.failed-count");
+      await page.getByRole("combobox", { name: "Metric 2", exact: true }).selectOption("workflow.failed-count");
       await page.getByLabel("Result name", { exact: true }).nth(1).fill("failed");
       await page.getByRole("button", { name: "Add metric", exact: true }).click();
-      await page.getByLabel("Metric 3", { exact: true }).selectOption("workflow.failure-rate");
+      await page.getByRole("combobox", { name: "Metric 3", exact: true }).selectOption("workflow.failure-rate");
       await page.getByLabel("Result name", { exact: true }).nth(2).fill("rate");
       await page.getByRole("button", { name: "Add parameter", exact: true }).click();
       await page.getByLabel("Parameter name", { exact: true }).fill("workflow");
       await page.getByLabel("Default / preview value", { exact: true }).fill(seeded.definitionId);
       const source = page.getByRole("group", { name: "Source filters", exact: true });
       await source.getByRole("button", { name: "Add condition", exact: true }).click();
-      await source.getByLabel("Field", { exact: true }).selectOption("definitionId");
-      await source.getByLabel("Comparison value source", { exact: true }).selectOption("parameter");
-      await source.getByLabel("Comparison value parameter", { exact: true }).selectOption("workflow");
-      await page.getByLabel("Time field", { exact: true }).selectOption("startedAt");
-      await page.getByLabel("Time range", { exact: true }).selectOption("last7Days");
+      await source.getByRole("combobox", { name: "Field", exact: true }).selectOption("definitionId");
+      await source.getByRole("combobox", { name: "Comparison value source", exact: true }).selectOption("parameter");
+      await source.getByRole("combobox", { name: "Comparison value parameter", exact: true }).selectOption("workflow");
+      await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
+      await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("last7Days");
       await page.getByLabel("Time zone", { exact: true }).fill("UTC");
       const having = page.getByRole("group", { name: "Result conditions", exact: true });
       await having.getByRole("button", { name: "Add condition", exact: true }).click();
-      await having.getByLabel("Result metric", { exact: true }).selectOption("started");
+      await having.getByRole("combobox", { name: "Result metric", exact: true }).selectOption("started");
       await having.getByLabel("Comparison value", { exact: true }).fill("0");
       await page.getByRole("button", { name: "Add sort", exact: true }).click();
-      await page.getByLabel("Sort column", { exact: true }).selectOption("started");
-      await page.getByLabel("Direction", { exact: true }).selectOption("descending");
+      await page.getByRole("combobox", { name: "Sort column", exact: true }).selectOption("started");
+      await page.getByRole("combobox", { name: "Direction", exact: true }).selectOption("descending");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("25");
-      await page.getByLabel("Visualization", { exact: true }).selectOption("bar");
-      await page.getByLabel("Category / x axis", { exact: true }).selectOption("status");
-      await page.getByLabel("Value columns", { exact: true }).selectOption(["started", "failed", "rate"]);
+      await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("bar");
+      await page.getByRole("combobox", { name: "Category / x axis", exact: true }).selectOption("status");
+      await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started", "failed", "rate"]);
       await page.getByRole("region", { name: "Ask Weaver", exact: true }).getByLabel("Your question", { exact: true }).fill("A provider-disabled native question remains editable");
       await expect(page.getByRole("button", { name: "Ask Weaver", exact: true })).toBeDisabled();
       await capture(page, info, "question-controls");
@@ -139,11 +153,11 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${copied.id}/audience`)).items).toEqual([]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${copied.id}/revisions`)).items).toHaveLength(1);
       await expect(page).toHaveURL(new RegExp(`/questions/${copied.id}$`)); await capture(page, info, "question-copy");
-      await page.getByLabel("Query form", { exact: true }).selectOption("records");
+      await page.getByRole("combobox", { name: "Query form", exact: true }).selectOption("records");
       const columns = page.getByRole("group", { name: "Columns", exact: true });
       for (const label of ["Run", "Current status", "Run kind"]) await columns.getByLabel(label, { exact: true }).check();
-      await page.getByLabel("Visualization", { exact: true }).selectOption("table");
-      await page.getByLabel("Value columns", { exact: true }).selectOption([]);
+      await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("table");
+      await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption([]);
       const recordsResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${copied.id}/preview`));
       await page.getByRole("button", { name: "Preview question", exact: true }).click();
       const recordsReply = await recordsResponse;
@@ -155,14 +169,14 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const dashboardNavigation = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
       const cancelPrompt = page.waitForEvent("dialog"); const cancelledNavigation = dashboardNavigation.click();
       const discard = await cancelPrompt; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.dismiss(); await cancelledNavigation;
-      await expect(page).toHaveURL(new RegExp(`/questions/${copied.id}$`)); await expect(page.getByLabel("Query form", { exact: true })).toHaveValue("records");
+      await expect(page).toHaveURL(new RegExp(`/questions/${copied.id}$`)); await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await capture(page, info, "question-navigation-cancelled");
       const tabs = page.getByRole("tablist", { name: "Open screens", exact: true });
       const questionTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(questionTabId).toBeTruthy();
       await dashboardNavigation.click({ modifiers: ["Alt"] }); await expect(page.getByRole("heading", { name: "Dashboards", exact: true })).toBeVisible();
       const dashboardTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(dashboardTabId).not.toBe(questionTabId);
       await tabs.locator(`[data-tab-id="${questionTabId}"]`).click();
-      await expect(page.getByLabel("Query form", { exact: true })).toHaveValue("records");
+      await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await expect(page.getByRole("group", { name: "Columns", exact: true }).getByLabel("Run", { exact: true })).toBeChecked();
       await capture(page, info, "question-retained-tab");
       // Close the clean parked collection so the next ordinary sidebar navigation replaces
@@ -181,7 +195,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await picker.getByRole("button", { name: "Search questions", exact: true }).click();
         await picker.getByRole("button", { name: `Add ${saved.name}`, exact: true }).click();
       }
-      await page.getByLabel("Size for question 1", { exact: true }).selectOption("wide");
+      await page.getByRole("combobox", { name: "Size for question 1", exact: true }).selectOption("wide");
       await page.getByRole("button", { name: "Move question 1 later", exact: true }).press("Enter");
       await expect(page.getByRole("button", { name: "Move question 2 later", exact: true })).toBeFocused();
       await expect(page.locator(".named-announcement")).toContainText("Tile moved to position 2 of 2");
@@ -193,11 +207,11 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect(dashboard.tiles.map(tile => tile.size)).toEqual(["medium", "wide"]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/dashboards/${dashboard.id}/audience`)).items).toEqual([]);
       await page.reload(); await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
-      await expect(page.getByLabel("Size for question 2", { exact: true })).toHaveValue("wide");
+      await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveValue("wide");
       await capture(page, info, "dashboard-reopened");
       await page.getByRole("button", { name: "Settings for question 1", exact: true }).click();
       const tileSettings = page.getByRole("dialog", { name: "Tile presentation and parameters", exact: true });
-      await tileSettings.getByLabel("Tile visualization", { exact: true }).selectOption("line");
+      await tileSettings.getByRole("combobox", { name: "Tile visualization", exact: true }).selectOption("line");
       await tileSettings.getByLabel("Tile label", { exact: true }).fill("Native run quality trend");
       await tileSettings.getByLabel("Override the saved default", { exact: true }).check();
       await tileSettings.getByLabel("Override value for workflow", { exact: true }).fill(seeded.definitionId);
@@ -265,17 +279,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await attachDashboardJson(info, "dashboard-native-oracle.json", { definitionId: seeded.definitionId, executionIds: seeded.executionIds, observedInstances: seeded.observedInstances, expectedInitialStarted: 3, expectedRefreshedStarted: 4, expectedFailed: 0, expectedFailureRatePercent: 0, actualQueryRows: result.rows, actualRefreshedRows: refreshed.rows, coverage: result.coverage, questionId, dashboardId });
     } finally {
       boundary.dispose(); readerBoundary.dispose();
-      try {
-        // Playwright merges owner and reader contexts into the required trace attachment.
-        await readerContext.close();
-        await profile("dashboard-native-reader");
-        for (const resource of resources.reverse()) {
-          const response = await backend.response(`/_elsa/studio/${resource.kind}/${resource.id}`);
-          if (response.status() === 404) continue;
-          expect(response.ok()).toBe(true); const current = await response.json() as Resource;
-          await backend.api(`/_elsa/studio/${resource.kind}/${resource.id}`, "DELETE", undefined, tag(current.revision));
-        }
-      } finally { await backend.api(`/design/workflows/definitions/${seeded.definitionId}`, "DELETE"); }
+      // Playwright merges owner and reader contexts into the required trace attachment.
+      await readerContext.close();
     }
   } finally { await readerBrowser.close(); }
 }

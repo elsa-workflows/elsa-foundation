@@ -1,6 +1,17 @@
 import { expect, type APIRequestContext, type Page, type Request, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 
+const pendingDashboardCleanup = new WeakMap<Page, () => Promise<void>>();
+
+/** Teardown runs in afterEach's own budget even if an interaction used its test timeout. */
+export function registerDashboardCleanup(page: Page, cleanup: () => Promise<void>) {
+  pendingDashboardCleanup.set(page, cleanup);
+}
+export async function cleanupDashboardJourney(page: Page) {
+  const cleanup = pendingDashboardCleanup.get(page);
+  if (cleanup) { await cleanup(); pendingDashboardCleanup.delete(page); }
+}
+
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Resource = { id: string; revision: string; name: string; description: string; definition?: unknown; definitionState: string; ownerId: string; capabilities: { canRead: boolean; canEdit: boolean; canShare: boolean; canDelete: boolean }; tiles: { id: string; questionId?: string; size: string; referenceState: string }[] };
 export type Result = { outcome: string; coverage: { status: string }; rows: { values: Record<string, { value: string | null }>; drill?: unknown }[] };
