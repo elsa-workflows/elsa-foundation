@@ -60,6 +60,22 @@ public sealed class MessageSubmissionContractTests
     }
 
     [Fact]
+    public void Opaque_server_receipt_IDs_survive_original_duplicate_wrapping_without_replacement()
+    {
+        string[] ids = ["accepted-\ud800", "accepted-\ud801", "accepted-\udc00", "accepted-\ufffd", "accepted\0tail", "accepted"];
+        var retained = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            var receipt = new MessageReceipt(id, AcceptedAt, MessageDeliveryMode.ImmediateOnly);
+            var duplicate = new MessageSubmissionResult(receipt, true);
+            Assert.Same(receipt, duplicate.Receipt);
+            Assert.Equal(id, duplicate.Receipt.ReceiptId);
+            retained.Add(duplicate.Receipt.ReceiptId);
+        }
+        Assert.Equal(ids.Length, retained.Count);
+    }
+
+    [Fact]
     public void Public_content_preserves_exact_intent_and_does_not_duplicate_deployment_limits()
     {
         using var document = JsonDocument.Parse("null");

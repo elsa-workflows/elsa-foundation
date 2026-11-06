@@ -8,6 +8,8 @@
 
 All records belong to the selected Runtime persistence family. EF uses its existing `RuntimeDbContext`, connection, schema/migrations and transaction owners. In-memory development state uses `InMemoryRuntimeCheckpointStoreState` and its existing write gate. New domain contracts do not select another broker, execution store, delivery authority or pump.
 
+Preserve existing opaque server identifiers as exact ordinal UTF-16, including their original framing boundaries. Submitted message names, business keys and producer IDs use the specified strict UTF-8 bounds. A material receiver address preserves the owning node/model identifier, bounded to 1024 UTF-16 code units; it is neither a subscription capability nor a substitute logical definition identity.
+
 | Address | Candidate identity rule |
 |---|---|
 | `MessageScope` | Actual PersistenceScope and authoritative tenant, with a distinct finite TestScope only for isolated test work. Retain run-kind/partition in captured authority and validate them; worker placement or execution protocol cannot split a production definition/admission lane. Default partition derives from PersistenceScope; unsupported foreign partition mappings refuse. Test/private sends cannot escape to production. |

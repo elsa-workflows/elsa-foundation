@@ -1,0 +1,241 @@
+{
+  "date": "2026-11-06",
+  "baseCommit": "7311ff104ee8b65d1141ca2b9eb33d6e99f219ee",
+  "scope": "Unregistered material-interest mechanics and lossless opaque server identity compatibility. No producer, provider or lifecycle enabled.",
+  "runs": {
+    "interest-focused": {
+      "counters": {
+        "total": "35",
+        "executed": "35",
+        "passed": "35",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "da87e23ed55d8088f0e1d9589c0eae7d9d950cebb540acd8b296e0a5b5dd4a7c",
+      "gzipSha256": "7920eaedafd3bae7dce4425c3c909df6422824885b3a42bfc4a96541fc3155b2"
+    },
+    "interest-mutation-red": {
+      "counters": {
+        "total": "35",
+        "executed": "35",
+        "passed": "29",
+        "failed": "6",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "fddcd7e4ce3c53fece62aea8024333d1fc49e5b3186ba2a3976c39943a626f01",
+      "gzipSha256": "12b1a95f77b3846de772b7cb8b14cd2210123edbf5ce0f1a08d26c13a83c51ae"
+    },
+    "opaque-runtime-red": {
+      "counters": {
+        "total": "57",
+        "executed": "57",
+        "passed": "50",
+        "failed": "7",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "404a20e2d68974aa881aaf3863c9f411935f55fdd0bfb4d60f7190493dad8029",
+      "gzipSha256": "f1f1bbc805424dd6e54846a2012e94ad6f486b9a097b1e23e82918c64bd992fb"
+    },
+    "opaque-bpmn-red": {
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "61e3833410a9f40ec31c85c60557e1f528aa3d17766ce9b0b4a1ef12d9218a32",
+      "gzipSha256": "9ec28129d990f5c9bbb1b3e32cf58aef9dd8272ca0009ff6666f514b1419fd4d"
+    },
+    "receiver-address-red": {
+      "counters": {
+        "total": "40",
+        "executed": "40",
+        "passed": "36",
+        "failed": "4",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "eaeca41108d0b4902dee511b6f0b4a5d4c201b1f6519c1401053dbe2913f46f2",
+      "gzipSha256": "8346945171d6c6b0921621523e208f2e9429b357101b08a752e03dbc8e988001"
+    },
+    "interest-opaque-green": {
+      "counters": {
+        "total": "97",
+        "executed": "97",
+        "passed": "97",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "ab1b0696d97f4b8787f85ce8981f95c951ade67187c5f06e59a615ecf891291f",
+      "gzipSha256": "84f48e4b2d51bc3a59c81c0ac98e29803140a9f21b8286e1d2c74019e816ce64"
+    },
+    "opaque-bpmn-green": {
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "4891b6e71130a7ff8ca5d30ee0732cd73a477a75a69780f890023ef22ad923a7",
+      "gzipSha256": "7c78b93a98d74751ada9b6f116aaee2dc1d3b46d13028321e75acfe68345bd68"
+    },
+    "whole-runtime": {
+      "counters": {
+        "total": "3540",
+        "executed": "3540",
+        "passed": "3540",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "15bf76608233c7e88bd22f3d4c2c819f17deaf6238970bd81b94bf59e86b7018",
+      "gzipSha256": "daed29a7ff0e553fa4c8e5ddea016852ac7e3737f0b11190c42d7ddeca73454a"
+    }
+  },
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Messaging/MessageIdentity.cs",
+      "sha256": "6032e9bf7ecb00cdb1fbd94e6e1492b971c368071593bf1c979349898875f5fd"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Messaging/MessageSubmission.cs",
+      "sha256": "ff53c91b2fdd20217e04a2d8ffc0c5c01fa7f8df35d0fa0f1510d678daf9555c"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Messaging/MessageMaterialInterest.cs",
+      "sha256": "c75570a2af5cd918cdb7ed25b5bdf31c3880cddaef51d19328148f4c1a0d3fd9"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageMaterialInterestExtractor.cs",
+      "sha256": "3386481cf38464ade34f6163533b992cf772810290e46a07342362ef7b67b070"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/MessageIdentityTests.cs",
+      "sha256": "d136ca1cc3be4a06148f60f9603722351d71aff3fc1545c0381dd03ad5eacd2a"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionContractTests.cs",
+      "sha256": "ac2610de588eb43649311a51e6b81282d08a169eb99854d952ba4ab3698ae378"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/MessageMaterialInterestTests.cs",
+      "sha256": "cd107ad2527254e09d6f54e2686461ef0a9d60d876895f40055581c7c105ee11"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectPublicationTests.cs",
+      "sha256": "e43a1b3bf71f733572ad51c945069cd72a288010da9757c55318c250ecc34320"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageSubmissionRules.cs",
+      "sha256": "7dd4c011cde1eca671a754e17aa4b06ddc044ec4690fa84951de3abf2efa16fa"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionRulesTests.cs",
+      "sha256": "0d33a14cfd20192fd774e5d39fc373f0a9615be59d1a8cf98709aad83a4db4e5"
+    }
+  ],
+  "selectorMutation": {
+    "originalSha256": "3386481cf38464ade34f6163533b992cf772810290e46a07342362ef7b67b070",
+    "mutations": [
+      "missing recognition becomes empty",
+      "competing recognition takes a winner",
+      "protocol versions ignored"
+    ],
+    "mutationSha256": "b25242afb16340d5b99b830c5fdcb08655a312e709566bdde657c5a063ed8f22",
+    "exitCode": 1,
+    "restored": true
+  },
+  "redControls": {
+    "opaqueIds": "New identity/receipt/BPMN cases ran against original strict-UTF8 production code before its fix. Receiver/material test file later grew; the retained red counters describe those exact runs, not the final whole-file snapshot.",
+    "receiverAddress": "40 material cases ran before replacing strict-UTF8 address validation with bounded opaque UTF16.",
+    "selector": "35 original material cases ran with three deliberately weakened selectors. Extractor restored byte-identically before all later green runs."
+  }
+}

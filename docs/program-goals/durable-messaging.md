@@ -16,7 +16,7 @@ Run beside existing work with consolidation priority one and one implementation 
 
 | Milestone | Outcome | State |
 |---|---|---|
-| M0 — Inventory/contracts | Code/provider/model gaps, owner decisions, reviewed spec and shared ingress/selection boundary | In progress; reviewed [spec 1216](../../specs/1216-durable-messaging/spec.md), T003 shared mapping open; T004 rules, Core contracts, authored BPMN provenance and dormant preparation tested; physical acceptance not started |
+| M0 — Inventory/contracts | Code/provider/model gaps, owner decisions, reviewed spec and shared ingress/selection boundary | In progress; reviewed [spec 1216](../../specs/1216-durable-messaging/spec.md), T003 shared mapping open; T004 rules, Core contracts, authored BPMN provenance, material-interest mechanics and dormant preparation tested; physical acceptance not started |
 | M1 — Acceptance | Durable API receipt, buffering, independent ID deduplication and inspection | Not started; depends on M0 |
 | M2 — Delivery/admission | Late waits/starts, per-definition recovery, same-key exclusion and terminal release | Not started |
 | M3 — Authoring/models | Authored send/receive/start and genuine native/BPMN integration | Not started |

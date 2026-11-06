@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Messaging;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -207,6 +208,23 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Null(new BpmnModelPublicationProvenance("version-1", "1.0.0") { DefinitionId = null }.DefinitionId);
         Assert.Throws<ArgumentException>(() => new BpmnModelPublicationProvenance("version-1", "1.0.0") { DefinitionId = " " });
         Assert.Equal("opaque-\ud800", new BpmnModelPublicationProvenance("version-1", "1.0.0") { DefinitionId = "opaque-\ud800" }.DefinitionId);
+    }
+
+    [Fact]
+    public void Canonical_authored_BPMN_source_identity_maps_to_Message_without_reencoding_or_hash_identity()
+    {
+        var scope = new MessageScope(new PersistenceScope("store"));
+        var definitions = new HashSet<MessageDefinitionIdentity>();
+        foreach (var id in new[] { "authored-\ud800", "authored-\ud801", "authored-\udc00", "authored-\ufffd", "authored\0tail" })
+        {
+            var source = BpmnModelPublicationProvenance.ForAuthoredDefinition(id, "version", "1.0.0");
+            var recipient = MessageDefinitionIdentity.ForWorkflowDefinition(scope, source.DefinitionId!);
+            Assert.Equal(id, recipient.DefinitionId);
+            Assert.Equal(MessageDefinitionIdentity.WorkflowDefinitionNamespace, recipient.DefinitionNamespace);
+            Assert.Equal(new MessageDefinitionIdentity(scope, "WorkflowDefinition", id), recipient);
+            definitions.Add(recipient);
+        }
+        Assert.Equal(5, definitions.Count);
     }
 
     private static BpmnModelDefinition ChangedMaterial(BpmnModelDefinition definition)

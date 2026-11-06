@@ -95,6 +95,9 @@ public sealed class MessageIdentityTests
         var first = new MessageDefinitionIdentity(Scope(), "owner", "bc");
         var second = new MessageDefinitionIdentity(Scope(), "owner", "c");
         Assert.NotEqual(new MessageDefinitionDeliveryIdentity("a", first), new MessageDefinitionDeliveryIdentity("ab", second));
+        Assert.NotEqual(new MessageScope(new PersistenceScope("a\0b"), "c"), new MessageScope(new PersistenceScope("a"), "b\0c"));
+        Assert.NotEqual(new MessageDefinitionIdentity(Scope(), "a\0b", "c"), new MessageDefinitionIdentity(Scope(), "a", "b\0c"));
+        Assert.NotEqual(new MessageDefinitionDeliveryIdentity("a\0b", second), new MessageDefinitionDeliveryIdentity("a\0", first));
     }
 
     [Fact]
@@ -115,16 +118,45 @@ public sealed class MessageIdentityTests
     [InlineData("definition")]
     [InlineData("key")]
     [InlineData("accepted-message")]
-    public void Invalid_text_refuses_without_leaking_the_submitted_value(string field)
+    public void Null_and_blank_identities_refuse_and_business_keys_remain_portable(string field)
     {
-        string?[] invalid = field is "tenant" or "test"
-            ? ["", "\t\u2003", "private-identity-canary-\ud800"]
-            : [null, "", "\t\u2003", "private-identity-canary-\ud800"];
+        string?[] invalid = field switch
+        {
+            "tenant" or "test" => ["", "\t\u2003"],
+            "key" => [null, "", "\t\u2003", "private-identity-canary-\ud800"],
+            _ => [null, "", "\t\u2003"]
+        };
         foreach (var text in invalid)
         {
-            var error = Assert.ThrowsAny<ArgumentException>(() => WithInvalidText(field, text));
+            var error = Assert.ThrowsAny<ArgumentException>(() => WithText(field, text));
             Assert.DoesNotContain("private-identity-canary", error.ToString());
             Assert.Null(error.InnerException);
+        }
+    }
+
+    [Theory]
+    [InlineData("persistence")]
+    [InlineData("tenant")]
+    [InlineData("test")]
+    [InlineData("namespace")]
+    [InlineData("definition")]
+    [InlineData("accepted-message")]
+    public void Server_owned_components_preserve_exact_opaque_UTF16_without_aliasing(string field)
+    {
+        string[] values = ["opaque-\ud800", "opaque-\ud801", "opaque-\udc00", "opaque-\ufffd", "opaque\0tail", "opaque", "opaque\0other"];
+        var identities = values.Select(value => WithText(field, value)).ToArray();
+        Assert.Equal(values.Length, new HashSet<object>(identities).Count);
+        for (var i = 0; i < values.Length; i++)
+        {
+            Assert.Equal(identities[i], WithText(field, values[i]));
+            var retained = identities[i] switch
+            {
+                MessageScope scope => field == "persistence" ? scope.PersistenceScope.Value : field == "tenant" ? scope.TenantId : scope.TestScopeId,
+                MessageDefinitionIdentity definition => field == "namespace" ? definition.DefinitionNamespace : definition.DefinitionId,
+                MessageDefinitionDeliveryIdentity delivery => delivery.AcceptedMessageId,
+                _ => throw new InvalidOperationException("Unexpected identity fixture.")
+            };
+            Assert.Equal(values[i], retained);
         }
     }
 
@@ -154,7 +186,7 @@ public sealed class MessageIdentityTests
 
     private static MessageScope Scope() => new(new PersistenceScope("store"), "tenant");
 
-    private static object WithInvalidText(string field, string? value) => field switch
+    private static object WithText(string field, string? value) => field switch
     {
         "persistence" => new MessageScope(new PersistenceScope(value!)),
         "tenant" => new MessageScope(new PersistenceScope("store"), value),

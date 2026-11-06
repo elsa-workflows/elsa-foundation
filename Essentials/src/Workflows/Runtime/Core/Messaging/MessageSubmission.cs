@@ -15,9 +15,9 @@ public sealed class MessageSubmission
     {
         try
         {
-            MessageIdentityValidation.RequireText(name, nameof(name));
-            MessageIdentityValidation.RequireText(correlationKey, nameof(correlationKey));
-            if (producerMessageId is not null) MessageIdentityValidation.RequireText(producerMessageId, nameof(producerMessageId));
+            MessageIdentityValidation.RequirePortableText(name, nameof(name));
+            MessageIdentityValidation.RequirePortableText(correlationKey, nameof(correlationKey));
+            if (producerMessageId is not null) MessageIdentityValidation.RequirePortableText(producerMessageId, nameof(producerMessageId));
             if (lifetimeSeconds < 0 || payload.ValueKind == JsonValueKind.Undefined)
                 throw new MessageSubmissionException(MessageSubmissionFailureKind.Validation);
             Payload = payload.Clone();
@@ -50,13 +50,14 @@ public enum MessageDeliveryMode
 /// This receipt reports acceptance, not recipient selection, delivery, workflow completion or exactly-once effects.
 /// Providers must reread original authoritative acceptance; a constructed or deserialized receipt grants no authority.
 /// An immediate-only receipt has no open buffer deadline, including when its confirmed result was unmatched.
+/// ReceiptId is an opaque server identity; internal storage/codecs must preserve its exact UTF-16 code units.
 /// </remarks>
 public sealed class MessageReceipt
 {
     public MessageReceipt(string receiptId, DateTimeOffset acceptedAt, MessageDeliveryMode mode,
         DateTimeOffset? bufferUntil = null, DateTimeOffset? deduplicateUntil = null)
     {
-        try { MessageIdentityValidation.RequireText(receiptId, nameof(receiptId)); }
+        try { MessageIdentityValidation.RequireOpaqueText(receiptId, nameof(receiptId)); }
         catch (ArgumentException) { throw new MessageSubmissionException(MessageSubmissionFailureKind.Validation); }
         if (!Enum.IsDefined(mode) || acceptedAt == default || acceptedAt == DateTimeOffset.MaxValue ||
             mode == MessageDeliveryMode.Buffered && bufferUntil is null ||

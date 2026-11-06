@@ -8,16 +8,17 @@ namespace Elsa.Workflows.Runtime.Core.Messaging;
 /// This value is not an authorization capability. Providers must reread authoritative scope and test lifetime;
 /// API boundaries must not trust a client-supplied scope. A null tenant never means across-scope access.
 /// Execution partition and run kind are separately captured and validated, not additional production lanes.
-/// Equality is ordinal; generated hash codes are for in-process collections only, never persisted identities.
+/// Server-owned identifiers retain exact opaque UTF-16 code units. Persistence must use lossless projections and
+/// explicitly framed composite identities. Equality is ordinal; generated hash codes are in-process only.
 /// </remarks>
 public sealed record MessageScope
 {
     public MessageScope(PersistenceScope persistenceScope, string? tenantId = null, string? testScopeId = null)
     {
         ArgumentNullException.ThrowIfNull(persistenceScope);
-        MessageIdentityValidation.RequireText(persistenceScope.Value, nameof(persistenceScope));
-        if (tenantId is not null) MessageIdentityValidation.RequireText(tenantId, nameof(tenantId));
-        if (testScopeId is not null) MessageIdentityValidation.RequireText(testScopeId, nameof(testScopeId));
+        MessageIdentityValidation.RequireOpaqueText(persistenceScope.Value, nameof(persistenceScope));
+        if (tenantId is not null) MessageIdentityValidation.RequireOpaqueText(tenantId, nameof(tenantId));
+        if (testScopeId is not null) MessageIdentityValidation.RequireOpaqueText(testScopeId, nameof(testScopeId));
         PersistenceScope = persistenceScope; TenantId = tenantId; TestScopeId = testScopeId;
     }
 
@@ -31,7 +32,8 @@ public sealed record MessageScope
 /// <remarks>
 /// Ordinary authored native and BPMN versions use the same WorkflowDefinition namespace and canonical authored ID.
 /// Standalone model namespaces require real owner authority, revalidated by the provider; hashes or protocol names
-/// do not supply it. This value grants no publication/start authority. Generated hash codes are in-process only.
+/// do not supply it. Opaque server-owned IDs retain their exact UTF-16 code units without replacement.
+/// This value grants no publication/start authority. Generated hash codes are in-process only.
 /// </remarks>
 public sealed record MessageDefinitionIdentity
 {
@@ -40,8 +42,8 @@ public sealed record MessageDefinitionIdentity
     public MessageDefinitionIdentity(MessageScope scope, string definitionNamespace, string definitionId)
     {
         ArgumentNullException.ThrowIfNull(scope);
-        MessageIdentityValidation.RequireText(definitionNamespace, nameof(definitionNamespace));
-        MessageIdentityValidation.RequireText(definitionId, nameof(definitionId));
+        MessageIdentityValidation.RequireOpaqueText(definitionNamespace, nameof(definitionNamespace));
+        MessageIdentityValidation.RequireOpaqueText(definitionId, nameof(definitionId));
         Scope = scope; DefinitionNamespace = definitionNamespace; DefinitionId = definitionId;
     }
 
@@ -59,6 +61,7 @@ public sealed record MessageDefinitionIdentity
 /// <remarks>
 /// No message name, version, execution model, artifact or execution partition splits this lane.
 /// The value is not proof of reservation or active execution; providers must validate that authority separately.
+/// The business key remains portable strict UTF-8 text, separately from opaque server-owned definition identity.
 /// String equality is ordinal and generated hash codes are in-process only, never durable key derivations.
 /// </remarks>
 public sealed record MessageStartAdmissionIdentity
@@ -66,7 +69,7 @@ public sealed record MessageStartAdmissionIdentity
     public MessageStartAdmissionIdentity(MessageDefinitionIdentity definition, string businessKey)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        MessageIdentityValidation.RequireText(businessKey, nameof(businessKey));
+        MessageIdentityValidation.RequirePortableText(businessKey, nameof(businessKey));
         Definition = definition; BusinessKey = businessKey;
     }
 
@@ -79,13 +82,14 @@ public sealed record MessageStartAdmissionIdentity
 /// <remarks>
 /// The accepted-message ID must originate from server acceptance and be reread in its authoritative scope.
 /// This value proves neither acceptance nor delivery and must not be trusted as client authority.
-/// Equality is ordinal; generated hash codes are in-process only, never persisted identity derivations.
+/// The opaque server acceptance ID retains exact UTF-16 code units. Equality is ordinal; generated hash codes
+/// are in-process only, never persisted identity derivations.
 /// </remarks>
 public sealed record MessageDefinitionDeliveryIdentity
 {
     public MessageDefinitionDeliveryIdentity(string acceptedMessageId, MessageDefinitionIdentity definition)
     {
-        MessageIdentityValidation.RequireText(acceptedMessageId, nameof(acceptedMessageId));
+        MessageIdentityValidation.RequireOpaqueText(acceptedMessageId, nameof(acceptedMessageId));
         ArgumentNullException.ThrowIfNull(definition);
         AcceptedMessageId = acceptedMessageId; Definition = definition;
     }
@@ -99,11 +103,16 @@ internal static class MessageIdentityValidation
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
-    internal static void RequireText(string? value, string parameter)
+    internal static void RequireOpaqueText(string? value, string parameter)
     {
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException("A message identity value must be nonblank.", parameter);
-        try { _ = StrictUtf8.GetByteCount(value); }
+    }
+
+    internal static void RequirePortableText(string? value, string parameter)
+    {
+        RequireOpaqueText(value, parameter);
+        try { _ = StrictUtf8.GetByteCount(value!); }
         catch (EncoderFallbackException)
         {
             throw new ArgumentException("A message identity value must contain valid Unicode.", parameter);
