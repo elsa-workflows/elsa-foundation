@@ -41,6 +41,7 @@ public sealed record JobDiagnostic(
     string Summary);
 
 /// <summary>Immutable physical completion report; a stale receipt cannot select or replace an authoritative result.</summary>
+/// <remarks>Successful completion requires its declared schema envelope; its JSON value may be null. Failure can omit the envelope.</remarks>
 public sealed record JobPhysicalReceipt(
     string ReceiptId,
     string AttemptId,

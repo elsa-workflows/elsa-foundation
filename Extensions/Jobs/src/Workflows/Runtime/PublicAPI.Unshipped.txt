@@ -1,0 +1,277 @@
+#nullable enable
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.AssociationMode.get -> Elsa.Jobs.Core.JobAssociationMode
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.AssociationMode.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Handler.get -> Elsa.Jobs.Core.JobHandlerIdentity!
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Handler.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Input.get -> System.Text.Json.JsonElement
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Input.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.InputSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.InputSchema.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.NotBefore.get -> System.DateTimeOffset?
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.NotBefore.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Policy.get -> Elsa.Jobs.Core.JobExecutionPolicy!
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Policy.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Queue.get -> string!
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.Queue.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.ResultSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.ResultSchema.set -> void
+Elsa.Jobs.Workflows.Runtime.Activities.RunJob.RunJob(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, System.Collections.Generic.IEnumerable<Elsa.Jobs.Workflows.Runtime.Contracts.IJobWorkflowAssociationSource!>! associations, Elsa.Jobs.Core.IJobQueries! jobs) -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobNativeDeliveryInspector
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobNativeDeliveryInspector.InspectWorkerAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! worker, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence?>
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobNativeResultSettlement
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobNativeResultSettlement.SettleWorkerAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! worker, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobWorkflowAssociationSource
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobWorkflowAssociationSource.InspectAsync(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner! owner, Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? evidence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation!>
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobWorkflowAssociationSource.ResolveAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner!>
+Elsa.Jobs.Workflows.Runtime.Contracts.IJobWorkflowAssociationSource.Supports(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin) -> bool
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Address.get -> Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Address.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Completion.get -> Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Completion.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Deconstruct(out Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress! Address, out Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion! Completion, out Elsa.Jobs.Core.JobResult! Result, out string! NativeDeliveryId, out string! NativeAttemptId, out Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus NativeStatus, out Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? NativeResult, out string? NativeFaultMarker) -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Equals(Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.JobNativeDeliveryEvidence(Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress! Address, Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion! Completion, Elsa.Jobs.Core.JobResult! Result, string! NativeDeliveryId, string! NativeAttemptId, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus NativeStatus, Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? NativeResult, string? NativeFaultMarker) -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeAttemptId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeAttemptId.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeDeliveryId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeDeliveryId.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeFaultMarker.get -> string?
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeFaultMarker.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeResult.get -> Elsa.Jobs.Workflows.Runtime.Models.RunJobResult?
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeResult.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeStatus.get -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionStatus
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.NativeStatus.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Result.get -> Elsa.Jobs.Core.JobResult!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Result.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition.AcceptedInput = 1 -> Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition.NotConsumed = 0 -> Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition.ProvenTerminal = 2 -> Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation!
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.Deconstruct(out Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition Disposition, out string? ModelReceiptId, out string? ResultId, out string? ResultSha256) -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.Disposition.get -> Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.Disposition.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.Equals(Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.JobWorkflowOwnerObservation(Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerDisposition Disposition, string? ModelReceiptId, string? ResultId, string? ResultSha256) -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ModelReceiptId.get -> string?
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ModelReceiptId.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ResultId.get -> string?
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ResultId.init -> void
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ResultSha256.get -> string?
+Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ResultSha256.init -> void
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.DeliveryPageSize.get -> int
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.DeliveryPageSize.set -> void
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.DeliveryScopes.get -> System.Collections.Generic.IList<Elsa.Jobs.Core.JobScope!>!
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.EnableResultDelivery.get -> bool
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.EnableResultDelivery.set -> void
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.JobWorkflowRuntimeOptions() -> void
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.OperationTimeout.get -> System.TimeSpan
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.OperationTimeout.set -> void
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.PollInterval.get -> System.TimeSpan
+Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions.PollInterval.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.DeliveryPageSize.get -> int
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.DeliveryPageSize.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.EnableResultDelivery.get -> bool
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.EnableResultDelivery.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.JobsWorkflowsRuntimeFeature() -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.OperationTimeoutSeconds.get -> int
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.OperationTimeoutSeconds.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.PersistencePartition.get -> string!
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.PersistencePartition.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.PollIntervalMilliseconds.get -> int
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.PollIntervalMilliseconds.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.TenantId.get -> string?
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.TenantId.set -> void
+Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeServiceCollectionExtensions
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.BookmarkId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.BookmarkId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Contract.get -> Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Contract.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Deconstruct(out int FormatVersion, out Elsa.Jobs.Core.JobScope! Scope, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, out string! WorkflowExecutionId, out string! InvocationId, out string! OperationKey, out string! InitialAttemptId, out string! NodeId, out Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity! Contract, out string! BookmarkId, out string! RegistrationId, out string! ResumeTargetId, out string! StimulusType, out string! StimulusHash, out string! ProviderId, out Elsa.Primitives.Models.ValueTypeDescriptor! PayloadType, out Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDeduplicationPolicy DeduplicationPolicy, out Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner! Owner) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.DeduplicationPolicy.get -> Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDeduplicationPolicy
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.DeduplicationPolicy.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Equals(Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Executable.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.InitialAttemptId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.InitialAttemptId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.InvocationId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.InvocationId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.JobNativeAddress(int FormatVersion, Elsa.Jobs.Core.JobScope! Scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! WorkflowExecutionId, string! InvocationId, string! OperationKey, string! InitialAttemptId, string! NodeId, Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity! Contract, string! BookmarkId, string! RegistrationId, string! ResumeTargetId, string! StimulusType, string! StimulusHash, string! ProviderId, Elsa.Primitives.Models.ValueTypeDescriptor! PayloadType, Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDeduplicationPolicy DeduplicationPolicy, Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner! Owner) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.NodeId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.NodeId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.OperationKey.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.OperationKey.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Owner.get -> Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Owner.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.PayloadType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.PayloadType.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.ProviderId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.ProviderId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.RegistrationId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.RegistrationId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.ResumeTargetId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.ResumeTargetId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Scope.get -> Elsa.Jobs.Core.JobScope!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Scope.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.StimulusHash.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.StimulusHash.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.StimulusType.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.StimulusType.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.WorkflowExecutionId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.WorkflowExecutionId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.AssociationMode.get -> Elsa.Jobs.Core.JobAssociationMode
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.AssociationMode.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Deconstruct(out int FormatVersion, out Elsa.Jobs.Core.JobHandlerIdentity! Handler, out Elsa.Jobs.Core.JobSchema! InputSchema, out Elsa.Jobs.Core.JobSchema! ResultSchema, out string! Queue, out Elsa.Jobs.Core.JobExecutionPolicy! Policy, out Elsa.Jobs.Core.JobAssociationMode AssociationMode) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Equals(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Handler.get -> Elsa.Jobs.Core.JobHandlerIdentity!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Handler.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.InputSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.InputSchema.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.JobWorkflowHandlerPin(int FormatVersion, Elsa.Jobs.Core.JobHandlerIdentity! Handler, Elsa.Jobs.Core.JobSchema! InputSchema, Elsa.Jobs.Core.JobSchema! ResultSchema, string! Queue, Elsa.Jobs.Core.JobExecutionPolicy! Policy, Elsa.Jobs.Core.JobAssociationMode AssociationMode) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Policy.get -> Elsa.Jobs.Core.JobExecutionPolicy!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Policy.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Queue.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Queue.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.ResultSchema.get -> Elsa.Jobs.Core.JobSchema!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.ResultSchema.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Serialize() -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Deconstruct(out int FormatVersion, out Elsa.Jobs.Core.JobScope! Scope, out string! ModelKind, out string! DefinitionId, out string! DefinitionVersion, out string! ExecutionId, out string! InvocationId, out string! MaterialId, out string! MaterialSha256, out Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin? Origin, out System.Text.Json.JsonElement? ModelAddress) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.DefinitionId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.DefinitionId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.DefinitionVersion.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.DefinitionVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Equals(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ExecutionId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ExecutionId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.InvocationId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.InvocationId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.JobWorkflowOwner(int FormatVersion, Elsa.Jobs.Core.JobScope! Scope, string! ModelKind, string! DefinitionId, string! DefinitionVersion, string! ExecutionId, string! InvocationId, string! MaterialId, string! MaterialSha256, Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin? Origin, System.Text.Json.JsonElement? ModelAddress) -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.MaterialId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.MaterialId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.MaterialSha256.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.MaterialSha256.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ModelAddress.get -> System.Text.Json.JsonElement?
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ModelAddress.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ModelKind.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ModelKind.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Origin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin?
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Origin.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Scope.get -> Elsa.Jobs.Core.JobScope!
+Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Scope.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ContinuationId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ContinuationId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Deconstruct(out int FormatVersion, out string! JobId, out string! RequestSha256, out string! ResultId, out string! ContinuationId, out string! ModelInputId, out System.Text.Json.JsonElement Result, out System.Text.Json.JsonElement Permission) -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Equals(Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.JobId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.JobId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ModelInputId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ModelInputId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Permission.get -> System.Text.Json.JsonElement
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Permission.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.RequestSha256.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.RequestSha256.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Result.get -> System.Text.Json.JsonElement
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Result.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ResultId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ResultId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.RunJobCompletion(int FormatVersion, string! JobId, string! RequestSha256, string! ResultId, string! ContinuationId, string! ModelInputId, System.Text.Json.JsonElement Result, System.Text.Json.JsonElement Permission) -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.RunJobResult!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ContinuationId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ContinuationId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Deconstruct(out int FormatVersion, out string! JobId, out string! ResultId, out string! ContinuationId, out string! ModelInputId, out Elsa.Jobs.Core.JobOutcome Outcome, out Elsa.Jobs.Core.JobPayload? Value, out string! ResultSha256, out Elsa.Jobs.Core.JobDiagnostic? Diagnostic) -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Diagnostic.get -> Elsa.Jobs.Core.JobDiagnostic?
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Diagnostic.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Equals(Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.JobId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.JobId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ModelInputId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ModelInputId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Outcome.get -> Elsa.Jobs.Core.JobOutcome
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Outcome.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ResultId.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ResultId.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ResultSha256.get -> string!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ResultSha256.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.RunJobResult(int FormatVersion, string! JobId, string! ResultId, string! ContinuationId, string! ModelInputId, Elsa.Jobs.Core.JobOutcome Outcome, Elsa.Jobs.Core.JobPayload? Value, string! ResultSha256, Elsa.Jobs.Core.JobDiagnostic? Diagnostic) -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Value.get -> Elsa.Jobs.Core.JobPayload?
+Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Value.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.<Clone>$() -> Elsa.Jobs.Workflows.Runtime.Models.RunJobState!
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.Deconstruct(out int FormatVersion, out System.Text.Json.JsonElement Invocation) -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.Equals(Elsa.Jobs.Workflows.Runtime.Models.RunJobState? other) -> bool
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.FormatVersion.get -> int
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.FormatVersion.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.Invocation.get -> System.Text.Json.JsonElement
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.Invocation.init -> void
+Elsa.Jobs.Workflows.Runtime.Models.RunJobState.RunJobState(int FormatVersion, System.Text.Json.JsonElement Invocation) -> void
+const Elsa.Jobs.Workflows.Runtime.Activities.RunJob.ActivityType = "Elsa.Jobs.Workflows.Runtime.Activities.RunJob" -> string!
+const Elsa.Jobs.Workflows.Runtime.Activities.RunJob.PinMetadataKey = "jobs.handler.v1" -> string!
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.ToString() -> string!
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobState.Equals(object? obj) -> bool
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobState.GetHashCode() -> int
+override Elsa.Jobs.Workflows.Runtime.Models.RunJobState.ToString() -> string!
+static Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.operator !=(Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? left, Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence.operator ==(Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? left, Elsa.Jobs.Workflows.Runtime.Contracts.JobNativeDeliveryEvidence? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.operator !=(Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation? left, Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation.operator ==(Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation? left, Elsa.Jobs.Workflows.Runtime.Contracts.JobWorkflowOwnerObservation? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeServiceCollectionExtensions.AddJobsWorkflowsRuntime(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Jobs.Workflows.Runtime.JobWorkflowRuntimeOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.operator !=(Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress? left, Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress.operator ==(Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress? left, Elsa.Jobs.Workflows.Runtime.Models.JobNativeAddress? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.Parse(string! json) -> Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin!
+static Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.operator !=(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin? left, Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin.operator ==(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin? left, Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowHandlerPin? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.operator !=(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner? left, Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner.operator ==(Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner? left, Elsa.Jobs.Workflows.Runtime.Models.JobWorkflowOwner? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.operator !=(Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion.operator ==(Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobCompletion? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.operator !=(Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobResult.operator ==(Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobResult? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobState.operator !=(Elsa.Jobs.Workflows.Runtime.Models.RunJobState? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobState? right) -> bool
+static Elsa.Jobs.Workflows.Runtime.Models.RunJobState.operator ==(Elsa.Jobs.Workflows.Runtime.Models.RunJobState? left, Elsa.Jobs.Workflows.Runtime.Models.RunJobState? right) -> bool
+virtual Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -145,6 +145,16 @@ public sealed class RuntimePostCommitOutboxItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusDeliverySnapshot? RecipientSnapshot { get; }
 
+    /// <summary>Whether this committed required source still needs its exact publisher's retained execution history.</summary>
+    /// <remarks>Every status except Delivered remains owed, including FailedFinal and Cancelled. A committed source
+    /// scope witnesses required delivery independently of any stimulus recipient protocol or snapshot.</remarks>
+    public bool RetainsPublisherForRequiredDelivery(string workflowExecutionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        return Status != RuntimePostCommitOutboxStatus.Delivered && StimulusDeliverySourceScope is not null &&
+            Intent.WorkflowExecutionId == workflowExecutionId;
+    }
+
     /// <summary>Whether unresolved stimulus delivery still needs this publisher or an exact recipient's execution/dedup state.</summary>
     /// <remarks>Every status except Delivered is owed, including FailedFinal and Cancelled. Snapshot absence retains the
     /// declared publisher; a selected start requires the original per-artifact key. Source rows themselves remain retained.</remarks>

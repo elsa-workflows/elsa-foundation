@@ -38,7 +38,7 @@ feature/program rollup is needed. Claim ownership and state transitions remain o
 | M0 | Current-source/provider research, scoped domain admission, reviewed spec/plan/tasks and pre-code UX acceptance | Design reviewed; domain adopted 6 November; runtime contracts remain subject to concrete consumer proof |
 | M1 | Packaged standalone client/worker, handler/input/result identity, durable intake and recoverable attempts | Checkpoint passed at b706023ddd; [two-profile receipt](../../specs/1218-standalone-jobs/evidence/m1-packaged-standalone.json) |
 | M2 | Immediate/delayed/recurring jobs, retry/cancel/timeout, all four pauses and distributed concurrency/recovery | In progress; source and process controls under qualification |
-| M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Not started |
+| M3 | Real native and BPMN invocation of the same handler, retained results and model-owned continuation | Source preparation in progress; qualification awaits the M2 gate |
 | M4 | Authorized API/Studio operations and integrator/operator documentation | Not started |
 | M5 | Complete packaged, multi-worker/provider and composed UX qualification; current-head review/checks/merge and resulting-main acceptance | Not started |
 

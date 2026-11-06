@@ -61,5 +61,9 @@ public interface IJobQueries
     ValueTask<JobScheduleSnapshot?> FindScheduleAsync(JobScope scope, string scheduleId, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobScheduleSnapshot>> ListSchedulesAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobDeliverySnapshot>> ListPendingDeliveriesAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
+    /// <summary>Reads one exact retained grant, including after delivery acknowledgement. Null is absence of a grant, never model-consumption proof.</summary>
+    ValueTask<JobContinuationPermission?> FindContinuationAsync(JobScope scope, string jobId, string continuationId, CancellationToken cancellationToken = default);
+    ValueTask<JobDeliveryStatusSnapshot?> FindDeliveryAsync(JobScope scope, string jobId, CancellationToken cancellationToken = default);
+    ValueTask<JobOriginSnapshot?> FindOriginAsync(JobScope scope, JobOrigin origin, CancellationToken cancellationToken = default);
     ValueTask<JobPage<JobQueueSnapshot>> ListQueuesAsync(JobScope scope, JobPageRequest page, CancellationToken cancellationToken = default);
 }

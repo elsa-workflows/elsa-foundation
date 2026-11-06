@@ -59,6 +59,9 @@ not automatic constitution violations.
 | Jobs (standalone durable handler, admission, attempt and result contracts) | [`Extensions/Jobs/src/Core/EXTENSION_POINTS.md`](Extensions/Jobs/src/Core/EXTENSION_POINTS.md) |
 | Jobs runtime (client, registered handlers and independent worker) | [`Extensions/Jobs/src/Elsa.Jobs/EXTENSION_POINTS.md`](Extensions/Jobs/src/Elsa.Jobs/EXTENSION_POINTS.md) |
 | Jobs EF (durable admission, attempts, gates, schedules and results) | [`Extensions/Jobs/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Jobs/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Jobs native workflow boundary and continuation | [`Extensions/Jobs/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Jobs/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Jobs publication pins | [`Extensions/Jobs/src/Workflows/Design/EXTENSION_POINTS.md`](Extensions/Jobs/src/Workflows/Design/EXTENSION_POINTS.md) |
+| Jobs BPMN association and result permission | [`Extensions/Jobs/src/Bpmn/EXTENSION_POINTS.md`](Extensions/Jobs/src/Bpmn/EXTENSION_POINTS.md) |
 | Caching (cache manager + change-token signaling) | [`Essentials/src/Caching/Memory/EXTENSION_POINTS.md`](Essentials/src/Caching/Memory/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`Essentials/src/Serialization/SystemText/EXTENSION_POINTS.md`](Essentials/src/Serialization/SystemText/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`Essentials/src/Locking/FileSystem/EXTENSION_POINTS.md`](Essentials/src/Locking/FileSystem/EXTENSION_POINTS.md) |

@@ -734,6 +734,21 @@
       "tier": "integration",
       "trait": "testcontainers",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Jobs/tests/Workflows/Runtime/Tests/Elsa.Jobs.Workflows.Runtime.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Jobs/tests/Workflows/Design/Elsa.Jobs.Workflows.Design.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     }
   ],
   "splits": {
@@ -907,7 +922,10 @@
           "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
           "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
           "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj",
-          "Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj"
+          "Extensions/Jobs/tests/Tests/Elsa.Jobs.Tests.csproj",
+          "Extensions/Jobs/tests/Workflows/Runtime/Tests/Elsa.Jobs.Workflows.Runtime.Tests.csproj",
+          "Extensions/Jobs/tests/Workflows/Design/Elsa.Jobs.Workflows.Design.Tests.csproj",
+          "Extensions/Jobs/tests/Bpmn/Tests/Elsa.Jobs.Bpmn.Tests.csproj"
         ]
       }
     ],
@@ -954,8 +972,8 @@
           "transaction-topology",
           "workbench-openiddict",
           "connections",
-        "specialist-journal",
-        "jobs"
+          "specialist-journal",
+          "jobs"
         ]
       },
       {

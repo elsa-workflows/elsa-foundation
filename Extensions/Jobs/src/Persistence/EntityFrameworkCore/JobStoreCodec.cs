@@ -126,6 +126,8 @@ internal static class JobStoreCodec
     internal static void Receipt(JobPhysicalReceipt receipt)
     {
         Name(receipt.ReceiptId); Name(receipt.AttemptId); Name(receipt.Owner); Digest(receipt.PayloadSha256);
+        if (receipt.Outcome == JobAttemptOutcome.Succeeded && receipt.Payload is null)
+            throw new ArgumentException("A successful Jobs receipt requires a schema-bearing payload envelope; JSON null remains a supported value.");
         if (receipt.Payload is { } payload) Payload(payload);
         if (receipt.Fence < 1 || !Enum.IsDefined(receipt.Outcome) || receipt.PayloadSha256 != JobPayloadDigest.Compute(receipt.Payload))
             throw new ArgumentException("The Jobs physical receipt identity or payload digest is invalid.");

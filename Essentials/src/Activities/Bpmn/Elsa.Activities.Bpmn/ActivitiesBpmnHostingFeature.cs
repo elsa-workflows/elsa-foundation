@@ -30,6 +30,8 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, BpmnLegacyFaultWorkRecovery>());
         services.TryAddScoped<BpmnDirectExecutionDriver>();
         services.TryAddScoped<BpmnNativeWorkBoundary>();
+        services.TryAddScoped<BpmnNativeWorkConsumer>();
+        services.TryAddScoped<IBpmnNativeWorkConsumer>(provider => provider.GetRequiredService<BpmnNativeWorkConsumer>());
         services.TryAddScoped<BpmnNativeWorkDelivery>();
         services.TryAddScoped<BpmnDurationTimerDelivery>();
         services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(BpmnDurationTimer.Kind, typeof(BpmnDurationTimerDelivery),
@@ -66,7 +68,7 @@ internal sealed class BpmnModelHostingRegistrationInitializer(IServiceCollection
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
     {
-        foreach (var contract in new[] { typeof(IBpmnModelRuntime), typeof(IBpmnModelActivityRuntime) })
+        foreach (var contract in new[] { typeof(IBpmnModelRuntime), typeof(IBpmnModelActivityRuntime), typeof(IBpmnNativeWorkConsumer) })
         {
             var services = registrations.Where(item => item.ServiceType == contract).ToArray();
             if (services is not [{ Lifetime: ServiceLifetime.Scoped }])

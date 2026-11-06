@@ -16,6 +16,19 @@ Its internal contributor registers exact protocol `elsa.bpmn/1` through Runtime'
 
 ## Native model activity
 
+The hosting feature also registers the scoped [`IBpmnNativeWorkConsumer`](../Core/IBpmnNativeWorkConsumer.cs)
+owner/semantic-input reader. Its [Core catalog](../Core/EXTENSION_POINTS.md#native-service-owner-reader)
+documents replacement and exact proof requirements. The driver's optional scoped
+`IBpmnNativeWorkResultValidator` fan-in runs once before live result progression, after physical-source,
+terminal/stale and cancellation-settlement checks. It does not run again for an already accepted exact input.
+The optional Jobs BPMN contribution checks prior durable continuation permission; hosting has no Jobs dependency.
+
+The existing native-result source also aggregates the optional scoped
+[`IBpmnNativeWorkResultDeliveryContributor`](../Core/IBpmnNativeWorkConsumer.cs) fan-in after exact retained
+receipt/physical-result validation and before Delivered. This [Core contract](../Core/EXTENSION_POINTS.md#native-result-delivery-contributions)
+allows an integration to confirm its own durable settlement before native history can be removed. It does
+not add another source to cancellation's downstream inventory or change model progression/replay behavior.
+
 [`IBpmnModelActivityRuntime`](Contracts/IBpmnModelActivityRuntime.cs) is the scoped replacement consumed by the new [`RunBpmn`](Activities/RunBpmn.cs) activity. The hosting feature uses `TryAddScoped`; startup rejects competing registrations or a different lifetime. Its default `BpmnModelActivityRuntime` suspends and resumes a typed native activity around the same model driver used for direct execution.
 
 The separate [Design feature](../Design/EXTENSION_POINTS.md) registers `BpmnEmbeddingPinSource` with Publishing's existing `IExecutableCompilationSource` aggregation. The literal `Model` input selects an accessible published model source; publication retains its complete material pin/incarnation and a native-to-model dependency edge. Execution reads that retained material rather than a mutable draft or current source selection. Direct and embedded models use the same declared profiles and refusal rules. Coded service-error boundaries use released-library matching after an authoritative terminal result. Held technical failures retain the pre-failure interpreter snapshot; one exact retry consumes the retained failure without overwriting its original evidence. [Spec1017 progress](../../../../../specs/1017-direct-bpmn-hosting/tasks.md) indexes actual service/ETL, retry, timer, signal, cancellation and parent-settlement recovery receipts, including their source/provider limits.

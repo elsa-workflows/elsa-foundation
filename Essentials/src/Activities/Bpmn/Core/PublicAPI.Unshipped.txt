@@ -366,3 +366,79 @@ override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.GetHashCode() -> int
 override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ToString() -> string!
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator !=(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
 static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator ==(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.BpmnNativeWorkAddress(int formatVersion, Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, string? tenantId, string! logicalDefinitionId, string! elementId, string! workerRootNodeId, string! workerRootActivityType, string! workerRootActivityTypeVersion, Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity! workerRootContract, Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy? faultPolicy) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.ElementId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.FaultPolicy.get -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.FormatVersion.get -> int
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.LogicalDefinitionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.Origin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.TenantId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.WorkerRootActivityType.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.WorkerRootActivityTypeVersion.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.WorkerRootContract.get -> Elsa.Workflows.Runtime.Core.Models.ActivityInvocationContractIdentity!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress.WorkerRootNodeId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.AttemptId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.BpmnNativeWorkCompletion(string! invocationId, string! attemptId, string! contractFingerprint, string! outcomeKey, Elsa.Primitives.Models.ValueTypeDescriptor! resultType, System.Text.Json.JsonElement? result, bool isRedacted) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.ContractFingerprint.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.InvocationId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.IsRedacted.get -> bool
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.OutcomeKey.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.Result.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion.ResultType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.AcceptedRevision.get -> long
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.BpmnNativeWorkInput(string! inputId, string! contentFingerprint, long acceptedRevision, System.DateTimeOffset acceptedAt, Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot! result) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.ContentFingerprint.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.InputId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput.Result.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.AcceptedInput.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.Address.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.BpmnNativeWorkObservation(Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress! address, Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind kind, long modelRevision, Elsa.Workflows.Runtime.Core.Models.RuntimeModelLifecycle lifecycle, string? terminalStatus, string? modelReceiptId, Elsa.Activities.Bpmn.Core.BpmnNativeWorkInput? acceptedInput, string? terminalReceiptId = null) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.Kind.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.Lifecycle.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelLifecycle
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.ModelReceiptId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.ModelRevision.get -> long
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.TerminalStatus.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation.TerminalReceiptId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind.AcceptedRootInput = 1 -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind.NotConsumed = 0 -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind.RootTerminal = 2 -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservationKind
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot.BpmnNativeWorkResultSnapshot(string! sourceOutboxItemId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStatus status, Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion? completion, string? faultCode) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot.Completion.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkCompletion?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot.FaultCode.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot.SourceOutboxItemId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot.Status.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStatus
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.BpmnNativeWorkResultValidation(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, string! inputId, string! contentFingerprint, Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot! result, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! worker) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.ContentFingerprint.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.InputId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.Origin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.Result.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation.Worker.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkConsumer
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkConsumer.InspectAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnNativeWorkObservation!>
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkConsumer.ResolveAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnNativeWorkAddress!>
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultValidator
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultValidator.ValidateAsync(Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultValidation! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition.Accepted = 0 -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition.Rejected = 1 -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.BpmnNativeWorkResultDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! worker, Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot! result, Elsa.Workflows.Runtime.Core.Models.RuntimeModelInputReceipt! inputReceipt, Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition disposition, long modelRevision, Elsa.Workflows.Runtime.Core.Models.RuntimeModelLifecycle lifecycle, string? terminalStatus, string? terminalReceiptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Disposition.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkInputDisposition
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.InputReceipt.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelInputReceipt!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Lifecycle.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelLifecycle
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.ModelRevision.get -> long
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Origin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Result.get -> Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultSnapshot!
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.TerminalReceiptId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.TerminalStatus.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery.Worker.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultDeliveryContributor
+Elsa.Activities.Bpmn.Core.IBpmnNativeWorkResultDeliveryContributor.CompleteAsync(Elsa.Activities.Bpmn.Core.BpmnNativeWorkResultDelivery! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

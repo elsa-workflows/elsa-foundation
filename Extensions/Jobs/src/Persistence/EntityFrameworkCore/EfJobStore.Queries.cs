@@ -47,7 +47,15 @@ internal sealed partial class EfJobStore
             if (job.ResultJson is { } resultJson)
             {
                 result = JobStoreCodec.ReadRetained<JobResult>(resultJson);
-                if (result.Payload is { } resultPayload) JobStoreCodec.Payload(resultPayload);
+                if (!Enum.IsDefined(result.Outcome)) throw new InvalidDataException("The retained Jobs result outcome is unsupported.");
+                if (result.Outcome == JobOutcome.Succeeded && result.Payload is null)
+                    throw new InvalidDataException("The retained successful Jobs result lost its payload envelope.");
+                if (result.Payload is { } resultPayload)
+                {
+                    JobStoreCodec.Payload(resultPayload);
+                    if (resultPayload.Schema != content.ResultSchema || result.Outcome != JobOutcome.Succeeded)
+                        throw new InvalidDataException("The retained Jobs result payload does not match its accepted schema and outcome.");
+                }
                 if (result.JobId != job.JobId || result.PayloadSha256 != JobPayloadDigest.Compute(result.Payload)) throw new InvalidDataException("The retained Jobs result failed digest validation.");
             }
             progress = job.ProgressJson is { } progressJson ? JobStoreCodec.ReadRetained<JobProgress>(progressJson) : null;
