@@ -11982,3 +11982,7 @@ override Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerIngress
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerIngressRefusal.SubscriptionId.init -> void
 override Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerIngressRefusal.Equals(object? obj) -> bool
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerIngress<TSource>.AdmitAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerSignal! signal, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerIngressResult!>
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.SupportsSubscriptionDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind, string! deliveryKind, int protocolVersion) -> bool
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxProcessor.SupportsSubscriptionDelivery(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind, string! deliveryKind, int protocolVersion) -> bool

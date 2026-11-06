@@ -20,6 +20,7 @@ public sealed partial class StimulusRouter
             var request = delivery.Request(source);
             if (source.Claim.Item.RecipientSnapshot is null)
             {
+                delivery.RequireFreshSubscriptionPipeline(source);
                 var candidate = await delivery.SelectAsync(source, request, _globalBookmarkStimulusLookup, _triggerBindingStore, cancellationToken);
                 if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null)
                 {

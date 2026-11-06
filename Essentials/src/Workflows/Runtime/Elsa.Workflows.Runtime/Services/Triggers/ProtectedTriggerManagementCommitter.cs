@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
@@ -6,7 +7,8 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 internal sealed class ProtectedTriggerManagementCommitter(IStandaloneTriggerStore resources, ITriggerSourceResourceCommitStore physical,
     IEnumerable<StandaloneTriggerSourceCapability> installedSources, IEnumerable<ITriggerReservationPlanner> reservationPlanners,
     IStandaloneTriggerTargetDiscovery? targets = null, IEnumerable<IStandaloneSchedulePlanner>? schedulePlanners = null,
-    IRuntimeIngressDeliveryStore? ingress = null) : ITriggerManagementCommitter
+    IRuntimeIngressDeliveryStore? ingress = null, IRuntimePostCommitOutboxProcessor? processor = null,
+    IRuntimePostCommitIntentDispatcher? dispatcher = null) : ITriggerManagementCommitter
 {
     // Several independently bound producers can supply the same trigger family.
     // Their source identities remain distinct; activation needs an installed type/schema pair.
@@ -16,7 +18,11 @@ internal sealed class ProtectedTriggerManagementCommitter(IStandaloneTriggerStor
     public bool SupportsActivatedResources => physical.SupportsActivatedResources;
     public bool CanActivateType(string typeKey, int schemaVersion) => SupportsActivatedResources &&
         installed.Any(item => item.Descriptor.TypeKey == typeKey && item.Descriptor.SchemaVersion == schemaVersion &&
-            (item.WorkflowIntentKind is null ? ingress?.SupportsAdmission == true : ingress?.SupportsWorkflowCohort(item.WorkflowIntentKind) == true));
+            (item.WorkflowIntentKind is null
+                ? ingress?.SupportsAdmission == true && TriggerSourcePipeline.Supports(processor, dispatcher,
+                    RuntimeDeliverySourceKind.StandaloneIngress, RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind)
+                : ingress?.SupportsWorkflowCohort(item.WorkflowIntentKind) == true && TriggerSourcePipeline.Supports(processor, dispatcher,
+                    RuntimeDeliverySourceKind.WorkflowCheckpoint, item.WorkflowIntentKind)));
     public bool CanStopType(string typeKey, int schemaVersion) => SupportsActivatedResources && (CanActivateType(typeKey, schemaVersion) ||
         planners.ContainsKey(typeKey) || schedulePlanners?.Any(planner => planner.Supports(typeKey)) == true);
 

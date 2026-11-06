@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -18,19 +19,34 @@ public sealed class StandaloneEventActivationTests
     private static readonly TriggerScope Scope = new(new("event-namespace"), "actual-event-tenant");
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Only_actual_workflow_Event_intake_with_its_coherent_provider_can_activate_through_normal_management(bool runtimeSource, bool unsupported)
+    [InlineData(false, false, "modern")]
+    [InlineData(true, false, "modern")]
+    [InlineData(true, true, "modern")]
+    [InlineData(true, false, "processor")]
+    [InlineData(true, false, "dispatcher")]
+    public async Task Only_actual_workflow_Event_intake_with_its_coherent_provider_can_activate_through_normal_management(
+        bool runtimeSource, bool unsupported, string pipeline)
     {
         var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now)); services.AddWorkflowRuntime();
         new StandaloneEventTriggerAuthoringFeature().ConfigureServices(services);
         if (runtimeSource) new ActivitiesPrimitivesFeature().ConfigureServices(services);
         if (unsupported) { services.RemoveAll<IRuntimeIngressDeliveryStore>(); services.AddScoped<IRuntimeIngressDeliveryStore, Unsupported>(); }
+        if (pipeline == "processor") { services.RemoveAll<IRuntimePostCommitOutboxProcessor>(); services.AddScoped<IRuntimePostCommitOutboxProcessor, LegacyProcessor>(); }
+        if (pipeline == "dispatcher") { services.RemoveAll<IRuntimePostCommitIntentDispatcher>(); services.AddScoped<IRuntimePostCommitIntentDispatcher, LegacyDispatcher>(); }
         using var provider = services.BuildServiceProvider(); using var operation = provider.CreateScope(); var sp = operation.ServiceProvider;
         sp.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(Scope.Persistence));
         var management = sp.GetRequiredService<ITriggerManagementCommitter>();
-        Assert.Equal(runtimeSource && !unsupported, management.CanActivateType("event", 1));
+        var ready = runtimeSource && !unsupported && pipeline == "modern";
+        Assert.Equal(ready, management.CanActivateType("event", 1));
+        var processor = sp.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        var dispatcher = sp.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
+        Assert.True(processor.SupportsSourceKind(RuntimeDeliverySourceKind.WorkflowCheckpoint));
+        Assert.True(dispatcher.SupportsSourceKind(RuntimeDeliverySourceKind.WorkflowCheckpoint));
+        Assert.Equal(runtimeSource && pipeline == "modern", processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint,
+            PublishStimulusConstants.PublishStimulusIntentKind, RuntimeSubscriptionDelivery.CurrentVersion));
+        Assert.False(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint, "other-workflow-kind", 1));
+        Assert.False(dispatcher.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint,
+            PublishStimulusConstants.PublishStimulusIntentKind, RuntimeSubscriptionDelivery.CurrentVersion + 1));
         Assert.Empty(sp.GetServices<StandaloneTriggerSourceDescriptor>()); // Canonical workflow source; no fake external producer port.
         var material = new WorkflowExecutable(new("event-material", "event-producer", "event-version", "1", "hash"),
             new("root", "authored", "test/activity", "1", new("test", "1", JsonSerializer.SerializeToElement(new { })),
@@ -48,7 +64,7 @@ public sealed class StandaloneEventActivationTests
             new(TriggerManagementKind.Studio), new("event-grant", trigger.Id, "event-subscription", "event-target", "Published", "native", "event", 1,
                 TriggerGrantStatus.Granted, "grant-author", Now));
         var write = new TriggerStoreWrite("enable", "enable-event", "operator", null, trigger, [subscription]);
-        if (!runtimeSource || unsupported)
+        if (!ready)
         {
             await Assert.ThrowsAsync<TriggerOperationException>(() => management.CommitAsync(Scope, write).AsTask());
             Assert.Null(await sp.GetRequiredService<IStandaloneTriggerStore>().FindAsync(Scope, trigger.Id));
@@ -66,4 +82,14 @@ public sealed class StandaloneEventActivationTests
     }
 
     private sealed class Unsupported : IRuntimeIngressDeliveryStore;
+    private sealed class LegacyProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException("Capability discovery must not process workflow work.");
+    }
+    private sealed class LegacyDispatcher : IRuntimePostCommitIntentDispatcher
+    {
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Capability discovery must not dispatch workflow work.");
+    }
 }

@@ -25,7 +25,8 @@ internal sealed class StimulusDeliveryServices(
     CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null,
     WorkflowStimulusSubscriptionSelector? subscriptions = null,
     IRuntimeIngressDeliveryStore? ingress = null,
-    StandaloneTriggerDeliveryHandler? subscriptionDelivery = null)
+    StandaloneTriggerDeliveryHandler? subscriptionDelivery = null,
+    IRuntimePostCommitOutboxProcessor? processor = null, IRuntimePostCommitIntentDispatcher? dispatcher = null)
 {
     private readonly StimulusDeliveryRequestProjector _requests = new(adapters);
     internal IStimulusDeliveryStore Sources => sources;
@@ -48,6 +49,13 @@ internal sealed class StimulusDeliveryServices(
     }
 
     internal StimulusDispatchRequest Request(PostCommitDeliveryContext source) => _requests.Read(source);
+
+    internal void RequireFreshSubscriptionPipeline(PostCommitDeliveryContext source)
+    {
+        if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null &&
+            !TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.WorkflowCheckpoint, source.Intent.Kind))
+            throw new NotSupportedException("The selected Runtime processing pipeline cannot drain this workflow source's subscription protocol.");
+    }
 
     internal ValueTask<RuntimeWorkflowSubscriptionCandidate> SelectSubscriptionsAsync(PostCommitDeliveryContext source, CancellationToken token) =>
         (subscriptions ?? throw new NotSupportedException("Independent workflow-source subscription selection is unavailable.")).SelectAsync(source, token);

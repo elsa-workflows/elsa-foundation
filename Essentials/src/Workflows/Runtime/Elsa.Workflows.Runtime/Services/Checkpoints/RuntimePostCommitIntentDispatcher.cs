@@ -12,6 +12,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
     private readonly IReadOnlyDictionary<string, Type> _handlerTypes;
     private readonly HashSet<string> _requiredSourceKinds;
     private readonly IReadOnlyDictionary<string, RuntimeDeliverySourceKind> _sourceKinds;
+    private readonly IReadOnlyDictionary<string, int?> _subscriptionProtocols;
 
     public RuntimePostCommitIntentDispatcher(
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions,
@@ -25,6 +26,8 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         _handlerTypes = BuildHandlerMap(materialized);
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(materialized);
         _sourceKinds = materialized.GroupBy(item => item.IntentKind, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First().SourceKind, StringComparer.Ordinal);
+        _subscriptionProtocols = materialized.GroupBy(item => item.IntentKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().SubscriptionDeliveryProtocolVersion, StringComparer.Ordinal);
     }
 
     public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -54,6 +57,12 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
 
     public bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) => sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint ||
         sourceKind == RuntimeDeliverySourceKind.StandaloneIngress && _sourceKinds.Values.Contains(sourceKind);
+
+    public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) =>
+        protocolVersion == RuntimeSubscriptionDelivery.CurrentVersion && SupportsSourceKind(sourceKind) &&
+        _sourceKinds.TryGetValue(deliveryKind, out var actualKind) && actualKind == sourceKind &&
+        _subscriptionProtocols.TryGetValue(deliveryKind, out var actualProtocol) && actualProtocol == protocolVersion &&
+        _requiredSourceKinds.Contains(deliveryKind);
 
     public ValueTask DispatchAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default)
     {

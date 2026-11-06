@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -26,9 +27,13 @@ public sealed class StandaloneTriggerProducerRegistrationTests
             return;
         }
         services.AddStandaloneTriggerIngress<SecondSource>(new("event", 1, "Second.Event", schema));
-        services.AddSingleton<IStandaloneTriggerStore>(new InMemoryStandaloneTriggerStore(new InMemoryRuntimeCheckpointStoreState(), new Access(), TimeProvider.System));
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        services.AddSingleton<IStandaloneTriggerStore>(new InMemoryStandaloneTriggerStore(state, new Access(), TimeProvider.System));
         services.AddSingleton<ITriggerSourceResourceCommitStore, SupportedPhysical>();
         services.AddSingleton<IRuntimeIngressDeliveryStore, SupportedIngress>();
+        var pipeline = StandaloneTriggerPipelineFixture.Create(new InMemoryRuntimeCheckpointCommitStore(state: state,
+            persistenceAccessContextAccessor: new Access()), new Access(), TimeProvider.System);
+        services.AddSingleton(pipeline.Processor); services.AddSingleton(pipeline.Dispatcher);
         services.AddScoped<ITriggerManagementCommitter, ProtectedTriggerManagementCommitter>();
         services.AddSingleton<IStandaloneTriggerIngressFactory, CapturingFactory>();
         services.AddScoped<IStandaloneTriggerSourceContext<FirstSource>, Context<FirstSource>>();

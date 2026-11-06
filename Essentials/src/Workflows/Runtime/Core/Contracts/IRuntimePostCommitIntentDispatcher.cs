@@ -9,6 +9,8 @@ public interface IRuntimePostCommitIntentDispatcher
     /// <summary>Legacy dispatchers have no required-source contributions.</summary>
     bool RequiresDurableSource(string intentKind) => false;
     bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) => sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint;
+    /// <summary>Explicit support from the actual contributed handler for this exact subscription delivery protocol.</summary>
+    bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) => false;
 
     /// <summary>Default refusal preserves legacy dispatchers without fabricating a workflow intent.</summary>
     ValueTask DispatchAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) =>

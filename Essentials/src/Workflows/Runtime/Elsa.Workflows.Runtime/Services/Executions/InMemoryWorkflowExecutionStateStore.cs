@@ -231,9 +231,10 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
             if (child is null ? (link.Status != WorkflowDispatchStatus.DispatchFailed && !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(link)) : !child.Status.IsTerminal())
                 return true;
             lock (_checkpointState.SyncRoot)
-                if (_checkpointState.OutboxItems.Values.Any(item => item.Status != RuntimePostCommitOutboxStatus.Delivered &&
-                    (item.Intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
-                     item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
+                if (_checkpointState.OutboxItems.Values.Any(item => item.Intent is { } intent &&
+                    item.Status != RuntimePostCommitOutboxStatus.Delivered &&
+                    (intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
+                     intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
                     return true;
         }
         return false;

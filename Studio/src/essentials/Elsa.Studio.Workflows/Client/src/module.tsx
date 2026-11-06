@@ -26,7 +26,7 @@ const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
 const WorkflowExecutableInspectorPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutableInspectorPage })));
 const WorkflowInstancesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstancesPage })));
-const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
+const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/WorkflowInstanceDetailsPage").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
 const ActivityDefinitionsPage = lazy(() => import("./ActivityDefinitionsPage").then(module => ({ default: module.ActivityDefinitionsPage })));
 const ActivityUpgradeWorkbenchPage = lazy(() => import("./ActivityUpgradeWorkbenchPage").then(module => ({ default: module.ActivityUpgradeWorkbenchPage })));
 const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").then(module => ({ default: module.Elsa3ReusableImportPage })));

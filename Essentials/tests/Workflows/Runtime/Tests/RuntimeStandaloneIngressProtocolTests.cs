@@ -173,11 +173,37 @@ public sealed class RuntimeStandaloneIngressProtocolTests
         }));
         var processor = Processor(store, services);
         Assert.True(processor.SupportsSourceKind(RuntimeDeliverySourceKind.StandaloneIngress));
+        Assert.True(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress,
+            RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, RuntimeSubscriptionDelivery.CurrentVersion));
         var result = await processor.ProcessAsync(new(10));
         Assert.Equal(1, result.DeliveredCount);
         Assert.Null(Assert.Single(handled).Claim.Item.Intent);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, store.Current.Status);
         Assert.Equal(RuntimeRecipientPhase.CancelledBeforeDispatch, Assert.Single(store.Current.SubscriptionDelivery!.Progress).Phase);
+    }
+
+    [Fact]
+    public void Subscription_readiness_requires_the_exact_contribution_and_actual_claim_lookup_and_scope_pipeline()
+    {
+        var store = new SerializedStore(Pending());
+        using var services = Services(new Handler(_ => throw new InvalidOperationException("Capability discovery cannot run a handler.")));
+        var dispatcher = services.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
+        var kind = RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind;
+        var version = RuntimeSubscriptionDelivery.CurrentVersion;
+        var processor = Processor(store, services);
+        Assert.True(dispatcher.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version));
+        Assert.True(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version));
+        Assert.False(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint, kind, version));
+        Assert.False(dispatcher.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, "different-kind", version));
+        Assert.False(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version + 1));
+        Assert.False(Processor(new ClaimlessStore(store), services).SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version));
+        var noScope = new RuntimePostCommitOutboxProcessor(store, dispatcher, new Clock(), DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            null, [], null, null, null, null, services.GetServices<RuntimePostCommitIntentHandlerContribution>());
+        Assert.False(noScope.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version));
+        var noContribution = new RuntimePostCommitOutboxProcessor(store, dispatcher, new Clock(), DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            null, [], null, null, null, new Access(), []);
+        Assert.False(noContribution.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.StandaloneIngress, kind, version));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, store.Current.Status);
     }
 
     [Fact]

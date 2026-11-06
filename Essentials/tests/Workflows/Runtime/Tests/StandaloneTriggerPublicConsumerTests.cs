@@ -208,6 +208,87 @@ public sealed class StandaloneTriggerPublicConsumerTests
         Assert.Empty(await sp.GetRequiredService<IRuntimePostCommitOutboxStore>().GetDeliverableAsync(new(Now, 10)));
     }
 
+    [Theory]
+    [InlineData("processor")]
+    [InlineData("dispatcher")]
+    public async Task A_modern_physical_provider_with_a_selected_legacy_pipeline_refuses_activation_and_fresh_admission(string legacyService)
+    {
+        var services = RuntimeServices();
+        var selectedTarget = Assert.Single(services, item => item.ServiceType == typeof(IStandaloneTriggerRuntimeTarget));
+        services.Remove(selectedTarget);
+        ConsumerModule.AddTargetDecorator(services, provider => (IStandaloneTriggerRuntimeTarget)(selectedTarget.ImplementationFactory?.Invoke(provider) ??
+            ActivatorUtilities.CreateInstance(provider, selectedTarget.ImplementationType!)));
+        if (legacyService == "processor")
+        { services.RemoveAll<IRuntimePostCommitOutboxProcessor>(); services.AddScoped<IRuntimePostCommitOutboxProcessor, LegacyProcessor>(); }
+        else
+        { services.RemoveAll<IRuntimePostCommitIntentDispatcher>(); services.AddScoped<IRuntimePostCommitIntentDispatcher, LegacyDispatcher>(); }
+        using var provider = services.BuildServiceProvider(); using var operation = provider.CreateScope(); var sp = operation.ServiceProvider; Bind(sp);
+        await SeedActualPublicationAndResourceAsync(sp);
+        Assert.True(sp.GetRequiredService<IRuntimeIngressDeliveryStore>().SupportsAdmission);
+        Assert.True(sp.GetRequiredService<ITriggerSourceResourceCommitStore>().SupportsActivatedResources);
+        var management = sp.GetRequiredService<ITriggerManagementCommitter>();
+        Assert.False(management.CanActivateType(ConsumerModule.TypeKey, 1));
+        var existing = (await sp.GetRequiredService<IStandaloneTriggerStore>().FindAsync(Scope, "consumer-trigger"))!;
+        var unavailable = await Assert.ThrowsAsync<TriggerOperationException>(() => management.CommitAsync(Scope,
+            new("enable-with-legacy-pipeline", "enable-with-legacy-pipeline", "operator", 1, Resource(2), existing.Subscriptions)).AsTask());
+        Assert.Equal("unavailable", unavailable.Code);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => ConsumerModule.SubmitAsync(sp, "consumer-trigger", "fresh",
+            JsonSerializer.SerializeToElement(new { message = "hello" })).AsTask());
+
+        Assert.Equal(1, (await sp.GetRequiredService<IStandaloneTriggerStore>().FindAsync(Scope, "consumer-trigger"))!.Trigger.Revision);
+        Assert.Empty(await sp.GetRequiredService<IRuntimePostCommitOutboxStore>().GetDeliverableAsync(new(Now, 10)));
+        Assert.Empty(await sp.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Equal(0, sp.GetRequiredService<ConsumerProbe>().CapabilityChecks);
+        Assert.Equal(0, sp.GetRequiredService<ConsumerProbe>().PreparedCommands);
+    }
+
+    [Fact]
+    public async Task Accepted_receipt_replay_survives_loss_of_current_processor_capability_while_fresh_signals_refuse()
+    {
+        var services = RuntimeServices();
+        var selected = Assert.Single(services, item => item.ServiceType == typeof(IRuntimePostCommitOutboxProcessor));
+        services.Remove(selected);
+        services.AddScoped(provider => new SwitchableProcessor((IRuntimePostCommitOutboxProcessor)(selected.ImplementationFactory?.Invoke(provider) ??
+            ActivatorUtilities.CreateInstance(provider, selected.ImplementationType!))));
+        services.AddScoped<IRuntimePostCommitOutboxProcessor>(provider => provider.GetRequiredService<SwitchableProcessor>());
+        using var provider = services.BuildServiceProvider(); using var operation = provider.CreateScope(); var sp = operation.ServiceProvider; Bind(sp);
+        await SeedActualPublicationAndResourceAsync(sp);
+        var payload = JsonSerializer.SerializeToElement(new { message = "hello" });
+        var first = await ConsumerModule.SubmitAsync(sp, "consumer-trigger", "accepted", payload);
+        var original = await ReadAcceptedAsync(sp, first, "accepted");
+        sp.GetRequiredService<SwitchableProcessor>().Available = false;
+
+        var replay = await ConsumerModule.SubmitAsync(sp, "consumer-trigger", "accepted", payload);
+
+        Assert.True(replay.Replayed); Assert.Equal(first.AdmissionId, replay.AdmissionId);
+        Assert.False(sp.GetRequiredService<ITriggerManagementCommitter>().CanActivateType(ConsumerModule.TypeKey, 1));
+        await Assert.ThrowsAsync<NotSupportedException>(() => ConsumerModule.SubmitAsync(sp, "consumer-trigger", "fresh", payload).AsTask());
+        var retained = await ReadAcceptedAsync(sp, replay, "accepted");
+        Assert.True(original.SubscriptionDelivery!.IsEquivalentTo(retained.SubscriptionDelivery));
+        Assert.Single(await sp.GetRequiredService<IRuntimePostCommitOutboxStore>().GetDeliverableAsync(new(Now, 10)));
+    }
+
+    private sealed class LegacyProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException("Fresh intake must refuse before processing effects.");
+    }
+    private sealed class LegacyDispatcher : IRuntimePostCommitIntentDispatcher
+    {
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Fresh intake must refuse before dispatch effects.");
+    }
+    private sealed class SwitchableProcessor(IRuntimePostCommitOutboxProcessor actual) : IRuntimePostCommitOutboxProcessor
+    {
+        internal bool Available { get; set; } = true;
+        public bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) => Available && actual.SupportsSourceKind(sourceKind);
+        public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) =>
+            Available && actual.SupportsSubscriptionDelivery(sourceKind, deliveryKind, protocolVersion);
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) => actual.ProcessAsync(request, cancellationToken);
+    }
+
     [Fact]
     public async Task Missing_runtime_adapter_is_a_known_refusal_before_physical_admission()
     {

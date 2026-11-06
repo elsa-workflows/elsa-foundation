@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resources, IRuntimeIngressDeliveryStore delivery,
     TriggerTargetResolver targets, ITriggerInputMapper mapper, IEnumerable<IStandaloneTriggerRuntimeTarget> runtimeTargets, TimeProvider clock,
-    IWorkflowExecutableStartPolicy startPolicy)
+    IWorkflowExecutableStartPolicy startPolicy, IRuntimePostCommitOutboxProcessor processor, IRuntimePostCommitIntentDispatcher dispatcher)
 {
     private readonly IReadOnlyDictionary<string, IStandaloneTriggerRuntimeTarget> runtimeTargets = runtimeTargets.ToDictionary(x => x.ModelKey, StringComparer.Ordinal);
 
@@ -27,6 +27,9 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             submittedIntent, context.Actor);
         // Saved acceptance wins before today's enabled state, targets, mappings, policy and publication are consulted.
         if (await delivery.FindAcceptedAsync(context.Scope, sourceId, requestFingerprint, ct) is { } prior) return prior;
+        if (!TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.StandaloneIngress,
+                RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind))
+            throw new NotSupportedException("The selected Runtime processing pipeline cannot drain standalone trigger work.");
         var aggregate = authorizedResource ?? await resources.FindAsync(context.Scope, signal.TriggerId, ct)
             ?? throw new TriggerOperationException("trigger-not-found", "The trigger is unavailable in this scope.");
         var trigger = aggregate.Trigger;

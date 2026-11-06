@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,6 +10,7 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -17,6 +19,76 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class InMemoryWorkflowExecutionDeletionStoreTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Standalone_sources_retain_their_own_execution_without_blocking_unrelated_control_history_deletion(bool cancelSource)
+    {
+        using var fixture = new RuntimeFixture();
+        var link = ControlLink("control-parent");
+        var dispatches = fixture.Services.GetRequiredService<IWorkflowDispatchStore>();
+        await fixture.Executions.SaveAsync(Workflow(link.ParentWorkflowExecutionId, WorkflowExecutionStatus.Completed));
+        await fixture.Executions.SaveAsync(Workflow(link.ChildWorkflowExecutionId, WorkflowExecutionStatus.Completed) with
+        {
+            ParentWorkflowExecutionId = link.ParentWorkflowExecutionId,
+            SystemMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlDispatchId] = link.DispatchId }
+        });
+        await dispatches.SaveAsync(link);
+        link = link.TransitionTo(WorkflowDispatchStatus.Started, Now);
+        await dispatches.SaveAsync(link);
+        link = link.TransitionTo(WorkflowDispatchStatus.Completed, Now);
+        await dispatches.SaveAsync(link);
+        var standalone = StandaloneSource();
+        var recipient = Assert.Single(standalone.SubscriptionDelivery!.Recipients);
+        await fixture.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().AddPendingForTestingAsync(standalone);
+        await fixture.Executions.SaveAsync(Workflow(recipient.StartIdentity.WorkflowExecutionId, WorkflowExecutionStatus.Completed) with
+        { PinnedExecutable = recipient.Material });
+
+        Assert.Null(standalone.Intent);
+        Assert.True(standalone.RetainsExecutionForStimulusDelivery(recipient.StartIdentity.WorkflowExecutionId));
+        Assert.False(await fixture.Executions.DeleteAsync(recipient.StartIdentity.WorkflowExecutionId));
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await fixture.DeletionStore.TryDeleteTerminalAsync(
+            (await fixture.DeletionStore.ReadAsync(recipient.StartIdentity.WorkflowExecutionId))!));
+        Assert.False(await fixture.Executions.IsDeletionTombstonedAsync(recipient.StartIdentity.WorkflowExecutionId));
+        if (cancelSource)
+        {
+            var delivery = standalone.SubscriptionDelivery!;
+            standalone = RuntimeIngressControlRules.CancelSource(standalone.WithSubscriptionDelivery(
+                delivery.WithProgress(Assert.Single(delivery.Progress).CancelPending())));
+            fixture.CheckpointState.OutboxItems[standalone.OutboxItemId] = standalone;
+            Assert.Equal(RuntimePostCommitOutboxStatus.Cancelled, standalone.Status);
+        }
+
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await fixture.DeletionStore.TryDeleteTerminalAsync(
+            (await fixture.DeletionStore.ReadAsync(link.ParentWorkflowExecutionId))!));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await fixture.DeletionStore.TryDeleteTerminalAsync(
+            (await fixture.DeletionStore.ReadAsync(link.ChildWorkflowExecutionId))!));
+        Assert.Same(standalone, fixture.CheckpointState.OutboxItems[standalone.OutboxItemId]);
+        Assert.NotNull(await fixture.Executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId));
+        if (!cancelSource) Assert.False(await fixture.Executions.DeleteAsync(recipient.StartIdentity.WorkflowExecutionId));
+    }
+
+    private static RuntimePostCommitOutboxItem StandaloneSource()
+    {
+        var scope = new PersistenceScope(PersistenceScope.DefaultValue);
+        var partition = new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+        var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
+        var payload = JsonSerializer.SerializeToElement(new { value = 42 });
+        var actor = new WorkflowExecutionAuthoritySnapshot("standalone-trigger", "source-actor");
+        var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, "tenant-a", "trigger", "Test.Source", "request", schema, payload, actor);
+        var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", Now, scope, "tenant-a", partition,
+            "trigger", 1, 1, "Test.Source", "request", fingerprint, schema, payload, RuntimeIngressAdmissionPolicy.RequireAll, actor);
+        var identity = new RuntimeSubscriptionStartIdentity(1, scope, source.OutboxItemId, "subscription");
+        var recipient = new RuntimeSubscriptionRecipient(identity.Digest, "subscription", 1, 1, "definition", "native", "slot", 1, "activation",
+            new("standalone-artifact", "definition", "version", "1", "hash"),
+            new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot"),
+            new string('a', 64), 1, 1, new Dictionary<string, JsonElement>(), actor, source.TenantId, partition, identity);
+        var delivery = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, scope,
+            [recipient], [], [new(recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
+        return RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, delivery,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

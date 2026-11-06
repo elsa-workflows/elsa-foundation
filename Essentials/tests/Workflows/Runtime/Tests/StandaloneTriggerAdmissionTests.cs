@@ -226,12 +226,15 @@ public sealed class StandaloneTriggerAdmissionTests
             ITriggerInputMapper? mapper = null)
         {
             this.type = type; this.policy = policy;
-            resources = new(new InMemoryRuntimeCheckpointStoreState(), new Access(), clock);
+            var state = new InMemoryRuntimeCheckpointStoreState();
+            resources = new(state, new Access(), clock);
+            var pipeline = StandaloneTriggerPipelineFixture.Create(new InMemoryRuntimeCheckpointCommitStore(state: state,
+                persistenceAccessContextAccessor: new Access()), new Access(), clock);
             Producer = new(type, 1, type + ".request", new("Object"));
             Targets = new(Slots, sources, material, new Access(), [new NativeTriggerTargetModelSource()], clock);
             Admission = new(resources, Delivery, Targets,
                 mapper ?? new TriggerInputMapper(new WorkflowExecutableInputValidator(new StringTypeRegistry())), [new Adapter()], clock,
-                policyGate ?? new AllowWorkflowExecutableStartPolicy());
+                policyGate ?? new AllowWorkflowExecutableStartPolicy(), pipeline.Processor, pipeline.Dispatcher);
         }
         internal async Task Save(IReadOnlyList<TriggerSubscription> subscriptions, TriggerDesiredState state = TriggerDesiredState.Enabled, long revision = 1)
         {

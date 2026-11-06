@@ -20,6 +20,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly HashSet<string> _requiredSourceKinds = new(StringComparer.Ordinal);
+    private readonly IReadOnlyDictionary<string, (RuntimeDeliverySourceKind SourceKind, int? Protocol)> _subscriptionProtocols =
+        new Dictionary<string, (RuntimeDeliverySourceKind, int?)>(StringComparer.Ordinal);
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
@@ -141,13 +143,23 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     {
         _loadSignal = loadSignal;
         _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
-        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+        var materialized = contributions.ToArray();
+        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(materialized);
+        _subscriptionProtocols = materialized.GroupBy(item => item.IntentKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (group.First().SourceKind, group.First().SubscriptionDeliveryProtocolVersion), StringComparer.Ordinal);
     }
 
     public bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) =>
         sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint || sourceKind == RuntimeDeliverySourceKind.StandaloneIngress &&
         _claimStore is not null && _outboxStore is IPostCommitOutboxLookupStore &&
         _persistenceAccessContextAccessor is not null && _intentDispatcher.SupportsSourceKind(sourceKind);
+
+    public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) =>
+        protocolVersion == RuntimeSubscriptionDelivery.CurrentVersion && SupportsSourceKind(sourceKind) &&
+        _claimStore is not null && _outboxStore is IPostCommitOutboxLookupStore && _persistenceAccessContextAccessor is not null &&
+        _requiredSourceKinds.Contains(deliveryKind) && _subscriptionProtocols.TryGetValue(deliveryKind, out var declared) &&
+        declared.SourceKind == sourceKind && declared.Protocol == protocolVersion &&
+        _intentDispatcher.SupportsSubscriptionDelivery(sourceKind, deliveryKind, protocolVersion);
 
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
         item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDeliveryProtocolVersion is not null ||
