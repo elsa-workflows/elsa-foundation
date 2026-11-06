@@ -90,7 +90,8 @@ public sealed class CoalescingDeliveredBackstopTests
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(ExecutionId)));
         Assert.Empty(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(ExecutionId));
         var physical = scope.ServiceProvider.GetRequiredService<CoalescingInner<IRuntimePostCommitOutboxStore>>().Value;
-        var settled = await Assert.IsAssignableFrom<IPostCommitOutboxLookupStore>(physical).FindDurableAsync(probe.PeerClaim.OutboxItemId);
+        // Inspect the captured physical store directly: this legacy fixture has no committed source-scope witness.
+        var settled = await Assert.IsAssignableFrom<IPostCommitOutboxLookupStore>(physical).FindAsync(probe.PeerClaim.OutboxItemId);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, settled?.Status);
         Assert.Equal(2, settled?.DeliveryFencingToken);
         Assert.Equal(1, settled?.DeliveryAttemptCount);
