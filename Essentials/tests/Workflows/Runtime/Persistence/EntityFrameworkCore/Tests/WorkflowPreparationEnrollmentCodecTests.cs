@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.WorkflowPreparationEnrollmentCodec;
+using Barrier = Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.WorkflowPreparationEnrollmentCodec.Barrier;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 

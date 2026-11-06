@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.WorkflowPreparationEnrollmentCodec;
+using Barrier = Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.WorkflowPreparationEnrollmentCodec.Barrier;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
