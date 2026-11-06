@@ -2,7 +2,7 @@
 
 Index of every ADR in this folder. Generated from each file's H1 and status line; the ADR files are the source of truth.
 The early Extension Builder series carries its own `EB-` prefix and is closed; every ADR number is unique.
-A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/` before choosing. An initiative's ADRs take the number its coordinator reserves on the board, across `main`, the [initiative branch](../contributing/initiatives.md#the-initiative-branch) and open PRs; their PRs do not edit this index, which the coordinator updates when merging them into the initiative branch.
+A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/`, and the `initiative/*` branches, before choosing. An initiative's ADRs take the number its coordinator reserves on the board, across `main`, every [initiative branch](../contributing/initiatives.md#the-initiative-branch) and open PRs; their PRs do not edit this index, which the coordinator updates when merging them into the initiative branch.
 
 An ADR proposed from an [initiative](../contributing/initiatives.md) follows its [agreement rule](../contributing/initiatives.md#how-work-flows): the author prepares the acceptance status, the required humans agree the final commit, and the coordinator records that commit on the board. A status line or bot approval alone is not agreement. Other ADRs keep their existing practice.
 

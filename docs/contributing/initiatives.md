@@ -79,8 +79,8 @@ The board states which phase the initiative is in.
 3. **Implementation.** Production implementation needs the approved spec and the decisions it applies, landed on
    `main` (see *Landing* below). ADR and spec PRs both follow the final-commit agreement rule below.
 
-An initiative may agree stricter rules; #3052, for example, agreed that all specs are defined before implementation
-starts. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
+Because the initiative branch lands as a whole, every spec is agreed before implementation of any of them starts. An
+initiative may agree further, stricter rules. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
 never silently becomes production implementation.
 
 No activation by a program goal is needed for any phase.
@@ -234,34 +234,36 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
 
 - **Proposal PRs target the branch.** An ADR, amendment or spec PR in the initiative's scope uses the initiative branch
   as its base from its first draft, so it is written and reviewed against what the initiative has already agreed.
-  Authors cut their branch from `origin/initiative/<n>-<slug>`. A spec author passes the reserved number to Speckit
-  (`--number <reserved>`) instead of letting it pick one.
+  Authors cut their branch from `origin/initiative/<n>-<slug>`. A spec author gives `speckit-specify` the reserved
+  folder (`SPECIFY_FEATURE_DIRECTORY=specs/<reserved>-<short-name>`) instead of letting it pick a number.
 - **Stacked proposals** (a change on top of another proposal, such as a reviewer's clarifications) target their
-  parent's branch. They are part of the parent: the coordinator merges an agreed child into its parent before the
-  parent's gate, and the change counts toward the parent's agreement under the materiality rule. A child still open
-  when its parent merges is retargeted to the initiative branch and becomes a proposal of its own.
+  parent's branch. They are part of the parent: the **parent's author** merges an agreed child into their own branch
+  before the parent's gate, and the change counts toward the parent's agreement under the materiality rule. A child
+  still open when its parent merges is retargeted to the initiative branch and becomes a proposal of its own.
 - **No required CI.** Initiative proposals carry no required checks. Architecture is judged by agreement and the
   pre-merge gate, not by builds and tests, which would only re-run unchanged code. The landing PR runs every required
   check on `main`.
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
-  of `main` and the ADR index updates; nobody else pushes to the branch. When the coordinator authored or committed to
-  a proposal, the recorded delegate, or else a non-author approver, runs the gate and merges it, because an author
-  never merges their own PR.
+  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. When the
+  coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
+  they run the gate, push what it needs and merge the proposal, because an author never merges their own PR.
 - **Accepted text is amended in place.** Until it lands, an agreed ADR or spec that must change is edited on the branch
   through an amendment PR that follows the agreement rule. No superseding ADR is written for something `main` has never
   seen. After landing, the branch is gone: later changes to the initiative's ADRs and specs are PRs to `main` under the
   agreement rule, and the normal supersede rules apply.
 - **Numbers are reserved on the board.** When a proposal is drafted, the coordinator reserves the next free ADR or spec
-  number (across `main`, the initiative branch and open PRs) and records it on the proposal's board row. Proposal PRs
-  do not edit `docs/adr/README.md`; the coordinator updates the index on the branch after each merge. A collision
-  with `main` that the gate finds is renumbered on the initiative branch.
+  number (across `main`, every `initiative/*` branch and all open PRs) and records it on the proposal's board row.
+  Proposal PRs do not edit `docs/adr/README.md`; the coordinator updates the index on the branch after each merge. A
+  number collision the gate finds is not an architecture call: a proposal's author renumbers it before it merges, and
+  the coordinator renumbers an item already on the branch.
 - **`main` is merged in, never rebased.** When a proposal no longer merges cleanly onto the updated initiative branch,
   its author merges the initiative branch into it. A merge that only resolves a conflict elsewhere keeps that PR's
   approvals (see *Material changes need renewed agreement*).
-- **Protection.** A ruleset on `refs/heads/initiative/*` blocks force-pushes and deletion, with repository admins as
-  the only bypass. Branch deletion at landing is therefore an admin step. The weekly branch sweep never deletes an
+- **Protection.** One repository ruleset on `refs/heads/initiative/*` blocks force-pushes and deletion, with
+  repository admins as the only bypass. A repository admin creates it once, before the first initiative branch is
+  pushed; starting an initiative checks that it exists. Branch deletion at landing is therefore an admin step. The weekly branch sweep never deletes an
   initiative branch ([repository hygiene](repository-hygiene.md)).
 
 An initiative started before this rule gets its branch at the coordinator's next sync, which retargets its open
@@ -291,18 +293,19 @@ out.
 6. **Post one gate comment** on the proposal PR. It lists the verified findings and the commits compared: the
    initiative branch head, the `main` commit and the PR head.
 7. **Decide.** The coordinator triages every finding.
-   - A **contradiction**, or any collision with `main`, is an architecture call. The coordinator lays out the options,
+   - A **contradiction**, including a change on `main` that contradicts or undermines the initiative's decisions, is
+     an architecture call. The coordinator lays out the options,
      such as revising the proposal or asking the author of the change on `main` to revise or revert it. The approvers
      decide, and the coordinator follows up with whoever has to act.
-   - A **number collision** or another error from the deterministic checks is fixed by renumbering or correcting the
-     text.
+   - A **number collision** or another error from the deterministic checks is fixed in the text: by the proposal's
+     author for the proposal, by the coordinator on the branch for an item already merged.
    - A finding against an item **already on the branch** marks that item's board row *recheck*. Its approval stands.
      The coordinator clears the recheck when the approvers decide no change is needed (recorded on the row), or when
      the amendment PR that changes it merges.
    - **Ambiguity, overlap and stale references** go back to the proposal's author as review comments. They block only
      when the coordinator says so in the gate comment.
-8. **Merge.** The gate is **clean** when no contradiction, collision or deterministic-check error is open for the
-   proposal. Then squash-merge the PR, push the ADR index update, and record the merge commit on the proposal's board
+8. **Merge.** The gate is **clean** when no contradiction, number collision or deterministic-check error is open for
+   the proposal. Then squash-merge the PR, push the ADR index update, and record the merge commit on the proposal's board
    row.
 
 ### Side tracks
@@ -327,13 +330,14 @@ implementation:
 
 - The coordinator runs the pre-merge gate against `main` one last time and posts the evidence on the landing PR:
   every row agreed and merged, no open side track, collision or recheck, and the gate comment.
-- One approver approves the landing PR, attesting that it is the agreed set. That attestation stands in for the
-  per-PR agreement rule, because every decision in it was already agreed on its own PR. It is not a fresh review of
-  each decision.
-- Code Review merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the
-  decision log. Every required check runs.
-- The coordinator tags the branch tip `archive/initiative/<n>-<slug>` and moves the board to the implementation phase.
-  A repository admin deletes the branch, since the ruleset blocks everyone else.
+- One approver records in a PR comment that it is the agreed set. That **attestation** stands in for the per-PR
+  agreement rule, because every decision in it was already agreed on its own PR. It is not a fresh review of each
+  decision and not a review approval, so having authored a proposal in it does not bar an approver from giving it.
+- The coordinator tags the branch tip `archive/initiative/<n>-<slug>` and requests Code Review. Code Review approves
+  and merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the decision
+  log. Every required check runs.
+- The coordinator moves the board to the implementation phase, and a repository admin deletes the branch, since the
+  ruleset blocks everyone else.
 
 ## Size guard
 

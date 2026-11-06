@@ -70,7 +70,7 @@ For visible UI or interaction changes, follow [Studio UX acceptance](docs/contri
 
 ## Program bookkeeping
 
-Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. A PR whose base is an `initiative/*` branch is the exception: the initiative's coordinator merges it after the [pre-merge gate](docs/contributing/initiatives.md#the-pre-merge-gate). See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. An initiative proposal (a PR whose base is an `initiative/*` branch, or the branch of a proposal stacked on one) is the exception: the initiative's coordinator merges it after the [pre-merge gate](docs/contributing/initiatives.md#the-pre-merge-gate). See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
