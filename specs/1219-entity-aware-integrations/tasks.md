@@ -13,7 +13,7 @@
 **Purpose:** prepare the single implementation lane and independently composable feature.
 
 - [X] T001 Verify the current claim/PR, main-red state and reviewed catalog scope; record the exact implementation head, owned qualification paths and C01–C12 evidence ledger in `specs/1219-entity-aware-integrations/quickstart.md`, preserving outstanding full-feature gates and all existing stores/hosts.
-- [ ] T002 Create `Essentials/src/Activities/Design/Disclosure/Elsa.Activities.Design.Disclosure.csproj` and `Essentials/src/Activities/Design/Disclosure/ActivityCatalogDisclosureFeature.cs`; add the project reference needed by `Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj` and the normal solution/filter entries, with internal sealed implementations and a public unsealed feature, without an API/Publishing implementation dependency.
+- [X] T002 Create `Essentials/src/Activities/Design/Disclosure/Elsa.Activities.Design.Disclosure.csproj` and `Essentials/src/Activities/Design/Disclosure/ActivityCatalogDisclosureFeature.cs`; add the project reference needed by `Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj` and the normal solution/filter entries, with internal sealed implementations and a public unsealed feature, without an API/Publishing implementation dependency.
 
 ## Phase 2: Foundational admission, retention and replay
 

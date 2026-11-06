@@ -53,12 +53,20 @@ The final implementation head, review and CI receipts belong on its PR; this led
   focused cases pass. The affected Activities Design project passes **806/806**, zero skips.
 - Three temporary causal mutations fail their intended tests: accepting unknown classification as
   Public, bypassing exact producer binding identity, and publishing the registry before final DI
-  validation. All mutated source bytes were restored. The final post-restoration suite and remaining
-  architecture/maps/dependency/review gates must be recorded before this batch is ready.
+  validation. All mutated source bytes were restored; the final post-restoration and API-tracked runs
+  pass 806/806. The architecture suite passes 617/617; locked Release/Debug graph restores, maps
+  generation/check and the 222-file catalog link check pass. Required hosted CI remains pending.
 - Initial failures remain visible: one test-construction compile error was fixed; the first whole
   project run was 800/802 because a serialization fixture contained Undefined JSON and a duplicate
   replacement test called its intentional unsupported stub. Both test defects were fixed before the
-  806-case passing run. No production failure was hidden or relabeled.
+  806-case passing run. The initial architecture run was 614/617: three guards correctly caught the new project
+  missing from the architecture test host; its full project reference/lock was added before the
+  617-case passing run. No production failure was hidden or relabeled.
+- Independent correctness/security, standards and acceptance review is clean at
+  `c649dd17d6323c3ecd4ac881bac226d522f66e54`. Standards findings were resolved with Core-only API
+  tracking (2,518 existing baseline entries and 255 additions) and complete owning catalogs. Test
+  discovery lists 783 entries; two dynamic Theories expand into 25 executed cases. Every listed method
+  ran, accounting for the 806 executed cases without omitted/skipped tests.
 - Allowlisted local evidence is under `/tmp/entity-3608-catalog-foundation-results` and
   `/tmp/entity-3608-catalog-foundation-mutations`. This component batch starts no HTTP host and changes
   no store/schema. The ownership repair's separate resulting-main SQLite/global HTTP evidence is on
