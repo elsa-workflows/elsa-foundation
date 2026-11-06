@@ -34,6 +34,13 @@ public sealed class StudioModuleManifestProvider(
     public async Task<StudioModuleRegistryResponse> GetModuleRegistry(CancellationToken cancellationToken)
     {
         var result = await Collect(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Disabled discoveries still participate in identity integrity. Otherwise duplicate disabled
+        // handlers could produce an apparently complete inventory that cannot identify its modules.
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var manifest in result.CollectedManifests.Concat(result.FailedManifests))
+            if (string.IsNullOrWhiteSpace(manifest.Id) || !identities.Add(manifest.Id))
+                throw new InvalidOperationException("Studio module discovery requires unique, nonblank identities.");
         var diagnosticsByModule = result.Diagnostics
             .GroupBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.ToArray() as IReadOnlyCollection<StudioModuleDiagnostic>, StringComparer.OrdinalIgnoreCase);
@@ -68,11 +75,12 @@ public sealed class StudioModuleManifestProvider(
             })
             .ToArray();
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new StudioModuleRegistryResponse(
             result.Options.HostVersion,
             result.Options.SdkVersion,
             DateTimeOffset.UtcNow,
-            registry);
+            registry) { Complete = true };
     }
 
     private async Task<CollectionResult> Collect(CancellationToken cancellationToken)
