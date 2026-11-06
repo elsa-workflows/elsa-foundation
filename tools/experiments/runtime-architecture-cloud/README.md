@@ -1,7 +1,13 @@
 # Hosted runtime experiment runner
 
 The first hosted path materializes the immutable reviewed v2 transfer, verifies all three original result trees,
-records a common Linux process-signal adaptation, then restores/builds the complete actual baseline probe graph.
+applies a hash-bound common compiler repair, records a common Linux process-signal adaptation, then restores/builds
+the complete actual baseline probe graph. The first hosted baseline compilation exposed a missing PersistenceScope
+namespace and an ambiguous ActivityTransitionKind enum in the shared harness. The minimal repair patch adds the
+actual namespace and qualifies the intended workflow attempt enum in all three variants, after original tree
+verification. State records its SHA and before/after commit/tree, and evidence retains the patch and source commit
+objects. The original v2 archive and the failed hosted build's receipts remain unchanged. Applying a repair is not
+compilation evidence; the next actual build must verify it.
 It commits generated dependency lock material before a separate locked, full-output-closure build qualifies binaries.
 The exploratory first build never qualifies measurements. Failures and controller/compiler logs remain under
 `ROOT/evidence/` for the workflow's unconditional artifact upload. No production-main source is changed.

@@ -15,6 +15,8 @@ MANIFEST_SHA = 'fe68e5d4142564a7544b7fd1094c2f4a712f5c5834757c652d49587c59ff3f97
 PROBE = 'tools/experiments/runtime-architecture/RuntimeArchitectureProbe.csproj'
 PROBE_LOCK = 'tools/experiments/runtime-architecture/packages.lock.json'
 VARIANTS = ('baseline', 'runview', 'snapshot')
+COMMON_REPAIR = '0001-common-harness-build-fixes.patch'
+COMMON_REPAIR_SHA = '109dee78fb77b6c951a1f4751db9242a6e9d294c32bd4d1ff56531ea7803365b'
 
 
 def sha(data):
@@ -45,6 +47,37 @@ def commit(root, message):
     git(root, 'add', '-A')
     git(root, '-c', 'user.name=Elsa Runtime Experiment', '-c', 'user.email=runtime-experiment@example.invalid',
         'commit', '-m', message)
+
+
+def repair_common_harness(source, evidence, variant):
+    """Apply the minimal hosted compiler repair after original input-tree verification."""
+    patch = HERE / 'patches' / COMMON_REPAIR
+    content = patch.read_bytes()
+    if sha(content) != COMMON_REPAIR_SHA:
+        raise ValueError('Reviewed common harness compiler repair differs')
+    if git(source, 'status', '--porcelain', '--untracked-files=all'):
+        raise ValueError('Compiler repair requires the clean verified original source')
+    before_commit, before_tree = git(source, 'rev-parse', 'HEAD'), git(source, 'rev-parse', 'HEAD^{tree}')
+    command(['git', '-C', str(source), 'apply', '--check', '--index', '--binary', str(patch)],
+            evidence / ('repair-check-' + variant + '.log'))
+    command(['git', '-C', str(source), 'apply', '--index', '--binary', str(patch)],
+            evidence / ('repair-apply-' + variant + '.log'))
+    expected = ['tools/experiments/runtime-architecture/Semantics.cs',
+                'tools/experiments/runtime-architecture/VariantLoader.cs']
+    if git(source, 'diff', '--cached', '--name-only').splitlines() != expected:
+        raise ValueError('Common compiler repair changed unexpected source files')
+    commit(source, 'Repair common probe namespace and transition enum compiler errors found by hosted build')
+    target = evidence / 'source-repairs' / COMMON_REPAIR
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() and target.read_bytes() != content:
+        raise ValueError('An earlier exported compiler repair changed')
+    if not target.exists():
+        with target.open('xb') as stream:
+            stream.write(content)
+    return {'patchPath': str(target), 'patchSha256': sha(content),
+        'beforeCommit': before_commit, 'beforeTree': before_tree,
+        'afterCommit': git(source, 'rev-parse', 'HEAD'), 'afterTree': git(source, 'rev-parse', 'HEAD^{tree}'),
+        'changedPaths': expected, 'applicationOnly': True}
 
 
 class Runner:
@@ -172,6 +205,7 @@ class Runner:
                 raise ValueError('Applied source tree differs: ' + name)
             commit(source, 'Materialize reviewed runtime experiment source ' + name)
             initial = git(source, 'rev-parse', 'HEAD')
+            common_repair = repair_common_harness(source, self.evidence, name)
             launcher = source / 'tools/experiments/runtime-architecture/launch_phase.py'
             content = launcher.read_text()
             old = "os.kill(expected['pid'], signal.SIGKILL)"
@@ -185,6 +219,7 @@ class Runner:
             commit(source, 'Use reviewed Linux exact-process signal primitive in hosted watcher')
             self.state['variants'][name] = {'worktree': str(source), 'inputCommit': entry['originalCommit'],
                 'verifiedInputTree': entry['resultTree'], 'materializedCommit': initial,
+                'commonHarnessRepair': common_repair,
                 'commit': git(source, 'rev-parse', 'HEAD'), 'tree': git(source, 'rev-parse', 'HEAD^{tree}'),
                 'linuxAdaptation': {'path': str(launcher.relative_to(source)), 'beforeSha256': before, 'afterSha256': sha(launcher.read_bytes())},
                 'linuxIdentityAdaptation': identity_adaptation,
