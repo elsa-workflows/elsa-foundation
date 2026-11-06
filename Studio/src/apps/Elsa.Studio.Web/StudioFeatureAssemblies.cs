@@ -47,6 +47,7 @@ internal static class StudioFeatureAssemblies
                 typeof(AgentSpecialistsStudioFeature).Assembly,
                 typeof(ConnectionsStudioFeature).Assembly,
                 typeof(ExternalAuthenticationStudioFeature).Assembly,
+                typeof(Elsa.Studio.Decisions.DecisionsStudioFeature).Assembly,
                 typeof(EtlStudioFeature).Assembly,
                 typeof(JavaScriptExpressionEditorStudioFeature).Assembly,
                 typeof(LiquidExpressionEditorStudioFeature).Assembly);

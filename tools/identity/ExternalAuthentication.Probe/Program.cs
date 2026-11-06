@@ -3,7 +3,7 @@ using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;

@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints;
 

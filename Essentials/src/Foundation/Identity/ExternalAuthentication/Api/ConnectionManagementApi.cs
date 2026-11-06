@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 

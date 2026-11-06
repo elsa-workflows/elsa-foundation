@@ -20,7 +20,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 

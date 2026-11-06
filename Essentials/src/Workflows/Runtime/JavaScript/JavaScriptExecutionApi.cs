@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.JavaScript.Authorization;

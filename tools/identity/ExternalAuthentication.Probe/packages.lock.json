@@ -436,7 +436,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.api.capabilities": {
@@ -449,7 +449,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.api.capabilities.core": {
@@ -484,7 +484,7 @@
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.foundation.identity.aspnetcoreidentity": {
@@ -496,7 +496,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.foundation.identity.aspnetcoreidentity.entityframeworkcore": {
@@ -530,7 +530,7 @@
           "Elsa.Api.Capabilities.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.ExternalAuthentication": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.foundation.identity.externalauthentication.core": {
@@ -694,11 +694,11 @@
           "Microsoft.EntityFrameworkCore": "10.0.10"
         }
       },
-      "NativeEndpoints": {
+      "ValenceWorks.MinimalEndpoints": {
         "type": "CentralTransitive",
-        "requested": "[1.0.0-preview.6, )",
-        "resolved": "1.0.0-preview.6",
-        "contentHash": "3TeUmdG8kjVZYj2NJeYc53kmP0M9Qj6sTBfhJjQMqrLGXgIBGdme9ivE7vlshRAqM79mRLmjICQJPAIBcdEQQw=="
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
       },
       "Npgsql": {
         "type": "CentralTransitive",

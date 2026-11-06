@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.ActivityExecutions.List;
 
