@@ -136,21 +136,6 @@
       "gzipSha256": "abbbd112c808ab94126e55125fa5fd7661bb183686569e569bd129a3e4f7f989"
     }
   },
-  "sourceSha256": {
-    "Essentials/src/Activities/Bpmn/Api/Endpoints/BpmnCatalog.cs": "dc01a255351407ffecafb32494e864c57ff31e729457b1028d0b081640b8ea1b",
-    "Essentials/src/Activities/Bpmn/Core/BpmnModelInspection.cs": "f6a25890074210c5b520401056dda47a515262f3951ec75f8f75e04412b1903e",
-    "Essentials/src/Activities/Bpmn/Core/BpmnModelPublicationProvenance.cs": "4f18fa6a89d8aa6b19e18cce427b90089e37d1aa12800966722f0d27b3f33f7d",
-    "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj": "d32bf2e14fd8eb104a19ce5e7f11222a6a9673811fd1a31ce08983c95dc73b40",
-    "Essentials/src/Activities/Bpmn/Core/PublicAPI.Unshipped.txt": "d16c25dce34763a4c5e60d9587c89c35a88d6bc86f5d69a3014253d00ebfb8b8",
-    "Essentials/src/Activities/Bpmn/Core/README.md": "a3a62d6c5889069251b7ef307d73e1809114c082d0d4dc3b4e38d4027c377e3a",
-    "Essentials/src/Activities/Bpmn/Design/Internal/BpmnEmbeddingPinSource.cs": "0a5343c4d94300a7cefa8f4f851bd8e2da747b9406e9a293613f71bd9640512b",
-    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs": "c077a60a1474d984da64be6039ae15958a04abc6b95dbd11d0de6fb98d2833e2",
-    "Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectProjection.cs": "57a325f43e88bf0af8c7bcb8f3f32505fefab680b2172604d377fbf67d0a4aaa",
-    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs": "d606e464eba12706f8c4ceb51527d9d927d7d19275d9f4dfaf8cd7a697f44f03",
-    "Essentials/tests/Activities/Bpmn/Tests/BpmnCatalogTests.cs": "10d505f10b040c31c881ca7d811a2162048de8ce35fccbbca33baa0bacd6680d",
-    "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectPublicationTests.cs": "9e2d6db5a8b6ea262075b9e9a2802da1302e2c345b452030d98a97e32e8da08a",
-    "Essentials/tests/Activities/Bpmn/Tests/BpmnPublicationProvenanceGeneratedJsonTests.cs": "1b001bcff8fffdb4c1c17093f7c6e43ee936cb730c1a219c78df6fe64e4df0fb"
-  },
   "canonicalMutation": {
     "originalSha256": "c077a60a1474d984da64be6039ae15958a04abc6b95dbd11d0de6fb98d2833e2",
     "mutation": "Replace authored logical DefinitionId with synthetic material DefinitionId",
@@ -159,5 +144,59 @@
     "restored": true
   },
   "strictJsonRedSourceSha256": "8737bffc7c5b43fc2205fd7651535b2b8e6ba78c20a0eeec92f62616b2353903",
-  "generatedReaderRedSourceSha256": "75a7e263b54f453349436a7b30621e73402f35a866a1a6dd0e6c1027b9277dac"
+  "generatedReaderRedSourceSha256": "75a7e263b54f453349436a7b30621e73402f35a866a1a6dd0e6c1027b9277dac",
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Api/Endpoints/BpmnCatalog.cs",
+      "sha256": "dc01a255351407ffecafb32494e864c57ff31e729457b1028d0b081640b8ea1b"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/BpmnModelInspection.cs",
+      "sha256": "f6a25890074210c5b520401056dda47a515262f3951ec75f8f75e04412b1903e"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/BpmnModelPublicationProvenance.cs",
+      "sha256": "4f18fa6a89d8aa6b19e18cce427b90089e37d1aa12800966722f0d27b3f33f7d"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
+      "sha256": "d32bf2e14fd8eb104a19ce5e7f11222a6a9673811fd1a31ce08983c95dc73b40"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/PublicAPI.Unshipped.txt",
+      "sha256": "d16c25dce34763a4c5e60d9587c89c35a88d6bc86f5d69a3014253d00ebfb8b8"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/README.md",
+      "sha256": "a3a62d6c5889069251b7ef307d73e1809114c082d0d4dc3b4e38d4027c377e3a"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Design/Internal/BpmnEmbeddingPinSource.cs",
+      "sha256": "0a5343c4d94300a7cefa8f4f851bd8e2da747b9406e9a293613f71bd9640512b"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+      "sha256": "c077a60a1474d984da64be6039ae15958a04abc6b95dbd11d0de6fb98d2833e2"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectProjection.cs",
+      "sha256": "57a325f43e88bf0af8c7bcb8f3f32505fefab680b2172604d377fbf67d0a4aaa"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs",
+      "sha256": "d606e464eba12706f8c4ceb51527d9d927d7d19275d9f4dfaf8cd7a697f44f03"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnCatalogTests.cs",
+      "sha256": "10d505f10b040c31c881ca7d811a2162048de8ce35fccbbca33baa0bacd6680d"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectPublicationTests.cs",
+      "sha256": "9e2d6db5a8b6ea262075b9e9a2802da1302e2c345b452030d98a97e32e8da08a"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnPublicationProvenanceGeneratedJsonTests.cs",
+      "sha256": "1b001bcff8fffdb4c1c17093f7c6e43ee936cb730c1a219c78df6fe64e4df0fb"
+    }
+  ]
 }

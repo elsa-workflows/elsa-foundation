@@ -136,20 +136,6 @@
       "gzipSha256": "b50e57fefcde0d05203783ce791bbcc63a00695f672a2ddfdfee7164c033492d"
     }
   },
-  "sourceSha256": {
-    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxClaimCompletionStore.cs": "4771f4a33a813acc6759724fb0ced65efd2cc944f50262d3203163716a7e3c92",
-    "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs": "4a86803847cad4648b505245d3eefbdb78d2a2f30dbd225e8b0e8f118aefede4",
-    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs": "94e8da971b28a9e48d25c5fbb6c420b26dd71b35b475ba432bd1ccebe9e8edd6",
-    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "2d8dc31c2bdaf182f1c819d77a57fc32dcd66e70f619e1b9613ddbd0021838ef",
-    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "e99018bd222ace83cdfadd428ec6654c38a82428058ca1817a3300d6dd210e17",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "5ac45c42d772419f0ff117902389de7423f056642d52578e048cf46196396d3e",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt": "5ba7d7c288733799a5dccd36f9ea7df81b9853c2a99b03cbae5ed86ba8273a7a",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs": "979730e7c309970ddef61f50d327224431cc5b75b080d1aa6737d177c772dc61",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs": "b793c2e60498e0ead515c61f162e3a47e61fbed3bd1f0e227d28cb249414f3aa",
-    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimePostCommitOutboxStoreTests.cs": "226c3e5c6f464cc80f9b5e97f65465b6c9a4517eb43067c99ff74f99bd51a773",
-    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationBoundaryTests.cs": "4d8b131e325fae1767bfd00e0c73c0a52925b2989e84faf34a486e2559ce5be9",
-    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationPreparationTests.cs": "7f8dab90946bad80a5703d4104a4bcb03a3ce13ce1b0adf517c05641a76f13ba"
-  },
   "completionRefusalRedSource": {
     "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "3a787acf160fcf7fcf9cc51e293c6baf24778f0489b89f774e61c8be80d9ac32",
     "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxClaimCompletionStore.cs": "4771f4a33a813acc6759724fb0ced65efd2cc944f50262d3203163716a7e3c92",
@@ -162,5 +148,55 @@
     "exitCode": 1,
     "restored": true
   },
-  "nestedStrictOutboxAndGeneratedConverterPrototypeFailuresExcluded": true
+  "nestedStrictOutboxAndGeneratedConverterPrototypeFailuresExcluded": true,
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxClaimCompletionStore.cs",
+      "sha256": "4771f4a33a813acc6759724fb0ced65efd2cc944f50262d3203163716a7e3c92"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs",
+      "sha256": "4a86803847cad4648b505245d3eefbdb78d2a2f30dbd225e8b0e8f118aefede4"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs",
+      "sha256": "94e8da971b28a9e48d25c5fbb6c420b26dd71b35b475ba432bd1ccebe9e8edd6"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs",
+      "sha256": "2d8dc31c2bdaf182f1c819d77a57fc32dcd66e70f619e1b9613ddbd0021838ef"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt",
+      "sha256": "e99018bd222ace83cdfadd428ec6654c38a82428058ca1817a3300d6dd210e17"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md",
+      "sha256": "5ac45c42d772419f0ff117902389de7423f056642d52578e048cf46196396d3e"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt",
+      "sha256": "5ba7d7c288733799a5dccd36f9ea7df81b9853c2a99b03cbae5ed86ba8273a7a"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs",
+      "sha256": "979730e7c309970ddef61f50d327224431cc5b75b080d1aa6737d177c772dc61"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs",
+      "sha256": "b793c2e60498e0ead515c61f162e3a47e61fbed3bd1f0e227d28cb249414f3aa"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimePostCommitOutboxStoreTests.cs",
+      "sha256": "226c3e5c6f464cc80f9b5e97f65465b6c9a4517eb43067c99ff74f99bd51a773"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationBoundaryTests.cs",
+      "sha256": "4d8b131e325fae1767bfd00e0c73c0a52925b2989e84faf34a486e2559ce5be9"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationPreparationTests.cs",
+      "sha256": "7f8dab90946bad80a5703d4104a4bcb03a3ce13ce1b0adf517c05641a76f13ba"
+    }
+  ]
 }
