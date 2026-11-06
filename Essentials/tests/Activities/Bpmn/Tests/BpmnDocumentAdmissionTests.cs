@@ -7,6 +7,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;

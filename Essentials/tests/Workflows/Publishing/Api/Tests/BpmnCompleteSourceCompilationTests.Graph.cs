@@ -76,6 +76,30 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("implementation", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Actual_template_coordinator_compiles_native_body_variable_frames_inside_complete_source(bool standardScope)
+    {
+        using var fixture = new GraphFixture();
+        var owner = Process(canStart: true, nestedStandardScope: standardScope);
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(owner.Structure!.Payload.GetRawText())!.AsObject();
+        var native = payload["activities"]!.AsArray()[0]!.AsObject();
+        native["structure"]!["payload"]!["variables"] = JsonSerializer.SerializeToNode(new[]
+        {
+            new VariableDefinition("native-local", "Native local", new("Int32"), null, new ArgumentValue("42", "Literal"))
+        }, Web);
+        owner = owner with { Structure = new(owner.Structure.Kind, owner.Structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, Web)) };
+        var result = await fixture.Compile(owner);
+        Assert.True(result.IsSuccessful, string.Join("; ", result.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        var dependency = Assert.Single(result.Template!.DirectDependencies, dependency => dependency.OccurrenceId == "work");
+        var overlay = Assert.IsType<ExecutableActivityTemplateOccurrenceOverlay>(dependency.OccurrenceOverlay);
+        var structure = Assert.IsType<ExecutableActivityStructure>(overlay.Structure);
+        var variable = Assert.Single(structure.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(Web)!);
+        Assert.Equal("native-local", variable.VariableKey);
+        Assert.Equal(42, variable.InitialBinding?.Literal?.InlineValue?.GetInt32());
+    }
+
     [Fact]
     public async Task Actual_loaded_Graph_template_cannot_gain_BpmnProcess_authority_from_its_publication_type_label()
     {
