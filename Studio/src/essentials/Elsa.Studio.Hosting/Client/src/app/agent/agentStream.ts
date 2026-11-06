@@ -205,7 +205,7 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return {
         type: "context-admitted",
         attachments: Array.isArray(attachments) ? attachments.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(mapAdmittedContextAttachment) : [],
-        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false })) : []
+        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false, ...(readBoolean(item, "ownerUnavailable") === true ? { ownerUnavailable: true } : {}) })) : []
       };
     }
     case "message-started":
@@ -282,6 +282,7 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       const code = readString(error, "code");
       const limit = readString(error, "limit");
       return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed."), ...(code ? { code } : {}),
+        ...(readBoolean(error, "ownerUnavailable") === true ? { ownerUnavailable: true } : {}),
         ...(limit === "snapshots" || limit === "bytes" ? { limit } : {}) };
     }
     case "conversation.error":

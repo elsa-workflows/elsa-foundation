@@ -1190,7 +1190,9 @@ export interface StudioAgentContextRequest {
 /** Backend payload enums retain camelCase wire spelling; presentation may normalize labels. */
 export type StudioAgentContextOrigin = "clientSnapshot" | "resourceData" | "authoritativeRead" | "installedGuidance";
 export type StudioAgentExecutionLocation = "server" | "clientWorkingState";
-export type StudioAgentEffectScope = "clientWorkingState" | "serverPersisted";
+export type StudioAgentEffectScope = "clientWorkingState" | "serverPersisted" | "noPersistedEffect";
+/** Host privilege requirements, separate from resource permission and session autonomy. */
+export type StudioAgentPrivilegeClass = "administrative" | "irrecoverable" | "activation";
 export type StudioAgentPreparedRisk = "readOnly" | "reviewRequired" | "destructive" | "admin";
 export type StudioAgentClientOutcome = "applied" | "refused" | "uncertain";
 
@@ -1232,6 +1234,8 @@ export interface StudioAgentContributionDiagnostic {
   code: string;
   message: string;
   required: boolean;
+  /** Reported transport metadata only; this flag cannot establish trusted owner origin. */
+  ownerUnavailable?: boolean;
 }
 
 export interface StudioAgentContextCollection {
@@ -1247,6 +1251,8 @@ export interface StudioAgentContextProviderContribution extends StudioBackendAwa
   surfaces: string[];
   sensitivity: StudioAgentSensitivity;
   required?: boolean;
+  /** Optional typed outcome declaration: absent/null is legacy; empty declares no codes. Server admission remains authoritative. */
+  moduleCodes?: readonly string[] | null;
   collect(context: StudioAgentContextRequest): Promise<StudioAgentContextCollection | StudioAgentContextAttachment[]>;
 }
 
@@ -1314,6 +1320,10 @@ export interface StudioAgentToolContractContribution extends StudioBackendAwareC
   resultRendererIds?: string[];
   contractVersion?: string;
   executionLocation?: StudioAgentExecutionLocation;
+  /** Server-tool metadata; never admits performed through the client working-state ACK protocol. */
+  canPerformWithoutPersistence?: boolean;
+  /** Optional typed outcome declaration: absent/null is legacy; empty declares no codes. */
+  moduleCodes?: readonly string[] | null;
   /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
   executeClient?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult>;
   /**
@@ -1355,6 +1365,8 @@ export interface StudioAgentPreparedInvocation {
   requiresApproval: boolean;
   client: StudioAgentClientBinding | null;
   expiresAt: string;
+  /** Frozen server requirements; omitted/null/empty preserves an unclassed legacy preparation. */
+  requiredPrivilegeClasses?: readonly StudioAgentPrivilegeClass[] | null;
 }
 
 /** Observed module outcome. Returning from a dispatch call alone does not prove application. */
@@ -1376,6 +1388,8 @@ export interface StudioAgentEffectReceipt {
   after: StudioAgentResourceTarget;
   scope: StudioAgentEffectScope;
   evidence: StudioAgentPayload;
+  /** Owning module's normalized typed outcome code; never a resource permission. */
+  moduleCode?: string | null;
 }
 
 export interface StudioAgentToolResult {

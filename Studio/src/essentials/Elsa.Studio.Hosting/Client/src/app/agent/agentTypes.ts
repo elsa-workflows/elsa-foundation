@@ -37,10 +37,19 @@ export interface AgentPlanStep {
  */
 export type AgentRecoveryMode = "durable" | "processLifetime" | "unsupported";
 
+/** Current read-only host limits. Missing projection means not reported, not an authority grant. */
+export interface AgentPrivilegePolicyView {
+  readonly administrative: boolean;
+  readonly irrecoverable: boolean;
+  readonly activation: boolean;
+}
+
 export interface AgentBootstrapResponse {
   enabled: boolean;
   /** Preview (#3441): absent from a server that does not report it. */
   recovery?: AgentRecoveryMode;
+  /** Absent for an older backend or an incomplete/malformed projection. Never a policy-update surface. */
+  privileges?: AgentPrivilegePolicyView;
   providerStatus: AgentProviderStatus;
   modes: StudioAgentMode[];
   capabilities: StudioAgentCapabilityContribution[];
@@ -316,7 +325,7 @@ export type AgentStreamEvent =
   | { type: "message-completed"; messageId: string }
   | { type: "turn-cancelled"; turnId: string }
   | { type: "provider-notice"; code: string; message: string }
-  | { type: "error"; message: string; code?: string; limit?: AgentSessionLimit };
+  | { type: "error"; message: string; code?: string; limit?: AgentSessionLimit; ownerUnavailable?: boolean };
 
 export interface AgentFeedbackRequest {
   rating: "positive" | "negative";

@@ -60,17 +60,23 @@ export interface AgentClient {
 
 /** An HTTP refusal with the authenticated server's authoritative terminal operation outcome. */
 export class AgentExecutionError extends StudioHttpError {
+  /** Reported transport metadata; never proof of no effect or fresh owner authority. */
+  readonly ownerUnavailable: boolean;
   constructor(status: number, message: string, public readonly code: string, public readonly terminalOutcome: AgentProposalDecisionResponse, payload: unknown) {
     super(status, message, null, payload);
     this.name = "AgentExecutionError";
+    this.ownerUnavailable = readBoolean(readRecord(payload, "error"), "ownerUnavailable") === true;
   }
 }
 
 /** An HTTP refusal that carries the Agent API's error code (for example `agent.session.policy_stale`). */
 export class AgentApiError extends StudioHttpError {
+  /** Reported transport metadata; never proof of no effect or fresh owner authority. */
+  readonly ownerUnavailable: boolean;
   constructor(status: number, message: string, public readonly code: string, payload: unknown, retryAfterSeconds: number | null = null) {
     super(status, message, null, payload, retryAfterSeconds);
     this.name = "AgentApiError";
+    this.ownerUnavailable = readBoolean(readRecord(payload, "error"), "ownerUnavailable") === true;
   }
 }
 
@@ -432,7 +438,7 @@ function terminalExecutionError(envelope: unknown, proposalId: string, status?: 
 
 interface AgentApiResponse<T> {
   data?: T | null;
-  error?: { code: string; message: string; statusCode?: number } | null;
+  error?: { code: string; message: string; statusCode?: number; ownerUnavailable?: boolean } | null;
 }
 
 interface BackendAgentBootstrapResponse {
@@ -441,6 +447,7 @@ interface BackendAgentBootstrapResponse {
   modes?: AgentBootstrapResponse["modes"];
   capabilities?: BackendAgentCapability[];
   policy?: AgentBootstrapResponse["policy"];
+  privileges?: AgentBootstrapResponse["privileges"];
   provider?: BackendAgentProviderDiagnostics | null;
 }
 
@@ -537,8 +544,19 @@ function mapBootstrap(response: BackendAgentBootstrapResponse): AgentBootstrapRe
     capabilities: capabilities.map(mapCapability),
     provider,
     policy: mapPolicy(readRecord(response, "policy")),
+    ...mapPrivilegeProjection(response),
     ...(recovery ? { recovery } : {})
   };
+}
+
+function mapPrivilegeProjection(response: unknown): Pick<AgentBootstrapResponse, "privileges"> {
+  const view = readRecord(response, "privileges");
+  const administrative = readBoolean(view, "administrative");
+  const irrecoverable = readBoolean(view, "irrecoverable");
+  const activation = readBoolean(view, "activation");
+  // An absent/partial old-server view is not an observation that the current host disabled all classes.
+  return administrative !== undefined && irrecoverable !== undefined && activation !== undefined
+    ? { privileges: { administrative, irrecoverable, activation } } : {};
 }
 
 const DEFAULT_AUTONOMY_MODE: AgentAutonomyMode = "auto-read-only";
