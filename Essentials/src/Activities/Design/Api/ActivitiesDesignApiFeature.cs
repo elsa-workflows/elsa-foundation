@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -34,7 +35,7 @@ namespace Elsa.Activities.Design.Api;
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain",
-    DependsOn = new object[] { "ApiCapabilities", "Expressions" }
+    DependsOn = new object[] { "ApiCapabilities", "Expressions", "WorkflowDesignValidations" }
 )]
 public class ActivitiesDesignApiFeature : IWebShellFeature
 {
@@ -75,6 +76,9 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddSingleton<ActivityContractAuthoringValidator>();
         services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
+        ActivityDataSelectionDraftValidationRegistration.Register(services);
+        services.TryAddScoped<ActivityDataSelectionContextService>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IApiCapabilitySource, ActivityDataSelectionApiCapabilitySource>());
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<ActivityTokenSigningOptions>().Configure(options =>
