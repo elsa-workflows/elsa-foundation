@@ -2,7 +2,7 @@
 
 **Inputs**: Reviewed [spec](spec.md), [plan R3](plan.md), [data model](data-model.md), [contracts](contracts/preparation-retention.md), [actual issuer integration](contracts/issuer-integration.md) and [validation guide](quickstart.md). Approval/source receipts are in [planning-record.md](planning-record.md).
 
-**State**: T002's contracts increment is implemented and independently reviewed; its bounded checks are in [evidence](evidence/README.md). The other 19 tasks remain unchecked; T001's source reconciliation is recorded and its authorized helper adoption is deferred until the first consumer. Spec status is In progress. No durable retention implementation, provider qualification, T066 acceptance or new #3804 gate is claimed.
+**State**: T002 remains complete. This increment publishes the reviewed/tested T003 metadata, codec, family-writer and migration source; T003 remains unchecked pending consolidated acceptance and the retained-row/provider qualification recorded in evidence. The other 19 task checkboxes are unchanged. T001 helper adoption remains deferred until its first consumer. Spec status stays In progress; no complete durable retention, T066 acceptance or extra #3804 gate is claimed.
 
 **Cadence**: Pair each logic-bearing implementation with risk-based behavior/failure/concurrency tests at the cheapest level that proves it, as directed for this leaf and framework §2.23/ADR 0080 D1. No blanket TDD or mandatory initial failing run. Conditional registration/decoration/validation needs targeted wiring tests; plain registrations use the existing feature-composition guard. Required causal mutations still show red then green for the claimed boundary. Tests assert behavior, never Markdown/source text.
 
