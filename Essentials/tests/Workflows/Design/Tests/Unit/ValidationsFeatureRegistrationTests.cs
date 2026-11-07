@@ -130,6 +130,94 @@ public sealed class ValidationsFeatureRegistrationTests
             await initializer.InitializeAsync();
     }
 
+    [Fact]
+    public void Source_analysis_has_one_scoped_authority()
+    {
+        using var provider = BuildProvider(_ => { });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var analyzer = Assert.Single(first.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>());
+        Assert.Same(analyzer, first.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+        Assert.NotSame(analyzer, second.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_second_source_authority_fails_activation_in_either_registration_order(bool registeredBefore)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        }, registeredBefore);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_pre_registered_scoped_source_authority_is_preserved_as_the_one_host_replacement()
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>(), hostRegistersFirst: true);
+        await InitializeShellAsync(provider);
+        using var scope = provider.CreateScope();
+        Assert.IsType<SecondAnalyzer>(Assert.Single(scope.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_singleton_source_authority_fails_activation(bool replaceWithSingleton)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            services.RemoveAll<IActivityDataSelectionAnalyzer>();
+            if (replaceWithSingleton) services.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        });
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    [InlineData("singleton")]
+    public async Task A_copied_child_shell_checks_its_own_source_authority_and_preserves_the_parent(string invalid)
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        if (invalid == "duplicate") child.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        if (invalid != "duplicate") child.RemoveAll<IActivityDataSelectionAnalyzer>();
+        if (invalid == "singleton") child.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(childProvider).InitializeAsync());
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+        Assert.Single(parent, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+    }
+
+    [Fact]
+    public async Task A_copied_child_shell_can_keep_one_scoped_source_authority()
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        await SourceInitializer(childProvider).InitializeAsync();
+        Assert.Single(child, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+    }
+
+    private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
+        provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "ActivityDataSelectionAnalyzerCompositionCheck");
+
     private static ServiceProvider BuildProvider(
         Action<WorkflowDesignValidationsFeature> configureFeature,
         Action<IServiceCollection>? hostRegistrations = null,
@@ -154,5 +242,12 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
             ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
+    }
+
+    private sealed class SecondAnalyzer : IActivityDataSelectionAnalyzer
+    {
+        public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityDataSelectionAnalysis(document.ContractRevision, null, [], []));
     }
 }

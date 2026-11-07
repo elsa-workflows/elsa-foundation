@@ -1,0 +1,438 @@
+using System.Collections.Immutable;
+using System.Text.Json;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Internal;
+using Microsoft.Extensions.Options;
+
+namespace Elsa.Workflows.Design.Validations.Services;
+
+/// <summary>The scoped authority for canonical source identities, causal availability and metadata acquisition.</summary>
+internal sealed class ActivityDataSelectionAnalyzer(
+    IActivityStructureService structures,
+    CatalogVersionResolver catalog,
+    ScopedVariablePicker variables,
+    ScopedVariableResolver variableResolver,
+    IEnumerable<IActivitySerializedShapeSource> shapeSources,
+    IEnumerable<IActivityInputSourceConstraintProvider> constraintProviders,
+    IOptions<WorkflowDesignValidatorOptions> options) : IActivityDataSelectionAnalyzer
+{
+    public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
+        ActivityDataSelectionDocument document,
+        ActivityDataSelectionTarget? target = null,
+        ActivityDataSelectionQuery? query = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        cancellationToken.ThrowIfCancellationRequested();
+        var findings = new List<ValidationError>();
+        var graph = new ActivityDataSelectionGraph(structures);
+        graph.Build(document.RootActivity, options.Value.MaxRecursionDepth, findings, cancellationToken);
+        if (findings.Count > 0) return Result(document, null, [], findings);
+        var context = new Request(document, graph, options.Value.MaxRecursionDepth);
+
+        if (target is null)
+        {
+            context.WholeVisibility = variableResolver.Resolve(document.Variables, document.RootActivity, context.MaxDepth);
+            if (query is not null)
+                findings.Add(new("$workflow", "ActivityData/InvalidQuery", "A source query requires a consuming input."));
+            foreach (var node in graph.Nodes)
+            foreach (var input in node.Inputs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var facts = await Target(context, new(node.Node.NodeId, input.ReferenceKey), cancellationToken);
+                if (facts?.IsCredential == true && (CanonicalReferenceState(input, CredentialInputBinding.SecretExpressionType) is not { } secretState ||
+                    !CredentialInputBinding.IsAccepted(true, secretState)))
+                    findings.Add(new(Path(node, input.ReferenceKey), CredentialInputBinding.RuleId, "A credential input accepts only a secret reference."));
+                if (context.ConnectionTargets.Contains(new(node.Node.NodeId, input.ReferenceKey)) &&
+                    (CanonicalReferenceState(input, ConnectionInputBinding.ConnectionExpressionType) is not { } connectionState || !ConnectionInputBinding.IsAccepted(connectionState)))
+                    findings.Add(new(Path(node, input.ReferenceKey), ConnectionInputBinding.RuleId, "A connection input accepts only a connection reference."));
+                if (facts?.Constraint is { } constraint && input.IsBound() &&
+                    !constraint.AllowedExpressionTypes.Contains(input.Value.ExpressionType, StringComparer.OrdinalIgnoreCase))
+                    findings.Add(new(Path(node, input.ReferenceKey), constraint.ReasonCode, constraint.Message));
+                foreach (var binding in ActivityDataReadBinding.Read(input.Value))
+                    await Resolve(context, node, binding, Path(node, input.ReferenceKey), findings, cancellationToken);
+            }
+            return Result(document, null, [], findings);
+        }
+
+        var consumer = string.IsNullOrWhiteSpace(target.NodeId) ? null : graph.Find(target.NodeId);
+        var targetFacts = consumer is null ? null : await Target(context, target, cancellationToken);
+        if (consumer is null || targetFacts is null)
+        {
+            findings.Add(new($"{target.NodeId}/inputs/{target.InputKey}", "ActivityData/UnknownTarget", "The consuming input is not declared by this canonical candidate and its catalog."));
+            return Result(document, null, [], findings);
+        }
+        query ??= new();
+        if (!Valid(query))
+        {
+            findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Source query bounds or literal member path are invalid."));
+            return Result(document, targetFacts, [], findings);
+        }
+        if (!query.IncludeSources)
+        {
+            if (query.Source is not null || !query.MemberPath.IsEmpty)
+                findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Target-only analysis does not select a source."));
+            return Result(document, targetFacts, [], findings);
+        }
+        if (query.Source is null && !query.MemberPath.IsDefaultOrEmpty)
+        {
+            findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "A literal member path requires a focused source."));
+            return Result(document, targetFacts, [], findings);
+        }
+
+        var candidates = new List<Source>();
+        if (query.Source is not null)
+        {
+            var binding = ActivityDataReadBinding.Direct(query.Source.ExpressionType, query.Source.Value);
+            var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
+            if (source is not null)
+            {
+                // Return only canonical identity fields. Ignored authored/client fields are never metadata.
+                candidates.Add(source);
+            }
+        }
+        else
+        {
+            foreach (var input in document.Inputs)
+            {
+                var source = await Resolve(context, consumer, new("Input", input.ReferenceKey), Path(consumer, target.InputKey), findings, cancellationToken);
+                if (source is not null) candidates.Add(source);
+            }
+            foreach (var visible in Visible(context, consumer))
+            {
+                var scope = AuthoredScope(document, visible.ScopeId);
+                var source = await Resolve(context, consumer, new("Variable", visible.Variable.ReferenceKey, scope), Path(consumer, target.InputKey), findings, cancellationToken);
+                if (source is not null) candidates.Add(source);
+            }
+            foreach (var producer in graph.Nodes.OrderBy(node => graph.Rank(node, consumer)))
+            {
+                if (ReferenceEquals(producer, consumer) || ActivityDataSelectionGraph.CrossesOutOfScope(producer, consumer) ||
+                    graph.IsBackEdge(producer, consumer) || RequiresReturn(producer) && !graph.HasExplicitReturn(producer)) continue;
+                var availability = graph.Assess(producer, consumer).Availability;
+                if (availability == ActivityChildResultAvailability.Unavailable) continue;
+                var version = await catalog.Find(producer.Node.ActivityVersionId, cancellationToken);
+                if (version is null) continue;
+                foreach (var projection in new[] { "$result" }.Concat(version.Outputs.Select(output => output.ReferenceKey)).Distinct(StringComparer.Ordinal))
+                {
+                    // Static order facts do not establish a runtime execution-scope constraint. Keep the
+                    // source inspectable without inventing a direct binding; portable identity is separate.
+                    var source = await Resolve(context, consumer,
+                        new("ActivityResult", producer.Node.NodeId, Projection: projection),
+                        Path(consumer, target.InputKey), findings, cancellationToken, admitOccurrence: false);
+                    if (source is not null) candidates.Add(source);
+                }
+            }
+        }
+
+        var allowed = candidates.Where(source => targetFacts.Constraint is not { } constraint ||
+            (source.Binding is { } binding
+                ? constraint.AllowedExpressionTypes.Contains(binding.ExpressionType, StringComparer.OrdinalIgnoreCase)
+                : source.ActivityResultSource is not null &&
+                  constraint.AllowedExpressionTypes.Contains("ActivityResult", StringComparer.OrdinalIgnoreCase)));
+        if (!string.IsNullOrWhiteSpace(query.Search))
+            allowed = allowed.Where(source => source.DisplayName.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
+                || source.Id.Contains(query.Search, StringComparison.OrdinalIgnoreCase));
+        var page = allowed.Skip(query.Skip).Take(query.Take + 1).ToArray();
+        var budget = new ShapeBudget(query.ShapeLimits.MaximumMembers, query.ShapeLimits.MaximumDepth);
+        var factsBuilder = ImmutableArray.CreateBuilder<ActivityDataSelectionSourceFacts>();
+        foreach (var source in page.Take(query.Take))
+        {
+            var shape = await Shape(source, document, query.MemberPath, new(query.ShapeLimits.MaximumDepth, budget.Remaining), cancellationToken);
+            shape = budget.Bound(shape);
+            factsBuilder.Add(new(source.Id, source.DisplayName, source.ScopeId, source.Binding, source.Availability, shape, source.ReasonCode) { ActivityResultSource = source.ActivityResultSource });
+        }
+        if (query.Source is not null && candidates.Count > 0 && !factsBuilder.Any())
+            findings.Add(new(Path(consumer, target.InputKey), "ActivityData/SourceRestricted", "The owning input contract does not accept this source role."));
+        return Result(document, targetFacts, factsBuilder.ToImmutable(), findings, page.Length > query.Take);
+    }
+
+    private async ValueTask<ActivityDataSelectionTargetFacts?> Target(Request context, ActivityDataSelectionTarget target, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (context.Targets.TryGetValue(target, out var cached)) return cached;
+        var location = context.Graph.Find(target.NodeId);
+        if (location is null) return null;
+        var projection = location.Projection.Inputs.Where(input => input.ReferenceKey == target.InputKey).ToArray();
+        if (projection.Length > 1) return null;
+        var version = location.Node.Intrinsic is null ? await catalog.Find(location.Node.ActivityVersionId, ct) : null;
+        var definitions = projection.FirstOrDefault()?.Definition is { } projected ? new[] { projected }
+            : version?.Inputs.Where(input => input.ReferenceKey == target.InputKey).ToArray() ?? [];
+        if (projection.Length == 0 && location.Projection.ConsumedInputKeys.Contains(target.InputKey, StringComparer.Ordinal)) return null;
+        InputDefinition? definition = definitions.Length == 1 ? definitions[0] : null;
+        if (location.Node.Intrinsic is { ValueType: { } valueType } intrinsic && target.InputKey == "value")
+        {
+            var type = intrinsic.Variable is { } variable
+                ? Visible(context, location).FirstOrDefault(item => item.Variable.ReferenceKey == variable.ReferenceKey &&
+                    item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
+                : valueType;
+            definition = new("value", "Value", type, null, "Value", null, true);
+        }
+        if (definition is null) return null;
+        var constraints = new List<ActivityDataInputConstraint>();
+        if (definition.IsCredential == true)
+            constraints.Add(new("Credential", [CredentialInputBinding.SecretExpressionType], CredentialInputBinding.RuleId,
+                "A credential input accepts only a secret reference."));
+        // Match the existing compiler's canonical connection declaration without adding a Design-to-Runtime dependency.
+        if (!string.IsNullOrWhiteSpace(definition.ConnectionType) || definition.Type.Alias == "Elsa.Activities.Runtime.Core.Models.ConnectionReference")
+        {
+            context.ConnectionTargets.Add(target);
+            constraints.Add(new("Connection", [ConnectionInputBinding.ConnectionExpressionType], ConnectionInputBinding.RuleId,
+                "A connection input accepts only a connection reference."));
+        }
+        if (version is not null)
+            foreach (var provider in constraintProviders)
+                if (await provider.GetConstraintAsync(version, target.InputKey, ct) is { } constraint) constraints.Add(constraint);
+        var merged = Intersect(constraints);
+        return context.Targets[target] = new(target, definition.DisplayName, definition.Type, definition.IsNullable,
+            definition.IsRequired, projection.Length > 0, merged, definition.IsSensitive, definition.IsCredential);
+    }
+
+    private async ValueTask<Source?> Resolve(Request context, ActivityDataSelectionGraph.Location consumer,
+        ActivityDataReadBinding binding, string path, ICollection<ValidationError> findings, CancellationToken ct, bool admitOccurrence = true)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (binding.Error is not null)
+        {
+            findings.Add(new(path, $"ActivityData/{binding.Error}", "The source binding is malformed or uses a member-read contract not supported by this server."));
+            return null;
+        }
+        if (binding.Role is "Input" or "WorkflowRequest")
+        {
+            var requestRead = binding.Role == "WorkflowRequest";
+            var matches = (requestRead ? context.RequestInputs : context.Inputs).GetValueOrDefault(binding.Key) ?? [];
+            if (requestRead && context.OpenWorkflowRequest)
+                return new($"request:{binding.Key}", binding.Key, null,
+                    new(JsonSerializer.SerializeToElement(new { memberKey = binding.Key, path = binding.Path }), "WorkflowRequest"),
+                    ActivityChildResultAvailability.Definite, null, null, null, null, null, null, "OpenWorkflowRequest");
+            if (matches.Length != 1)
+            {
+                findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
+                return null;
+            }
+            var input = matches[0];
+            var value = binding.Role == "Input"
+                ? new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
+                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = context.WorkflowBoundary ? input.Name : input.ReferenceKey, path = binding.Path }), "WorkflowRequest");
+            return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
+                ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
+                binding.Path is null ? null : "LegacyRequestPath");
+        }
+        if (binding.Role == "Variable")
+        {
+            var scope = NormalizeScope(context.Document, binding.Scope);
+            var matches = Visible(context, consumer).Where(item => item.ScopeId == scope && item.Variable.ReferenceKey == binding.Key).ToArray();
+            if (matches.Length != 1)
+            {
+                findings.Add(new(path, "Variable/UnresolvableReference", "The referenced variable is missing, ambiguous or outside the consuming scope."));
+                return null;
+            }
+            var variable = matches[0].Variable;
+            var authoredScope = AuthoredScope(context.Document, scope);
+            return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
+                new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable"), ActivityChildResultAvailability.Definite,
+                variable.Type, null, null, null, null, null);
+        }
+        if (binding.Role != "ActivityResult")
+        {
+            findings.Add(new(path, "ActivityData/InvalidSource", "The requested source role is not a readable data source."));
+            return null;
+        }
+        var producer = context.Graph.Find(binding.Key);
+        if (producer is null || context.Graph.IsAmbiguous(binding.Key))
+        {
+            findings.Add(new(path, "ValueFlow/UnavailableProducer", $"Result producer '{binding.Key}' is not present unambiguously in the canonical graph."));
+            return null;
+        }
+        if (ActivityDataSelectionGraph.CrossesOutOfScope(producer, consumer) || RequiresReturn(producer) && !context.Graph.HasExplicitReturn(producer))
+        {
+            findings.Add(new(path, "ValueFlow/ScopeBoundary", "This result crosses a structured scope without an explicit typed return, collection, merge or reduction."));
+            return null;
+        }
+        if (context.Graph.IsBackEdge(producer, consumer))
+        {
+            findings.Add(new(path, "ValueFlow/CyclicBackEdge", "This result lookup crosses a cyclic back-edge; transfer iteration state explicitly."));
+            return null;
+        }
+        var availability = context.Graph.Assess(producer, consumer).Availability;
+        if (admitOccurrence && !binding.IsOptional && availability != ActivityChildResultAvailability.Definite)
+            findings.Add(new(path, "ValueFlow/UnavailableProducer", "The required result producer is not causally available on every path to this input."));
+        var version = await catalog.Find(producer.Node.ActivityVersionId, ct);
+        if (version is null)
+        {
+            findings.Add(new(path, "ActivityData/UnknownProducerContract", "The referenced producer's catalog contract is unavailable."));
+            return null;
+        }
+        var outputs = version.Outputs.Where(output => output.ReferenceKey == binding.Projection).ToArray();
+        if (binding.Projection != "$result" && outputs.Length != 1)
+        {
+            findings.Add(new(path, "ActivityData/UnknownProjection", "The referenced result projection is not declared unambiguously by the actual producer contract."));
+            return null;
+        }
+        if (admitOccurrence && binding.Projection == "$result" && await HasNoTypedResult(context, version, ct))
+        {
+            findings.Add(new(path, "ActivityData/UnknownProjection", "The admitted producer contract declares no typed whole result."));
+            return null;
+        }
+        var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
+        return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
+            output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
+            binding.Scope is null ? null : new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult"),
+            availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
+            binding.Scope is null ? "RuntimeScopeBindingUnavailable" : availability switch {
+                ActivityChildResultAvailability.Definite => null,
+                ActivityChildResultAvailability.Conditional => "ConditionalOccurrence",
+                ActivityChildResultAvailability.Unknown => "AvailabilityUnknown",
+                _ => "UnavailableProducer"
+            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
+    }
+
+    private async ValueTask<ActivitySerializedShape> Shape(Source source, ActivityDataSelectionDocument document,
+        ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (source.ReasonCode == "LegacyRequestPath") return Unknown(null, document.ContractRevision, "LegacyRequestPath");
+        ActivitySerializedShape? owned = null;
+        foreach (var provider in shapeSources)
+        {
+            var candidate = source.Version is not null
+                ? await provider.DescribeResultAsync(source.Version, source.Projection!, memberPath, limits, ct)
+                : source.Type is not null
+                    ? await provider.DescribeDeclaredTypeAsync(source.Type, $"{document.ContractRevision}/{source.Id}", memberPath, limits, ct)
+                    : null;
+            if (candidate is null) continue;
+            if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
+            owned = candidate;
+        }
+        var shape = owned ?? Unknown(memberPath.IsDefaultOrEmpty ? source.Type : null, document.ContractRevision, "NoMetadataOwner");
+        return shape with { IsNullable = memberPath.IsDefaultOrEmpty ? source.IsNullable ?? shape.IsNullable : shape.IsNullable,
+            IsSensitive = source.IsSensitive == true ? true : shape.IsSensitive,
+            IsCredential = source.IsCredential == true ? true : shape.IsCredential };
+    }
+
+    private async ValueTask<bool> HasNoTypedResult(Request context, IActivityDefinitionVersion version, CancellationToken ct)
+    {
+        if (context.NoTypedResults.TryGetValue(version.Id, out var cached)) return cached;
+        ActivitySerializedShape? owned = null;
+        foreach (var provider in shapeSources)
+        {
+            var candidate = await provider.DescribeResultAsync(version, "$result", [], new(0, 0), ct);
+            if (candidate is null) continue;
+            if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
+            owned = candidate;
+        }
+        // Only the exact, source-bound absence result is a static refusal. Missing assets/profiles stay uncertain.
+        return context.NoTypedResults[version.Id] = owned is { State: ActivitySerializedShapeState.Unavailable, ReasonCode: "activity.shape.no-typed-result" };
+    }
+
+    private IReadOnlyList<VisibleVariable> Visible(Request context, ActivityDataSelectionGraph.Location consumer)
+    {
+        if (!context.Variables.TryGetValue(consumer.Node.NodeId, out var visible))
+            context.Variables[consumer.Node.NodeId] = visible = context.WholeVisibility is { } visibility
+                ? visibility.GetVisibleVariables(consumer.Node.NodeId)
+                : variables.GetVisibleVariables(context.Document.Variables, context.Document.RootActivity, consumer.Node.NodeId, context.MaxDepth);
+        return visible;
+    }
+
+    private static string NormalizeScope(ActivityDataSelectionDocument document, string? scope) =>
+        string.IsNullOrWhiteSpace(scope) || scope == "workflow" || document.ResourceKind == "ActivityDefinition" && scope == "activity-graph"
+            ? VariableReference.WorkflowScopeId : scope;
+    private static string AuthoredScope(ActivityDataSelectionDocument document, string scope) =>
+        document.ResourceKind == "ActivityDefinition" && scope == VariableReference.WorkflowScopeId ? "activity-graph" : scope;
+    private static bool RequiresReturn(ActivityDataSelectionGraph.Location producer) => producer.Node.Structure?.Kind is
+        "elsa.sequence.structure" or "elsa.parallel.structure" or "elsa.flowchart.structure";
+    private static string Path(ActivityDataSelectionGraph.Location location, string key) => $"{location.Node.NodeId}/inputs/{key}";
+    private static ArgumentState? CanonicalReferenceState(ArgumentState state, string role)
+    {
+        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value?.ExpressionType, role) || !state.IsBound()) return state;
+        // Existing acceptance predicates serialize non-JSON objects. Never hand them an arbitrary CLR instance.
+        object? payload = state.Value.Value switch {
+            JsonElement json => json,
+            SecretReferenceMembers secret when role == CredentialInputBinding.SecretExpressionType =>
+                JsonSerializer.SerializeToElement(new { name = secret.Name, typeName = secret.TypeName, scope = secret.Scope }),
+            ConnectionReferenceMembers connection when role == ConnectionInputBinding.ConnectionExpressionType =>
+                JsonSerializer.SerializeToElement(new { connection = connection.Name, type = connection.Type }),
+            _ => null
+        };
+        return payload is null ? null : state with { Value = state.Value with { Value = payload } };
+    }
+    private static bool Valid(ActivityDataSelectionQuery query) => query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100
+        && (query.Search?.Length ?? 0) <= 256 && !query.MemberPath.IsDefault && query.MemberPath.Length <= 64 && query.MemberPath.All(segment => segment is not null)
+        && query.ShapeLimits is { MaximumDepth: >= 0 and <= 16, MaximumMembers: >= 0 and <= 512 };
+    private static ActivitySerializedShape Unknown(TypeReference? type, string revision, string reason) =>
+        new(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown, type, revision, "", "") { ReasonCode = reason };
+    private static ActivityDataInputConstraint? Intersect(IReadOnlyList<ActivityDataInputConstraint> constraints)
+    {
+        if (constraints.Count == 0) return null;
+        var allowed = constraints[0].AllowedExpressionTypes.Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var constraint in constraints.Skip(1)) allowed = allowed.Intersect(constraint.AllowedExpressionTypes, StringComparer.OrdinalIgnoreCase);
+        return constraints.Count == 1 ? constraints[0] : new(string.Join("+", constraints.Select(item => item.Owner)),
+            [.. allowed], "ActivityData/SourceRestricted", "The selected source does not satisfy all owning input restrictions.");
+    }
+    private static ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
+        ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
+        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore);
+    private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
+        ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
+        bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
+    {
+        public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
+    }
+    private sealed class Request(ActivityDataSelectionDocument document, ActivityDataSelectionGraph graph, int maxDepth)
+    {
+        public ActivityDataSelectionDocument Document { get; } = document;
+        public ActivityDataSelectionGraph Graph { get; } = graph;
+        public int MaxDepth { get; } = maxDepth;
+        public Dictionary<ActivityDataSelectionTarget, ActivityDataSelectionTargetFacts?> Targets { get; } = [];
+        public Dictionary<string, IReadOnlyList<VisibleVariable>> Variables { get; } = new(StringComparer.Ordinal);
+        public ScopedVariableVisibility? WholeVisibility { get; set; }
+        public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
+        public Dictionary<string, InputDefinition[]> Inputs { get; } = document.Inputs
+            .Where(input => !string.IsNullOrEmpty(input.ReferenceKey)).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        public bool WorkflowBoundary { get; } = document.ResourceKind is "Workflow" or "WorkflowDefinition";
+        // Empty workflow declarations compile to the legacy null/open InputContract. Activity definitions are closed.
+        public bool OpenWorkflowRequest { get; } = (document.ResourceKind is "Workflow" or "WorkflowDefinition") && document.Inputs.IsEmpty;
+        public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
+            .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        public Dictionary<string, bool> NoTypedResults { get; } = new(StringComparer.Ordinal);
+    }
+
+    /// <summary>Defends the single response budget even when a contribution returns more than requested.</summary>
+    private sealed class ShapeBudget(int remaining, int maximumDepth)
+    {
+        public int Remaining { get; private set; } = remaining;
+        public ActivitySerializedShape Bound(ActivitySerializedShape shape, int depth = 0)
+        {
+            var members = ImmutableArray.CreateBuilder<ActivitySerializedMember>();
+            var truncated = false;
+            foreach (var member in shape.Members)
+            {
+                if (depth >= maximumDepth || Remaining == 0) { truncated = true; break; }
+                Remaining--;
+                members.Add(member with { Shape = Bound(member.Shape, depth + 1) });
+            }
+            ActivitySerializedShape? Child(ActivitySerializedShape? child)
+            {
+                if (child is null) return null;
+                if (depth >= maximumDepth || Remaining == 0) { truncated = true; return null; }
+                Remaining--;
+                return Bound(child, depth + 1);
+            }
+            var element = Child(shape.Element);
+            var mapValue = Child(shape.MapValue);
+            return shape with { Members = members.ToImmutable(), Element = element, MapValue = mapValue,
+                State = truncated ? ActivitySerializedShapeState.Truncated : shape.State,
+                ReasonCode = truncated ? "ResponseLimit" : shape.ReasonCode };
+        }
+    }
+}

@@ -6,6 +6,7 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <ProjectReference Include="../../../src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <ProjectReference Include="../../../src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

@@ -5,6 +5,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Validators;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -84,6 +86,16 @@ public sealed class ValueFlowValidatorTests
 
         var error = Assert.Single(errors, item => item.Type == "ValueFlow/UnavailableProducer");
         Assert.Equal("consumer/inputs/value", error.Path);
+    }
+
+    [Fact]
+    public async Task Optional_result_from_a_real_conditional_producer_keeps_its_existing_absence_semantics()
+    {
+        var flowchart = Flowchart("flow", [Activity("start"), Activity("producer"), Activity("bypass"),
+                Activity("consumer", ResultInput("value", "producer", "scope:root", isOptional: true))],
+            [("produce", "start", "producer"), ("skip", "start", "bypass"),
+                ("produced", "producer", "consumer"), ("bypassed", "bypass", "consumer")], "start");
+        Assert.Empty(await Validate(Sequence("root", flowchart)));
     }
 
     [Fact]
@@ -202,6 +214,40 @@ public sealed class ValueFlowValidatorTests
         Assert.Equal("$workflow/variables/counter", error.Path);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_legacy_structure_replacement_with_unknown_fork_facts_refuses_only_colliding_writes(bool sameVariable)
+    {
+        using var actual = StructureProvider();
+        var legacy = new LegacyStructureService(actual.GetRequiredService<IActivityStructureService>());
+        var flowchart = Flowchart("flow",
+            [Activity("start"), Set("write-left", "counter", "workflow"), Set("write-right", sameVariable ? "counter" : "other", "workflow")],
+            [("left", "start", "write-left"), ("right", "start", "write-right")], "start");
+
+        var errors = await Validate(flowchart, legacy);
+
+        Assert.Equal(sameVariable, errors.Any(error => error.Type == "ValueFlow/ConcurrentWrite"));
+        if (sameVariable)
+            Assert.Equal("$workflow/variables/counter", Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite").Path);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_legacy_completed_before_declaration_proves_sequential_writes_safe_in_either_projection_order(bool reverseProjection)
+    {
+        using var actual = StructureProvider();
+        var legacy = new LegacyStructureService(actual.GetRequiredService<IActivityStructureService>(), ordered: true);
+        var left = Set("write-left", "counter", "workflow");
+        var right = Set("write-right", "counter", "workflow");
+        var flowchart = Flowchart("flow",
+            reverseProjection ? [Activity("start"), right, left] : [Activity("start"), left, right],
+            [("left", "start", "write-left"), ("right", "write-left", "write-right")], "start");
+
+        Assert.DoesNotContain(await Validate(flowchart, legacy), error => error.Type == "ValueFlow/ConcurrentWrite");
+    }
+
     [Fact]
     public async Task Mid_flow_node_with_an_inbound_connection_is_not_an_entry_point()
     {
@@ -250,19 +296,60 @@ public sealed class ValueFlowValidatorTests
         Assert.DoesNotContain(errors, item => item.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
     }
 
-    private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root)
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Switch_predicates_keep_their_projected_input_location_and_sequence_order(bool producerFirst)
     {
-        var validator = new ValueFlowValidator(StructureService());
+        var producer = Activity("flag");
+        var condition = ResultInput("ignored", "flag", "root");
+        var switchNode = new ActivityNode("switch", "switch@1",
+            [ResultInput("Value", "unused-value-producer", "root")], [],
+            new ActivityNodeStructure(Elsa.Activities.Switch.Activities.Switch.StructureKind,
+                Elsa.Activities.Switch.Activities.Switch.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    cases = new[] { new { caseId = "case-a", match = "Approved", condition, activity = Activity("branch") } },
+                    @default = (ActivityNode?)null
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+        var errors = await Validate(producerFirst ? Sequence("root", producer, switchNode) : Sequence("root", switchNode, producer));
+
+        Assert.DoesNotContain(errors, error => error.Path == "switch/inputs/Value");
+        if (producerFirst)
+            Assert.DoesNotContain(errors, error => error.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+        else
+            Assert.Equal("switch/inputs/" + Elsa.Activities.Switch.Activities.Switch.ConditionInputKey("case-a"),
+                Assert.Single(errors, error => error.Type == "ValueFlow/UnavailableProducer").Path);
+    }
+
+    private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root, IActivityStructureService? structures = null)
+    {
+        using var services = StructureProvider(structures);
+        var validator = new ValueFlowValidator(services.GetRequiredService<IActivityStructureService>(), services.GetRequiredService<IActivityDataSelectionAnalyzer>());
         var draft = new StubDraft(new WorkflowDefinitionState([], root, [], [], null));
         return [.. await validator.Validate(draft, CancellationToken.None)];
     }
 
-    private static IActivityStructureService StructureService() =>
-        new DefaultActivityStructureService([
-            new JsonStructureHandler("elsa.sequence.structure", StructureShape.Sequence),
-            new JsonStructureHandler("elsa.parallel.structure", StructureShape.Parallel),
-            new JsonStructureHandler("elsa.flowchart.structure", StructureShape.Flowchart)
-        ]);
+    private static ServiceProvider StructureProvider(IActivityStructureService? structures = null)
+    {
+        var catalog = new StubActivityCatalog().Add("test.activity@1").Add("elsa.sequence.structure@1")
+            .Add("elsa.parallel.structure@1").Add("elsa.flowchart.structure@1").Add("switch@1");
+        return ActivityDataSelectionTestSupport.Provider(catalog, structures);
+    }
+
+    // Models a host implementation compiled against the legacy completion-order port. It delegates
+    // child projection to the real owners and intentionally inherits the new unknown-facts default.
+    private sealed class LegacyStructureService(IActivityStructureService inner, bool ordered = false) : IActivityStructureService
+    {
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => inner.ProjectChildren(activity);
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> children) => inner.ReplaceChildren(activity, children);
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => inner.CompileExecutableStructure(activity);
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => inner.ProjectScopedVariables(activity);
+        public bool SupportsScopedVariables(ActivityNode activity) => inner.SupportsScopedVariables(activity);
+        public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
+            ordered && activity.NodeId == "flow" && childNodeId == "write-right" ? ["write-left"] : null;
+    }
 
     private static ActivityNode Activity(string nodeId, params ArgumentState[] inputs) =>
         new(nodeId, "test.activity@1", inputs, []);
@@ -359,44 +446,5 @@ public sealed class ValueFlowValidatorTests
         public WorkflowDefinitionState State { get; } = state;
         public DateTimeOffset CreatedAt => DateTimeOffset.UnixEpoch;
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UnixEpoch;
-    }
-
-    private enum StructureShape
-    {
-        Sequence,
-        Parallel,
-        Flowchart
-    }
-
-    private sealed class JsonStructureHandler(string kind, StructureShape shape) : IActivityStructureHandler
-    {
-        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-        public string Kind => kind;
-        public string SchemaVersion => "1.0.0";
-
-        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
-        {
-            var payload = activity.Structure!.Payload;
-            if (shape == StructureShape.Parallel)
-            {
-                return payload.GetProperty("branches")
-                    .EnumerateArray()
-                    .Select(branch => new ActivityChildProjection(
-                        branch.GetProperty("name").GetString() ?? string.Empty,
-                        branch.TryGetProperty("activity", out var child) && child.ValueKind != JsonValueKind.Null
-                            ? [child.Deserialize<ActivityNode>(JsonOptions)!]
-                            : []))
-                    .ToArray();
-            }
-
-            var activities = payload.GetProperty("activities").Deserialize<ActivityNode[]>(JsonOptions) ?? [];
-            return [new ActivityChildProjection("Activities", activities)];
-        }
-
-        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) =>
-            throw new NotSupportedException();
-
-        public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity) => activity.Structure!;
     }
 }

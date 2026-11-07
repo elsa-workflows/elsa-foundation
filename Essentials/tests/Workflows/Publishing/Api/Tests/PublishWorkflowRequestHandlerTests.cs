@@ -26,6 +26,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Tests.Support;
@@ -82,6 +83,34 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
     private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
+
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("typed-portable")]
+    [InlineData("json-portable")]
+    public async Task Static_source_admission_refuses_missing_optional_producers_before_any_publication_write(string form)
+    {
+        var expression = new Elsa.Expressions.Core.Models.ExpressionDefinition("JavaScript", "customer", new("String"),
+            new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+            {
+                ["customer"] = new Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding("missing-producer", "$result", true)
+            }, JsonSerializer.SerializeToElement(new { }), Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1);
+        var value = form switch
+        {
+            "direct" => new ArgumentValue(JsonSerializer.SerializeToElement(new
+                { producerNodeId = "missing-producer", projectionKey = "$result", producerScopeId = "workflow", isOptional = true }), "ActivityResult"),
+            "typed-portable" => new ArgumentValue(expression, "JavaScript"),
+            _ => new ArgumentValue(JsonSerializer.SerializeToElement(expression, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript")
+        };
+        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)));
+        var before = await CountPublishWritesAsync();
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/UnavailableProducer");
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
 
     [Fact]
     public async Task Republishing_with_a_retained_pre_fix_Set_artifact_stores_and_executes_the_corrected_contract()

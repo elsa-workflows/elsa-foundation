@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />

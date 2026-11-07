@@ -576,7 +576,10 @@
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
