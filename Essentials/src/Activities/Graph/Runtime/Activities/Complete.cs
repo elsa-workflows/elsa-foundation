@@ -26,6 +26,7 @@ namespace Elsa.Activities.Graph.Runtime.Activities;
 /// </remarks>
 [ActivityPalette(ResourceKinds = ["activity-definition-graph"], Description = "Complete ends an enclosing reusable activity and belongs inside its graph body.")]
 [Activity(Icon = "CircleCheck")]
+[ActivityOutcome("Done")]
 public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
 {
     /// <summary>The fault code when <see cref="Outcome"/> is blank at run time.</summary>

@@ -35,3 +35,7 @@ python3 -c 'import json,pathlib; pathlib.Path("/tmp/elsa-blocks-owned-proof/comm
 ```
 
 `closed.json` must confirm that every owned child stopped. Private stores/logs remain in that explicitly selected output directory for diagnosis. Never target another session's directory or stop processes by port/name.
+
+## Production native planner qualification
+
+`node tools/blocks/plan_native_cases.mjs INPUT.json OUTPUT.json` loads the production Studio planner through the installed Vite toolchain. Run it from a clean committed checkout with an input containing that `source` commit, the actual owned host `catalog`, and named `cases` containing a normalized `document`, optional `scope`, and extraction `request`. Use `operation: "create"` for empty creation or `refusal: "diagnostic-code"` for a negative case. Each accepted case includes the actual extraction and Ungroup documents for normal authored API publication/execution; the runner does not simulate runtime behavior. It refuses stale/dirty source and output overwrites and records input and planner hashes. Retain the input, output, source/product identities and paired normal API execution results with the task evidence.
