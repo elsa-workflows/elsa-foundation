@@ -1,3 +1,5 @@
+bfcb4094eb06c2026393bcc3249fa04cfdf0053f4b8f39a8c1f218088dd67537  Essentials/tests/Foundation/Identity/Tests/Fixtures/SchemaUpcasters/IdentityIam/1.0.0-to-1.1.0/UserEntity.expected.json
+bfcb4094eb06c2026393bcc3249fa04cfdf0053f4b8f39a8c1f218088dd67537  Essentials/tests/Foundation/Identity/Tests/Fixtures/SchemaUpcasters/IdentityIam/1.0.0-to-1.1.0/UserEntity.source.json
 ef0aa3f9d3b230993f8f06f1a22e40ef116340737af414f931f670e62a2f961e  Essentials/tests/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/1-to-2/OrderRow.expected.json
 99029e3ace9c6e2bfbe03bf4eb188650aadf71c81cf999c0b323d95d24b2a0d1  Essentials/tests/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/1-to-2/OrderRow.source.json
 d6d75c7c8a957b35bd6c1fc20e95fda0a957070c6df5274b027cf97f1ddbbdb2  Essentials/tests/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/2-to-3/OrderRow.expected.json

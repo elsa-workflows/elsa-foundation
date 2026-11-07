@@ -51,6 +51,7 @@ COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEdit
 COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
 COPY Extensions/FeatureManagement/studio/ ./Extensions/FeatureManagement/studio/
+COPY Extensions/Identity/studio/ ./Extensions/Identity/studio/
 COPY Extensions/Secrets/studio/ ./Extensions/Secrets/studio/
 COPY Extensions/UserTasks/studio/ ./Extensions/UserTasks/studio/
 COPY Extensions/Weaver/studio/ ./Extensions/Weaver/studio/

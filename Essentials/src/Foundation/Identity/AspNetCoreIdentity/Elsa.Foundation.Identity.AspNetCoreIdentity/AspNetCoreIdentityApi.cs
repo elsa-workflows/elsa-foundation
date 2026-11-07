@@ -74,9 +74,22 @@ public static class AspNetCoreIdentityApi
         var returnUrl = LocalUrl.Sanitize(context.Request.Query["returnUrl"].FirstOrDefault(), options.AllowedReturnUrlOrigins);
         var error = context.Request.Query["error"].FirstOrDefault();
         var tokens = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context);
+        LoginMethods methods;
+        try
+        {
+            var choices = await context.RequestServices.GetRequiredService<IAuthenticationProviderResolver>().ListAsync(context.RequestAborted);
+            methods = new(choices.Where(provider => provider.Id != options.ProviderId && provider.Challenge is not null).ToArray(), options.Enabled);
+        }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            // The local recovery form remains available if an optional managed catalog is unavailable.
+            methods = new([], options.Enabled, true);
+        }
 
         context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.WriteAsync(LoginPage.RenderInShell(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value, LoginPathBase(context)), context.RequestAborted);
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        await context.Response.WriteAsync(LoginPage.RenderInShell(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value, LoginPathBase(context), methods), context.RequestAborted);
     }
 
     private static async Task HandleLoginAsync(HttpContext context)

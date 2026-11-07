@@ -48,6 +48,7 @@ public sealed class UsesEfModuleGuardTests
         ("Elsa3ImportActivitiesEntityFrameworkCore", ["Elsa3.Activities.Design.Import"], true),
         ("FoundationAgentEntityFrameworkCore", ["Agent"], true),
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", ["Identity.Iam"], true),
+        ("FoundationIdentityExternalAuthenticationEntityFrameworkCore", ["Identity.ExternalAuthentication"], true),
         ("IdentityIamEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityProviderConfigurationEntityFrameworkCore", ["Identity.ProviderConfiguration"], true),
         ("SecretsEntityFrameworkCore", ["Secrets"], true),

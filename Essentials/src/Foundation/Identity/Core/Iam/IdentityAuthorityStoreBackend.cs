@@ -28,6 +28,7 @@ public sealed class IdentityAuthorityStoreBackend
     ];
 
     private readonly IReadOnlyDictionary<Type, ServiceDescriptor> _descriptors;
+    private readonly ServiceDescriptor? _administrationDescriptor;
 
     public IdentityAuthorityStoreBackend(string name, IServiceCollection services)
     {
@@ -36,6 +37,9 @@ public sealed class IdentityAuthorityStoreBackend
 
         Name = name;
         _descriptors = ContractTypes.ToDictionary(type => type, type => GetSingleDescriptor(services, type));
+        var administration = services.Where(descriptor => descriptor.ServiceType == typeof(IExternalIdentityAdministrationStore)).ToArray();
+        if (administration.Length > 1) throw OwnershipFailure(typeof(IExternalIdentityAdministrationStore), administration.Length);
+        _administrationDescriptor = administration.SingleOrDefault();
     }
 
     public string Name { get; }
@@ -66,6 +70,9 @@ public sealed class IdentityAuthorityStoreBackend
             if (descriptors.Length != 1 || !ReferenceEquals(descriptors[0], pair.Value))
                 throw OwnershipFailure(pair.Key, descriptors.Length);
         }
+        var administration = services.Where(descriptor => descriptor.ServiceType == typeof(IExternalIdentityAdministrationStore)).ToArray();
+        if (_administrationDescriptor is null ? administration.Length != 0 : administration.Length != 1 || !ReferenceEquals(administration[0], _administrationDescriptor))
+            throw OwnershipFailure(typeof(IExternalIdentityAdministrationStore), administration.Length);
     }
 
     private ServiceDescriptor GetSingleDescriptor(IServiceCollection services, Type contractType)

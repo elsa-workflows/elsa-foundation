@@ -34,19 +34,22 @@ public sealed class OpenIddictTokenService(
     IOpenIddictTokenManager tokenManager,
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
-    IOptions<OpenIddictIdentityOptions> options) : ITokenService
+    IOptions<OpenIddictIdentityOptions> options, IAuthenticationSessionStore? sessions = null, ICanonicalUserSignInService? canonical = null) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
+        var session = await TokenSessionGuard.ValidateAsync(request.Subject, request.SessionId, sessions, canonical, cancellationToken);
+        if (!session.Allowed) throw new InvalidOperationException("The authentication session is unavailable.");
         var accessExpiresAt = now.Add(options.Value.AccessTokenLifetime);
+        if (session.ExpiresAt is { } absolute && absolute < accessExpiresAt) accessExpiresAt = absolute;
 
         var entryId = await CreateTokenEntryAsync(
-            request.SubjectId, OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
+            TokenSubjectKey.Create(request.Subject), OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
             referenceId: null, payload: null, cancellationToken);
 
         var accessToken = CreateAccessTokenJwt(request, entryId, now, accessExpiresAt);
-        var refreshToken = await CreateRefreshTokenAsync(request, now, cancellationToken);
+        var refreshToken = await CreateRefreshTokenAsync(request, now, session.ExpiresAt, cancellationToken);
 
         return new TokenIssueResult(accessToken, accessExpiresAt, refreshToken);
     }
@@ -66,11 +69,23 @@ public sealed class OpenIddictTokenService(
         if (!await tokenManager.TryRedeemAsync(entry, cancellationToken))
             throw InvalidRefreshToken();
 
-        var subject = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
+        var subjectKey = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
         var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
-        var payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+        RefreshTokenPayload payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            throw InvalidRefreshToken();
+        }
+        // Pre-GA unscoped payloads are refused rather than guessed into a tenant/provider scope.
+        if (payload.Subject is null || payload.Scopes is null ||
+            !string.Equals(subjectKey, TokenSubjectKey.Create(payload.Subject), StringComparison.Ordinal))
+            throw InvalidRefreshToken();
 
-        var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes) { CanonicalUserId = payload.CanonicalUserId }, cancellationToken);
+        var issued = await IssueAsync(new TokenIssueRequest(payload.Subject, payload.Scopes) { SessionId = payload.SessionId }, cancellationToken);
         return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);
     }
 
@@ -107,12 +122,12 @@ public sealed class OpenIddictTokenService(
             await tokenManager.TryRevokeAsync(entry, cancellationToken);
     }
 
-    public async ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default)
+    public async ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default)
     {
         // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
         // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
         var entries = new List<object>();
-        await foreach (var entry in tokenManager.FindBySubjectAsync(subjectId, cancellationToken))
+        await foreach (var entry in tokenManager.FindBySubjectAsync(TokenSubjectKey.Create(subject), cancellationToken))
             entries.Add(entry);
 
         // Live entries only: an expired or no-longer-valid entry is already dead, so it is left unwritten. Filtered
@@ -163,13 +178,24 @@ public sealed class OpenIddictTokenService(
     private ClaimsIdentity CreateClaimsIdentity(TokenIssueRequest request)
     {
         var identity = new ClaimsIdentity(options.Value.ProviderId);
-        identity.AddClaim(new Claim(OpenIddictConstants.Claims.Subject, request.SubjectId));
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, request.SubjectId));
-        identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, request.TenantId));
-        if (request.CanonicalUserId is { } userId)
+        // Non-user subjects are scoped in the JWT too: consumers that bind an actor through sub must
+        // not collapse different providers into one actor. Canonical Elsa users keep their user ID.
+        var publicSubject = request.Subject.CanonicalUserId ?? TokenSubjectKey.Create(request.Subject);
+        identity.AddClaim(new Claim(OpenIddictConstants.Claims.Subject, publicSubject));
+        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, publicSubject));
+        identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, request.Subject.TenantId));
+        identity.AddClaim(new Claim(IdentityClaimTypes.TokenSubjectKey, TokenSubjectKey.Create(request.Subject)));
+        if (request.SessionId is { } sessionId) identity.AddClaim(new(IdentityClaimTypes.SessionId, sessionId));
+        if (request.Subject.CanonicalUserId is { } userId)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(userId);
             identity.AddClaim(new Claim(IdentityClaimTypes.UserId, userId));
+        }
+        else
+        {
+            identity.AddClaim(new Claim(IdentityClaimTypes.SubjectProvider, request.Subject.Provider!));
+            identity.AddClaim(new Claim(IdentityClaimTypes.SubjectIssuer, request.Subject.Issuer!));
+            identity.AddClaim(new Claim(IdentityClaimTypes.ExternalSubject, request.Subject.SubjectId));
         }
         identity.AddClaim(new Claim(IdentityClaimTypes.Provider, options.Value.ProviderId));
 
@@ -183,13 +209,15 @@ public sealed class OpenIddictTokenService(
         return identity;
     }
 
-    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, CancellationToken cancellationToken)
+    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, DateTimeOffset? sessionExpiresAt, CancellationToken cancellationToken)
     {
         var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId));
+        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.Subject, request.Scopes.ToArray(), request.SessionId));
+        var expiresAt = now.Add(options.Value.RefreshTokenLifetime);
+        if (sessionExpiresAt is { } absolute && absolute < expiresAt) expiresAt = absolute;
 
         await CreateTokenEntryAsync(
-            request.SubjectId, OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
+            TokenSubjectKey.Create(request.Subject), OpenIddictConstants.TokenTypeHints.RefreshToken, now, expiresAt,
             referenceId, payload, cancellationToken);
 
         return referenceId;
@@ -236,5 +264,5 @@ public sealed class OpenIddictTokenService(
 
     private static InvalidOperationException InvalidRefreshToken() => new("Refresh token is invalid or expired.");
 
-    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes, string? CanonicalUserId = null);
+    private sealed record RefreshTokenPayload(TokenSubject? Subject, string[]? Scopes, string? SessionId = null);
 }

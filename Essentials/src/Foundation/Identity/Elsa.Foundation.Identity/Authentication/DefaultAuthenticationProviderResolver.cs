@@ -2,7 +2,8 @@ using Elsa.Foundation.Identity.Core.Authentication;
 
 namespace Elsa.Foundation.Identity.Authentication;
 
-public sealed class DefaultAuthenticationProviderResolver(IEnumerable<IAuthenticationProviderModule> modules) : IAuthenticationProviderResolver
+public sealed class DefaultAuthenticationProviderResolver(IEnumerable<IAuthenticationProviderModule> modules,
+    IEnumerable<IAuthenticationProviderSource>? sources = null) : IAuthenticationProviderResolver
 {
     public async ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -10,6 +11,16 @@ public sealed class DefaultAuthenticationProviderResolver(IEnumerable<IAuthentic
 
         foreach (var module in modules)
             descriptors.Add(await module.DescribeAsync(cancellationToken));
+
+        foreach (var source in sources ?? [])
+        {
+            var supplied = await source.ListAsync(cancellationToken);
+            if (supplied.Count > 256) throw new InvalidOperationException("An authentication provider source exceeds its descriptor bound.");
+            descriptors.AddRange(supplied);
+        }
+
+        if (descriptors.Count > 512 || descriptors.GroupBy(descriptor => (descriptor.Id.ToUpperInvariant(), descriptor.TenantId)).Any(group => group.Count() > 1))
+            throw new InvalidOperationException("Authentication provider descriptors exceed their bound or contain duplicate identities.");
 
         return descriptors
             .Where(x => x.Enabled)

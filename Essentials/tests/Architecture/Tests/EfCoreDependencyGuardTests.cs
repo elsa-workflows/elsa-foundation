@@ -1257,7 +1257,8 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The repository-first Identity EF admissions for issues #1708, #1710, and #1712.
+    /// The repository-first Identity EF admissions for issues #1708, #1710, #1712 and the scoped
+    /// external-authentication artifact authority in #3579 (ADR 0085, spec 1205).
     /// The production repository and ASP.NET Identity adapters stay provider-neutral; engines remain
     /// in focused test projects.
     /// </summary>
@@ -1268,6 +1269,7 @@ public sealed class EfCoreDependencyGuardTests
             {
                 ["Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["Essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =

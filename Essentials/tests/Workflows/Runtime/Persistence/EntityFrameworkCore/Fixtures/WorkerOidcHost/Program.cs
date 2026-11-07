@@ -14,6 +14,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Api.Capabilities;
+using Elsa.Cluster.Readability;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Foundation.Identity;
@@ -27,6 +28,9 @@ using Elsa.Mediator;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
+using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
@@ -172,6 +176,7 @@ internal static class Program
                     continue;
                 }
 
+                SchemaControlObservation? schemaObservation = null;
                 try
                 {
                     if (request.ResetEpochAfterOperationEntry && request.Command != "list-rules")
@@ -183,7 +188,8 @@ internal static class Program
                     using var operation = mappingReads.BeginControlOperation(request.Command);
                     if (request.ResetEpochAfterOperationEntry)
                         mappingReads.Reset();
-                    var result = await ExecuteControlAsync(activeApp, input, mappingReads, candidateConfiguration.FileHashes, request);
+                    var result = await ExecuteControlAsync(activeApp, input, mappingReads, candidateConfiguration.FileHashes,
+                        request, observation => schemaObservation = observation);
                     await WriteAsync(new
                     {
                         status = "ok",
@@ -196,10 +202,17 @@ internal static class Program
                     if (result.Stop)
                         break;
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Control failures deliberately omit exception text, paths, values and claims.
-                    await WriteAsync(new { status = "error", code = "control-operation-failed" });
+                    // Retain bounded code-owned type names; never exception text, paths, values or claims.
+                    await WriteAsync(new
+                    {
+                        status = "error",
+                        code = "control-operation-failed",
+                        exceptionTypes = SafeExceptionTypes(exception),
+                        schemaObservation,
+                        schemaRefusal = SafeSchemaRefusal(exception)
+                    });
                 }
             }
         }
@@ -225,6 +238,10 @@ internal static class Program
         builder.Logging.ClearProviders();
 
         builder.Configuration.AddConfiguration(candidateConfiguration);
+
+        // Match the canonical Foundation host's one shared fleet/readability composition before shell activation.
+        // The real migrator/gate publishes, counts and finalizes; the fixture never sets a gate version itself.
+        builder.Services.AddEfSchemaReadability();
 
         // This establishes the ordinary nondefault tenant context before CShells copies root services into a shell.
         builder.Services.AddPersistenceCore(input.PersistenceScope);
@@ -368,6 +385,7 @@ internal static class Program
                 GetConnectionDataSource(app.Configuration, iamOptions.ConnectionName)),
             iamMigrationsApplied = iamAppliedMigrations.Any(),
             iamMigrationsPending = iamPendingMigrations.Any(),
+            iamSchemaReadiness = ObserveSchemaBeforeSave(scope.ServiceProvider) with { Stage = "host-schema-readiness" },
             databasesAreDistinct = !string.Equals(Path.GetFullPath(runtimeConnection), Path.GetFullPath(iamConnection), StringComparison.Ordinal),
             mappingStoreType = scope.ServiceProvider.GetRequiredService<IClaimMappingStore>().GetType().FullName,
             normalizerType = scope.ServiceProvider.GetRequiredService<IClaimsNormalizer>().GetType().FullName,
@@ -383,7 +401,8 @@ internal static class Program
         HostStartupInput input,
         MappingReadCounter mappingReads,
         IReadOnlyDictionary<string, string> candidateFileHashes,
-        ControlRequest request)
+        ControlRequest request,
+        Action<SchemaControlObservation> observeSchema)
     {
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(input.ShellId);
         switch (request.Command)
@@ -411,7 +430,10 @@ internal static class Program
                 try
                 {
                     await using var scope = shell.ServiceProvider.CreateAsyncScope();
-                    await scope.ServiceProvider.GetRequiredService<IClaimMappingStore>().SaveAsync(rule);
+                    var store = scope.ServiceProvider.GetRequiredService<IClaimMappingStore>();
+                    // Snapshot only; no gate refresh, evaluation, admission, fleet publication or database mutation.
+                    observeSchema(ObserveSchemaBeforeSave(scope.ServiceProvider));
+                    await store.SaveAsync(rule);
                 }
                 finally
                 {
@@ -565,11 +587,84 @@ internal static class Program
         return Convert.ToHexString(await SHA256.HashDataAsync(assembly));
     }
 
+    private static SchemaControlObservation ObserveSchemaBeforeSave(IServiceProvider services)
+    {
+        var fleetPresent = services.GetService<IEfSchemaFleet>() is not null;
+        var context = services.GetRequiredService<IdentityIamDbContext>();
+        var gate = services.GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
+        var state = gate?.StateOf(IdentityIamEfModule.SchemaFamily);
+        var observed = gate?.ObservedRecordOf(IdentityIamEfModule.SchemaFamily);
+        return new SchemaControlObservation(
+            "save-rule-before-save",
+            fleetPresent,
+            gate is not null,
+            state is not null,
+            SafeSchemaVersion(state?.WriteVersion),
+            state?.WritesRefused,
+            SafeSchemaVersion(state?.UnreadableFinalizedVersion),
+            observed is not null,
+            SafeSchemaVersion(observed?.Record.FinalizedVersion));
+    }
+
+    private static SchemaRefusalMetadata? SafeSchemaRefusal(Exception exception)
+    {
+        var depth = 0;
+        for (Exception? current = exception; current is not null && depth++ < 4; current = current.InnerException)
+        {
+            if (current is not SchemaWriteRefusedException refusal)
+                continue;
+            return new SchemaRefusalMetadata(
+                StringComparer.Ordinal.Equals(refusal.Code, SchemaWriteRefusedException.RefusalCode)
+                    ? SchemaWriteRefusedException.RefusalCode : "unrecognized-code",
+                StringComparer.Ordinal.Equals(refusal.Family, IdentityIamEfModule.SchemaFamily)
+                    ? IdentityIamEfModule.SchemaFamily : "unrecognized-family",
+                SafeSchemaVersion(refusal.WriteVersion),
+                SafeSchemaVersion(refusal.RequiredVersion));
+        }
+        return null;
+    }
+
+    private static string? SafeSchemaVersion(string? value)
+    {
+        // Reject before parsing; never truncate or echo an unrecognized persisted/exception value.
+        if (value is null)
+            return null;
+        return value.Length <= 32 && value.All(character => character is >= '0' and <= '9' or '.') &&
+               Version.TryParse(value, out var version)
+            ? version.ToString()
+            : "unrecognized-version";
+    }
+
+    private static string[] SafeExceptionTypes(Exception exception)
+    {
+        var types = new List<string>();
+        for (Exception? current = exception; current is not null && types.Count < 4; current = current.InnerException)
+            types.Add(SafeExceptionTypeName(current));
+        return types.ToArray();
+    }
+
     private static string SafeExceptionTypeName(Exception exception)
     {
         var name = exception.GetType().FullName ?? exception.GetType().Name;
         return name.Length <= 160 ? name : name[..160];
     }
+
+    private sealed record SchemaControlObservation(
+        string Stage,
+        bool FleetPresent,
+        bool GatePresent,
+        bool StatePresent,
+        string? WriteVersion,
+        bool? WritesRefused,
+        string? UnreadableFinalizedVersion,
+        bool ObservedRecordPresent,
+        string? FinalizedVersion);
+
+    private sealed record SchemaRefusalMetadata(
+        string Code,
+        string Family,
+        string? WriteVersion,
+        string? RequiredVersion);
 
     private sealed record HostStartupInput(
         string CandidateDirectory,

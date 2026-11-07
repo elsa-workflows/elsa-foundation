@@ -129,6 +129,8 @@ public static class FoundationIdentityApi
 
     private static async Task HandleTokenAsync(HttpContext context)
     {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.Pragma = "no-cache";
         if (await IsFirstPartyBearerAsync(context))
         {
             await Results.Unauthorized().ExecuteAsync(context);
@@ -154,27 +156,21 @@ public static class FoundationIdentityApi
             return;
         }
 
-        var subject = Subject(normalizedPrincipal);
-        if (string.IsNullOrWhiteSpace(subject))
+        if (!context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(normalizedPrincipal, out var subject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
             return;
         }
 
-        var tenantId = normalizedPrincipal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
         var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission)
             .Select(x => x.Value)
             .ToArray();
-        var canonicalUsers = normalizedPrincipal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
-        if (canonicalUsers.Length > 1 || canonicalUsers.Length == 1 && string.IsNullOrWhiteSpace(canonicalUsers[0]))
-        {
-            await Results.Unauthorized().ExecuteAsync(context);
-            return;
-        }
+        var sessionIds = normalizedPrincipal.FindAll(IdentityClaimTypes.SessionId).ToArray();
+        if (sessionIds.Length > 1) { await Results.Unauthorized().ExecuteAsync(context); return; }
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions) { CanonicalUserId = canonicalUsers.SingleOrDefault() }, context.RequestAborted);
+            .IssueAsync(new TokenIssueRequest(subject, permissions) { SessionId = sessionIds.SingleOrDefault()?.Value }, context.RequestAborted);
 
-        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
+        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt, result.RefreshToken), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }
 
     private static async Task<bool> IsFirstPartyBearerAsync(HttpContext context)
@@ -204,6 +200,18 @@ public static class FoundationIdentityApi
             return;
         }
 
+        if (descriptor.Challenge.Method == "POST")
+        {
+            // Managed providers deliberately open the chooser on GET; only its antiforgery-protected
+            // POST initiates authentication. Preferred providers never bypass that page.
+            var url = descriptor.Challenge.Url;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var destination) ||
+                destination.UserInfo.Length != 0 || destination.Scheme is not ("https" or "http"))
+            { await Results.NotFound().ExecuteAsync(context); return; }
+            await Results.Redirect(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(url, "returnUrl", context.Request.Query["returnUrl"].FirstOrDefault() ?? "/")).ExecuteAsync(context);
+            return;
+        }
+
         await context.ChallengeAsync(
             descriptor.Challenge.Scheme ?? descriptor.Id,
             new AuthenticationProperties
@@ -217,7 +225,10 @@ public static class FoundationIdentityApi
         var provider = RouteValue(context, "provider");
         var services = context.RequestServices;
         var resolver = services.GetRequiredService<IAuthenticationProviderResolver>();
-        var descriptor = await resolver.FindAsync(provider, allowGlobalFallback: true, cancellationToken: context.RequestAborted);
+        AuthenticationProviderDescriptor? descriptor;
+        try { descriptor = await resolver.FindAsync(provider, allowGlobalFallback: true, cancellationToken: context.RequestAborted); }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        { descriptor = null; } // A catalog outage must not prevent an existing signed interactive session from signing out.
         var schemeName = descriptor?.Challenge?.Scheme ?? provider;
         var schemeRegistered = !string.IsNullOrEmpty(schemeName) &&
             await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null;
@@ -229,6 +240,25 @@ public static class FoundationIdentityApi
         var session = descriptor is null
             ? null
             : (schemeRegistered ? await AuthenticateSessionAsync(context, schemeName) : null) ?? context.User;
+
+        // A managed connection can be disabled/retired after a cookie was issued. It disappears from
+        // discovery, but its own signed interactive session must still be able to sign out.
+        if (descriptor is null && await FindRetiredInteractiveSessionAsync(context, provider) is { } retired)
+        {
+            schemeName = retired.Scheme;
+            schemeRegistered = true;
+            session = retired.Principal;
+        }
+        if (!schemeRegistered && session is not null &&
+            services.GetRequiredService<ITokenSubjectResolver>().TryResolve(session, out var signedSubject) && signedSubject.CanonicalUserId is not null &&
+            await FindInteractiveSessionForSubjectAsync(context, signedSubject) is { } interactive)
+        {
+            // A first-party bearer identifies its token issuer, while the browser cookie identifies the
+            // original sign-in method. Clear that cookie only when its complete canonical subject matches.
+            schemeName = interactive.Scheme;
+            schemeRegistered = true;
+            session = interactive.Principal;
+        }
 
         // Revoke before invalidating: a revocation fault then leaves the session (cookie and security stamp)
         // intact, so a retry still authenticates as the subject and can revoke. The fault answers a bare 503,
@@ -242,7 +272,8 @@ public static class FoundationIdentityApi
         var invalidator = session is null
             ? null
             : services.GetServices<IAuthenticationSessionInvalidator>().SingleOrDefault(candidate =>
-                string.Equals(candidate.ProviderId, descriptor!.Id, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.ProviderId, descriptor?.Id ?? provider, StringComparison.OrdinalIgnoreCase) ||
+                schemeRegistered && string.Equals(candidate.AuthenticationScheme, schemeName, StringComparison.Ordinal));
         if (invalidator is not null)
             await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(session!), context.RequestAborted);
 
@@ -266,9 +297,8 @@ public static class FoundationIdentityApi
             !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal))
             return true;
 
-        var subject = Subject(principal);
-        if (string.IsNullOrWhiteSpace(subject))
-            return true;
+        if (!context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(principal, out var subject))
+            return false;
 
         try
         {
@@ -289,8 +319,39 @@ public static class FoundationIdentityApi
         return result.Succeeded ? result.Principal : null;
     }
 
+    private static async Task<(string Scheme, ClaimsPrincipal Principal)?> FindRetiredInteractiveSessionAsync(HttpContext context, string provider)
+    {
+        var services = context.RequestServices;
+        foreach (var scheme in services.GetRequiredService<IOptions<FoundationIdentityApiOptions>>().Value.InteractiveAuthSchemes)
+        {
+            if (await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(scheme) is null ||
+                await services.GetRequiredService<IAuthenticationHandlerProvider>().GetHandlerAsync(context, scheme) is not IAuthenticationSignOutHandler) continue;
+            var principal = await AuthenticateSessionAsync(context, scheme);
+            if (principal is null || !services.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(principal, out var normalized)) continue;
+            var origins = normalized.FindAll(IdentityClaimTypes.Provider).ToArray();
+            if (origins is { Length: 1 } && string.Equals(origins[0].Value, provider, StringComparison.OrdinalIgnoreCase)) return (scheme, principal);
+        }
+        return null;
+    }
+
+    private static async Task<(string Scheme, ClaimsPrincipal Principal)?> FindInteractiveSessionForSubjectAsync(HttpContext context, TokenSubject subject)
+    {
+        var services = context.RequestServices;
+        foreach (var scheme in services.GetRequiredService<IOptions<FoundationIdentityApiOptions>>().Value.InteractiveAuthSchemes)
+        {
+            if (await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(scheme) is null ||
+                await services.GetRequiredService<IAuthenticationHandlerProvider>().GetHandlerAsync(context, scheme) is not IAuthenticationSignOutHandler) continue;
+            var principal = await AuthenticateSessionAsync(context, scheme);
+            if (principal is not null && services.GetRequiredService<ITokenSubjectResolver>().TryResolve(principal, out var current) && current == subject)
+                return (scheme, principal);
+        }
+        return null;
+    }
+
     private static async Task HandleRefreshAsync(HttpContext context)
     {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.Pragma = "no-cache";
         var (request, malformed) = await ReadJsonAsync(context, FoundationIdentityApiJsonContext.Default.RefreshTokenRequest);
         if (malformed)
             return;
@@ -362,9 +423,6 @@ public static class FoundationIdentityApi
 
         return null;
     }
-
-    private static string? Subject(ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

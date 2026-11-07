@@ -167,6 +167,9 @@
   <Folder Name="/tools/hosting/">
     <Project Path="tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj" />
   </Folder>
+  <Folder Name="/tools/identity/">
+    <Project Path="tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj" />
+  </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
     <Project Path="tools/maps/Elsa.Maps.Projects/Elsa.Maps.Projects.csproj" />
@@ -346,6 +349,15 @@
     <Project Path="Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Foundation/Identity/ExternalAuthentication/">
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/">
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Foundation/Identity/AspNetCoreIdentity/">
     <Project Path="Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />

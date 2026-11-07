@@ -1,0 +1,15 @@
+#nullable enable
+const Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcRegistration.HttpClientName = "Elsa.ManagedOidc" -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature.AllowLoopbackHttpForDevelopment.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature.AllowLoopbackHttpForDevelopment.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature.ManagedOidcFeature() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions.AllowLoopbackHttpForDevelopment.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions.AllowLoopbackHttpForDevelopment.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions.BackchannelTimeout.get -> System.TimeSpan
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions.BackchannelTimeout.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions.ManagedOidcOptions() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcRegistration
+static Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcRegistration.AddFoundationExternalOidc(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Foundation.Identity.ExternalAuthentication.Oidc.ManagedOidcFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

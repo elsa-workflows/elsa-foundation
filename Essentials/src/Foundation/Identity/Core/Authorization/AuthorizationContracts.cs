@@ -179,6 +179,19 @@ public static class IdentityClaimTypes
 
     public const string Provider = "elsa.identity.provider";
 
+    /// <summary>Validated origin of a non-user token subject; provider-owned, never copied from incoming claims.</summary>
+    public const string SubjectProvider = "elsa.identity.subject_provider";
+
+    /// <summary>Validated issuer of a non-user token subject, preserved exactly across first-party refresh.</summary>
+    public const string SubjectIssuer = "elsa.identity.subject_issuer";
+
+    /// <summary>Opaque original external subject; the first-party token's public subject is scoped.</summary>
+    public const string ExternalSubject = "elsa.identity.external_subject";
+
+    /// <summary>Versioned full-scope storage identity, validated on every first-party bearer request.</summary>
+    public const string TokenSubjectKey = "elsa.identity.token_subject";
+    public const string SessionId = "elsa.identity.session_id";
+
     public const string Role = "elsa.identity.role";
 
     public const string Permission = "elsa.identity.permission";
@@ -205,6 +218,10 @@ public static class DefaultIdentityPermissionKeys
     public const string IdentityProvidersManage = "identity/providers:manage";
 
     public const string IdentityCredentialsManage = "identity/credentials:manage";
+    public const string IdentitySessionsRead = "identity/sessions:read";
+    public const string IdentitySessionsManage = "identity/sessions:manage";
+    public const string IdentityLinksRead = "identity/links:read";
+    public const string IdentityLinksManage = "identity/links:manage";
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;

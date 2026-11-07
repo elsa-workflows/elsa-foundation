@@ -49,6 +49,15 @@ Phase 1, users and roles:
 - #2781 Studio Roles pages.
 - #2782 Studio permission gating.
 
+Phase 2 external authentication/OIDC is active under the owner's 4 November 2026 scoped authorization:
+
+- #3579 end-to-end external connection management and sign-in, adapted to Elsa 4; design/specification
+  [1205](../../specs/1212-external-authentication/spec.md).
+- #2848 identity/token scope isolation as a necessary prerequisite, coordinated through its existing issue.
+
+Phase 1's remaining user/role administration work retains its existing issues and priorities. This feature adds
+only the bounded lookup/delegation services it needs; it does not claim the full Phase 1 backlog delivered.
+
 ## Linked surfaces
 
 - [ADR 0085](../adr/0085-elsa-3-parity-identity-administration-and-scope.md).
@@ -58,7 +67,9 @@ Phase 1, users and roles:
 
 ## Current roadmap notes
 
-Phase 2 (external OIDC) is filed once Phase 1 is under way. Phases 3–5 follow.
+Phase 2 is being delivered through #3579, including the explicit override amendment to ADR 0085 D3. Phases 3–5
+retain their existing sequencing and are not activated by this authorization. Current acceptance is incomplete;
+planning or token-isolation tests alone do not close the external-authentication feature.
 
 The User Tasks portion of Phase 5 was delivered separately under owner-authorized
 [Program #3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688) and

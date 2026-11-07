@@ -17,13 +17,21 @@ public sealed class EfCoreIdentitySessionInvalidator(
     IOptions<AspNetCoreIdentityOptions> options) : IAuthenticationSessionInvalidator
 {
     public string ProviderId => options.Value.ProviderId;
+    public string? AuthenticationScheme => AspNetCoreIdentityDefaults.CookieScheme;
 
     public async ValueTask InvalidateAsync(AuthenticationSessionInvalidationContext context, CancellationToken cancellationToken = default)
     {
         if (context.Principal.Identity?.IsAuthenticated != true)
             return;
 
-        var subject = context.Principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Principal.FindFirstValue("sub");
+        // An external subject that happens to equal an Elsa user ID owns no local cookie. Only a
+        // provider-projected canonical user can rotate that user's security stamp.
+        var canonicalUsers = context.Principal.FindAll(IdentityClaimTypes.UserId).ToArray();
+        if (canonicalUsers.Length == 0)
+            return;
+        if (canonicalUsers.Length != 1)
+            throw new InvalidOperationException("The authenticated Identity session has an ambiguous canonical user.");
+        var subject = canonicalUsers[0].Value;
         var tenantId = context.Principal.FindFirstValue(IdentityClaimTypes.TenantId);
         if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId))
             throw new InvalidOperationException("The authenticated Identity session is missing its subject or tenant binding.");

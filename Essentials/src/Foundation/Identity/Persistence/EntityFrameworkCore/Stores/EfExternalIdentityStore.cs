@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
@@ -11,13 +12,57 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfExternalIdentityStore(
     IdentityIamDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    EfIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null)
+    EfIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null,
+    EfIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null,
+    IIdentityEmailUniquenessPolicy? emailUniquenessPolicy = null)
     : IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
 {
     private readonly EfIdentityAuthorityRelationshipCoordinator relationship = relationshipCoordinator ?? new(
         context,
         new EfIdentityAtomicWrite(context, accessContextAccessor: accessContextAccessor),
         accessContextAccessor);
+
+    public bool SupportsQualifiedKeys => true;
+    public bool SupportsAtomicAdmission => true;
+    public bool SupportsQualifiedRemoval
+    {
+        get
+        {
+            if (!context.Database.IsRelational()) return false;
+            var relational = context.GetService<IDbContextOptions>().Extensions.OfType<RelationalOptionsExtension>().Single();
+            return relational.Connection is null && !string.IsNullOrEmpty(relational.ConnectionString) &&
+                string.Equals(relational.ConnectionString, context.Database.GetConnectionString(), StringComparison.Ordinal);
+        }
+    }
+
+    public async ValueTask<ExternalIdentityRemovalResult> RemoveWithRevisionAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        string expectedLinkRevision, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key); ArgumentNullException.ThrowIfNull(owner);
+        Validate(key.Provider, nameof(key)); Validate(key.Subject, nameof(key)); EfIdentityStoreSupport.ValidateIssuer(key.Issuer);
+        Prepare(key.TenantId, cancellationToken);
+        if (context.Database.CurrentTransaction is not null || System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("Qualified removal owns its transaction and cannot borrow caller changes.");
+        if (!SupportsQualifiedRemoval) throw new NotSupportedException("Qualified removal requires an owned configured relational target.");
+        if (owner.Kind != IamRevisionGuardKind.User || EfIdentityStoreSupport.RecordId(owner.TenantId, owner.Id) !=
+            EfIdentityStoreSupport.RecordId(key.TenantId, owner.Id) ||
+            !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedLinkRevision, out var linkVersion) ||
+            !EfIamRevisionGuards.TryGetVersion(owner.Revision, out _)) return new(ExternalIdentityRemovalStatus.Conflict);
+        await using var transaction = await EfSharedTransaction.BeginSerializableAsync([context], cancellationToken);
+        var owned = transaction.Context<IdentityIamDbContext>();
+        var coordinator = new EfIdentityAuthorityRelationshipCoordinator(owned,
+            new EfIdentityAtomicWrite(owned, accessContextAccessor: accessContextAccessor), accessContextAccessor);
+        var result = await coordinator.DeleteQualifiedExternalIdentityAsync(key, owner, linkVersion, cancellationToken);
+        if (result.Status == EfIdentityWriteStatus.Deleted) await transaction.CommitAsync(cancellationToken);
+        return new(result.Status == EfIdentityWriteStatus.Deleted ? ExternalIdentityRemovalStatus.Removed :
+                result.Status == EfIdentityWriteStatus.NotFound ? ExternalIdentityRemovalStatus.Missing : ExternalIdentityRemovalStatus.Conflict,
+            result.Status == EfIdentityWriteStatus.Deleted && result.Version is { } version ? IdentityEntityFrameworkRevisionCodec.FromVersion(version) : null);
+    }
+
+    public ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
+        new EfExternalUserAdmission(context, accessContextAccessor,
+            aggregateCoordinator ?? new(context, accessContextAccessor), relationship,
+            emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique).ApplyAsync(request, cancellationToken);
 
     public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
@@ -32,6 +77,27 @@ public sealed class EfExternalIdentityStore(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException) { context.ChangeTracker.Clear(); throw Failure("Unable to find the external Identity login.", exception); }
+    }
+
+    public async ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default)
+    {
+        var row = await FindByKeyWithRevisionAsync(key, cancellationToken);
+        return row?.Record;
+    }
+
+    public async ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindByKeyWithRevisionAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        Validate(key.TenantId, nameof(key.TenantId)); Validate(key.Provider, nameof(key.Provider)); Validate(key.Subject, nameof(key.Subject));
+        EfIdentityStoreSupport.ValidateIssuer(key.Issuer);
+        _ = EfIdentityStoreSupport.ExternalOrderKey(key.Provider, key.Subject);
+        Prepare(key.TenantId, cancellationToken);
+        var id = EfIdentityStoreSupport.ExternalIdentityId(key.TenantId, key.Provider, key.Subject, key.Issuer);
+        var row = await EfIdentityStoreSupport.ReadAsync(context, "Unable to find the issuer-qualified Identity login.",
+            () => context.ExternalIdentities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
+        if (row is null) return null;
+        EfIdentityStoreSupport.EnsureExternalIdentity(row, key.TenantId, key.Provider, key.Subject, issuer: key.Issuer);
+        return new(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
     }
 
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
@@ -85,6 +151,7 @@ public sealed class EfExternalIdentityStore(
     private async Task<EfIdentityWriteResult> SaveCoreAsync(ExternalIdentityRecord record, long? expectedVersion, bool createOnly, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record); Validate(record.TenantId, nameof(record.TenantId)); Validate(record.Provider, nameof(record.Provider)); Validate(record.ProviderSubject, nameof(record.ProviderSubject)); _ = EfIdentityStoreSupport.ExternalOrderKey(record.Provider, record.ProviderSubject); Validate(record.UserId, nameof(record.UserId));
+        EfIdentityStoreSupport.ValidateIssuer(record.Issuer);
         Prepare(record.TenantId, cancellationToken);
         var row = ToEntity(record);
         return await relationship.SaveExternalIdentityPreservingProviderDisplayNameAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
@@ -100,11 +167,11 @@ public sealed class EfExternalIdentityStore(
     }
 
     private IQueryable<ExternalIdentityEntity> QueryForUser(string tenantId, string userId) => context.ExternalIdentities.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.UserLookupKey == EfIdentityStoreSupport.Lookup(tenantId, userId));
-    private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
+    private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, Issuer = record.Issuer, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
     private static ExternalIdentityRecord Map(ExternalIdentityEntity row)
     {
         EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
-        return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy);
+        return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy) { Issuer = row.Issuer };
     }
 
     private static string Id(string tenantId, string provider, string subject) => EfIdentityStoreSupport.CompoundKey(tenantId, provider, subject);

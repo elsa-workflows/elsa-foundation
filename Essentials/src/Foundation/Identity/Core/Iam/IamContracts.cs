@@ -8,6 +8,7 @@ public interface IUserStore
 {
     ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns only a unique normalized email match; missing or ambiguous addresses return null.</summary>
     ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
@@ -44,6 +45,9 @@ public interface IPagedUserStore
 [ReplacementContract]
 public interface IRevisionAwareUserStore
 {
+    /// <summary>Captures a non-reusable account-instance/revision binding for a coordinated write; null means unsupported or absent.</summary>
+    ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string userId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IamRevisionGuard?>(null);
+
     ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(UserRecord user, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -62,6 +66,9 @@ public interface IRoleStore
 [ReplacementContract]
 public interface IRevisionAwareRoleStore
 {
+    /// <summary>Captures the role definition and revision for a coordinated write; null means unsupported or absent.</summary>
+    ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string roleId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IamRevisionGuard?>(null);
+
     ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(RoleRecord role, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -112,6 +119,17 @@ public interface IRevisionAwareCredentialStore
 [ReplacementContract]
 public interface IExternalIdentityStore
 {
+    bool SupportsQualifiedKeys => false;
+    bool SupportsAtomicAdmission => false;
+
+    /// <summary>Commits a policy-assessed new user and login atomically, or links an unchanged active existing user.</summary>
+    ValueTask<ExternalUserAdmissionResult> AdmitAsync(ExternalUserAdmission request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support atomic admission.");
+
+    /// <summary>Finds an exact issuer/subject link. Legacy issuer-less links are never used as a fallback.</summary>
+    ValueTask<ExternalIdentityRecord?> FindByKeyAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");
+
     ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
@@ -122,6 +140,16 @@ public interface IExternalIdentityStore
 [ReplacementContract]
 public interface IRevisionAwareExternalIdentityStore
 {
+    bool SupportsQualifiedKeys => false;
+    bool SupportsQualifiedRemoval => false;
+    /// <summary>Owns a conditional qualified removal and advances the owner counter beyond the removed link without changing other credentials.</summary>
+    ValueTask<ExternalIdentityRemovalResult> RemoveWithRevisionAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        string expectedLinkRevision, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This identity authority does not support conditional qualified removal.");
+
+    ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindByKeyWithRevisionAsync(ExternalIdentityKey key, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This external identity authority does not support issuer-qualified links.");
+
     ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ExternalIdentityRecord externalIdentity, string? expectedRevision, CancellationToken cancellationToken = default);
@@ -187,6 +215,14 @@ public interface IProviderConfigurationStore
 [ReplacementContract]
 public interface IRevisionAwareProviderConfigurationStore
 {
+    /// <summary>True only when IAM roots and provider configuration can commit in one physical transaction.</summary>
+    bool SupportsIdentityRevisionGuards => false;
+
+    /// <summary>CAS-saves a global configuration and advances the guarded IAM revisions as one committed unit.</summary>
+    ValueTask<IamRevisionSaveResult> SaveWithIdentityRevisionGuardsAsync(ProviderConfigurationRecord configuration, string? expectedRevision,
+        IReadOnlyList<IamRevisionGuard> guards, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This provider configuration authority cannot coordinate IAM revisions.");
+
     ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
 
     ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
@@ -321,7 +357,11 @@ public sealed record ExternalIdentityRecord(
     string UserId,
     DateTimeOffset LinkedAt,
     DateTimeOffset? LastSeenAt,
-    ExternalIdentityLinkPolicy LinkPolicy);
+    ExternalIdentityLinkPolicy LinkPolicy)
+{
+    /// <summary>Validated issuer, compared ordinally. Null identifies the separate legacy ASP.NET login namespace.</summary>
+    public string? Issuer { get; init; }
+}
 
 public sealed record ProviderConfigurationRecord(
     string Provider,
@@ -347,7 +387,10 @@ public sealed record LinkExternalIdentityRequest(
     string ProviderSubject,
     string UserId,
     ExternalIdentityLinkPolicy LinkPolicy,
-    bool DuplicateEmailWasExplicitlyApproved);
+    bool DuplicateEmailWasExplicitlyApproved)
+{
+    public string? Issuer { get; init; }
+}
 
 public sealed record CreateRoleRequest(string TenantId, string Name, string? Description, IReadOnlySet<string> Permissions);
 

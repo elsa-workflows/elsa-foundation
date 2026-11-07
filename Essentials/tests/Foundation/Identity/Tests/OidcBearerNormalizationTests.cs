@@ -331,6 +331,10 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.Normalized.ToUpperInvariant(), "forged"),
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
+            new Claim(IdentityClaimTypes.SubjectProvider, "forged-origin"),
+            new Claim(IdentityClaimTypes.SubjectIssuer.ToUpperInvariant(), "https://forged-issuer/"),
+            new Claim(IdentityClaimTypes.ExternalSubject, "forged-subject"),
+            new Claim(IdentityClaimTypes.SessionId.ToUpperInvariant(), new string('a', 64)),
             new Claim(IdentityClaimTypes.Role, "admin"),
             new Claim(IdentityClaimTypes.Permission, "worker:admin"),
             new Claim(IdentityClaimTypes.UserId, "user-forged"));
@@ -344,6 +348,7 @@ public sealed class OidcBearerNormalizationTests
         Assert.Equal("worker.execute", Header(response, "X-Permissions"));
         Assert.Equal("0", Header(response, "X-Roles-Count"));
         Assert.Equal("0", Header(response, "X-User-Id-Count"));
+        Assert.Equal("0", Header(response, "X-Session-Id-Count"));
         Assert.Equal(Tenant, mappings.LastTenant);
         Assert.Equal(Provider, mappings.LastProvider);
     }
@@ -595,6 +600,7 @@ public sealed class OidcBearerNormalizationTests
         [
             new Claim("sub", "worker-1"),
             new Claim("outside", "kept"),
+            new Claim(IdentityClaimTypes.SessionId.ToUpperInvariant(), new string('a', 64)),
             new Claim(IdentityClaimTypes.Normalized.ToUpperInvariant(), "forged"),
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
@@ -609,7 +615,12 @@ public sealed class OidcBearerNormalizationTests
         Assert.NotNull(received);
         Assert.Contains(received!.Claims, claim => claim.Type == "outside" && claim.Value == "kept");
         Assert.DoesNotContain(received.Claims, IsInternalClaim);
+        Assert.Empty(received.FindAll(IdentityClaimTypes.SessionId));
         Assert.Equal(OidcBearerNormalizationEvents.NormalizedAuthenticationType, context.Principal!.Identity!.AuthenticationType);
+        Assert.Equal(Provider, Assert.Single(context.Principal.FindAll(IdentityClaimTypes.SubjectProvider)).Value);
+        Assert.Equal(Issuer, Assert.Single(context.Principal.FindAll(IdentityClaimTypes.SubjectIssuer)).Value);
+        Assert.Empty(context.Principal.FindAll(IdentityClaimTypes.ExternalSubject));
+        Assert.Empty(context.Principal.FindAll(IdentityClaimTypes.SessionId));
     }
 
     [Fact]
@@ -1722,6 +1733,7 @@ public sealed class OidcBearerNormalizationTests
             context.Response.Headers["X-Permissions"] = string.Join(",", identity.FindAll(IdentityClaimTypes.Permission).Select(claim => claim.Value));
             context.Response.Headers["X-Roles-Count"] = identity.FindAll(IdentityClaimTypes.Role).Count().ToString();
             context.Response.Headers["X-User-Id-Count"] = identity.FindAll(IdentityClaimTypes.UserId).Count().ToString();
+            context.Response.Headers["X-Session-Id-Count"] = identity.FindAll(IdentityClaimTypes.SessionId).Count().ToString();
             context.Response.Headers["X-External-Canary-Count"] = identity.FindAll("external-canary").Count().ToString();
             return context.Response.WriteAsync("ok");
         }

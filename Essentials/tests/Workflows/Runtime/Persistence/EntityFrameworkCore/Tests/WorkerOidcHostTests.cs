@@ -15,6 +15,9 @@ public sealed class WorkerOidcHostTests
 {
     private const string ExecutePath = "/runtime/workflows/executables/{0}/execute";
     private const string ExecutePermission = WorkflowRuntimePermissions.WorkflowRuntimeExecute;
+    // Contract: Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityIamEfModule.cs, SchemaVersion.
+    // Pin the process-boundary expectation without importing the child host's persistence assembly.
+    private const string ExpectedIamSchemaVersion = "1.2.0";
 
     [UnixPtyFact]
     public async Task Real_shell_activation_refuses_a_scope_that_disagrees_with_the_configured_tenant()
@@ -322,6 +325,16 @@ public sealed class WorkerOidcHostTests
         Assert.True(ready.GetProperty("iamUsesExpectedDatabase").GetBoolean());
         Assert.True(ready.GetProperty("iamMigrationsApplied").GetBoolean());
         Assert.False(ready.GetProperty("iamMigrationsPending").GetBoolean());
+        var schema = ready.GetProperty("iamSchemaReadiness");
+        Assert.Equal("host-schema-readiness", schema.GetProperty("stage").GetString());
+        Assert.True(schema.GetProperty("fleetPresent").GetBoolean());
+        Assert.True(schema.GetProperty("gatePresent").GetBoolean());
+        Assert.True(schema.GetProperty("statePresent").GetBoolean());
+        Assert.True(schema.GetProperty("observedRecordPresent").GetBoolean());
+        Assert.False(schema.GetProperty("writesRefused").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, schema.GetProperty("unreadableFinalizedVersion").ValueKind);
+        Assert.Equal(ExpectedIamSchemaVersion, schema.GetProperty("writeVersion").GetString());
+        Assert.Equal(ExpectedIamSchemaVersion, schema.GetProperty("finalizedVersion").GetString());
         Assert.True(ready.GetProperty("databasesAreDistinct").GetBoolean());
         Assert.EndsWith("EfClaimMappingStore", ready.GetProperty("mappingStoreType").GetString(), StringComparison.Ordinal);
         Assert.EndsWith("DefaultClaimsNormalizer", ready.GetProperty("normalizerType").GetString(), StringComparison.Ordinal);

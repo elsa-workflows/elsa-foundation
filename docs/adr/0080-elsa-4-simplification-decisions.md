@@ -279,6 +279,17 @@ This activates only the User Tasks scope linked from parity #2771, not its remai
 backlog. Routine decisions, milestone transitions, tests, docs and scoped PRs proceed under this authority;
 release and production deployment remain separate.
 
+**Owner amendment, 4 November 2026:** external authentication/OIDC delivery
+[#3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579) is authorized end to end within the existing
+[Elsa 3 parity program #2771](../program-goals/elsa3-parity.md). Sequence refreshed source assessment and necessary
+design/specification before backend/API/Studio implementation, actual provider sign-in and deployment-mode
+qualification, review/merge and resulting-main acceptance. Integrate the necessary scoped identity/token prerequisite
+#2848 through its existing delivery record. Preserve the confirmed explicit Studio override decision in ADR 0085 D3.
+Run beside active programs, displace none, and retain Foundation/Studio consolidation's first priority. This advances
+only the external authentication scope; it creates no duplicate program, activates no remaining parity phase or
+parked backlog, and includes no production deployment or credentials. Authorization and delivery state:
+[#3579 comment](https://github.com/elsa-workflows/elsa-foundation/issues/3579#issuecomment-6627537005).
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.

@@ -23,7 +23,7 @@ public static class IdentityIamEfModule
     public const string MutationReceiptTableName = "identity_mutation_receipts";
 
     /// <summary>The persisted-schema version every Identity IAM row is stamped with, and checked against when read.</summary>
-    public const string SchemaVersion = "1.0.0";
+    public const string SchemaVersion = "1.2.0";
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "IdentityIam";

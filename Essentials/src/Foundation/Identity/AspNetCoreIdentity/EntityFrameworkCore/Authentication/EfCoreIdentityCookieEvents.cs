@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
@@ -15,17 +16,22 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authen
 public sealed class EfCoreIdentityCookieEvents(
     UserManager<AspNetCoreIdentityUser> userManager,
     IUserStore users,
+    ITenantMembershipStore memberships,
+    ITokenSubjectResolver subjects,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPersistenceAccessContextBinder accessContextBinder,
-    IOptions<IdentityOptions> identityOptions) : CookieAuthenticationEvents
+    IOptions<IdentityOptions> identityOptions, IAuthenticationSessionStore? sessions = null,
+    ICanonicalUserSignInService? canonical = null) : CookieAuthenticationEvents
 {
     public override async Task ValidatePrincipal(CookieValidatePrincipalContext context)
     {
         if (context.Principal?.Identity?.IsAuthenticated != true)
             return;
 
-        var subject = context.Principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Principal.FindFirstValue("sub");
-        var tenantId = context.Principal.FindFirstValue(IdentityClaimTypes.TenantId);
+        if (!subjects.TryResolve(context.Principal, out var identity) || identity.CanonicalUserId is null)
+        { await RejectAsync(context); return; }
+        var subject = identity.CanonicalUserId;
+        var tenantId = identity.TenantId;
         var stamp = context.Principal.FindFirstValue(identityOptions.Value.ClaimsIdentity.SecurityStampClaimType);
         if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(stamp))
         {
@@ -42,8 +48,26 @@ public sealed class EfCoreIdentityCookieEvents(
         var user = await userManager.FindByIdAsync(subject);
         if (user is null || !string.Equals(user.TenantId, tenantId, StringComparison.Ordinal) ||
             !string.Equals(await userManager.GetSecurityStampAsync(user), stamp, StringComparison.Ordinal) ||
-            (await users.FindAsync(user.TenantId, user.Id, context.HttpContext.RequestAborted))?.Status == UserStatus.Disabled)
-            await RejectAsync(context);
+            (await users.FindAsync(user.TenantId, user.Id, context.HttpContext.RequestAborted))?.Status != UserStatus.Active)
+        { await RejectAsync(context); return; }
+        var membership = await memberships.FindAsync(tenantId, subject, context.HttpContext.RequestAborted);
+        if (membership is not null && membership.Status != TenantMembershipStatus.Active) { await RejectAsync(context); return; }
+        var ids = context.Principal.FindAll(IdentityClaimTypes.SessionId).ToArray();
+        if (sessions is not null || ids.Length != 0)
+        {
+            try
+            {
+                if (sessions is null || canonical is null || ids.Length != 1 || ids[0].Value.Length != 64 || !sessions.IsDurable)
+                { await RejectAsync(context); return; }
+                var session = await sessions.FindAsync(tenantId, ids[0].Value, context.HttpContext.RequestAborted);
+                var now = DateTimeOffset.UtcNow;
+                if (session is null || session.TenantId != tenantId || session.UserId != subject || session.RevokedAt is not null ||
+                    session.CreatedAt > now || session.ExpiresAt <= now || !await canonical.ValidateSessionAsync(session, context.HttpContext.RequestAborted))
+                    await RejectAsync(context);
+            }
+            catch (Exception exception) when (!(exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested))
+            { await RejectAsync(context); }
+        }
     }
 
     private static async Task RejectAsync(CookieValidatePrincipalContext context)

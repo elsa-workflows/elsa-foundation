@@ -86,6 +86,12 @@ published model with `RunBpmn`; the [host adapter](Essentials/src/Activities/Bpm
 describes its binding profiles, compatibility and recovery evidence. Existing Studio BPMN authoring is
 preserved; first-class direct-model Studio support remains tracked by the execution-model program.
 
+Optional [managed external sign-in](Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md)
+adds OIDC connections, explicit deployment overrides, prospective preview and guarded link/session administration.
+The [Studio module](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md) consumes its
+capability and public SDK. Integrator provisioning policies assign existing saved Elsa roles to new users;
+subsequent sign-ins use those saved assignments.
+
 ## Run with Docker
 
 The fastest way to try the stack is to [run the published images with Docker Compose](docker/compose/README.md#with-docker-compose),

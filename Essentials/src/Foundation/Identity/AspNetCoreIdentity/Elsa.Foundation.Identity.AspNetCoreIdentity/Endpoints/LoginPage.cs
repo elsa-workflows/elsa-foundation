@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 
@@ -13,9 +15,10 @@ public static class LoginPage
     public static string Render(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options)
         => RenderInShell(returnUrl,showError,antiforgeryToken,options,"");
 
-    internal static string RenderInShell(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options, string pathBase)
+    internal static string RenderInShell(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options, string pathBase,
+        LoginMethods? methods = null)
     {
-        var form = RenderForm(returnUrl, showError, antiforgeryToken, pathBase);
+        var form = RenderForm(returnUrl, showError, antiforgeryToken, pathBase, methods);
         if (options.Renderer is { } renderer)
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
@@ -67,6 +70,10 @@ public static class LoginPage
             input:focus-visible,button:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
             button { width:100%; padding:14px; border:1px solid transparent; border-radius:11px; background:var(--accent); color:var(--on-accent); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
             button:hover { filter:brightness(.94); }
+            .login-methods { display:grid; gap:12px; margin:24px 0; }
+            .login-methods a { display:block; padding:14px; border:1px solid var(--line); border-radius:11px; text-align:center; font-size:13px; }
+            .login-methods [data-preferred="true"] { box-shadow:0 0 0 2px var(--accent); }
+            .login-methods small { margin-left:8px; font-weight:400; }
             .error { padding:12px; border:1px solid #c34e44; border-radius:11px; color:#992a24; background:#fff0ed; font-size:13px; line-height:1.5; }
             footer { display:flex; flex-wrap:wrap; gap:18px; margin-top:40px; font-size:11px; color:var(--muted); }
             a { color:inherit; text-underline-offset:3px; }
@@ -192,13 +199,13 @@ public static class LoginPage
         """;
     }
 
-    private static string RenderForm(string returnUrl, bool showError, string? token, string pathBase)
+    private static string RenderForm(string returnUrl, bool showError, string? token, string pathBase, LoginMethods? methods)
     {
         var antiforgery = string.IsNullOrEmpty(token) ? "" : $"<input type=\"hidden\" name=\"{AspNetCoreIdentityDefaults.AntiforgeryFieldName}\" value=\"{WebUtility.HtmlEncode(token)}\" />";
-        var error = showError ? "<p class=\"error\" role=\"alert\">Invalid username or password.</p>" : "";
-        return $$"""
+        var error = showError ? "<p class=\"error\" role=\"alert\">" + (methods?.Providers.Count > 0 ? "Sign-in could not be completed. Please try again." : "Invalid username or password.") + "</p>" : "";
+        var local = methods?.LocalEnabled == false ? "" : $$"""
         <form method="post" action="{{WebUtility.HtmlEncode(pathBase)}}/{{AspNetCoreIdentityDefaults.LoginRoute}}">
-          {{error}}{{antiforgery}}
+          {{antiforgery}}
           <input type="hidden" name="returnUrl" value="{{WebUtility.HtmlEncode(returnUrl)}}" />
           <label for="username">Username</label>
           <input id="username" name="username" autocomplete="username" autofocus required />
@@ -207,6 +214,22 @@ public static class LoginPage
           <button type="submit">Sign in</button>
         </form>
         """;
+        var buttons = new List<string>();
+        foreach (var provider in methods?.Providers ?? [])
+        {
+            var url = SafeUrl(provider.Challenge?.Url);
+            if (url is null || provider.Challenge?.Method is not ("GET" or "POST")) continue;
+            if (url.StartsWith('/')) url = pathBase + url;
+            var preferred = provider.IsDefault ? "true" : "false";
+            var label = WebUtility.HtmlEncode(provider.DisplayName) + (provider.IsDefault ? " <small>Preferred</small>" : "");
+            if (provider.Challenge.Method == "POST")
+                buttons.Add($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(url)}\">{antiforgery}<input type=\"hidden\" name=\"returnUrl\" value=\"{WebUtility.HtmlEncode(returnUrl)}\" /><button type=\"submit\" data-preferred=\"{preferred}\">Continue with {label}</button></form>");
+            else
+                buttons.Add($"<a href=\"{WebUtility.HtmlEncode(QueryHelpers.AddQueryString(url, "returnUrl", returnUrl))}\" data-preferred=\"{preferred}\">Continue with {label}</a>");
+        }
+        var external = buttons.Count == 0 ? "" : "<div class=\"login-methods\" aria-label=\"Sign-in methods\">" + string.Join("", buttons) + "</div>";
+        var unavailable = methods?.Unavailable == true ? "<p role=\"status\">Some sign-in methods are currently unavailable.</p>" : "";
+        return error + unavailable + (methods?.Providers.Any(provider => provider.IsDefault) == true ? external + local : local + external);
     }
 
     internal static string? SafeUrl(string? value)
@@ -217,3 +240,5 @@ public static class LoginPage
             (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) ? value : null;
     }
 }
+
+internal sealed record LoginMethods(IReadOnlyList<AuthenticationProviderDescriptor> Providers, bool LocalEnabled, bool Unavailable = false);

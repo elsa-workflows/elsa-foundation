@@ -26,6 +26,10 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+        <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+        <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+        <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+        <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
@@ -40,5 +44,10 @@
 	<ItemGroup>
 		<Using Include="Xunit" />
 	</ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="../../../Persistence/EntityFramework/Tests/EfSchemaUpcasterFixtureSupport.cs" Link="Support/EfSchemaUpcasterFixtureSupport.cs" />
+        <None Update="Fixtures/SchemaUpcasters/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 
 </Project>

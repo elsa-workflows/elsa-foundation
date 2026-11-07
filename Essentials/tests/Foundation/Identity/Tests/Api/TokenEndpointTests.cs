@@ -31,6 +31,33 @@ public sealed class TokenEndpointTests : IAsyncLifetime
 
     private TokenEndpointFixture _fixture = null!;
 
+    [Fact]
+    public async Task Http_logout_of_external_subject_does_not_revoke_equal_subjects_in_other_scopes_or_rotate_a_local_users_stamp()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var localToken = await FetchAccessTokenAsync(client);
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
+        var local = (await tokens.ValidateAsync(new(localToken))).Principal!;
+        var tenant = local.FindFirstValue(IdentityClaimTypes.TenantId)!;
+        var sameSubject = local.FindFirstValue(IdentityClaimTypes.UserId)!;
+        var a = await tokens.IssueAsync(new(new TokenSubject(tenant, sameSubject, "provider-a", "https://issuer-a/"), []));
+        var b = await tokens.IssueAsync(new(new TokenSubject(tenant, sameSubject, "provider-b", "https://issuer-b/"), []));
+        var otherTenant = await tokens.IssueAsync(new(new TokenSubject("another-tenant", sameSubject, "provider-a", "https://issuer-a/"), []));
+        var cookie = WithoutCookie(client);
+
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, a.AccessToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, a.AccessToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = a.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = b.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = otherTenant.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, localToken));
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
     public async Task InitializeAsync() => _fixture = await TokenEndpointFixture.StartAsync();
 
     public async Task DisposeAsync() => await _fixture.DisposeAsync();
@@ -451,7 +478,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
         var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
         return await tokens.IssueAsync(new TokenIssueRequest(
-            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []));
+            new TokenSubject(principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value), []));
     }
 
     private static async Task<HttpStatusCode> CallProtectedAsync(HttpClient client, string accessToken)
@@ -493,7 +520,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         public ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default) => inner.ValidateAsync(request, cancellationToken);
         public ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default) => inner.RevokeAsync(request, cancellationToken);
 
-        public ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default) =>
-            fault.Armed ? throw new InvalidOperationException("The token store is unavailable.") : inner.RevokeSubjectAsync(subjectId, cancellationToken);
+        public ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default) =>
+            fault.Armed ? throw new InvalidOperationException("The token store is unavailable.") : inner.RevokeSubjectAsync(subject, cancellationToken);
     }
 }

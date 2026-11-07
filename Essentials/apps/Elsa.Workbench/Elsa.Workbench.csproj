@@ -143,6 +143,10 @@
 		<ProjectReference Include="..\..\src\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
 		<ProjectReference Include="..\..\src\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
+		<ProjectReference Include="../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+		<ProjectReference Include="../../src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+		<ProjectReference Include="../../src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+		<ProjectReference Include="../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
 		<ProjectReference Include="..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\src\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />

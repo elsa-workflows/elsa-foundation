@@ -19,6 +19,7 @@
           "SecretsStudio": {},
           "AgentSpecialistsStudio": {},
           "ConnectionsStudio": {},
+          "ExternalAuthenticationStudio": {},
           "DecisionsStudio": {},
           "EtlStudio": {},
           "StructuredLogsStudio": {},

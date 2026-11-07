@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../Secrets/Core/Elsa.Secrets.Core.csproj" />
+  </ItemGroup>
+</Project>

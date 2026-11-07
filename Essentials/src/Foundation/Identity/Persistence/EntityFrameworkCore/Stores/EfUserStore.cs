@@ -105,6 +105,12 @@ public sealed class EfUserStore(
             : new IamRevisionedRecord<UserRecord>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
     }
 
+    public async ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    {
+        var row = await FindEntityAsync(tenantId, userId, false, cancellationToken);
+        return row is null || !Matches(row, tenantId, userId) ? null : EfIamRevisionGuards.User(row);
+    }
+
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(UserRecord user, string? expectedRevision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);

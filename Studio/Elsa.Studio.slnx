@@ -33,6 +33,7 @@
     <Project Path="../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <Project Path="../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" />
     <Project Path="../Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" />
+    <Project Path="../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj" />
     <Project Path="../Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" />
     <Project Path="../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Elsa.Studio.Agent.Specialists.csproj" />
     <Project Path="../Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" />

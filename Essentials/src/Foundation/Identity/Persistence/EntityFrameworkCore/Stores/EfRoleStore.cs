@@ -79,6 +79,12 @@ public sealed class EfRoleStore(
             : new IamRevisionedRecord<RoleRecord>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
     }
 
+    public async ValueTask<IamRevisionGuard?> FindRevisionGuardAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)
+    {
+        var row = await FindEntityAsync(tenantId, roleId, false, cancellationToken);
+        return row is null || !Matches(row, tenantId, roleId) ? null : EfIamRevisionGuards.Role(row);
+    }
+
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(RoleRecord role, string? expectedRevision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(role);

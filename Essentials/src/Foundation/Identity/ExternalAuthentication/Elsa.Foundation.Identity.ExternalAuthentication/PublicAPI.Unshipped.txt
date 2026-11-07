@@ -1,0 +1,56 @@
+#nullable enable
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowDatabaseManagement.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowDatabaseManagement.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowDeploymentOverrides.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowDeploymentOverrides.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedOverrideKeys.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedOverrideKeys.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedReturnUrlOrigins.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedReturnUrlOrigins.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedRoleIds.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.AllowedRoleIds.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.CallbackPath.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.CallbackPath.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.Connections.get -> System.Collections.Generic.List<Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.Connections.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.ExternalAuthenticationFeature() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.PublicBaseUrl.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.PublicBaseUrl.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.RecoveryEvidenceLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.RecoveryEvidenceLifetime.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.RecoveryScanLimit.get -> int
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.RecoveryScanLimit.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.TenantId.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.TenantId.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowDatabaseManagement.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowDatabaseManagement.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowDeploymentOverrides.get -> bool
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowDeploymentOverrides.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedOverrideKeys.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedOverrideKeys.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedReturnUrlOrigins.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedReturnUrlOrigins.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedRoleIds.get -> System.Collections.Generic.List<string!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.AllowedRoleIds.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.CallbackPath.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.CallbackPath.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.Connections.get -> System.Collections.Generic.List<Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord!>!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.Connections.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.ExternalAuthenticationOptions() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.FlowLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.FlowLifetime.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.PreviewResultLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.PreviewResultLifetime.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.PublicBaseUrl.get -> string?
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.PublicBaseUrl.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.RecoveryEvidenceLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.RecoveryEvidenceLifetime.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.RecoveryScanLimit.get -> int
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.RecoveryScanLimit.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.TenantId.get -> string!
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions.TenantId.set -> void
+Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationRegistration
+static Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationRegistration.AddFoundationExternalAuthentication(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Foundation.Identity.ExternalAuthentication.ExternalAuthenticationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -30,6 +30,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.AddOptions<FoundationIdentityOptions>().ValidateOnStart();
 
         services.TryAddScoped<IAuthenticationProviderResolver, DefaultAuthenticationProviderResolver>();
+        services.EnsureReplacementContract<ITokenSubjectResolver, DefaultTokenSubjectResolver>();
         services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);

@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthenticationSessionId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthenticationSessionId.init -> void
 Elsa.Foundation.Identity.Core.Authentication.AuthSession
 Elsa.Foundation.Identity.Core.Authentication.AuthSession.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.AuthSession!
 Elsa.Foundation.Identity.Core.Authentication.AuthSession.AuthSession(string! Status, string? Subject, string? DisplayName, string? TenantId, System.Collections.Generic.IReadOnlySet<string!>! Roles, System.Collections.Generic.IReadOnlySet<string!>! Permissions, string! TokenFreshness, string? Provider) -> void
@@ -81,38 +83,25 @@ Elsa.Foundation.Identity.Core.Authentication.ITokenService
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.IssueAsync(Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult!>
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RefreshAsync(Elsa.Foundation.Identity.Core.Authentication.TokenRefreshRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult!>
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeAsync(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeSubjectAsync(string! subjectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeSubjectAsync(Elsa.Foundation.Identity.Core.Authentication.TokenSubject! subject, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.ValidateAsync(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult!>
+Elsa.Foundation.Identity.Core.Authentication.ITokenSubjectResolver
+Elsa.Foundation.Identity.Core.Authentication.ITokenSubjectResolver.TryResolve(System.Security.Claims.ClaimsPrincipal! principal, out Elsa.Foundation.Identity.Core.Authentication.TokenSubject? subject) -> bool
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.CatalogPermissions.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.CatalogPermissions.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Deconstruct(out string! TenantId, out string! Provider, out string! ProviderSubject, out System.Security.Claims.ClaimsPrincipal! ExternalPrincipal, out System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>! MappingRules, out System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>! CatalogPermissions) -> void
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Equals(Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext? other) -> bool
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalPrincipal.get -> System.Security.Claims.ClaimsPrincipal!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalPrincipal.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.MappingRules.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.MappingRules.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.PrincipalFactoryContext(string! TenantId, string! Provider, string! ProviderSubject, System.Security.Claims.ClaimsPrincipal! ExternalPrincipal, System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.ClaimMappingRule!>! MappingRules, System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>! CatalogPermissions) -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.init -> void
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ProviderSubject.get -> string!
-Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ProviderSubject.init -> void
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.TenantId.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.TenantId.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest!
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.CanonicalUserId.get -> string?
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.CanonicalUserId.init -> void
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Deconstruct(out string! SubjectId, out string! TenantId, out System.Collections.Generic.IReadOnlyCollection<string!>! Scopes) -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Deconstruct(out Elsa.Foundation.Identity.Core.Authentication.TokenSubject! Subject, out System.Collections.Generic.IReadOnlyCollection<string!>! Scopes) -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Equals(Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest? other) -> bool
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Scopes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Scopes.init -> void
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SubjectId.get -> string!
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SubjectId.init -> void
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.TenantId.get -> string!
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.TenantId.init -> void
-Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.TokenIssueRequest(string! SubjectId, string! TenantId, System.Collections.Generic.IReadOnlyCollection<string!>! Scopes) -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Subject.get -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Subject.init -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.TokenIssueRequest(Elsa.Foundation.Identity.Core.Authentication.TokenSubject! Subject, System.Collections.Generic.IReadOnlyCollection<string!>! Scopes) -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult!
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult.AccessToken.get -> string!
@@ -151,6 +140,15 @@ Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Reason.init 
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Token.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Token.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.TokenRevocationRequest(string! Token, string? Reason = null) -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.CanonicalUserId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Equals(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? other) -> bool
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Provider.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.SubjectId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.TokenSubject(string! tenantId, string! subjectId, string? provider = null, string? issuer = null) -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest!
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.Deconstruct(out string! Token) -> void
@@ -822,11 +820,15 @@ const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityRolesRead = "identity/roles:read" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityUsersManage = "identity/users:manage" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityUsersRead = "identity/users:read" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.ExternalSubject = "elsa.identity.external_subject" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Normalized = "elsa.identity.normalized" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Permission = "elsa.identity.permission" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Provider = "elsa.identity.provider" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Role = "elsa.identity.role" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.SubjectIssuer = "elsa.identity.subject_issuer" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.SubjectProvider = "elsa.identity.subject_provider" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.TenantId = "elsa.identity.tenant_id" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.TokenSubjectKey = "elsa.identity.token_subject" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.UserId = "elsa.identity.user_id" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.PermissionKey.ResourceSeparator = '/' -> char
 const Elsa.Foundation.Identity.Core.Authorization.PermissionKey.VerbSeparator = ':' -> char
@@ -863,6 +865,9 @@ override Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.ToStrin
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Equals(object? obj) -> bool
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.GetHashCode() -> int
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.ToString() -> string!
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ToString() -> string!
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.Equals(object? obj) -> bool
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.GetHashCode() -> int
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.ToString() -> string!
@@ -988,6 +993,8 @@ static Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.operator 
 static Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult? left, Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? right) -> bool
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? left, Elsa.Foundation.Identity.Core.Authentication.TokenSubject? right) -> bool
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? left, Elsa.Foundation.Identity.Core.Authentication.TokenSubject? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult? right) -> bool
@@ -1080,3 +1087,187 @@ static Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities.operator !=(
 static Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities.operator ==(Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities? left, Elsa.Foundation.Identity.Core.Ownership.ProviderCapabilities? right) -> bool
 static Elsa.Foundation.Identity.Core.Security.AuthEvent.operator !=(Elsa.Foundation.Identity.Core.Security.AuthEvent? left, Elsa.Foundation.Identity.Core.Security.AuthEvent? right) -> bool
 static Elsa.Foundation.Identity.Core.Security.AuthEvent.operator ==(Elsa.Foundation.Identity.Core.Security.AuthEvent? left, Elsa.Foundation.Identity.Core.Security.AuthEvent? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.ExternalIdentityKey(string! tenantId, string! provider, string! issuer, string! subject) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Issuer.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Provider.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Subject.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord.Issuer.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.FindByKeyAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord?>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.FindByKeyWithRevisionAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionedRecord<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRecord!>?>
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.ToString() -> string!
+static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? left, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? left, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Iam.LinkExternalIdentityRequest.Issuer.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.CreateUser.get -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.CreateUser.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Deconstruct(out Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! Key, out Elsa.Foundation.Identity.Core.Iam.UserRecord! User, out bool CreateUser, out Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy LinkPolicy) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExternalUserAdmission(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! Key, Elsa.Foundation.Identity.Core.Iam.UserRecord! User, bool CreateUser, Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy LinkPolicy) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Key.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Key.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.LinkPolicy.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityLinkPolicy
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.LinkPolicy.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.User.get -> Elsa.Foundation.Identity.Core.Iam.UserRecord!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.User.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.<Clone>$() -> Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult!
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Admitted.get -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Admitted.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Deconstruct(out bool Admitted, out string? UserId, out string? Failure) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Equals(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? other) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.ExternalUserAdmissionResult(bool Admitted, string? UserId = null, string? Failure = null) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Failure.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Failure.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.UserId.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.UserId.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.AdmitAsync(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult!>
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ToString() -> string!
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.ToString() -> string!
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator !=(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool
+static Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult.operator ==(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? left, Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult? right) -> bool
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExpectedMembership.get -> Elsa.Foundation.Identity.Core.Iam.TenantMembershipRecord?
+Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission.ExpectedMembership.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Deconstruct(out string! TenantId, out string! UserId, out string? Provider) -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.PrincipalFactoryContext(string! TenantId, string! UserId, string? Provider = null) -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.Provider.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.UserId.init -> void
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsQualifiedKeys.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityStore.SupportsAtomicAdmission.get -> bool
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationProviderSource
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationProviderSource.ListAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Authentication.AuthenticationProviderDescriptor!>!>
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.AuthenticationScheme.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.SignInAsync(Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthSession?>
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionInvalidator.AuthenticationScheme.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.CanSignInAsync(Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext! context, bool requiresPassword = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.AuthenticationSessionRecord(string! Id, string! TenantId, string! UserId, string! Provider, string! SecurityVersion, System.DateTimeOffset CreatedAt, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionKey.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionKey.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRecordId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRecordId.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.CreatedAt.get -> System.DateTimeOffset
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.CreatedAt.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Deconstruct(out string! Id, out string! TenantId, out string! UserId, out string! Provider, out string! SecurityVersion, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Equals(Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord? other) -> bool
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExpiresAt.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalSubject.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalSubject.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Id.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Id.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Issuer.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Issuer.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Provider.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Provider.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Revision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Revision.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.RevokedAt.get -> System.DateTimeOffset?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.RevokedAt.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.SecurityVersion.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.SecurityVersion.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.TenantId.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.UserId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.UserId.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus.AlreadyRevoked = 1 -> Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus.Conflict = 3 -> Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus.Missing = 2 -> Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus.Revoked = 0 -> Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore.FindAsync(string! tenantId, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord?>
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore.IsDurable.get -> bool
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore.ListAsync(string! tenantId, string! userId, Elsa.Foundation.Identity.Core.Iam.IamPageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamPage<Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord!>!>
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore.RevokeAsync(string! tenantId, string! id, string! expectedRevision, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRevocationStatus>
+Elsa.Foundation.Identity.Core.Authentication.IAuthenticationSessionStore.TryCreateAsync(Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord! session, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+override Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ToString() -> string!
+static Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.operator !=(Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord? left, Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord? right) -> bool
+static Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.operator ==(Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord? left, Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord? right) -> bool
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.ValidateSessionAsync(Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord! session, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRecordId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRecordId.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalIdentity.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ExternalIdentity.init -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SessionId.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SessionId.init -> void
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.SessionId = "elsa.identity.session_id" -> string!
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.ReadSessionAsync(Elsa.Foundation.Identity.Core.Authentication.TokenSubject! subject, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord?>
+Elsa.Foundation.Identity.Core.Authentication.ICanonicalUserSignInService.SupportsDurableSessions.get -> bool
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentitySessionsRead = "identity/sessions:read" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentitySessionsManage = "identity/sessions:manage" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksRead = "identity/links:read" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityLinksManage = "identity/links:manage" -> string!
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareProviderConfigurationStore.SaveWithIdentityRevisionGuardsAsync(Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord! configuration, string? expectedRevision, System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard!>! guards, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionSaveResult!>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareProviderConfigurationStore.SupportsIdentityRevisionGuards.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.IamRevisionGuard(Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind kind, string! tenantId, string! id, string! revision) -> void
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Id.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Kind.get -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.Revision.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.Role = 1 -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind.User = 0 -> Elsa.Foundation.Identity.Core.Iam.IamRevisionGuardKind
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareRoleStore.FindRevisionGuardAsync(string! tenantId, string! roleId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareUserStore.FindRevisionGuardAsync(string! tenantId, string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard?>
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalLinkRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ExternalLinkRevision.init -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.ExternalIdentityRemovalResult(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus status, string? userRevision = null) -> void
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.Status.get -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult.UserRevision.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Conflict = 2 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Missing = 1 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus.Removed = 0 -> Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalStatus
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.RemoveWithRevisionAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard! owner, string! expectedLinkRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult!>
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.SupportsQualifiedKeys.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IRevisionAwareExternalIdentityStore.SupportsQualifiedRemoval.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityAdministrationStore
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityAdministrationStore.AttachAsync(Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmission! admission, Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard! owner, System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard!>! guards, Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite? providerWrite = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalUserAdmissionResult!>
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityAdministrationStore.RemoveAsync(Elsa.Foundation.Identity.Core.Iam.ExternalIdentityKey! key, Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard! owner, string! expectedLinkRevision, System.Collections.Generic.IReadOnlyList<Elsa.Foundation.Identity.Core.Iam.IamRevisionGuard!>! guards, Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite? providerWrite = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Iam.ExternalIdentityRemovalResult!>
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityAdministrationStore.SupportsIdentityRevisionGuards.get -> bool
+Elsa.Foundation.Identity.Core.Iam.IExternalIdentityAdministrationStore.SupportsProviderRevisionGuards.get -> bool
+Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite
+Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.Configuration.get -> Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord!
+Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.ExpectedRevision.get -> string?
+Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationWrite.ProviderConfigurationWrite(Elsa.Foundation.Identity.Core.Iam.ProviderConfigurationRecord! configuration, string? expectedRevision) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionCredentialBinding.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionCredentialBinding.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionMaterialRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionMaterialRevision.init -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRedirectUri.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationSessionRecord.ConnectionRedirectUri.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionCredentialBinding.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionCredentialBinding.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionMaterialRevision.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionMaterialRevision.init -> void
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.ConnectionRedirectUri.init -> void
+
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.AuthenticationStoreException(string! operation, string! tenantId, string? recordId, System.Exception! innerException) -> void
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.Operation.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.RecordId.get -> string?

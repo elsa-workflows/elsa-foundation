@@ -103,6 +103,7 @@ not automatic constitution violations.
 | Specialist human review API | [`Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md) |
 | Specialist authoring API | [`Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md) |
 | Specialist inspection API | [`Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md) |
+| Foundation Identity external authentication (managed connections, admission/protocol contributions, protected one-time flows, explicit source ownership, catalog CAS, guarded link administration, durable session revocation and login recovery) | [`Essentials/src/Foundation/Identity/ExternalAuthentication/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/ExternalAuthentication/Core/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
@@ -250,4 +251,5 @@ not automatic constitution violations.
 ## Studio
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
+- [External sign-in Studio module and standalone management client](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

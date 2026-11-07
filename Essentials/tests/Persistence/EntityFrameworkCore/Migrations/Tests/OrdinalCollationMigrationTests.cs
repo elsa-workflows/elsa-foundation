@@ -20,9 +20,10 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// </summary>
 public sealed class OrdinalCollationMigrationTests
 {
-    /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
+    /// <summary>The modules #1837 put in scope, plus #3579's hashed one-time authentication bindings.</summary>
     private static readonly string[] CollatingModules =
     [
+        "ExternalAuthentication",
         "ActivitiesDesign", "Agent", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
     ];
@@ -33,6 +34,11 @@ public sealed class OrdinalCollationMigrationTests
     /// </summary>
     private static readonly (string Module, string Table, string Column)[] MustBeOrdinal =
     [
+        ("ExternalAuthentication", "identity_authentication_artifacts", "Id"),
+        ("ExternalAuthentication", "identity_authentication_artifacts", "TenantKey"),
+        ("ExternalAuthentication", "identity_authentication_artifacts", "BrowserBinding"),
+        ("ExternalAuthentication", "identity_authentication_artifacts", "AdministratorBinding"),
+        ("ExternalAuthentication", "identity_authentication_artifacts", "Version"),
         // The keyset cursor EfActivityDesignStores pages the management projection with.
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SortKey"),
         ("ActivitiesDesign", "elsa_activity_management_definitions", "ResourceId"),
@@ -96,6 +102,7 @@ public sealed class OrdinalCollationMigrationTests
     /// </summary>
     private static readonly (string Module, string Table, string Column)[] MustNotBeOrdinal =
     [
+        ("ExternalAuthentication", "identity_authentication_artifacts", "ProtectedPayload"),
         ("ActivitiesDesign", "elsa_activity_availability_settings", "Rules"),
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SearchText"),
         ("ActivitiesDesign", "elsa_activity_definitions", "Description"),
