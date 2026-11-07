@@ -286,6 +286,8 @@ They cover shard selection, the retry decision, quarantine, the tier traits, col
 
   *(Filed as #3267, because the measurements need 20 PR runs after this switch merges.)*
 
+  First-20-PR measurements are recorded in [outcomes.md](outcomes.md) with retained run data (6 November 2026). SC-001 and the first-ready SC-002 sample miss their time bounds; SC-004 and the exact ready-push share remain incomplete. T038 stays open.
+
   A median of at most 13 minutes meets SC-001; file the method-level split of the slowest class as a `needs-triage` follow-up. A miss above 13 minutes goes to the owner with the options in the plan's Risks section.
 - [X] T039 Set the spec's `**Status**:` line to `Implemented` in the PR that completes T038's measured outcomes, before it merges (docs/reference/spec-lifecycle.md; never a separate status PR). Update `docs/program-goals/` per Program bookkeeping. *(Done in the switch PR, which completes the implementation; the outcome measurements of T038 follow as their own issue, since they need runs after the merge. Spec 263 belongs to no program-goal bucket (`none/free-flow`), so `docs/program-goals/` has nothing to update.)*
 
