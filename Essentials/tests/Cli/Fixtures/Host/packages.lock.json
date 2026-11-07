@@ -439,6 +439,26 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.decisions.core": {
+        "type": "Project"
+      },
+      "elsa.decisions.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Decisions.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.decisions.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
       "elsa.diagnostics.opentelemetry": {
         "type": "Project",
         "dependencies": {
