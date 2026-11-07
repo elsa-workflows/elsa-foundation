@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentApiError, classifyAutonomyFailure, createAgentClient, POLICY_CHANGED } from "../agentClient";
-import { StudioHttpError, createHttpClient, type StudioHttpClient, type StudioEndpointContext } from "../../../sdk";
+import { StudioHttpError, createHttpClient, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
   it("transports the per-message surface and maps only server-admitted context metadata and opaque payload", async () => {
@@ -129,7 +129,7 @@ describe("agent client", () => {
 
   it("maps the autonomy policy and forwards the requested mode", async () => {
     const context = stubContext();
-    context.http.getJson = vi.fn<StudioHttpClient["getJson"]>().mockResolvedValue({
+    context.http.getJson = mockGetJson({
       data: {
         enabled: true,
         capabilities: [],
@@ -164,7 +164,7 @@ describe("agent client", () => {
 
   it("derives allowed autonomy modes from the ceiling when the backend omits them", async () => {
     const context = stubContext();
-    context.http.getJson = vi.fn<StudioHttpClient["getJson"]>().mockResolvedValue({
+    context.http.getJson = mockGetJson({
       data: {
         enabled: true,
         capabilities: [],
@@ -336,7 +336,7 @@ function stubContext(): StudioEndpointContext {
     baseUrl: "https://foundation.example/",
     http: {
       ...createHttpClient("https://foundation.example/"),
-      getJson: vi.fn<StudioHttpClient["getJson"]>().mockResolvedValue({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } }),
+      getJson: mockGetJson({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } }),
       postJson: mockPostJson(async url => {
         if (url === "/_elsa/agent/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };
@@ -353,7 +353,7 @@ function stubPascalCaseContext(): StudioEndpointContext {
     baseUrl: "https://foundation.example/",
     http: {
       ...createHttpClient("https://foundation.example/"),
-      getJson: vi.fn<StudioHttpClient["getJson"]>().mockResolvedValue({
+      getJson: mockGetJson({
         Data: {
           Enabled: true,
           ProviderStatus: "Available",
@@ -389,5 +389,14 @@ function mockPostJson(respond: (url: string) => Promise<unknown>) {
   const http = createHttpClient("https://foundation.example/", {
     fetch: async input => Response.json(await respond(new URL(String(input)).pathname))
   });
-  return vi.fn(http.postJson);
+  vi.spyOn(http, "postJson");
+  return http.postJson;
+}
+
+function mockGetJson(response: unknown) {
+  const http = createHttpClient("https://foundation.example/", {
+    fetch: async () => Response.json(response)
+  });
+  vi.spyOn(http, "getJson");
+  return http.getJson;
 }

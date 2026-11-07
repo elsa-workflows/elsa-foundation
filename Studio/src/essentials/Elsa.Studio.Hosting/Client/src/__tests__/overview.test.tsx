@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath, ShellFrame } from "../app/App";
 import { filterAccessibleNavigation, moreToolsStorageKey, type NavigationAccess } from "../app/navigation/placement";
 import { ThemeProvider } from "../app/components/ThemeProvider";
-import { createEndpointContext, createHttpClient, type StudioHttpClient, type ElsaStudioModuleApi, type StudioBackendManagementStatus, type StudioDiagnosticsWidgetContribution, type StudioDiagnosticsWidgetProps, type StudioNavigationContribution } from "../sdk";
+import { createEndpointContext, createHttpClient, type StudioDashboardWidgetContribution, type ElsaStudioModuleApi, type StudioBackendManagementStatus, type StudioDiagnosticsWidgetContribution, type StudioDiagnosticsWidgetProps, type StudioNavigationContribution } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 const mountedTestRoots = new Set<() => void>();
@@ -358,7 +358,7 @@ function stubApi(options: {
   backendStatus?: StudioBackendManagementStatus;
   bridgeGetJson?: (url: string) => Promise<unknown>;
   backendGetJson?: (url: string) => Promise<unknown>;
-  widgets?: Array<{ id: string; title: string; order?: number; component: React.ComponentType }>;
+  widgets?: StudioDashboardWidgetContribution[];
   diagnosticsWidgets?: StudioDiagnosticsWidgetContribution[];
   diagnostics?: Array<{ moduleId: string; status: string; reason: string }>;
 } = {}): ElsaStudioModuleApi {
@@ -376,7 +376,7 @@ function stubApi(options: {
       http: {
         ...createEndpointContext("https://studio.example/").http,
         getJson: stubGetJson("https://studio.example/", hostGetJson),
-        postJson: vi.fn<StudioHttpClient["postJson"]>().mockResolvedValue({})
+        postJson: stubPostJson("https://studio.example/")
       }
     },
     backend: {
@@ -385,7 +385,7 @@ function stubApi(options: {
         // Must never be called by host-health anymore; a probe here fails the test loudly.
         ...createEndpointContext("https://foundation.example/").http,
         getJson: stubGetJson("https://foundation.example/", options.backendGetJson ?? (async () => { throw new Error("backend context must not be probed by host-health"); })),
-        postJson: vi.fn<StudioHttpClient["postJson"]>().mockResolvedValue({})
+        postJson: stubPostJson("https://foundation.example/")
       }
     },
     dashboardWidgets: {
@@ -480,4 +480,12 @@ function stubGetJson(baseUrl: string, read: (url: string) => Promise<unknown>) {
   return createHttpClient(baseUrl, {
     fetch: async input => Response.json(await read(new URL(String(input)).pathname))
   }).getJson;
+}
+
+function stubPostJson(baseUrl: string) {
+  const http = createHttpClient(baseUrl, {
+    fetch: async () => Response.json({})
+  });
+  vi.spyOn(http, "postJson");
+  return http.postJson;
 }
