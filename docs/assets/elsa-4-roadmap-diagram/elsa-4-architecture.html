@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Elsa 4 Architecture</title>
+<meta name="description" content="Elsa 4 target architecture: one platform, multiple execution models. Interactive layer highlighting and zoom.">
+<script>try{var t=localStorage.getItem('elsa4-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+:root{--page:#F7F6F2;--panel:#fff;--line:#D6D3C9;--ink:#14161A;--muted:#5B6068;--accent:#4F46E5;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--page:#0E1013;--panel:#181B21;--line:#343A45;--ink:#ECEDEF;--muted:#A3A8B1;--accent:#8B84FF}
+:root:not([data-theme=light]) svg .f-bg{fill:#0E1013}:root:not([data-theme=light]) svg .s-bg{stroke:#0E1013}:root:not([data-theme=light]) svg .f-band{fill:#181B21}:root:not([data-theme=light]) svg .s-band{stroke:#181B21}:root:not([data-theme=light]) svg .f-surface{fill:#20242C}:root:not([data-theme=light]) svg .s-surface{stroke:#20242C}:root:not([data-theme=light]) svg .f-line{fill:#343A45}:root:not([data-theme=light]) svg .s-line{stroke:#343A45}:root:not([data-theme=light]) svg .f-rail{fill:#7A7F8A}:root:not([data-theme=light]) svg .s-rail{stroke:#7A7F8A}:root:not([data-theme=light]) svg .f-ink{fill:#ECEDEF}:root:not([data-theme=light]) svg .s-ink{stroke:#ECEDEF}:root:not([data-theme=light]) svg .f-muted{fill:#A3A8B1}:root:not([data-theme=light]) svg .s-muted{stroke:#A3A8B1}:root:not([data-theme=light]) svg .f-chip{fill:#2C313B}:root:not([data-theme=light]) svg .s-chip{stroke:#2C313B}:root:not([data-theme=light]) svg .f-n-main{fill:#8B84FF}:root:not([data-theme=light]) svg .s-n-main{stroke:#8B84FF}:root:not([data-theme=light]) svg .f-n-tint{fill:#2A2860}:root:not([data-theme=light]) svg .s-n-tint{stroke:#2A2860}:root:not([data-theme=light]) svg .f-n-ink{fill:#D4D1FF}:root:not([data-theme=light]) svg .s-n-ink{stroke:#D4D1FF}:root:not([data-theme=light]) svg .f-b-main{fill:#F59E0B}:root:not([data-theme=light]) svg .s-b-main{stroke:#F59E0B}:root:not([data-theme=light]) svg .f-b-tint{fill:#4A3010}:root:not([data-theme=light]) svg .s-b-tint{stroke:#4A3010}:root:not([data-theme=light]) svg .f-b-ink{fill:#FFD79A}:root:not([data-theme=light]) svg .s-b-ink{stroke:#FFD79A}:root:not([data-theme=light]) svg .f-e-main{fill:#2DD4BF}:root:not([data-theme=light]) svg .s-e-main{stroke:#2DD4BF}:root:not([data-theme=light]) svg .f-e-tint{fill:#0F3F3B}:root:not([data-theme=light]) svg .s-e-tint{stroke:#0F3F3B}:root:not([data-theme=light]) svg .f-e-ink{fill:#A7F0E6}:root:not([data-theme=light]) svg .s-e-ink{stroke:#A7F0E6}}
+:root[data-theme=dark]{--page:#0E1013;--panel:#181B21;--line:#343A45;--ink:#ECEDEF;--muted:#A3A8B1;--accent:#8B84FF}
+:root[data-theme=dark] svg .f-bg{fill:#0E1013}:root[data-theme=dark] svg .s-bg{stroke:#0E1013}:root[data-theme=dark] svg .f-band{fill:#181B21}:root[data-theme=dark] svg .s-band{stroke:#181B21}:root[data-theme=dark] svg .f-surface{fill:#20242C}:root[data-theme=dark] svg .s-surface{stroke:#20242C}:root[data-theme=dark] svg .f-line{fill:#343A45}:root[data-theme=dark] svg .s-line{stroke:#343A45}:root[data-theme=dark] svg .f-rail{fill:#7A7F8A}:root[data-theme=dark] svg .s-rail{stroke:#7A7F8A}:root[data-theme=dark] svg .f-ink{fill:#ECEDEF}:root[data-theme=dark] svg .s-ink{stroke:#ECEDEF}:root[data-theme=dark] svg .f-muted{fill:#A3A8B1}:root[data-theme=dark] svg .s-muted{stroke:#A3A8B1}:root[data-theme=dark] svg .f-chip{fill:#2C313B}:root[data-theme=dark] svg .s-chip{stroke:#2C313B}:root[data-theme=dark] svg .f-n-main{fill:#8B84FF}:root[data-theme=dark] svg .s-n-main{stroke:#8B84FF}:root[data-theme=dark] svg .f-n-tint{fill:#2A2860}:root[data-theme=dark] svg .s-n-tint{stroke:#2A2860}:root[data-theme=dark] svg .f-n-ink{fill:#D4D1FF}:root[data-theme=dark] svg .s-n-ink{stroke:#D4D1FF}:root[data-theme=dark] svg .f-b-main{fill:#F59E0B}:root[data-theme=dark] svg .s-b-main{stroke:#F59E0B}:root[data-theme=dark] svg .f-b-tint{fill:#4A3010}:root[data-theme=dark] svg .s-b-tint{stroke:#4A3010}:root[data-theme=dark] svg .f-b-ink{fill:#FFD79A}:root[data-theme=dark] svg .s-b-ink{stroke:#FFD79A}:root[data-theme=dark] svg .f-e-main{fill:#2DD4BF}:root[data-theme=dark] svg .s-e-main{stroke:#2DD4BF}:root[data-theme=dark] svg .f-e-tint{fill:#0F3F3B}:root[data-theme=dark] svg .s-e-tint{stroke:#0F3F3B}:root[data-theme=dark] svg .f-e-ink{fill:#A7F0E6}:root[data-theme=dark] svg .s-e-ink{stroke:#A7F0E6}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 "Helvetica Neue",Helvetica,Arial,sans-serif}
+main{max-width:1560px;margin:0 auto;padding:16px clamp(12px,3vw,40px) 40px}
+.toolbar{display:none;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.js .toolbar{display:flex}
+.toolbar .sep{width:1px;height:24px;background:var(--line);margin:0 6px}
+.toolbar .grow{flex:1}
+button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer;min-height:36px}
+button:hover{border-color:var(--muted)}
+button[aria-pressed=true]{background:var(--ink);color:var(--page);border-color:var(--ink)}
+button.icon{width:36px;padding:0;font-size:20px;line-height:1}
+button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.diagram{border-radius:18px;overflow:hidden;border:1px solid var(--line);background:var(--page);touch-action:pan-y}
+.diagram svg{display:block;width:100%;height:auto;user-select:none}
+.js .diagram.zoomed{cursor:grab}.js .diagram.dragging{cursor:grabbing}
+.js [data-detail]{cursor:pointer}
+[data-detail]:focus{outline:none}
+[data-detail]:focus-visible{outline:4px solid var(--accent);outline-offset:6px;border-radius:12px}
+svg [data-level],svg .connectors{transition:opacity .25s}
+svg.has-focus [data-level]:not(.is-active):not(.has-active),svg.has-focus .connectors{opacity:.22}
+@media (prefers-reduced-motion:reduce){svg [data-level],svg .connectors{transition:none}}
+.detail{display:none;margin:16px 0 0;padding:20px 24px;background:var(--panel);border:1px solid var(--line);border-radius:18px}
+.js .detail{display:block}
+.detail h2{margin:0 0 6px;font-size:22px}
+.detail ul{margin:0;padding-left:20px}.detail li{margin:4px 0}
+.detail .hint{color:var(--muted);margin:0}
+.detail .status{margin:12px 0 0;color:var(--muted);font-size:14px}
+details.notes{margin:16px 0 0;padding:14px 24px;background:var(--panel);border:1px solid var(--line);border-radius:18px}
+details.notes summary{cursor:pointer;font-weight:600}
+details.notes p{max-width:75ch;margin:12px 0 0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<main>
+<div class="toolbar" role="toolbar" aria-label="Diagram controls">
+  <button type="button" data-filter="all" aria-pressed="true">All layers</button>
+  <button type="button" data-filter="authoring" aria-pressed="false">1 Authoring</button>
+  <button type="button" data-filter="models" aria-pressed="false">2 Models</button>
+  <button type="button" data-filter="foundation" aria-pressed="false">3 Foundation</button>
+  <button type="button" data-filter="hosting" aria-pressed="false">4 Hosting</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" data-filter="native" aria-pressed="false">Native</button>
+  <button type="button" data-filter="bpmn" aria-pressed="false">BPMN</button>
+  <button type="button" data-filter="etl" aria-pressed="false">ETL</button>
+  <span class="grow"></span>
+  <button type="button" class="icon" id="zout" aria-label="Zoom out">&minus;</button>
+  <button type="button" class="icon" id="zin" aria-label="Zoom in">+</button>
+  <button type="button" id="zreset">Reset view</button>
+  <button type="button" id="theme" aria-label="Color theme">Theme: Auto</button>
+</div>
+<div class="diagram" id="diagram">
+<svg id="elsa4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" font-family='"Helvetica Neue", Helvetica, Arial, sans-serif' role="img" aria-labelledby="t d">
+<title id="t">Elsa 4 target architecture: one platform, multiple execution models</title>
+<desc id="d">Four layers. Shared authoring and operations in Elsa Studio. Three execution models, native workflows, BPMN processes and ETL pipelines, plus an extension slot. A shared durable runtime foundation. Hosting and distributed work, with execution coordination and work execution.</desc>
+<defs><marker id="ah-rail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8F8C80" class="f-rail"/></marker><marker id="ah-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#D97706" class="f-b-main"/></marker><marker id="ah-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0F9488" class="f-e-main"/></marker>
+<clipPath id="clip-bpmn"><rect x="80" y="324" width="360" height="296" rx="20"/></clipPath><clipPath id="clip-native"><rect x="480" y="324" width="660" height="296" rx="20"/></clipPath><clipPath id="clip-etl"><rect x="1180" y="324" width="360" height="296" rx="20"/></clipPath><clipPath id="clip-slot"><rect x="1580" y="324" width="260" height="296" rx="20"/></clipPath></defs>
+<rect width="1920" height="1080" fill="#F7F6F2" class="f-bg"/>
+<g id="header"><text x="80" y="46" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" letter-spacing="3">ELSA 4   ·   ROADMAP</text><text x="80" y="102" font-size="52" fill="#14161A" class="f-ink" letter-spacing="-0.6"><tspan font-weight="700">One platform.</tspan><tspan font-weight="400" dx="16">Multiple execution models.</tspan></text><rect x="1507" y="28" width="333" height="38" rx="19" fill="none" stroke="#8F8C80" stroke-width="1.5" stroke-dasharray="5 5" class="s-rail"/><text x="1673.5" y="53" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" text-anchor="middle" letter-spacing="2.4">TARGET ARCHITECTURE</text><text x="1840" y="100" font-size="20" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="end">Proposed or possible</text><rect x="1609.2401580810547" y="86" width="30" height="18" rx="9" fill="none" stroke="#8F8C80" stroke-width="1.75" stroke-dasharray="4 3" class="s-rail"/><text x="1575.2401580810547" y="100" font-size="20" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="end">Target capability</text><rect x="1389.5003204345703" y="86" width="30" height="18" rx="9" fill="#E2E0D8" class="f-chip"/></g>
+<g id="layer-authoring" class="layer" data-level="layer" data-detail="authoring"><rect x="80" y="140" width="1760" height="124" rx="22" fill="#EDECE6" class="f-band"/><text x="112" y="176" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" letter-spacing="2.2">1   SHARED AUTHORING &amp; OPERATIONS</text><text x="1808" y="177" font-size="24" font-weight="700" fill="#14161A" class="f-ink" text-anchor="end">Elsa Studio  ·  design  ·  inspect  ·  operate</text><rect x="268.5" y="196" width="223" height="52" rx="26" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><circle cx="296.5" cy="222" r="6" fill="#D97706" class="f-b-main"/><text x="314.5" y="229.5" font-size="22" font-weight="600" fill="#14161A" class="f-ink">BPMN modeler</text><rect x="679.5" y="196" width="261" height="52" rx="26" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><circle cx="707.5" cy="222" r="6" fill="#4F46E5" class="f-n-main"/><text x="725.5" y="229.5" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Workflow designer</text><rect x="1237.5" y="196" width="245" height="52" rx="26" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><circle cx="1265.5" cy="222" r="6" fill="#0F9488" class="f-e-main"/><text x="1283.5" y="229.5" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Pipeline designer</text><rect x="1605.5" y="196" width="209" height="52" rx="26" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5" stroke-dasharray="6 5"/><circle cx="1633.5" cy="222" r="6" fill="none" stroke="#8F8C80" stroke-width="2" stroke-dasharray="3 2" class="s-rail"/><text x="1651.5" y="229.5" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Its own editor</text></g>
+<g id="layer-models" class="layer" data-level="layer" data-detail="models"><text x="80" y="302" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" letter-spacing="2.2">2   EXECUTION MODELS</text><g id="model-bpmn" class="card" data-level="card" data-detail="bpmn"><rect x="80" y="324" width="360" height="296" rx="20" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><g clip-path="url(#clip-bpmn)"><rect x="80" y="324" width="360" height="8" fill="#D97706" class="f-b-main"/></g><text x="112" y="378" font-size="34" font-weight="700" fill="#14161A" class="f-ink">BPMN processes</text><rect x="112" y="392" width="147" height="40" rx="20" fill="#FBEBD0" class="f-b-tint"/><text x="185.5" y="419.48" font-size="22" font-weight="500" fill="#8A4B00" class="f-b-ink" text-anchor="middle">Direct host</text><rect x="112" y="442" width="261" height="40" rx="20" fill="#FBEBD0" class="f-b-tint"/><text x="242.5" y="469.48" font-size="22" font-weight="500" fill="#8A4B00" class="f-b-ink" text-anchor="middle">Embedded via activity</text><text x="112" y="526" font-size="22" font-weight="700" fill="#8A4B00" class="f-b-ink">One shared interpreter</text><text x="112" y="554" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Owns tokens, events,</text><text x="112" y="582" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">gateways and scopes.</text></g><g id="model-native" class="card" data-level="card" data-detail="native"><rect x="480" y="324" width="660" height="296" rx="20" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><g clip-path="url(#clip-native)"><rect x="480" y="324" width="660" height="8" fill="#4F46E5" class="f-n-main"/></g><text x="512" y="378" font-size="34" font-weight="700" fill="#14161A" class="f-ink">Native workflows</text><rect x="512" y="392" width="138" height="40" rx="20" fill="#E8E7FB" class="f-n-tint"/><text x="581" y="419.48" font-size="22" font-weight="500" fill="#3730A3" class="f-n-ink" text-anchor="middle">Sequence</text><rect x="662" y="392" width="137" height="40" rx="20" fill="#E8E7FB" class="f-n-tint"/><text x="730.5" y="419.48" font-size="22" font-weight="500" fill="#3730A3" class="f-n-ink" text-anchor="middle">Flowchart</text><rect x="811" y="392" width="177" height="40" rx="20" fill="#FFFFFF" class="f-surface s-n-main" stroke="#4F46E5" stroke-width="1.75" stroke-dasharray="5 4"/><text x="899.5" y="419.48" font-size="22" font-weight="500" fill="#3730A3" class="f-n-ink" text-anchor="middle">StateMachine</text><rect x="512" y="442" width="258" height="40" rx="20" fill="#FFFFFF" class="f-surface s-b-main" stroke="#D97706" stroke-width="2.25"/><text x="641" y="469.48" font-size="22" font-weight="500" fill="#8A4B00" class="f-b-ink" text-anchor="middle">BpmnProcess activity</text><rect x="867" y="442" width="241" height="40" rx="20" fill="#FFFFFF" class="f-surface s-e-main" stroke="#0F9488" stroke-width="2.25"/><text x="987.5" y="469.48" font-size="22" font-weight="500" fill="#0B5F58" class="f-e-ink" text-anchor="middle">ETL pipeline activity</text><rect x="512" y="492" width="235" height="40" rx="20" fill="#E8E7FB" class="f-n-tint"/><text x="629.5" y="519.48" font-size="22" font-weight="500" fill="#3730A3" class="f-n-ink" text-anchor="middle">Agent collaboration</text><text x="512" y="576" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Each composition owns its sequencing,</text><text x="512" y="604" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">routing and joining rules.</text></g><g id="model-etl" class="card" data-level="card" data-detail="etl"><rect x="1180" y="324" width="360" height="296" rx="20" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><g clip-path="url(#clip-etl)"><rect x="1180" y="324" width="360" height="8" fill="#0F9488" class="f-e-main"/></g><text x="1212" y="378" font-size="34" font-weight="700" fill="#14161A" class="f-ink">ETL pipelines</text><rect x="1212" y="392" width="209" height="40" rx="20" fill="#D3EFEB" class="f-e-tint"/><text x="1316.5" y="419.48" font-size="22" font-weight="500" fill="#0B5F58" class="f-e-ink" text-anchor="middle">Partition workers</text><rect x="1212" y="442" width="231" height="40" rx="20" fill="#D3EFEB" class="f-e-tint"/><text x="1327.5" y="469.48" font-size="22" font-weight="500" fill="#0B5F58" class="f-e-ink" text-anchor="middle">Invoked via activity</text><text x="1212" y="526" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Batch and continuous.</text><text x="1212" y="554" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Owns partitions,</text><text x="1212" y="582" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">checkpoints, backpressure.</text></g><g id="model-slot" class="card" data-level="card" data-detail="slot"><rect x="1580" y="324" width="260" height="296" rx="20" fill="#FFFFFF" class="f-surface s-rail" stroke="#8F8C80" stroke-width="2" stroke-dasharray="9 7"/><text x="1608" y="378" font-size="22" font-weight="700" fill="#5B6068" class="f-muted">Additional</text><text x="1608" y="406" font-size="22" font-weight="700" fill="#5B6068" class="f-muted">execution models</text><text x="1608" y="486" font-size="64" font-weight="300" fill="#8F8C80" class="f-rail">+ n</text><text x="1608" y="526" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Extension point for</text><text x="1608" y="554" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">separately packaged</text><text x="1608" y="582" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">models.</text></g></g>
+<g id="layer-foundation" class="layer" data-level="layer" data-detail="foundation"><rect x="80" y="660" width="1760" height="128" rx="22" fill="#EDECE6" class="f-band"/><text x="112" y="696" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" letter-spacing="2.2">3   SHARED DURABLE RUNTIME FOUNDATION</text><text x="1808" y="696" font-size="22" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="end">Shared contracts and infrastructure. Each model keeps its own state and semantics.</text><rect x="112" y="712" width="412" height="60" rx="14" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="134" y="738" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Execution identity</text><text x="134" y="763" font-size="22" font-weight="600" fill="#14161A" class="f-ink">and lifecycle</text><rect x="540" y="712" width="412" height="60" rx="14" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="562" y="738" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Durable state</text><text x="562" y="763" font-size="22" font-weight="600" fill="#14161A" class="f-ink">and delivery</text><rect x="968" y="712" width="412" height="60" rx="14" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="990" y="738" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Timers, correlation</text><text x="990" y="763" font-size="22" font-weight="600" fill="#14161A" class="f-ink">and recovery</text><rect x="1396" y="712" width="412" height="60" rx="14" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="1418" y="738" font-size="22" font-weight="600" fill="#14161A" class="f-ink">Work dispatch</text><text x="1418" y="763" font-size="22" font-weight="600" fill="#14161A" class="f-ink">and observability</text></g>
+<g id="layer-hosting" class="layer" data-level="layer" data-detail="hosting"><rect x="80" y="832" width="1760" height="200" rx="22" fill="#EDECE6" class="f-band"/><text x="112" y="868" font-size="20" font-weight="700" fill="#5B6068" class="f-muted" letter-spacing="2.2">4   HOSTING &amp; DISTRIBUTED WORK</text><text x="1808" y="868" font-size="22" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="end">Decides placement and coordination, never model semantics.</text><g id="hosting-coordination"><rect x="112" y="884" width="800" height="128" rx="16" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="136" y="922" font-size="28" font-weight="700" fill="#14161A" class="f-ink">Execution coordination</text><text x="136" y="952" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">One actor or virtual actor per execution, not per activity.</text><rect x="136" y="964" width="144" height="38" rx="19" fill="#E2E0D8" class="f-chip"/><text x="208" y="989.8" font-size="20" font-weight="500" fill="#14161A" class="f-ink" text-anchor="middle">Built-in host</text><rect x="290" y="964" width="104" height="38" rx="19" fill="#FFFFFF" class="f-surface s-rail" stroke="#8F8C80" stroke-width="1.75" stroke-dasharray="5 4"/><text x="342" y="989.8" font-size="20" font-weight="500" fill="#5B6068" class="f-muted" text-anchor="middle">Orleans</text><rect x="404" y="964" width="138" height="38" rx="19" fill="#FFFFFF" class="f-surface s-rail" stroke="#8F8C80" stroke-width="1.75" stroke-dasharray="5 4"/><text x="473" y="989.8" font-size="20" font-weight="500" fill="#5B6068" class="f-muted" text-anchor="middle">Proto.Actor</text><text x="556" y="990" font-size="20" font-weight="400" fill="#5B6068" class="f-muted">possible adapters</text></g><g id="hosting-work"><rect x="1042" y="884" width="766" height="128" rx="16" fill="#FFFFFF" class="f-surface s-line" stroke="#D6D3C9" stroke-width="1.5"/><text x="1066" y="922" font-size="28" font-weight="700" fill="#14161A" class="f-ink">Work execution</text><text x="1066" y="952" font-size="22" font-weight="400" fill="#5B6068" class="f-muted">Runs dispatched work and reports completion.</text><rect x="1066" y="964" width="162" height="38" rx="19" fill="#E2E0D8" class="f-chip"/><text x="1147" y="989.8" font-size="20" font-weight="500" fill="#14161A" class="f-ink" text-anchor="middle">Local workers</text><rect x="1238" y="964" width="163" height="38" rx="19" fill="#E2E0D8" class="f-chip"/><text x="1319.5" y="989.8" font-size="20" font-weight="500" fill="#14161A" class="f-ink" text-anchor="middle">External tasks</text><rect x="1411" y="964" width="230" height="38" rx="19" fill="#E2E0D8" class="f-chip"/><text x="1526" y="989.8" font-size="20" font-weight="500" fill="#14161A" class="f-ink" text-anchor="middle">ETL partition workers</text></g><text x="977" y="924" font-size="20" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="middle">dispatch</text><line x1="924" y1="936" x2="1030" y2="936" stroke="#8F8C80" stroke-width="2.5" class="s-rail" marker-end="url(#ah-rail)"/><line x1="1030" y1="976" x2="924" y2="976" stroke="#8F8C80" stroke-width="2.5" class="s-rail" marker-end="url(#ah-rail)"/><text x="977" y="1002" font-size="20" font-weight="400" fill="#5B6068" class="f-muted" text-anchor="middle">completion</text></g>
+<g id="connectors" class="connectors"><line x1="810" y1="248" x2="810" y2="321" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="810" y1="620" x2="810" y2="656" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="380" y1="248" x2="380" y2="321" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="380" y1="620" x2="380" y2="656" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="1360" y1="248" x2="1360" y2="321" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="1360" y1="620" x2="1360" y2="656" stroke="#8F8C80" stroke-width="2.25" class="s-rail" marker-end="url(#ah-rail)"/><line x1="1710" y1="248" x2="1710" y2="321" stroke="#8F8C80" stroke-width="2.25" stroke-dasharray="6 5" class="s-rail" marker-end="url(#ah-rail)"/><line x1="1710" y1="620" x2="1710" y2="656" stroke="#8F8C80" stroke-width="2.25" stroke-dasharray="6 5" class="s-rail" marker-end="url(#ah-rail)"/><line x1="508" y1="462" x2="377" y2="462" stroke="#D97706" stroke-width="2.75" class="s-b-main" marker-end="url(#ah-amber)"/><line x1="1112" y1="462" x2="1208" y2="462" stroke="#0F9488" stroke-width="2.75" class="s-e-main" marker-end="url(#ah-teal)"/><line x1="960" y1="788" x2="960" y2="828" stroke="#8F8C80" stroke-width="2.25" class="s-rail"/><text x="976" y="816" font-size="20" font-weight="400" fill="#5B6068" class="f-muted">runs on</text></g>
+</svg>
+</div>
+<section class="detail" id="detail" aria-live="polite">
+  <h2>Target architecture</h2>
+  <p class="hint">Select a layer or an execution model to highlight it and read what it owns. Selecting a model zooms in. Use the buttons or Ctrl/Cmd with the wheel to zoom, drag to pan, Esc to reset.</p>
+</section>
+<details class="notes">
+<summary>Speaker notes (about 45 seconds)</summary>
+<p>Elsa 4 is one platform with several execution models.</p><p>At the top, Elsa Studio is one place to design, inspect and operate, with an editor that fits each model.</p><p>Below are the execution models. Native workflows compose with Sequence, Flowchart or agent collaboration, and each composition owns its own routing and joins. BPMN keeps its own token and gateway semantics, and runs directly or embedded in a workflow on the same interpreter. ETL pipelines own partitions and checkpoints, and a workflow can invoke one as an activity too. The dashed slot leaves room for more.</p><p>They all share one durable foundation for identity, state, timers and recovery.</p><p>Hosting places and coordinates executions, one actor per execution, while workers do the work. Orleans and Proto.Actor are possible adapters. This is the target, not today's release.</p>
+</details>
+</main>
+<script>
+(() => {
+  const DETAILS = {"authoring":["Shared authoring and operations",["One Studio experience to design, inspect and operate executions.","Each execution model brings its own editor and notation into it: a workflow designer, a BPMN modeler, a pipeline designer, and one for any future model.","Shared tooling does not force every model into one graph language."]],"models":["Extensible execution models",["Three peers, plus an open extension point for n more execution models.","Each model owns its own semantics. The shared engine defines no universal join algorithm."]],"native":["Native workflows",["Compositions own sequencing, routing and joining. Sequence owns ordering, Flowchart owns joins, and StateMachine (a possible future composition) would own transitions.","Agent collaboration is a specialized composition and activity capability.","A BpmnProcess activity embeds BPMN and uses the same BPMN interpreter as direct execution.","An ETL pipeline activity lets a workflow invoke a distributed pipeline. Success, fault and cancellation of the pipeline map explicitly onto the parent workflow."]],"bpmn":["BPMN processes",["Owns token, event, gateway and scope semantics.","Direct hosting and the embedding activity use one semantics implementation, so there is no second token engine."]],"etl":["ETL pipelines",["Owns partition, checkpoint, backpressure and data-processing semantics.","Targets finite batches and continuous event integration. Partitions are independently leased workers with a local transform chain. They are not actors.","Can be invoked from a native workflow through an activity, while the pipeline keeps its own partition and checkpoint semantics.","Delivery is at least once, with explicit idempotency at the destination."]],"slot":["Additional execution models",["An open-ended extension point, not a fourth peer. Any number of separately packaged models could plug in without model-specific branches in the shared foundation, and unsupported capabilities are refused clearly.","Proposed, not delivered."]],"foundation":["Shared durable runtime foundation",["Execution identity and lifecycle, durable state and delivery, timers, correlation and recovery, work dispatch and observability.","These are shared contracts and infrastructure. Each model keeps its own state representation and execution semantics.","Delivery is at least once and external effects need idempotency. There is no exactly-once claim."]],"hosting":["Hosting and distributed work",["Execution coordination: a logical execution boundary, potentially hosted as an actor or virtual actor. One per workflow or process execution, never one per activity or data record.","Work execution: local and background workers, external tasks and ETL partition workers. Coordinators dispatch work and receive completion.","Hosting is pluggable: a built-in host, with Orleans and Proto.Actor as possible adapters rather than delivered integrations. It decides placement and coordination, not model semantics."]]};
+  const doc = document.documentElement, host = document.getElementById('diagram');
+  const svg = host.querySelector('svg'), panel = document.getElementById('detail');
+  doc.classList.add('js');
+  const FULL = { x: 0, y: 0, w: 1920, h: 1080 };
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  let view = { ...FULL }, raf = 0, selected = 'all';
+
+  const clamp = v => {
+    const w = Math.min(FULL.w, Math.max(360, v.w)), h = w * 9 / 16;
+    return { x: Math.min(FULL.w - w, Math.max(0, v.x)), y: Math.min(FULL.h - h, Math.max(0, v.y)), w, h };
+  };
+  const apply = v => { view = v; svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h); host.classList.toggle('zoomed', v.w < FULL.w - 1); };
+  const setView = (v, animate) => {
+    cancelAnimationFrame(raf); v = clamp(v);
+    if (!animate || reduce.matches) return apply(v);
+    const a = { ...view }, t0 = performance.now();
+    const step = t => {
+      const k = Math.min(1, (t - t0) / 320), e = 1 - Math.pow(1 - k, 3);
+      apply({ x: a.x + (v.x - a.x) * e, y: a.y + (v.y - a.y) * e, w: a.w + (v.w - a.w) * e, h: a.h + (v.h - a.h) * e });
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  };
+  const toSvg = (cx, cy) => { const r = svg.getBoundingClientRect(); return [view.x + (cx - r.left) / r.width * view.w, view.y + (cy - r.top) / r.height * view.h]; };
+  const zoomAt = (factor, px, py, animate) => {
+    const w = view.w / factor, h = w * 9 / 16;
+    setView({ x: px - (px - view.x) * (w / view.w), y: py - (py - view.y) * (h / view.h), w, h }, animate);
+  };
+  const zoomCenter = factor => zoomAt(factor, view.x + view.w / 2, view.y + view.h / 2, true);
+
+  const targets = [...svg.querySelectorAll('[data-detail]')];
+  const byKey = k => targets.find(t => t.dataset.detail === k);
+
+  const renderDetail = key => {
+    const d = DETAILS[key];
+    panel.replaceChildren();
+    const h = document.createElement('h2');
+    if (!d) {
+      h.textContent = 'Target architecture';
+      const p = document.createElement('p'); p.className = 'hint';
+      p.textContent = 'Select a layer or an execution model to highlight it and read what it owns. Selecting a model zooms in. Use the buttons or Ctrl/Cmd with the wheel to zoom, drag to pan, Esc to reset.';
+      panel.append(h, p); return;
+    }
+    h.textContent = d[0];
+    const ul = document.createElement('ul');
+    for (const li of d[1]) { const e = document.createElement('li'); e.textContent = li; ul.append(e); }
+    const st = document.createElement('p'); st.className = 'status';
+    st.textContent = 'Target architecture. Not every capability shown is implemented yet.';
+    panel.append(h, ul, st);
+  };
+
+  const select = key => {
+    selected = key;
+    targets.forEach(t => { t.classList.remove('is-active', 'has-active'); t.setAttribute('aria-pressed', 'false'); });
+    document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === key)));
+    const el = byKey(key);
+    if (!el) { svg.classList.remove('has-focus'); renderDetail(null); setView(FULL, true); return; }
+    svg.classList.add('has-focus');
+    el.classList.add('is-active'); el.setAttribute('aria-pressed', 'true');
+    const layer = el.closest('.layer'); if (layer && layer !== el) layer.classList.add('has-active');
+    renderDetail(key);
+    if (el.dataset.level === 'card') {
+      const b = el.getBBox(), pad = 70;
+      const w = Math.max(b.width + pad * 2, (b.height + pad * 2) * 16 / 9), h = w * 9 / 16;
+      setView({ x: b.x + b.width / 2 - w / 2, y: b.y + b.height / 2 - h / 2, w, h }, true);
+    } else setView(FULL, true);
+  };
+  const reset = () => select('all');
+
+  targets.forEach(t => {
+    t.setAttribute('tabindex', '0'); t.setAttribute('role', 'button'); t.setAttribute('aria-pressed', 'false');
+    t.setAttribute('aria-label', DETAILS[t.dataset.detail][0]);
+    t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); select(selected === t.dataset.detail ? 'all' : t.dataset.detail); } });
+  });
+  document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => select(b.dataset.filter)));
+  document.getElementById('zin').addEventListener('click', () => zoomCenter(1.4));
+  document.getElementById('zout').addEventListener('click', () => zoomCenter(1 / 1.4));
+  document.getElementById('zreset').addEventListener('click', reset);
+
+  // theme: auto (follows the OS) -> light -> dark
+  const themeBtn = document.getElementById('theme'), modes = ['auto', 'light', 'dark'];
+  const readTheme = () => { try { const t = localStorage.getItem('elsa4-theme'); return modes.includes(t) ? t : 'auto'; } catch (e) { return 'auto'; } };
+  const showTheme = m => {
+    if (m === 'auto') delete doc.dataset.theme; else doc.dataset.theme = m;
+    themeBtn.textContent = 'Theme: ' + m[0].toUpperCase() + m.slice(1);
+    themeBtn.setAttribute('aria-label', 'Color theme: ' + m + '. Activate to change.');
+  };
+  showTheme(readTheme());
+  themeBtn.addEventListener('click', () => {
+    const m = modes[(modes.indexOf(readTheme()) + 1) % modes.length];
+    try { m === 'auto' ? localStorage.removeItem('elsa4-theme') : localStorage.setItem('elsa4-theme', m); } catch (e) {}
+    showTheme(m);
+  });
+
+  // pointer: click selects (or clears), drag pans when zoomed
+  let drag = null, moved = false;
+  host.addEventListener('pointerdown', e => { if (e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, v: { ...view } }; moved = false; });
+  host.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!moved && Math.hypot(dx, dy) > 5) { if (view.w >= FULL.w - 1) { drag = null; return; } moved = true; host.classList.add('dragging'); host.setPointerCapture(e.pointerId); }
+    if (moved) { const r = svg.getBoundingClientRect(); setView({ x: drag.v.x - dx / r.width * drag.v.w, y: drag.v.y - dy / r.height * drag.v.h, w: drag.v.w, h: drag.v.h }, false); }
+  });
+  const endDrag = () => { drag = null; host.classList.remove('dragging'); };
+  host.addEventListener('pointerup', endDrag); host.addEventListener('pointercancel', endDrag);
+  host.addEventListener('click', e => {
+    if (moved) { moved = false; return; }
+    const t = e.target.closest('[data-detail]');
+    if (!t) return reset();
+    const card = e.target.closest('.card');
+    const key = (card || t).dataset.detail;
+    select(selected === key ? 'all' : key);
+  });
+  host.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault(); const [px, py] = toSvg(e.clientX, e.clientY);
+    zoomAt(Math.exp(-e.deltaY * 0.005), px, py, false);
+  }, { passive: false });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') return reset();
+    if (!host.contains(document.activeElement) && document.activeElement !== document.body) return;
+    const step = view.w * 0.08;
+    if (e.key === '+' || e.key === '=') zoomCenter(1.4);
+    else if (e.key === '-') zoomCenter(1 / 1.4);
+    else if (e.key === '0') reset();
+    else if (view.w < FULL.w - 1 && e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      setView({ ...view, x: view.x + (e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0), y: view.y + (e.key === 'ArrowDown' ? step : e.key === 'ArrowUp' ? -step : 0) }, false);
+    }
+  });
+})();
+</script>
+</body>
+</html>
