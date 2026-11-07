@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +13,17 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null; initialReturnTo?: string | null }) =>
-    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""}>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo, onRunTitleChange }: {
+    initialInspectorTab?: string;
+    initialActivityExecutionId?: string | null;
+    initialReturnTo?: string | null;
+    onRunTitleChange?(title: string): void;
+  }) => {
+    useEffect(() => {
+      onRunTitleChange?.("Run · Invoice settlement");
+    }, [onRunTitleChange]);
+    return <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""}>Run workbench</div>;
+  }
 }));
 
 let container: HTMLDivElement;
@@ -114,6 +123,8 @@ describe("Run detail page layout", () => {
     const page = container.querySelector(".wf-page--run-workbench");
     expect(page).toBeTruthy();
     expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
+    await vi.waitFor(() => expect(page?.querySelector(".studio-page-header")?.textContent).toContain("Run · Invoice settlement"));
+    expect(page?.querySelector(".wf-page-context")?.textContent).toContain("run-1");
     expect(page?.querySelector(".wf-status-line")).toBeNull();
     expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");
