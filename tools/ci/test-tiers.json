@@ -19,7 +19,7 @@
     {
       "project": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
       "tier": "integration",
-      "medianMinutes": null,
+      "medianMinutes": 49.4,
       "trait": "child-process"
     },
     {
@@ -808,6 +808,25 @@
           "rest": true
         }
       ]
+    },
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj": {
+      "groups": [
+        {
+          "name": "bpmn-hosting-journeys",
+          "classes": [
+            "Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests",
+            "Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests",
+            "Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests",
+            "Elsa.Activities.Bpmn.Hosting.Tests.InstantBpmnWorkbenchTests",
+            "Elsa.Activities.Bpmn.Hosting.Tests.LegacyBroadcastUpgradeTests",
+            "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests"
+          ]
+        },
+        {
+          "name": "bpmn-hosting-rest",
+          "rest": true
+        }
+      ]
     }
   },
   "shards": {
@@ -954,8 +973,19 @@
           "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
           "Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
-          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest",
-          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
+          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
+        ]
+      },
+      {
+        "name": "bpmn-hosting-journeys",
+        "units": [
+          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj#bpmn-hosting-journeys"
+        ]
+      },
+      {
+        "name": "bpmn-hosting-rest",
+        "units": [
+          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj#bpmn-hosting-rest"
         ]
       }
     ],
