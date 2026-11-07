@@ -5,11 +5,11 @@ import type { ValidationError } from "./workflowTypes";
 export const STRUCTURAL_DANGLING_TYPE = "Structure/DisconnectedNode";
 export const STRUCTURAL_NO_START_TYPE = "Structure/NoStartConnection";
 /**
- * An activity authored to start a workflow that is neither the start node nor connected into. Raised as
- * soon as the trigger is authored — the designer pairs it with a one-click "set as start" — because the
- * reachability error alone reports the symptom at publish time and offers no way to fix it.
+ * Advisory guidance for start-capable activities with an incoming edge outside the selected start.
+ * Actual start registration depends on the provider, so only a backend Placement refusal is an error.
  */
 export const STRUCTURAL_START_TRIGGER_TYPE = "Structure/StartTriggerNotStart";
+export const START_TRIGGER_PLACEMENT_TYPE = "workflow.trigger.placement";
 
 /**
  * Draft validation diagnostics, focused on the scoped-variable repair surface (ADR-0027).

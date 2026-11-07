@@ -4,7 +4,7 @@ import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInCo
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
   createActivityNode,
@@ -369,6 +369,26 @@ export function WorkflowEditor({
   // backend advertises the relation), and combine them with the draft's reconciled errors and
   // designer-side structural checks so the editor panel agrees with the promotion gate.
   const draftValidations = useDraftValidations({ context, draft, persistedDraft, enabled: !documentAdapter });
+  const publicationValidationRef = useRef<HTMLDivElement>(null);
+  const [publicationPlacement, setPublicationPlacement] = useState<{ draftId: string; signature: string; errors: ValidationError[] } | null>(null);
+  const authoredSignature = draft ? getDraftSignature(draft) : null;
+  const publicationPlacementErrors = publicationPlacement && publicationPlacement.draftId === draft?.id && publicationPlacement.signature === authoredSignature
+    ? publicationPlacement.errors : null;
+  useEffect(() => {
+    setPublicationPlacement(current => current && (current.draftId !== draft?.id || current.signature !== authoredSignature) ? null : current);
+  }, [draft?.id, authoredSignature]);
+  useEffect(() => {
+    if (!publicationPlacementErrors) return;
+    const frame = requestAnimationFrame(() => {
+      publicationValidationRef.current?.scrollIntoView({ block: "nearest" });
+      publicationValidationRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [publicationPlacementErrors]);
+  const onPublicationPlacementRefused = useCallback((snapshot: WorkflowDraft, errors: ValidationError[]) => {
+    setPublicationPlacement({ draftId: snapshot.id, signature: getDraftSignature(snapshot), errors });
+    setCanvasView("designer");
+  }, []);
 
   // Executable-artifact export (#493, foundation #1304): available only when the workflow has a
   // published version and the server advertises the export relation, so a runtime-less or older server
@@ -385,15 +405,16 @@ export function WorkflowEditor({
     }),
     [catalogByVersion, draft?.activityPresentation, draft?.state.rootActivity]);
   const structuralValidationErrors = useMemo(
-    () => detectStructuralValidationErrors(draft?.state, activityLabels),
-    [activityLabels, draft?.state]);
+    () => detectStructuralValidationErrors(draft?.state, activityLabels, catalogByVersion),
+    [activityLabels, catalogByVersion, draft?.state]);
   const combinedValidationErrors = useMemo(
     () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
-      structuralErrors: structuralValidationErrors
+      structuralErrors: structuralValidationErrors,
+      publicationErrors: publicationPlacementErrors
     }), activityLabels),
-    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors, publicationPlacementErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
@@ -703,7 +724,8 @@ export function WorkflowEditor({
     setError,
     setActiveRightPanelId,
     setInspectorCollapsed,
-    setAutosavePaused
+    setAutosavePaused,
+    onPublicationPlacementRefused
   });
 
   // Workflow declaration edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -1762,6 +1784,7 @@ export function WorkflowEditor({
             ) : null}
             </>}
           />}
+          <div ref={publicationValidationRef} role="region" aria-label="Workflow validation" tabIndex={-1}>
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}
@@ -1770,6 +1793,7 @@ export function WorkflowEditor({
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />
+          </div>
           </>
           )}
         </main>}

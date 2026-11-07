@@ -66,17 +66,28 @@ public sealed class PublishMisplacedStartTriggerEndpointTests : IAsyncLifetime
         services.AddSingleton<IWorkflowExecutableStore>(_executables);
     }
 
-    [Fact]
-    public async Task Placement_failure_is_a_400_and_nothing_is_saved()
+    [Theory]
+    [InlineData(PublishRoute)]
+    [InlineData("/publishing/workflows/" + VersionId + "/preflight")]
+    [InlineData("/publishing/workflows/preflight")]
+    public async Task Placement_failure_is_a_structured_400_and_nothing_is_saved(string route)
     {
         _triggers.Facet = WorkflowTriggerPreflightException.PlacementFacet;
 
-        using var response = await PostAsync("{}");
+        using var response = await PostAsync(route == "/publishing/workflows/preflight"
+            ? """{"definitionId":"capture-definition","state":{},"layout":[]}""" : "{}", route);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(await _executables.ListAllAsync());
         var authority = _host.Services.GetRequiredService<IWorkflowActivationAuthority>();
         Assert.Empty(await authority.ListByDefinitionAsync(DefinitionId));
+        using var problem = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("workflow.trigger.placement", problem.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal("node-trigger", problem.RootElement.GetProperty("triggerNodeId").GetString());
+        Assert.Equal("capture-node", problem.RootElement.GetProperty("compositeNodeId").GetString());
+        Assert.Equal("elsa.sequence.structure", problem.RootElement.GetProperty("compositeStructureKind").GetString());
+        Assert.Equal(400, problem.RootElement.GetProperty("status").GetInt32());
     }
 
     [Fact]
@@ -91,9 +102,9 @@ public sealed class PublishMisplacedStartTriggerEndpointTests : IAsyncLifetime
         Assert.Empty(await _executables.ListAllAsync());
     }
 
-    private async Task<HttpResponseMessage> PostAsync(string body)
+    private async Task<HttpResponseMessage> PostAsync(string body, string route = PublishRoute)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, PublishRoute)
+        using var request = new HttpRequestMessage(HttpMethod.Post, route)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
@@ -161,6 +172,7 @@ public sealed class PublishMisplacedStartTriggerRealExtractorEndpointTests : IAs
     private const string PublishRoute = $"/publishing/workflows/{VersionId}/publish";
 
     private readonly InMemoryWorkflowExecutableStore _executables = new();
+    private readonly StartTriggerProvider _provider = new();
     private PublishingMinimalApiScenarioHost _host = null!;
 
     public async Task InitializeAsync() =>
@@ -183,7 +195,7 @@ public sealed class PublishMisplacedStartTriggerRealExtractorEndpointTests : IAs
         services.AddSingleton<IExpressionDraftSemanticValidator, ValidExpressions>();
         services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
         services.RemoveAll<IWorkflowTriggerBindingExtractor>();
-        services.AddSingleton<IWorkflowTriggerBindingExtractor>(new WorkflowTriggerBindingExtractor([new StartTriggerProvider()], []));
+        services.AddSingleton<IWorkflowTriggerBindingExtractor>(new WorkflowTriggerBindingExtractor([_provider], []));
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddSingleton<IWorkflowExecutableStore>(_executables);
     }
@@ -202,6 +214,24 @@ public sealed class PublishMisplacedStartTriggerRealExtractorEndpointTests : IAs
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(await _executables.ListAllAsync());
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowActivationAuthority>().ListByDefinitionAsync(DefinitionId));
+        using var problem = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("workflow.trigger.placement", problem.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal("node-trigger", problem.RootElement.GetProperty("triggerNodeId").GetString());
+        Assert.Equal("node-root", problem.RootElement.GetProperty("compositeNodeId").GetString());
+        Assert.False(problem.RootElement.TryGetProperty("compositeStructureKind", out _));
+    }
+
+    [Fact]
+    public async Task Trigger_capability_with_a_recognized_non_starting_provider_does_not_refuse_placement()
+    {
+        // Like a BPMN process without a start event: capability is present, but no start is registered.
+        _provider.RegistersStart = false;
+        using var request = new HttpRequestMessage(HttpMethod.Post, PublishRoute)
+        { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        using var response = await _host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(await _executables.ListAllAsync());
     }
 
     /// <summary>Compiles every version into a structure-less composite whose only child is a start trigger.</summary>
@@ -240,12 +270,13 @@ public sealed class PublishMisplacedStartTriggerRealExtractorEndpointTests : IAs
 
     private sealed class StartTriggerProvider : IActivityTriggerStimulusProvider
     {
+        public bool RegistersStart { get; set; } = true;
         public string ProviderId => "test.start";
         public TriggerCardinality Cardinality => TriggerCardinality.FanOut;
 
         public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, TriggerType)
-                ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor("Event", "sha256:misplaced")])
+                ? ActivityTriggerStimulusResult.Recognized(RegistersStart ? [new TriggerStimulusDescriptor("Event", "sha256:misplaced")] : [])
                 : ActivityTriggerStimulusResult.NotRecognized;
     }
 

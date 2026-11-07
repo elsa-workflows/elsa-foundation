@@ -8,6 +8,9 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -18,8 +21,26 @@ public sealed class ActivityAuthoringCatalogReader(
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
     IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders,
-    IActivityFeatureAttributionResolver featureAttributionResolver) : IActivityAuthoringCatalogReader
+    IActivityFeatureAttributionResolver featureAttributionResolver,
+    IWellKnownTypeRegistry? wellKnownTypes) : IActivityAuthoringCatalogReader
 {
+    private static readonly JsonSerializerOptions DescriptorOptions = new(JsonSerializerDefaults.Web)
+    {
+        AllowOutOfOrderMetadataProperties = true
+    };
+
+    // Preserve existing callers and Design-only hosts without a runtime type registry.
+    public ActivityAuthoringCatalogReader(
+        IActivityDefinitionStore definitionStore,
+        IActivityDefinitionVersionStore versionStore,
+        IActivityAvailabilityEvaluator availabilityEvaluator,
+        IActivityAvailabilitySettingsStore settingsStore,
+        IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders,
+        IActivityFeatureAttributionResolver featureAttributionResolver)
+        : this(definitionStore, versionStore, availabilityEvaluator, settingsStore, builtInDescriptorProviders, featureAttributionResolver, null)
+    {
+    }
+
     public async Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
     {
         var definitions = await definitionStore.ListAsync(new ActivityDefinitionFilter(), cancellationToken);
@@ -61,7 +82,7 @@ public sealed class ActivityAuthoringCatalogReader(
         return new ActivityAuthoringCatalogView(persisted.Concat(builtIns).ToArray());
     }
 
-    private static ActivityAuthoringDescriptorView ToView(
+    private ActivityAuthoringDescriptorView ToView(
         Persistence.Core.Entities.ActivityDefinitionVersion version,
         Persistence.Core.Entities.ActivityDefinition definition,
         bool available,
@@ -81,7 +102,7 @@ public sealed class ActivityAuthoringCatalogReader(
             definition.DisplayName ?? definition.ActivityTypeKey,
             definition.Category,
             definition.Description,
-            version.ExecutionType.ToString(),
+            ReadExecutionType(version),
             available,
             available ? null : "Excluded by the effective activity availability policy.",
             version.Inputs.Select(ToView).ToArray(),
@@ -100,6 +121,31 @@ public sealed class ActivityAuthoringCatalogReader(
             DesignFacets = version.DesignFacets.Select(facet => new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, facet.Payload.Clone())).ToArray(),
             PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone()
         };
+    }
+
+    private string ReadExecutionType(Persistence.Core.Entities.ActivityDefinitionVersion version)
+    {
+        var stored = version.ExecutionType.ToString();
+        if (wellKnownTypes is null || version.ConsumerKey != ActivityProvenanceConstants.ClrActivityConsumerKey ||
+            version.DescriptorPayload.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            return stored;
+
+        ClrActivityDescriptor? descriptor;
+        try
+        {
+            // Match publication's CLR descriptor semantics; the definition type key is not the descriptor alias.
+            descriptor = version.DescriptorPayload.Deserialize<ClrActivityDescriptor>(DescriptorOptions);
+        }
+        catch (JsonException)
+        {
+            return stored;
+        }
+
+        return descriptor is not null && !string.IsNullOrWhiteSpace(descriptor.TypeAlias) &&
+               wellKnownTypes.TryGetTypeOrDefault(descriptor.TypeAlias, out var type) && type != typeof(object) &&
+               ActivityTypeMetadata.IsTrigger(type)
+            ? "Trigger"
+            : stored;
     }
 
     private static ActivityInputDescriptorView ToView(InputDefinition input) =>

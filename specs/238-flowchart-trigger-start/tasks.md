@@ -476,3 +476,43 @@ Independently of Phase 3:
 4. **Placement revision**: Phases 7–10. US4 makes the runtime and the design-time check agree by refusing
    start-trigger placements no run can start from. US5 aligns Studio's warning. The gate evidence comment is posted
    once both land.
+
+
+## Studio follow-up #2859 — planned 6 November 2026
+
+The completed runtime/placement work above remains delivered. These tasks implement FR-031–FR-034 and SC-007–SC-009;
+the coordinator reviewed the bounded route and its advisory capability/authoritative refusal distinction before code.
+
+Source checkpoint: the catalog projection, structured refusal, advisory client metadata, snapshot routing, controls,
+project-only dependency metadata and real owned-host journey are written. Focused client checks are supporting
+evidence; the follow-up stays unaccepted until the unchecked qualification/review tasks below are actually satisfied.
+
+- [X] T060 Record and review the bounded spec/plan, Constitution Check and Studio goal/reference/states for #2859.
+- [ ] T061 In `Activities.Design.Api/Services/ActivityAuthoringCatalogReader.cs`, project CLR trigger metadata using
+  the existing descriptor/type registry/classifier without changing persisted rows/hashes. Preserve the six-argument
+  constructor; add actual-DI controls with/without a registry, malformed/null/undefined/unresolved descriptors,
+  descriptor identity versus display/type names, non-CLR rows and unchanged real hash/IDs/execution type in
+  `Essentials/tests/Activities/Design/Api/Tests`.
+- [ ] T062 Add omitted nullable Placement fields/stable code to the existing Publishing problem writer/fault renderer;
+  remove the superseded plain translation. Extend actual Publishing endpoint tests for preflight/direct refusal,
+  structured trigger/composite IDs, original 400/no writes, unrelated problem compatibility and non-Placement failures.
+- [ ] T063 Add catalog-aware potential-trigger/switch/default/no-inbound behavior in `flowchartStartNode.ts` and
+  `draftValidation.ts`. Add causal client controls for renamed Timer/Cron metadata, explicit false, declared defaults,
+  dynamic/unknown values, independent branches and a non-starting BPMN/provider-shaped configuration.
+- [ ] T064 Parse typed Placement errors in workflow operations and route transient document/snapshot-bound errors into
+  the existing editor validation panel. Local capability guidance stays advisory and cannot block a valid publication;
+  the backend refusal alone is an authoritative Error. Cover prepare/refresh/direct paths, node focus, corrected retry,
+  stale/different-document responses, edit clearing and redundant advisory suppression with focused mounted tests.
+- [ ] T065 Add the real owned-host Studio journey: catalog-based Flowchart warning/focus, optional false/no-inbound
+  correctness, a Sequence child 1 real backend refusal pinned to its node, corrected child 0 successful publication and
+  read-only state. Preserve four theme/size projects, no retries and source-bound PNG/ARIA/traces for independent review.
+- [ ] T066 Update only required project-reference lock metadata and the existing API consumption/failure catalog
+  descriptions; no new external package, persisted facet/hash/version rule, feature identity or runtime policy.
+- [ ] T067 Run light scoped checks/causal client controls, reconcile changed files, freeze exact source/commands/artifact
+  expectations and obtain three independent source-review lenses. Keep all unrun runtime/visual rows explicit.
+- [ ] T068 After actual coordinator remote admission, run whole touched API/Studio suites, real endpoint bite controls,
+  architecture Release/Debug graph restores, whole Architecture/maps and the composed journey. Reconcile discovery and
+  executed cases, retain original failures/full logs and clean only owned hosts/stores. No local heavy fallback.
+- [ ] T069 Open the single #2859 PR when pushing, record all acceptance evidence, independently inspect downloadable
+  current-head visuals, and satisfy exact-head required CI/review/merge gates. Mark ready only after actual acceptance;
+  source work or a machine summary alone does not complete this task.

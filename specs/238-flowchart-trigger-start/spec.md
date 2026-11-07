@@ -395,3 +395,61 @@ undo a correct multi-trigger flowchart.
 - Re-evaluating or rewriting publications that are already active.
 - Trigger nodes inside graph (reusable) activity bodies.
 - Studio presentation of multiple entry points beyond the warning in User Story 5.
+
+
+## Studio follow-up — #2859 (planned, 6 November 2026)
+
+The runtime delivery above remains implemented. This follow-up completes the author-facing part of US5 and D11;
+it changes neither the start-path rule nor persisted activity versions.
+
+**User goal and reference:** a workflow author sees which trigger cannot start from its current position, navigates
+to that node through the existing validation panel, corrects it and successfully publishes. The reference is the
+current node-navigable draft-validation panel and its structural start-trigger repair, using the shared Studio
+controls in [module UI guidance](../../Studio/docs/module-ui.md).
+
+- **FR-031**: Studio MUST use catalog trigger metadata to recognise trigger-capable activities, including Timer
+  and Cron, without recognising them by activity type or display names. An activity with a start switch MUST retain
+  its authored on/off behavior and its declared default; an explicit off value MUST NOT be overridden by trigger
+  capability. A valid independent no-inbound trigger branch MUST raise neither a misplaced-trigger nor an
+  unreachable-branch error. Catalog capability alone does not establish that a node actually registers a start:
+  local guidance MUST stay advisory where registration depends on configuration or a provider. A non-starting BPMN
+  process MUST remain publishable. Only the authoritative backend refusal establishes a placement error.
+- **FR-032**: A Placement refusal from workflow publication review or publication MUST retain the existing 400 and
+  guidance, and additionally identify the trigger node and enclosing composite in structured fields. Other trigger
+  preflight facets MUST retain their existing host-failure behavior. Refusal MUST remain before publication writes.
+- **FR-033**: Studio MUST show the structured refusal in its existing validation panel with node navigation. The
+  error MUST be bound to the authored document and snapshot that was reviewed; editing or switching documents MUST
+  prevent a delayed refusal from being shown on a different snapshot. Correcting and retrying MUST clear the old
+  refusal and allow the normal publication flow.
+- **FR-034**: Catalog classification for this follow-up MUST NOT change stored version identities, content hashes,
+  execution-type values, reconciliation or already-published artifacts. A host without enough local type metadata
+  MUST retain catalog reads and MUST NOT guess an trigger hint from a name. The server's structured refusal
+  remains available where the Publishing surface is composed.
+
+**Acceptance scenarios:**
+
+1. A Timer or Cron with an inbound Flowchart connection, not selected as its start, is shown on that trigger's node
+   in the validation panel. Giving the same descriptor an unrelated type/display name does not change the result.
+2. A start switch authored off is not reported; an explicit default-on switch is recognised when omitted. A
+   no-inbound trigger's independent branch has no false unreachable or misplaced error. A trigger-capable but
+   intentionally non-starting BPMN/provider configuration is not blocked by advisory local guidance.
+3. Reviewing a Sequence with a start trigger after child 0 receives the real structured refusal, opens the validation
+   panel and permits navigation to the trigger. Moving the trigger to child 0 permits a new review and publication.
+4. A delayed refusal for an earlier document or an edited snapshot does not appear on the current document. A
+   published read-only view does not gain editing or repair actions.
+5. Missing local metadata preserves catalog reads and the prior fallback; an unrelated catalog row is never
+   reclassified merely because its name resembles a trigger. Stored version/hash values remain unchanged after reads.
+
+**Observable states and coverage:** known always-start trigger; switch on/off/default; unavailable/older metadata;
+local warning and server-only refusal; corrected/retried publication; delayed response after editing; read-only;
+desktop/narrow in light and dark themes. Pure Design-only compositions without CLR metadata cannot gain a new local
+trigger hint; this is an explicit safe fallback, not inferred runtime capability. Tests at the catalog and real
+HTTP boundary cover fallback/no-writes; the actual composed Studio journey covers node focus, recovery, successful
+publication and the four theme/size views. Source/isolated tests do not establish visual acceptance.
+
+- **SC-007**: All specified trigger/switch/no-inbound cases show the expected node validations, with no type-name
+  recognition and no false no-inbound branch warning.
+- **SC-008**: The real refusal/correction/review/publication journey completes in every required theme/size project,
+  without retries or skipped states, and current-source evidence is independently opened and inspected.
+- **SC-009**: Catalog reads leave every tested persisted identity/hash/execution-type value unchanged, and no delayed
+  refusal crosses the tested document/snapshot boundaries.

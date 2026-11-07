@@ -83,6 +83,13 @@ The endpoint surface is documented in the [module README](README.md#http-endpoin
 authorization is expressed through Foundation Identity permission policies and endpoint metadata. Hosts may
 apply ordinary route-group conventions such as API-prefixing, CORS, rate limiting, filters, and OpenAPI.
 
+Workflow start-trigger Placement refusals use the existing 400 problem family with the additive code
+`workflow.trigger.placement` and `triggerNodeId`/`compositeNodeId`; `compositeStructureKind` is present when
+known. These are the refusal's executable node identities (ordinary authored workflow nodes retain their IDs).
+Preflight and direct publish share this renderer and preserve the original guidance/no-write behavior. Other
+trigger facets remain host failures; unrelated problems omit these nullable fields. Studio uses the typed code
+and pointer only for the current authored document/snapshot, never a message-text heuristic (#2859).
+
 ## Persistence-provider notes
 
 `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore`'s `AddPublishingEntityFrameworkCore(...)` composes durable

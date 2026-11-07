@@ -107,3 +107,11 @@ Activity definitions are populated by Activity Design reconciliation sources, no
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.
 
 Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+
+The catalog reader optionally uses the composed `IWellKnownTypeRegistry` to project CLR trigger capability
+through the existing `ExecutionType` view. It resolves the stored CLR descriptor alias with publication's native
+descriptor semantics and `ActivityTypeMetadata.IsTrigger`; it does not infer capability from an activity name.
+Missing registries, unknown types and malformed descriptor metadata retain the stored classification. The existing
+six-argument constructor remains usable in Design-only compositions. This enriches existing persisted catalog
+rows only and never rewrites their execution type, version, hash or descriptor. Trigger capability does not prove
+that a provider registers a start for a particular node; local placement guidance remains advisory (#2859).

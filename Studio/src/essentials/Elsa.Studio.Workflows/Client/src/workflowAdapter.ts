@@ -982,7 +982,7 @@ function createWorkflowNode(
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts,
       isStartNode: options.isStartNode,
-      canStartWorkflow: activityCanStartWorkflow(activity),
+      canStartWorkflow: activityCanStartWorkflow(activity, catalogItem),
       httpEndpointResponseMode: getHttpEndpointResponseMode(activity, catalogItem) ?? undefined
     }
   };

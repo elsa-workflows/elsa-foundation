@@ -1,4 +1,6 @@
-import type { ActivityNode } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
+
+export type StartTriggerDescriptor = Pick<ActivityCatalogItem, "executionType" | "inputs">;
 
 export const flowchartStructureKind = "elsa.flowchart.structure";
 
@@ -25,7 +27,7 @@ export function normalizeFlowchartStartNode(activity: ActivityNode): ActivityNod
   const currentStartNodeId = activity.structure.payload.startNodeId;
   const nextStartNodeId = typeof currentStartNodeId === "string" && activities.some(child => child.nodeId === currentStartNodeId)
     ? currentStartNodeId
-    : activities.find(canStartWorkflow)?.nodeId ?? activities[0]?.nodeId ?? null;
+    : activities.find(child => canStartWorkflow(child))?.nodeId ?? activities[0]?.nodeId ?? null;
 
   if (currentStartNodeId === nextStartNodeId) return activity;
   return withStartNodeId(activity, nextStartNodeId);
@@ -50,42 +52,48 @@ export function readFlowchartStartNodeId(activity: ActivityNode | null | undefin
 }
 
 /**
- * Reports whether an activity is authored to start a workflow — its `CanStartWorkflow` input is a
- * literal true.
+ * Reports a potential workflow start. Catalog Trigger means capability: a provider can still decide
+ * that this particular authored node registers no starts. Only publication can confirm placement.
  *
  * Both representations of an authored input are accepted: the designer's top-level wrapped property
  * (`activity.canStartWorkflow = { expression: { value: true } }`) and the wire's `inputs` array of
  * `{ referenceKey, value }`. The key is matched case-insensitively because a referenceKey is an opaque
  * contract identifier whose casing is the backend's to choose.
  */
-export function canStartWorkflow(activity: ActivityNode): boolean {
+export function canStartWorkflow(activity: ActivityNode, descriptor?: StartTriggerDescriptor): boolean {
   for (const [key, value] of Object.entries(activity)) {
-    if (key.toLowerCase() === startTriggerInputKey && readBooleanInput(value)) return true;
+    if (key.toLowerCase() === startTriggerInputKey) return readBooleanInput(value);
   }
   const inputs = Array.isArray(activity.inputs) ? activity.inputs : [];
-  return inputs.some(input => {
-    if (!isRecord(input)) return false;
-    const referenceKey = typeof input.referenceKey === "string" ? input.referenceKey : "";
-    return referenceKey.toLowerCase() === startTriggerInputKey && readBooleanInput(input.value);
-  });
+  const authored = inputs.find(input => isRecord(input) && typeof input.referenceKey === "string" &&
+    input.referenceKey.toLowerCase() === startTriggerInputKey);
+  if (isRecord(authored)) return readBooleanInput(authored.value);
+  if (descriptor?.executionType?.toLowerCase() !== "trigger") return false;
+  const startSwitch = readStartTriggerSwitch(descriptor);
+  return startSwitch ? readBooleanInput({ expressionType: startSwitch.defaultSyntax ?? "Literal", value: startSwitch.defaultValue }) : true;
+}
+
+export function readStartTriggerSwitch(descriptor?: StartTriggerDescriptor): Record<string, unknown> | undefined {
+  return descriptor?.inputs.find(input => isRecord(input) && typeof input.referenceKey === "string" &&
+    input.referenceKey.toLowerCase() === startTriggerInputKey) as Record<string, unknown> | undefined;
 }
 
 /**
  * The activities that say they can start a workflow but sit where no run can start at them: something
- * connects into them and they are not the start node. Publishing refuses that placement (spec 238), so the
- * designer surfaces it as soon as it arises (with a one-click "set as start").
+ * connects into them and they are not the start node. These are advisory candidates: publishing refuses
+ * that placement only when the provider actually registers a workflow start (spec 238).
  *
  * A start trigger that is not the start node and that nothing connects into is NOT misplaced. It is an
  * entry point of its own: when it fires, the Flowchart starts there and runs that trigger's branch.
  */
-export function findMisplacedStartTriggers(activity: ActivityNode): ActivityNode[] {
+export function findMisplacedStartTriggers(activity: ActivityNode, catalog?: ReadonlyMap<string, StartTriggerDescriptor>): ActivityNode[] {
   if (activity.structure?.kind !== flowchartStructureKind) return [];
 
   const activities = readFlowchartActivities(activity);
   const startNodeId = readFlowchartStartNodeId(activity);
   const targets = new Set(readFlowchartConnectionTargets(activity));
   return activities.filter(child =>
-    canStartWorkflow(child) && child.nodeId !== startNodeId && targets.has(child.nodeId));
+    canStartWorkflow(child, catalog?.get(child.activityVersionId)) && child.nodeId !== startNodeId && targets.has(child.nodeId));
 }
 
 export function readFlowchartActivities(activity: ActivityNode): ActivityNode[] {
@@ -122,9 +130,11 @@ function withStartNodeId(activity: ActivityNode, startNodeId: string | null): Ac
 function readBooleanInput(value: unknown): boolean {
   if (value === true) return true;
   if (!isRecord(value)) return false;
+  const syntax = value.expressionType ?? value.type;
+  if (syntax != null && (typeof syntax !== "string" || syntax.toLowerCase() !== "literal")) return false;
   if (value.expression !== undefined) {
     const expression = value.expression;
-    return isRecord(expression) ? readBooleanInput(expression.value) : false;
+    return isRecord(expression) ? readBooleanInput(expression) : false;
   }
   return value.value !== undefined ? readBooleanInput(value.value) : false;
 }

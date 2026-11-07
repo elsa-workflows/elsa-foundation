@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MinimalEndpoints;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -115,6 +116,20 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
                     ValueConversionPublicationProblems.Create(conversion, context, versionId), context.RequestAborted);
                 return true;
             }
+        }
+
+        // Placement is an authored-graph refusal. Other trigger facets remain host failures.
+        if (exception is WorkflowTriggerPreflightException { Facet: WorkflowTriggerPreflightException.PlacementFacet } placement)
+        {
+            var problem = WorkflowPublishingLegacyProblems.Build(context,
+                EndpointProblem.General(StatusCodes.Status400BadRequest, placement.Message), "workflow.trigger.placement") with
+            {
+                TriggerNodeId = placement.ExecutableNodeId,
+                CompositeNodeId = placement.CompositeNodeId,
+                CompositeStructureKind = placement.CompositeStructureKind
+            };
+            await WorkflowPublishingLegacyProblems.WriteAsync(context, problem);
+            return true;
         }
 
         // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
