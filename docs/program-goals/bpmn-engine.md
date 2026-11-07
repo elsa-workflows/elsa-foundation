@@ -65,6 +65,17 @@ and does not close the remaining import or production objectives.
 
 ## Active objectives
 
+- [#3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597): optional bpmn-js editor for the
+  **same process**, owner-authorized on 5 November 2026. Retain the integrated editor; feasibility prototype
+  and reviewed design precede production integration, current-head review/merge and resulting-main
+  qualification. Reuse Elsa's inspector beside the alternate canvas; expose the full production BPMN
+  toolbox in **both editors**, including the necessary integrated Elsa modeling expansion, with preserved
+  drafts and explicit current-host execution limits (corrected 6 November owner choice).
+  Preserve full Elsa configuration,
+  identities, relevant layout and the normal authoring/version/publication lifecycle. This scoped
+  Studio work reactivates no adjacent paused program and authorizes no release/deployment.
+  Plan: [spec 1217](../../specs/1217-optional-bpmn-js-editor/plan.md). Feasibility is in progress;
+  prototype/rendering/local test success is not production delivery.
 - [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736): refuse to import or publish BPMN whose
   meaning changed on import.
 - Library follow-ups: [valence-works/bpmn#27](https://github.com/valence-works/bpmn/issues/27) (cycles that

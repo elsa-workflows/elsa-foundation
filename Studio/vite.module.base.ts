@@ -29,6 +29,10 @@ export function defineModuleConfig({
   // not import is harmless, so keeping this list uniform is intentional.
   const sharedExternals = [
     "react",
+    // These must use the host's single vendor graph as well. A second ReactDOM copy has its own
+    // dispatcher, so its flushSync cannot synchronously acknowledge a host-rendered document edit.
+    "react-dom",
+    "react-dom/client",
     "@elsa-workflows/studio-sdk",
     "@elsa-workflows/studio-ui",
     "lucide-react"

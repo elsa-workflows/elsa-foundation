@@ -1,4 +1,5 @@
 import { directHumanMode } from "./bpmnDirectBinding";
+import { reconcileBpmnDiagram } from "./bpmnDiagram";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
@@ -141,7 +142,7 @@ function createBpmnNode(
 // Rebuilds the owner's structure payload from the canvas mirror: elements from the nodes (each node's
 // `data.element` is the authored record — new nodes carry a freshly minted one), sequence flows from
 // the edges (unknown authored props on an existing flow survive via merge), and the activities slot
-// trimmed to the children still referenced by an element. The BPMN analog of
+// trimmed to the children and listeners still referenced by an element. The BPMN analog of
 // syncCanvasToScope + withFlowchartConnections.
 export function syncBpmnCanvasToScope(
   scope: CanvasScope,
@@ -184,12 +185,13 @@ export function syncBpmnCanvasToScope(
       ? { ...element, defaultFlowId: null }
       : element);
 
-  const referencedChildNodeIds = new Set(
-    elements.map(element => element.childNodeId).filter((nodeId): nodeId is string => !!nodeId)
+  const referencedActivityNodeIds = new Set(
+    elements.flatMap(element => [element.childNodeId, element.listenerNodeId])
+      .filter((nodeId): nodeId is string => typeof nodeId === "string" && nodeId.length > 0)
   );
   const existingActivities = new Map(scope.slot.activities.map(activity => [activity.nodeId, activity]));
   for (const activity of additionalActivities) existingActivities.set(activity.nodeId, activity);
-  const activities = [...existingActivities.values()].filter(activity => referencedChildNodeIds.has(activity.nodeId));
+  const activities = [...existingActivities.values()].filter(activity => referencedActivityNodeIds.has(activity.nodeId));
 
   return {
     ...owner,
@@ -199,7 +201,11 @@ export function syncBpmnCanvasToScope(
         ...owner.structure.payload,
         elements,
         sequenceFlows,
-        activities
+        activities,
+        ...(owner.structure.payload.diagram !== undefined ? {
+          diagram: reconcileBpmnDiagram(owner.structure.payload.diagram, [...previousElementsById.values()], [...previousFlowsById.values()],
+            elements, sequenceFlows, new Map(nodes.map(node => [node.id, node.position])))
+        } : {})
       }
     }
   };

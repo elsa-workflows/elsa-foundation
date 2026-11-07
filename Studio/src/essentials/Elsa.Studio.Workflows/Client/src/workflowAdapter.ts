@@ -7,7 +7,7 @@ import {
   normalizeFlowchartStartNode,
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
-import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { bpmnStructureKind } from "./bpmn/bpmnStructure";
 import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -33,7 +33,7 @@ export {
   readFlowchartStartNodeId,
   setFlowchartStartNode
 } from "./flowchartStartNode";
-export { bpmnStructureKind } from "./bpmn/bpmnTypes";
+export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -882,7 +882,7 @@ export function withFlowchartConnections(owner: ActivityNode, edges: Edge[]) {
   };
 }
 
-export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
+export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[], options: { roundPositions?: boolean } = {}) {
   const byNodeId = new Map(layout.map(record => [record.nodeId, record]));
   for (const node of nodes) {
     const previous = byNodeId.get(node.id);
@@ -890,8 +890,8 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
     byNodeId.set(node.id, {
       ...(previous ?? { nodeId: node.id }),
       nodeId: node.id,
-      x: Math.round(node.position.x),
-      y: Math.round(node.position.y),
+      x: options.roundPositions === false ? node.position.x : Math.round(node.position.x),
+      y: options.roundPositions === false ? node.position.y : Math.round(node.position.y),
       ...(width !== undefined ? { width } : {})
     });
   }

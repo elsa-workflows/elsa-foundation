@@ -377,6 +377,59 @@ describe("syncBpmnCanvasToScope", () => {
     expect((next.structure?.payload.activities as ActivityNode[]).map(activity => activity.nodeId)).toEqual(["node-a"]);
   });
 
+  it.each(["layout", "structural"])("retains nested child and listener bodies after a %s canvas commit", change => {
+    const nested = nestedBpmnActivity("node-sub");
+    const listener: ActivityNode = {
+      nodeId: "node-listener",
+      activityVersionId: "sequence@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.sequence.structure",
+        schemaVersion: "1.0.0",
+        payload: { activities: [activityNode("listener-step")], retained: { vendor: "configuration" } }
+      }
+    };
+    const elements = [
+      ...diamondElements.map(element => element.elementId === "end" ? { ...element, listenerNodeId: listener.nodeId } : element),
+      { elementId: "sub", elementType: "subProcess", childNodeId: nested.nodeId }
+    ];
+    const owner = bpmnOwner(elements, diamondFlows, [activityNode("node-a"), nested, listener]);
+    const { scope, nodes, edges } = canvasFor(owner);
+    const nextNodes = change === "layout"
+      ? nodes.map(node => node.id === "sub" ? { ...node, position: { x: 450, y: 160 } } : node)
+      : [...nodes, createBpmnShapeNode(bpmnShapePalette.find(shape => shape.key === "parallelGateway")!, { x: 450, y: 160 })];
+
+    const next = syncBpmnCanvasToScope(scope, nextNodes, edges);
+    const activities = next.structure!.payload.activities as ActivityNode[];
+    expect(activities.map(activity => activity.nodeId)).toEqual(["node-a", "node-sub", "node-listener"]);
+    expect(activities.find(activity => activity.nodeId === nested.nodeId)).toBe(nested);
+    expect(activities.find(activity => activity.nodeId === listener.nodeId)).toBe(listener);
+    expect(next.structure!.payload.elements).toContainEqual({ elementId: "end", elementType: "endEvent", listenerNodeId: listener.nodeId });
+    expect(nested.structure!.payload.activities).toEqual([activityNode("node-inner")]);
+    expect(listener.structure!.payload.activities).toEqual([activityNode("listener-step")]);
+  });
+
+  it("removes a deleted element's orphaned listener while retaining another element's listener", () => {
+    const removedListener = nestedBpmnActivity("removed-listener");
+    const retainedListener = activityNode("retained-listener");
+    const owner = bpmnOwner(
+      [
+        { elementId: "start", elementType: "startEvent", listenerNodeId: retainedListener.nodeId },
+        { elementId: "end", elementType: "endEvent", listenerNodeId: removedListener.nodeId }
+      ],
+      [{ flowId: "flow", sourceRef: "start", targetRef: "end" }],
+      [retainedListener, removedListener]
+    );
+    const { scope, nodes, edges } = canvasFor(owner);
+
+    const next = syncBpmnCanvasToScope(scope, nodes.filter(node => node.id !== "end"), edges);
+
+    expect(next.structure!.payload.activities).toEqual([retainedListener]);
+    expect(next.structure!.payload.elements).toEqual([{ elementId: "start", elementType: "startEvent", listenerNodeId: retainedListener.nodeId }]);
+    expect(next.structure!.payload.sequenceFlows).toEqual([]);
+  });
+
   it("adds a stamped shape node as a new element", () => {
     const owner = bpmnOwner(diamondElements, diamondFlows, [activityNode("node-a")]);
     const { scope, nodes, edges } = canvasFor(owner);

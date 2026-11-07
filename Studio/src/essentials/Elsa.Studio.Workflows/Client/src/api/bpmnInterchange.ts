@@ -1,6 +1,6 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { bpmnStructureKind } from "../bpmn/bpmnStructure";
 import { readBpmnElements } from "../bpmn/bpmnAdapter";
 
 // Client for the ingestion-style BPMN interchange endpoints (elsa-foundation PR #889): pure
@@ -8,6 +8,21 @@ import { readBpmnElements } from "../bpmn/bpmnAdapter";
 // persisted server-side — the caller applies the imported node through normal draft authoring.
 
 const root = "interchange/bpmn";
+
+/** A successful XML export alone does not prove that an older server retains source schema2. */
+export async function requireBpmnDocumentAuthoring(context: StudioEndpointContext, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  let capability: { structureKind?: unknown; schemaVersion?: unknown } | null;
+  try {
+    capability = await context.http.getJson(`${root}/authoring-capabilities`, signal ? { signal } : undefined);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new Error("This backend has not enabled complete BPMN document authoring. Connect to a compatible backend to edit this source.");
+  }
+  signal?.throwIfAborted();
+  if (capability?.structureKind !== bpmnStructureKind || capability.schemaVersion !== "2.0.0")
+    throw new Error("This backend uses an incompatible BPMN authoring contract. The current draft is retained.");
+}
 
 export interface BpmnImportIssue {
   severity: string | number;
@@ -59,6 +74,7 @@ export function layoutFromBpmnDiagram(processNode: ActivityNode): DesignMetadata
 // the payload already carries; the exporter synthesizes the rest).
 export function withDiagramFromLayout(processNode: ActivityNode, layout: DesignMetadataRecord[]): ActivityNode {
   if (processNode.structure?.kind !== bpmnStructureKind) return processNode;
+  if (processNode.structure.schemaVersion === "2.0.0") return processNode; // Canonical XML already owns all DI.
 
   const layoutByNodeId = new Map(layout.map(record => [record.nodeId, record]));
   const previousDiagram = processNode.structure.payload.diagram;

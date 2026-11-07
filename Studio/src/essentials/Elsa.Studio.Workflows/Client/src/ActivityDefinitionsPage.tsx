@@ -1,3 +1,5 @@
+import { createCanvasEditorPreferences } from "./graph-authoring/canvasEditorPreferences";
+import type { StudioWorkflowDesignerCanvasContribution, StudioCanvasEditorPreferenceStore } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw } from "lucide-react";
@@ -81,12 +83,15 @@ export function ActivityDefinitionsPage({
     properties: StudioActivityPropertyEditorContribution[];
     expressions: StudioExpressionEditorContribution[];
     panels: StudioWorkflowDesignerPanelContribution[];
+    canvasEditors?: StudioWorkflowDesignerCanvasContribution[];
+    canvasEditorPreferences?: StudioCanvasEditorPreferenceStore;
   };
   inputEditors?: () => StudioWorkflowRunInputEditorContribution[];
   runtime?: StudioRuntimeSettings;
   navigateToStudioPath?(path: string): void;
 }) {
   const [route, setRoute] = useState(readRouteState);
+  const canvasEditorPreferences = useMemo(() => createCanvasEditorPreferences({ backend: context, runtime }), [context, runtime]);
   // A create or upgrade can complete while this screen's workspace tab is in the background; its
   // navigation then waits for the tab to return instead of taking over the active tab's address.
   const whenActive = useStudioWorkspaceWhenActive();
@@ -178,7 +183,7 @@ export function ActivityDefinitionsPage({
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
       const extensions = graphExtensions();
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} graphCanvasEditors={extensions.canvasEditors} canvasEditorPreferences={extensions.canvasEditorPreferences ?? canvasEditorPreferences} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
         if (route.returnPlanId) {
           navigationBlockedRef.current = false;
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);

@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,6 +21,11 @@ public class ActivitiesBpmnDesignFeature : IShellFeature
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnStructureHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentStructureHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentScopeViewHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnScopeViewSourceValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnDocumentAdmissionValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnDocumentCompilationSource>());
     }
 }

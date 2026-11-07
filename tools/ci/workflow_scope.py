@@ -20,7 +20,7 @@ def matches(path: str, pattern: str) -> bool:
 
 def select(event_name: str, event: dict, changed: list[str] | None, patterns: dict) -> dict[str, bool]:
     """None means the diff is unavailable: run every potentially affected proof."""
-    result = dict.fromkeys([*patterns, 'studio-order'], False)
+    result = dict.fromkeys([*patterns, 'studio-order', 'bpmn-document'], False)
     if event_name == 'workflow_dispatch':
         suite = event.get('inputs', {}).get('suite', 'ci')
         if suite in result:

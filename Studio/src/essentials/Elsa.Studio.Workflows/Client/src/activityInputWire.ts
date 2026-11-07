@@ -84,7 +84,11 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
 
   let changed = false;
   const nextPayload: Record<string, unknown> = { ...structure.payload };
+  const completeBpmnSource = structure.kind === "elsa.bpmn.structure" && structure.schemaVersion === "2.0.0";
   for (const [key, value] of Object.entries(structure.payload)) {
+    // Complete-source BPMN owns exactly one native forest. Compact scope invocation headers and
+    // opaque metadata can look like nodes, but neither is another independently authored tree.
+    if (completeBpmnSource && key !== "activities") continue;
     if (isActivityNode(value)) {
       nextPayload[key] = mapActivityTree(value, transform);
       changed = true;
@@ -322,16 +326,19 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
 // their authored syntax and serialize the value to a string. Two exceptions:
 //  - Variable and Input expressions keep their structured reference objects (the backend's
 //    VariableReference.TryParse reads `{ referenceKey, declaringScopeId }` from an ArgumentValue.Value
-//    object), as do Connection expressions (whose `{ connection, type }` payload is object-shaped) and
+//    object), as do Connection, WorkflowRequest, ActivityResult and Secret expressions (whose backend
+//    reference readers require actual object payloads rather than JSON text), and
 //    portable expression definitions (whose `language`, `source`, and related fields form an object
 //    contract), so their structured payloads survive the trip.
 //  - A Literal whose value is structured (an array or object, e.g. a collection repeater's list) is sent
 //    as an "Object" expression. The backend's literal converter only handles scalars, so it can't turn
 //    the JSON-string form of a list into ICollection<T>; the Object handler JSON-deserializes it into the
 //    target type. isRecord covers both arrays and plain objects.
+const structuredReferenceExpressionTypes = new Set(["Variable", "Input", "Connection", "WorkflowRequest", "ActivityResult", "Secret"]);
+
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
-  if ((expressionType === "Variable" || expressionType === "Input" || expressionType === "Connection") && isRecord(expression.value)) {
+  if (structuredReferenceExpressionTypes.has(expressionType) && isRecord(expression.value)) {
     return { value: expression.value, expressionType };
   }
   const portableDefinition = readPortableExpressionDefinition(expression.value, expressionType);
@@ -342,7 +349,7 @@ function toWireArgument(expression: { type: string; value: unknown }): { value: 
   return { value: toWireValue(expression.value), expressionType };
 }
 
-// ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.
+// Scalar/expression-text wire contracts use strings; reference objects take the explicit path above.
 function toWireValue(value: unknown): string | null {
   if (value == null) return null;
   if (typeof value === "string") return value;

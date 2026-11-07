@@ -187,7 +187,8 @@ export function useWorkflowCanvas({
       // Prune the departed nodes' side tables before upserting the survivors' positions: updateLayout
       // only ever upserts, so a deleted node's record would otherwise outlive it in the saved draft.
       const forgotten = forgetRemovedNodes(current, options?.removedNodeIds ?? []);
-      const nextLayout = mode === "sequence" ? forgotten.layout : updateLayout(forgotten.layout, nextNodes);
+      // BPMN DI keeps fractional coordinates; its layout mirror must use the same positions.
+      const nextLayout = mode === "sequence" ? forgotten.layout : updateLayout(forgotten.layout, nextNodes, { roundPositions: mode !== "bpmn" });
       const nextPresentation = forgotten.activityPresentation;
       const rootActivity = current.state.rootActivity;
       if (!rootActivity) return { ...current, layout: nextLayout, activityPresentation: nextPresentation };

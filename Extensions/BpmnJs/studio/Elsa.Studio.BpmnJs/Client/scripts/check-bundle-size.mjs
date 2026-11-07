@@ -1,0 +1,31 @@
+import { readFile, readdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+const output = resolve(root, "../wwwroot/studio/modules/bpmn-js");
+const base = resolve(root, "../../../../../Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows");
+const manifest = JSON.parse(await readFile(resolve(output, ".vite/manifest.json"), "utf8"));
+const baseManifest = JSON.parse(await readFile(resolve(base, ".vite/manifest.json"), "utf8"));
+const styles = JSON.parse(await readFile(resolve(output, "entry-styles.json"), "utf8"));
+if (styles.styles.length) throw new Error("Toolkit CSS must be deferred until its canvas loads.");
+if (Object.keys(baseManifest).some(key => /(?:bpmn-js|diagram-js|bpmn-moddle|bpmn-font)/.test(key))) throw new Error("Toolkit dependency leaked into the base Workflows bundle.");
+const entry = manifest["src/module.tsx"];
+const eager = new Set();
+function visit(key) { const item = manifest[key]; if (!item || eager.has(item.file)) return; eager.add(item.file); for (const dependency of item.imports ?? []) visit(dependency); }
+visit("src/module.tsx");
+const jsFiles = [...new Set(Object.values(manifest).map(item => item.file).filter(file => file.endsWith(".js")))];
+const cssFiles = [...new Set(Object.values(manifest).flatMap(item => item.css ?? []))];
+const size = async files => (await Promise.all(files.map(async file => (await readFile(resolve(output, file))).byteLength))).reduce((sum, bytes) => sum + bytes, 0);
+const eagerSize = await size([...eager]);
+const jsSize = await size(jsFiles);
+const cssSize = await size(cssFiles);
+const largest = Math.max(...await Promise.all(jsFiles.map(file => size([file]))));
+const assets = (await readdir(output)).filter(file => /\.(woff2?|ttf|eot|svg)$/.test(file));
+const assetSize = await size(assets);
+if (eagerSize > 5_000 || jsSize > 650_000 || cssSize > 40_000 || assetSize > 300_000 || largest > 500_000) throw new Error(`Optional BPMN module budget exceeded: ${JSON.stringify({ eagerSize, jsSize, cssSize, assetSize, largest })}`);
+const notices = await readFile(resolve(output, "THIRD_PARTY_NOTICES.txt"), "utf8");
+if (!notices.includes("bpmn-js@18.31.1") || !notices.includes("watermark")) throw new Error("Pinned toolkit attribution is missing.");
+const canvas = manifest["src/BpmnDocumentJsCanvas.tsx"];
+if (!entry || !canvas?.isDynamicEntry || eager.has(canvas.file)) throw new Error("The source2 canvas must remain a deferred entry.");
+console.log(JSON.stringify({ baseToolkitDependencies: 0, registrationBytes: eagerSize, javaScriptBytes: jsSize, stylesheetBytes: cssSize, assetBytes: assetSize, largestChunkBytes: largest, eagerStyles: styles.styles }, null, 2));

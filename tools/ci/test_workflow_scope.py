@@ -56,7 +56,9 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertFalse(scope.matches('Extensions/Example/other/studio/a.ts', 'Extensions/*/studio/**'))
 
     def test_unreadable_diff_selects_all_eligible_jobs(self):
-        self.assertTrue(all(self.selected().values()))
+        selected = self.selected()
+        self.assertTrue(all(enabled for name, enabled in selected.items() if name != 'bpmn-document'))
+        self.assertFalse(selected['bpmn-document'])
         with patch.object(scope.subprocess, 'run') as run:
             run.return_value.returncode = 128
             self.assertIsNone(scope.changed_paths('pull_request', {}, 'a' * 40))
@@ -71,11 +73,18 @@ class WorkflowScopeTests(unittest.TestCase):
             self.assertIn('-z', run.call_args.args[0])
 
     def test_manual_suites_are_isolated(self):
-        for suite in [*self.patterns, 'studio-order']:
+        for suite in [*self.patterns, 'studio-order', 'bpmn-document']:
             with self.subTest(suite=suite):
                 selected = self.selected('workflow_dispatch', inputs={'suite': suite})
                 self.assertEqual([suite], [name for name, enabled in selected.items() if enabled])
         self.assertFalse(any(self.selected('workflow_dispatch', inputs={'suite': 'ci'}).values()))
+
+    def test_bpmn_document_is_never_selected_automatically(self):
+        for event in ['pull_request', 'push', 'schedule']:
+            for paths in [None, ['.github/workflows/ci.yml'], ['Studio/src/Feature.ts'],
+                          ['tools/ux-acceptance/run-bpmn-document-editors.py']]:
+                with self.subTest(event=event, paths=paths):
+                    self.assertFalse(self.selected(event, paths)['bpmn-document'])
 
     def test_nightly_only_adds_shuffle(self):
         self.assertEqual(['studio-order'], [name for name, enabled in self.selected('schedule').items() if enabled])

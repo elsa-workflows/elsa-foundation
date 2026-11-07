@@ -719,7 +719,7 @@ describe("secret-only input values", () => {
     const picked = writeInputValue(stored, secretOnly, withLiteralValue(readWrappedInput(stored, secretOnly), { name: "tokens" }));
 
     expect(wire(picked).inputs).toEqual([
-      { isSensitive: true, referenceKey: "authorization", value: { value: '{"name":"tokens"}', expressionType: "Secret" } }
+      { isSensitive: true, referenceKey: "authorization", value: { value: { name: "tokens" }, expressionType: "Secret" } }
     ]);
 
     const unbound = clearSecretOnlyInput(picked, secretOnly, null)!;

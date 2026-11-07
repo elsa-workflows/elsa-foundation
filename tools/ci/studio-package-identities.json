@@ -57,6 +57,7 @@
     { "id": "Elsa.Studio.Dashboard", "project": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
     { "id": "Elsa.Studio.UserTasks", "project": "Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
+    { "id": "Elsa.Studio.BpmnJs", "project": "Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Elsa.Studio.BpmnJs.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Attention", "project": "Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },
     { "id": "Elsa.Studio.ConsoleStream", "project": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj", "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Diagnostics.OpenTelemetry", "project": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" },

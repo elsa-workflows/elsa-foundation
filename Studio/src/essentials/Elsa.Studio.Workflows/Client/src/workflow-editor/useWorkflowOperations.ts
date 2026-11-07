@@ -1,3 +1,4 @@
+import type { AuthoringCheckpointCapture, AuthoringCheckpointIntent } from "../graph-authoring/authoringCheckpoint";
 import { useCallback, useRef, useState } from "react";
 import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
@@ -58,10 +59,12 @@ interface WorkflowOperationsParams {
    * workflow has no published version or the server does not advertise the export relation.
    */
   publishedExecutable?: PublishedExecutableTarget | null;
-  saveDraft(draft: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }): Promise<WorkflowDraft>;
+  saveDraft(draft: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string>; capture?: "current" }): Promise<WorkflowDraft>;
   /** The live history line, captured together with the publication review snapshot (spec 1193 FR-010). */
   lineage?(): Iterable<string>;
   flushPendingSave(): Promise<void>;
+  /** Resource-owned flush and canonical capture, including native canvas work. */
+  captureDraft?(intent: AuthoringCheckpointIntent): Promise<AuthoringCheckpointCapture<WorkflowDraft>>;
   reload(options?: { shouldLoadDraft(): boolean }): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
   updateTestRunResult?(testRun: WorkflowTestRunState): void;
@@ -86,6 +89,7 @@ export function useWorkflowOperations({
   saveDraft,
   lineage,
   flushPendingSave,
+  captureDraft,
   reload,
   startTestRun,
   updateTestRunResult,
@@ -112,12 +116,17 @@ export function useWorkflowOperations({
     workflowInputNames: string[];
     onStarted?: (view: WorkflowTestRunView) => Promise<void>;
   } | null>(null);
-  const exportJson = useCallback(() => {
+  const exportJson = useCallback(async () => {
     if (!draft) return;
-    const name = details?.definition.name;
-    downloadWorkflowJson(buildExportPayload(draft, name), name);
-    setStatus("Exported workflow as JSON.");
-  }, [draft, details, setStatus]);
+    try {
+      const snapshot = captureDraft ? (await captureDraft("export")).snapshot : draft;
+      const name = details?.definition.name;
+      downloadWorkflowJson(buildExportPayload(snapshot, name), name);
+      setStatus("Exported workflow as JSON.");
+    } catch (error) {
+      setError(describeWorkflowError(error, "Could not finish canvas edits before exporting the workflow."));
+    }
+  }, [captureDraft, draft, details, setError, setStatus]);
 
   // Distinct from `exportJson` above: that serializes the design draft, this downloads the *compiled*
   // artifact closure the server produced for the published version (foundation #1304). The payload is
@@ -155,7 +164,7 @@ export function useWorkflowOperations({
     setOperation("saving");
     setStatus("Saving...");
     try {
-      await saveDraft(draft, "Saved", { lineage: line });
+      await saveDraft(draft, "Saved", { lineage: line, capture: "current" });
     } catch {
       // saveDraft surfaces the error in the editor alert.
     } finally {
@@ -417,12 +426,17 @@ export function useWorkflowOperations({
     // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
     // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
     setStatus(mode === "publish" ? "Saving before publication..." : "Saving before review...");
-    // The snapshot is this render's draft; its history line is captured now with it, before any await, since the author
-    // may Undo or Redo while the save settles or the review is open.
-    const draftLineage = lineage ? [...lineage()] : undefined;
+    // Once native work is acknowledged, freeze one snapshot and its line. Later Undo/Redo or
+    // edits during HTTP must not change the contents of this review.
+    let draftLineage = lineage ? [...lineage()] : undefined;
+    let draftSnapshot = structuredClone(draft);
     try {
+      if (captureDraft) {
+        const captured = await captureDraft("publish");
+        draftSnapshot = structuredClone(captured.snapshot);
+        draftLineage = [...captured.lineage];
+      }
       await flushPendingSave();
-      const draftSnapshot = structuredClone(draft);
       setStatus(mode === "publish" ? "Preparing publication..." : "Preparing publication review...");
       // Policy and preflight reads never promote a version. Both actions use the same snapshot
       // and authoritative evidence; only direct Publish proceeds without an author review dialog.
@@ -497,7 +511,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, captureDraft, lineage, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
@@ -533,6 +547,11 @@ export function useWorkflowOperations({
     try {
       setOperation("testRunPreparing");
       setStatus("Preparing test run...");
+      if (captureDraft) {
+        const captured = await captureDraft("test-run");
+        if (getDraftSignature(captured.snapshot) !== draftSignature)
+          throw new Error("Canvas edits changed the workflow. Review the updated Test Drive setup before starting this run.");
+      }
       const snapshotId = createDraftSnapshotId(draftSnapshot);
 
       setOperation("testRunStarting");
@@ -580,13 +599,16 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
+  }, [captureDraft, context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
-  const run = useCallback(() => {
+  const run = useCallback(async () => {
     if (!draft?.state.rootActivity || busy) return;
-    setActiveRightPanelId("test-drive");
-    setInspectorCollapsed(false);
-  }, [draft?.state.rootActivity, busy, setActiveRightPanelId, setInspectorCollapsed]);
+    try {
+      if (captureDraft) await captureDraft("view-change");
+      setActiveRightPanelId("test-drive");
+      setInspectorCollapsed(false);
+    } catch (error) { setError(describeWorkflowError(error, "Could not finish canvas edits before opening Test Drive.")); }
+  }, [captureDraft, draft?.state.rootActivity, busy, setActiveRightPanelId, setError, setInspectorCollapsed]);
 
   const runTestDrive = useCallback(async (
     draftSnapshot: WorkflowDraft,

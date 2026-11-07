@@ -17,6 +17,7 @@ using Elsa.Studio.Secrets;
 using Elsa.Studio.Agent.Specialists;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
+using Elsa.Studio.BpmnJs;
 using Elsa.Studio.Workflows.Dashboard;
 
 using Elsa.Studio.Backends;
@@ -42,6 +43,7 @@ internal static class StudioFeatureAssemblies
                 typeof(WorkflowsDashboardStudioFeature).Assembly,
                 typeof(WeaverWorkflowsStudioFeature).Assembly,
                 typeof(WorkflowsStudioFeature).Assembly,
+                typeof(BpmnJsStudioFeature).Assembly,
                 typeof(SecretsStudioFeature).Assembly,
                 typeof(AgentSpecialistsStudioFeature).Assembly,
                 typeof(ConnectionsStudioFeature).Assembly,

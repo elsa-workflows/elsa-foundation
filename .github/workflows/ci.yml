@@ -21,7 +21,7 @@ on:
       suite:
         description: Validation to run
         type: choice
-        options: [ci, studio, backend-source, weaver, published-images, studio-order]
+        options: [ci, studio, backend-source, weaver, published-images, studio-order, bpmn-document]
         default: ci
       tier:
         description: Which tier to run
@@ -59,6 +59,7 @@ jobs:
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
+      bpmn-document: ${{ steps.scope.outputs.bpmn-document }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1078,6 +1079,37 @@ jobs:
         with:
           name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ux-acceptance
+          if-no-files-found: error
+          retention-days: 14
+
+  bpmn-document-acceptance:
+    name: BPMN document acceptance (composed Studio)
+    needs: plan-scope
+    # Full-source BPMN qualification is an explicit manual proof, separate from ordinary Studio gates.
+    if: github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.bpmn-document == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+      - name: Exercise all eighteen source2 Workflow and Activity Graph journeys
+        env:
+          UX_PR_HEAD_SHA: ${{ github.sha }}
+        run: python3 tools/ux-acceptance/run-bpmn-document-editors.py "$RUNNER_TEMP/bpmn-document-acceptance"
+      - name: Retain downloadable source-bound success and failure evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-document-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bpmn-document-acceptance
           if-no-files-found: error
           retention-days: 14
 

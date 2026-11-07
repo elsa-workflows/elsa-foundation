@@ -1,3 +1,4 @@
+import type { StudioWorkflowDesignerCanvasContribution, StudioCanvasEditorPreferenceStore, StudioRuntimeSettings } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
@@ -30,6 +31,9 @@ export function WorkflowManagementPage({
   runInputEditors,
   testStimulusEditors,
   workflowDesignerPanels,
+  workflowCanvasEditors = [],
+  canvasEditorPreferences,
+  runtime,
   autosaveEnabledByDefault,
   operations
 }: {
@@ -46,6 +50,9 @@ export function WorkflowManagementPage({
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   testStimulusEditors?: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
+  workflowCanvasEditors?: StudioWorkflowDesignerCanvasContribution[];
+  canvasEditorPreferences?: StudioCanvasEditorPreferenceStore;
+  runtime?: StudioRuntimeSettings;
   autosaveEnabledByDefault?: boolean;
   operations?: {publishing:StudioContributionAvailability;testRuns:StudioContributionAvailability};
 }) {
@@ -86,7 +93,7 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} workflowCanvasEditors={workflowCanvasEditors} canvasEditorPreferences={canvasEditorPreferences} runtime={runtime} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (

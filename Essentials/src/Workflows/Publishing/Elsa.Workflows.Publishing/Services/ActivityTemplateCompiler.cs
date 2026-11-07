@@ -30,8 +30,16 @@ public sealed class ActivityTemplateCompiler(
     IActivityDefinitionVersionStore activityVersions,
     IExecutableActivityTemplateReader templates,
     IActivityTemplateAdmissionPolicy admissionPolicy,
-    TimeProvider timeProvider) : IActivityTemplateCompiler
+    TimeProvider timeProvider,
+    IExecutableStructureNormalizer? structureNormalizer = null) : IActivityTemplateCompiler
 {
+    // Preserve the existing constructor for precompiled callers as well as source callers.
+    public ActivityTemplateCompiler(IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications, IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates, IActivityTemplateAdmissionPolicy admissionPolicy, TimeProvider timeProvider)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy, timeProvider, null) { }
+
     public async ValueTask<ActivityTemplateCompilerResult> CompileAsync(
         ActivityTemplateCompilerRequest request,
         CancellationToken cancellationToken = default)
@@ -41,6 +49,7 @@ public sealed class ActivityTemplateCompiler(
         var resolved = new List<ActivityResolvedDependency>();
         var loadedTemplates = new Dictionary<string, ExecutableActivityTemplate>(StringComparer.Ordinal);
         var loadedActivityVersions = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
+        var structureInvocations = new Dictionary<string, ResolvedStructureInvocation>(StringComparer.Ordinal);
         IReadOnlyList<ActivityTemplateDependencyRequest> authoritativeDependencies;
         IActivityTemplateDependencyDiscoverer discoverer;
         try
@@ -147,6 +156,9 @@ public sealed class ActivityTemplateCompiler(
                 continue;
 
             loadedTemplates.TryAdd(template.TemplateId, template);
+            structureInvocations.TryAdd(dependencyRequest.OccurrenceId, new(publication.DefinitionVersionId,
+                publication.ResolveWorkflowResolutionKind(), template.Root.ActivityType, template.Root.Descriptor.ConsumerKey,
+                template.Root.Descriptor.SchemaVersion, declaredStructure, template.TemplateId, template.TemplateHash));
             resolved.Add(new(
                 publication.DefinitionId,
                 publication.DefinitionVersionId,
@@ -212,7 +224,11 @@ public sealed class ActivityTemplateCompiler(
             request.Candidate.Contract,
             request.Candidate.Provider,
             resolved,
-            provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
+            provider.CompilerFingerprint)
+        {
+            SubjectKind = request.Candidate.SubjectKind,
+            ResolvedStructureInvocations = new System.Collections.ObjectModel.ReadOnlyDictionary<string, ResolvedStructureInvocation>(structureInvocations)
+        }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
@@ -328,6 +344,36 @@ public sealed class ActivityTemplateCompiler(
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
         }
 
+        var normalizedStructures = new Dictionary<string, ExecutableActivityStructure?>(StringComparer.Ordinal);
+        foreach (var occurrence in compilation.Occurrences)
+        {
+            var structure = occurrence.Structure;
+            var translated = structure is not null && occurrence.AuthoredStructure is { } authored &&
+                (structure.Kind != authored.Kind || structure.SchemaVersion != authored.SchemaVersion);
+            if (translated && structureNormalizer is null)
+            {
+                diagnostics.Add(new("activity.structure.normalizer-unavailable", ActivityDiagnosticSeverity.Error,
+                    "Translated activity structures require the canonical executable structure normalizer.", subject,
+                    new(request.Candidate.Provider.ProviderKey, ReferenceKey: occurrence.OccurrenceId)));
+                continue;
+            }
+            try
+            {
+                var normalized = translated
+                    ? structureNormalizer!.Normalize(occurrence.OccurrenceId, structure)
+                    : structure is null ? null : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
+                if (translated && (normalized is null || normalized.Kind != structure!.Kind || normalized.SchemaVersion != structure.SchemaVersion))
+                    throw new ArgumentException("The canonical structure normalizer must retain the translated target identity.");
+                normalizedStructures.Add(occurrence.OccurrenceId, normalized);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
+            {
+                diagnostics.Add(new("activity.structure.normalization-refused", ActivityDiagnosticSeverity.Error,
+                    exception.Message, subject, new(request.Candidate.Provider.ProviderKey, ReferenceKey: occurrence.OccurrenceId)));
+            }
+        }
+        if (diagnostics.Any(IsError)) return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
+
         var occurrenceCompilations = compilation.Occurrences.ToDictionary(x => x.OccurrenceId, StringComparer.Ordinal);
         var directRuntimeDependencies = resolved
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
@@ -337,12 +383,7 @@ public sealed class ActivityTemplateCompiler(
                 ExecutableActivityTemplateOccurrenceOverlay? overlay = null;
                 if (occurrenceCompilations.TryGetValue(x.OccurrenceId, out var occurrence))
                 {
-                    var structure = occurrence.Structure is null
-                        ? null
-                        : new ExecutableActivityStructure(
-                            occurrence.Structure.Kind,
-                            occurrence.Structure.SchemaVersion,
-                            occurrence.Structure.Payload);
+                    var structure = normalizedStructures[x.OccurrenceId];
                     overlay = new(
                         ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion,
                         occurrence.InputBindings,

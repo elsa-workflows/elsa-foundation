@@ -23,6 +23,7 @@
     <Project Path="src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" />
   </Folder>
   <Folder Name="/src/extensions/">
+    <Project Path="../Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Elsa.Studio.BpmnJs.csproj" />
     <Project Path="../Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" />
     <Project Path="../Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" />
     <Project Path="../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />

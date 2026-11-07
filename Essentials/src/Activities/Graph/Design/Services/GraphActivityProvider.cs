@@ -131,14 +131,35 @@ public sealed class GraphActivityProvider(
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         IReadOnlyList<GraphNode> nodes = [];
         IReadOnlyList<GraphNode> completeNodes = [];
+        var projections = new Dictionary<string, IReadOnlyCollection<ActivityChildProjection>>(StringComparer.Ordinal);
+        var compiledStructures = new Dictionary<string, ActivityNodeStructure?>(StringComparer.Ordinal);
 
         if (graph is not null)
         {
-            nodes = EnumerateNodes(graph.RootActivity);
+            nodes = EnumerateNodes(graph.RootActivity, projections);
             completeNodes = FindCompleteNodes(nodes, request.ResolvedDirectDependencies);
             ValidateGraph(graph, request.Contract, subject, diagnostics, completeNodes);
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
-            ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            if (!diagnostics.Any(item => item.Severity == ActivityDiagnosticSeverity.Error) && TryReadRootNode(graph.RootActivity, out var physicalRoot))
+            {
+                var context = request.ResolvedStructureInvocations.Count == 0 ? null
+                    : new ActivityStructureCompilationContext(physicalRoot, request.ResolvedStructureInvocations, projections);
+                foreach (var node in nodes)
+                {
+                    try
+                    {
+                        compiledStructures.Add(node.NodeId, context is null
+                            ? activityStructureService.CompileExecutableStructure(node.Activity)
+                            : activityStructureService.CompileExecutableStructure(node.Activity, context));
+                    }
+                    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
+                    {
+                        diagnostics.Add(Diagnostic("activity.graph.structure-compilation-refused", exception.Message,
+                            subject, $"{node.JsonPointer}/structure", node.NodeId));
+                    }
+                }
+                ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics, compiledStructures);
+            }
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateBodyReferences(
                 graph,
@@ -186,10 +207,15 @@ public sealed class GraphActivityProvider(
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
                 EffectiveInputArray(node),
-                activityStructureService.CompileExecutableStructure(node.Activity),
+                compiledStructures[node.NodeId],
                 // A body node's captures into graph variables; absent when it captures nothing.
                 ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
-            { StructureInputs = OptionalInputProjection(node.Activity) })
+            {
+                StructureInputs = OptionalInputProjection(node.Activity),
+                AuthoredStructure = node.Activity.Structure is { } authored && compiledStructures[node.NodeId] is { } target &&
+                    (authored.Kind != target.Kind || authored.SchemaVersion != target.SchemaVersion)
+                    ? new ActivityStructureContract(authored.Kind, authored.SchemaVersion) : null
+            })
             .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
@@ -785,7 +811,8 @@ public sealed class GraphActivityProvider(
         IReadOnlyList<GraphNode> nodes,
         IReadOnlyList<ActivityResolvedDependency> dependencies,
         ActivityDiagnosticSubject subject,
-        ICollection<ActivityDiagnostic> diagnostics)
+        ICollection<ActivityDiagnostic> diagnostics,
+        IReadOnlyDictionary<string, ActivityNodeStructure?> compiledStructures)
     {
         var dependenciesByOccurrence = dependencies
             .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
@@ -794,52 +821,54 @@ public sealed class GraphActivityProvider(
 
         foreach (var node in nodes)
         {
-            var actual = node.Activity.Structure;
-            if (actual is null ||
+            var authored = node.Activity.Structure;
+            if (authored is null ||
                 !dependenciesByOccurrence.TryGetValue(node.NodeId, out var dependency) ||
                 !StringComparer.Ordinal.Equals(dependency.VersionId, node.ActivityVersionId))
                 continue;
 
+            if (!compiledStructures.TryGetValue(node.NodeId, out var actual)) continue;
+
             if (dependency.DeclaredStructure is not { } declared)
             {
-                if (activityStructureService.HasHandler(actual))
+                if (activityStructureService.HasHandler(authored))
                 {
                     diagnostics.Add(Diagnostic(
                         "activity.graph.structure-contract-undeclared",
-                        $"Graph node '{node.NodeId}' uses handled structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares no structure contract.",
+                        $"Graph node '{node.NodeId}' uses handled structure '{authored.Kind}@{authored.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares no structure contract.",
                         subject,
                         $"{node.JsonPointer}/structure",
                         node.NodeId,
                         new Dictionary<string, string>(StringComparer.Ordinal)
                         {
-                            ["structureKind"] = actual.Kind,
-                            ["structureSchemaVersion"] = actual.SchemaVersion
+                            ["structureKind"] = authored.Kind,
+                            ["structureSchemaVersion"] = authored.SchemaVersion
                         }));
                 }
 
                 continue;
             }
 
-            if (!StringComparer.Ordinal.Equals(actual.Kind, declared.Kind) ||
+            if (actual is null || !StringComparer.Ordinal.Equals(actual.Kind, declared.Kind) ||
                 !StringComparer.Ordinal.Equals(actual.SchemaVersion, declared.SchemaVersion))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.structure-contract-mismatch",
-                    $"Graph node '{node.NodeId}' carries structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares '{declared.Kind}@{declared.SchemaVersion}'.",
+                    $"Graph node '{node.NodeId}' compiled structure '{actual?.Kind}@{actual?.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares '{declared.Kind}@{declared.SchemaVersion}'.",
                     subject,
                     $"{node.JsonPointer}/structure",
                     node.NodeId,
                     new Dictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["actualKind"] = actual.Kind,
-                        ["actualSchemaVersion"] = actual.SchemaVersion,
+                        ["actualKind"] = actual?.Kind ?? "<none>",
+                        ["actualSchemaVersion"] = actual?.SchemaVersion ?? "<none>",
                         ["declaredKind"] = declared.Kind,
                         ["declaredSchemaVersion"] = declared.SchemaVersion
                     }));
                 continue;
             }
 
-            if (!activityStructureService.HasHandler(actual))
+            if (!activityStructureService.HasHandler(authored))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.structure-handler-unavailable",
@@ -856,7 +885,8 @@ public sealed class GraphActivityProvider(
         }
     }
 
-    private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
+    private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root,
+        IDictionary<string, IReadOnlyCollection<ActivityChildProjection>>? capturedProjections = null)
     {
         // ValidateGraph refuses a root that cannot be read, so an empty body here is never accepted.
         if (!TryReadRootNode(root, out var rootNode))
@@ -881,7 +911,9 @@ public sealed class GraphActivityProvider(
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || string.IsNullOrWhiteSpace(item.Node.ActivityVersionId))
                 continue;
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
-            var element = FindNodeElement(root, item.Node.NodeId) ?? root;
+            // Standard XML scopes have pure projected ActivityNodes rather than physical node JSON.
+            // Their invocation arguments belong to that projection, independently of root arguments.
+            var element = FindNodeElement(root, item.Node.NodeId) ?? JsonSerializer.SerializeToElement(item.Node, NodeSerializerOptions);
             var memberUsage = PublicMemberUsage(element)
                 .Concat(item.StructureMemberUsage)
                 .Distinct()
@@ -909,7 +941,9 @@ public sealed class GraphActivityProvider(
                         .Distinct()
                         .ToArray(),
                     StringComparer.Ordinal);
-            foreach (var slot in activityStructureService.ProjectChildren(item.Node).Reverse())
+            var childProjections = activityStructureService.ProjectChildren(item.Node);
+            capturedProjections?.TryAdd(item.Node.NodeId, childProjections);
+            foreach (var slot in childProjections.Reverse())
             {
                 var children = slot.Activities.ToArray();
                 for (var index = children.Length - 1; index >= 0; index--)

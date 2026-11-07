@@ -94,6 +94,9 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         ActivityNodeStructure structure,
         IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
     {
+        if (structure.Kind != BpmnProcessActivity.StructureKind || structure.SchemaVersion != BpmnProcessActivity.StructureSchemaVersion)
+            throw new InvalidOperationException("Legacy BPMN executable remapping requires the exact kind and schema 1.0.0 before typed deserialization.");
+        BpmnLegacyStructureGuard.RejectCompleteSourceFields(structure.Payload);
         var executable = structure.Payload.Deserialize<BpmnStructure>(SerializerOptions)
                          ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
         var remapped = new BpmnStructure(
@@ -127,7 +130,10 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     {
         if (activity.Structure is null)
             return new BpmnAuthoredStructure();
+        if (activity.Structure.Kind != BpmnProcessActivity.StructureKind || activity.Structure.SchemaVersion != BpmnProcessActivity.StructureSchemaVersion)
+            throw new InvalidOperationException("Legacy BPMN authoring requires the exact kind and schema 1.0.0 before typed deserialization.");
 
+        BpmnLegacyStructureGuard.RejectCompleteSourceFields(activity.Structure.Payload);
         return activity.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
                ?? new BpmnAuthoredStructure();
     }

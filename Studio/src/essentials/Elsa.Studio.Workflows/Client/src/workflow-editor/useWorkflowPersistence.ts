@@ -9,6 +9,21 @@ import type { WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import type { WorkflowLineageHold } from "./useDraftHistory";
 
+export interface PreparedWorkflowSave {
+  readonly draft: WorkflowDraft;
+  /** Omitted means keep the line captured by the caller; null explicitly writes an unknown line. */
+  readonly lineage?: readonly string[] | null;
+  /** Check resource/authority again after waiting behind earlier HTTP saves. */
+  assertCurrent?(): void;
+}
+
+export interface WorkflowSaveCheckpoint {
+  prepare(request: { snapshot: WorkflowDraft; intent: "save" | "autosave"; capture: "current" | "snapshot"; lineage: readonly string[] | null }): Promise<PreparedWorkflowSave>;
+  /** Synchronous only: navigation must retain unsaved native work without starting serialization. */
+  probe(): boolean;
+  readonly revision: number;
+}
+
 interface WorkflowPersistenceParams {
   context: StudioEndpointContext;
   draft: WorkflowDraft | null;
@@ -25,13 +40,17 @@ interface WorkflowPersistenceParams {
    * the live draft marks the batches of that line as saved.
    */
   lineageHold?: WorkflowLineageHold;
+  authoringCheckpoint?: WorkflowSaveCheckpoint;
 }
 
 // Owns draft persistence: the serialised save queue (so concurrent saves apply in order), the
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, onSaveReconciled, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, onSaveReconciled, setStatus, setError, lineageHold, authoringCheckpoint }: WorkflowPersistenceParams) {
+  const checkpointRef = useRef(authoringCheckpoint);
+  checkpointRef.current = authoringCheckpoint;
+  const authoringRevision = authoringCheckpoint?.revision;
   const onSaveReconciledRef = useRef(onSaveReconciled);
   onSaveReconciledRef.current = onSaveReconciled;
   const lineageHoldRef = useRef(lineageHold);
@@ -57,7 +76,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   useEffect(() => {
     const preventNavigation = (event: Event) => {
       const current = latestDraftRef.current;
-      if (queuedSavesRef.current > 0 || current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) event.preventDefault();
+      if (queuedSavesRef.current > 0 || checkpointRef.current?.probe() || current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) event.preventDefault();
     };
     window.addEventListener(studioNavigationRequestedEvent, preventNavigation);
     window.addEventListener("beforeunload", preventNavigation);
@@ -79,33 +98,45 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
    * it captured together with it in `options.lineage`; without one a save of anything but the live draft writes an
    * unknown line, which clears the batch saved set.
    */
-  const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }) => {
+  const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string>; capture?: "current" }) => {
     // Capture when requested, before waiting in the queue. An old save cannot release a newer
     // reviewed edit, even when that old request only starts after the new hold was acquired.
     const requestedReviewGeneration = reviewHoldGenerationRef.current;
-    const requestedSignature = getDraftSignature(draftSnapshot);
+    const initialSignature = getDraftSignature(draftSnapshot);
     // The line of the state this save writes, captured when the save is requested: the caller's declared line for a
     // snapshot it captured together with that line, else the live line's when it saves the live draft, else not known
     // (null). The live match is by signature: edits that return to the line's content and are then saved explicitly
     // mark its batches saved without writing anything new, which is harmless, as the owner then holds content equal
     // to what the line represents.
     const requestedLive = latestDraftRef.current;
-    const writtenLineage = options?.lineage ? [...options.lineage]
-      : requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
+    const initialLineage = options?.lineage ? [...options.lineage]
+      : requestedLive && getDraftSignature(requestedLive) === initialSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
+    type Prepared = { ok: true; value: PreparedWorkflowSave } | { ok: false; error: unknown };
+    let settlePrepared!: (outcome: Prepared) => void;
+    const prepared = new Promise<Prepared>(resolve => { settlePrepared = resolve; });
     const queuedSave = async () => {
-      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
       setError("");
       inFlightSavesRef.current += 1;
       setSaving(true);
       try {
-        const saved = await (documentAdapter?.save ?? updateDraft)(context, draftSnapshot);
+        const preparationResult = await prepared;
+        if (!preparationResult.ok) throw preparationResult.error;
+        const { value } = preparationResult;
+        const requested = value.draft;
+        const requestedSignature = getDraftSignature(requested);
+        const line = value.lineage === undefined ? initialLineage : value.lineage;
+        const writtenLineage = line === null ? null : [...line];
+        if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return requested;
+        value.assertCurrent?.();
+        const saved = await (documentAdapter?.save ?? updateDraft)(context, requested);
+        value.assertCurrent?.();
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
         setPersistedDraft(saved);
         const live = latestDraftRef.current;
-        const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
-        if (coversLiveDraft) onSaveReconciledRef.current?.(draftSnapshot, saved);
+        const coversLiveDraft = live?.id === requested.id && live.definitionId === requested.definitionId && getDraftSignature(live) === requestedSignature;
+        if (coversLiveDraft) onSaveReconciledRef.current?.(requested, saved);
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
         // An explicit save marks the batches of the line it wrote, even when the author kept editing while it was in flight:
@@ -135,6 +166,15 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     queuedSavesRef.current += 1;
     const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
+    // Reserve the queue position before invoking a host that might synchronously request another
+    // save. Preparation still starts in this call; its rejection is always observed immediately.
+    try {
+      const preparation: Promise<PreparedWorkflowSave> = checkpointRef.current?.prepare({ snapshot: draftSnapshot, intent: savedStatus === "Autosaved" ? "autosave" : "save",
+        capture: options?.capture ?? "snapshot", lineage: initialLineage }) ?? Promise.resolve({ draft: draftSnapshot });
+      void preparation.then(value => settlePrepared({ ok: true, value: {
+        ...value, draft: structuredClone(value.draft), lineage: value.lineage === undefined || value.lineage === null ? value.lineage : [...value.lineage]
+      } })).catch(error => settlePrepared({ ok: false, error }));
+    } catch (error) { settlePrepared({ ok: false, error }); }
     return queued;
   }, [context, documentAdapter, editDraft, setStatus, setError]);
 
@@ -143,8 +183,8 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   // Guarantees "Review & publish" acts on a consistent, saved snapshot instead of silently no-opping.
   const flushPendingSave = useCallback(async () => {
     const current = latestDraftRef.current;
-    if (current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) {
-      await saveDraft(current, "Saved");
+    if (current && (checkpointRef.current?.probe() || getDraftSignature(current) !== lastSavedDraftSignatureRef.current)) {
+      await saveDraft(current, "Saved", { capture: "current" });
     }
     await saveQueueRef.current.catch(() => undefined);
   }, [saveDraft]);
@@ -153,16 +193,16 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     if (!autosaveEnabled || autosavePaused || reviewHeld || lineageHeld || !draft) return;
 
     const draftSignature = getDraftSignature(draft);
-    if (draftSignature === lastSavedDraftSignatureRef.current) return;
+    if (draftSignature === lastSavedDraftSignatureRef.current && !checkpointRef.current?.probe()) return;
 
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
       if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) return;
-      void saveDraft(draft, "Autosaved").catch(() => undefined);
+      void saveDraft(draft, "Autosaved", { capture: "current" }).catch(() => undefined);
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus]);
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus, authoringRevision]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

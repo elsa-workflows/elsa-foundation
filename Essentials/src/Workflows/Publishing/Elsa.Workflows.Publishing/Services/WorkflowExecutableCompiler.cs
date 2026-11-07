@@ -131,6 +131,7 @@ public sealed class WorkflowExecutableCompiler(
             executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
+            var structureInvocations = new Dictionary<string, ResolvedStructureInvocation>(StringComparer.Ordinal);
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
             var placedResumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
             var placedNodeIds = new HashSet<string>(StringComparer.Ordinal);
@@ -149,6 +150,7 @@ public sealed class WorkflowExecutableCompiler(
                 {
                     if (!activityRows.ContainsKey(activity.ActivityVersionId))
                         activityRows[activity.ActivityVersionId] = await activityVersions.GetWithDefinitionAsync(activity.ActivityVersionId, cancellationToken);
+                    structureInvocations.Add(activity.NodeId, executableNodeCompiler.ResolveStructureInvocation(activityRows[activity.ActivityVersionId]));
                     continue;
                 }
 
@@ -157,6 +159,11 @@ public sealed class WorkflowExecutableCompiler(
 
                 var template = await activityTemplates.FindAsync(publication.TemplateId, cancellationToken)
                                ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no executable template '{publication.TemplateId}'.");
+                // Placement stamps boundary type labels. Retain the actual exact template-root
+                // runtime facts first so an authored structure cannot obtain a native role by label.
+                structureInvocations.Add(activity.NodeId, new(activity.ActivityVersionId, publication.ResolveWorkflowResolutionKind(),
+                    template.Root.ActivityType, template.Root.Descriptor.ConsumerKey, template.Root.Descriptor.SchemaVersion,
+                    null, template.TemplateId, template.TemplateHash));
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
@@ -197,7 +204,9 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var structureContext = new ActivityStructureCompilationContext(rootActivity, structureInvocations,
+                projection.Nodes.ToDictionary(node => node.NodeId, projection.ChildProjections, StringComparer.Ordinal));
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs, structureContext);
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {

@@ -4,10 +4,14 @@ import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
 import { ExecutionActivityPulse } from "../workflow-editor/ExecutionMotionPulse";
-import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
+import { bpmnElementTypes, bpmnElementTypeLabel, bpmnNotationType, isActivityBearingElementType, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
+import type { BpmnNotationDescriptor } from "./bpmnNotation";
 import type { BpmnNodeData } from "./bpmnAdapter";
 import { useGraphPortLayout } from "../graph-authoring/useGraphPortLayout";
 import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
+import { bpmnAppearanceLabelStyle } from "./bpmnDocumentAppearance";
+
+const CompleteBpmnNotation = React.lazy(async () => ({ default: (await import("./bpmnNotation")).BpmnNotation }));
 
 // Renders one BPMN element with its standard notation shape: thin circle (start event), thick circle
 // (end event, filled when terminate), diamond with an X / + / O marker (exclusive / parallel /
@@ -16,8 +20,10 @@ import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
 export function BpmnElementNode({ id, data, selected }: NodeProps) {
   const nodeData = data as BpmnNodeData;
   const element = nodeData.element;
-  const acceptsInbound = element.elementType !== bpmnElementTypes.startEvent;
-  const producesOutbound = element.elementType !== bpmnElementTypes.endEvent;
+  const flowNode = isActivityBearingElementType(element.elementType) || isEventElementType(element.elementType) || isGatewayElementType(element.elementType);
+  const sequenceConnected = flowNode && element.triggeredByEvent !== true && element.isForCompensation !== true;
+  const acceptsInbound = sequenceConnected && element.elementType !== bpmnElementTypes.startEvent && element.elementType !== bpmnElementTypes.boundaryEvent;
+  const producesOutbound = sequenceConnected && element.elementType !== bpmnElementTypes.endEvent;
   const typeLabel = bpmnElementTypeLabel(element);
   const ports = useGraphPortLayout(id, producesOutbound ? ["flow"] : [], acceptsInbound);
 
@@ -30,15 +36,29 @@ export function BpmnElementNode({ id, data, selected }: NodeProps) {
     >
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
-      {renderBpmnShape(nodeData)}
+      {renderBpmnShape(nodeData, selected)}
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
       {ports.sources.map(port => <Handle key={port.id} type="source" position={port.side} id={port.id} style={portPlacementStyle(port)} />)}
     </div>
   );
 }
 
-function renderBpmnShape(nodeData: BpmnNodeData) {
+function renderBpmnShape(nodeData: BpmnNodeData, selected?: boolean) {
   const element = nodeData.element;
+  const explicit = nodeData.notation;
+  const loop = element.loopCharacteristics as { isSequential?: boolean } | null | undefined;
+  const advanced = explicit && typeof explicit === "object" && typeof (explicit as BpmnNotationDescriptor).type === "string"
+    ? explicit as BpmnNotationDescriptor
+    : !["startEvent", "endEvent", "exclusiveGateway", "parallelGateway", "inclusiveGateway", "task", "subProcess"].includes(element.elementType)
+      || element.eventDefinitions?.some(definition => definition.type !== "terminate") || loop
+      || element.isForCompensation === true || element.triggeredByEvent === true || element.isTransaction === true
+      ? { type: element.elementType, name: element.name ?? undefined, eventDefinitions: element.eventDefinitions?.map(definition => definition.type),
+        cancelActivity: typeof element.cancelActivity === "boolean" ? element.cancelActivity : undefined,
+        interrupting: typeof element.isInterrupting === "boolean" ? element.isInterrupting : undefined,
+        eventSubProcess: element.triggeredByEvent === true, transaction: element.isTransaction === true,
+        loop: loop ? loop.isSequential ? "sequential" : "parallel" : undefined,
+        compensation: element.isForCompensation === true } satisfies BpmnNotationDescriptor : null;
+  if (advanced) return renderCompleteNotation(nodeData, advanced, selected);
 
   if (isEventElementType(element.elementType)) {
     const isEnd = element.elementType === bpmnElementTypes.endEvent;
@@ -99,4 +119,24 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
       {element.elementType === bpmnElementTypes.subProcess ? <span className="wf-bpmn-subprocess-marker" aria-hidden="true">⊞</span> : null}
     </span>
   );
+}
+
+function renderCompleteNotation(nodeData: BpmnNodeData, descriptor: BpmnNotationDescriptor, selected?: boolean) {
+  const type = bpmnNotationType(descriptor.type);
+  const bound = nodeData.boundActivity;
+  const activity = isActivityBearingElementType(type);
+  const label = descriptor.name?.trim() || nodeData.element.name?.trim() || bound?.label || bpmnElementTypeLabel(nodeData.element);
+  const ownsLabel = ["participant", "lane", "textAnnotation", "group"].includes(type);
+  return <span className="wf-bpmn-notation-node">
+    <React.Suspense fallback={<span role="status">Loading BPMN notation…</span>}><CompleteBpmnNotation descriptor={descriptor} selected={selected} faulted={nodeData.runtime?.hasBlockingIncident} /></React.Suspense>
+    {activity ? <>
+      {bound ? <span className="wf-node-icon wf-bpmn-notation-binding" data-tone={bound.iconTone ?? "accent"} aria-hidden="true">{renderActivityIcon(bound.icon, "activity")}</span> : null}
+      <span className="wf-bpmn-notation-content">
+        <strong style={bpmnAppearanceLabelStyle(descriptor.appearance)}>{label}</strong>
+        {!bound && nodeData.bindingLabel ? <small>{nodeData.bindingLabel}</small> : null}
+        {bound ? <NodeSlotBadges ownerNodeId={bound.nodeId} ownerLabel={label} slots={nodeData.childSlots}
+          collections={nodeData.collectionSlots} onEnterSlot={nodeData.onEnterSlot} /> : null}
+      </span>
+    </> : !ownsLabel ? <small className="wf-bpmn-caption" style={bpmnAppearanceLabelStyle(descriptor.appearance)}>{label}</small> : null}
+  </span>;
 }

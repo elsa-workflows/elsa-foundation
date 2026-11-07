@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -27,6 +28,14 @@ internal static class BpmnAuthoredDirectProjection
         try
         {
             var state = ReadState(version);
+            if (state?.RootActivity is { Structure: { Kind: Process.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion } } completeSource)
+            {
+                // Assess the complete document before the legacy direct DTO can discard any syntax.
+                var diagnostics = BpmnDocumentAdmission.Assess(completeSource);
+                var reason = diagnostics.Count == 0 ? "The complete-source direct human/service profile is not qualified; native and direct bindings cannot be reinterpreted."
+                    : string.Join("; ", diagnostics.Select(item => $"{item.Code} at {item.SourcePath}: {item.Message}"));
+                throw new BpmnModelValidationException($"BPMN source '{completeSource.NodeId}' cannot be directly published: {reason}");
+            }
             if (state is null || state.Variables is null || state.Inputs is null || state.Outputs is null ||
                 state.Variables.Any() || state.Inputs.Any() || state.Outputs.Any() || state.StrategyOptions is not null)
                 throw new BpmnModelValidationException("Direct authored BPMN currently requires a closed workflow without variables or strategy overrides.");
@@ -35,6 +44,7 @@ internal static class BpmnAuthoredDirectProjection
                 root.Inputs is null || root.Outputs is null || root.Inputs.Any() || root.Outputs.Any() ||
                 root.Structure is not { Kind: Process.StructureKind, SchemaVersion: Process.StructureSchemaVersion } structure)
                 throw new BpmnModelValidationException("Direct publication requires a supported root BpmnProcess without native arguments or placement overrides.");
+            BpmnLegacyStructureGuard.RejectCompleteSourceFields(structure.Payload);
             var authored = structure.Payload.Deserialize<BpmnAuthoredStructure>(Strict)
                 ?? throw new BpmnModelValidationException("The authored BPMN structure is missing.");
             if (authored.Activities.Count != 0 || authored.Pools.Count != 0 || authored.MessageFlows.Count != 0)

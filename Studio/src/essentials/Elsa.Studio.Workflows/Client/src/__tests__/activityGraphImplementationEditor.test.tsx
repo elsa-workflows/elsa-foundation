@@ -161,10 +161,11 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
 
   it("adds a stable root-outcome mapping and preserves existing mappings", () => {
     const onChange = vi.fn();
+    const value = implementationValue({
+      outcomeMappings: [{ sourceOutcomeReferenceKey: "approved", boundaryOutcomeReferenceKey: "approved-boundary" }]
+    });
     const rendered = renderEditor({
-      value: implementationValue({
-        outcomeMappings: [{ sourceOutcomeReferenceKey: "approved", boundaryOutcomeReferenceKey: "approved-boundary" }]
-      }),
+      value,
       onChange
     });
 
@@ -185,7 +186,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
           { sourceOutcomeReferenceKey: "rejected", boundaryOutcomeReferenceKey: "declined-boundary" }
         ]
       })
-    }));
+    }), value);
   });
 
   it("renders mapping controls as read-only when the draft is locked", () => {
@@ -202,6 +203,27 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     expect(buttonByText(rendered.container, "Remove connection").disabled).toBe(true);
   });
 
+  it("retains outcome choices after parent refusal and clears them after a later acknowledgement", () => {
+    const value = implementationValue({
+      outcomeMappings: [{ sourceOutcomeReferenceKey: "approved", boundaryOutcomeReferenceKey: "approved-boundary" }]
+    });
+    const onChange = vi.fn<StudioActivityDefinitionImplementationEditorProps["onChange"]>().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const rendered = renderEditor({ value, onChange });
+    const source = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Designer outcome']")!;
+    const boundary = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Activity outcome']")!;
+    change(source, "rejected"); change(boundary, "declined-boundary");
+    click(buttonByText(rendered.container, "Connect"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][1]).toEqual(value);
+    expect(source.value).toBe("rejected");
+    expect(boundary.value).toBe("declined-boundary");
+    expect([...rendered.container.querySelectorAll("button")].filter(button => button.textContent?.trim() === "Remove connection")).toHaveLength(1);
+    click(buttonByText(rendered.container, "Connect"));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange.mock.calls[1]).toEqual(onChange.mock.calls[0]);
+    expect(source.value).toBe(""); expect(boundary.value).toBe("");
+  });
+
   it("keeps schema 1 free of schema-2 mapping controls", () => {
     const rendered = renderEditor({ providerSchemaVersion: "1" });
 
@@ -210,11 +232,43 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
 });
 
 describe("ActivityGraphImplementationEditor shared designer", () => {
+  it("keeps a stale shared-Variables callback from replacing an acknowledged document or adding history", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const value = flowchartImplementationValue(), onChange = vi.fn();
+    const rendered = renderDesigner({ value, onChange });
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Variables")!);
+    click(buttonByText(rendered.container, "Add variable"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const changed = onChange.mock.calls[0][0];
+    expect(changed.payload.variables).toHaveLength(1);
+    expect(onChange.mock.calls[0][1]).toEqual(value);
+    // This legacy void-returning host has admitted the first edit without echoing props yet.
+    // The still-mounted Variables panel therefore holds the previous document as its baseline.
+    click(buttonByText(rendered.container, "Add variable"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
+    expect(onChange).toHaveBeenLastCalledWith(value, changed);
+    expect(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label").disabled).toBe(true);
+  });
+
+  it("does not record a shared-Variables edit when the canonical parent refuses it", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const value = flowchartImplementationValue(), onChange = vi.fn<StudioActivityDefinitionImplementationEditorProps["onChange"]>(() => false);
+    const rendered = renderDesigner({ value, onChange });
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Variables")!);
+    click(buttonByText(rendered.container, "Add variable"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][1]).toEqual(value);
+    expect(rendered.container.querySelector("input[aria-label='Variable name']")).toBeNull();
+    expect(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label").disabled).toBe(true);
+  });
+
   it("uses the shared workspace, treats the root as scope owner, and persists undo through onChange", () => {
     catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
     const onChange = vi.fn();
+    const value = flowchartImplementationValue();
     const rendered = renderDesigner({
-      value: flowchartImplementationValue(),
+      value,
       onChange
     });
 
@@ -243,14 +297,15 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
           })
         })
       })
-    }));
+    }), value);
+    const changed = onChange.mock.calls.at(-1)![0];
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Inputs");
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Outputs");
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Details");
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Version");
 
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
-    expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
+    expect(onChange).toHaveBeenLastCalledWith(value, changed);
   });
 
   it("canonicalizes direct inputs when the first composition is adopted from the palette", () => {
@@ -434,7 +489,8 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
   it("offers the shared empty-canvas picker and places the chosen activity", () => {
     catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
     const onChange = vi.fn();
-    const rendered = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind), onChange });
+    const value = flowchartImplementationValue(flowchartStructureKind);
+    const rendered = renderDesigner({ value, onChange });
 
     click(buttonByText(rendered.container, "Add activity"));
     const option = [...rendered.container.querySelectorAll<HTMLButtonElement>(".wf-connect-menu [role='option']")]
@@ -451,7 +507,7 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
           })
         })
       })
-    }));
+    }), value);
   });
 
   it("honours the cursor position when an activity is dropped onto the canvas", () => {
@@ -985,7 +1041,9 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
   it("requires a mapping for required outputs and adds one through a shared expression editor", async () => {
     expressionDescriptors = [{ type: "Input", displayName: "Public input", editingMode: "reference" }];
     const onChange = vi.fn();
+    const value = implementationValue();
     const rendered = renderEditor({
+      value,
       contract: {
         contractSchemaVersion: "1",
         inputs: [{
@@ -1021,7 +1079,7 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
           }
         }]
       })
-    }));
+    }), value);
   });
 
   it("allows an optional output to remain unmapped", () => {

@@ -1,0 +1,50 @@
+{
+  "name": "@elsa-workflows/studio-bpmn-js",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "types": "./src/module.tsx",
+  "exports": {
+    ".": "./src/module.tsx",
+    "./style.css": "./src/bpmnJsCanvas.css"
+  },
+  "publishConfig": {
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./style.css": "./dist/style.css"
+    }
+  },
+  "scripts": {
+    "build": "vite build && pnpm bundle:check",
+    "build:lib": "vite build --config vite.lib.config.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "notices": "node scripts/update-bpmn-js-notices.mjs",
+    "bundle:check": "node scripts/check-bundle-size.mjs"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-sdk": "workspace:*",
+    "bpmn-js": "18.31.1"
+  },
+  "peerDependencies": {
+    "@elsa-workflows/studio-workflows": "workspace:*",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@elsa-workflows/studio-workflows": "workspace:*",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "bpmn-moddle": "10.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.0",
+    "vite-plugin-dts": "^4.5.0",
+    "vitest": "^2.1.8",
+    "jsdom": "^25.0.1",
+    "@vitejs/plugin-react": "^5.0.0"
+  }
+}

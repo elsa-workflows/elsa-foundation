@@ -1,0 +1,28 @@
+# Tasks: Optional bpmn-js editor
+
+**Input**: [spec.md](spec.md), [plan.md](plan.md), canonical #3597.
+
+## M0 — Feasibility before production freeze
+
+- [x] T001 Settle exact claim, verify app identity, record owner scope, isolated branch and acceptance states on #3597.
+- [x] T002 Inventory native/direct/nested/reusable authoring, history, bindings, interchange, validation/publication and run inspection.
+- [x] T003 Record pinned upstream primary-source/license/API/dependency findings in `research.md` and review specification/plan before prototype code. Independent reviews identified profile/ID/raw-record/attribution requirements, incorporated before implementation.
+- [x] T004 [US1] Build identity-preserving projection/merge prototype (now extracted to `Extensions/BpmnJs/studio/Elsa.Studio.BpmnJs/Client/src/bpmnJsBridge.ts`); define/admit the experimental profile before import and reject malformed raw records/unsupported transitions/ID collisions. Cover bound Decision expressions, full child/listener/nested inventory, unknown fields, default paths and layout with meaningful mutation controls in the optional module's `src/__tests__/bpmnJsBridge.test.ts` (48 passed after real-modeler empty-plane correction; configuration/outcome/marker mutants fail).
+- [x] T005 [US1] Embed optional canvas in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx`, sharing canonical draft, selection/configuration/history and read-only gates. Keep contract provisional. `bpmnJsAuthoring.ts` reconciles exact baseline/scope and deletion side tables (14 focused cases); `bpmnJsCanvas.test.tsx` covers import/rejection/history transport. Native browser switching/persistence passes in light/dark; real-host execution remains T006.
+- [x] T006 [US1] Demonstrate both directions on owned composed Studio/Workbench using `Studio/tests/acceptance/bpmnJsPrototype.spec.ts` and `tools/ux-acceptance/run-bpmn-js-prototype.py`: save/reload, same-process publication, two-path execution/result/inspection and XML download. Exact clean source1296fd2cf witness8 passes2/2 with4 actual published runs, High→Edited high and declared Done→Nested low, strict references/identities/docking and0 uncaught page errors. Independent inspection accepts all18 PNG/ARIA pairs, including4 settled runtime captures and repaired framing/refusal notices. Original failed attempts remain failed. This establishes the desktop Light/schema1 representative profile only; optional404 console errors and the incomplete WorkflowRequest editor remain visible. Full-toolbox/current-head production UX and asset acceptance remain T010–T014.
+- [ ] T007 Review go/no-go, maintenance cost and consequential owner choices. Refine design/spec/tasks from actual prototype evidence before production freeze.
+
+## M1 — Production integration after feasible proof
+
+- [ ] T008 Integrate optional module/loading/consumer assets, saved preference and absent/incompatible capability recovery using existing composition.
+- [ ] T009 Complete Workflow and Activity Graph/nested surfaces, shared module contributions, coherent history/dirty/recovery, validation/publication/Test Drive and read-only/source-owned behavior.
+- [ ] T010 [US3] Implement full-toolbox canonical draft preservation and current-host execution admission in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/` and the reviewed BPMN Design/Interchange owning paths, coordinating #2736 and the existing execution-model owners. Replace temporary prototype edit restrictions with reviewed full-content retention and content-derived validation/publication blockers before typed lowering. Document internal and public XML fidelity separately; prove advanced drafts survive save/reload and editor switching without silent loss.
+- [ ] T011 [US1] Extend the integrated Elsa editor's `bpmn/BpmnElementNode.tsx`, `bpmn/BpmnElementInspector.tsx`, `bpmn/bpmnAdapter.ts`, palette and shared authoring operations to accurately represent and edit the full bpmn-js toolbox. Define the construct/configuration/DI matrix and prove advanced edits in both directions on Workflow and Activity Graph/nested surfaces. Do not substitute generic-task notation or a read-only fallback for missing modeling support; preserve actual permission/source-owned/historical read-only behavior.
+- [ ] T012 [US4] Complete theme/narrow/keyboard/focus/accessibility/attribution and actual composed-host network budgets; retain distributed copyright/permission and transitive notices in host and consumer packages. Update existing `Studio/docs/module-ui.md` and appropriate user/maintenance guidance.
+
+## M2 — Review, merge and resulting-main qualification
+
+- [ ] T013 Run affected suites as whole suites, meaningful red/green controls, optional package/consumer integration, architecture/maps and required current-head checks.
+- [ ] T014 Capture current-commit composed-host journeys/screenshots/traces with downloadable evidence and obtain independent UX acceptance. Preserve failed/incomplete states.
+- [ ] T015 Recheck live claims/open PRs, open one draft PR, post acceptance/gate evidence; run independent correctness/standards/acceptance review, fix/retest and request final review under current org rules.
+- [ ] T016 Merge only with applicable gates, qualify resulting main, update spec lifecycle and canonical issue/program bookkeeping. Do not close #3597 at prototype completion.

@@ -1,0 +1,108 @@
+.wf-bpmn-js {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--studio-canvas);
+  color: var(--studio-text);
+}
+
+.wf-bpmn-js-modeler {
+  flex: 1;
+  min-height: 320px;
+  min-width: 0;
+  --bpmn-font-family: var(--studio-font-ui);
+}
+
+.wf-bpmn-js .bio-theme-parent {
+  --bio-surface: var(--studio-canvas);
+  --bio-surface-overlay: var(--studio-surface-raised);
+  --bio-surface-subtle: var(--studio-surface);
+  --bio-surface-medium: var(--studio-surface-muted);
+  --bio-text: var(--studio-text);
+  --bio-text-subtle: var(--studio-text-muted);
+  --bio-text-subtlest: var(--studio-text-muted);
+  --bio-border: var(--studio-border);
+  --bio-border-disabled: var(--studio-border);
+  --bio-primary: var(--studio-accent);
+  --bio-primary-surface: var(--studio-accent-soft);
+  --bio-selected-surface: var(--studio-accent-soft);
+  --bio-selected-text: var(--studio-text);
+  --bio-focus: var(--studio-accent);
+  --bio-focus-surface: var(--studio-accent-soft);
+  --bio-canvas-accent: var(--studio-accent);
+  --bio-canvas-accent-subtle: var(--studio-accent-soft);
+  --bio-danger: var(--studio-danger);
+  --bio-danger-surface-subtle: var(--studio-surface);
+  --popup-font-family: var(--studio-font-ui);
+  --search-font-family: var(--studio-font-ui);
+  --hover-tooltip-font-family: var(--studio-font-ui);
+}
+
+.wf-bpmn-js-modeler:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: -2px;
+}
+
+.wf-bpmn-js-modeler > .djs-container {
+  min-height: inherit;
+}
+
+.wf-bpmn-js-notice,
+.wf-bpmn-js-mode {
+  margin: 0;
+  padding: .6rem .8rem;
+  border-bottom: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: .875rem;
+}
+
+.wf-bpmn-js-notice p {
+  margin: 0 0 .4rem;
+}
+
+.wf-bpmn-js-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.wf-bpmn-js-loading {
+  position: absolute;
+  top: .5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: .5rem .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  pointer-events: none;
+}
+
+.wf-bpmn-js[data-read-only] .djs-palette,
+.wf-bpmn-js[data-read-only] .djs-context-pad {
+  display: none;
+}
+
+.wf-bpmn-js[data-bpmn-js-state="loading"] .djs-palette,
+.wf-bpmn-js[data-bpmn-js-state="loading"] .djs-context-pad {
+  /* Retain measurable palette bounds for the first viewport fit while its tools are hidden. */
+  visibility: hidden;
+}
+
+.wf-bpmn-js:not([data-bpmn-js-state="ready"]) .wf-bpmn-js-modeler {
+  pointer-events: none;
+}
+
+/* Keep the upstream bpmn.io attribution in its own unobstructed canvas corner. */
+.wf-bpmn-js .bjs-powered-by {
+  z-index: 10;
+}
+
+.wf-bpmn-js .bjs-powered-by svg {
+  color: var(--studio-text);
+}

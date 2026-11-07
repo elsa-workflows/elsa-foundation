@@ -48,6 +48,17 @@ function clearActivityDefinitionRecoveryOnAuthSessionEnded() {
 
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
+export type { WorkflowCanvasEditorContext, WorkflowCanvasChange, WorkflowCanvasState } from "./graph-authoring/canvasEditorContract";
+export type { AuthoringCheckpointToken, AuthoringParentReceipt, AuthoringParticipantWork } from "./graph-authoring/authoringCheckpoint";
+export type { BpmnDocumentSessionSource, BpmnDocumentSessionAcknowledgement, BpmnDocumentSessionCommit, BpmnDocumentSessionAdmission } from "./bpmn/bpmnDocumentSessionHost";
+export type { BpmnDocumentCanvasEditorContext, BpmnDocumentCanvasSession, BpmnDocumentCanvasParticipant } from "./bpmn/bpmnDocumentSurfacePort";
+export type { BpmnDocumentSyntaxPlan } from "./bpmn/bpmnDocumentSyntaxChange";
+export type { ActivityNode, DesignMetadataRecord } from "./workflowTypes";
+export type { BpmnElement, BpmnSequenceFlow } from "./bpmn/bpmnTypes";
+export { loadBpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { BpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { BpmnDocumentCommand, BpmnDocumentTransaction, BpmnDocumentConfigurationChange, BpmnXmlAddress, BpmnScopeAddress,
+  BpmnDocumentSelection, BpmnBounds, BpmnPoint, ParsedBpmnDocument } from "./bpmn/bpmnDocument";
 export type { GraphPaletteElement } from "./graph-authoring/graphPaletteElements";
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
@@ -167,14 +178,14 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/activity-definitions",
         label: "Activity Definitions",
         workspace: activityDefinitionWorkspace,
-        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
+        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list(), canvasEditors: api.workflowDesigner.canvasEditors?.list() ?? [] })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",
         label: "Workflow definitions",
         workspace: workspaceResource("workflow-definition", "definition"),
-        component: ({ navigate }) => deferred("workflow definitions", <WorkflowManagementPage onOpenBpmnProcesses={() => navigate(qualifyStudioBackendPath("/workflows/bpmn"))} backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} runRelatedLinks={runRelatedLinks()} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: ({ navigate }) => deferred("workflow definitions", <WorkflowManagementPage onOpenBpmnProcesses={() => navigate(qualifyStudioBackendPath("/workflows/bpmn"))} backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} runRelatedLinks={runRelatedLinks()} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} workflowCanvasEditors={api.workflowDesigner.canvasEditors?.list() ?? []} runtime={api.runtime} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
