@@ -4,8 +4,11 @@ import { capabilityIds, hasCapabilityLink } from "../api/capabilities";
 import { listPublicationSlots, type PublicationSlot } from "../api/publishing";
 import { getExecutable } from "../api/runtime";
 import { RunWorkflowPicker } from "../workflow-editor/RunWorkflowPicker";
-import { directServiceBinding, directServicePatch } from "./bpmnDirectBinding";
+import { directServiceBinding, directServicePatch, type DirectWorkerInput } from "./bpmnDirectBinding";
 import type { BpmnElement } from "./bpmnTypes";
+import type { WorkflowExecutableDetails, WorkflowInput, WorkflowTestRunInputContract } from "../workflowTypes";
+import { isArgumentTypeCompatible } from "../workflowReferenceAuthoring";
+import { parseLiteralJson, serializeTriggerPayload } from "../standalone-triggers/json";
 
 interface Props {
   session: StudioBackendSession;
@@ -13,6 +16,7 @@ interface Props {
   element: BpmnElement;
   readOnly?: boolean;
   onChange(patch: Partial<BpmnElement>): void;
+  modelInputs?: WorkflowInput[];
 }
 
 function sessionScope(session: StudioBackendSession) {
@@ -22,10 +26,12 @@ function sessionScope(session: StudioBackendSession) {
 
 /** Uses the ordinary catalog/publication flow. Selecting a worker never creates or publishes one. */
 export function BpmnServiceBindingEditor(props: Props) {
-  return <ServiceBindingForm key={JSON.stringify([sessionScope(props.session), props.documentId, props.element])} {...props} />;
+  return <ServiceBindingForm key={JSON.stringify([sessionScope(props.session), props.documentId, props.element, props.modelInputs])} {...props} />;
 }
 
-function ServiceBindingForm({ session, element, readOnly = false, onChange }: Props) {
+interface WorkerInputDraft { kind: "Omit" | "Input" | "Literal"; name: string; literal: string }
+function savedInputDrafts(inputs: Record<string, DirectWorkerInput> | undefined): Record<string, WorkerInputDraft> { return Object.fromEntries(Object.entries(inputs ?? {}).map(([name, source]) => [name, source.kind === "Input" ? { kind: "Input", name: source.name, literal: "" } : { kind: "Literal", name: "", literal: serializeTriggerPayload(source.value) }])); }
+function ServiceBindingForm({ session, element, readOnly = false, onChange, modelInputs = [] }: Props) {
   const current = directServiceBinding(element);
   const scope = sessionScope(session);
   const context = session.context;
@@ -39,6 +45,12 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
   const [disposition, setDisposition] = useState<"FinalFault" | "HoldForRetry">(current?.faultPolicy.disposition ?? "HoldForRetry");
   const [attempts, setAttempts] = useState(current?.faultPolicy.maxAttempts ?? 3);
   const [businessErrorCode, setBusinessErrorCode] = useState(current?.businessErrorCode ?? "service-failure");
+  const [mappingContract, setMappingContract] = useState<WorkflowTestRunInputContract>();
+  const [inputDrafts, setInputDrafts] = useState(() => savedInputDrafts(current?.formatVersion === 2 ? current.inputs : undefined));
+  const [inputErrors, setInputErrors] = useState<Record<string, string>>({});
+  const mappingHeading = useRef<HTMLHeadingElement>(null);
+  const publicationButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (mappingContract) mappingHeading.current?.focus(); }, [mappingContract]);
   const generation = useRef(0);
   const mounted = useRef(true);
   const retireReads = useCallback(() => { generation.current++; }, []);
@@ -80,9 +92,9 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
 
   const chooseDefinition = (id: string) => {
     if (!active() || busy) return;
-    generation.current++; setSlots([]); setSlotId(""); setDefinitionId(id);
+    generation.current++; setSlots([]); setSlotId(""); setDefinitionId(id); setMappingContract(undefined); setInputDrafts({}); setInputErrors({});
   };
-  const applyPublication = async () => {
+  const applyPublication = async (finishMappings = false) => {
     if (!active() || busy || support !== "available") return;
     const slot = slots.find(value => value.slotId === slotId);
     const publication = slot?.publication;
@@ -101,8 +113,29 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
         || !reference.artifactVersion || reference.scope.toLowerCase() !== "published" || reference.deletedAt != null
         || reference.expiresAt != null && !(Date.parse(reference.expiresAt) > Date.now()))
         throw new Error("The selected publication no longer has its exact live published reference. Refresh the workflow selection.");
+      const contract = (executable as WorkflowExecutableDetails & { inputContract?: WorkflowTestRunInputContract | null }).inputContract;
+      if (contract && contract.version !== 1) throw new Error("This service publication uses an unsupported input contract.");
+      if (!finishMappings && contract?.inputs.length) { setMappingContract(contract); return; }
+      const inputs: Record<string, DirectWorkerInput> = Object.create(null) as Record<string, DirectWorkerInput>;
+      if (finishMappings) {
+        const errors = Object.create(null) as Record<string, string>;
+        if (!contract || serializeTriggerPayload(contract) !== serializeTriggerPayload(mappingContract)) throw new Error("The service input contract changed. Select its publication again.");
+        for (const input of contract.inputs) {
+          const draft = Object.hasOwn(inputDrafts, input.name) ? inputDrafts[input.name] : undefined;
+          if (!draft || draft.kind === "Omit") { if (input.isRequired && input.defaultValue == null) errors[input.name] = "Map this required service input or choose a publication with a default."; continue; }
+          if (draft.kind === "Input") {
+            const source = modelInputs.find(value => value.name === draft.name);
+            if (!source) errors[input.name] = "Choose an input declared by the current process document.";
+            else if (!isArgumentTypeCompatible(source.type, input.type.alias, input.type.collectionKind)) errors[input.name] = "The process input type is incompatible with this service input.";
+            else inputs[input.name] = { kind: "Input", name: source.name };
+          } else { try { inputs[input.name] = { kind: "Literal", value: parseLiteralJson(draft.literal) }; } catch { errors[input.name] = "Enter a valid JSON literal."; } }
+        }
+        for (const [name, draft] of Object.entries(inputDrafts)) if (draft.kind !== "Omit" && !contract.inputs.some(input => input.name === name)) errors[name] = "This mapping is absent from the selected service contract. Remove it before applying.";
+        setInputErrors(errors);
+        if (Object.keys(errors).length) { mappingHeading.current?.focus(); return; }
+      }
       const patch = directServicePatch(element, {
-        formatVersion: 1, kind: "nativeService", sourceReferenceId: reference.sourceReferenceId,
+        ...(Object.keys(inputs).length ? { formatVersion: 2 as const, inputs } : { formatVersion: 1 as const }), kind: "nativeService", sourceReferenceId: reference.sourceReferenceId,
         executable: { artifactId: executable.artifactId, artifactHash: executable.artifactHash, definitionId: reference.definitionId,
           definitionVersionId: reference.definitionVersionId, artifactVersion: reference.artifactVersion },
         businessErrorCode: businessErrorCode.trim(), faultPolicy: { formatVersion: 1, disposition, maxAttempts }
@@ -115,6 +148,7 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
 
   return <section aria-label="Published service workflow">
     {current ? <p>Retained service version {current.executable.artifactVersion}. Later publications do not change this binding.</p> : null}
+    {current?.formatVersion === 2 ? <section aria-label="Saved service input mappings"><h4>Saved service inputs</h4><dl>{Object.entries(current.inputs).map(([name, source]) => <div key={name}><dt>{name}</dt><dd>{source.kind === "Input" ? `Process input: ${source.name}` : `Configured JSON: ${serializeTriggerPayload(source.value)}`}</dd></div>)}</dl></section> : null}
     {readOnly ? <p className="wf-muted">This saved binding is read-only.</p> : <>
       {support === "available" ? <fieldset disabled={busy}>
         <legend>Choose a published service workflow</legend>
@@ -122,7 +156,7 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
         {loading ? <p role="status">Loading published versions…</p> : null}
         {definitionId && !loading && slots.length === 0 ? <p>No active publication is available. Publish this service workflow, then select it again.</p> : null}
         <label className="wf-form-field"><span>Publication</span><select aria-label="Service publication" value={slotId} disabled={loading || slots.length === 0}
-          onChange={event => setSlotId(event.target.value)}><option value="">Choose a publication</option>
+          onChange={event => { setSlotId(event.target.value); setMappingContract(undefined); setInputErrors({}); }}><option value="">Choose a publication</option>
           {slots.map(slot => <option key={slot.slotId} value={slot.slotId}>{slot.slotName}</option>)}
         </select></label>
         <label className="wf-form-field"><span>Technical failure</span><select aria-label="Service technical failure" value={disposition}
@@ -133,8 +167,19 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
           <input aria-label="Service maximum attempts" type="number" min={1} max={32} value={attempts} onChange={event => setAttempts(Number(event.target.value))} />
         </label> : null}
         <label className="wf-form-field"><span>Business error code</span><input aria-label="Service business error code" value={businessErrorCode} onChange={event => setBusinessErrorCode(event.target.value)} /></label>
-        <p className="wf-muted">The workflow must supply its own inputs. Publication validates its closed input contract. Retrying may repeat external effects.</p>
-        <button type="button" disabled={!slotId || busy || !businessErrorCode.trim() || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 32} onClick={() => void applyPublication()}>
+        {mappingContract ? <section aria-label="Service input mappings">
+          <h4 tabIndex={-1} ref={mappingHeading}>Map service workflow inputs</h4>
+          <p>Use declared inputs from this process document or configured JSON values. Publication validates the actual types. Retrying may repeat external effects.</p>
+          {mappingContract.inputs.map(input => { const draft = Object.hasOwn(inputDrafts, input.name) ? inputDrafts[input.name] : { kind: "Omit" as const, name: "", literal: "" }; const update = (patch: Partial<WorkerInputDraft>) => setInputDrafts(previous => ({ ...previous, [input.name]: { ...draft, ...patch } })); return <fieldset key={input.name}><legend>{input.name}{input.isRequired ? " · Required" : ""} · {input.type.alias}</legend>
+            <label className="wf-form-field"><span>Value source</span><select aria-label={`Service input ${input.name} source`} value={draft.kind} onChange={event => update({ kind: event.target.value as WorkerInputDraft["kind"] })}><option value="Omit">Use service default / omit</option><option value="Input">Declared process input</option><option value="Literal">Configured JSON value</option></select></label>
+            {draft.kind === "Input" ? <label className="wf-form-field"><span>Process input</span><select aria-label={`Process input for service ${input.name}`} value={draft.name} onChange={event => update({ name: event.target.value })}><option value="">Choose a declared process input</option>{draft.name && !modelInputs.some(value => value.name === draft.name) ? <option value={draft.name}>{draft.name} · Missing declaration</option> : null}{modelInputs.map(source => <option key={source.referenceKey} value={source.name} disabled={!isArgumentTypeCompatible(source.type, input.type.alias, input.type.collectionKind)}>{source.displayName || source.name} · {source.type.alias}</option>)}</select></label> : draft.kind === "Literal" ? <label className="wf-form-field"><span>JSON value</span><textarea aria-label={`JSON value for service ${input.name}`} value={draft.literal} onChange={event => update({ literal: event.target.value })} /></label> : null}
+            {Object.hasOwn(inputErrors, input.name) ? <p role="alert">{inputErrors[input.name]}</p> : null}
+          </fieldset>; })}
+          {Object.entries(inputDrafts).filter(([name, draft]) => draft.kind !== "Omit" && !mappingContract.inputs.some(input => input.name === name)).map(([name]) => <p key={name}>{name} is absent from this service contract. <button type="button" onClick={() => setInputDrafts(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => key !== name)))}>Remove obsolete mapping {name}</button></p>)}
+          <button type="button" disabled={busy} onClick={() => { setMappingContract(undefined); setInputErrors({}); setInputDrafts(savedInputDrafts(current?.formatVersion === 2 ? current.inputs : undefined)); queueMicrotask(() => publicationButton.current?.focus()); }}>Cancel input mapping</button>
+          <button type="button" disabled={busy} onClick={() => void applyPublication(true)}>{busy ? "Validating service inputs…" : "Apply service input mapping"}</button>
+        </section> : <p className="wf-muted">Select a publication to inspect its declared inputs. Publications without mapped inputs retain their existing binding format. Retrying may repeat external effects.</p>}
+        <button ref={publicationButton} type="button" disabled={!!mappingContract || !slotId || busy || !businessErrorCode.trim() || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 32} onClick={() => void applyPublication()}>
           {busy ? "Reading publication…" : "Use this service publication"}
         </button>
       </fieldset> : <p role="status">{support === "loading" ? "Checking service selection support…" : "This backend does not advertise authored service publication and its required paged workflow and executable reads."}</p>}

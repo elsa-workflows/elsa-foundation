@@ -1,17 +1,20 @@
 import type { BpmnElement } from "./bpmnTypes";
 import type { BpmnPin } from "../api/bpmnRuntime";
+import { parseTriggerResponse, serializeTriggerPayload } from "../standalone-triggers/json";
+import type { JsonValue } from "../standalone-triggers/types";
 
 export const directBindingProperty = "elsa.direct.binding";
 export const directHumanBinding = JSON.stringify({ formatVersion: 1, kind: "human", claimRequired: false });
 export type DirectHumanMode = "human" | "service" | "unbound" | "native" | "unsupported";
-export interface DirectServiceBinding {
-  formatVersion: 1;
+interface DirectServiceBindingBase {
   kind: "nativeService";
   sourceReferenceId: string;
   executable: BpmnPin;
   businessErrorCode: string;
   faultPolicy: { formatVersion: 1; disposition: "FinalFault" | "HoldForRetry"; maxAttempts: number };
 }
+export type DirectWorkerInput = { kind: "Input"; name: string } | { kind: "Literal"; value: JsonValue };
+export type DirectServiceBinding = DirectServiceBindingBase & ({ formatVersion: 1; inputs?: never } | { formatVersion: 2; inputs: Record<string, DirectWorkerInput> });
 
 function readBinding(raw: unknown): Record<string, unknown> | null {
   if (typeof raw !== "string" || raw.length > 16_384 || new TextEncoder().encode(raw).length > 16_384) return null;
@@ -31,25 +34,36 @@ export function directServiceBinding(element: BpmnElement): DirectServiceBinding
   if (element.elementType !== "serviceTask" || element.childNodeId || element.listenerNodeId) return null;
   const raw = element.properties?.[directBindingProperty];
   const binding = readBinding(raw);
-  if (!hasKeys(binding, ["formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy"])
-    || binding.formatVersion !== 1 || binding.kind !== "nativeService"
+  const version = binding?.formatVersion;
+  if (!hasKeys(binding, ["formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy", ...(version === 2 ? ["inputs"] : [])])
+    || binding.formatVersion !== 1 && binding.formatVersion !== 2 || binding.kind !== "nativeService"
     || !hasKeys(binding.executable, ["artifactId", "definitionId", "definitionVersionId", "artifactVersion", "artifactHash"])
     || !hasKeys(binding.faultPolicy, ["formatVersion", "disposition", "maxAttempts"])) return null;
   const policy = binding.faultPolicy;
   // Consume complete string tokens, including escaped quotes in values, before counting property keys.
   const keys = [...(raw as string).matchAll(/"(?:[^"\\]|\\.)*"\s*(:)?/g)].filter(token => token[1] === ":");
-  if (keys.length !== 14 || ![binding.sourceReferenceId, binding.businessErrorCode, ...Object.values(binding.executable)]
+  if (keys.length !== countKeys(binding) || ![binding.sourceReferenceId, binding.businessErrorCode, ...Object.values(binding.executable)]
     .every(value => typeof value === "string" && !!value.trim()) || policy.formatVersion !== 1
     || !["FinalFault", "HoldForRetry"].includes(String(policy.disposition)) || !Number.isInteger(policy.maxAttempts)
     || (policy.maxAttempts as number) < 1 || (policy.maxAttempts as number) > 32
     || policy.disposition === "FinalFault" && policy.maxAttempts !== 1) return null;
-  return binding as unknown as DirectServiceBinding;
+  if (version === 2 && (!binding.inputs || typeof binding.inputs !== "object" || Array.isArray(binding.inputs)
+    || Object.keys(binding.inputs).length === 0 || Object.entries(binding.inputs).some(([name, source]) => !name.trim()
+      || !(hasKeys(source, ["kind", "name"]) && source.kind === "Input" && typeof source.name === "string" && !!source.name.trim()
+        || hasKeys(source, ["kind", "value"]) && source.kind === "Literal")))) return null;
+  return parseTriggerResponse<DirectServiceBinding>(raw as string);
+}
+
+function countKeys(value: unknown): number {
+  if (Array.isArray(value)) return value.reduce((total, item) => total + countKeys(item), 0);
+  if (!value || typeof value !== "object") return 0;
+  return Object.entries(value).reduce((total, [, item]) => total + 1 + countKeys(item), 0);
 }
 
 export function directServicePatch(element: BpmnElement, binding: DirectServiceBinding): Partial<BpmnElement> {
   const current = directHumanMode(element);
   if (current === "native" || current === "unsupported") return {};
-  const properties = { ...element.properties, [directBindingProperty]: JSON.stringify(binding) };
+  const properties = { ...element.properties, [directBindingProperty]: serializeTriggerPayload(binding) };
   const candidate = { ...element, elementType: "serviceTask", properties };
   return directServiceBinding(candidate) ? { elementType: "serviceTask", properties } : {};
 }

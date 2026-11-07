@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -50,7 +51,10 @@ public sealed class EfWorkflowExecutionStateStore(
         Validate(state);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        if (state.IngressOrigin is null && state.ModelWorkOrigin?.IngressOrigin is null)
+            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        else if (!HasBoundIngressScope(state, scope))
+            throw new InvalidDataException("The ingress workflow changed physical scope.");
         var id = CreateId(scope, state.WorkflowExecutionId);
         context.ChangeTracker.Clear();
         try
@@ -61,6 +65,11 @@ public sealed class EfWorkflowExecutionStateStore(
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null)
+            {
+                if (row is null) throw new NotSupportedException("Ingress workflows require initial admission through the conditional runtime checkpoint.");
+                NativeIngressCheckpointAuthority.ValidateContinuation(state, ReadChecked(row, scope, state.WorkflowExecutionId));
+            }
             var writeVersion = ModelWorkWriteVersion.For(context, state, row?.SchemaVersion);
             if (row is null && state.ModelWorkOrigin is not null)
                 throw new NotSupportedException("Model-owned native workers require initial admission through the conditional runtime checkpoint.");
@@ -700,7 +709,7 @@ public sealed class EfWorkflowExecutionStateStore(
                     [RuntimeMetadataKeys.OwnershipFencingToken] = "0",
                     [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
                 });
-            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(tombstone, scope, 1));
+            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(context, tombstone, scope, 1));
             return true;
         }
 
@@ -721,7 +730,7 @@ public sealed class EfWorkflowExecutionStateStore(
             current.InterruptedExecution,
             current.PendingPostCommitIntentIds,
             metadata);
-        EfExecutionLivenessStateStore.Copy(row, revoked, scope, checked(row.Revision + 1));
+        EfExecutionLivenessStateStore.Copy(context, row, revoked, scope, checked(row.Revision + 1));
         return false;
     }
 
@@ -801,6 +810,8 @@ public sealed class EfWorkflowExecutionStateStore(
         if (!string.IsNullOrEmpty(row.ContentJson))
         {
             var previous = ReadChecked(row, scope, state.WorkflowExecutionId);
+            if (previous.IngressOrigin is not null)
+                NativeIngressCheckpointAuthority.ValidateContinuation(state, previous);
             if (previous.ModelWorkOrigin is { } origin ? !origin.IsEquivalentTo(state.ModelWorkOrigin) : state.ModelWorkOrigin is not null)
                 throw new InvalidOperationException("A native worker cannot replace or discard its immutable model invocation address.");
         }
@@ -839,6 +850,18 @@ public sealed class EfWorkflowExecutionStateStore(
 
     internal static string CreateIdForAtomicParticipant(string scope, string id) => CreateId(scope, id);
 
+    // A stored typed origin is a read projection, never fresh admission authority. Both initial writers
+    // require the actual source/model proof in the same transaction; direct Save permits only exact continuations.
+    private static bool HasBoundIngressScope(WorkflowExecutionState state, string scope)
+    {
+        if (state.Partition?.Value != scope || state.RunKind != WorkflowRunKind.PublishedRun || state.TestScope is not null ||
+            state.ParentWorkflowExecutionId is not null || state.Authority is null) return false;
+        if (state.IngressOrigin is { } direct)
+            return direct.Scope.Value == scope && state.ModelWorkOrigin is null && state.PinnedSource is not null;
+        return state.ModelWorkOrigin is { IngressOrigin: { } parent } work && parent.Scope.Value == scope && work.Scope.Value == scope &&
+            work.WorkerExecutionId == state.WorkflowExecutionId && WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable);
+    }
+
     private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
         if (EfSchemaVersion.NotReadable(RuntimeWorkflowExecutionEfModule.Chain, row.SchemaVersion) || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
@@ -853,7 +876,10 @@ public sealed class EfWorkflowExecutionStateStore(
             throw new InvalidDataException("The persisted workflow execution state content is not valid current JSON.", exception);
         }
         Validate(state);
-        if (state.TenantId is not null && !StringComparer.Ordinal.Equals(state.TenantId, scope))
+        if ((state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null) &&
+            Version.Parse(row.SchemaVersion) < Version.Parse(RuntimeWorkflowExecutionEfModule.IngressSchemaVersion))
+            throw new InvalidDataException("The persisted ingress workflow requires its protected schema version.");
+        if (state.TenantId is not null && !StringComparer.Ordinal.Equals(state.TenantId, scope) && !HasBoundIngressScope(state, scope))
             throw new InvalidDataException("The persisted workflow execution tenant does not match its persistence scope.");
         if (!StringComparer.Ordinal.Equals(state.WorkflowExecutionId, expectedId) || !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, Encode(expectedId)) || row.WorkflowExecutionIdHash != Hash(expectedId) || row.WorkflowExecutionIdOrderKey != OrderKey(expectedId))
             throw new InvalidDataException("The persisted workflow execution identity projection does not match its content.");

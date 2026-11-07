@@ -3,7 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowInstanceDetailsPage, WorkflowInstancesPage } from "../workflow-editor/pages";
+import { WorkflowInstanceDetailsPage } from "../workflow-editor/WorkflowInstanceDetailsPage";
+import { WorkflowInstancesPage } from "../workflow-editor/pages";
 import {
   clampRunDetailInspectorWidth,
   getRunDetailInspectorMaxWidth,

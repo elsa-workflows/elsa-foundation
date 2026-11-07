@@ -27,11 +27,11 @@ public sealed class EfExecutionLivenessStateStore(
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
         if (entity is null)
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(ToEntity(context, state, scope, 1));
         else
         {
             EnsureNotDeletionTombstone(Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId));
-            Copy(entity, state, scope, checked(entity.Revision + 1));
+            Copy(context, entity, state, scope, checked(entity.Revision + 1));
         }
 
         try
@@ -68,7 +68,7 @@ public sealed class EfExecutionLivenessStateStore(
         {
             if (entity is not null)
                 return new(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(ToEntity(context, state, scope, 1));
         }
         else
         {
@@ -79,7 +79,7 @@ public sealed class EfExecutionLivenessStateStore(
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
             if (IsDeletionTombstone(current))
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
-            Copy(entity, state, scope, checked(expectedRevision + 1));
+            Copy(context, entity, state, scope, checked(expectedRevision + 1));
         }
 
         try
@@ -477,7 +477,7 @@ public sealed class EfExecutionLivenessStateStore(
         return tracking ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
-    internal static ExecutionLivenessStateEntity ToEntity(ExecutionLivenessState state, string scope, long revision)
+    internal static ExecutionLivenessStateEntity ToEntity(RuntimeDbContext context, ExecutionLivenessState state, string scope, long revision)
     {
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
@@ -495,20 +495,20 @@ public sealed class EfExecutionLivenessStateStore(
             HeartbeatOwnerId = heartbeat is null ? null : EfRuntimeOperationalStoreSupport.Encode(heartbeat.OwnerId),
             HeartbeatRecordedAtUtcTicks = heartbeat?.RecordedAt.UtcTicks,
             HasOperationalOwner = lease is not null || heartbeat is not null,
-            ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
+            ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeSchemaWriteVersion.Operational(context), Revision = revision
         };
     }
 
-    internal static void Copy(ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
+    internal static void Copy(RuntimeDbContext context, ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
     {
-        var replacement = ToEntity(state, scope, revision);
+        var replacement = ToEntity(context, state, scope, revision);
         row.Id = replacement.Id; row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash;
         row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey;
         row.OperationalStateId = replacement.OperationalStateId; row.OperationalStateIdHash = replacement.OperationalStateIdHash; row.OperationalStateIdOrderKey = replacement.OperationalStateIdOrderKey;
         row.InterruptedStatus = replacement.InterruptedStatus; row.InterruptedAtUtcTicks = replacement.InterruptedAtUtcTicks;
         row.LeaseOwnerId = replacement.LeaseOwnerId; row.LeaseAcquiredAtUtcTicks = replacement.LeaseAcquiredAtUtcTicks; row.LeaseExpiresAtUtcTicks = replacement.LeaseExpiresAtUtcTicks;
         row.HeartbeatOwnerId = replacement.HeartbeatOwnerId; row.HeartbeatRecordedAtUtcTicks = replacement.HeartbeatRecordedAtUtcTicks; row.HasOperationalOwner = replacement.HasOperationalOwner;
-        row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion); row.Revision = revision;
     }
 
     // Internal checkpoint staging uses the same envelope/projection validation before touching the ownership fence.

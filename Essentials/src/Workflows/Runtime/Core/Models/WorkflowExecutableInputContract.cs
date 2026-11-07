@@ -43,6 +43,7 @@ public sealed class WorkflowExecutableInputContract
 
     /// <summary>The canonical declared workflow inputs, ordered by ordinal name.</summary>
     public IReadOnlyCollection<WorkflowDeclaredInput> Inputs { get; }
+
 }
 
 /// <summary>

@@ -85,6 +85,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             workItem, "ResumeBookmark", "resume bookmark payload", PayloadValidationParamNames);
         await using var scope = await _serviceScopeFactory.CreateAsyncScopeAsync(persistenceScope);
         var serviceProvider = scope.ServiceProvider;
+        if (resumePayload.IngressWaitOrigin is { } origin)
+        {
+            var ingress = serviceProvider.GetService<IRuntimeIngressDeliveryStore>()
+                ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.ingress.wait-unsupported", "The physical saved wait source is unavailable.");
+            var committed = await ReadResumeStateAsync(() => ingress.ReadCommittedWaitAsync(origin, cancellationToken), resumePayload, cancellationToken);
+            RuntimeIngressWaitCommand.ValidateWorkItem(committed, workItem);
+            var access = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>();
+            access.Current.EnsureScope(origin.Scope);
+        }
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var bookmarkStateStore = serviceProvider.GetRequiredService<IBookmarkStateStore>();
         var bookmarkConsumptionCheckpointService = serviceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
@@ -153,7 +162,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.scope-unavailable", "Exact resume persistence access is unavailable.");
             var execution = await ReadResumeStateAsync(() => executions.FindAsync(workItem.WorkflowExecutionId, cancellationToken), resumePayload, cancellationToken)
                 ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
-            access.EnsureTenantScope(execution.TenantId);
+            // External source authority binds tenant independently of its opaque physical scope.
+            // The immutable source read and canonical command validation above verify the exact captured tenant.
+            if (resumePayload.IngressWaitOrigin is null) access.EnsureTenantScope(execution.TenantId);
             if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), _timeProvider.GetUtcNow())) return;
         }
         if ((bookmark is not null || hasClaimedResume) &&
@@ -259,6 +270,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 resumePayload,
                 state,
                 triggerDelivery);
+            if (resumePayload.IngressWaitOrigin is { } origin)
+            {
+                var committed = await ReadResumeStateAsync(() => serviceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>()
+                    .ReadCommittedWaitAsync(origin, cancellationToken), resumePayload, cancellationToken);
+                RuntimeIngressWaitCommand.ValidateWorkItem(committed, workItem);
+                var metadata = activationClaim.State.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                metadata[RuntimeIngressWaitCommand.AcceptanceSealMetadataKey] = committed.Seal.Fingerprint;
+                activationClaim = activationClaim with { State = activationClaim.State with { Metadata = RuntimeModelMetadata.Snapshot(metadata) } };
+            }
             try
             {
                 await ReadResumeStateAsync(() => bookmarkConsumptionCheckpointService.CommitAsync(

@@ -78,6 +78,63 @@ class VerdictTests(unittest.TestCase):
                     target['tests'][0]['results'][0]['attachments'].remove(attachment)
                     with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
 
+    def trigger_report(self):
+        specs = []
+        for journey, captures in acceptance.TRIGGER_CAPTURES.items():
+            tests = []
+            for project in acceptance.TRIGGER_PROJECTS:
+                mode = project.removeprefix('desktop-').removeprefix('narrow-').removeprefix('compact-')
+                width = 320 if project == 'compact-light' else 360 if project.startswith('narrow-') else 1440
+                evidence = self.root / f'{len(specs)}-{project}.json'
+                evidence.write_text(json.dumps({'kind': 'composed-source', 'sourceSha': 'candidate', 'journey': journey,
+                    'project': project, 'requests': [{'method': 'GET', 'path': '/runtime/standalone-triggers', 'status': 200}],
+                    'observed': ['actual API result inspected'], 'unverified': [],
+                    'captures': [{'name': name, 'viewport': {'width': width}, 'mode': mode, 'palette': 'meridian'} for name in captures]}))
+                attachments = [{'name': name, 'path': str(self.artifact)} for name in
+                    ['trace'] + [f'{capture}.{suffix}' for capture in captures for suffix in ('png', 'aria.yml')]]
+                attachments.append({'name': 'standalone-evidence.json', 'path': str(evidence)})
+                tests.append({'projectName': project, 'expectedStatus': 'passed', 'status': 'expected',
+                              'results': [{'status': 'passed', 'attachments': attachments}]})
+            specs.append({'title': journey, 'tests': tests})
+        return {'suites': [{'specs': specs}]}
+
+    def test_trigger_inventory_is_finite_and_separate_from_existing(self):
+        report = self.trigger_report()
+        self.assertEqual(49, acceptance.verdict(report, self.root, 'standalone-triggers', 'candidate'))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'all', 'candidate')
+        with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, 'standalone-triggers', 'candidate')
+
+    def test_missing_trigger_boundary_stays_incomplete_even_when_browser_passes(self):
+        for change in ('gap', 'capture', 'capture-metadata'):
+            with self.subTest(change=change):
+                report = self.trigger_report()
+                attachments = report['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments']
+                evidence = Path(attachments[-1]['path'])
+                state = json.loads(evidence.read_text())
+                if change == 'gap': state['unverified'] = [{'state': 'after-seal restart', 'reason': 'No actual process restart occurred'}]
+                if change == 'capture':
+                    attachments.pop(1)
+                    state['captures'].pop(0)
+                if change == 'capture-metadata': state['captures'].pop()
+                evidence.write_text(json.dumps(state))
+                with self.assertRaises(acceptance.IncompleteAcceptanceError):
+                    acceptance.verdict(report, self.root, 'standalone-triggers', 'candidate')
+
+    def test_trigger_evidence_rejects_stale_source_and_unexplained_or_mismatched_states(self):
+        for change in ('source', 'unexplained', 'viewport', 'mode', 'missing-unverified', 'no-requests'):
+            with self.subTest(change=change):
+                report = self.trigger_report()
+                evidence = Path(report['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments'][-1]['path'])
+                state = json.loads(evidence.read_text())
+                if change == 'source': state['sourceSha'] = 'stale'
+                if change == 'unexplained': state['unverified'] = [{'state': 'missing'}]
+                if change == 'viewport': state['captures'][0]['viewport']['width'] = 3600
+                if change == 'mode': state['captures'][0]['mode'] = 'unrecorded'
+                if change == 'missing-unverified': del state['unverified']
+                if change == 'no-requests': state['requests'] = []
+                evidence.write_text(json.dumps(state))
+                with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'standalone-triggers', 'candidate')
+
     def test_stale_development_overlays_never_reach_owned_content_root(self):
         project = self.root / 'source/Host.csproj'
         project.parent.mkdir()

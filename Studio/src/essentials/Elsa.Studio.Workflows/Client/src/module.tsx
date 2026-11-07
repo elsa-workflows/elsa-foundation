@@ -17,6 +17,7 @@ import {
 } from "./workflowTestStimulusEditors";
 import { registerWorkflowAgent } from "./workflowAgent";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
+import type { WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
 const BpmnWorkflowsPage = lazy(() => import("./bpmn/BpmnWorkflowsPage").then(module => ({ default: module.BpmnWorkflowsPage })));
@@ -25,12 +26,14 @@ const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
 const WorkflowExecutableInspectorPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutableInspectorPage })));
 const WorkflowInstancesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstancesPage })));
-const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
+const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/WorkflowInstanceDetailsPage").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
 const ActivityDefinitionsPage = lazy(() => import("./ActivityDefinitionsPage").then(module => ({ default: module.ActivityDefinitionsPage })));
 const ActivityUpgradeWorkbenchPage = lazy(() => import("./ActivityUpgradeWorkbenchPage").then(module => ({ default: module.ActivityUpgradeWorkbenchPage })));
 const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").then(module => ({ default: module.Elsa3ReusableImportPage })));
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
+const StandaloneTriggersRoute = lazy(() => import("./standalone-triggers/TriggersRoute").then(module => ({ default: module.TriggersRoute })));
+const StandaloneWorkflowTriggersPanel = lazy(() => import("./standalone-triggers/Subscriptions").then(module => ({ default: module.WorkflowTriggersPanel })));
 
 // register() has no host-provided teardown to unregister this listener, and it can run more than once
 // (module reloads, tests). Keeping the handler as a stable module-level reference makes repeat
@@ -101,6 +104,11 @@ export function register(api: ElsaStudioModuleApi) {
   const runRelatedLinks = () => api.workflowRunRelatedLinks?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
+  api.workflowDesigner.panels.add({
+    id: "workflows.standalone-triggers", title: "Triggers", side: "right", order: 15,
+    supportedResourceKinds: ["workflow-definition"],
+    component: ({ context }) => deferred("workflow triggers", <StandaloneWorkflowTriggersPanel api={api} context={context as WorkflowDesignerPanelContext} />)
+  });
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
@@ -127,11 +135,18 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
         { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "more", order: 25 },
+        { id: "workflows-triggers", requiresBackend: [{ id: "elsa.api.standalone-triggers", contractVersion: "1", relations: ["triggers"] }], title: "Triggers", path: "/workflows/triggers", placement: "more", order: 35 },
         { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
         { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
       ]
     },
     routes: [
+      ...([ ["list", "/workflows/triggers", "Triggers"], ["create", "/workflows/triggers/new", "Create trigger"], ["delivery", "/workflows/triggers/deliveries/:deliveryId", "Trigger delivery"], ["details", "/workflows/triggers/:triggerId", "Trigger details"] ] as const).map(([view, path, label]) => ({
+        id: `workflows-triggers-${view}`, path, label,
+        requiresBackend: [{ id: "elsa.api.standalone-triggers", contractVersion: "1", relations: [view === "delivery" ? "delivery" : "triggers"] }],
+        workspace: { resourceKey: (location: URL) => view === "details" || view === "delivery" ? `standalone-trigger-${view}:${location.pathname.split("/").at(-1)}` : null },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("standalone triggers", <StandaloneTriggersRoute api={api} view={view} navigate={navigate} />)
+      })),
       ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "Create workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
         id: `workflows-tags-${view}`,
         requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],

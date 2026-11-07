@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// transitions use the row revision for optimistic CAS, while consumption deliberately fences on owner and token so
 /// a renewal remains consumable by its original claimant.
 /// </remarks>
-public sealed class EfSchedulerWorkQueueStore(
+public sealed partial class EfSchedulerWorkQueueStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection,

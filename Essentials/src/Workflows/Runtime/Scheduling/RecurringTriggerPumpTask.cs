@@ -1,6 +1,7 @@
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Elsa.Workflows.Runtime.Services.Claims;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +77,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
     private readonly IWorkflowTriggerBindingStore? _bindingStore;
     private readonly IStimulusRouter? _router;
     private readonly IRecurringScheduleCalculator? _calculator;
+    private readonly IReadOnlyList<IStandaloneScheduleSource> _resourceSources = [];
     private readonly IOptions<RecurringTriggerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly string _claimOwnerId = $"recurring-trigger-pump:{Guid.NewGuid():N}";
@@ -114,6 +116,12 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         _calculator = calculator;
     }
 
+    /// <summary>Direct host seam for the same pump with its installed resource-owned source module.</summary>
+    public RecurringTriggerPumpTask(IRecurringTriggerScheduleStore store, IWorkflowTriggerBindingStore bindingStore,
+        IStimulusRouter router, IRecurringScheduleCalculator calculator, IOptions<RecurringTriggerPumpOptions> options,
+        TimeProvider timeProvider, ILogger<RecurringTriggerPumpTask> logger, IStandaloneScheduleSource resourceSource)
+        : this(store, bindingStore, router, calculator, options, timeProvider, logger) => _resourceSources = [resourceSource];
+
     private RecurringTriggerPumpTask(
         IOptions<RecurringTriggerPumpOptions> options,
         TimeProvider timeProvider,
@@ -141,7 +149,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 
         if (_scopeRunner is null)
         {
-            await SweepAsync(new PersistenceScope(PersistenceScope.DefaultValue), _store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
+            await SweepAsync(new PersistenceScope(PersistenceScope.DefaultValue), _store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken, resourceSources: _resourceSources);
         }
         else
         {
@@ -157,7 +165,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                     now,
                     operationCancellationToken,
                     operationScope.ServiceProvider.GetService<IPersistenceOperationScopeFactory>(),
-                    operationScope.ServiceProvider.GetService<IRuntimeAdmissionLoadSignal>());
+                    operationScope.ServiceProvider.GetService<IRuntimeAdmissionLoadSignal>(),
+                    operationScope.ServiceProvider.GetServices<IStandaloneScheduleSource>().ToArray());
             }, cancellationToken);
         }
     }
@@ -179,7 +188,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         DateTimeOffset now,
         CancellationToken cancellationToken,
         IPersistenceOperationScopeFactory? scopeFactory = null,
-        IRuntimeAdmissionLoadSignal? loadSignal = null)
+        IRuntimeAdmissionLoadSignal? loadSignal = null,
+        IReadOnlyList<IStandaloneScheduleSource>? resourceSources = null)
     {
         var claims = await store.ClaimDueAsync(
             new RecurringTriggerOccurrenceClaimRequest(_claimOwnerId, now, options.ClaimVisibilityTimeout, options.MaxSchedulesPerTick),
@@ -207,7 +217,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                                 scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
                                 scope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
                                 scope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
-                                lease, claim, options, now, ct, loadSignal, keepRenewing: true))
+                                lease, claim, options, now, ct, loadSignal, keepRenewing: true,
+                                resourceSources: scope.ServiceProvider.GetServices<IStandaloneScheduleSource>().ToArray(), persistenceScope: persistenceScope))
                             Interlocked.Increment(ref fired);
                     }
                 });
@@ -218,7 +229,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (await FireAsync(store, bindingStore, router, calculator, lease, claim, options, now, cancellationToken,
-                        loadSignal, keepRenewing: scopeFactory is not null))
+                        loadSignal, keepRenewing: scopeFactory is not null, resourceSources: resourceSources, persistenceScope: persistenceScope))
                     fired++;
             }
         }
@@ -240,16 +251,26 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         DateTimeOffset now,
         CancellationToken cancellationToken,
         IRuntimeAdmissionLoadSignal? loadSignal = null,
-        bool keepRenewing = false)
+        bool keepRenewing = false,
+        IReadOnlyList<IStandaloneScheduleSource>? resourceSources = null,
+        PersistenceScope? persistenceScope = null)
     {
         var schedule = claim.Schedule;
         DateTimeOffset? next;
         try
         {
-            next = calculator.ComputeNext(schedule.Kind, schedule.Expression, now);
+            next = schedule.Resource is { } resource
+                ? calculator.ComputeNext(schedule.Kind, schedule.Expression, now, resource.TimeZoneId)
+                : calculator.ComputeNext(schedule.Kind, schedule.Expression, now);
         }
         catch (Exception exception)
         {
+            if (schedule.Resource is not null)
+            {
+                Logger.LogError(exception, "Resource schedule '{ScheduleId}' cannot calculate its next firing; its one occurrence is retained for retry", schedule.ScheduleId);
+                await ReleaseAsync(store, claim, options, now, cancellationToken);
+                return false;
+            }
             // A schedule whose expression no longer parses cannot advance; drop it so it does not jam the sweep.
             Logger.LogError(exception, "Recurring schedule '{ScheduleId}' has an invalid expression; deleting it", schedule.ScheduleId);
             await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
@@ -261,6 +282,16 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         async ValueTask<RouteOutcome> RouteChargedAsync(CancellationToken ct)
         {
             using var charge = loadSignal is { HasAmbientCharge: false } ? loadSignal.OpenCharge() : null;
+            if (schedule.Resource is not null)
+            {
+                var matches = (resourceSources ?? []).Where(source => source.Supports(schedule.Resource.SourceTypeKey, schedule.Resource.SourceFamily)).ToArray();
+                if (matches.Length != 1) throw new NotSupportedException("The resource schedule requires exactly one installed owner for its source family.");
+                var accepted = await matches[0].AdmitAsync(persistenceScope ?? schedule.Resource.Scope, claim, ct);
+                if (accepted.Item.StandaloneIngress is null || accepted.Item.SubscriptionDelivery?.Recipients.Count is not > 0)
+                    throw new InvalidDataException("A resource occurrence cannot advance without a positive accepted source cohort.");
+                StandaloneScheduleAuthority.Validate(claim, accepted.Item.StandaloneIngress);
+                return RouteOutcome.Routed;
+            }
             return await RouteAsync(bindingStore, router, schedule, ct);
         }
         // Custom direct hosts may share the renewal store's context with routing, so retain renew-before-only there.
@@ -281,7 +312,11 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                     "Recurring schedule '{ScheduleId}' start dispatch for occurrence {Occurrence} threw; the occurrence is kept and retried after backoff",
                     schedule.ScheduleId,
                     schedule.NextOccurrence);
-                await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
+                var failureReason = schedule.Resource is null ? (RecurringTriggerScheduleFailureReason?)null
+                    : run.Exception is StandaloneTriggerAdmissionRefusedException { Code: "no-eligible-subscribers" }
+                        ? RecurringTriggerScheduleFailureReason.NoEligibleSubscribers
+                        : RecurringTriggerScheduleFailureReason.AdmissionUnavailable;
+                await ReleaseAsync(store, run.Claim, options, now, cancellationToken, failureReason);
                 return false;
         }
 
@@ -308,6 +343,22 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                 schedule.ExecutableNodeId);
             await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
             return false;
+        }
+
+        if (schedule.Resource is { } owner)
+        {
+            try { next = calculator.ComputeNext(schedule.Kind, schedule.Expression, _timeProvider.GetUtcNow(), owner.TimeZoneId)?.ToUniversalTime(); }
+            catch (Exception exception)
+            {
+                Logger.LogError(exception, "Resource schedule '{ScheduleId}' accepted its frozen cohort but cannot advance; retry retains that same source key", schedule.ScheduleId);
+                await ReleaseAsync(store, run.Claim, options, _timeProvider.GetUtcNow(), cancellationToken);
+                return false;
+            }
+            if (next is null)
+            {
+                if (!await store.ExhaustClaimAsync(run.Claim, cancellationToken)) LogClaimLost(run.Claim, "exhaust resource occurrence", null);
+                return true;
+            }
         }
 
         if (next is null)
@@ -356,8 +407,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
             return RouteOutcome.NoOwnedBinding;
 
         var request = new StimulusDispatchRequest(
-            stimulusType: schedule.StimulusType,
-            stimulusHash: schedule.StimulusHash,
+            stimulusType: schedule.StimulusType!,
+            stimulusHash: schedule.StimulusHash!,
             mode: StimulusRoutingMode.StartOnly,
             idempotencyKey: schedule.BuildOccurrenceKey(),
             requestedBy: PumpRequestedBy,
@@ -374,10 +425,14 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         RecurringTriggerOccurrenceClaim claim,
         RecurringTriggerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RecurringTriggerScheduleFailureReason? failureReason = null)
     {
         var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, checked(claim.FailureCount + 1));
-        if (!await store.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken))
+        var released = failureReason is { } reason
+            ? await store.ReleaseClaimWithFailureAsync(claim, now.Add(delay), reason, cancellationToken)
+            : await store.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken);
+        if (!released)
             LogClaimLost(claim, "release", exception: null);
     }
 
@@ -399,7 +454,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         RecurringTriggerSchedule schedule,
         CancellationToken cancellationToken)
     {
-        var matches = await bindingStore.ListAllByStimulusAsync(schedule.StimulusType, schedule.StimulusHash, cancellationToken);
+        var matches = await bindingStore.ListAllByStimulusAsync(schedule.StimulusType!, schedule.StimulusHash!, cancellationToken);
         return matches
             .Where(binding =>
                 StringComparer.Ordinal.Equals(binding.ArtifactId, schedule.ArtifactId) &&

@@ -806,6 +806,9 @@
   <Folder Name="/Essentials/tests/Workflows/Runtime/Api/">
     <Project Path="Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Runtime/Fixtures/">
+    <Project Path="Essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Runtime/Http/">
     <Project Path="Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
   </Folder>

@@ -162,4 +162,6 @@ public static class BpmnModelProtocol
     public const string NativeWorkProfile = "foundation-native-work-v1";
     /// <summary>Format 6 claim-required human material; older hosts refuse this profile and its state frame.</summary>
     public const string ClaimsProfile = "foundation-direct-claims-v1";
+    /// <summary>Authored declared inputs and typed native worker input mappings, interpreted by a versioned envelope.</summary>
+    public const string InputsProfile = "foundation-inputs-v1";
 }

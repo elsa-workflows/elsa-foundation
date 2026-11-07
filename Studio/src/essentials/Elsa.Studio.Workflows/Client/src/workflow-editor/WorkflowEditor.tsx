@@ -34,6 +34,7 @@ import { WorkflowCodeView } from "../WorkflowCodeView";
 import { withWorkflowStartEnabled } from "../workflowStartEditing";
 import { getWorkflowStartEnabled } from "../workflowStart";
 import { WorkflowDataView, WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
@@ -994,6 +995,7 @@ export function WorkflowEditor({
     directHumanClaimsAvailable: directBpmnRoot && directClaimPublisherAvailable,
     directServiceSession: directBpmnRoot && directServicePublisherAvailable ? backendSession : undefined,
     directServiceDocumentId: draft ? `${definitionId}:${draft.id}` : undefined,
+    directServiceModelInputs: readWorkflowInputs(draft?.state.inputs),
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
     conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
