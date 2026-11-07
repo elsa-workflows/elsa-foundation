@@ -76,7 +76,7 @@ function variable(alias: string, collectionKind = "Single") {
 }
 
 describe("argument row editor", () => {
-  it.each(["Single", "Array", "List", "HashSet"])("authors %s JSON defaults as raw JSON syntax without narrowing numeric tokens", kind => {
+  it.each(["Single"])("authors %s JSON defaults as raw JSON syntax without narrowing numeric tokens", kind => {
     const onChange = vi.fn();
     const container = render(<VariablesEditor items={[variable("System.Text.Json.JsonElement", kind)]}
       typeOptions={[{ value: "System.Text.Json.JsonElement", label: "JSON" }]}
@@ -191,11 +191,12 @@ describe("argument row editor", () => {
     expect(typeSelect.value).toBe("Some.Unresolved.Type");
   });
 
-  it("falls back to a free-text default for a non-Single collection kind", () => {
+  it("offers an empty item list for a non-Single collection kind", () => {
     const container = render(
       <VariablesEditor items={[variable("Boolean", "List")]} typeOptions={typeOptions} storageOptions={null} editorForAlias={editorForAlias} onChange={vi.fn()} />
     );
-    expect(container.querySelector("input[aria-label='Variable default value']")?.getAttribute("type")).toBe("text");
+    expect(container.querySelector("input[aria-label='Variable default value']")).toBeNull();
+    expect(container.querySelector(".wf-collection-add")?.textContent).toContain("Add item");
   });
 
   it("changing the collection kind of a blank-alias row does not invent a 'String' alias", () => {

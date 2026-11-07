@@ -282,31 +282,29 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void Compiler_CoercesScalarLiteral_IntoSingleElementStringCollection()
+    public void Compiler_RefusesScalarLiteral_ForACollection()
     {
-        // Issue #924: a bare scalar typed into a collection input compiles to a one-element collection ("GET" → ["GET"]).
+        // Collection literals now require JSON arrays; the former scalar convenience silently changed data.
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("GET", "Literal"));
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            compiler.Compile("node-endpoint", input, new ArgumentValue("GET", "Literal")));
 
-        var array = binding.Literal!.InlineValue!.Value;
-        Assert.Equal(JsonValueKind.Array, array.ValueKind);
-        Assert.Equal(["GET"], array.EnumerateArray().Select(item => item.GetString()));
+        Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Compiler_CoercesCommaSeparatedScalar_IntoPrimitiveCollection()
+    public void Compiler_RefusesCommaSeparatedScalar_ForACollection()
     {
-        // Issue #924: a comma-separated scalar into a primitive collection splits per item ("200, 404" → [200, 404]).
+        // The issue's pre-GA contract intentionally retires the old comma-splitting behavior.
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("ExpectedStatusCodes", "Int32");
 
-        var binding = compiler.Compile("node-send", input, new ArgumentValue("200, 404", "Literal"));
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            compiler.Compile("node-send", input, new ArgumentValue("200, 404", "Literal")));
 
-        var array = binding.Literal!.InlineValue!.Value;
-        Assert.Equal(JsonValueKind.Array, array.ValueKind);
-        Assert.Equal([200, 404], array.EnumerateArray().Select(item => item.GetInt32()));
+        Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -376,19 +374,50 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void Compiler_StringifiedJsonArrayUnderLiteral_FallsIntoScalarCollectionCoercion()
+    public void Compiler_StringifiedJsonArrayUnderLiteral_PreservesItsStringItems()
     {
-        // Issue #1143: the boundary of the structured branch, pinned so it is explicit rather than a silent trap.
-        // A *stringified* array arrives as a plain string, misses the JsonElement branch, and is split on commas by the
-        // #924 scalar→collection coercion. Clients sending structured values as "Literal" must send the raw value.
+        // Defaults carry JSON text. Commas and quotes belong to each item, never to a second parsing convention.
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Literal"));
+        var text = JsonSerializer.Serialize(new[] { "GET,POST", "quoted \"value\"" });
+        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue(text, "Literal"));
 
         var array = binding.Literal!.InlineValue!.Value;
         Assert.Equal(JsonValueKind.Array, array.ValueKind);
-        Assert.Equal(["[\"GET\"", "\"POST\"]"], array.EnumerateArray().Select(item => item.GetString()));
+        Assert.Equal(["GET,POST", "quoted \"value\""], array.EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Theory]
+    [InlineData(CollectionKind.Array)]
+    [InlineData(CollectionKind.List)]
+    [InlineData(CollectionKind.HashSet)]
+    public void Compiler_JsonArrayText_ProducesTheDeclaredNumericCollection(CollectionKind kind)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = CollectionInput("values", "Int32") with { Type = new TypeReference("Int32", kind) };
+
+        var binding = compiler.Compile("node", input, new ArgumentValue("[1,2]", "Literal"));
+
+        Assert.Equal([1, 2], binding.Literal!.InlineValue!.Value.EnumerateArray().Select(item => item.GetInt32()));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a, b")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("42")]
+    [InlineData("[1,\"not a number\"]")]
+    public void Compiler_InvalidCollectionText_HasTheStructuredCoercionDiagnostic(string text)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            compiler.Compile("node", CollectionInput("values", "Int32"), new ArgumentValue(text, "Literal")));
+
+        Assert.Equal(ValueConversionRejectionReason.LiteralCoercionFailed, exception.ReasonCode);
+        Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("values", exception.Binding!.ReferenceKey);
     }
 
     [Fact]

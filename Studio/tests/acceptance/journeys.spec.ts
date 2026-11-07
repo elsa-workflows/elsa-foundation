@@ -4,6 +4,7 @@ import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
+import { collectionVariableDefaultsJourney } from "./collectionVariableDefaultsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -29,6 +30,7 @@ const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: s
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
+test("collection variable defaults", async ({ page }, info) => collectionVariableDefaultsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.

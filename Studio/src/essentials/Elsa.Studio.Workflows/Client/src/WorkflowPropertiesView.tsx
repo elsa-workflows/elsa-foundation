@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -231,7 +231,10 @@ function fitsEditor(editor: string, value: string): boolean {
   if (value === "") return true;
   if (editor === "checkbox") return value === "true" || value === "false" || value === "True" || value === "False";
   if (editor === "number") return Number.isFinite(Number(value.trim())) && value.trim() !== "";
-  if (editor === "date") return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (editor === "date") {
+    const date = new Date(value);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && date.getUTCFullYear() > 0 && date.toISOString().slice(0, 10) === value;
+  }
   return true;
 }
 
@@ -239,10 +242,12 @@ function fitsEditor(editor: string, value: string): boolean {
 // (checkbox for bool, number, date, else text). Unknown hints fall back to text; `none` renders a
 // disabled field so a non-editable type's stored default is preserved but not edited. A stored value
 // that doesn't fit the specialized control degrades to text so it stays visible and isn't clobbered.
-function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
+function DefaultValueCell({ value, editor, ariaLabel, invalid, describedBy, onChange }: {
   value: string;
   editor: string;
   ariaLabel: string;
+  invalid?: boolean;
+  describedBy?: string;
   onChange(value: string): void;
 }) {
   if (editor === "json") {
@@ -252,7 +257,8 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
     }
     return <div>
       <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
-        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+        aria-invalid={error || invalid ? true : undefined} aria-describedby={describedBy}
+        onChange={event => onChange(event.target.value)} />
       {error ? <span role="alert">{error}</span> : null}
     </div>;
   }
@@ -262,6 +268,7 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
       <input
         type="checkbox"
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined} aria-describedby={describedBy}
         checked={value === "true" || value === "True"}
         onChange={event => onChange(event.target.checked ? "true" : "false")}
       />
@@ -272,6 +279,7 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
       <input
         type={editor}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined} aria-describedby={describedBy}
         value={value}
         placeholder="(empty)"
         onChange={event => onChange(event.target.value)}
@@ -282,12 +290,155 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
     <input
       type="text"
       aria-label={ariaLabel}
+      aria-invalid={invalid || undefined} aria-describedby={describedBy}
       value={value}
       placeholder="(empty)"
       disabled={editor === "none"}
       onChange={event => onChange(event.target.value)}
     />
   );
+}
+
+interface CollectionDefaultItem { id: number; token: string; text?: string; rawEditing?: boolean }
+
+function CollectionDefaultValueCell({ value, editor, alias, ariaLabel, onChange }: {
+  value: string;
+  editor: string;
+  alias: string;
+  ariaLabel: string;
+  onChange(value: string): void;
+}) {
+  const errorId = useId();
+  const nextId = useRef(0);
+  const container = useRef<HTMLDivElement>(null);
+  const focusAfter = useRef<number | "add" | null>(null);
+  const parsed = useMemo<CollectionDefaultItem[] | null>(() => {
+    const tokens = collectionDefaultTokens(value);
+    return tokens?.map(token => ({ id: ++nextId.current, token })) ?? null;
+  }, [value]);
+  // Keep an item's incomplete JSON draft in its own field while the parent retains the authored text.
+  const [edited, setEdited] = useState<{ value: string; editor: string; alias: string; rows: CollectionDefaultItem[] } | null>(null);
+  const rows = edited?.value === value && edited.editor === editor && edited.alias === alias ? edited.rows : parsed;
+  useEffect(() => {
+    if (focusAfter.current === null) return;
+    const target = focusAfter.current === "add"
+      ? container.current?.querySelector<HTMLButtonElement>(".wf-collection-add")
+      : container.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-default-item-id='${focusAfter.current}'] input, [data-default-item-id='${focusAfter.current}'] textarea`);
+    focusAfter.current = null;
+    target?.focus();
+  }, [rows]);
+
+  if (rows === null) {
+    return <div>
+      <textarea aria-label={ariaLabel} value={value} rows={3} aria-invalid="true"
+        onChange={event => onChange(event.target.value)} />
+      <span role="alert">Enter a JSON array. Comma-separated text is not a collection.</span>
+    </div>;
+  }
+  const change = (next: CollectionDefaultItem[]) => {
+    const text = `[${next.map(row => row.token).join(",")}]`;
+    setEdited({ value: text, editor, alias, rows: next });
+    onChange(text);
+  };
+  const add = () => {
+    const row = { id: ++nextId.current, token: editor === "number" ? "0" : editor === "checkbox" ? "false" : editor === "json" ? "null" : '""' };
+    focusAfter.current = row.id;
+    change([...rows, row]);
+  };
+  const remove = (index: number) => {
+    focusAfter.current = rows[index + 1]?.id ?? rows[index - 1]?.id ?? "add";
+    change(rows.filter((_, position) => position !== index));
+  };
+  return <div ref={container} className="wf-collection-editor" role="group" aria-label={ariaLabel}>
+    {rows.length === 0 ? <p className="wf-collection-empty">No items yet.</p> : <ul className="wf-collection-items">
+      {rows.map((row, index) => {
+        const error = collectionItemError(row.token, editor, alias);
+        // A loaded token must fit its control before decoding it. In particular, "true" is not true.
+        // Keep a raw correction in its textarea until blur, and an incomplete typed edit in its input.
+        const raw = row.rawEditing || (row.text === undefined && collectionItemNeedsRaw(row.token, editor, error));
+        const description = error ? `${errorId}-${row.id}` : undefined;
+        return <li key={row.id} className="wf-collection-item" data-default-item-id={row.id}>
+          <div className="wf-collection-item-editor">
+            {raw ? <textarea aria-label={`${ariaLabel} item ${index + 1}`} value={row.token} rows={2}
+              aria-invalid={error ? true : undefined} aria-describedby={description} disabled={editor === "none"}
+              onChange={event => change(rows.map(current => current.id === row.id
+                ? { ...current, token: event.target.value, rawEditing: true } : current))}
+              onBlur={() => {
+                if (!error) setEdited({ value, editor, alias, rows: rows.map(current => current.id === row.id
+                  ? { ...current, rawEditing: false } : current) });
+              }} /> : <DefaultValueCell value={row.text ?? collectionItemText(row.token, editor)} editor={editor}
+              ariaLabel={`${ariaLabel} item ${index + 1}`}
+              invalid={!!error} describedBy={description}
+              onChange={text => change(rows.map(current => current.id === row.id
+                ? { ...current, token: collectionItemToken(text, editor), text } : current))} />}
+            {error ? <span id={description} role="alert">{error} Stored JSON: <code>{row.token}</code></span> : null}
+          </div>
+          <button type="button" className="wf-collection-item-button danger" disabled={editor === "none"}
+            aria-label={`Remove ${ariaLabel} item ${index + 1}`} onClick={() => remove(index)}>
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+        </li>;
+      })}
+    </ul>}
+    <button type="button" className="wf-collection-add" aria-label={`Add ${ariaLabel} item`}
+      disabled={editor === "none"} onClick={add}><Plus size={13} aria-hidden="true" /> Add item</button>
+  </div>;
+}
+
+function collectionItemError(token: string, editor: string, alias: string): string | null {
+  if (editor === "json") return null;
+  let value: unknown;
+  try { value = JSON.parse(token); } catch { return "Enter a valid JSON value."; }
+  if (editor === "checkbox" && typeof value !== "boolean") return "Enter a JSON boolean (true or false).";
+  if (editor === "number" && typeof value !== "number") return "Enter a JSON number.";
+  // Null handling and custom type conversion remain the publisher's responsibility.
+  if ((alias === "String" || editor === "date") && value !== null && typeof value !== "string") return "Enter a JSON string.";
+  if (editor === "date" && typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !fitsEditor(editor, value))
+    return "Enter a valid calendar date (YYYY-MM-DD).";
+  return null;
+}
+
+function collectionItemNeedsRaw(token: string, editor: string, error: string | null): boolean {
+  if (error) return true;
+  if (editor === "json" || editor === "number" || editor === "checkbox") return false;
+  try { return typeof JSON.parse(token) !== "string"; } catch { return true; }
+}
+
+// Validate once, then retain each top-level token's source. JSON.parse is never used to save numbers.
+function collectionDefaultTokens(value: string): string[] | null {
+  if (value === "") return [];
+  const source = value.trim();
+  try { if (!Array.isArray(JSON.parse(source))) return null; } catch { return null; }
+  const items: string[] = [];
+  let start = 1, depth = 0, quoted = false, escaped = false;
+  for (let index = 1; index < source.length - 1; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === "[" || character === "{") depth += 1;
+    else if (character === "]" || character === "}") depth -= 1;
+    else if (character === "," && depth === 0) { items.push(source.slice(start, index).trim()); start = index + 1; }
+  }
+  const last = source.slice(start, -1).trim();
+  if (last) items.push(last);
+  return items;
+}
+
+function collectionItemText(token: string, editor: string): string {
+  if (editor === "json") return token;
+  try {
+    const value: unknown = JSON.parse(token);
+    return typeof value === "string" ? value : token;
+  } catch { return token; }
+}
+
+function collectionItemToken(text: string, editor: string): string {
+  if (editor === "json" || editor === "checkbox") return text;
+  if (editor === "number" && /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(text.trim())) return text.trim();
+  return JSON.stringify(text);
 }
 
 function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, children }: {
@@ -399,8 +550,7 @@ function ArgumentsEditor({
         const referenceKey = readStringField(item, referenceKeyKeys);
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
         const typeEditor = editorForAlias(argType.alias);
-        // JSON defaults keep their raw syntax for scalar values and collections alike.
-        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
+        const isCollection = argType.collectionKind !== "Single";
         return (
           <tr key={index}>
             <td>
@@ -424,16 +574,22 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td>
+              <td className={isCollection ? "wf-properties-collection-default" : undefined}>
                 {/* Only Variables render this column; the value is their ArgumentValue default. */}
-                <DefaultValueCell
+                {isCollection ? <CollectionDefaultValueCell
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
-                  editor={editor}
-                  onChange={value => update(index, { default: editor === "json" && value !== ""
+                  editor={typeEditor}
+                  alias={argType.alias}
+                  onChange={value => update(index, { default: literalDefault(value) })}
+                /> : <DefaultValueCell
+                  ariaLabel={`${namePrefix} default value`}
+                  value={readVariableDefault((item as VariableDefinition).default)}
+                  editor={typeEditor}
+                  onChange={value => update(index, { default: typeEditor === "json" && value !== ""
                     ? { value, expressionType: "Object" }
                     : literalDefault(value) })}
-                />
+                />}
               </td>
             ) : null}
             {columns.storage ? (

@@ -4099,6 +4099,17 @@
   vertical-align: middle;
 }
 
+.wf-properties-table .wf-properties-collection-default {
+  min-width: 240px;
+}
+
+.wf-properties-collection-default [role="alert"] {
+  display: block;
+  margin-top: 4px;
+  color: var(--studio-danger-fg);
+  overflow-wrap: anywhere;
+}
+
 .wf-properties-table td:last-child {
   width: 36px;
   text-align: right;
