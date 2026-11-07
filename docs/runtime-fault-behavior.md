@@ -536,6 +536,25 @@ The incident strategy is different in kind: it is not a single registered defaul
 reference pinned into the executable at publish, resolved against the strategy catalog at runtime.
 Changing the catalog default only affects workflows published afterwards.
 
+## Graceful shutdown of detached re-drives
+
+An in-process actor may queue a detached re-drive after a yielded drain loses its Cancel waiter. Cancellation alone
+does not finish that work: the execution lease runner releases ownership with an uncancelled token and then disposes
+its persistence scope. The runtime tracks re-drives before queue admission. Graceful Generic Host stop and CShells
+termination close that admission, cancel the provider lifetime and join accepted re-drives before persistence teardown.
+The shell terminator runs after recurring Tasks stop and before provider disposal. Both hosting paths share the same
+idempotent join; a caller cancelling its wait does not reopen admission or cancel the ownership-release cleanup.
+
+A standalone caller should await the concrete actor provider's `StopAsync` while its persistence services remain
+usable, then dispose it. A bare service-provider test harness must stop its runtime lifecycle before disposing the root
+provider; singleton disposal occurs too late to guarantee that other services remain usable. Disposal requests
+cancellation only. Emergency shell disposal or a host shutdown-timeout breach can interrupt graceful
+termination, so these paths do not promise that in-flight I/O has joined. Durable recovery and fencing remain necessary.
+
+The HTTP lifetime control holds the real re-drive's ownership release and checks that host stop cannot proceed past
+the runtime's lifecycle hook until that release finishes. This establishes the shutdown boundary; it does not identify
+the historical writer behind a fixture directory-delete failure.
+
 ## Where this lives in the code
 
 | Claim | Source |
