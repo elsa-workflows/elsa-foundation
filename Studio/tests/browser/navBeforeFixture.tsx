@@ -80,7 +80,7 @@ export function NavBeforeFixture() {
           </div>
           <label className="sidebar-search">
             <Search size={16} aria-hidden="true" />
-            <input type="search" aria-label="Search modules" placeholder="Search modules" defaultValue="" />
+            <input type="search" aria-label="Search Studio" placeholder="Search Studio" defaultValue="" />
           </label>
           {sections.map(section => (
             <nav key={section.id} className="nav-section" aria-label={section.label}>

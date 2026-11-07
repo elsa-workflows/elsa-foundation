@@ -88,7 +88,7 @@
   --studio-control-height: 32px;
   --studio-row-height: 48px;
   --studio-table-header-height: var(--studio-row-height);
-  --studio-page-gap: var(--studio-space-4);
+  --studio-page-gap: var(--studio-space-6);
   --studio-row-boundary-style: solid;
   --studio-section-boundary-style: solid;
   --studio-row-hover: var(--studio-accent-soft);

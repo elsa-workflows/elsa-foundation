@@ -19,6 +19,8 @@ export default defineConfig({
     { name: "desktop-light", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "light" } },
     { name: "desktop-dark", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" } },
     { name: "narrow-light", use: { viewport: { width: 360, height: 900 }, colorScheme: "light" } },
-    { name: "narrow-dark", use: { viewport: { width: 360, height: 900 }, colorScheme: "dark" } }
+    { name: "narrow-dark", use: { viewport: { width: 360, height: 900 }, colorScheme: "dark" } },
+    { name: "narrow-390-light", use: { viewport: { width: 390, height: 900 }, colorScheme: "light" } },
+    { name: "narrow-390-dark", use: { viewport: { width: 390, height: 900 }, colorScheme: "dark" } }
   ]
 });

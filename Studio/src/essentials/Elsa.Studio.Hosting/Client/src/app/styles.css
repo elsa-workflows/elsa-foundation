@@ -802,11 +802,11 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   font-weight: 600;
 }
 
-.nav-section-more {
+.nav-section-group {
   gap: 2px;
 }
 
-.nav-disclosure {
+.nav-group-toggle {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -824,21 +824,21 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   text-align: left;
 }
 
-.nav-disclosure:hover,
-.nav-disclosure.open {
+.nav-group-toggle:hover,
+.nav-group-toggle.open {
   background: var(--sidebar-active);
 }
 
-.nav-disclosure:focus-visible {
+.nav-group-toggle:focus-visible {
   outline: 2px solid var(--studio-focus);
   outline-offset: 2px;
 }
 
-.nav-disclosure .nav-label {
+.nav-group-toggle .nav-label {
   flex: 1;
 }
 
-.nav-disclosure-panel {
+.nav-group-panel {
   display: grid;
   gap: 2px;
 }
@@ -1003,7 +1003,7 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   .sidebar-collapsed .sidebar .nav-label,
   .sidebar-collapsed .sidebar .nav-heading,
   .sidebar-collapsed .sidebar .nav-children,
-  .sidebar-collapsed .sidebar .nav-disclosure > svg:last-child,
+  .sidebar-collapsed .sidebar .nav-group-toggle > svg:last-child,
   .sidebar-collapsed .sidebar-environment-copy,
   .sidebar-collapsed .sidebar-account .user-menu-name {
     display: none;
@@ -1018,7 +1018,7 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   }
 
   .sidebar-collapsed .nav-section a,
-  .sidebar-collapsed .nav-disclosure {
+  .sidebar-collapsed .nav-group-toggle {
     justify-content: center;
     padding: 6px;
   }
@@ -1145,7 +1145,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   flex: 1;
   min-height: 0;
   background: color-mix(in srgb, var(--background) 94%, var(--muted));
-  padding: 20px 26px;
+  padding: 28px clamp(16px, 2vw, 36px);
   overflow-y: auto;
 }
 
@@ -1154,9 +1154,25 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   width: 100%;
 }
 
+/* Local route views share the shell cell with the full-bleed editor. Allocate the
+   remaining height to the editor, including retained workspace screens and the dock. */
 .content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) {
+  display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
+}
+
+.content > .wf-editor,
+.content > .studio-workspace-panel:not([hidden]) > .wf-editor {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) .studio-view-navigation {
+  flex-shrink: 0;
 }
 
 /* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
@@ -3019,7 +3035,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     align-items: center;
   }
 
-  .nav-disclosure-panel {
+  .nav-group-panel {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
@@ -3036,7 +3052,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   }
 
   .nav-section a,
-  .nav-disclosure {
+  .nav-group-toggle {
     flex: 0 0 auto;
   }
 

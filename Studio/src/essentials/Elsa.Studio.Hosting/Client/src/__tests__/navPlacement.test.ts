@@ -6,9 +6,10 @@ import {
   getNavigationPlacement,
   getTopLevelNavigationItemsByPlacement,
   isNavigationItemAccessible,
-  moreToolsStorageKey,
-  readMoreToolsOpen,
-  writeMoreToolsOpen
+  resolveNavigationPlacement,
+  navigationGroupsStorageKey,
+  readNavigationGroups,
+  writeNavigationGroups
 } from "../app/navigation/placement";
 import type { StudioNavigationContribution } from "../sdk";
 
@@ -16,7 +17,7 @@ const home: StudioNavigationContribution = { id: "home", label: "Home", path: "/
 const workflows: StudioNavigationContribution = { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 };
 const weather: StudioNavigationContribution = { id: "weather", label: "Weather", path: "/weather" };
 const modules: StudioNavigationContribution = { id: "modules", label: "Modules", path: "/modules" };
-const diagnostics: StudioNavigationContribution = { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "more" };
+const diagnostics: StudioNavigationContribution = { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "build" };
 const logs: StudioNavigationContribution = { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics" };
 const tasks: StudioNavigationContribution = {
   id: "tasks",
@@ -35,8 +36,16 @@ const adminOnly: StudioNavigationContribution = {
 };
 
 describe("navigation placement", () => {
-  it("defaults unset contributions to More tools and honours an explicit placement", () => {
-    expect(getNavigationPlacement(weather)).toBe("more");
+  it("inherits through every ancestor and terminates cycles without inventing placement", () => {
+    const parent: StudioNavigationContribution = { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "operate" };
+    const child: StudioNavigationContribution = { id: "audit", label: "Audit", path: "/audit", parentId: parent.id };
+    const grandchild: StudioNavigationContribution = { id: "recent", label: "Recent", path: "/audit/recent", parentId: child.id };
+    expect(resolveNavigationPlacement(grandchild, [parent, child, grandchild])).toBe("operate");
+    const cycle = [{ ...child, parentId: grandchild.id }, grandchild];
+    expect(resolveNavigationPlacement(grandchild, cycle)).toBeUndefined();
+  });
+  it("keeps undeclared contributions unplaced and honours explicit placement", () => {
+    expect(getNavigationPlacement(weather)).toBeUndefined();
     expect(getNavigationPlacement(home)).toBe("main");
     expect(getNavigationPlacement(modules)).toBe("admin");
     expect(getNavigationPlacement({ id: "tools", path: "/tools", section: "settings" })).toBe("admin");
@@ -57,14 +66,14 @@ describe("navigation placement", () => {
     expect(isNavigationItemAccessible(modules, { canReadAdmin: false })).toBe(false);
   });
 
-  it("groups today's entries into main, more and admin without nesting lifted children", () => {
+  it("groups today's entries into main, named groups and admin without nesting lifted children", () => {
     const navigation = filterAccessibleNavigation(
       [home, workflows, weather, modules, diagnostics, logs, tasks],
       { enabledFeatures: ["user-tasks"], canReadAdmin: true }
     );
 
     expect(getTopLevelNavigationItemsByPlacement(navigation, "main").map(item => item.id)).toEqual(["home", "workflows", "tasks"]);
-    expect(getTopLevelNavigationItemsByPlacement(navigation, "more").map(item => item.id)).toEqual(["diagnostics", "weather"]);
+    expect(getTopLevelNavigationItemsByPlacement(navigation, "build").map(item => item.id)).toEqual(["diagnostics"]);
     expect(getTopLevelNavigationItemsByPlacement(navigation, "admin").map(item => item.id)).toEqual(["modules"]);
   });
 
@@ -76,13 +85,13 @@ describe("navigation placement", () => {
       label: "Executables",
       path: "/workflows/executables",
       parentId: "workflows",
-      placement: "more"
+      placement: "build"
     };
     const navigation = [parent, nested, lifted];
 
     expect(getTopLevelNavigationItemsByPlacement(navigation, "main").map(item => item.id)).toEqual(["workflows"]);
     expect(getChildNavigationItems(navigation, parent).map(item => item.id)).toEqual(["definitions"]);
-    expect(getTopLevelNavigationItemsByPlacement(navigation, "more").map(item => item.id)).toEqual(["executables"]);
+    expect(getTopLevelNavigationItemsByPlacement(navigation, "build").map(item => item.id)).toEqual(["executables"]);
     expect(getChildNavigationItems(navigation, parent).map(item => item.id)).not.toContain("executables");
   });
 
@@ -94,7 +103,7 @@ describe("navigation placement", () => {
 
     const visible = filterAccessibleNavigation(navigation, { authenticated: true, canReadAdmin: false });
     expect(visible.map(item => item.id)).toEqual([]);
-    expect(getTopLevelNavigationItemsByPlacement(visible, "more").map(item => item.id)).toEqual([]);
+    expect(getTopLevelNavigationItemsByPlacement(visible, "build").map(item => item.id)).toEqual([]);
 
     const allowed = filterAccessibleNavigation(navigation, { authenticated: true, canReadAdmin: true });
     expect(allowed.map(item => item.id)).toEqual(["modules", "mod-logs"]);
@@ -109,12 +118,17 @@ describe("navigation placement", () => {
     expect(isNavigationItemAccessible(modules, { canReadAdmin: false })).toBe(false);
   });
 
-  it("remembers More tools open/closed through the appearance-style storage helper", () => {
+  it("remembers independent group choices and tolerates malformed storage", () => {
     const storage = memoryStorage();
-    expect(readMoreToolsOpen(storage)).toBe(false);
-    writeMoreToolsOpen(true, storage);
-    expect(storage.data.get(moreToolsStorageKey)).toBe("true");
-    expect(readMoreToolsOpen(storage)).toBe(true);
+    expect(readNavigationGroups(storage)).toEqual({});
+    writeNavigationGroups({ build: false, operate: true }, storage);
+    expect(readNavigationGroups(storage)).toEqual({ build: false, operate: true });
+    storage.setItem(navigationGroupsStorageKey, '{"build":"false","unknown":false,"integrations":false}');
+    expect(readNavigationGroups(storage)).toEqual({ integrations: false });
+    storage.setItem(navigationGroupsStorageKey, 'broken');
+    expect(readNavigationGroups(storage)).toEqual({});
+    writeNavigationGroups({}, storage);
+    expect(storage.getItem(navigationGroupsStorageKey)).toBeNull();
   });
 });
 

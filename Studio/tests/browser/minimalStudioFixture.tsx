@@ -24,8 +24,8 @@ const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "more" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "more" }
+  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "build" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "build" }
 ], { includeThemeBuilder: false });
 
 registerLogs({

@@ -10,7 +10,7 @@ export const settingsAccessDeniedMessage = "You don't have access to this sectio
 export const settingsEmptyMessage = "No settings sections are available.";
 
 export interface SettingsSectionGroup {
-  id: "studio" | "administration";
+  id: "studio" | "authoring" | "runtime" | "administration";
   label: string;
   sections: StudioNavigationContribution[];
 }
@@ -50,6 +50,10 @@ export function getSettingsSectionGroups(
   const administration = getTopLevelNavigationItemsByPlacement(visible, "admin");
   if (studio.length > 0) {
     groups.push({ id: "studio", label: "Studio", sections: studio });
+  }
+  for (const [id, label] of [["authoring", "Workflow authoring"], ["runtime", "Runtime"]] as const) {
+    const sections = getTopLevelNavigationItemsByPlacement(visible, id);
+    if (sections.length > 0) groups.push({ id, label, sections });
   }
   if (administration.length > 0) {
     groups.push({ id: "administration", label: "Administration", sections: administration });
