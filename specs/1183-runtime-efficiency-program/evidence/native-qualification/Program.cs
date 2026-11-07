@@ -34,6 +34,12 @@ if (config.Activities is < 1 or > 100 || config.Concurrency is < 1 or > 64 || co
     throw new ArgumentOutOfRangeException(nameof(config), "Qualification must remain within the authorized finite bounds.");
 if (!Regex.IsMatch(config.Label, "^[A-Za-z0-9_-]{1,128}$")) throw new ArgumentException("Use a finite case label without path syntax.");
 if (File.Exists(Path.Combine(config.Output, config.Label + ".json"))) throw new InvalidOperationException("A qualification result already exists; retain it and choose a fresh label.");
+if (config.InputProfile is not ("Noop" or "DeclaredNoop" or "Literal" or "WorkflowRequest"))
+    throw new ArgumentException("Use an explicit finite native input profile.");
+var hasPayload = config.InputProfile is "Literal" or "WorkflowRequest";
+if (!hasPayload ? config.PayloadBytes != 0 : config.PayloadBytes is not (1024 or 65536))
+    throw new ArgumentException("Noop profiles have no payload; payload profiles accept exactly 1 KiB or 64 KiB of ASCII text.");
+var payloadFixture = new PayloadFixture(config.InputProfile, config.PayloadBytes);
 var runId = "perf_" + Guid.NewGuid().ToString("N");
 var database = config.Database ?? runId;
 var serverConnection = Environment.GetEnvironmentVariable("ELSA_EFFICIENCY_POSTGRES_CONNECTION");
@@ -61,6 +67,7 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
     new ActivitiesSequenceFeature().ConfigureServices(services);
     new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
     services.Replace(productionIds);
+    services.AddSingleton(payloadFixture);
     if (config.Provider != "Memory")
     {
         services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
@@ -77,25 +84,76 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
 if (!config.SkipInitialize)
     foreach (var initializer in host.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
 
-ExecutableNode Node(string id, Type type, IReadOnlyCollection<ExecutableChildSlot>? slots = null, ExecutableActivityStructure? structure = null) =>
+ExecutableNode Node(string id, Type type, IReadOnlyCollection<ExecutableChildSlot>? slots = null,
+    ExecutableActivityStructure? structure = null, IReadOnlyDictionary<string, RuntimeInputBinding>? bindings = null) =>
     new(id, "authored-" + id, type.FullName!, "1.0.0", "test", JsonSerializer.SerializeToElement(new {}),
-        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: slots, structure: structure);
-var leafType = config.External ? typeof(ExternalNoop) : typeof(ReplaySafeNoop);
-var leaves = Enumerable.Range(0, config.Activities).Select(i => Node("leaf" + i, leafType)).ToArray();
+        bindings ?? new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: slots, structure: structure);
+var leafType = !hasPayload
+    ? config.External ? typeof(ExternalNoop) : typeof(ReplaySafeNoop)
+    : config.External ? typeof(ExternalPayloadActivity) : typeof(ReplaySafePayloadActivity);
+var payloadType = new ValueTypeDescriptor("String");
+var payloadBinding = config.InputProfile switch
+{
+    "Literal" => new RuntimeInputBinding("payload", payloadType, ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(payloadType,
+            JsonSerializer.SerializeToElement(payloadFixture.Literal), ValueProtectionPolicy.InstanceInline)),
+    "WorkflowRequest" => new RuntimeInputBinding("payload", payloadType, ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("payload")),
+    _ => null
+};
+var leaves = Enumerable.Range(0, config.Activities).Select(i => Node("leaf" + i, leafType,
+    bindings: payloadBinding is null ? null : new Dictionary<string, RuntimeInputBinding> { ["payload"] = payloadBinding })).ToArray();
 var root = config.Activities == 1 ? leaves[0] : Node("sequence", typeof(Seq),
     [new ExecutableChildSlot(Seq.ActivitiesSlotName, leaves)],
     new ExecutableActivityStructure(Seq.StructureKind, Seq.StructureSchemaVersion,
         JsonSerializer.SerializeToElement(new { activities = leaves.Select(n => n.ExecutableNodeId).ToArray() })));
 var artifactKeyName = config.ArtifactKey ?? runId;
 var identity = new WorkflowExecutableIdentity("artifact-" + artifactKeyName, "definition-" + artifactKeyName, "version-" + artifactKeyName, "1.0.0", "sha256:" + artifactKeyName);
-var reference = await host.PublishAsync(WorkflowExecutionHarness.NewExecutable(root, identity), "source-" + artifactKeyName);
+var executable = WorkflowExecutionHarness.NewExecutable(root, identity);
+if (config.InputProfile != "Noop")
+{
+    // Keep the historical legacy baseline separate from newly compiled, declared input contracts.
+    var inputContract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+        config.InputProfile == "WorkflowRequest"
+            ? [new WorkflowDeclaredInput("payload", new TypeReference("String"), isRequired: true)]
+            : []);
+    executable = new WorkflowExecutable(
+        identity: executable.Identity, rootActivity: executable.RootActivity,
+        resumeTargets: executable.ResumeTargets, createdAt: executable.CreatedAt,
+        compatibilityMetadata: executable.CompatibilityMetadata, inputContract: inputContract,
+        dependencies: executable.Dependencies, runtimeRequirements: executable.RuntimeRequirements,
+        storageDriverRequirements: executable.StorageDriverRequirements,
+        incidentStrategy: executable.IncidentStrategy, persistenceMode: executable.PersistenceMode,
+        workflowVariables: executable.WorkflowVariables);
+}
+var reference = await host.PublishAsync(executable, "source-" + artifactKeyName);
 var partition = new WorkflowExecutionPartition(PersistenceScope.DefaultValue);
 var ids = new ConcurrentBag<string>();
 var idGenerator = host.Services.GetRequiredService<IRuntimeExecutionIdGenerator>();
 async Task Execute()
 {
     var id = idGenerator.NewWorkflowExecutionId();
-    await host.StartPublishedAsync(reference, id, partition: partition);
+    if (config.InputProfile != "WorkflowRequest")
+        await host.StartPublishedAsync(reference, id, partition: partition);
+    else
+    {
+        // Match the real published-start helper, supplying a different validated value for every execution.
+        var authority = new WorkflowExecutionAuthoritySnapshot(
+            systemIdentity: "activity-behavioural-drive", rootInitiator: "activity-behavioural-drive");
+        await using var scope = host.Services.CreateAsyncScope();
+        var start = await scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(
+                artifactId: reference.ArtifactId, requestedBy: authority.SystemIdentity,
+                workflowExecutionId: id, idempotencyKey: $"start:{id}", metadata: null, variables: null,
+                inputs: new Dictionary<string, object?> { ["payload"] = payloadFixture.CreateRequest(id) },
+                stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(reference.SourceReferenceId),
+                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                parentWorkflowExecutionId: null, correlationId: null, tenantId: null,
+                partition: partition, authority: authority));
+        if (start.CommandDispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+            throw new InvalidOperationException($"Start command was not accepted ({start.CommandDispatch.Status}): {start.CommandDispatch.Reason}");
+    }
     ids.Add(id);
 }
 
@@ -125,6 +183,8 @@ if (config.StartAtUtc is { } startAt)
     await Task.Delay(wait);
 }
 long beforeLeaves = LeafCounter.Count;
+var beforePayloadVerifications = LeafCounter.PayloadVerifications;
+var beforePayloadBytes = LeafCounter.PayloadBytes;
 var beforeAlloc = GC.GetTotalAllocatedBytes(true);
 var beforeGc = Enumerable.Range(0, 3).Select(GC.CollectionCount).ToArray();
 using var process = Process.GetCurrentProcess();
@@ -148,6 +208,8 @@ var cpu = (process.TotalProcessorTime - beforeCpu).TotalSeconds;
 var allocated = GC.GetTotalAllocatedBytes(true) - beforeAlloc;
 var collections = Enumerable.Range(0, 3).Select(i => GC.CollectionCount(i) - beforeGc[i]).ToArray();
 var measuredLeaves = LeafCounter.Count - beforeLeaves;
+var measuredPayloadVerifications = LeafCounter.PayloadVerifications - beforePayloadVerifications;
+var measuredPayloadBytes = LeafCounter.PayloadBytes - beforePayloadBytes;
 var peakWorkingSetAtSampleEnd = process.PeakWorkingSet64;
 if (config.ValidationGate is { } validationGate)
 {
@@ -192,12 +254,14 @@ else
 }
 var expectedRecord = config.Mode != "EphemeralNoRecord" || config.External;
 var distinctIds = ids.Distinct(StringComparer.Ordinal).Count();
-var correct = distinctIds == ids.Count && errors.IsEmpty && measuredLeaves == all.Length * (long)config.Activities && queued == 0 && incidents == 0 && (pendingOutbox ?? memoryExecutionsWithUndeliveredOutbox) == 0 &&
+var expectedPayloadVerifications = hasPayload ? all.Length * (long)config.Activities : 0;
+var correct = measuredPayloadVerifications == expectedPayloadVerifications &&
+    measuredPayloadBytes == expectedPayloadVerifications * config.PayloadBytes && distinctIds == ids.Count && errors.IsEmpty && measuredLeaves == all.Length * (long)config.Activities && queued == 0 && incidents == 0 && (pendingOutbox ?? memoryExecutionsWithUndeliveredOutbox) == 0 &&
     (expectedRecord ? completed == ids.Count && states == ids.Count : states == 0) &&
     (activityRows == (expectedRecord ? ids.Count * (config.Activities + (config.Activities > 1 ? 1 : 0)) : 0));
 var result = new
 {
-    Config = config, runId, database, Timestamp = DateTimeOffset.UtcNow, measuredStartedAt, measuredEndedAt,
+    Config = config, InputContractVersion = executable.InputContract?.Version, runId, database, Timestamp = DateTimeOffset.UtcNow, measuredStartedAt, measuredEndedAt,
     Runtime = RuntimeInformation.FrameworkDescription, OS = RuntimeInformation.OSDescription,
     ProcessorCount = Environment.ProcessorCount, ServerGC = GCSettings.IsServerGC,
     ColdMs = cold.Elapsed.TotalMilliseconds, WarmupCount = warmCount, WarmupSeconds = warm.Elapsed.TotalSeconds,
@@ -208,6 +272,9 @@ var result = new
     CpuCoreEquivalent = cpu / timer.Elapsed.TotalSeconds, GcCollections = collections, PeakWorkingSet = peakWorkingSetAtSampleEnd,
     Accounting = accounting, Correct = correct, Completed = completed, States = states, ActivityRows = activityRows,
     Queued = queued, Incidents = incidents, PendingOutbox = pendingOutbox, MemoryExecutionsWithUndeliveredOutbox = memoryExecutionsWithUndeliveredOutbox, TotalRuns = ids.Count, DistinctRunIds = distinctIds, measuredLeaves,
+    PayloadPattern = "ascii-x-fill-v1; request prefix is the current workflow execution ID",
+    measuredPayloadVerifications, measuredPayloadBytes,
+    MeasurementIncludes = "Published starts, request construction/serialization, runtime persistence and leaf payload verification; not isolated engine-only cost",
     Errors = errors.ToArray(), SamplesMs = all
 };
 var path = Path.Combine(config.Output, config.Label + ".json");
@@ -217,9 +284,73 @@ if (!correct) Environment.ExitCode = 2;
 
 public record Config(string Label, string Provider, string Mode, int Activities, int Concurrency = 1, double Seconds = 15, int Minimum = 100,
     bool External = false, int Cap = 50, bool ContextPooling = false, double WarmupSeconds = 3, int WarmupMinimum = 10,
-    string Output = "./results", string? Database = null, bool SkipInitialize = false, string? StartGate = null, string? ArtifactKey = null, DateTimeOffset? StartAtUtc = null, string? ValidationGate = null);
-public static class LeafCounter { public static long Count; }
+    string Output = "./results", string? Database = null, bool SkipInitialize = false, string? StartGate = null, string? ArtifactKey = null, DateTimeOffset? StartAtUtc = null, string? ValidationGate = null,
+    string InputProfile = "Noop", int PayloadBytes = 0);
+public static class LeafCounter
+{
+    public static long Count;
+    public static long PayloadVerifications;
+    public static long PayloadBytes;
+}
+
+public sealed record PayloadFixture(string Profile, int Bytes)
+{
+    public string Literal { get; } = new('x', Bytes);
+
+    public string CreateRequest(string workflowId)
+    {
+        if (workflowId.Length >= Bytes)
+            throw new InvalidOperationException("The bounded payload needs a shorter ASCII workflow execution ID.");
+        foreach (var character in workflowId)
+            if (character > 127)
+                throw new InvalidOperationException("The bounded payload needs an ASCII workflow execution ID.");
+        return string.Create(Bytes, workflowId, static (destination, id) =>
+        {
+            id.AsSpan().CopyTo(destination);
+            destination[id.Length..].Fill('x');
+        });
+    }
+
+    public void Verify(string payload, string workflowId)
+    {
+        if (payload.Length != Bytes)
+            throw new InvalidOperationException("Payload length was not preserved.");
+        if (Profile == "Literal")
+        {
+            if (!StringComparer.Ordinal.Equals(payload, Literal))
+                throw new InvalidOperationException("Literal payload was not preserved.");
+        }
+        else
+        {
+            if (!payload.StartsWith(workflowId, StringComparison.Ordinal))
+                throw new InvalidOperationException("Payload did not belong to the current workflow execution.");
+            for (var i = workflowId.Length; i < payload.Length; i++)
+                if (payload[i] != 'x')
+                    throw new InvalidOperationException("Request payload content was not preserved.");
+        }
+        Interlocked.Increment(ref LeafCounter.PayloadVerifications);
+        Interlocked.Add(ref LeafCounter.PayloadBytes, Bytes);
+    }
+}
 namespace Elsa.PerformanceProbe {
+public abstract class PayloadActivity(PayloadFixture fixture) : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = "payload")]
+    [System.ComponentModel.DataAnnotations.Required]
+    public string Payload { get; set; } = null!;
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        fixture.Verify(Payload, context.WorkflowExecutionId);
+        Interlocked.Increment(ref LeafCounter.Count);
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
+}
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class ReplaySafePayloadActivity(PayloadFixture fixture) : PayloadActivity(fixture) { }
+[ActivitySideEffectProfile(SideEffectProfile.External)]
+public sealed class ExternalPayloadActivity(PayloadFixture fixture) : PayloadActivity(fixture) { }
+
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class ReplaySafeNoop : Activity<ActivityUnit>
 {
