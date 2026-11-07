@@ -328,6 +328,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
 
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
+            // Every failed save aborts this entire owned transaction; no save is retried inside it. EF's automatic
+            // savepoints therefore add database work without providing a recovery boundary. Preserve the caller's
+            // setting for later transactions on this scoped context.
+            var autoSavepointsEnabled = context.Database.AutoSavepointsEnabled;
+            context.Database.AutoSavepointsEnabled = false;
             try
             {
                 // Stage against the rows as they are now. An unchanged tracked entity is only a snapshot from earlier
@@ -486,6 +491,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     EfRelationalExceptionClassifier.IsProviderFailure(exception)))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission is unavailable.", exception);
                 throw;
+            }
+            finally
+            {
+                context.Database.AutoSavepointsEnabled = autoSavepointsEnabled;
             }
         }
 

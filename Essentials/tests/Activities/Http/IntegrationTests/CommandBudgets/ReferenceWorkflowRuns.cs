@@ -26,6 +26,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 internal static class ReferenceWorkflowRuns
 {
     public const string WriteLineSequence = "writeline-sequence";
+    public const string SingleWriteLine = "single-writeline";
     public const string HttpReference = "http-reference";
     public const string ForkJoinResume = "fork-join-resume";
     public const string SuspendingSequence100 = "suspending-sequence-100";
@@ -79,6 +80,9 @@ internal static class ReferenceWorkflowRuns
             case WriteLineSequence:
                 await RunWriteLineSequenceAsync(fixture, measure, writeLines, recordsCompletion);
                 break;
+            case SingleWriteLine:
+                await RunWriteLineSequenceAsync(fixture, measure, 1, recordsCompletion, singleRoot: true);
+                break;
             case HttpReference:
                 await RunHttpReferenceAsync(fixture, measure, recordsCompletion);
                 break;
@@ -95,9 +99,11 @@ internal static class ReferenceWorkflowRuns
         await AssertSettledAsync(fixture);
     }
 
-    private static async Task RunWriteLineSequenceAsync(HttpEndpointHostFixture fixture, Func<Func<Task>, Task> measure, int writeLines, bool recordsCompletion)
+    private static async Task RunWriteLineSequenceAsync(HttpEndpointHostFixture fixture, Func<Func<Task>, Task> measure, int writeLines, bool recordsCompletion, bool singleRoot = false)
     {
-        var executable = ReferenceWorkflows.WriteLineSequence(WriteLineSequence, writeLines);
+        var executable = singleRoot
+            ? ReferenceWorkflows.Executable(SingleWriteLine, ReferenceWorkflows.WriteLines(1).Single())
+            : ReferenceWorkflows.WriteLineSequence(WriteLineSequence, writeLines);
         await fixture.PublishAsync(executable);
 
         var executionId = string.Empty;
