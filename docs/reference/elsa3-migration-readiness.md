@@ -140,3 +140,17 @@ current state without publishing.
 
 Review the `warnings` (`ELS3-BEHAVIOUR-*`): they describe where Elsa 4 behaves differently at run time, and they stay on
 the receipt.
+
+## Import from a folder at engine start
+
+Instead of uploading, a host can import a folder of Elsa 3 exports every time it starts, with
+[`Elsa3JsonReconciliation`](../../Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/README.md) (spec 235). It
+runs the same import, so every check on this page applies, and it also publishes the imported workflows. What differs:
+
+- A workflow the import refuses is skipped with its code, together with every workflow that uses it, and the rest is
+  imported. The host log has one warning per skipped workflow and a summary line; set `FailOnUnconvertible` to make
+  a skip fail the start instead.
+- Two refusals fail the start because the import cannot name the workflow they came from: a credential literal, and
+  a changed workflow under an Elsa 3 version that is already imported. Give a changed workflow a new version in Elsa 3.
+- Publishing needs no permissions: the startup task publishes in its persistence scope's tenant.
+- The folder holds every reusable version the other workflows use (the collection checklist above).

@@ -70,20 +70,44 @@ public sealed record ReusableActivityReferenceRewrite(
 
 public sealed record ReusableActivityDirectStart(string NodeId, string ActivityType);
 
+/// <param name="TenantId">
+/// Without an <paramref name="AccessScope"/>: the tenant stamped on the imported rows, as an access scope's tenant is.
+/// The import at engine start passes its persistence scope's tenant, so the publishers authorize the same tenant the
+/// commit writes (spec 235).
+/// </param>
+/// <param name="OperationKey">
+/// Without an <paramref name="AccessScope"/>: the publish phase's operation key instead of the plan id. A caller that
+/// applies the same input again passes a new key, so a publication refused earlier is attempted again (spec 235).
+/// </param>
 public sealed record ReusableActivityImportApplyRequest(
     string PlanId,
     ReusableActivityImportCollection Collection,
     IReadOnlyCollection<string> SelectedSourceVersionIds,
     ReusableActivityImportAccessScope? AccessScope = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string? TenantId = null,
+    string? OperationKey = null);
 
 /// <param name="Warnings">Conversion warnings of the applied items (runtime differences); the receipt stores them too.</param>
+/// <param name="Publications">The publish phase's states of the reusable versions, also when there is no receipt.</param>
+/// <param name="Workflows">One entry per workflow or wrapper version the mutation holds.</param>
 public sealed record ReusableActivityImportApplyResult(
     string PlanId,
     IReadOnlyList<string> AppliedSourceVersionIds,
     bool NoOp,
     ReusableActivityImportReceipt? Receipt = null,
-    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null,
+    IReadOnlyList<ReusableActivityPublicationState>? Publications = null,
+    IReadOnlyList<ReusableActivityImportedWorkflowVersion>? Workflows = null);
+
+/// <summary>A workflow or wrapper version an apply wrote or found already written.</summary>
+/// <param name="SourceVersionId">The Elsa 3 version id it was converted from.</param>
+/// <param name="Version">Its SemVer, <c>{n}.0.0</c> for Elsa 3 version n.</param>
+public sealed record ReusableActivityImportedWorkflowVersion(
+    string SourceVersionId,
+    string WorkflowDefinitionId,
+    string WorkflowVersionId,
+    string Version);
 
 /// <summary>
 /// Complete Design mutation handed to the atomic adapter. <see cref="Activities"/> are in publish order: dependencies
