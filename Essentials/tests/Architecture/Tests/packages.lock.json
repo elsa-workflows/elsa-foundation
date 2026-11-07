@@ -2763,6 +2763,16 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.testing": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Testing.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.testing.core": {
+        "type": "Project"
+      },
       "elsa3.activities.design.import": {
         "type": "Project",
         "dependencies": {

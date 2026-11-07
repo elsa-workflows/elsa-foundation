@@ -6,6 +6,8 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>One request a <see cref="LoopbackHttpServer"/> received: its path and every header it carried.</summary>
 internal sealed record RecordedRequest(string Path, IReadOnlyDictionary<string, string> Headers);
+internal sealed record LoopbackHttpResponse(int Status, Uri? Location = null,
+    IReadOnlyDictionary<string, string>? Headers = null, int ContentLength = 0);
 
 /// <summary>
 /// A bodiless HTTP/1.1 server on the IPv4 loopback address, bound to a port the operating system picks, so a test can
@@ -15,7 +17,7 @@ internal sealed record RecordedRequest(string Path, IReadOnlyDictionary<string, 
 internal sealed class LoopbackHttpServer : IAsyncDisposable
 {
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-    private readonly Func<RecordedRequest, (int Status, Uri? Location)> _respond;
+    private readonly Func<RecordedRequest, LoopbackHttpResponse> _respond;
     private readonly CancellationTokenSource _stop = new();
     private readonly List<RecordedRequest> _requests = [];
     private readonly List<Task> _connections = [];
@@ -23,6 +25,15 @@ internal sealed class LoopbackHttpServer : IAsyncDisposable
     private int _disposed;
 
     public LoopbackHttpServer(Func<RecordedRequest, (int Status, Uri? Location)> respond)
+        : this(request =>
+        {
+            var response = respond(request);
+            return new LoopbackHttpResponse(response.Status, response.Location);
+        })
+    {
+    }
+
+    public LoopbackHttpServer(Func<RecordedRequest, LoopbackHttpResponse> respond)
     {
         _respond = respond;
         _listener.Start();
@@ -104,11 +115,13 @@ internal sealed class LoopbackHttpServer : IAsyncDisposable
             lock (_requests)
                 _requests.Add(request);
 
-            var (status, location) = _respond(request);
+            var definition = _respond(request);
             var response = new StringBuilder()
-                .Append(FormattableString.Invariant($"HTTP/1.1 {status} Stub\r\nContent-Length: 0\r\nConnection: close\r\n"));
-            if (location is not null)
-                response.Append("Location: ").Append(location.AbsoluteUri).Append("\r\n");
+                .Append(FormattableString.Invariant($"HTTP/1.1 {definition.Status} Stub\r\nContent-Length: {definition.ContentLength}\r\nConnection: close\r\n"));
+            if (definition.Location is not null)
+                response.Append("Location: ").Append(definition.Location.AbsoluteUri).Append("\r\n");
+            foreach (var (name, value) in definition.Headers ?? new Dictionary<string, string>())
+                response.Append(name).Append(": ").Append(value).Append("\r\n");
             response.Append("\r\n");
 
             await stream.WriteAsync(Encoding.ASCII.GetBytes(response.ToString()), _stop.Token);

@@ -9,6 +9,8 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Events.Core.Contracts;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
@@ -24,6 +26,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IRuntimeCoalescingSessionAccessor? _sessionAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
+    private readonly IReadOnlyList<IRuntimeTestContextSeedSource> _testContextSources;
+    private readonly IInlineEventPublisher? _testScopePublisher;
+    private readonly IWorkflowExecutableInputValidator? _testValueValidator;
+    private readonly IWellKnownTypeRegistry? _testTypeRegistry;
 
     /// <summary>
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
@@ -41,6 +47,25 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         IWorkflowExecutableStore? workflowExecutableStore = null,
         IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
+        : this(activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, timeProvider,
+            workflowExecutionStateStore, workflowExecutableStore, sessionAccessor, executableReader, [], null) { }
+
+    public WorkflowCheckpointSchedulerWorkHandler(IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter, IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        TimeProvider timeProvider, IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IWorkflowExecutableStore? workflowExecutableStore, IRuntimeCoalescingSessionAccessor? sessionAccessor,
+        IWorkflowExecutableReader? executableReader, IEnumerable<IRuntimeTestContextSeedSource> testContextSources,
+        IInlineEventPublisher? testScopePublisher)
+        : this(activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, timeProvider,
+            workflowExecutionStateStore, workflowExecutableStore, sessionAccessor, executableReader, testContextSources,
+            testScopePublisher, null, null) { }
+
+    public WorkflowCheckpointSchedulerWorkHandler(IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter, IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        TimeProvider timeProvider, IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IWorkflowExecutableStore? workflowExecutableStore, IRuntimeCoalescingSessionAccessor? sessionAccessor,
+        IWorkflowExecutableReader? executableReader, IEnumerable<IRuntimeTestContextSeedSource> testContextSources,
+        IInlineEventPublisher? testScopePublisher, IWorkflowExecutableInputValidator? testValueValidator, IWellKnownTypeRegistry? testTypeRegistry)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -54,6 +79,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _sessionAccessor = sessionAccessor;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
+        _testContextSources = testContextSources?.ToArray() ?? [];
+        _testScopePublisher = testScopePublisher;
+        _testValueValidator = testValueValidator;
+        _testTypeRegistry = testTypeRegistry;
     }
 
     public string Name => HandlerName;
@@ -159,6 +188,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? DrainModeOf(workItem.WorkflowExecutionId)
             : null;
 
+        var workflowChange = BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode);
+        if (payload.CheckpointName == RuntimeCheckpointNames.WorkflowStarted &&
+            workflowChange?.State is { TestEntry: { } entry, TestContext: null, RootVariableFrame: { } root } starting)
+        {
+            var initialized = await RuntimeTestContextOwner.CreateAsync(entry,
+                executable ?? throw new InvalidOperationException("Selected test initialization requires the exact executable."),
+                workItem.WorkflowExecutionId, root, _testContextSources, _testScopePublisher, payload.SeedInputs, payload.SeedVariables,
+                _testValueValidator, _testTypeRegistry, cancellationToken);
+            workflowChange = workflowChange with { State = starting with { TestContext = initialized.Context, RootVariableFrame = initialized.RootFrame } };
+        }
+
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -169,7 +209,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode),
+                workflowExecution: workflowChange,
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -277,6 +317,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
+            TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
+            TestContext = priorWorkflowState?.TestContext,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
@@ -377,6 +419,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
+            TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
+            TestContext = priorWorkflowState?.TestContext?.Close(),
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
                 ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
                 : null
@@ -413,38 +457,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
             }));
 
-    private static VariableFrameState CreateRootVariableFrame(
-        string workflowExecutionId,
-        IReadOnlyDictionary<string, JsonElement> seedVariables,
-        WorkflowExecutable? executable)
-    {
-        if (executable is null)
-            throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' cannot activate its canonical root variable frame without the pinned executable.");
-
-        // The root frame declares exactly the workflow-scope variables (state.Variables compiled into the
-        // executable, #972). The root ACTIVITY's structure variables are a normal container scope owned by the
-        // root node itself — they are NOT folded into the workflow scope here.
-        var projector = new RuntimeVariableDeclarationProjector();
-        var declarations = projector.ProjectDeclarations(executable.WorkflowVariables);
-        var initial = projector.ProjectInitialValues(executable.WorkflowVariables);
-        var values = new Dictionary<string, ValueEnvelope>(initial, StringComparer.Ordinal);
-        foreach (var (referenceKey, declaration) in declarations)
-        {
-            if (!seedVariables.TryGetValue(referenceKey, out var seed) &&
-                !seedVariables.TryGetValue(declaration.Name, out seed))
-                continue;
-
-            var declared = initial[referenceKey];
-            values[referenceKey] = seed.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                ? ValueEnvelope.Null(declared.Type, declared.Policy)
-                : ValueEnvelope.Inline(declared.Type, seed, declared.Policy);
-        }
-
-        return new VariableFrameFactory().CreateRoot(
-            workflowExecutionId,
-            VariableReference.WorkflowScopeId,
-            values);
-    }
+    private static VariableFrameState CreateRootVariableFrame(string workflowExecutionId,
+        IReadOnlyDictionary<string, JsonElement> seedVariables, WorkflowExecutable? executable) =>
+        RuntimeRootVariableFrameFactory.Create(workflowExecutionId, seedVariables, executable);
 
     private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem) =>
         SchedulerWorkHandlerHelpers.DeserializePayload(

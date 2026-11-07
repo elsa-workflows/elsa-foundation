@@ -508,7 +508,7 @@ public sealed class EfExecutionLivenessStateStore(
         row.InterruptedStatus = replacement.InterruptedStatus; row.InterruptedAtUtcTicks = replacement.InterruptedAtUtcTicks;
         row.LeaseOwnerId = replacement.LeaseOwnerId; row.LeaseAcquiredAtUtcTicks = replacement.LeaseAcquiredAtUtcTicks; row.LeaseExpiresAtUtcTicks = replacement.LeaseExpiresAtUtcTicks;
         row.HeartbeatOwnerId = replacement.HeartbeatOwnerId; row.HeartbeatRecordedAtUtcTicks = replacement.HeartbeatRecordedAtUtcTicks; row.HasOperationalOwner = replacement.HasOperationalOwner;
-        row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion); row.Revision = revision;
     }
 
     // Internal checkpoint staging uses the same envelope/projection validation before touching the ownership fence.

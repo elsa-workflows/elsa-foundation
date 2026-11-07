@@ -233,6 +233,10 @@ public sealed class RuntimeCheckpointCommandPayload
     /// <summary>Authoritative finite test-run scope. Null for non-test and legacy checkpoints.</summary>
     public WorkflowTestScope? TestScope { get; }
 
+    /// <summary>Admitted selected-node entry retained by the workflow-started checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);
 

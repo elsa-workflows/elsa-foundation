@@ -1,6 +1,8 @@
 using Elsa.Activities.Http.Activities;
-using Elsa.Activities.Http.Connections;
+using Elsa.Activities.Http;
+using System.Text.Json;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Contracts;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -68,6 +70,8 @@ internal static class OAuth2TestSupport
         services.AddSecrets(configuration);
         services.Configure<SecretsOptions>(options => options.EncryptionKey ??= EncryptionKey);
         services.AddConnections(configuration);
+        new ActivitiesHttpFeature().ConfigureServices(services);
+        services.AddSingleton<IRuntimeTestEffectGate, OrdinaryEffectGate>();
         services.AddConnectionsWorkflows();
         services.AddOAuth2Connector();
         services.AddOptions<HttpActivityOptions>();
@@ -142,10 +146,9 @@ internal static class OAuth2TestSupport
 
     public static async Task<IActivityCompletionTransition<SendHttpRequestResult>> SendAsync(OAuth2Harness harness, Uri url)
     {
-        var factory = harness.Services.GetRequiredService<IHttpClientFactory>();
         var options = harness.Services.GetRequiredService<IOptions<HttpActivityOptions>>();
-        var applicator = harness.Services.GetRequiredService<IHttpConnectionApplicator>();
-        var activity = new SendHttpRequest(factory, options, applicator)
+        var executor = harness.Services.GetRequiredService<IHttpActivityRequestExecutor>();
+        var activity = new SendHttpRequest(options, executor)
         {
             Url = url,
             Method = "GET",
@@ -154,6 +157,21 @@ internal static class OAuth2TestSupport
         var context = new ActivityExecutionContext("wf-1", ActivityExecutionId, "att-1", "node-1", CancellationToken.None);
         var transition = await ((IActivity)activity).ExecuteAsync(context);
         return Assert.IsAssignableFrom<IActivityCompletionTransition<SendHttpRequestResult>>(transition);
+    }
+
+    // This connector fixture deliberately omits Runtime execution rows. Its gate admits only ordinary sends;
+    // controlled-policy and production credential isolation qualification use the normal Runtime gateway.
+    private sealed class OrdinaryEffectGate : IRuntimeTestEffectGate
+    {
+        public ValueTask<RuntimeTestInvocation> ValidateActivityAsync(RuntimeTestActivationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeTestInvocation(request.WorkflowExecutionId, request.ActivityExecutionId, request.AttemptId, "node-1"));
+        public ValueTask<RuntimeSecretReference> MapSecretAsync(RuntimeTestInvocation invocation, string inputKey, RuntimeSecretReference reference,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(reference);
+        public ValueTask<RuntimeTestEffectAdmission> BeginAsync(RuntimeTestEffectRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeTestEffectAdmission(request, RuntimeTestEffectMode.Ordinary, "ordinary-http-fixture/1",
+                JsonSerializer.SerializeToElement(new { }), null, null, null, 0, true));
+        public ValueTask RevalidateAsync(RuntimeTestEffectAdmission admission, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask CompleteAsync(RuntimeTestEffectCompletion completion, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     public static async Task AuthorizeAsync(OAuth2Harness harness, MockOAuthServer server)

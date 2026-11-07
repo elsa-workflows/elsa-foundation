@@ -1,0 +1,162 @@
+using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+
+public sealed partial class EfSchedulerWorkQueueStoreTests
+{
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.Start)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
+    public async Task Test_entry_admission_requires_a_predecessor_unreadable_queue_format(WorkflowExecutionCommandKind kind)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        var payload = JsonSerializer.SerializeToElement(new { testEntry = new { contextId = "admitted-context" } });
+        await fixture.Store.EnqueueAsync(new("test-admission", "workflow", "command", kind, "envelope", "key", now, now, payload: payload));
+        var row = await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync();
+        Assert.Equal(RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion, row.SchemaVersion);
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeSchedulerWorkEfModule.SchemaFamily, "3.0.0").EnsureReadable(row.SchemaVersion));
+        await fixture.Context.SchedulerWorkItems.ExecuteUpdateAsync(set => set.SetProperty(x => x.SchemaVersion, "3.0.0"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListAsync(new("workflow")).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ClaimAsync(new("workflow", "old-worker", now, TimeSpan.FromMinutes(1))).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.DequeueAsync("workflow").AsTask());
+        row = await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync();
+        Assert.Equal(0, row.ClaimToken);
+        Assert.Equal(1, row.Revision);
+    }
+
+    [Fact]
+    public async Task Test_entry_fresh_context_recovers_protected_header_and_all_native_continuations()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var state = TestExecution(DateTimeOffset.UtcNow);
+        await using (var first = database.Open("tenant-a"))
+        {
+            first.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+                EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+            await first.Context.SaveChangesAsync();
+            Assert.Equal(RuntimeWorkflowExecutionEfModule.TestEntrySchemaVersion, (await first.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        }
+        await using var recovered = database.Open("tenant-a");
+        var header = await recovered.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeWorkflowExecutionEfModule.SchemaFamily, "2.0.0").EnsureReadable(header.SchemaVersion));
+        Assert.True(state.TestEntry!.Matches(EfWorkflowExecutionStateStore.ReadChecked(header, "tenant-a", state.WorkflowExecutionId).TestEntry));
+        foreach (var kind in new[] { WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity,
+                     WorkflowExecutionCommandKind.InvokeActivity, WorkflowExecutionCommandKind.ResumeBookmark, WorkflowExecutionCommandKind.CompleteActivity,
+                     WorkflowExecutionCommandKind.Checkpoint, WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.Cancel })
+        {
+            var now = DateTimeOffset.UtcNow;
+            await recovered.Store.EnqueueAsync(new(kind.ToString(), state.WorkflowExecutionId, kind.ToString(), kind, "envelope-" + kind,
+                "key-" + kind, now, now));
+        }
+        Assert.All(await recovered.Context.SchedulerWorkItems.AsNoTracking().ToArrayAsync(), row =>
+        {
+            Assert.Equal(RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion, row.SchemaVersion);
+            Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeSchedulerWorkEfModule.SchemaFamily, "3.0.0").EnsureReadable(row.SchemaVersion));
+        });
+        var claim = await recovered.Store.ClaimAsync(new(state.WorkflowExecutionId, "new-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1)));
+        Assert.NotNull(claim);
+        Assert.True((await recovered.Store.ReleaseClaimAsync(claim, DateTimeOffset.UtcNow)).Succeeded);
+        Assert.All(await recovered.Context.SchedulerWorkItems.AsNoTracking().ToArrayAsync(), row => Assert.Equal(RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion, row.SchemaVersion));
+    }
+
+    [Theory]
+    [InlineData("1.0.0")]
+    [InlineData("2.0.0")]
+    public async Task Test_entry_header_cannot_be_hidden_in_a_predecessor_stamp_or_have_identity_discarded(string stamp)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var state = TestExecution(DateTimeOffset.UtcNow);
+        var row = EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a", EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1);
+        fixture.Context.WorkflowExecutionStates.Add(row);
+        await fixture.Context.SaveChangesAsync();
+        Assert.Throws<InvalidOperationException>(() => EfWorkflowExecutionStateStore.CopyToEntity(row, state with { TestEntry = null }, "tenant-a", row.Id, 2));
+        fixture.Context.ChangeTracker.Clear();
+        await fixture.Context.WorkflowExecutionStates.ExecuteUpdateAsync(set => set.SetProperty(x => x.SchemaVersion, stamp));
+        var forged = await fixture.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+        Assert.Throws<InvalidDataException>(() => EfWorkflowExecutionStateStore.ReadChecked(forged, "tenant-a", state.WorkflowExecutionId));
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.EnqueueAsync(new("resume", state.WorkflowExecutionId, "resume-command",
+            WorkflowExecutionCommandKind.ResumeBookmark, "envelope", "key", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)).AsTask());
+        Assert.Empty(await fixture.Context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
+        Assert.Equal(1, (await fixture.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task Ordinary_start_authored_input_and_metadata_cannot_claim_test_format_authority()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Store.EnqueueAsync(new("ordinary", "workflow", "command", WorkflowExecutionCommandKind.Start, "envelope", "key", now, now,
+            payload: JsonSerializer.SerializeToElement(new { inputs = new { testEntry = "authored-data" } }),
+            commandMetadata: new Dictionary<string, string> { ["testEntry"] = "authored-metadata" }));
+        Assert.Equal("2.0.0", (await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.NotNull(await fixture.Store.ClaimAsync(new("workflow", "ordinary-worker", now, TimeSpan.FromMinutes(1))));
+    }
+
+    [Fact]
+    public async Task Test_entry_outbox_timer_background_and_checkpoint_retention_are_predecessor_unreadable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        var state = TestExecution(now);
+        fixture.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+            EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+        await fixture.Context.SaveChangesAsync();
+        var access = new FixedAccessor("tenant-a");
+        var outbox = new EfRuntimePostCommitOutboxStore(fixture.Context, access);
+        await outbox.SavePendingAsync(new("test-send", new("send", state.WorkflowExecutionId, "test-effect", now, null, "send-key", null),
+            RuntimePostCommitOutboxStatus.Pending, now, now));
+        var timers = new EfDurableTimerStore(fixture.Context, access, new TestFormatCodec());
+        await timers.SaveAsync(new("test-timer", state.WorkflowExecutionId, "Delay", "wait", now.AddMinutes(1), now));
+        var attempt = new ActivityAttempt("attempt", "invocation", 1, ActivityAttemptReason.Initial, now);
+        var work = new BackgroundActivityWorkRequest("background", state.WorkflowExecutionId, "invocation", attempt,
+            state.PinnedExecutable, "selected", "contract", new("invocation", "contract", "bindings", new Dictionary<string, ValueEnvelope>(), now),
+            new("coordinator", state.WorkflowExecutionId, "coordinator-command", WorkflowExecutionCommandKind.InvokeActivity, "envelope", "coordinator-key", now, now));
+        fixture.Context.BackgroundActivityWorks.Add(EfBackgroundActivityWorkStore.ToEntity(BackgroundActivityWorkLifecycle.CreatePending(work, now), "tenant-a"));
+        await fixture.Context.SaveChangesAsync();
+        await new EfRuntimeCheckpointCommitStore(fixture.Context, access).CommitAsync(new("test-checkpoint",
+            new("test-checkpoint", "TestObservation", state.WorkflowExecutionId, now, [], new Dictionary<string, string>()),
+            new(null, null, [], [], [], [], []), [], new Dictionary<string, string>()), new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var send = await fixture.Context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
+        var timer = await fixture.Context.DurableTimers.AsNoTracking().SingleAsync();
+        var background = await fixture.Context.BackgroundActivityWorks.AsNoTracking().SingleAsync();
+        var marker = await fixture.Context.RuntimeCheckpointCommits.AsNoTracking().SingleAsync();
+        Assert.Equal(RuntimePostCommitOutboxEfModule.TestEntrySchemaVersion, send.SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TestEntrySchemaVersion, timer.SchemaVersion);
+        Assert.Equal(RuntimeBackgroundActivityWorkEfModule.TestEntrySchemaVersion, background.SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TestEntrySchemaVersion, marker.SchemaVersion);
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimePostCommitOutboxEfModule.SchemaFamily, "2.0.0").EnsureReadable(send.SchemaVersion));
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeOperationalStateEfModule.SchemaFamily, "1.0.0").EnsureReadable(timer.SchemaVersion));
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, "1.0.0").EnsureReadable(background.SchemaVersion));
+        Assert.Throws<EfSchemaVersionSkewException>(() => Predecessor(RuntimeOperationalStateEfModule.SchemaFamily, "1.0.0").EnsureReadable(marker.SchemaVersion));
+        Assert.NotNull(await new EfBackgroundActivityWorkStore(fixture.Context, access).ClaimNextAsync("current-worker", now, TimeSpan.FromMinutes(1)));
+        Assert.Equal(RuntimeBackgroundActivityWorkEfModule.TestEntrySchemaVersion, (await fixture.Context.BackgroundActivityWorks.AsNoTracking().SingleAsync()).SchemaVersion);
+    }
+
+    private static EfSchemaChain Predecessor(string family, string version) => EfSchemaChain.For(
+        new EfSchemaFamilyDescriptor(family, "Workflows.Runtime", version, typeof(EfSchedulerWorkQueueStoreTests).Assembly));
+
+    private static WorkflowExecutionState TestExecution(DateTimeOffset now)
+    {
+        var pin = new WorkflowExecutableIdentity("test-artifact", "definition", "version", "1", "hash");
+        var scope = new WorkflowTestScope("test-scope", now.AddMinutes(10), null, new("tenant-a"));
+        var authority = new WorkflowExecutionAuthoritySnapshot("tests", "tests");
+        return new("test-workflow", pin, WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, null,
+            new Dictionary<string, string>())
+        {
+            RunKind = WorkflowRunKind.TestRun, Partition = scope.Partition, Authority = authority, TestScope = scope,
+            TestEntry = new("context", "context-fingerprint", pin, "selected", scope, authority)
+        };
+    }
+}

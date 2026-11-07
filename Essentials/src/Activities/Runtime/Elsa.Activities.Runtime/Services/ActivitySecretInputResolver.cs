@@ -19,12 +19,18 @@ namespace Elsa.Activities.Runtime.Services;
 /// than one does not start: <see cref="RuntimeSecretResolverCompositionValidator"/> fails its shell activation.
 /// </remarks>
 public sealed class ActivitySecretInputResolver(
+    IRuntimeTestEffectGate? testEffects,
     IWorkflowExecutionPartitionAccessor partitionAccessor,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IRuntimeValueConversionExecutor valueConversionExecutor,
     IRuntimeSecretMask secretMask,
     IRuntimeSecretResolver? secretResolver = null)
 {
+    public ActivitySecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor,
+        IWorkflowExecutionStateStore workflowExecutionStateStore, IRuntimeValueConversionExecutor valueConversionExecutor,
+        IRuntimeSecretMask secretMask, IRuntimeSecretResolver? secretResolver = null)
+        : this(null, partitionAccessor, workflowExecutionStateStore, valueConversionExecutor, secretMask, secretResolver) { }
+
     /// <summary>
     /// Refuses, before the activity exists, every withheld input of <paramref name="snapshot"/> that this activation
     /// cannot resolve, rather than hydrating null and letting the activity run on a missing value: any withheld input
@@ -64,14 +70,19 @@ public sealed class ActivitySecretInputResolver(
         string workflowExecutionId,
         string activityExecutionId,
         ActivityInputSnapshot snapshot,
+        RuntimeTestInvocation? invocation,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
-        var tenantId = await ReadExecutingTenantAsync(workflowExecutionId, pending.Secrets[0].Reference.Name, cancellationToken);
+        var (tenantId, workflow) = await ReadExecutingTenantAsync(workflowExecutionId, pending.Secrets[0].Reference.Name, cancellationToken);
+        var controlled = workflow.TestEntry is not null || workflow.TestContext is not null;
+        if (controlled && (testEffects is null || invocation is null))
+            throw new RuntimeTestEffectUnavailableException("runtime.test-effects.secret-gate-missing", "Test secret resolution requires the admitted invocation policy.");
         var values = new Dictionary<string, ValueEnvelope>(snapshot.Values, StringComparer.Ordinal);
         foreach (var secret in pending.Secrets)
         {
-            var value = await ResolveReferenceAsync(pending.Resolver, tenantId, secret.Reference, cancellationToken);
+            var reference = controlled ? await testEffects!.MapSecretAsync(invocation!, secret.Key, secret.Reference, cancellationToken) : secret.Reference;
+            var value = await ResolveReferenceAsync(pending.Resolver, tenantId, reference, cancellationToken);
             secretMask.Register(activityExecutionId, secret.Reference.Name, value);
             values[secret.Key] = ConvertResolvedSecret(secret, value, cancellationToken);
         }
@@ -86,7 +97,7 @@ public sealed class ActivitySecretInputResolver(
     /// another tenant's secret. An instance the partition cannot read is refused as well, and a global or across-scope
     /// context has no partition, which the accessor refuses.
     /// </summary>
-    private async ValueTask<string> ReadExecutingTenantAsync(
+    private async ValueTask<(string TenantId, WorkflowExecutionState Workflow)> ReadExecutingTenantAsync(
         string workflowExecutionId,
         string referenceName,
         CancellationToken cancellationToken)
@@ -98,7 +109,7 @@ public sealed class ActivitySecretInputResolver(
         if (instance.TenantId is { } instanceTenantId && !StringComparer.Ordinal.Equals(instanceTenantId, partition))
             throw new RuntimeSecretResolutionException(referenceName, RuntimeSecretResolutionException.TenantMismatch, isRetryable: false);
 
-        return partition;
+        return (partition, instance);
     }
 
     /// <summary>

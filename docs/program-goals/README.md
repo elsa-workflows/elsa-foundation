@@ -26,6 +26,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
+| [Workflow and Activity Testing](workflow-activity-testing.md) | Active; owner authorization, 5 November; design first | Shared Studio/headless regression scenarios and selected activity execution | Sipke | Program #3901; combined #3588/#3892 design, then staged runtime/Studio/CI qualification |
 | [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Isolated rehearsal and qualification under #2510 from captured copies; live cutover remains gated |
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |

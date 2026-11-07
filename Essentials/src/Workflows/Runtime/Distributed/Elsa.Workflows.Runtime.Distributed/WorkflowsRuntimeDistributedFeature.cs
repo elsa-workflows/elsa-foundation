@@ -182,6 +182,9 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
             sp.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>(),
             sp.GetRequiredService<ExecutionPlacementGate>()));
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionActorProvider>(sp => sp.GetRequiredService<DistributedWorkflowExecutionActorProvider>()));
+        services.Replace(ServiceDescriptor.Scoped<IRuntimeTestExecutionRoutingBoundary, DistributedRuntimeTestRoutingBoundary>());
+        services.TryAddSingleton(new RuntimeTestTransportRegistrations(() => services.ToArray()));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeTestTransportComposition>());
 
         services.AddSingleton<IRecurringTask>(sp => new ExecutionPlacementPumpTask(
             sp.GetRequiredService<IWorkflowExecutionActorProvider>(),

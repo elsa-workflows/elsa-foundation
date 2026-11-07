@@ -284,7 +284,7 @@ public sealed class EfIncidentStateStore(
         row.CreatedAtUtcTicks = replacement.CreatedAtUtcTicks;
         row.ResolvedAtUtcTicks = replacement.ResolvedAtUtcTicks;
         row.ContentJson = replacement.ContentJson;
-        row.SchemaVersion = replacement.SchemaVersion;
+        row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion);
         row.Revision = revision;
     }
 

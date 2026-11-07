@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Options;
@@ -64,6 +66,28 @@ public sealed class RuntimeFaultCapturePolicyTests
         var info = policy.Capture(new BlankMessageException());
 
         Assert.Equal(nameof(BlankMessageException), info.Message);
+    }
+
+    [Fact]
+    public void CaptureInner_PreservesOrdinaryDiagnosticProjection()
+    {
+        var cause = new IOException("ordinary storage diagnostic");
+
+        var inner = Policy().CaptureInner(new InvalidOperationException("outer", cause));
+
+        Assert.NotNull(inner);
+        Assert.Equal(typeof(IOException).FullName, inner.ExceptionType);
+        Assert.Equal(cause.Message, inner.Message);
+    }
+
+    [Fact]
+    public void TestEffectRefusal_ExistingConstructorStillHasNoInnerCause()
+    {
+        var error = new RuntimeTestEffectUnavailableException("test.code", "safe control message");
+
+        Assert.Equal("test.code", error.Code);
+        Assert.Equal("safe control message", error.Message);
+        Assert.Null(error.InnerException);
     }
 
     private sealed class BlankMessageException : Exception

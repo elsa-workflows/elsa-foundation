@@ -1,0 +1,840 @@
+#nullable enable
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestAssertionEvaluator
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestAssertionEvaluator.Evaluate(Elsa.Workflows.Testing.Core.Models.TestAssertion! assertion, Elsa.Workflows.Testing.Core.Models.TestSubjectObservation! observation) -> Elsa.Workflows.Testing.Core.Models.TestCheckResult!
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestReportPolicy
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestReportPolicy.GetExitCode(Elsa.Workflows.Testing.Core.Models.TestRunReport! report) -> int
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestReportWriter
+Elsa.Workflows.Testing.Core.Contracts.IWorkflowTestReportWriter.WriteJunit(Elsa.Workflows.Testing.Core.Models.TestRunReport! report, System.IO.TextWriter! output) -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Suite, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember!>! Members, out string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Equals(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest? other) -> bool
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Fingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Fingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember!>!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Members.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.ResolvedTestSuiteManifest(Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Suite, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember!>! Members, string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Suite.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Suite.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Case.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Case.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Deconstruct(out string! Key, out Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Case, out bool Required, out string? SkipReason) -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Equals(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember? other) -> bool
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Required.get -> bool
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Required.init -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.ResolvedTestSuiteMember(string! Key, Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Case, bool Required, string? SkipReason) -> void
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.SkipReason.get -> string?
+Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.SkipReason.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion
+Elsa.Workflows.Testing.Core.Models.TestAssertion.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestAssertion!
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Equals(Elsa.Workflows.Testing.Core.Models.TestAssertion? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Expected.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Expected.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Operator.get -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Operator.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Subject.get -> Elsa.Workflows.Testing.Core.Models.TestSubject!
+Elsa.Workflows.Testing.Core.Models.TestAssertion.Subject.init -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertion.TestAssertion() -> void
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator.Absent = 2 -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator.Contains = 3 -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator.CountEquals = 4 -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator.Equals = 0 -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestAssertionOperator.Exists = 1 -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCandidateManifest!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ArtifactFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ArtifactFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ArtifactId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ArtifactId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.DefinitionId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.DefinitionId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.Dependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity!>!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.Dependencies.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.Equals(Elsa.Workflows.Testing.Core.Models.TestCandidateManifest? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ModelProfile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ModelProfile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.SourceFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.SourceFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.SourceId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.SourceId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.TestCandidateManifest() -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCaseContent!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Assertions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestAssertion!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Assertions.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.CleanupTimeout.get -> System.TimeSpan
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.CleanupTimeout.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Dependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDependencyBinding!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Dependencies.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Equals(Elsa.Workflows.Testing.Core.Models.TestCaseContent? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Fixtures.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Fixtures.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Mode.get -> Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Mode.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Name.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Name.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Purpose.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Purpose.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Setup.get -> Elsa.Workflows.Testing.Core.Models.TestSetup!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Setup.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Steps.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestScenarioStep!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Steps.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Target.get -> Elsa.Workflows.Testing.Core.Models.TestTargetBinding!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Target.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.TestCaseContent() -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Time.get -> Elsa.Workflows.Testing.Core.Models.TestTimePolicy!
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Time.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Timeout.get -> System.TimeSpan
+Elsa.Workflows.Testing.Core.Models.TestCaseContent.Timeout.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCaseResult!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.AttemptId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.AttemptId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Candidate.get -> Elsa.Workflows.Testing.Core.Models.TestCandidateManifest!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Candidate.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Case.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Case.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Checks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckResult!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Checks.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Closure.get -> Elsa.Workflows.Testing.Core.Models.TestClosureResult!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Closure.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDiagnostic!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Diagnostics.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Equals(Elsa.Workflows.Testing.Core.Models.TestCaseResult? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Execution.get -> Elsa.Workflows.Testing.Core.Models.TestExecutionObservation!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Execution.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Interactions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestInteractionObservation!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Interactions.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Mode.get -> Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Mode.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Profiles.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Profiles.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Required.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Required.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.SelectionKey.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.SelectionKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.SkipReason.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.SkipReason.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Steps.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestStepResult!>!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Steps.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Target.get -> Elsa.Workflows.Testing.Core.Models.TestTargetBinding!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Target.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.TestCaseResult() -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Time.get -> Elsa.Workflows.Testing.Core.Models.TestTimePolicy!
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Time.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Verdict.get -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestCaseResult.Verdict.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCaseRevision!
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Content.get -> Elsa.Workflows.Testing.Core.Models.TestCaseContent!
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Content.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Reference, out Elsa.Workflows.Testing.Core.Models.TestCaseContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Equals(Elsa.Workflows.Testing.Core.Models.TestCaseRevision? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Reference.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Reference.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseRevision.TestCaseRevision(Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Reference, Elsa.Workflows.Testing.Core.Models.TestCaseContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy!
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Content.get -> Elsa.Workflows.Testing.Core.Models.TestCaseContent!
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Content.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Deconstruct(out string! Id, out long Revision, out Elsa.Workflows.Testing.Core.Models.TestCaseContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Equals(Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Id.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Id.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Revision.get -> long
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Revision.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.TestCaseWorkingCopy(string! Id, long Revision, Elsa.Workflows.Testing.Core.Models.TestCaseContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCheckResult!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Actual.get -> Elsa.Workflows.Testing.Core.Models.TestObservationValue!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Actual.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Equals(Elsa.Workflows.Testing.Core.Models.TestCheckResult? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Expected.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Expected.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Message.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Message.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Subject.get -> Elsa.Workflows.Testing.Core.Models.TestSubject!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Subject.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Verdict.get -> Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Verdict.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestCheckVerdict.Failed = 2 -> Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestCheckVerdict.NotEvaluated = 0 -> Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestCheckVerdict.Passed = 1 -> Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestCheckVerdict.Unavailable = 3 -> Elsa.Workflows.Testing.Core.Models.TestCheckVerdict
+Elsa.Workflows.Testing.Core.Models.TestClockKind
+Elsa.Workflows.Testing.Core.Models.TestClockKind.Controlled = 1 -> Elsa.Workflows.Testing.Core.Models.TestClockKind
+Elsa.Workflows.Testing.Core.Models.TestClockKind.Wall = 0 -> Elsa.Workflows.Testing.Core.Models.TestClockKind
+Elsa.Workflows.Testing.Core.Models.TestClosureResult
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestClosureResult!
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.CleanupSettled.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.CleanupSettled.init -> void
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestClosureState State, out bool CleanupSettled, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDiagnostic!>! Remaining) -> void
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.Equals(Elsa.Workflows.Testing.Core.Models.TestClosureResult? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.Remaining.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDiagnostic!>!
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.Remaining.init -> void
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.State.get -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.State.init -> void
+Elsa.Workflows.Testing.Core.Models.TestClosureResult.TestClosureResult(Elsa.Workflows.Testing.Core.Models.TestClosureState State, bool CleanupSettled, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestDiagnostic!>! Remaining) -> void
+Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureState.AdmissionClosed = 1 -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureState.CancellationRequested = 2 -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureState.Closed = 4 -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureState.Open = 0 -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestClosureState.Reconciling = 3 -> Elsa.Workflows.Testing.Core.Models.TestClosureState
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestDependencyBinding!
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Configuration.get -> Elsa.Workflows.Testing.Core.Models.TestProfileData!
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Configuration.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Deconstruct(out string! Key, out Elsa.Workflows.Testing.Core.Models.TestExecutionMode Mode, out Elsa.Workflows.Testing.Core.Models.TestProfileData! Configuration) -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Equals(Elsa.Workflows.Testing.Core.Models.TestDependencyBinding? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Mode.get -> Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Mode.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.TestDependencyBinding(string! Key, Elsa.Workflows.Testing.Core.Models.TestExecutionMode Mode, Elsa.Workflows.Testing.Core.Models.TestProfileData! Configuration) -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity!
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Deconstruct(out string! Key, out string! Profile, out string! Revision, out string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Equals(Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Fingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Fingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Revision.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Revision.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.TestDependencyIdentity(string! Key, string! Profile, string! Revision, string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestDiagnostic!
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Code.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Code.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Deconstruct(out string! Code, out string! Message, out string? Target, out string? Member, out string? Step) -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Equals(Elsa.Workflows.Testing.Core.Models.TestDiagnostic? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Member.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Member.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Message.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Message.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Step.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Step.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Target.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Target.init -> void
+Elsa.Workflows.Testing.Core.Models.TestDiagnostic.TestDiagnostic(string! Code, string! Message, string? Target = null, string? Member = null, string? Step = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability.Available = 0 -> Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability.Missing = 1 -> Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability.Unavailable = 3 -> Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability.Withheld = 2 -> Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestExecutionMode.Controlled = 0 -> Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestExecutionMode.Integration = 1 -> Elsa.Workflows.Testing.Core.Models.TestExecutionMode
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestExecutionObservation!
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.Deconstruct(out string! ModelProfile, out string! Status, out string? ExecutionId) -> void
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.Equals(Elsa.Workflows.Testing.Core.Models.TestExecutionObservation? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.ExecutionId.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.ExecutionId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.ModelProfile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.ModelProfile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.Status.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.Status.init -> void
+Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.TestExecutionObservation(string! ModelProfile, string! Status, string? ExecutionId = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition!
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Configuration.get -> Elsa.Workflows.Testing.Core.Models.TestProfileData!
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Configuration.init -> void
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Deconstruct(out string! Key, out Elsa.Workflows.Testing.Core.Models.TestProfileData! Configuration) -> void
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Equals(Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.TestFixtureDefinition(string! Key, Elsa.Workflows.Testing.Core.Models.TestProfileData! Configuration) -> void
+Elsa.Workflows.Testing.Core.Models.TestInputOverride
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestInputOverride!
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.Deconstruct(out string! NodeId, out string! MemberKey, out System.Text.Json.JsonElement Value) -> void
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.Equals(Elsa.Workflows.Testing.Core.Models.TestInputOverride? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.MemberKey.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.MemberKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.NodeId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.NodeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.TestInputOverride(string! NodeId, string! MemberKey, System.Text.Json.JsonElement Value) -> void
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.Value.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Testing.Core.Models.TestInputOverride.Value.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestInteractionObservation!
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Deconstruct(out string! Key, out string! DependencyKey, out string! Disposition, out string! RequestFingerprint, out System.DateTimeOffset ObservedAt) -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.DependencyKey.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.DependencyKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Disposition.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Disposition.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Equals(Elsa.Workflows.Testing.Core.Models.TestInteractionObservation? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.ObservedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.ObservedAt.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.RequestFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.RequestFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.TestInteractionObservation(string! Key, string! DependencyKey, string! Disposition, string! RequestFingerprint, System.DateTimeOffset ObservedAt) -> void
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>!
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Deconstruct(out int Total, out System.Collections.Generic.IReadOnlyList<T>! Items) -> void
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Equals(Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Items.get -> System.Collections.Generic.IReadOnlyList<T>!
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Items.init -> void
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.TestLibraryPage(int Total, System.Collections.Generic.IReadOnlyList<T>! Items) -> void
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Total.get -> int
+Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Total.init -> void
+Elsa.Workflows.Testing.Core.Models.TestObservationValue
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestObservationValue!
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Availability.get -> Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Availability.init -> void
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability Availability, out System.Text.Json.JsonElement? Value, out string? Reason) -> void
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Equals(Elsa.Workflows.Testing.Core.Models.TestObservationValue? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Reason.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Reason.init -> void
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.TestObservationValue(Elsa.Workflows.Testing.Core.Models.TestEvidenceAvailability Availability, System.Text.Json.JsonElement? Value, string? Reason = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Value.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Testing.Core.Models.TestObservationValue.Value.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture!
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.CausalSlot.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.CausalSlot.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ContractFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ContractFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.Deconstruct(out string! ProducerNodeId, out System.Collections.Generic.IReadOnlyList<string!>! OwningPath, out string! ProjectionKey, out string! ContractFingerprint, out System.Text.Json.JsonElement Value, out string? CausalSlot) -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.Equals(Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.OwningPath.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.OwningPath.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ProducerNodeId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ProducerNodeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ProjectionKey.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ProjectionKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.TestPriorResultFixture(string! ProducerNodeId, System.Collections.Generic.IReadOnlyList<string!>! OwningPath, string! ProjectionKey, string! ContractFingerprint, System.Text.Json.JsonElement Value, string? CausalSlot = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.Value.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.Value.init -> void
+Elsa.Workflows.Testing.Core.Models.TestProfileData
+Elsa.Workflows.Testing.Core.Models.TestProfileData.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestProfileData!
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Data.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Data.init -> void
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Deconstruct(out string! Profile, out System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Equals(Elsa.Workflows.Testing.Core.Models.TestProfileData? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestProfileData.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestProfileData.TestProfileData(string! Profile, System.Text.Json.JsonElement Data) -> void
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.Deconstruct(out string! ResourceId, out string! RevisionId, out string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.Equals(Elsa.Workflows.Testing.Core.Models.TestRevisionReference? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.Fingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.Fingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.ResourceId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.ResourceId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.RevisionId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.RevisionId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRevisionReference.TestRevisionReference(string! ResourceId, string! RevisionId, string! Fingerprint) -> void
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle.Admitted = 0 -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle.Closing = 3 -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle.Executing = 2 -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle.Finalized = 4 -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunLifecycle.Preparing = 1 -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunReport
+Elsa.Workflows.Testing.Core.Models.TestRunReport.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestRunReport!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Cases.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCaseResult!>!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Cases.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Equals(Elsa.Workflows.Testing.Core.Models.TestRunReport? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Lifecycle.get -> Elsa.Workflows.Testing.Core.Models.TestRunLifecycle
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Lifecycle.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.MaterialFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.MaterialFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.ObservationSequence.get -> long
+Elsa.Workflows.Testing.Core.Models.TestRunReport.ObservationSequence.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.ObservedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Testing.Core.Models.TestRunReport.ObservedAt.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.OptionalSkipsAllowed.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestRunReport.OptionalSkipsAllowed.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.RequestFingerprint.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.RequestFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.RunId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.RunId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Selections.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestRunSelection!>!
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Selections.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Suite.get -> Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest?
+Elsa.Workflows.Testing.Core.Models.TestRunReport.Suite.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.TestRunReport() -> void
+Elsa.Workflows.Testing.Core.Models.TestRunReport.UserCancellationRequested.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestRunReport.UserCancellationRequested.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestRunSelection!
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Case.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Case.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Equals(Elsa.Workflows.Testing.Core.Models.TestRunSelection? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Required.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Required.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.SkipReason.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.SkipReason.init -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestScenarioStep!
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Action.get -> Elsa.Workflows.Testing.Core.Models.TestProfileData!
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Action.init -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Assertions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestAssertion!>!
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Assertions.init -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Equals(Elsa.Workflows.Testing.Core.Models.TestScenarioStep? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.TestScenarioStep() -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Timeout.get -> System.TimeSpan
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Timeout.init -> void
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Wait.get -> Elsa.Workflows.Testing.Core.Models.TestWaitSelector?
+Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Wait.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSetup
+Elsa.Workflows.Testing.Core.Models.TestSetup.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSetup!
+Elsa.Workflows.Testing.Core.Models.TestSetup.Equals(Elsa.Workflows.Testing.Core.Models.TestSetup? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSetup.InputOverrides.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestInputOverride!>!
+Elsa.Workflows.Testing.Core.Models.TestSetup.InputOverrides.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSetup.PriorResults.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture!>!
+Elsa.Workflows.Testing.Core.Models.TestSetup.PriorResults.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSetup.TestSetup() -> void
+Elsa.Workflows.Testing.Core.Models.TestSetup.Variables.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestVariableFixture!>!
+Elsa.Workflows.Testing.Core.Models.TestSetup.Variables.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSetup.WorkflowInputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Workflows.Testing.Core.Models.TestSetup.WorkflowInputs.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult
+Elsa.Workflows.Testing.Core.Models.TestStepResult.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestStepResult!
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Checks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckResult!>!
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Checks.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Equals(Elsa.Workflows.Testing.Core.Models.TestStepResult? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.ObservationSequence.get -> long
+Elsa.Workflows.Testing.Core.Models.TestStepResult.ObservationSequence.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.State.get -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepResult.State.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Cancelled = 4 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Executing = 1 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Incomplete = 6 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.NotStarted = 0 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Settled = 2 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Skipped = 3 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestStepState.Unavailable = 5 -> Elsa.Workflows.Testing.Core.Models.TestStepState
+Elsa.Workflows.Testing.Core.Models.TestSubject
+Elsa.Workflows.Testing.Core.Models.TestSubject.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSubject!
+Elsa.Workflows.Testing.Core.Models.TestSubject.Code.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubject.Code.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.DependencyKey.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubject.DependencyKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.Equals(Elsa.Workflows.Testing.Core.Models.TestSubject? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSubject.Extension.get -> Elsa.Workflows.Testing.Core.Models.TestProfileData?
+Elsa.Workflows.Testing.Core.Models.TestSubject.Extension.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.Kind.get -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubject.Kind.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.MemberKey.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubject.MemberKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.NodeId.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubject.NodeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.ObservationInterval.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubject.ObservationInterval.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.TestSubject() -> void
+Elsa.Workflows.Testing.Core.Models.TestSubject.Wait.get -> Elsa.Workflows.Testing.Core.Models.TestWaitSelector?
+Elsa.Workflows.Testing.Core.Models.TestSubject.Wait.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Extension = 7 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Fault = 2 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Interaction = 5 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Outcome = 1 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Output = 0 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Path = 4 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Variable = 6 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectKind.Wait = 3 -> Elsa.Workflows.Testing.Core.Models.TestSubjectKind
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSubjectObservation!
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestObservationValue! Evidence, out bool Exists, out bool Settled, out string? Reference) -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Equals(Elsa.Workflows.Testing.Core.Models.TestSubjectObservation? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Evidence.get -> Elsa.Workflows.Testing.Core.Models.TestObservationValue!
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Evidence.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Exists.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Exists.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Reference.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Reference.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Settled.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Settled.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.TestSubjectObservation(Elsa.Workflows.Testing.Core.Models.TestObservationValue! Evidence, bool Exists, bool Settled, string? Reference = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSuiteContent!
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Equals(Elsa.Workflows.Testing.Core.Models.TestSuiteContent? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestSuiteMember!>!
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Members.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Name.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Name.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Purpose.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Purpose.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteContent.TestSuiteContent() -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSuiteMember!
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.CaseId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.CaseId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Deconstruct(out string! Key, out string! CaseId, out bool Required, out string? SkipReason) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Equals(Elsa.Workflows.Testing.Core.Models.TestSuiteMember? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Required.get -> bool
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Required.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.SkipReason.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.SkipReason.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteMember.TestSuiteMember(string! Key, string! CaseId, bool Required = true, string? SkipReason = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSuiteRevision!
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Content.get -> Elsa.Workflows.Testing.Core.Models.TestSuiteContent!
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Content.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Deconstruct(out Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Reference, out Elsa.Workflows.Testing.Core.Models.TestSuiteContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Equals(Elsa.Workflows.Testing.Core.Models.TestSuiteRevision? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Reference.get -> Elsa.Workflows.Testing.Core.Models.TestRevisionReference!
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Reference.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.TestSuiteRevision(Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Reference, Elsa.Workflows.Testing.Core.Models.TestSuiteContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy!
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Content.get -> Elsa.Workflows.Testing.Core.Models.TestSuiteContent!
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Content.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Deconstruct(out string! Id, out long Revision, out Elsa.Workflows.Testing.Core.Models.TestSuiteContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Equals(Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Id.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Id.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Revision.get -> long
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Revision.init -> void
+Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.TestSuiteWorkingCopy(string! Id, long Revision, Elsa.Workflows.Testing.Core.Models.TestSuiteContent! Content) -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestTargetBinding!
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ActivityDefinitionId.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ActivityDefinitionId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ActivityVersion.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ActivityVersion.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ContractFingerprint.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ContractFingerprint.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.DefinitionId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.DefinitionId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Equals(Elsa.Workflows.Testing.Core.Models.TestTargetBinding? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Kind.get -> Elsa.Workflows.Testing.Core.Models.TestTargetKind
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Kind.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ModelProfile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ModelProfile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.NodeId.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.NodeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.OwningPath.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.OwningPath.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Start.get -> Elsa.Workflows.Testing.Core.Models.TestProfileData?
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Start.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetBinding.TestTargetBinding() -> void
+Elsa.Workflows.Testing.Core.Models.TestTargetKind
+Elsa.Workflows.Testing.Core.Models.TestTargetKind.ActivityDefinition = 2 -> Elsa.Workflows.Testing.Core.Models.TestTargetKind
+Elsa.Workflows.Testing.Core.Models.TestTargetKind.ActivityOccurrence = 1 -> Elsa.Workflows.Testing.Core.Models.TestTargetKind
+Elsa.Workflows.Testing.Core.Models.TestTargetKind.Workflow = 0 -> Elsa.Workflows.Testing.Core.Models.TestTargetKind
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestTimePolicy!
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.Equals(Elsa.Workflows.Testing.Core.Models.TestTimePolicy? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.InitialInstant.get -> System.DateTimeOffset
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.InitialInstant.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.Kind.get -> Elsa.Workflows.Testing.Core.Models.TestClockKind
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.Kind.init -> void
+Elsa.Workflows.Testing.Core.Models.TestTimePolicy.TestTimePolicy() -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestVariableFixture!
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.DeclaringScopeId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.DeclaringScopeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.Deconstruct(out string! DeclaringScopeId, out string! VariableKey, out System.Text.Json.JsonElement Value, out string? IterationKey) -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.Equals(Elsa.Workflows.Testing.Core.Models.TestVariableFixture? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.IterationKey.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.IterationKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.TestVariableFixture(string! DeclaringScopeId, string! VariableKey, System.Text.Json.JsonElement Value, string? IterationKey = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.Value.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.Value.init -> void
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.VariableKey.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestVariableFixture.VariableKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Cancelled = 4 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Failed = 2 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Incomplete = 6 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.NotEvaluated = 0 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Passed = 1 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Skipped = 3 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestVerdict.Unavailable = 5 -> Elsa.Workflows.Testing.Core.Models.TestVerdict
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestWaitSelector!
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Deconstruct(out string! NodeId, out string! Profile, out string? Key, out string? IterationKey) -> void
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Equals(Elsa.Workflows.Testing.Core.Models.TestWaitSelector? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.IterationKey.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.IterationKey.init -> void
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Key.get -> string?
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.NodeId.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.NodeId.init -> void
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestWaitSelector.TestWaitSelector(string! NodeId, string! Profile, string? Key = null, string? IterationKey = null) -> void
+const Elsa.Workflows.Testing.Core.Models.TestCaseContent.Profile = "elsa.workflow-test-case/1" -> string!
+const Elsa.Workflows.Testing.Core.Models.TestRunReport.Profile = "elsa.workflow-test-report/1" -> string!
+const Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Profile = "elsa.workflow-test-suite/1" -> string!
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestAssertion.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestAssertion.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestAssertion.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCaseContent.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCaseContent.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCaseContent.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCaseResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCaseResult.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCaseResult.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCaseRevision.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCaseRevision.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCaseRevision.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCheckResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCheckResult.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCheckResult.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestClosureResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestClosureResult.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestClosureResult.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestDiagnostic.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestDiagnostic.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestDiagnostic.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestInputOverride.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestInputOverride.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestInputOverride.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestObservationValue.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestObservationValue.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestObservationValue.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestProfileData.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestProfileData.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestProfileData.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestRevisionReference.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestRevisionReference.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestRevisionReference.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestRunReport.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestRunReport.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestRunReport.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestRunSelection.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestRunSelection.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestRunSelection.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestScenarioStep.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestScenarioStep.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestScenarioStep.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSetup.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSetup.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSetup.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestStepResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestStepResult.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestStepResult.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSubject.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSubject.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSubject.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSuiteContent.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSuiteContent.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSuiteContent.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSuiteMember.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSuiteMember.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSuiteMember.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestTargetBinding.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestTargetBinding.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestTargetBinding.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestTimePolicy.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestTimePolicy.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestTimePolicy.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestVariableFixture.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestVariableFixture.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestVariableFixture.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestWaitSelector.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestWaitSelector.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestWaitSelector.ToString() -> string!
+static Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.operator !=(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest? left, Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest.operator ==(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest? left, Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteManifest? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.operator !=(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember? left, Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember.operator ==(Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember? left, Elsa.Workflows.Testing.Core.Models.ResolvedTestSuiteMember? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestAssertion.operator !=(Elsa.Workflows.Testing.Core.Models.TestAssertion? left, Elsa.Workflows.Testing.Core.Models.TestAssertion? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestAssertion.operator ==(Elsa.Workflows.Testing.Core.Models.TestAssertion? left, Elsa.Workflows.Testing.Core.Models.TestAssertion? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.operator !=(Elsa.Workflows.Testing.Core.Models.TestCandidateManifest? left, Elsa.Workflows.Testing.Core.Models.TestCandidateManifest? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCandidateManifest.operator ==(Elsa.Workflows.Testing.Core.Models.TestCandidateManifest? left, Elsa.Workflows.Testing.Core.Models.TestCandidateManifest? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseContent.operator !=(Elsa.Workflows.Testing.Core.Models.TestCaseContent? left, Elsa.Workflows.Testing.Core.Models.TestCaseContent? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseContent.operator ==(Elsa.Workflows.Testing.Core.Models.TestCaseContent? left, Elsa.Workflows.Testing.Core.Models.TestCaseContent? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseResult.operator !=(Elsa.Workflows.Testing.Core.Models.TestCaseResult? left, Elsa.Workflows.Testing.Core.Models.TestCaseResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseResult.operator ==(Elsa.Workflows.Testing.Core.Models.TestCaseResult? left, Elsa.Workflows.Testing.Core.Models.TestCaseResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseRevision.operator !=(Elsa.Workflows.Testing.Core.Models.TestCaseRevision? left, Elsa.Workflows.Testing.Core.Models.TestCaseRevision? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseRevision.operator ==(Elsa.Workflows.Testing.Core.Models.TestCaseRevision? left, Elsa.Workflows.Testing.Core.Models.TestCaseRevision? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.operator !=(Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy? left, Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy.operator ==(Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy? left, Elsa.Workflows.Testing.Core.Models.TestCaseWorkingCopy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCheckResult.operator !=(Elsa.Workflows.Testing.Core.Models.TestCheckResult? left, Elsa.Workflows.Testing.Core.Models.TestCheckResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCheckResult.operator ==(Elsa.Workflows.Testing.Core.Models.TestCheckResult? left, Elsa.Workflows.Testing.Core.Models.TestCheckResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestClosureResult.operator !=(Elsa.Workflows.Testing.Core.Models.TestClosureResult? left, Elsa.Workflows.Testing.Core.Models.TestClosureResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestClosureResult.operator ==(Elsa.Workflows.Testing.Core.Models.TestClosureResult? left, Elsa.Workflows.Testing.Core.Models.TestClosureResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.operator !=(Elsa.Workflows.Testing.Core.Models.TestDependencyBinding? left, Elsa.Workflows.Testing.Core.Models.TestDependencyBinding? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDependencyBinding.operator ==(Elsa.Workflows.Testing.Core.Models.TestDependencyBinding? left, Elsa.Workflows.Testing.Core.Models.TestDependencyBinding? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.operator !=(Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity? left, Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity.operator ==(Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity? left, Elsa.Workflows.Testing.Core.Models.TestDependencyIdentity? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDiagnostic.operator !=(Elsa.Workflows.Testing.Core.Models.TestDiagnostic? left, Elsa.Workflows.Testing.Core.Models.TestDiagnostic? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestDiagnostic.operator ==(Elsa.Workflows.Testing.Core.Models.TestDiagnostic? left, Elsa.Workflows.Testing.Core.Models.TestDiagnostic? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.operator !=(Elsa.Workflows.Testing.Core.Models.TestExecutionObservation? left, Elsa.Workflows.Testing.Core.Models.TestExecutionObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestExecutionObservation.operator ==(Elsa.Workflows.Testing.Core.Models.TestExecutionObservation? left, Elsa.Workflows.Testing.Core.Models.TestExecutionObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.operator !=(Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition? left, Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition.operator ==(Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition? left, Elsa.Workflows.Testing.Core.Models.TestFixtureDefinition? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestInputOverride.operator !=(Elsa.Workflows.Testing.Core.Models.TestInputOverride? left, Elsa.Workflows.Testing.Core.Models.TestInputOverride? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestInputOverride.operator ==(Elsa.Workflows.Testing.Core.Models.TestInputOverride? left, Elsa.Workflows.Testing.Core.Models.TestInputOverride? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.operator !=(Elsa.Workflows.Testing.Core.Models.TestInteractionObservation? left, Elsa.Workflows.Testing.Core.Models.TestInteractionObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestInteractionObservation.operator ==(Elsa.Workflows.Testing.Core.Models.TestInteractionObservation? left, Elsa.Workflows.Testing.Core.Models.TestInteractionObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.operator !=(Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>? left, Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>.operator ==(Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>? left, Elsa.Workflows.Testing.Core.Models.TestLibraryPage<T>? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestObservationValue.operator !=(Elsa.Workflows.Testing.Core.Models.TestObservationValue? left, Elsa.Workflows.Testing.Core.Models.TestObservationValue? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestObservationValue.operator ==(Elsa.Workflows.Testing.Core.Models.TestObservationValue? left, Elsa.Workflows.Testing.Core.Models.TestObservationValue? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.operator !=(Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture? left, Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture.operator ==(Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture? left, Elsa.Workflows.Testing.Core.Models.TestPriorResultFixture? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestProfileData.operator !=(Elsa.Workflows.Testing.Core.Models.TestProfileData? left, Elsa.Workflows.Testing.Core.Models.TestProfileData? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestProfileData.operator ==(Elsa.Workflows.Testing.Core.Models.TestProfileData? left, Elsa.Workflows.Testing.Core.Models.TestProfileData? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRevisionReference.operator !=(Elsa.Workflows.Testing.Core.Models.TestRevisionReference? left, Elsa.Workflows.Testing.Core.Models.TestRevisionReference? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRevisionReference.operator ==(Elsa.Workflows.Testing.Core.Models.TestRevisionReference? left, Elsa.Workflows.Testing.Core.Models.TestRevisionReference? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRunReport.operator !=(Elsa.Workflows.Testing.Core.Models.TestRunReport? left, Elsa.Workflows.Testing.Core.Models.TestRunReport? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRunReport.operator ==(Elsa.Workflows.Testing.Core.Models.TestRunReport? left, Elsa.Workflows.Testing.Core.Models.TestRunReport? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRunSelection.operator !=(Elsa.Workflows.Testing.Core.Models.TestRunSelection? left, Elsa.Workflows.Testing.Core.Models.TestRunSelection? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestRunSelection.operator ==(Elsa.Workflows.Testing.Core.Models.TestRunSelection? left, Elsa.Workflows.Testing.Core.Models.TestRunSelection? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestScenarioStep.operator !=(Elsa.Workflows.Testing.Core.Models.TestScenarioStep? left, Elsa.Workflows.Testing.Core.Models.TestScenarioStep? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestScenarioStep.operator ==(Elsa.Workflows.Testing.Core.Models.TestScenarioStep? left, Elsa.Workflows.Testing.Core.Models.TestScenarioStep? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSetup.operator !=(Elsa.Workflows.Testing.Core.Models.TestSetup? left, Elsa.Workflows.Testing.Core.Models.TestSetup? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSetup.operator ==(Elsa.Workflows.Testing.Core.Models.TestSetup? left, Elsa.Workflows.Testing.Core.Models.TestSetup? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestStepResult.operator !=(Elsa.Workflows.Testing.Core.Models.TestStepResult? left, Elsa.Workflows.Testing.Core.Models.TestStepResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestStepResult.operator ==(Elsa.Workflows.Testing.Core.Models.TestStepResult? left, Elsa.Workflows.Testing.Core.Models.TestStepResult? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSubject.operator !=(Elsa.Workflows.Testing.Core.Models.TestSubject? left, Elsa.Workflows.Testing.Core.Models.TestSubject? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSubject.operator ==(Elsa.Workflows.Testing.Core.Models.TestSubject? left, Elsa.Workflows.Testing.Core.Models.TestSubject? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.operator !=(Elsa.Workflows.Testing.Core.Models.TestSubjectObservation? left, Elsa.Workflows.Testing.Core.Models.TestSubjectObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSubjectObservation.operator ==(Elsa.Workflows.Testing.Core.Models.TestSubjectObservation? left, Elsa.Workflows.Testing.Core.Models.TestSubjectObservation? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteContent.operator !=(Elsa.Workflows.Testing.Core.Models.TestSuiteContent? left, Elsa.Workflows.Testing.Core.Models.TestSuiteContent? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteContent.operator ==(Elsa.Workflows.Testing.Core.Models.TestSuiteContent? left, Elsa.Workflows.Testing.Core.Models.TestSuiteContent? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteMember.operator !=(Elsa.Workflows.Testing.Core.Models.TestSuiteMember? left, Elsa.Workflows.Testing.Core.Models.TestSuiteMember? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteMember.operator ==(Elsa.Workflows.Testing.Core.Models.TestSuiteMember? left, Elsa.Workflows.Testing.Core.Models.TestSuiteMember? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.operator !=(Elsa.Workflows.Testing.Core.Models.TestSuiteRevision? left, Elsa.Workflows.Testing.Core.Models.TestSuiteRevision? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteRevision.operator ==(Elsa.Workflows.Testing.Core.Models.TestSuiteRevision? left, Elsa.Workflows.Testing.Core.Models.TestSuiteRevision? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.operator !=(Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy? left, Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy.operator ==(Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy? left, Elsa.Workflows.Testing.Core.Models.TestSuiteWorkingCopy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestTargetBinding.operator !=(Elsa.Workflows.Testing.Core.Models.TestTargetBinding? left, Elsa.Workflows.Testing.Core.Models.TestTargetBinding? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestTargetBinding.operator ==(Elsa.Workflows.Testing.Core.Models.TestTargetBinding? left, Elsa.Workflows.Testing.Core.Models.TestTargetBinding? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestTimePolicy.operator !=(Elsa.Workflows.Testing.Core.Models.TestTimePolicy? left, Elsa.Workflows.Testing.Core.Models.TestTimePolicy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestTimePolicy.operator ==(Elsa.Workflows.Testing.Core.Models.TestTimePolicy? left, Elsa.Workflows.Testing.Core.Models.TestTimePolicy? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestVariableFixture.operator !=(Elsa.Workflows.Testing.Core.Models.TestVariableFixture? left, Elsa.Workflows.Testing.Core.Models.TestVariableFixture? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestVariableFixture.operator ==(Elsa.Workflows.Testing.Core.Models.TestVariableFixture? left, Elsa.Workflows.Testing.Core.Models.TestVariableFixture? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestWaitSelector.operator !=(Elsa.Workflows.Testing.Core.Models.TestWaitSelector? left, Elsa.Workflows.Testing.Core.Models.TestWaitSelector? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestWaitSelector.operator ==(Elsa.Workflows.Testing.Core.Models.TestWaitSelector? left, Elsa.Workflows.Testing.Core.Models.TestWaitSelector? right) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCasePlan
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCasePlan!
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Checks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>!
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Checks.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>! Checks, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestStepPlan!>! Steps) -> void
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Equals(Elsa.Workflows.Testing.Core.Models.TestCasePlan? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Steps.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestStepPlan!>!
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.Steps.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCasePlan.TestCasePlan(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>! Checks, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestStepPlan!>! Steps) -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestCheckPlan!
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Deconstruct(out string! Key, out string! Profile, out string! DefinitionDigest) -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.DefinitionDigest.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.DefinitionDigest.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Equals(Elsa.Workflows.Testing.Core.Models.TestCheckPlan? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckPlan.TestCheckPlan(string! Key, string! Profile, string! DefinitionDigest) -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Deconstruct(out string! Key, out string! Profile, out Elsa.Workflows.Testing.Core.Models.TestAssertionOperator Operator, out string! DefinitionDigest, out Elsa.Workflows.Testing.Core.Models.TestCheckVerdict Verdict, out Elsa.Workflows.Testing.Core.Models.TestSubject! Subject, out System.Text.Json.JsonElement? Expected, out Elsa.Workflows.Testing.Core.Models.TestObservationValue! Actual, out string? Message) -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.DefinitionDigest.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.DefinitionDigest.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Operator.get -> Elsa.Workflows.Testing.Core.Models.TestAssertionOperator
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Operator.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Profile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.Profile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestCheckResult.TestCheckResult(string! Key, string! Profile, Elsa.Workflows.Testing.Core.Models.TestAssertionOperator Operator, string! DefinitionDigest, Elsa.Workflows.Testing.Core.Models.TestCheckVerdict Verdict, Elsa.Workflows.Testing.Core.Models.TestSubject! Subject, System.Text.Json.JsonElement? Expected, Elsa.Workflows.Testing.Core.Models.TestObservationValue! Actual, string? Message = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Deconstruct(out string! Key, out Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Case, out Elsa.Workflows.Testing.Core.Models.TestCasePlan! Plan, out bool Required, out string? SkipReason) -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Plan.get -> Elsa.Workflows.Testing.Core.Models.TestCasePlan!
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.Plan.init -> void
+Elsa.Workflows.Testing.Core.Models.TestRunSelection.TestRunSelection(string! Key, Elsa.Workflows.Testing.Core.Models.TestRevisionReference! Case, Elsa.Workflows.Testing.Core.Models.TestCasePlan! Plan, bool Required = true, string? SkipReason = null) -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.<Clone>$() -> Elsa.Workflows.Testing.Core.Models.TestStepPlan!
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.ActionDigest.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.ActionDigest.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.ActionProfile.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.ActionProfile.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Checks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>!
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Checks.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Deconstruct(out string! Key, out string! ActionProfile, out string! ActionDigest, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>! Checks) -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Equals(Elsa.Workflows.Testing.Core.Models.TestStepPlan? other) -> bool
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Key.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.Key.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepPlan.TestStepPlan(string! Key, string! ActionProfile, string! ActionDigest, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckPlan!>! Checks) -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.ActionDigest.get -> string!
+Elsa.Workflows.Testing.Core.Models.TestStepResult.ActionDigest.init -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.Deconstruct(out string! Key, out string! Profile, out string! ActionDigest, out Elsa.Workflows.Testing.Core.Models.TestStepState State, out long ObservationSequence, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckResult!>! Checks) -> void
+Elsa.Workflows.Testing.Core.Models.TestStepResult.TestStepResult(string! Key, string! Profile, string! ActionDigest, Elsa.Workflows.Testing.Core.Models.TestStepState State, long ObservationSequence, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Testing.Core.Models.TestCheckResult!>! Checks) -> void
+override Elsa.Workflows.Testing.Core.Models.TestCasePlan.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCasePlan.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCasePlan.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestCheckPlan.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestCheckPlan.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestCheckPlan.ToString() -> string!
+override Elsa.Workflows.Testing.Core.Models.TestStepPlan.Equals(object? obj) -> bool
+override Elsa.Workflows.Testing.Core.Models.TestStepPlan.GetHashCode() -> int
+override Elsa.Workflows.Testing.Core.Models.TestStepPlan.ToString() -> string!
+static Elsa.Workflows.Testing.Core.Models.TestCasePlan.operator !=(Elsa.Workflows.Testing.Core.Models.TestCasePlan? left, Elsa.Workflows.Testing.Core.Models.TestCasePlan? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCasePlan.operator ==(Elsa.Workflows.Testing.Core.Models.TestCasePlan? left, Elsa.Workflows.Testing.Core.Models.TestCasePlan? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCheckPlan.operator !=(Elsa.Workflows.Testing.Core.Models.TestCheckPlan? left, Elsa.Workflows.Testing.Core.Models.TestCheckPlan? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestCheckPlan.operator ==(Elsa.Workflows.Testing.Core.Models.TestCheckPlan? left, Elsa.Workflows.Testing.Core.Models.TestCheckPlan? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestStepPlan.operator !=(Elsa.Workflows.Testing.Core.Models.TestStepPlan? left, Elsa.Workflows.Testing.Core.Models.TestStepPlan? right) -> bool
+static Elsa.Workflows.Testing.Core.Models.TestStepPlan.operator ==(Elsa.Workflows.Testing.Core.Models.TestStepPlan? left, Elsa.Workflows.Testing.Core.Models.TestStepPlan? right) -> bool

@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -26,6 +27,7 @@ public sealed class GraphActivitiesRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, GraphActivityActivationStrategy>());
         // Distinct type per capability -- see ClrActivityConsumerCapability's remarks.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, GraphActivityConsumerCapability>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeTestScopeContractSource, GraphTestScopeContractSource>());
         services.AddSingleton<GraphActivityScopeFactory>();
         services.AddSingleton<GraphActivityRecovery>();
     }

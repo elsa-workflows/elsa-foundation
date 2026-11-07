@@ -24,6 +24,7 @@ public sealed class EfExecutionCommandTransportTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 13, 10, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
+    private const string UnreadableSchemaVersion = "3.0.0";
 
     [Fact]
     public async Task Send_and_reopen_round_trips_the_frozen_envelope_losslessly_and_separates_sequences()
@@ -377,7 +378,7 @@ public sealed class EfExecutionCommandTransportTests
         var sent = await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
         var row = await fixture.Context.CommandTransportItems.SingleAsync();
         Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, row.SchemaVersion);
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.PayloadJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, _ => row.SchemaVersion = UnreadableSchemaVersion, v => row.PayloadJson = v);
 
         Func<Task>[] operations =
         [
@@ -397,7 +398,7 @@ public sealed class EfExecutionCommandTransportTests
         await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
         var head = await fixture.Context.CommandStreamHeads.SingleAsync();
         Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, head.SchemaVersion);
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => head.SchemaVersion = v, _ => head.LastSequence = 0);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, _ => head.SchemaVersion = UnreadableSchemaVersion, _ => head.LastSequence = 0);
 
         Func<Task>[] operations =
         [
@@ -409,8 +410,12 @@ public sealed class EfExecutionCommandTransportTests
             AssertTransportSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation));
     }
 
-    private static void AssertTransportSkew(EfSchemaVersionSkewException skew) =>
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "ExecutionCommandTransport", ExecutionCommandTransportEfModule.SchemaVersion);
+    private static void AssertTransportSkew(EfSchemaVersionSkewException skew)
+    {
+        Assert.Equal("ExecutionCommandTransport", skew.Family);
+        Assert.Equal(UnreadableSchemaVersion, skew.Found);
+        Assert.Equal(ExecutionCommandTransportEfModule.TestEntrySchemaVersion, skew.Expected);
+    }
 
     [Fact]
     public async Task Indexed_projection_and_json_disagreement_fails_closed_for_addressed_item()

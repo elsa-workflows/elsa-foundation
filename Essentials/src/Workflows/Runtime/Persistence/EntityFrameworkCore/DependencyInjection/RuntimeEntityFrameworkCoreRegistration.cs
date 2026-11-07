@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Persistence.EntityFramework;
@@ -70,6 +71,11 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddRuntimeOperationalStateEntityFrameworkCore(operational);
+            var testBoundaries = services.Where(x => x.ServiceType == typeof(IRuntimeTestPersistenceBoundary)).ToArray();
+            if (testBoundaries.Length > 1 || testBoundaries.Any(x => x.ImplementationType != typeof(InMemoryRuntimeTestPersistenceBoundary) && x.ImplementationType != typeof(EfRuntimeTestPersistenceBoundary)))
+                throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected test persistence boundary.");
+            if (testBoundaries.SingleOrDefault()?.ImplementationType != typeof(EfRuntimeTestPersistenceBoundary))
+                services.Replace(ServiceDescriptor.Scoped<IRuntimeTestPersistenceBoundary, EfRuntimeTestPersistenceBoundary>());
             var taskRegistrations = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore)).ToArray();
             if (taskRegistrations.Length > 1) throw new InvalidOperationException("Multiple user-task journal owners are selected.");
             var taskRegistration = taskRegistrations.SingleOrDefault();

@@ -15,6 +15,8 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 /// </remarks>
 internal sealed class ScopedWorkflowExecutionCommandExecutor(IPersistenceOperationScopeFactory scopeFactory) : IWorkflowExecutionCommandExecutor
 {
+    internal bool Uses(IPersistenceOperationScopeFactory selected) => ReferenceEquals(scopeFactory, selected);
+
     public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
         WorkflowExecutionCommandEnvelope envelope,
         CancellationToken cancellationToken = default) =>

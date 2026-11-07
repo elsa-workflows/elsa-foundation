@@ -470,6 +470,16 @@ materialized; the API never exposes `IQueryable`. Names are presentation/search 
 own their local transaction and refuse a context with pending unrelated changes. A context is scoped
 to one operation at a time; no automatic storage retry guesses an unknown commit outcome.
 
+`StageCaptureAsync` stages an exact saved snapshot and capture pin inside a domain-owned transaction.
+An adapter can capture each distinct suite/member source and its own immutable admission manifest
+as one commit. It validates every expected revision and touches the same source fences. Repeating
+the exact staged capture reuses its snapshot even after later buffer edits, preserving their tracked
+state and the original capture fence. A new capture refuses pending edits to its target rather than
+silently detaching them. Cached replay revalidates the immutable source scope, including authority.
+The domain owns commit, rollback, clearing failed tracked work and durable
+operation reconciliation after an unknown commit acknowledgement. The helper never commits a
+partial member set or resolves mutable membership itself.
+
 Capture records the operation identity, exact content/profile/fingerprint and capture pin atomically.
 Replay returns that snapshot after edits or discard; a new capture of a discarded copy is refused.
 Pins and collection serialize on the source fence and relational foreign keys. An operation pin may

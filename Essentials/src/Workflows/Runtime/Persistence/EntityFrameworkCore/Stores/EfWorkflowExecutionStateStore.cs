@@ -803,7 +803,18 @@ public sealed class EfWorkflowExecutionStateStore(
             var previous = ReadChecked(row, scope, state.WorkflowExecutionId);
             if (previous.ModelWorkOrigin is { } origin ? !origin.IsEquivalentTo(state.ModelWorkOrigin) : state.ModelWorkOrigin is not null)
                 throw new InvalidOperationException("A native worker cannot replace or discard its immutable model invocation address.");
+            if (previous.TestEntry is { } admitted ? !admitted.Matches(state.TestEntry) : state.TestEntry is not null)
+                throw new InvalidOperationException("A workflow execution cannot replace or discard its admitted test entry.");
+            if (previous.TestContext is { } testContext && (state.TestContext is null ||
+                state.TestContext.ContextId != testContext.ContextId || state.TestContext.ContextFingerprint != testContext.ContextFingerprint))
+                throw new InvalidOperationException("A workflow execution cannot replace or discard its admitted test context identity.");
         }
+        if (state.TestEntry is { } entry && (state.RunKind != WorkflowRunKind.TestRun ||
+            !WorkflowTestScope.ContextEquals(state.TestScope, entry.Scope) || state.Partition != entry.Scope.Partition ||
+            state.TenantId != entry.Scope.TenantId || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(entry.Executable, state.PinnedExecutable) ||
+            state.Authority is null || !WorkflowExecutionAuthoritySnapshot.Matches(entry.Authority,
+                state.Authority.SystemIdentity, state.Authority.RootInitiator, state.Authority.Metadata)))
+            throw new InvalidOperationException("The execution header differs from its admitted test authority and exact pin.");
         if (state.ModelWorkOrigin is { } work && (work.Scope.Value != scope || work.WorkerExecutionId != state.WorkflowExecutionId ||
             state.Partition?.Value != scope || state.ParentWorkflowExecutionId is not null ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable)))

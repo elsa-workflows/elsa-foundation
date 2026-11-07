@@ -39,6 +39,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. |
 | `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. |
 | `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. |
+| `Elsa.Workflows.Testing` | Verifies workflow behavior against saved expectations through shared Studio and headless scenarios. |
 | `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). |
 
 Host and test-only groupings that appear in the generated map — `Elsa.Workbench`, `Elsa.Architecture`,

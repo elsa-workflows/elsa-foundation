@@ -191,6 +191,21 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
     internal ValueTask PassivateLocalActorAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken) =>
         _localProvider.PassivateAsync(request, cancellationToken);
 
+    internal async ValueTask<bool> CanRouteTestEntryAsync(WorkflowTestEntry entry, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_operationScopeFactory is null || _gate is null || _leaseFencingCapability?.IsAvailable is not true)
+            return false;
+        await using var scope = await CreateOperationScopeAsync(entry.Scope.Partition, cancellationToken);
+        if (scope.Services.GetService<IWorkflowExecutionCommandExecutor>() is not { } executor ||
+            !_localProvider.SupportsCurrentTestEntryExecutor(executor, _operationScopeFactory) ||
+            scope.Services.GetService<RuntimeTestExecutionBoundary>()?.CanPersist(entry) != true)
+            return false;
+        var owners = scope.Services.GetServices<IExecutionCommandTransportTestBoundary>().ToArray();
+        var transport = scope.Services.GetService<IExecutionCommandTransport>();
+        return owners.Length == 1 && transport is not null && owners[0].CanTransportTestEntry(entry, transport);
+    }
+
     /// <summary>
     /// Decides placement for one command: the gate first, in an operation scope that is closed before the drain runs,
     /// then the claim. Nothing is written when the gate refuses.

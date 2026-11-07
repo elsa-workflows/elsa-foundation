@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,6 +25,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly ILogger<WorkflowStartSchedulerWorkHandler> _logger;
+    private readonly WorkflowTestEntryAdmission _testEntries;
+    private readonly IWorkflowExecutableSourceReferenceStore? _sourceReferences;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -34,6 +37,34 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         IWorkflowExecutableReader? executableReader = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         RuntimeCheckpointCommitter? checkpointCommitter = null,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
+        : this(workflowExecutableStore, schedulerWorkQueue, idGenerator, timeProvider, workflowExecutionStateStore,
+            [], null, null, executableReader, incidentStrategyCatalog, checkpointCommitter, logger) { }
+
+    public WorkflowStartSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IEnumerable<IWorkflowTestEntryContextResolver> testEntryResolvers,
+        IWorkflowTestScopeStore? testScopeStore,
+        IWorkflowExecutableSourceReferenceStore? sourceReferences,
+        IWorkflowExecutableReader? executableReader = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        RuntimeCheckpointCommitter? checkpointCommitter = null,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
+        : this(workflowExecutableStore, schedulerWorkQueue, idGenerator, timeProvider, workflowExecutionStateStore,
+            null, testEntryResolvers, testScopeStore, sourceReferences, executableReader, incidentStrategyCatalog, checkpointCommitter,
+            logger) { }
+
+    public WorkflowStartSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore, IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator, TimeProvider timeProvider, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IServiceProvider? serviceProvider,
+        IEnumerable<IWorkflowTestEntryContextResolver> testEntryResolvers, IWorkflowTestScopeStore? testScopeStore,
+        IWorkflowExecutableSourceReferenceStore? sourceReferences, IWorkflowExecutableReader? executableReader = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null, RuntimeCheckpointCommitter? checkpointCommitter = null,
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
@@ -51,6 +82,9 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         _checkpointCommitter = checkpointCommitter;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _logger = logger ?? NullLogger<WorkflowStartSchedulerWorkHandler>.Instance;
+        _testEntries = new(testEntryResolvers, testScopeStore, timeProvider,
+            serviceProvider is null ? null : new RuntimeTestExecutionBoundary(serviceProvider));
+        _sourceReferences = sourceReferences;
     }
 
     public string Name => HandlerName;
@@ -77,6 +111,21 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
+        if (startPayload.TestEntry is { } entry)
+        {
+            var source = startPayload.PinnedSource is { } provenance && _sourceReferences is not null
+                ? await _sourceReferences.FindAsync(provenance.SourceReferenceId, cancellationToken) : null;
+            if (source is null || source.Scope != WorkflowExecutableReferenceScope.TestRun ||
+                source.ExpiresAt is null || !source.IsLive(_timeProvider.GetUtcNow()) ||
+                source.ArtifactId != entry.Executable.ArtifactId ||
+                WorkflowExecutableSourceProvenance.From(source) != startPayload.PinnedSource ||
+                startPayload.TriggerMetadata.Count != 0 || startPayload.StimulusInput is not null)
+                throw WorkflowTestEntryAdmission.Refused("test-entry-source-required", "The queued test entry requires an exact live TestRun source and no trigger stimulus.");
+            await _testEntries.ValidateAsync(entry, executable, startPayload.RunKind, startPayload.TestScope, startPayload.Authority,
+                startPayload.TenantId, startPayload.Partition, startPayload.ParentWorkflowExecutionId,
+                startPayload.TriggerNodeId, startPayload.StartAuthority, cancellationToken);
+        }
+
         var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
         var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
         if (_incidentStrategyCatalog is not null &&
@@ -89,7 +138,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             return;
         }
 
-        var rootActivityId = executable.RootActivity.ExecutableNodeId;
+        var rootActivityId = startPayload.TestEntry?.ExecutableNodeId ?? executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
         var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
@@ -124,6 +173,19 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     {
         if (await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
             return false;
+
+        if ((existing.TestEntry is not null || startPayload.TestEntry is not null) &&
+            (startPayload.TestEntry is null || !startPayload.TestEntry.Matches(existing.TestEntry) ||
+             existing.RunKind != startPayload.RunKind ||
+             !WorkflowTestScope.ContextEquals(existing.TestScope, startPayload.TestScope) ||
+             existing.TenantId != startPayload.TenantId || existing.Partition != startPayload.Partition ||
+             startPayload.Authority is null || existing.Authority is null ||
+             !WorkflowExecutionAuthoritySnapshot.Matches(existing.Authority, startPayload.Authority.SystemIdentity,
+                 startPayload.Authority.RootInitiator, startPayload.Authority.Metadata) ||
+             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(existing.PinnedExecutable, startPayload.PinnedExecutable) ||
+             startPayload.ParentWorkflowExecutionId is not null || startPayload.TriggerNodeId is not null ||
+             startPayload.StimulusInput is not null || startPayload.TriggerMetadata.Count != 0))
+            throw WorkflowTestEntryAdmission.Refused("test-entry-duplicate-mismatch", "The queued start differs from the existing admitted test entry.");
 
         if (StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, startPayload.PinnedExecutable.ArtifactId))
         {
@@ -338,7 +400,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             authority: startPayload.Authority,
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
-        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork };
+        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork, TestEntry = startPayload.TestEntry };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),

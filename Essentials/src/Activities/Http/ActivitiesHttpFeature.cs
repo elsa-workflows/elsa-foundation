@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Capabilities;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Contracts;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
@@ -87,6 +88,8 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             .AddLogger<HttpActivityClientLogger>();
         services.TryAddSingleton<HttpActivityClientLogger>();
         services.TryAddScoped<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>();
+        services.TryAddScoped<IHttpActivityRequestExecutor, HttpActivityRequestExecutor>();
+        HttpActivityRequestExecutorCompositionValidator.Register(services);
 
         // Contribute the HttpEndpoint start-trigger's stimulus provider so the publish-time trigger
         // extractor can recognize published HttpEndpoint nodes and index them. Enumerable so other activity

@@ -612,6 +612,11 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Essentials/tests/Workflows/Testing/Tests/Elsa.Workflows.Testing.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
@@ -851,7 +856,8 @@
           "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
           "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
           "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
-          "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj"
+          "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj",
+          "Essentials/tests/Workflows/Testing/Tests/Elsa.Workflows.Testing.Tests.csproj"
         ]
       },
       {

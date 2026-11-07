@@ -1,4 +1,6 @@
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Events.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Builders;
@@ -484,6 +486,14 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IWorkflowOutputSource, WorkflowOutputSource>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
+        services.TryAddScoped<IRuntimeTestContextFrameAccess, RuntimeTestContextOwner>();
+        services.TryAddScoped<IRuntimeTestContextPreparer, RuntimeTestContextPreparer>();
+        services.TryAddScoped<IRuntimeTestEffectGate, RuntimeTestEffectGate>();
+        services.TryAddScoped<RuntimeTestExecutionBoundary>();
+        services.TryAddScoped<IRuntimeTestPersistenceBoundary, InMemoryRuntimeTestPersistenceBoundary>();
+        services.TryAddScoped<IRuntimeTestExecutionRoutingBoundary, InProcessRuntimeTestExecutionRoutingBoundary>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeTestScopeContractSource, NativeRuntimeTestScopeContractSource>());
+        services.AddEventHandler<RuntimeTestScopeContractsCollecting, CollectRuntimeTestScopeContracts>();
         // Issue #977: shared snapshot materialization, resolvable by the parent-completion evaluation so an
         // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
@@ -520,6 +530,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
         services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider => serviceProvider.GetRequiredService<InProcessWorkflowExecutionActorProvider>());
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
+        services.TryAddSingleton(new WorkflowTestEntryRegistrations(() => services.ToArray()));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateWorkflowTestEntryComposition>());
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
         {
             var policies = serviceProvider.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
@@ -542,7 +554,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>(),
+                serviceProvider.GetServices<IWorkflowTestEntryContextResolver>(),
+                serviceProvider.GetRequiredService<IWorkflowTestScopeStore>(), serviceProvider);
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

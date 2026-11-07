@@ -210,6 +210,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\src\Workflows\Testing\Elsa.Workflows.Testing\Elsa.Workflows.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Connectors\Microsoft365\Elsa.Integrations.Connectors.Microsoft365.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />

@@ -14,6 +14,8 @@ public sealed record RuntimeOutputCaptureProjection(
     IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues,
     IReadOnlyDictionary<string, RuntimeDurableValueEncoding> WorkflowVariableWrites)
 {
+    public IReadOnlyCollection<RuntimeTestFrameWrite> TestFrameWrites { get; init; } = [];
+
     public static RuntimeOutputCaptureProjection Empty { get; } = new(
         [],
         new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal));
@@ -39,19 +41,30 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
         string executableNodeId,
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
         IReadOnlyDictionary<string, string> metadata,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        await BuildStateChangeAsync(workflowExecutionStateStore, workflowExecutionId, executableNodeId, writes, metadata,
+            cancellationToken, null, null);
+
+    public static async ValueTask<RuntimeStateChange<WorkflowExecutionState>?> BuildStateChangeAsync(
+        IWorkflowExecutionStateStore workflowExecutionStateStore, string workflowExecutionId, string executableNodeId,
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes, IReadOnlyDictionary<string, string> metadata,
+        CancellationToken cancellationToken, IRuntimeTestContextFrameAccess? testFrames,
+        IReadOnlyCollection<RuntimeTestFrameWrite>? testWrites)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(writes);
 
-        if (writes.Count == 0)
+        if (writes.Count == 0 && (testWrites?.Count ?? 0) == 0)
             return null;
 
         var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException(
                 $"Output capture on executable node '{executableNodeId}' targets a workflow variable, but workflow execution '{workflowExecutionId}' has no durable state.");
         var changed = Apply(workflowState, executableNodeId, writes);
+        if (testWrites is { Count: > 0 })
+            changed = (testFrames ?? throw new InvalidOperationException("The runtime test frame owner is unavailable."))
+                .ApplyWrites(changed, testWrites);
         return new RuntimeStateChange<WorkflowExecutionState>(
             StateId: workflowExecutionId,
             Operation: RuntimeStateChangeOperation.Upsert,

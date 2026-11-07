@@ -20,9 +20,26 @@ namespace Elsa.Activities.Scheduling.Activities;
 [RefusesSecretBinding("Duration", SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityOutcome("Done")]
 [Activity(Icon = "Hourglass")]
-public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider) :
+public sealed class Delay :
     StatefulActivity<ActivityUnit, DelayState, DurableTimerElapsed>
 {
+    private readonly IDurableTimerScheduler _scheduler;
+    private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowBusinessClock? _businessClock;
+
+    public Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider)
+        : this(scheduler, timeProvider, null)
+    {
+    }
+
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
+    public Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider, IWorkflowBusinessClock? businessClock = null)
+    {
+        _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _businessClock = businessClock;
+    }
+
     public const string TimerTriggerProviderId = "provider.durable-timer";
     private const string ResumeTargetId = "resume-target:durable-timer";
 
@@ -33,7 +50,9 @@ public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timePro
     protected override async ValueTask<ActivityTransition<ActivityUnit, DelayState>> ExecuteAsync(
         ActivityExecutionContext context)
     {
-        var now = timeProvider.GetUtcNow();
+        var businessTime = _businessClock is null ? null :
+            await _businessClock.ReadAsync(context, context.CancellationToken);
+        var now = businessTime?.Instant ?? _timeProvider.GetUtcNow();
         var dueTime = Duration <= TimeSpan.Zero ? now : now + Duration;
         var timerId = DeriveTimerId(context.InvocationId);
         var trigger = new DurableTimerElapsed(timerId);
@@ -43,7 +62,7 @@ public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timePro
             timerId,
             ActivityTriggerDeduplicationMode.Once);
 
-        await scheduler.ScheduleAsync(
+        await _scheduler.ScheduleAsync(
             new DurableTimer(
                 TimerId: timerId,
                 WorkflowExecutionId: context.WorkflowExecutionId,
@@ -53,7 +72,8 @@ public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timePro
                 CreatedAt: now,
                 Input: JsonSerializer.SerializeToElement(trigger),
                 PayloadType: registration.PayloadType,
-                ProviderId: TimerTriggerProviderId),
+                ProviderId: TimerTriggerProviderId,
+                ActivityExecutionId: context.InvocationId) { BusinessTime = businessTime },
             context.CancellationToken);
 
         return Suspend(new DelayState(timerId), [registration]);

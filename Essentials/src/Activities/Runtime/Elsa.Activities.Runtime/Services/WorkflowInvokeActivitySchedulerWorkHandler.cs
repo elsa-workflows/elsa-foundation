@@ -163,6 +163,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
             RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
+        IReadOnlyCollection<RuntimeTestFrameWrite> testFrameWrites = [];
 
         // Carrier identity (correlation id / instance name) is projected from the IdentityName-tagged durable
         // values this invocation already re-lists, so a plain activity populates the carrier without
@@ -603,9 +604,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken),
+                testCaptureTargets: await ClosedScopeCaptureBoundary.FindTestTargetsAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
+            testFrameWrites = captureProjection.TestFrameWrites;
             return valueFlowCompletion.Projections
                 .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
@@ -706,7 +709,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = invokePayload.Reason
             },
-            cancellationToken);
+            cancellationToken,
+            serviceProvider.GetService<IRuntimeTestContextFrameAccess>(), testFrameWrites);
 
         await CommitCompletedActivityAsync(
             checkpointCommitter,

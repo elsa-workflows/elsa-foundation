@@ -79,10 +79,10 @@ public sealed class RuntimeContainerScopeService(
                 ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' reads scoped variables inside a closed activity execution scope, which requires a durable value state store.");
             durableValues = await store.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
         }
-        var ordered = new List<VariableFrameState>
-        {
-            boundary is null ? root : RuntimeClosedScope.CreateFrame(boundary, durableValues)
-        };
+        RuntimeTestContextFrame? testBoundary = null;
+        var ordered = boundary is null
+            ? RuntimeTestContextOwner.EnclosingFrames(workflowState, root, out testBoundary).ToList()
+            : new List<VariableFrameState> { RuntimeClosedScope.CreateFrame(boundary, durableValues) };
         foreach (var ancestor in chain.Skip(boundaryIndex + 1))
             AddOwnedFrames(ancestor, ordered);
 
@@ -98,7 +98,8 @@ public sealed class RuntimeContainerScopeService(
             AddFrame(ownContainer, VariableFrameKind.Container, activityState.InvocationId, ordered);
 
         return boundary is null
-            ? new RuntimeVisibleVariableFrames(ordered)
+            ? new RuntimeVisibleVariableFrames(ordered, null,
+                testBoundary?.VariableNames ?? new Dictionary<string, string>(), testBoundary)
             : new RuntimeVisibleVariableFrames(
                 ordered,
                 boundary,
@@ -285,7 +286,7 @@ public sealed class RuntimeContainerScopeService(
     public static WorkflowExecutionState CloseRootFrame(WorkflowExecutionState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state with { RootVariableFrame = Close(state.RootVariableFrame) };
+        return state with { RootVariableFrame = Close(state.RootVariableFrame), TestContext = state.TestContext?.Close() };
     }
 
     public IReadOnlyList<RuntimeScopedVariableValue> ReadScopeVariableValues(
@@ -386,7 +387,8 @@ public sealed class RuntimeContainerScopeService(
             }
 
             // A closed scope's root frame holds the boundary's variables, named by their rows.
-            if (RuntimeClosedScope.IsClosedScopeFrame(frame))
+            if (RuntimeClosedScope.IsClosedScopeFrame(frame) ||
+                frame.Kind == VariableFrameKind.Root && frame.FrameId.StartsWith(RuntimeTestContextOwner.FramePrefix, StringComparison.Ordinal))
             {
                 foreach (var (key, value) in frame.Values)
                     yield return (rootVariableNames?.GetValueOrDefault(key) ?? key, value);
@@ -512,9 +514,15 @@ public sealed class RuntimeVisibleVariableFrames
         IReadOnlyCollection<VariableFrameState> frames,
         ActivityExecutionState? closedScopeBoundary,
         IReadOnlyDictionary<string, string> rootVariableNames)
+        : this(frames, closedScopeBoundary, rootVariableNames, null) { }
+
+    public RuntimeVisibleVariableFrames(IReadOnlyCollection<VariableFrameState> frames,
+        ActivityExecutionState? closedScopeBoundary, IReadOnlyDictionary<string, string> rootVariableNames,
+        RuntimeTestContextFrame? testClosedScopeBoundary)
     {
         ArgumentNullException.ThrowIfNull(rootVariableNames);
         ClosedScopeBoundary = closedScopeBoundary;
+        TestClosedScopeBoundary = testClosedScopeBoundary;
         RootVariableNames = rootVariableNames;
         ArgumentNullException.ThrowIfNull(frames);
         Frames = frames.ToArray();
@@ -529,7 +537,7 @@ public sealed class RuntimeVisibleVariableFrames
         foreach (var frame in Frames)
         foreach (var (key, value) in frame.Values)
             values[new RuntimeVariableValueAddress(frame.ScopeId, key)] = value;
-        if (closedScopeBoundary is not null)
+        if (closedScopeBoundary is not null || testClosedScopeBoundary is not null)
             RuntimeClosedScope.AliasWorkflowScope(Frames[0], values);
         Values = values;
     }
@@ -539,6 +547,8 @@ public sealed class RuntimeVisibleVariableFrames
 
     /// <summary>The nearest closed activity execution scope the chain is rooted at, or null for the workflow root.</summary>
     public ActivityExecutionState? ClosedScopeBoundary { get; }
+
+    public RuntimeTestContextFrame? TestClosedScopeBoundary { get; }
 
     /// <summary>Reference key → name of a closed scope's root variables; empty for the workflow root.</summary>
     public IReadOnlyDictionary<string, string> RootVariableNames { get; }

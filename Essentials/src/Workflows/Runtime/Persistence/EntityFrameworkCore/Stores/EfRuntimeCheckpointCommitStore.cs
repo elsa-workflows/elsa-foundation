@@ -26,6 +26,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
     TimeProvider? timeProvider = null,
     IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null) : IRuntimeCheckpointCommitStore
 {
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
+
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
 
     private const int MaxFenceRenewalAttempts = 3;

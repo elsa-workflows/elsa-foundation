@@ -22,6 +22,9 @@ public sealed class EfDurableTimerStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IDurableTimerStore
 {
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
+
     private const string CursorPurpose = "ef-runtime-durable-timers-v1";
     private const int MaxDeadlineCandidates = 16;
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);

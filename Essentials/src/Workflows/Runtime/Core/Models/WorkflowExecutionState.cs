@@ -62,6 +62,14 @@ public sealed record WorkflowExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTestScope? TestScope { get; init; }
 
+    /// <summary>Attempt-owned lexical frames and explicit fixtures; never activity execution history.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeTestContextState? TestContext { get; init; }
+
+    /// <summary>Exact admitted test boundary and context. Null for ordinary and legacy executions.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     /// <summary>
     /// The workflow activation's lexical variable frame. Null only for legacy states that predate
     /// role-owned variable frames.

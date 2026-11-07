@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
@@ -19,11 +20,18 @@ public static class RuntimeFaultCapturePolicyExtensions
     /// the outer capture), or <c>null</c> when there is none. Runtime faults are routinely wrapped one level deep
     /// (e.g. a checkpoint-writer exception around the physical storage fault), so surfacing the first inner fault
     /// alongside the outer one keeps the root cause diagnosable (#1031).
+    /// A <see cref="RuntimeTestEffectUnavailableException"/>'s provider cause is retained for trusted diagnostics only
+    /// and is omitted from these persisted/public projections, including after secret masking.
     /// </summary>
     public static RuntimeFaultInfo? CaptureInner(this IRuntimeFaultCapturePolicy policy, Exception exception)
     {
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(exception);
+
+        if (exception is RuntimeTestEffectUnavailableException ||
+            exception is SecretMaskedException { OriginalExceptionType: var originalType } &&
+            originalType == typeof(RuntimeTestEffectUnavailableException).FullName)
+            return null;
 
         return exception.InnerException is { } inner ? policy.Capture(inner) : null;
     }

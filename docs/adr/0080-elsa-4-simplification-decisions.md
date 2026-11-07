@@ -56,6 +56,18 @@ implementation leaf. This authorization reactivates no unrelated paused/parked w
 architecture. Production/shared-system deployment, production credentials, package release, mandatory CRM,
 wholesale mirroring, arbitrary database access and an unbounded application platform are outside scope.
 
+**Owner amendment, 5 November 2026:** [Workflow and Activity Testing #3901](../program-goals/workflow-activity-testing.md)
+is authorized for scoped program establishment and end-to-end delivery of #3588 and #3892 together in a
+dedicated isolated worktree. The owner asked for their coherent delivery from necessary product/architecture
+design with Sipke through implementation, verification, required review/merge and resulting-main closeout.
+Sequence reviewed requirements and runtime/context design before shared saved scenarios/results, explicit
+selected-occurrence execution, controlled dependencies/time and multi-step settlement, Studio/headless
+integration and complete acceptance. Preserve consolidation priority and displace no existing program.
+This activates only the named testing scope; it resumes no unrelated paused backend or parity stream.
+The two feature issues remain canonical acceptance records; the program coordinates their shared critical
+path. Routine engineering choices, transitions, tests, documentation and scoped PRs follow that authority.
+Release and production deployment remain separate. The remaining decisions in this ADR apply.
+
 **Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
 is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
 contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing

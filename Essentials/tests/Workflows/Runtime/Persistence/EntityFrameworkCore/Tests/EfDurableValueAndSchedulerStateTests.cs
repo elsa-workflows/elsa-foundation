@@ -72,10 +72,12 @@ public sealed class EfDurableValueAndSchedulerStateTests
         // #2108: a newer module version almost certainly changed this row's JSON shape along with its
         // schema version, so the malformed content below must never reach the deserializer - the version
         // check has to run first and report skew, not the deserializer reporting corruption.
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = "3.0.0", v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Values.FindAsync("workflow-a", "value").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        Assert.Equal("RuntimeOperationalState", skew.Family);
+        Assert.Equal("3.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]
@@ -188,10 +190,12 @@ public sealed class EfDurableValueAndSchedulerStateTests
 
         // #2108: the version check has to run before EfSchedulerStateJson.Deserialize ever sees this
         // row's content, or a newer module's changed shape is reported as corruption instead of skew.
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = "3.0.0", v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Scheduler.FindAsync("workflow-a").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        Assert.Equal("RuntimeOperationalState", skew.Family);
+        Assert.Equal("3.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]
@@ -301,10 +305,12 @@ public sealed class EfDurableValueAndSchedulerStateTests
 
         // #2108: the version check has to run before the deserializer ever sees this row's content, or a
         // newer module's changed shape is reported as corruption instead of skew.
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = "3.0.0", v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Liveness.FindAsync("workflow-a", "state-a").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        Assert.Equal("RuntimeOperationalState", skew.Family);
+        Assert.Equal("3.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]
@@ -412,10 +418,12 @@ public sealed class EfDurableValueAndSchedulerStateTests
 
         // #2108: the version check has to run before the deserializer ever sees this row's content, or a
         // newer module's changed shape is reported as corruption instead of skew.
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = "3.0.0", v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Holds.FindAsync("workflow-state").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        Assert.Equal("RuntimeOperationalState", skew.Family);
+        Assert.Equal("3.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]

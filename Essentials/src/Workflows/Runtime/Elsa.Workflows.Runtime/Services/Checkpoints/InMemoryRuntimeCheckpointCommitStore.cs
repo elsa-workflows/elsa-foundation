@@ -227,6 +227,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     }
 
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
+    internal bool CoordinatesTestExecutions(InMemoryWorkflowExecutionStateStore executions) => ReferenceEquals(ExactResumeExecutions, executions);
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume =>
         _bookmarkStateStore is InMemoryBookmarkStateStore bookmarks && bookmarks.Coordinates(_state) &&

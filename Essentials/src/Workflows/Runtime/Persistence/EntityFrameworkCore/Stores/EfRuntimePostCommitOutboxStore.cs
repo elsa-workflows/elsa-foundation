@@ -1047,7 +1047,7 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         row.ClaimableIsEligible = replacement.ClaimableIsEligible;
         row.ClaimDeliveredAtUtcTicks = replacement.ClaimDeliveredAtUtcTicks;
         row.ContentJson = replacement.ContentJson;
-        row.SchemaVersion = replacement.SchemaVersion;
+        row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion);
         row.Revision = revision;
     }
 
