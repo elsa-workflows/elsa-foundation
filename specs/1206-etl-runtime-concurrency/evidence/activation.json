@@ -1,0 +1,49 @@
+{
+  "candidateParent": "d6f9b290079fa94bdca69a1fa58fceae9d89921a",
+  "candidateSources": {
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/AssemblyInfo.cs": "eec558e6f664b17ac5241b5aac1335b4f3a55777b9480a40160906f5276fbf73",
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/DependencyInjection/EtlRuntimeEntityFrameworkCoreRegistration.cs": "12d1e09ff4b7089d71bdfe040d70fc822f64047c0237a10cff5561d0f5647b43",
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeEntityFrameworkCoreFeature.cs": "3515c48e227e20c0fd79d5a5ba81cb05bc85dab87290627e20603dafd02ee7fd",
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj": "db63e92ffc4fb56da18d2dde1f3ce3b4758652e3a6bb7ffbbe3a862a9073b957",
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeProviderTests.cs": "1275f64fe222c29383212e0b4edd3c262114d770ddccba47e6e18f8fc4043b88",
+    "Extensions/Etl/tests/Tests/EtlRuntimeRegistrationTests.cs": "eae557f3ac8951e63df189c8d31dba80efd90be57fb27342aac2b0d15084d28c"
+  },
+  "results": [
+    {
+      "name": "activation-before",
+      "executed": 6,
+      "passed": 0,
+      "failed": 6,
+      "skipped": 0,
+      "trxSha256": "736589e1dd0d1876e11dd754ad624ac958ba3a46415a7b9b1105499271dc3284"
+    },
+    {
+      "name": "activation-after",
+      "executed": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "2cf1b3d5fa85edb92489b0b37cf6bb466dc7b67c2b913f5b767f19a92912f19d"
+    },
+    {
+      "name": "activation-default-capability",
+      "executed": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c66016bdd45fb3c3e4d14c624d9623bb22a2cd8395e728e0f13a1f81fa42e02e"
+    }
+  ],
+  "changes": [
+    "Normal runtime provider binding selects all four contexts; no additional store or port.",
+    "Three server runtime contexts added to existing module metadata.",
+    "Existing SQLite default, options, scoped runtime store and optional connector casts preserved.",
+    "Feature/package descriptions reflect engine selection."
+  ],
+  "limits": [
+    "Six server cases prove real DI-selected contexts/store persistence across scopes, pooled and unpooled, without design service registration.",
+    "Two SQLite default cases, existing SQLite-only module composition and existing file-only provider host case pass.",
+    "Actual both-store Workbench proof and complete feature/API/architecture/review/CI gates remain pending.",
+    "No migrations or stored shapes changed."
+  ]
+}

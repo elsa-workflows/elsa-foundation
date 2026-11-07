@@ -11,7 +11,14 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease,
         EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(ReserveConnectorBatchAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return await RunOperationAsync(nameof(ReserveConnectorBatchAsync), lease?.Scope, lease?.RunId,
+            () => ReserveConnectorBatchOnceAsync(lease, batch, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchOnceAsync(EtlConnectorPartitionLease? lease,
+        EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(lease);
         ArgumentNullException.ThrowIfNull(batch);
         var key = RunKey(lease.Scope, lease.RunId);

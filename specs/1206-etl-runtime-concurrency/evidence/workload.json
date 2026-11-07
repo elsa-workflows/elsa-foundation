@@ -1,0 +1,172 @@
+{
+  "baselineProductionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "candidateParent": "a244f27cce84b7d49deb75a9ae47b59436014bb5",
+  "candidateSources": {
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.Workload.cs": "0f9aea6b51aa323e97375e5265efb9a5f4298cd43de54a6599fc5eab1353891e",
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlRuntimeOperation.cs": "bba0b87df7351308685e4f47908ee8f3c662505916686390ca93a8e1ea54b7ff"
+  },
+  "baselinePolicySha256": "faee3e5fba83069aef50a2ab8b220d3f5666f40f5f39dceba354e210c99dc0e4",
+  "linearPolicySha256": "3db4e33094cbb1803873cd4acbc9271735b9fba761c5f8e9f2cb4982f1d1fe79",
+  "workload": {
+    "runsPerEngine": 32,
+    "writerContexts": 4,
+    "partitionsPerRun": 2,
+    "v1Runs": 16,
+    "connectorRuns": 16,
+    "acceptedPerV1Run": 4,
+    "filteredPerConnectorRun": 2,
+    "staleFenceRefusalsPerEngine": 64,
+    "terminalAndAcknowledgedOutboxPerEngine": 32,
+    "checks": "Per-run counters, scope/run-correlated terminal/outbox and delivered result/hash/address, explicit reservation/partition/batch cardinalities, unique result/delivery identities."
+  },
+  "policy": {
+    "attempts": 16,
+    "delay": "Full jitter from 1 ms to exponential cap 1000 ms; caps 20/40/80/160/320/640/1000...",
+    "maximumTotalDelayMilliseconds": 10260,
+    "transactionIsolationChanged": false,
+    "outerRetryAdded": false
+  },
+  "results": [
+    {
+      "name": "workload-native",
+      "executed": 3,
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "trxSha256": "23970bd66a203a4d12be5c57e703ae78252930c0e723163c9c282049c18ac40f",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Observed workload native conflict: SqlException:1205\nStore workload: 32 mixed runs, four concurrent writers, 32 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Failed",
+          "observation": ""
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Observed workload native conflict: MySqlException:1213\nStore workload: 32 mixed runs, four concurrent writers, 32 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        }
+      ]
+    },
+    {
+      "name": "workload-postgresql-observed",
+      "executed": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "trxSha256": "3a945fc039382ad697d28b20cec54b19a274b03fa03e74e7d1f498ec3d01cd21",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Failed",
+          "observation": "Preparation/acceptance observed native conflicts: 213.\nObserved workload native conflict: PostgresException:40001"
+        }
+      ]
+    },
+    {
+      "name": "workload-approved-shape-red",
+      "executed": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "trxSha256": "ee24748a1e23a9e3d1b62f515546ad829f7831f8dbb27a573e9e0646fb9060a8",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Failed",
+          "observation": "Preparation/acceptance observed native conflicts: 341.\nObserved workload native conflict: PostgresException:40001"
+        }
+      ]
+    },
+    {
+      "name": "workload-postgresql-backoff",
+      "executed": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "trxSha256": "fca22c61406435367597e567be102c991ddb6c9b52dc3e4a689ddbdd618719f1",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Failed",
+          "observation": "Preparation/acceptance observed native conflicts: 202.\nObserved workload native conflict: PostgresException:40001"
+        }
+      ]
+    },
+    {
+      "name": "workload-postgresql-exponential",
+      "executed": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "e1a1817a72902fa75821a94d059ebbefa1a2bee16526ff82463ab9057ef5e386",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Preparation/acceptance observed native conflicts: 150.\nObserved workload native conflict: PostgresException:40001\nObserved workload native conflict: PostgresException:40001\nStore workload: 32 mixed runs, four concurrent writers, 64 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        }
+      ]
+    },
+    {
+      "name": "all-concurrency-backoff",
+      "executed": 45,
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "3e4dfe0e95d40abc3f4954fb09a666e6e4d6412ad90bd1184a2bd480c01a72cd",
+      "workloadObservations": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Preparation/acceptance observed native conflicts: 1.\nObserved workload native conflict: SqlException:1205\nObserved workload native conflict: SqlException:1205\nStore workload: 32 mixed runs, four concurrent writers, 64 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Preparation/acceptance observed native conflicts: 135.\nObserved workload native conflict: PostgresException:40001\nObserved workload native conflict: PostgresException:40001\nStore workload: 32 mixed runs, four concurrent writers, 64 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Four_writers_complete_32_mixed_runs_with_exact_accounting_and_stale_fence_refusal",
+          "outcome": "Passed",
+          "observation": "Preparation/acceptance observed native conflicts: 6.\nObserved workload native conflict: MySqlException:1213\nObserved workload native conflict: MySqlException:1213\nStore workload: 32 mixed runs, four concurrent writers, 64 stale-fence refusals, 32 unique terminal/outbox acknowledgements; no physical connector I/O or native bookmark consumption is asserted."
+        }
+      ]
+    },
+    {
+      "name": "backoff-boundary-sqlite",
+      "executed": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "1f76aae64046342acdd837e1d8592d8586213deeeb1bdfcea0161c04308ebf00",
+      "workloadObservations": []
+    }
+  ],
+  "focusedReview": {
+    "findings": [
+      "Original workload had one partition; approved shape requires at least two.",
+      "Only global counter sums and vacuous reservation All check."
+    ],
+    "corrections": [
+      "Two partitions/shards per run, processed and counted.",
+      "Per-run expected counters and terminal/outbox/delivery correlation; explicit retained cardinalities."
+    ],
+    "reReview": "No actionable defect found in corrected workload or delay policy; no cached aborted transaction or missing run-key filter found. Not a full PR review."
+  },
+  "diagnostics": [
+    "Original single-partition all-engine probe passed SQL Server/MySQL and failed PostgreSQL; it does not qualify T010.",
+    "A second single-partition PostgreSQL probe reproduced failure with 213 native conflicts; still diagnostic only.",
+    "Approved-shape first build failed before execution on incorrect assumed Outbox.PayloadJson property. Corrected to correlate actual delivery Result/PayloadHash.",
+    "Approved two-partition PostgreSQL shape failed on AcceptConnectorBatchAsync with native40001 before backoff; unchanged workload also failed with the first linear100ms delay cap."
+  ],
+  "limits": [
+    "Store workload only: simulated delivery acknowledgements, no physical connector I/O or actual native bookmark-consumption/host-recovery claim.",
+    "Contention mechanism is not fully diagnosed; broad PostgreSQL predicate locks are a plausible unconfirmed explanation, not a proven root cause.",
+    "Whole projects, activation/actual hosts, API/architecture qualification, full review/required checks and resulting main remain pending."
+  ]
+}

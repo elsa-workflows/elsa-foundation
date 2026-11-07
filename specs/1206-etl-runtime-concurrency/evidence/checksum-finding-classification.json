@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "findings": [
+    {
+      "incident": "39602839",
+      "commit": "b8c7c01fb084a14d2aee8c0d01ea80d114b4ba64",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 293,
+      "productSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+      "productFile": "Elsa.Secrets.Persistence.EntityFrameworkCore.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602840",
+      "commit": "b8c7c01fb084a14d2aee8c0d01ea80d114b4ba64",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 291,
+      "productSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+      "productFile": "Elsa.Secrets.Core.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602841",
+      "commit": "b8c7c01fb084a14d2aee8c0d01ea80d114b4ba64",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 289,
+      "productSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+      "productFile": "Elsa.Secrets.Api.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602842",
+      "commit": "b8c7c01fb084a14d2aee8c0d01ea80d114b4ba64",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 297,
+      "productSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+      "productFile": "Elsa.Secrets.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602843",
+      "commit": "b8c7c01fb084a14d2aee8c0d01ea80d114b4ba64",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 295,
+      "productSource": "09ab6ffcda19141cf0043ae0b91fe52e2cab8f8b",
+      "productFile": "Elsa.Secrets.Workflows.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39601030",
+      "commit": "427319432e2dbb217b1f9613227d4fa3996ae7f7",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 303,
+      "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+      "productFile": "Elsa.Secrets.Persistence.EntityFrameworkCore.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39601028",
+      "commit": "427319432e2dbb217b1f9613227d4fa3996ae7f7",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 299,
+      "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+      "productFile": "Elsa.Secrets.Api.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39601031",
+      "commit": "427319432e2dbb217b1f9613227d4fa3996ae7f7",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 305,
+      "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+      "productFile": "Elsa.Secrets.Workflows.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39601032",
+      "commit": "427319432e2dbb217b1f9613227d4fa3996ae7f7",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 307,
+      "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+      "productFile": "Elsa.Secrets.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39601029",
+      "commit": "427319432e2dbb217b1f9613227d4fa3996ae7f7",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 301,
+      "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+      "productFile": "Elsa.Secrets.Core.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602514",
+      "commit": "059fd2e0f832b5353d0a6d6942e98399f489e963",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 292,
+      "productSource": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+      "productFile": "Elsa.Secrets.Core.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602513",
+      "commit": "059fd2e0f832b5353d0a6d6942e98399f489e963",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 290,
+      "productSource": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+      "productFile": "Elsa.Secrets.Api.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39602515",
+      "commit": "059fd2e0f832b5353d0a6d6942e98399f489e963",
+      "path": "specs/1202-etl-design-store-providers/evidence/workbench-products-current-main.json",
+      "line": 294,
+      "productSource": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+      "productFile": "Elsa.Secrets.Persistence.EntityFrameworkCore.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39605445",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 291,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Core.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39605446",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 289,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Api.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    },
+    {
+      "incident": "39605447",
+      "commit": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+      "path": "specs/1206-etl-runtime-concurrency/evidence/workbench-products.json",
+      "line": 293,
+      "productSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+      "productFile": "Elsa.Secrets.Persistence.EntityFrameworkCore.pdb",
+      "isRecordedSha256": true,
+      "recomputedFromRetainedProduct": true,
+      "disposition": "False positive (public product checksum)",
+      "dashboardChanged": false
+    }
+  ],
+  "recordedAtUtc": "2026-11-04T21:16:23.217036+00:00",
+  "statusNote": "DashboardChanged records the state at this checksum classification, before dashboard triage; use later PR checkpoints and current checks for live state.",
+  "triageVerification": {
+    "checksumIncidents": 16,
+    "checksumStatus": "Ignored",
+    "checksumReason": "Not a secret (false positive)",
+    "historicalTestIncidents": [
+      "39471203",
+      "39471729"
+    ],
+    "historicalTestStatus": "Ignored",
+    "historicalTestReason": "Test credential",
+    "verifiedThrough": "Signed-in GitGuardian visible UI on 2026-11-04",
+    "githubCheckResults": "Not yet confirmed green; re-evaluation required."
+  }
+}

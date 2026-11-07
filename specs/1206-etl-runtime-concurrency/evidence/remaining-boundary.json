@@ -1,0 +1,39 @@
+{
+  "productionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "workingTreeParent": "4b25201c3ae05c4d2d62d5e6b15b25095ecf3999",
+  "testSources": {
+    "Extensions/Etl/tests/Shared/RuntimeStore/EtlRuntimeRetryContract.cs": "81f4b5f51963c61a698dd78c3f969a750ff276c29102efa1f434f7e860c96942",
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.cs": "69b9376295170f2cf352f57285d194d2402190533601dda2da11ab492ea93bd2"
+  },
+  "results": [
+    {
+      "name": "remaining-boundary-sqlite",
+      "executed": 7,
+      "passed": 1,
+      "failed": 6,
+      "skipped": 0,
+      "trxSha256": "a8ae47a0bf9d443d2325e19fac36a1304a1e7a2ac1044f680a1fe42b073ce17e"
+    },
+    {
+      "name": "remaining-boundary-sqlite-green",
+      "executed": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "40f296911ce146c06788013f16b54bbbe60b499cbdbfc1fc967f9f3d429f36a7"
+    },
+    {
+      "name": "remaining-boundary-native",
+      "executed": 24,
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "54e2adc0e5428a2a1c7d938d7a1af7fbd7af15ccf1639e125d2f1d5c56cec58f"
+    }
+  ],
+  "limits": [
+    "Read retry exhaustion uses controlled EF concurrency exceptions in command interception, not genuine native read contention.",
+    "Enlisted transaction checks use a real separately enlisted transaction on each server, with Transaction.Current and EF CurrentTransaction null.",
+    "The initial SQLite artifact-record equality assertion compared JsonDocument identity; six cases reached successful retained readback before this harness assertion failed. Corrected to the existing invocation fingerprint; not a product bite."
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "a48ec7b0daaa64d8db51667029809918fce668f9",
+  "parentProductSource": "7190843f0c1e7ac63eaa14c0896890277f18078d",
+  "tool": "Microsoft.DotNet.ApiCompat.Tool10.0.100",
+  "framework": "Microsoft.NETCore.App10.0.13",
+  "comparisons": [
+    {
+      "assembly": "Elsa.Etl.Core",
+      "baseline": "parentStack",
+      "leftSha256": "f34f8c2cf9c4277065a4b98f9b91a4c14d9f0b5c41da31413ca031dccfb8d876",
+      "rightSha256": "0af745f8753734e65c0d2effb9cb320e9a2838f1b460ab7697524de4348091e2",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Core",
+      "baseline": "released",
+      "leftSha256": "7609abeff282bfa5953e34e0ded90f19b1cdf0af40659bf1c1084faf2918f41a",
+      "rightSha256": "0af745f8753734e65c0d2effb9cb320e9a2838f1b460ab7697524de4348091e2",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "baseline": "parentStack",
+      "leftSha256": "3d85177621bd85f85781713697496f08a9ba1f7836a91a6762eed0a3d12123f1",
+      "rightSha256": "73d9320dd9ab2488fa87ea3fd0cc2b2b0f25d2157437228ef68739e9b4c847a1",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    },
+    {
+      "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "baseline": "released",
+      "leftSha256": "c7062fe6b5776ae030c04c599329a615bf6baaecdedc2eac9c9a156c20754ca7",
+      "rightSha256": "73d9320dd9ab2488fa87ea3fd0cc2b2b0f25d2157437228ef68739e9b4c847a1",
+      "exitCode": 0,
+      "unresolvedReferences": 0,
+      "logSha256": "8028060817bd04eafb22ad125db5c7094817849dda3617c098fe28e69dffae02"
+    }
+  ],
+  "releasedPackages": [
+    {
+      "package": "Elsa.Etl.Core",
+      "version": "4.0.12-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.etl.core/4.0.12-preview/elsa.etl.core.4.0.12-preview.nupkg",
+      "packageSha256": "19bea499f1915c4422fcfa3cc1c9796ddee59bf602c39e4de567060f3fd630db",
+      "assemblyEntry": "lib/net10.0/Elsa.Etl.Core.dll",
+      "assemblySha256": "7609abeff282bfa5953e34e0ded90f19b1cdf0af40659bf1c1084faf2918f41a"
+    },
+    {
+      "package": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "version": "4.0.14-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.etl.persistence.entityframeworkcore/4.0.14-preview/elsa.etl.persistence.entityframeworkcore.4.0.14-preview.nupkg",
+      "packageSha256": "e4f7b19c4f970e63ddba730a659df3daf14cd9b8fbd8ec61dc51f3acbecf9813",
+      "assemblyEntry": "lib/net10.0/Elsa.Etl.Persistence.EntityFrameworkCore.dll",
+      "assemblySha256": "c7062fe6b5776ae030c04c599329a615bf6baaecdedc2eac9c9a156c20754ca7"
+    }
+  ]
+}

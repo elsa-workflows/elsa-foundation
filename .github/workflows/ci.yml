@@ -21,7 +21,7 @@ on:
       suite:
         description: Validation to run
         type: choice
-        options: [ci, studio, backend-source, weaver, published-images, studio-order]
+        options: [ci, studio, backend-source, weaver, published-images, studio-order, etl-host]
         default: ci
       tier:
         description: Which tier to run
@@ -1435,6 +1435,111 @@ jobs:
           path: ${{ runner.temp }}/weaver-failure-diagnostic/
           if-no-files-found: warn
           retention-days: 14
+
+  # On demand only: reuse the real three-engine controller without repeating the backend tiers.
+  etl-host:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'etl-host'
+    name: ETL server stores in Workbench
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MSBUILDDISABLENODEREUSE: 1
+      DOTNET_CLI_USE_MSBUILD_SERVER: 0
+      DOTNET_PROCESSOR_COUNT: 2
+    steps:
+      - name: Checkout the executing source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Publish the intended Workbench with locked dependencies
+        id: publish
+        run: >-
+          dotnet publish Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj
+          -c Release -m:1 -p:BuildInParallel=false -p:RestoreLockedMode=true
+          -p:UseSharedCompilation=false -p:WarningsNotAsErrors=NU1603
+          --output "$RUNNER_TEMP/etl-host-products"
+
+      - name: Bind every published byte to the actual source
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          if subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip():
+              raise SystemExit('The executing source is not clean.')
+          root = Path(os.environ['RUNNER_TEMP'])
+          products = root / 'etl-host-products'
+          receipt = {
+              'sourceRevision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workingTreeDirty': False,
+              'files': {str(p.relative_to(products)): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in sorted(products.rglob('*')) if p.is_file()},
+          }
+          (root / 'etl-host-products.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+
+      - name: Run the existing three-engine native workflow journey
+        id: journey
+        run: >-
+          python3 specs/1206-etl-runtime-concurrency/evidence/runtime_store_workbench_journey.py
+          --workbench-assembly "$RUNNER_TEMP/etl-host-products/Elsa.Workbench.dll"
+          --product-receipt "$RUNNER_TEMP/etl-host-products.json"
+          --output "$RUNNER_TEMP/etl-host-journey"
+
+      - name: Record execution outcomes without implying acceptance
+        if: always()
+        env:
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+          JOURNEY_OUTCOME: ${{ steps.journey.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          result = {
+              'sourceRevision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'publishOutcome': os.environ['PUBLISH_OUTCOME'],
+              'journeyOutcome': os.environ['JOURNEY_OUTCOME'],
+              'proofScope': 'Both ETL stores on three server engines; native persistence SQLite. '
+                            'Completed-state restart only; no mid-work recovery, upgrade or Studio proof.',
+          }
+          (Path(os.environ['RUNNER_TEMP']) / 'etl-host-ci-result.json').write_text(json.dumps(result, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('### ETL host qualification\n\n```json\n' + json.dumps(result, indent=2) + '\n```\n')
+          PY
+
+      - name: Retain the product receipt and completed or partial journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etl-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/etl-host-products.json
+            ${{ runner.temp }}/etl-host-ci-result.json
+            ${{ runner.temp }}/etl-host-journey/summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Retain the immutable published products for source-bound API checks
+        if: ${{ !cancelled() && steps.publish.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: etl-host-products-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/etl-host-products/
+          if-no-files-found: error
+          retention-days: 7
 
   published-image-pair:
     needs: plan-scope

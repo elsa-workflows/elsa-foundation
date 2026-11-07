@@ -1,0 +1,251 @@
+{
+  "productionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "workingTreeParent": "0849715154e7f66c105e44b8fa1246ee79f86ed1",
+  "testSources": {
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.cs": "a286b1d8495f5b31dea5c6969d56f0a9ce919f11976f689c7de4ed2168445ad2",
+    "Extensions/Etl/tests/Shared/RuntimeStore/EtlRuntimeStoreContract.cs": "ee3840b01c9579743f718ba642a4c9f67ef6fc1bd763732ad3808df2a62e6338"
+  },
+  "results": [
+    {
+      "name": "transition-races-corrected",
+      "executed": 24,
+      "passed": 21,
+      "failed": 3,
+      "skipped": 0,
+      "trxSha256": "7ce38452798397f4e500863741cb99e634ee9fd5caf476da2311a413953cafb8",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        }
+      ]
+    },
+    {
+      "name": "all-native-races-green",
+      "executed": 33,
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "bb0bed78529175e09a3f5eb717ed71e7a9b7abae9f18523c6dec4dbf86e71179",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observation": "Observed native conflict: PostgresException:23505"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_final_acceptance_and_cancellation_retain_one_terminal_decision",
+          "observation": "Observed native conflict: PostgresException:23505"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_partition_claims_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_preparers_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_final_acceptance_and_cancellation_retain_one_terminal_decision",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observation": "Observed native conflict: PostgresException:23505"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_partition_claims_retain_one_authority(connector: True)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_reservations_cannot_exceed_the_run_budget",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_delivery_transitions_retain_one_claim_and_acknowledgement(acknowledge: False)",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_preparers_retain_one_authority(connector: False)",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_final_acceptance_and_cancellation_retain_one_terminal_decision",
+          "observation": "Observed native conflict: SqlException:1205"
+        }
+      ]
+    }
+  ],
+  "focusedReview": {
+    "findings": [
+      "Final fixture defaulted to two partitions but supplied a two-record acceptance for one one-record partition.",
+      "Persisted authority owner missing from claim oracles.",
+      "Timed-out waits did not cancel and drain both participants."
+    ],
+    "corrections": [
+      "One two-record partition configured.",
+      "Persisted encoded owners compared; acknowledgement clears owner/expiry and retains timestamp.",
+      "Shared cancellation deadline passed to participants; cancellation/failure drains aggregate before disposal."
+    ],
+    "reReview": "No remaining concrete finding; not a complete-PR review round."
+  },
+  "diagnostics": [
+    "Initial fixture compilation failed before execution because the shared nested clock was inaccessible; reuse now exposes only internal test helpers.",
+    "First behavioral run passed 21 cases and failed 3 final-case fixture timeouts before genuine contention. These are harness failures, not product bites."
+  ]
+}

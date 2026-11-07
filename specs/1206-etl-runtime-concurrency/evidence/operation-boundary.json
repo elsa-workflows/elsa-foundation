@@ -1,0 +1,149 @@
+{
+  "stage": "runtime-operation-boundary",
+  "productionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "results": [
+    {
+      "name": "admission-before",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "915623b7354f7e7b925b0b0e45ecbc62c7b078a6c0e1fa2d2219b6abdc82c9cb"
+    },
+    {
+      "name": "admission-after",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "014cb9d70b51b3f7991cace73b6d4d658e686aa44633152d9c557280c8d9d85a"
+    },
+    {
+      "name": "admission-boundaries",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "7",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "a54f81e3f3550b9260d44d32238f193feb5ce711425550ea291656c56da68a54"
+    },
+    {
+      "name": "store-candidate",
+      "counters": {
+        "total": "266",
+        "executed": "266",
+        "passed": "266",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "12d7c897e6d1dba99bd1483f1eb7285f52c95c221d653fd93996ef133cf8ce98"
+    },
+    {
+      "name": "admission-providers-corrected",
+      "counters": {
+        "total": "27",
+        "executed": "27",
+        "passed": "27",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "d28f490f23cf83e4a8c704507a74417bc375a36b70b841c18a3518212097f2d6",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observations": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observations": "Observed native conflict: PostgresException:23505"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observations": "Observed native conflict: PostgresException:23505"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observations": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: False)",
+          "observations": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Concurrent_admission_retries_native_conflicts_as_a_whole(differentBindings: True)",
+          "observations": "Observed native conflict: SqlException:1205"
+        }
+      ]
+    }
+  ],
+  "nativeTestSourceSha256": "a52e9ea49d077317d2e1fdd861c73d3bd92a5e13758734009bb1626f2bd21546",
+  "limits": [
+    "Native admission races are covered; other native races, multi-save and compaction rollback, bounded workload and host journeys remain open.",
+    "The initial failed build of the new native fixture used wrong helper/property names; no tests ran in that attempt.",
+    "The server runtime registration guard is still present.",
+    "Final whole-project, API/binary/version, review and CI gates remain open."
+  ]
+}
