@@ -57,7 +57,7 @@ the renderer, so a renderer from another package never needs the owning module's
 
 ## Related run links
 
-Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. A provider-owned family of user-defined activities, whose type keys are not known in advance, sets `anyActivityType: true` instead; the host then reads the state view of every selected activity, and the view kind alone decides. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 

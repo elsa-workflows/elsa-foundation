@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
+import { InvocationEvidenceDetails } from "./InvocationEvidence";
+import { invocationPath } from "./SpecialistInvocationPage";
 import {
   acceptedConversation, allowsContinuity, businessInputs, cancelRun, getDraft, getEvidence, isTerminal, newIdempotencyKey, startPlaygroundRun,
   type ConversationReference, type PlaygroundDraft, type PlaygroundEvidence, type PlaygroundInput
@@ -259,7 +261,6 @@ export function parseInputs(inputs: PlaygroundInput[], raw: Record<string, strin
 function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revision: number; onContinue(reference: ConversationReference): void; onRetry(): void }) {
   const evidence = run.evidence;
   const invocation = evidence?.invocation;
-  const turn = invocation?.turn;
   const terminal = evidence ? isTerminal(evidence.status) : false;
   // Only a run of the revision on screen can be continued; an earlier revision's conversation belongs to another candidate.
   const accepted = evidence && evidence.draftRevision === revision ? acceptedConversation(evidence) : null;
@@ -285,45 +286,17 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
           <StudioButton size="sm" onClick={onRetry}>Retry</StudioButton></p>
       ) : null}
       {run.stopNote ? <p role="status">{run.stopNote}</p> : null}
-      {turn?.status === "OutcomeUnknown" ? (
-        <StudioAlert tone="warning">
-          The model may have received this request, but no result was accepted. It is not retried automatically.{" "}
-          {invocation?.specialist.allowContinuity
-            ? "Start a fresh conversation, or continue from the last accepted revision."
-            : "Run again only once a repeated request is acceptable."}
-        </StudioAlert>
-      ) : null}
-      {invocation?.fault ? (
-        <StudioAlert tone="danger"><span data-testid="playground-fault">{invocation.fault.message ?? "The agent did not complete."}</span> <code>{invocation.fault.code}</code></StudioAlert>
-      ) : null}
-      {invocation?.output ? <Output output={invocation.output} valuesPermitted={evidence?.valuesPermitted !== false} /> : null}
-      {invocation ? (
-        <dl className="agent-playground__facts">
-          <dt>Candidate</dt><dd>{invocation.specialist.version} <CopyableIdentifier label="Candidate version" value={invocation.specialist.definitionVersionId} /></dd>
-          <dt>Model</dt><dd>{invocation.model.modelId} on {invocation.model.connectionName}</dd>
-          {turn ? <><dt>Model requests</dt><dd data-testid="playground-requests">{turn.modelRequests.length} of at most {turn.maximumModelCalls}</dd></> : null}
-          {turn ? <><dt>Usage</dt><dd data-testid="playground-usage">{usageText(turn.usage, terminal)}</dd></> : null}
-          {turn ? <><dt>Result</dt><dd data-testid="playground-application">{applicationText(turn.application)}</dd></> : null}
-          {turn?.conversation ? <><dt>Conversation</dt><dd>
-            <CopyableIdentifier label="Conversation" value={turn.conversation.conversationId} />
-            {turn.conversation.currentRevision != null ? ` at revision ${turn.conversation.currentRevision}` : " (no longer readable)"}
-          </dd></> : null}
-        </dl>
-      ) : null}
+      {invocation ? <InvocationEvidenceDetails invocation={invocation} valuesPermitted={evidence?.valuesPermitted !== false} terminal={terminal} versionLabel="Candidate"
+        outcomeUnknownAdvice={invocation.specialist.allowContinuity
+          ? "Start a fresh conversation, or continue from the last accepted revision."
+          : "Run again only once a repeated request is acceptable."} /> : null}
+      {invocation ? <p><a href={invocationPath({ workflowExecutionId: invocation.workflowExecutionId, activityExecutionId: invocation.activityExecutionId })}
+        data-testid="playground-invocation-link">Inspect this invocation</a></p> : null}
       {terminal && accepted ? <StudioButton onClick={() => onContinue(accepted)}>Continue this conversation</StudioButton> : null}
     </section>
   );
 }
 
-function Output({ output, valuesPermitted }: { output: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["output"]>; valuesPermitted: boolean }) {
-  if (!valuesPermitted)
-    return <p className="agent-playground__hint" data-testid="playground-output-withheld">Seeing the result needs permission to inspect captured values in this run.</p>;
-  if (output.captureMode !== "Payload" || output.value === undefined || output.value === null)
-    return <p className="agent-playground__hint" data-testid="playground-output-withheld">The host's capture policy keeps this result out of the playground ({output.captureMode}).</p>;
-  return typeof output.value === "string"
-    ? <div className="agent-playground__text" data-testid="playground-output">{output.value}</div>
-    : <pre className="agent-playground__json" data-testid="playground-output">{JSON.stringify(output.value, null, 2)}</pre>;
-}
 
 function announcement(run: Run) {
   if (run.refusal) return "The run was refused before the agent started.";
@@ -345,22 +318,7 @@ function stageText(evidence: PlaygroundEvidence | null) {
   }
 }
 
-function applicationText(application: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["turn"]>["application"]) {
-  switch (application) {
-    case "NotAccepted": return "No accepted result";
-    case "Pending": return "Accepted; the agent has not finished yet";
-    case "SettlementPending": return "Accepted and used; settlement is being recorded";
-    case "Applied": return "Accepted and applied";
-    case "NotApplied": return "Accepted, but the run ended before applying it";
-  }
-}
 
-function usageText(usage: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["turn"]>["usage"], terminal: boolean) {
-  if (!usage) return terminal ? "Not reported" : "Not reported yet";
-  if (!usage.usageAvailable) return "The provider did not report usage";
-  const part = (value: number | null | undefined) => value == null ? "unknown" : String(value);
-  return `${part(usage.inputTokens)} input, ${part(usage.outputTokens)} output, ${part(usage.totalTokens)} total tokens`;
-}
 
 function statusTone(status?: string) {
   switch (status?.toLowerCase()) {

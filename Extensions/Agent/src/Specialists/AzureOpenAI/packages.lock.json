@@ -92,14 +92,6 @@
           "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
-      "OpenAI": {
-        "type": "Transitive",
-        "resolved": "2.14.0",
-        "contentHash": "AeyC3GxbrJ7KRoWDyFeNSUOQQWD9AnNvM7LYQijCcXcqjyr53aGRcf5GBLExcSBzIs0RWYHe+NbzPrHTeuU5zA==",
-        "dependencies": {
-          "System.ClientModel": "1.15.0"
-        }
-      },
       "System.ClientModel": {
         "type": "Transitive",
         "resolved": "1.15.0",
@@ -135,6 +127,7 @@
       "elsa.agent.specialists.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
@@ -253,6 +246,15 @@
         "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "dYfCLR52UA+3DL7C4I/pvSaRPkNqxrUAQmbFL2u0zvYKKzqgrFCJl08Df+F1aYc8leu9JvpC9bsURUdpExcBXQ=="
+      },
+      "OpenAI": {
+        "type": "CentralTransitive",
+        "requested": "[2.14.0, )",
+        "resolved": "2.14.0",
+        "contentHash": "AeyC3GxbrJ7KRoWDyFeNSUOQQWD9AnNvM7LYQijCcXcqjyr53aGRcf5GBLExcSBzIs0RWYHe+NbzPrHTeuU5zA==",
+        "dependencies": {
+          "System.ClientModel": "1.15.0"
+        }
       }
     }
   }

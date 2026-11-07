@@ -541,7 +541,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IWorkflowExecutionStateStore>(),
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
-                serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>());
+                serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

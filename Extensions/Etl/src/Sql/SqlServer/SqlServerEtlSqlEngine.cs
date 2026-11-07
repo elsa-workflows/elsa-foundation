@@ -37,8 +37,10 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
     // SQL Server has no infinity: 9999-12-31 is a real value, such as a temporal table's open period end.
     public bool ExtremeDatesAreInfinite => false;
 
-    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
-        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} " +
+        (watermarkColumn is null ? "" : $"WHERE ({Quote(watermarkColumn)} > @watermark OR {Quote(watermarkColumn)} IS NULL) ") +
+        $"ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new SqlConnection(connectionString);
 

@@ -62,13 +62,13 @@ export function PipelineBindingSelect({
 }
 
 const connectorRoleLabels: Record<EtlBindingRole, Record<EtlConnectorBindingSummary["kind"], string>> = {
-  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL", sql: "Source SQL table" },
-  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL", sql: "Lookup SQL" },
-  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output", sql: "Accepted SQL table" },
-  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output", sql: "Rejected SQL table" }
+  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL", sql: "Source SQL table", rabbitMq: "Source RabbitMQ" },
+  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL", sql: "Lookup SQL", rabbitMq: "Lookup RabbitMQ" },
+  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output", sql: "Accepted SQL table", rabbitMq: "Accepted RabbitMQ exchange" },
+  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output", sql: "Rejected SQL table", rabbitMq: "Rejected RabbitMQ exchange" }
 };
 
-/** Lower-cases only the first letter, so acronyms such as CSV, HTTP and SQL keep their case mid-sentence. */
+/** Lower-cases only the first letter, so acronyms such as CSV, HTTP, SQL and RabbitMQ keep their case mid-sentence. */
 function inSentence(subject: string) {
   return subject.charAt(0).toLowerCase() + subject.slice(1);
 }

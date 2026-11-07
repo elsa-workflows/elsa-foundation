@@ -93,7 +93,20 @@ export interface EtlContinuousRunPolicy {
   pollIntervalSeconds: number;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource;
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource | EtlSqlSource | EtlRabbitMqSource;
+
+/**
+ * A host-approved RabbitMQ queue drained up to `maxMessages` when a run prepares; its messages are acknowledged once the
+ * snapshot of their JSON bodies is recorded, and each body is read with the declared JSON fields.
+ */
+export interface EtlRabbitMqSource {
+  kind: "rabbitmq";
+  binding: string;
+  queue: string;
+  fields: EtlJsonField[];
+  /** 1 to 100,000. */
+  maxMessages: number;
+}
 
 export interface EtlCsvSource {
   kind: "csv";
@@ -128,6 +141,8 @@ export interface EtlSqlSource {
   columns: EtlColumn[];
   /** One to eight required columns ordering the snapshot. */
   key: string[];
+  /** A required int64 column; each run then reads only rows above the last completed run's high watermark. */
+  watermark?: string;
 }
 
 export interface EtlJsonField {
@@ -154,7 +169,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination | EtlRabbitMqDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -183,6 +198,18 @@ export interface EtlSqlDestination {
   table: string;
   /** One to eight output fields mapped from required source fields. */
   key: string[];
+}
+
+/**
+ * A host-approved RabbitMQ exchange receiving one persistent JSON message per record, recorded once the broker confirmed
+ * every message of the batch; delivery is at least once with stable message ids (main route only).
+ */
+export interface EtlRabbitMqDestination {
+  kind: "rabbitmq";
+  binding: string;
+  /** The exchange, or empty for the default exchange. */
+  exchange: string;
+  routingKey: string;
 }
 
 export interface EtlConnectorLimits {
@@ -257,7 +284,7 @@ export interface EtlBindingSummary {
 
 /** A current v2 connector alias without endpoint, storage, or credential details. */
 export interface EtlConnectorBindingSummary extends EtlBindingSummary {
-  kind: "csv" | "http" | "jsonl" | "sql";
+  kind: "csv" | "http" | "jsonl" | "sql" | "rabbitMq";
 }
 
 export interface EtlDefinitionSummaryView {

@@ -114,7 +114,7 @@ internal sealed partial class EfEtlRuntimeStore
     {
         null => null,
         EtlConnectorKind.Http => 1,
-        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql => 2,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => 2,
         _ => throw new InvalidDataException("The connector route kind has no delivery mechanism.")
     };
 
@@ -175,7 +175,8 @@ internal sealed partial class EfEtlRuntimeStore
             }
             EtlRuntimeRecordCodec.ValidateObject(route.Body, "route body");
             if (count <= 0 || route.RecordCount != count || route.Body.ByteLength <= 0 ||
-                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
+                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
                 throw new InvalidDataException("The connector route body is invalid.");
             return route.Body.ByteLength;
         }

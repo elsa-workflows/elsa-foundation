@@ -81,14 +81,18 @@ def psql(container: str, sql: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-# A throwaway container's administrator password, generated per run so no credential is committed. It meets SQL Server's
-# complexity rule: upper case, lower case, digits and a symbol.
-SQLSERVER_PASSWORD = "Etl!" + secrets.token_hex(12)
+def throwaway_secret() -> str:
+    """A container's administrator secret generated per run, so none is committed. Upper- and lower-case hexadecimal digits
+    and a symbol meet SQL Server's complexity rule."""
+    return secrets.token_hex(8).upper() + secrets.token_hex(8) + "-"
+
+
+SQLSERVER_SA_SECRET = throwaway_secret()
 
 
 def sqlcmd(container: str, sql: str, database: str = "warehouse") -> list[str]:
     result = subprocess.run(["docker", "exec", container, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa",
-                             "-P", SQLSERVER_PASSWORD, "-d", database, "-b", "-h", "-1", "-W", "-s", "|", "-Q", "SET NOCOUNT ON; " + sql],
+                             "-P", SQLSERVER_SA_SECRET, "-d", database, "-b", "-h", "-1", "-W", "-s", "|", "-Q", "SET NOCOUNT ON; " + sql],
                             capture_output=True, text=True, check=True)
     return [line for line in result.stdout.splitlines() if line]
 
@@ -96,7 +100,7 @@ def sqlcmd(container: str, sql: str, database: str = "warehouse") -> list[str]:
 def start_sqlserver() -> tuple[str, int]:
     """Starts an owned SQL Server 2022 container on an ephemeral loopback port, with a snapshot-isolation database."""
     name = "elsa-etl-sql-journey-" + uuid.uuid4().hex[:8]
-    subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "-e", "ACCEPT_EULA=Y", "-e", f"MSSQL_SA_PASSWORD={SQLSERVER_PASSWORD}",
+    subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "-e", "ACCEPT_EULA=Y", "-e", f"MSSQL_SA_PASSWORD={SQLSERVER_SA_SECRET}",
                     "-p", "127.0.0.1::1433", "mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04"], capture_output=True, text=True, check=True)
     port = int(subprocess.check_output(["docker", "port", name, "1433/tcp"], text=True).strip().rsplit(":", 1)[1])
     def ready():
@@ -162,7 +166,7 @@ def main() -> int:
         database, database_port = start_sqlserver()
         query = lambda sql: sqlcmd(database, sql)
         text_type, feature = "nvarchar(100)", "EtlSqlServer"
-        connection_string = (f"Server=127.0.0.1,{database_port};Database=warehouse;User Id=sa;Password={SQLSERVER_PASSWORD};"
+        connection_string = (f"Server=127.0.0.1,{database_port};Database=warehouse;User Id=sa;Password={SQLSERVER_SA_SECRET};"
                              "TrustServerCertificate=true;Pooling=false")
     else:
         database, database_port = start_postgres()

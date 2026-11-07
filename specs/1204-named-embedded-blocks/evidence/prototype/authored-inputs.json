@@ -1,0 +1,2750 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "cases": [
+    {
+      "name": "seq-out-to-in-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "seq-in-to-out-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "seq-out-to-in-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "consumer",
+                        "activityVersionId": "elsa.intrinsic.set-output@1",
+                        "inputs": [
+                          {
+                            "referenceKey": "name",
+                            "value": {
+                              "value": "answer",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "value",
+                            "value": {
+                              "value": {
+                                "producerNodeId": "producer",
+                                "projectionKey": "$result",
+                                "producerScopeId": "scope:root"
+                              },
+                              "expressionType": "ActivityResult"
+                            }
+                          }
+                        ],
+                        "outputs": [],
+                        "intrinsic": {
+                          "kind": "setOutput",
+                          "valueType": {
+                            "alias": "Elsa.Any",
+                            "collectionKind": "single"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "seq-in-to-out-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "producer",
+                        "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                        "inputs": [
+                          {
+                            "referenceKey": "Expression",
+                            "value": {
+                              "value": 42,
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "flow-out-to-in-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "flow-in-to-out-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "flow-out-to-in-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_rkGhZbCALdkpdFLO9XXQeMdM4AiXx7vmsm1awnpAnQc",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.flowchart.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "consumer",
+                        "activityVersionId": "elsa.intrinsic.set-output@1",
+                        "inputs": [
+                          {
+                            "referenceKey": "name",
+                            "value": {
+                              "value": "answer",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "value",
+                            "value": {
+                              "value": {
+                                "producerNodeId": "producer",
+                                "projectionKey": "$result",
+                                "producerScopeId": "scope:root"
+                              },
+                              "expressionType": "ActivityResult"
+                            }
+                          }
+                        ],
+                        "outputs": [],
+                        "intrinsic": {
+                          "kind": "setOutput",
+                          "valueType": {
+                            "alias": "Elsa.Any",
+                            "collectionKind": "single"
+                          }
+                        }
+                      }
+                    ],
+                    "startNodeId": "consumer",
+                    "nodeMetadata": {},
+                    "connectionMetadata": {},
+                    "connections": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "flow-in-to-out-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_rkGhZbCALdkpdFLO9XXQeMdM4AiXx7vmsm1awnpAnQc",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.flowchart.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "producer",
+                        "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                        "inputs": [
+                          {
+                            "referenceKey": "Expression",
+                            "value": {
+                              "value": 42,
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ],
+                    "startNodeId": "producer",
+                    "nodeMetadata": {},
+                    "connectionMetadata": {},
+                    "connections": []
+                  }
+                }
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "bpmn-out-to-in-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "bpmn-in-to-out-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "bpmn-out-to-in-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 42,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.bpmn.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "consumer",
+                        "activityVersionId": "elsa.intrinsic.set-output@1",
+                        "inputs": [
+                          {
+                            "referenceKey": "name",
+                            "value": {
+                              "value": "answer",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "value",
+                            "value": {
+                              "value": {
+                                "producerNodeId": "producer",
+                                "projectionKey": "$result",
+                                "producerScopeId": "scope:root"
+                              },
+                              "expressionType": "ActivityResult"
+                            }
+                          }
+                        ],
+                        "outputs": [],
+                        "intrinsic": {
+                          "kind": "setOutput",
+                          "valueType": {
+                            "alias": "Elsa.Any",
+                            "collectionKind": "single"
+                          }
+                        }
+                      }
+                    ],
+                    "elements": [
+                      {
+                        "elementId": "start",
+                        "elementType": "startEvent"
+                      },
+                      {
+                        "elementId": "t0",
+                        "elementType": "task",
+                        "childNodeId": "consumer"
+                      },
+                      {
+                        "elementId": "end",
+                        "elementType": "endEvent"
+                      }
+                    ],
+                    "sequenceFlows": [
+                      {
+                        "flowId": "f0",
+                        "sourceRef": "start",
+                        "targetRef": "t0"
+                      },
+                      {
+                        "flowId": "f1",
+                        "sourceRef": "t0",
+                        "targetRef": "end"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "bpmn-in-to-out-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.bpmn.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "producer",
+                        "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                        "inputs": [
+                          {
+                            "referenceKey": "Expression",
+                            "value": {
+                              "value": 42,
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ],
+                    "elements": [
+                      {
+                        "elementId": "start",
+                        "elementType": "startEvent"
+                      },
+                      {
+                        "elementId": "t0",
+                        "elementType": "task",
+                        "childNodeId": "producer"
+                      },
+                      {
+                        "elementId": "end",
+                        "elementType": "endEvent"
+                      }
+                    ],
+                    "sequenceFlows": [
+                      {
+                        "flowId": "f0",
+                        "sourceRef": "start",
+                        "targetRef": "t0"
+                      },
+                      {
+                        "flowId": "f1",
+                        "sourceRef": "t0",
+                        "targetRef": "end"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "nodeId": "consumer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "loop-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "loop",
+                "activityVersionId": "actver_SJ_8siKJjIgM254ALuOnZC4ScBBuP56pQmNmN8Y5YPY",
+                "inputs": [
+                  {
+                    "referenceKey": "Condition",
+                    "value": {
+                      "value": "getVariable('counter') < 3",
+                      "expressionType": "JavaScript"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.while.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "body": {
+                      "nodeId": "body",
+                      "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                      "inputs": [],
+                      "outputs": [],
+                      "structure": {
+                        "kind": "elsa.sequence.structure",
+                        "schemaVersion": "1.0.0",
+                        "payload": {
+                          "activities": [
+                            {
+                              "nodeId": "increment",
+                              "activityVersionId": "elsa.intrinsic.set@1",
+                              "inputs": [
+                                {
+                                  "referenceKey": "value",
+                                  "value": {
+                                    "value": "getVariable('counter') + 1",
+                                    "expressionType": "JavaScript"
+                                  }
+                                }
+                              ],
+                              "outputs": [],
+                              "intrinsic": {
+                                "kind": "set",
+                                "valueType": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "variable": {
+                                  "referenceKey": "counter"
+                                }
+                              }
+                            },
+                            {
+                              "nodeId": "producer",
+                              "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                              "inputs": [
+                                {
+                                  "referenceKey": "Expression",
+                                  "value": {
+                                    "value": "counter",
+                                    "expressionType": "Variable"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            },
+                            {
+                              "nodeId": "consumer",
+                              "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                              "inputs": [
+                                {
+                                  "referenceKey": "Expression",
+                                  "value": {
+                                    "value": {
+                                      "producerNodeId": "producer",
+                                      "projectionKey": "$result",
+                                      "producerScopeId": "scope:root"
+                                    },
+                                    "expressionType": "ActivityResult"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "nodeId": "last",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "counter",
+          "name": "counter",
+          "type": {
+            "alias": "Int32",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": 0,
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": null
+    },
+    {
+      "name": "loop-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "loop",
+                "activityVersionId": "actver_SJ_8siKJjIgM254ALuOnZC4ScBBuP56pQmNmN8Y5YPY",
+                "inputs": [
+                  {
+                    "referenceKey": "Condition",
+                    "value": {
+                      "value": "getVariable('counter') < 3",
+                      "expressionType": "JavaScript"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.while.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "body": {
+                      "nodeId": "body",
+                      "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                      "inputs": [],
+                      "outputs": [],
+                      "structure": {
+                        "kind": "elsa.sequence.structure",
+                        "schemaVersion": "1.0.0",
+                        "payload": {
+                          "activities": [
+                            {
+                              "nodeId": "block",
+                              "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                              "inputs": [],
+                              "outputs": [],
+                              "structure": {
+                                "kind": "elsa.sequence.structure",
+                                "schemaVersion": "1.0.0",
+                                "payload": {
+                                  "activities": [
+                                    {
+                                      "nodeId": "increment",
+                                      "activityVersionId": "elsa.intrinsic.set@1",
+                                      "inputs": [
+                                        {
+                                          "referenceKey": "value",
+                                          "value": {
+                                            "value": "getVariable('counter') + 1",
+                                            "expressionType": "JavaScript"
+                                          }
+                                        }
+                                      ],
+                                      "outputs": [],
+                                      "intrinsic": {
+                                        "kind": "set",
+                                        "valueType": {
+                                          "alias": "Elsa.Any",
+                                          "collectionKind": "single"
+                                        },
+                                        "variable": {
+                                          "referenceKey": "counter"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "nodeId": "producer",
+                                      "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                                      "inputs": [
+                                        {
+                                          "referenceKey": "Expression",
+                                          "value": {
+                                            "value": "counter",
+                                            "expressionType": "Variable"
+                                          }
+                                        }
+                                      ],
+                                      "outputs": []
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "nodeId": "consumer",
+                              "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                              "inputs": [
+                                {
+                                  "referenceKey": "Expression",
+                                  "value": {
+                                    "value": {
+                                      "producerNodeId": "producer",
+                                      "projectionKey": "$result",
+                                      "producerScopeId": "scope:root"
+                                    },
+                                    "expressionType": "ActivityResult"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "nodeId": "last",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "counter",
+          "name": "counter",
+          "type": {
+            "alias": "Int32",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": 0,
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": null
+    },
+    {
+      "name": "restart-Balanced-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "set",
+                "activityVersionId": "elsa.intrinsic.set@1",
+                "inputs": [
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "retained",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "set",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "variable": {
+                    "referenceKey": "message"
+                  }
+                }
+              },
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 73,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "wait",
+                "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                "inputs": [
+                  {
+                    "referenceKey": "EventName",
+                    "value": {
+                      "value": "block-lifecycle-1d1ee609648f4386a4b9a9c0c9c5ecfb",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CanStartWorkflow",
+                    "value": {
+                      "value": false,
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CorrelationId",
+                    "value": {
+                      "expressionType": "JavaScript",
+                      "value": {
+                        "language": "JavaScript",
+                        "source": "args.instance",
+                        "capabilityProfile": "binding-pure-v1",
+                        "resultType": {
+                          "alias": "String",
+                          "collectionKind": "single"
+                        },
+                        "parameters": {
+                          "instance": {
+                            "kind": "WorkflowInstance",
+                            "member": "instanceId"
+                          }
+                        },
+                        "options": {}
+                      }
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "answer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              },
+              {
+                "nodeId": "message",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "message",
+          "name": "message",
+          "type": {
+            "alias": "String",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": "",
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": {
+        "persistenceMode": "Balanced"
+      }
+    },
+    {
+      "name": "restart-Balanced-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "set",
+                "activityVersionId": "elsa.intrinsic.set@1",
+                "inputs": [
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "retained",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "set",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "variable": {
+                    "referenceKey": "message"
+                  }
+                }
+              },
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "producer",
+                        "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                        "inputs": [
+                          {
+                            "referenceKey": "Expression",
+                            "value": {
+                              "value": 73,
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      },
+                      {
+                        "nodeId": "wait",
+                        "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                        "inputs": [
+                          {
+                            "referenceKey": "EventName",
+                            "value": {
+                              "value": "block-lifecycle-4696bc77e4294b5b8e082c9317fcd456",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CanStartWorkflow",
+                            "value": {
+                              "value": false,
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CorrelationId",
+                            "value": {
+                              "expressionType": "JavaScript",
+                              "value": {
+                                "language": "JavaScript",
+                                "source": "args.instance",
+                                "capabilityProfile": "binding-pure-v1",
+                                "resultType": {
+                                  "alias": "String",
+                                  "collectionKind": "single"
+                                },
+                                "parameters": {
+                                  "instance": {
+                                    "kind": "WorkflowInstance",
+                                    "member": "instanceId"
+                                  }
+                                },
+                                "options": {}
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "nodeId": "answer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              },
+              {
+                "nodeId": "message",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "message",
+          "name": "message",
+          "type": {
+            "alias": "String",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": "",
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": {
+        "persistenceMode": "Balanced"
+      }
+    },
+    {
+      "name": "restart-Durable-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "set",
+                "activityVersionId": "elsa.intrinsic.set@1",
+                "inputs": [
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "retained",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "set",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "variable": {
+                    "referenceKey": "message"
+                  }
+                }
+              },
+              {
+                "nodeId": "producer",
+                "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                "inputs": [
+                  {
+                    "referenceKey": "Expression",
+                    "value": {
+                      "value": 73,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "wait",
+                "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                "inputs": [
+                  {
+                    "referenceKey": "EventName",
+                    "value": {
+                      "value": "block-lifecycle-d809eeee48e34bd8a84ab25033dd0b08",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CanStartWorkflow",
+                    "value": {
+                      "value": false,
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CorrelationId",
+                    "value": {
+                      "expressionType": "JavaScript",
+                      "value": {
+                        "language": "JavaScript",
+                        "source": "args.instance",
+                        "capabilityProfile": "binding-pure-v1",
+                        "resultType": {
+                          "alias": "String",
+                          "collectionKind": "single"
+                        },
+                        "parameters": {
+                          "instance": {
+                            "kind": "WorkflowInstance",
+                            "member": "instanceId"
+                          }
+                        },
+                        "options": {}
+                      }
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "answer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              },
+              {
+                "nodeId": "message",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "message",
+          "name": "message",
+          "type": {
+            "alias": "String",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": "",
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": {
+        "persistenceMode": "Durable"
+      }
+    },
+    {
+      "name": "restart-Durable-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "set",
+                "activityVersionId": "elsa.intrinsic.set@1",
+                "inputs": [
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "retained",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "set",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "variable": {
+                    "referenceKey": "message"
+                  }
+                }
+              },
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "producer",
+                        "activityVersionId": "actver_TRzdK-2vy_m2jhBScfO8h8q1bM-9EAvfi_j5PC_ZJcU",
+                        "inputs": [
+                          {
+                            "referenceKey": "Expression",
+                            "value": {
+                              "value": 73,
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      },
+                      {
+                        "nodeId": "wait",
+                        "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                        "inputs": [
+                          {
+                            "referenceKey": "EventName",
+                            "value": {
+                              "value": "block-lifecycle-373d8952a361452b8fdf9611c9a570c6",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CanStartWorkflow",
+                            "value": {
+                              "value": false,
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CorrelationId",
+                            "value": {
+                              "expressionType": "JavaScript",
+                              "value": {
+                                "language": "JavaScript",
+                                "source": "args.instance",
+                                "capabilityProfile": "binding-pure-v1",
+                                "resultType": {
+                                  "alias": "String",
+                                  "collectionKind": "single"
+                                },
+                                "parameters": {
+                                  "instance": {
+                                    "kind": "WorkflowInstance",
+                                    "member": "instanceId"
+                                  }
+                                },
+                                "options": {}
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "nodeId": "answer",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "answer",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": {
+                        "producerNodeId": "producer",
+                        "projectionKey": "$result",
+                        "producerScopeId": "scope:root"
+                      },
+                      "expressionType": "ActivityResult"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              },
+              {
+                "nodeId": "message",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "message",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [
+        {
+          "referenceKey": "message",
+          "name": "message",
+          "type": {
+            "alias": "String",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "value": "",
+            "expressionType": "Literal"
+          }
+        }
+      ],
+      "options": {
+        "persistenceMode": "Durable"
+      }
+    },
+    {
+      "name": "cancel-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "wait",
+                "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                "inputs": [
+                  {
+                    "referenceKey": "EventName",
+                    "value": {
+                      "value": "block-cancel-7d661f5f724546cd9786bcc4a278668c",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CanStartWorkflow",
+                    "value": {
+                      "value": false,
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "CorrelationId",
+                    "value": {
+                      "expressionType": "JavaScript",
+                      "value": {
+                        "language": "JavaScript",
+                        "source": "args.instance",
+                        "capabilityProfile": "binding-pure-v1",
+                        "resultType": {
+                          "alias": "String",
+                          "collectionKind": "single"
+                        },
+                        "parameters": {
+                          "instance": {
+                            "kind": "WorkflowInstance",
+                            "member": "instanceId"
+                          }
+                        },
+                        "options": {}
+                      }
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "after",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "must not run",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "cancel-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "block",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "wait",
+                        "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+                        "inputs": [
+                          {
+                            "referenceKey": "EventName",
+                            "value": {
+                              "value": "block-cancel-048163722727421ab0194320cf0d8426",
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CanStartWorkflow",
+                            "value": {
+                              "value": false,
+                              "expressionType": "Literal"
+                            }
+                          },
+                          {
+                            "referenceKey": "CorrelationId",
+                            "value": {
+                              "expressionType": "JavaScript",
+                              "value": {
+                                "language": "JavaScript",
+                                "source": "args.instance",
+                                "capabilityProfile": "binding-pure-v1",
+                                "resultType": {
+                                  "alias": "String",
+                                  "collectionKind": "single"
+                                },
+                                "parameters": {
+                                  "instance": {
+                                    "kind": "WorkflowInstance",
+                                    "member": "instanceId"
+                                  }
+                                },
+                                "options": {}
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": []
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "after",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "must not run",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "options": null
+    },
+    {
+      "name": "recover-extracted-False"
+    },
+    {
+      "name": "recover-extracted-True"
+    },
+    {
+      "name": "break-nearest-loop-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "loop",
+                "activityVersionId": "actver_SJ_8siKJjIgM254ALuOnZC4ScBBuP56pQmNmN8Y5YPY",
+                "inputs": [
+                  {
+                    "referenceKey": "Condition",
+                    "value": {
+                      "value": true,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.while.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "body": {
+                      "nodeId": "body",
+                      "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                      "inputs": [],
+                      "outputs": [],
+                      "structure": {
+                        "kind": "elsa.sequence.structure",
+                        "schemaVersion": "1.0.0",
+                        "payload": {
+                          "activities": [
+                            {
+                              "nodeId": "increment",
+                              "activityVersionId": "elsa.intrinsic.set@1",
+                              "inputs": [
+                                {
+                                  "referenceKey": "value",
+                                  "value": {
+                                    "value": "getVariable('counter') + 1",
+                                    "expressionType": "JavaScript"
+                                  }
+                                }
+                              ],
+                              "outputs": [],
+                              "intrinsic": {
+                                "kind": "set",
+                                "valueType": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "variable": {
+                                  "referenceKey": "counter"
+                                }
+                              }
+                            },
+                            {
+                              "nodeId": "break",
+                              "activityVersionId": "actver_Lih8A3COoikoDhjNi_ej8HHfZmhZKSSpM5rrQRVjHPI",
+                              "inputs": [],
+                              "outputs": []
+                            },
+                            {
+                              "nodeId": "never",
+                              "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                              "inputs": [
+                                {
+                                  "referenceKey": "text",
+                                  "value": {
+                                    "value": "must not run after Break",
+                                    "expressionType": "Literal"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "break-nearest-loop-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "loop",
+                "activityVersionId": "actver_SJ_8siKJjIgM254ALuOnZC4ScBBuP56pQmNmN8Y5YPY",
+                "inputs": [
+                  {
+                    "referenceKey": "Condition",
+                    "value": {
+                      "value": true,
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.while.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "body": {
+                      "nodeId": "body",
+                      "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                      "inputs": [],
+                      "outputs": [],
+                      "structure": {
+                        "kind": "elsa.sequence.structure",
+                        "schemaVersion": "1.0.0",
+                        "payload": {
+                          "activities": [
+                            {
+                              "nodeId": "increment",
+                              "activityVersionId": "elsa.intrinsic.set@1",
+                              "inputs": [
+                                {
+                                  "referenceKey": "value",
+                                  "value": {
+                                    "value": "getVariable('counter') + 1",
+                                    "expressionType": "JavaScript"
+                                  }
+                                }
+                              ],
+                              "outputs": [],
+                              "intrinsic": {
+                                "kind": "set",
+                                "valueType": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "variable": {
+                                  "referenceKey": "counter"
+                                }
+                              }
+                            },
+                            {
+                              "nodeId": "block",
+                              "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                              "inputs": [],
+                              "outputs": [],
+                              "structure": {
+                                "kind": "elsa.sequence.structure",
+                                "schemaVersion": "1.0.0",
+                                "payload": {
+                                  "activities": [
+                                    {
+                                      "nodeId": "break",
+                                      "activityVersionId": "actver_Lih8A3COoikoDhjNi_ej8HHfZmhZKSSpM5rrQRVjHPI",
+                                      "inputs": [],
+                                      "outputs": []
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "nodeId": "never",
+                              "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                              "inputs": [
+                                {
+                                  "referenceKey": "text",
+                                  "value": {
+                                    "value": "must not run after Break",
+                                    "expressionType": "Literal"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "counter",
+                      "expressionType": "Variable"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "complete-nearest-graph-extracted-False",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "call",
+                "activityVersionId": "activity-ver-14tYAz47Fbi",
+                "inputs": [],
+                "outputs": []
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "after",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "continued",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "reusableRequest": {
+        "category": "BlocksPrototype",
+        "displayName": "Complete graph boundary bf2eaa985fce426c98d074ddc15323cb",
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "variables": [],
+            "rootActivity": {
+              "nodeId": "graph-root",
+              "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "nodeId": "complete",
+                      "activityVersionId": "actver_2doydimkosdG5HLmPoVPyyENIfUCMAm49cIi0LdK_SI",
+                      "inputs": [
+                        {
+                          "referenceKey": "outcome",
+                          "value": {
+                            "value": "done",
+                            "expressionType": "Literal"
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    },
+                    {
+                      "nodeId": "never",
+                      "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "value": "must not run after Complete",
+                            "expressionType": "Literal"
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    }
+                  ]
+                }
+              }
+            },
+            "outputMappings": [],
+            "outcomeMappings": []
+          }
+        },
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [],
+          "outputs": [],
+          "outcomes": [
+            {
+              "referenceKey": "done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "layout": []
+      },
+      "reusablePublication": {
+        "idempotencyKey": "296c9a040f6a45aaa8ff788630e90145",
+        "status": "Applied",
+        "draftId": "activity-draft-14tYAxqgpAa",
+        "expectedDraftRevision": 1,
+        "expectedDefinitionHeadVersionId": null,
+        "reviewToken": "sha256:4e18623c923e95db0a5bd702884295d84a3e577e5e7b365483b099cceed54807",
+        "requestedVersion": "1.0.0",
+        "outcome": {
+          "definitionId": "activity-def-14tYAxqmhez",
+          "definitionVersionId": "activity-ver-14tYAz47Fbi",
+          "draftId": "activity-draft-14tYAxqgpAa",
+          "version": "1.0.0",
+          "templateId": "activity-template-d96dd2877b962256dfcb1d6b36ef09fdff60b7294837afe7851285adc1dabe8e",
+          "templateHash": "sha256:d96dd2877b962256dfcb1d6b36ef09fdff60b7294837afe7851285adc1dabe8e",
+          "sourceReferenceId": "activity-source-ref-14tYAz4wRzl",
+          "publishedAt": "2026-11-03T21:58:48.372105+00:00"
+        },
+        "errorCode": null,
+        "diagnostics": [],
+        "updatedAt": "2026-11-03T21:58:48.372105+00:00"
+      }
+    },
+    {
+      "name": "complete-nearest-graph-extracted-True",
+      "authoredRoot": {
+        "nodeId": "root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "call",
+                "activityVersionId": "activity-ver-14tYB0ZtP9p",
+                "inputs": [],
+                "outputs": []
+              },
+              {
+                "nodeId": "after",
+                "activityVersionId": "elsa.intrinsic.set-output@1",
+                "inputs": [
+                  {
+                    "referenceKey": "name",
+                    "value": {
+                      "value": "after",
+                      "expressionType": "Literal"
+                    }
+                  },
+                  {
+                    "referenceKey": "value",
+                    "value": {
+                      "value": "continued",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": "setOutput",
+                  "valueType": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "reusableRequest": {
+        "category": "BlocksPrototype",
+        "displayName": "Complete graph boundary cbe1db40782f41c797cdc3310f1853f9",
+        "provider": {
+          "providerKey": "elsa.activity-graph",
+          "schemaVersion": "2",
+          "payload": {
+            "variables": [],
+            "rootActivity": {
+              "nodeId": "graph-root",
+              "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+              "inputs": [],
+              "outputs": [],
+              "structure": {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "activities": [
+                    {
+                      "nodeId": "block",
+                      "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                      "inputs": [],
+                      "outputs": [],
+                      "structure": {
+                        "kind": "elsa.sequence.structure",
+                        "schemaVersion": "1.0.0",
+                        "payload": {
+                          "activities": [
+                            {
+                              "nodeId": "complete",
+                              "activityVersionId": "actver_2doydimkosdG5HLmPoVPyyENIfUCMAm49cIi0LdK_SI",
+                              "inputs": [
+                                {
+                                  "referenceKey": "outcome",
+                                  "value": {
+                                    "value": "done",
+                                    "expressionType": "Literal"
+                                  }
+                                }
+                              ],
+                              "outputs": []
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "nodeId": "never",
+                      "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                      "inputs": [
+                        {
+                          "referenceKey": "text",
+                          "value": {
+                            "value": "must not run after Complete",
+                            "expressionType": "Literal"
+                          }
+                        }
+                      ],
+                      "outputs": []
+                    }
+                  ]
+                }
+              }
+            },
+            "outputMappings": [],
+            "outcomeMappings": []
+          }
+        },
+        "contract": {
+          "contractSchemaVersion": "1",
+          "inputs": [],
+          "outputs": [],
+          "outcomes": [
+            {
+              "referenceKey": "done",
+              "name": "Done",
+              "isEmitted": true
+            }
+          ]
+        },
+        "layout": []
+      },
+      "reusablePublication": {
+        "idempotencyKey": "ac9ed0a9262d4a82b377b69005b34b61",
+        "status": "Applied",
+        "draftId": "activity-draft-14tYB0U3E0U",
+        "expectedDraftRevision": 1,
+        "expectedDefinitionHeadVersionId": null,
+        "reviewToken": "sha256:50f685c06a39cf117166859cd3e68305645dbd6a092acc0fe5bfe7d059468f5f",
+        "requestedVersion": "1.0.0",
+        "outcome": {
+          "definitionId": "activity-def-14tYB0UIuSv",
+          "definitionVersionId": "activity-ver-14tYB0ZtP9p",
+          "draftId": "activity-draft-14tYB0U3E0U",
+          "version": "1.0.0",
+          "templateId": "activity-template-fca0a83adaffabb6cacc5f054c453dff81b7834dd82a4d31ced8f0d4ee3417c0",
+          "templateHash": "sha256:fca0a83adaffabb6cacc5f054c453dff81b7834dd82a4d31ced8f0d4ee3417c0",
+          "sourceReferenceId": "activity-source-ref-14tYB0ad330",
+          "publishedAt": "2026-11-03T21:58:48.70262+00:00"
+        },
+        "errorCode": null,
+        "diagnostics": [],
+        "updatedAt": "2026-11-03T21:58:48.70262+00:00"
+      }
+    }
+  ],
+  "nativeVersions": {
+    "Elsa.Workbench.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Activities.Bpmn.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Activities.Bpmn.Interchange.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Runtime.Core.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Runtime.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Activities.Runtime.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Activities.DispatchWorkflow.Runtime.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Serialization.SystemText.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Design.Core.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Design.Api.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "Elsa.Persistence.EntityFramework.dll": "1.0.0+b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e"
+  }
+}

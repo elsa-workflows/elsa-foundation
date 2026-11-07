@@ -26,7 +26,7 @@ export function WorkflowRunRelatedLinks({ context, session, activity, contributi
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
   const refreshReference = useRef<(() => void) | null>(null);
   const [state, setState] = useState<{ key: string; view?: ActivityStateView; unavailable?: boolean } | null>(null);
-  const candidates = contributions.filter(item => item.activityTypes.includes(activity.activityType)
+  const candidates = contributions.filter(item => (item.anyActivityType === true || item.activityTypes.includes(activity.activityType))
     && evaluateBackendRequirements(session, item.requiresBackend).state === "available");
   const eligible = !!session && !session.disposed && session.context === context
     && session.identity.status === "authenticated" && !!session.identity.subject && candidates.length > 0;
@@ -65,6 +65,9 @@ export function WorkflowRunRelatedLinks({ context, session, activity, contributi
   useEffect(() => { refreshReference.current?.(); }, [refreshKey]);
 
   if (!eligible) return null;
+  // A contribution that matched only because it applies to any activity type stays silent until it yields a link, so
+  // ordinary activities show no empty section.
+  const listed = candidates.some(item => item.activityTypes.includes(activity.activityType));
   const view = state?.key === key ? state.view : null;
   const returnTo = `/workflows/instances/${encodeURIComponent(activity.workflowExecutionId)}?${new URLSearchParams({
     backend: session!.profile.id, [runSelectionParameter]: activity.activityExecutionId, tab: "activity"
@@ -86,8 +89,10 @@ export function WorkflowRunRelatedLinks({ context, session, activity, contributi
       }
     } catch { /* One unavailable contributor must not remove native inspection or other related links. */ }
   }
-  return <section className="wf-instance-section" aria-label="Related runs">
-    <h4>Related runs</h4>
+  if (!listed && links.size === 0) return null;
+  const heading = listed ? "Related runs" : "Related";
+  return <section className="wf-instance-section" aria-label={heading}>
+    <h4>{heading}</h4>
     {links.size ? <ul>{[...links.values()].map(link => <li key={link.id}><a href={link.path} onClick={event => {
       if (session!.disposed || identity(session) !== scope || live.current.key !== key || session!.context !== context) event.preventDefault();
     }}>{link.label}</a></li>)}</ul> : <p role="status">{state?.key === key && (state.unavailable || view)

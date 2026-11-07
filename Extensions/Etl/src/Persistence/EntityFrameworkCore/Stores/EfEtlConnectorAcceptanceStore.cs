@@ -34,13 +34,18 @@ internal sealed partial class EfEtlRuntimeStore
             state.Prepared!, position, cancellationToken);
         if (owed?.Output is not { } output) return EtlStoreStatus.Conflict;
         var planned = route == EtlOutputRoute.Main ? output.Main : output.Errors;
-        if (planned?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql)) return EtlStoreStatus.Invalid;
-        // A SQL write is recorded like a file publication, under its effect's ledger key (spec 1197).
+        if (planned?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq))
+            return EtlStoreStatus.Invalid;
+        // A SQL write (spec 1197) or a confirmed RabbitMQ publication (spec 1200) is recorded like a file publication, under
+        // its effect's key.
         var expected = planned.Body with
         {
-            Key = planned.Kind == EtlConnectorKind.Sql
-                ? EtlRuntimeIdentity.ConnectorSqlEffectKey(planned.EffectId)
-                : EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind)
+            Key = planned.Kind switch
+            {
+                EtlConnectorKind.Sql => EtlRuntimeIdentity.ConnectorSqlEffectKey(planned.EffectId),
+                EtlConnectorKind.RabbitMq => EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(planned.EffectId),
+                _ => EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind)
+            }
         };
         if (publication != expected) return EtlStoreStatus.Conflict;
         if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return EtlStoreStatus.LeaseLost;
@@ -226,13 +231,67 @@ internal sealed partial class EfEtlRuntimeStore
         run.Status = outcome == EtlTerminalOutcome.Succeeded ? (int)EtlRunStatus.Succeeded : (int)EtlRunStatus.BusinessError;
         run.UpdatedAtUtcTicks = now;
         run.Revision = checked(run.Revision + 1);
+        await RaiseSourceWatermarkAsync(key, invocation, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Raises a watermarked SQL source's checkpoint to the run's high watermark as the run completes, in the same transaction,
+    /// so a faulted or cancelled run never advances it and the checkpoint never moves backwards (spec 1199).
+    /// </summary>
+    private async ValueTask RaiseSourceWatermarkAsync((string ScopeKey, string RunKey) key, EtlInvocation invocation, long now,
+        CancellationToken cancellationToken)
+    {
+        if (EtlConnectorRecordCodec.Pipeline(invocation).Source is not EtlSqlSource { Watermark: { } column } sql) return;
+        var connector = await db.ConnectorRuns.SingleAsync(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey, cancellationToken);
+        if (connector.PreparedJson is null ||
+            EtlConnectorRecordCodec.Read<EtlConnectorPreparedRun>(connector.PreparedJson).SourceWatermark is not { } high) return;
+        var bindings = EtlConnectorRecordCodec.Read<EtlConnectorRunBindings>(connector.BindingsJson);
+        var checkpointKey = SourceWatermarkKey(new(invocation.Artifact.DefinitionId, sql.Binding, bindings.Source.Revision.Handle,
+            sql.Table, column));
+        var checkpoint = await db.ConnectorSourceWatermarks.SingleOrDefaultAsync(
+            row => row.ScopeKey == key.ScopeKey && row.CheckpointKey == checkpointKey, cancellationToken);
+        if (checkpoint is null)
+            db.ConnectorSourceWatermarks.Add(new EtlConnectorSourceWatermarkRecord
+            {
+                ScopeKey = key.ScopeKey, CheckpointKey = checkpointKey, Watermark = high, RunKey = key.RunKey,
+                UpdatedAtUtcTicks = now, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
+            });
+        else if (high > checkpoint.Watermark)
+        {
+            checkpoint.Watermark = high;
+            checkpoint.RunKey = key.RunKey;
+            checkpoint.UpdatedAtUtcTicks = now;
+        }
+    }
+
+    public async ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(key);
+        var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
+        var checkpointKey = SourceWatermarkKey(key);
+        var checkpoint = await db.ConnectorSourceWatermarks.AsNoTracking()
+            .SingleOrDefaultAsync(row => row.ScopeKey == scopeKey && row.CheckpointKey == checkpointKey, cancellationToken);
+        return checkpoint?.Watermark;
+    }
+
+    private static string SourceWatermarkKey(EtlConnectorSourceWatermarkKey key) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            FormatVersion = 1,
+            key.DefinitionId,
+            key.SourceAlias,
+            key.SourceHandle,
+            key.Table,
+            key.Column
+        })));
+
     private static EtlConnectorFilePublications ReadConnectorFilePublications(EtlConnectorBatchRecord batch, EtlConnectorBatchOutput? output)
     {
-        if (batch.MainFilePublished && output?.Main?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
-            batch.ErrorFilePublished && output?.Errors?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql))
+        if (batch.MainFilePublished && output?.Main?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq) ||
+            batch.ErrorFilePublished && output?.Errors?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq))
             throw new InvalidDataException("The connector file publication has no matching file route.");
         return new(batch.MainFilePublished, batch.ErrorFilePublished);
     }
@@ -244,7 +303,7 @@ internal sealed partial class EfEtlRuntimeStore
     private static bool Delivered(EtlConnectorRouteOutput? route, EtlConnectorHttpDelivery? delivery, bool published) => route?.Kind switch
     {
         null => true,
-        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql => published,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => published,
         EtlConnectorKind.Http => delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged,
         _ => false
     };

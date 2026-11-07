@@ -16,6 +16,7 @@ export interface ActivityDefinitionRecoverySnapshot {
   payload: unknown;
   layout: ActivityDefinitionLayoutRecord[];
   presentationLabel?: string | null;
+  activityPresentation?: ActivityDefinitionDraftView["activityPresentation"];
 }
 
 export interface ActivityDefinitionRecoveryStore {
@@ -68,6 +69,7 @@ export function createActivityDefinitionRecoveryStore(
         contract: draft.contract,
         payload: draft.provider.payload,
         layout: draft.layout,
+        activityPresentation: draft.activityPresentation ?? [],
         presentationLabel: draft.presentationLabel ?? null
       };
       try {

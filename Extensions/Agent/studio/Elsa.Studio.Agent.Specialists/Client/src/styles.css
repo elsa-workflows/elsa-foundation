@@ -31,7 +31,6 @@
   margin-top: var(--studio-space-3, 12px);
 }
 
-.agent-create-form,
 .agent-specialist-editor fieldset {
   display: grid;
   gap: var(--studio-space-3, 12px);
@@ -41,13 +40,6 @@
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md, 6px);
   min-width: 0;
-}
-.agent-create-form h2 {
-  margin: 0;
-  font-size: 1rem;
-}
-.agent-create-form p {
-  margin: 0;
 }
 .agent-create-actions {
   display: flex;
@@ -103,9 +95,52 @@
   align-items: center;
 }
 .agent-collection-count {
-  margin: var(--studio-space-2, 8px) 0;
+  margin: 0;
   color: var(--studio-text-muted);
 }
+
+/* Lead with the task and connection; keep optional invocation controls together. */
+.agent-specialist-editor { padding: var(--studio-space-4); }
+.agent-specialist-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  align-items: start;
+  gap: var(--studio-space-4);
+  min-width: 0;
+}
+.agent-specialist-instructions { min-width: 0; }
+.agent-specialist-instructions textarea { min-height: 18rem; resize: vertical; line-height: 1.6; }
+.agent-specialist-editor fieldset { max-width: none; margin: 0; }
+.agent-specialist-advanced {
+  border-top: 1px solid var(--studio-border);
+  min-width: 0;
+}
+.agent-specialist-advanced > summary {
+  display: list-item;
+  list-style-position: inside;
+  padding: var(--studio-space-3) 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.agent-specialist-advanced > summary span { margin-left: var(--studio-space-2); color: var(--studio-text-muted); font-weight: 400; font-size: var(--studio-label-size); }
+.agent-specialist-advanced .agent-specialist-limits {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.agent-specialist-continuity { margin-top: var(--studio-space-3); }
+.agent-specialist-continuity input { flex: 0 0 auto; width: 1rem; height: 1rem; padding: 0; }
+@media (max-width: 800px) {
+  .agent-specialist-main, .agent-specialist-advanced .agent-specialist-limits { grid-template-columns: minmax(0, 1fr); }
+}
+
+.agent-create-form {
+  display: grid;
+  gap: var(--studio-space-4);
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
+  margin: 0;
+}
+
 .agent-specialist-editor__playground {
   margin: 0 0 var(--studio-space-3, 12px);
 }

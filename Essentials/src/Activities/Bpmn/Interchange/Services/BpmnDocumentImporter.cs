@@ -27,7 +27,8 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// <item><term>MessagePublish</term><description><c>Elsa.PublishEvent</c></description></item>
 /// <item><term>CallProcess</term><description><c>Elsa.DispatchWorkflow</c>, when the document names the Elsa workflow to call</description></item>
 /// <item><term>NestedProcess</term><description>a nested <c>Elsa.BpmnProcess</c> node</description></item>
-/// <item><term>UnboundTask</term><description>no child; an author binds one later</description></item>
+/// <item><term>UnboundTask</term><description>no child; an author binds one later. A task binding the document retained
+/// (<c>elsa:taskBinding</c>) is proposed and becomes the child only when the author confirms its element.</description></item>
 /// </list>
 /// <para>
 /// The library's model renamed the two child references (<c>bindingRef</c>/<c>listenerBindingRef</c>) and made
@@ -82,7 +83,10 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
     {
         var document = BpmnVendorNamespace.TryParse(xml);
         if (document is not null)
+        {
             BpmnDirectBindingMetadata.ValidateSourceAttributes(document);
+            BpmnTaskBindingMetadata.ValidateSourceAttributes(document);
+        }
         IReadOnlyDictionary<string, string> boundaryDrops = document is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : BpmnUnboundHostPolicy.ScanBoundariesOnUnboundHosts(document);
@@ -113,8 +117,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         BpmnImportOptions? options,
         IBpmnWorkBinder binder)
     {
-        private readonly Dictionary<string, LibInterchange.BpmnWorkBinding> _bindings =
-            read.Bindings.ToDictionary(binding => binding.BindingRef, StringComparer.Ordinal);
+        private readonly Dictionary<string, LibInterchange.BpmnWorkBinding> _bindings = IndexBindings(read.Bindings);
 
         private readonly List<BpmnImportIssue> _issues = read.Analysis.Issues
             // A boundary Elsa drops for its own reason must not also carry the library's differently-reasoned
@@ -126,6 +129,25 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             .Select(issue => new BpmnImportIssue(Map(issue.Severity), issue.Message, issue.ElementId ?? issue.ProcessId))
             .ToList();
         private readonly List<BpmnImportCapability> _capabilities = [];
+        private readonly HashSet<string> _confirmed = new(options?.ConfirmedBindings ?? [], StringComparer.Ordinal);
+        private readonly HashSet<string> _proposed = new(StringComparer.Ordinal);
+
+        // Confirmations name element ids, so a retained binding on an id another element in the document shares (another
+        // pool's process or a subprocess body) is never proposed: one confirmation would bind every element with that id.
+        private readonly HashSet<string> _sharedElementIds = read.Definitions.Processes.SelectMany(process => process.Elements)
+            .Concat(read.Bindings.OfType<LibInterchange.BpmnWorkBinding.NestedProcess>().SelectMany(nested => nested.Definition.Elements))
+            .GroupBy(element => element.ElementId, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        /// <summary>Work bindings by reference. Two elements sharing an id share a reference, which no import can place twice.</summary>
+        private static Dictionary<string, LibInterchange.BpmnWorkBinding> IndexBindings(IEnumerable<LibInterchange.BpmnWorkBinding> bindings)
+        {
+            var indexed = new Dictionary<string, LibInterchange.BpmnWorkBinding>(StringComparer.Ordinal);
+            foreach (var binding in bindings)
+                if (!indexed.TryAdd(binding.BindingRef, binding))
+                    throw new BpmnInterchangeException($"The document binds work under reference '{binding.BindingRef}' more than once; element ids must be unique across its processes.");
+            return indexed;
+        }
 
         public BpmnImportResult Build()
         {
@@ -153,6 +175,10 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                     collaboration.ParticipantNameFor(process.ProcessId),
                     BuildProcessNode(process, $"{nodePrefix}-{process.ProcessId}", diagram, collaboration)))
                 .ToArray();
+
+            // A confirmation the document cannot honor is the author's mistake, not a binding: say so and stay unexecutable.
+            foreach (var elementId in _confirmed.Where(elementId => !_proposed.Contains(elementId)).Order(StringComparer.Ordinal))
+                Degraded(elementId, "The confirmed element has no retained task binding in this document; bind it explicitly.");
 
             var primary = SelectPrimary(definitions.Processes, imported);
             return new BpmnImportResult(primary.Node, new BpmnImportAnalysis(read.Analysis.ProcessIds, read.Analysis.ElementCounts, _issues)
@@ -190,10 +216,14 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 {
                     ForeignAttributes = source.Extensions.ForeignAttributes.Where(attribute =>
                         !BpmnDirectBindingMetadata.IsAttribute(attribute) &&
+                        !BpmnTaskBindingMetadata.IsAttribute(attribute) &&
                         (source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute))).ToArray()
                 }, source.ElementId);
                 if (source.Script is not null)
                     Degraded(source.ElementId, "The script body and script format are not represented by the frozen Foundation authoring contract; bind an activity explicitly.");
+                if (source.Extensions.ForeignAttributes.Any(BpmnTaskBindingMetadata.IsAttribute) &&
+                    (source.BindingRef is not { } workRef || !_bindings.ContainsKey(workRef)))
+                    Degraded(source.ElementId, "The retained task binding was ignored: this element has no work to bind.");
                 if (boundaryDrops.ContainsKey(source.ElementId))
                 {
                     dropped.Add(source.ElementId);
@@ -288,12 +318,48 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 result.Activity is not null && result.Activity.NodeId != binding.BindingRef)
                 throw new BpmnInterchangeException($"The work binder returned an incompatible activity identity/availability for '{source.ElementId}'.");
             var capability = binding.GetType().Name;
+            var retained = source.Extensions.ForeignAttributes.Where(BpmnTaskBindingMetadata.IsAttribute).ToArray();
+            if (retained.Length > 0 && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null))
+                Degraded(source.ElementId, "The retained task binding was ignored: it is honored only on a task this host leaves unbound.");
+            else if (retained.Length > 0 && _sharedElementIds.Contains(source.ElementId))
+                Degraded(source.ElementId, "The retained task binding was ignored: another element in the document uses this element id; bind it explicitly.");
+            else if (retained.Length > 0)
+                return Retained(binding, source, retained[0].Value, capability, result);
             _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, result.Availability, result.Reason) { BindingRef = binding.BindingRef });
             if (result.Availability is BpmnImportCapabilityAvailability.Unsupported or BpmnImportCapabilityAvailability.Unknown)
                 Degraded(source.ElementId, $"{capability} was retained without executable work: {result.Reason}");
             if (request.Kind == BpmnWorkBindingKind.CallProcess && result.Availability == BpmnImportCapabilityAvailability.RequiresBinding)
                 _issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, result.Reason, source.ElementId));
             return result.Activity;
+        }
+
+        /// <summary>
+        /// Proposes the document's retained binding for an unbound task, or, when the author confirmed the element, binds
+        /// it: a child under the binding's own reference with the exact version and its literal inputs. Either way the
+        /// catalog pass still decides whether the version and inputs are available on this host.
+        /// </summary>
+        private ActivityNode? Retained(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source, string value, string capability, BpmnWorkBindingResult unbound)
+        {
+            if (!BpmnTaskBindingMetadata.TryRead(value, out var activityVersionId, out var inputs, out var problem))
+            {
+                Degraded(source.ElementId, problem!);
+                _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, unbound.Availability, unbound.Reason) { BindingRef = binding.BindingRef });
+                return null;
+            }
+
+            _proposed.Add(source.ElementId);
+            var proposal = new BpmnRetainedBinding(activityVersionId, inputs.Select(input => input.ReferenceKey).ToArray());
+            if (!_confirmed.Contains(source.ElementId))
+            {
+                _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, BpmnImportCapabilityAvailability.RequiresBinding,
+                    $"The document retained a binding to activity version '{activityVersionId}'; confirm it to bind this task.")
+                    { BindingRef = binding.BindingRef, RetainedBinding = proposal });
+                return null;
+            }
+
+            _capabilities.Add(new BpmnImportCapability(source.ElementId, BpmnCatalogBindingSession.RetainedBindingCapability, BpmnImportCapabilityAvailability.Available,
+                "The author confirmed the retained binding.") { BindingRef = binding.BindingRef, RetainedBinding = proposal });
+            return new ActivityNode(binding.BindingRef, activityVersionId, inputs, [], null);
         }
 
         private BpmnWorkBindingRequest Request(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source) => binding switch

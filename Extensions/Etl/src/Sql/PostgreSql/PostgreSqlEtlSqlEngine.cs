@@ -35,8 +35,10 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     // Npgsql maps infinity and -infinity to the extreme values, so a finite 9999-12-31 cannot be told apart from them.
     public bool ExtremeDatesAreInfinite => true;
 
-    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
-        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} " +
+        (watermarkColumn is null ? "" : $"WHERE ({Quote(watermarkColumn)} > @watermark OR {Quote(watermarkColumn)} IS NULL) ") +
+        $"ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
 

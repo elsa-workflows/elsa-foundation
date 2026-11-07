@@ -142,3 +142,25 @@ Elsa.Etl.Runtime.EtlHostSqlBindingOptions.TenantId.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.SqlBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostSqlBindingOptions!>!
 Elsa.Etl.Runtime.EtlRuntimeFeature.SqlBindings.set -> void
 const Elsa.Etl.Runtime.EtlHostSqlBindingOptions.DefaultLedgerTable = "elsa_etl_effect_ledger" -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedExchanges.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedExchanges.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.ConnectionString.get -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.ConnectionString.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.EtlHostRabbitMqBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.RabbitMqBindings.set -> void
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostRabbitMqBindingOptions.AllowedQueues.set -> void

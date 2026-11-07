@@ -82,6 +82,65 @@ host, port, database and user, never the password.
 - **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
   run's row can allow a second write.
 
+## RabbitMQ delivery
+
+[Spec 1200](../../specs/1200-etl-rabbitmq-delivery/spec.md) adds a `rabbitmq` destination for the main route: a
+host-approved exchange and routing key to which each accepted record is published as one persistent JSON message. Install
+`Elsa.Etl.RabbitMq` and add an `EtlRuntimeFeature.RabbitMqBindings` entry: alias, an AMQP URI as `ConnectionString` from
+host configuration, and `AllowedExchanges` (an empty name allows the default exchange). The pinned binding handle hashes
+the parsed host, port, virtual host and user, and the allowed exchanges, never the password. The runtime never declares
+exchanges, queues or bindings.
+
+- **Publisher confirms.** A batch's messages are published in order on one channel with confirmation tracking, mandatory
+  and persistent, with content type `application/json`. The route is recorded, and the batch may be accepted, only once the
+  broker has confirmed every message.
+- **At least once, with stable ids.** RabbitMQ has no ledger the runtime could consult, so a batch whose publication was
+  interrupted, or whose worker died after the confirms and before the record, is published again in full. Every message
+  carries the message id `{effectId}:{index}` and the headers `elsa-etl-run-id`, `elsa-etl-batch-id`,
+  `elsa-etl-effect-id` and `elsa-etl-record-index`, identical on every replay, so consumers deduplicate by message id. A
+  replayed batch can arrive after messages of later batches.
+- **Failures.** A message no queue matches is returned and fails the run with `etl.rabbitmq-unroutable`. A negative
+  acknowledgement (for example a queue at its length limit with `reject-publish`), an unreachable broker, a closed
+  connection, a connection or channel limit, a broker blocking publishers under a resource alarm, or a confirm that takes over 30 seconds
+  retries after two seconds (a blocked target keeps one connection open until the broker unblocks it), so an outage pauses the run. Access refused, a missing exchange or failed
+  authentication fails the run with `etl.rabbitmq-publish-rejected`; a store that refuses to record a confirmed route
+  fails it with `etl.rabbitmq-delivery-refused`. Without `Elsa.Etl.RabbitMq`, admission refuses the run
+  with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
+- **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.
+
+## RabbitMQ ingestion
+
+[Spec 1201](../../specs/1201-etl-rabbitmq-source/spec.md) adds a finite `rabbitmq` source: a host-approved queue drained up to
+`maxMessages` (1 to 100,000) when a run prepares, its JSON message bodies read with declared JSON fields as for a JSON Lines
+source. Add an `EtlRuntimeFeature.RabbitMqBindings` entry with role `Source` and `AllowedQueues`; `Elsa.Etl.RabbitMq`
+provides the consumer. The runtime never declares queues.
+
+- **Manual acknowledgements.** Preparation receives the messages without acknowledging them, writes their bodies as a JSON
+  Lines snapshot, and acknowledges them only once the store has recorded that snapshot as the run's prepared input. A
+  preparation that fails, is refused or whose worker dies before the record leaves them unacknowledged; the broker
+  requeues them, and the next attempt reads them again into a snapshot of its own.
+- **At least once.** A worker that dies, or a connection that is lost, after the messages were received and before the
+  acknowledgement reaches the broker can leave the run with messages the broker also requeues, so a later run reads them
+  again. Records carry no message id, so destinations should be idempotent (a keyed SQL destination is) or tolerate
+  duplicates.
+- **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
+  `MaxSnapshotBytes`, or the run's retained input (the snapshot, its index of one 24-byte entry per record plus a
+  sentinel entry, and the lookup) past `http.maxRetainedInputBytes`; the rest stay queued. A single message larger than that fails preparation with
+  `etl.snapshot-too-large` and stays queued. Each message is one record: a body that is not JSON, or not a JSON object, is
+  routed to errors as `etl.jsonl.record-invalid` or `etl.jsonl.record-not-object` and still acknowledged.
+- **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
+  refused, a missing queue, a stream queue (which `basic.get` cannot read) or failed authentication fails the run with
+  `etl.rabbitmq-read-rejected`. Two runs reading one queue at once take different messages.
+- **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
+  counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
+  lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.
+- **Acknowledgement timeout.** RabbitMQ closes a channel whose deliveries stay unacknowledged past its `consumer_timeout`
+  (30 minutes by default). A run stops taking messages after five minutes (always taking at least one) and leaves the rest
+  for the next run, so a slow or distant broker drains a backlog over several runs; a channel closed for that timeout is
+  retried. Keep `consumer_timeout` well above the time a preparation takes to record its snapshot.
+- **Snapshots of failed attempts.** Each preparation attempt writes its own snapshot, under a random key, so an attempt that
+  does not record it leaves a snapshot behind that no later attempt reuses; retention must account for these.
+
 ## SQL snapshot reads
 
 [Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
@@ -120,7 +179,31 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
   run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
   names the exception type, not the error number.
-  Watermark (incremental) reads, authored queries and log CDC are not supported.
+  Authored queries and log CDC are not supported.
+- **Watermark reads.** [Spec 1199](../../specs/1199-etl-sql-watermark/spec.md) adds an optional `watermark`: a declared,
+  required `Int64` column. A row whose watermark is NULL is read on every run and rejected as a record error, so it
+  is never silently skipped. A run then reads only rows whose watermark is above the high watermark of the last completed
+  run of the same definition, source alias, source binding revision (the pinned handle, which covers the database, user
+  and allowed tables), table and column. The first run reads every row, and so does the first run after any of these
+  changes, including a new binding revision, so a non-idempotent route then receives the table again. The checkpoint
+  does not include the destination: a new definition version that routes to a new, empty target reads only rows above
+  the checkpoint, and loading that target from the start needs a new source identity, as there is no checkpoint reset
+  yet. The run's highest watermark
+  is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
+  cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Runs of one
+  watermarked definition must not overlap: the checkpoint never moves backwards, but a run that read a row before a
+  newer run delivered it can finish last and write the older row over the newer one in a keyed destination, and the
+  checkpoint, already past the row's newer value, does not read it again until it changes. Nothing enforces this yet
+  ([#3721](https://github.com/elsa-workflows/elsa-foundation/issues/3721)); start the next run only once the previous
+  one has settled. **A row whose watermark is at or below a checkpoint
+  already passed is never read.** Values drawn when a row is inserted, such as a sequence or identity, can commit out of
+  order under concurrent writers: a run can read value 101 while the transaction holding 100 is still open, and row 100,
+  committed later, is then skipped. A per-row version counter is not a watermark either. Use a column whose values
+  become visible in increasing order, for example one written by a single writer or by a job that stamps rows after
+  their transactions commit; otherwise load the table with snapshot reads. Such a job should leave unstamped rows at a
+  value at or below every checkpoint, such as 0, not NULL: NULL rows are rejected as record errors on every run until
+  they are stamped, so the error route fills with rows a later run delivers. Running the definition repeatedly, for
+  example from a scheduled workflow, loads the table incrementally; rows deleted from the source are not propagated.
 - **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
   retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
   before such a pipeline is admitted.
@@ -169,12 +252,12 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
 
 - Core: typed finite topology, exact nullable-tenant/required-persistence scope, immutable versioned artifact envelope, typed JSON representation and SHA-256. Complete v1 envelopes are limited to 256 KiB; a definition may request a lower limit. Unknown saved formats remain observable and are refused at publication/read boundaries.
 - `EtlDesign`: scoped compiler with structured diagnostics, schema/key/mapping/filter/limit validation and deterministic behavioral hash. Artifact identity also includes definition/version provenance. Caller-owned collections are snapshotted for publication.
-- `EtlDesignEntityFrameworkCore`: SQLite drafts and immutable publications, optimistic revisions, atomic version publication, compiler-backed artifact admission, schema/migration metadata and separate `EtlDesign` history. A real host AutoMigrate/publish/stop/Validate/reload test covers its registration. Other relational providers are not qualified.
+- `EtlDesignEntityFrameworkCore`: drafts and immutable publications on SQLite, SQL Server, PostgreSQL or MySQL ([spec 1202](../../specs/1202-etl-design-store-providers/spec.md)); optimistic revisions, atomic version publication, compiler-backed artifact admission, schema/migration metadata and separate `EtlDesign` history. Key columns use each engine's binary collation, and a publication that meets a transient write conflict (a serialization failure, a deadlock, a lock timeout or, on SQLite, a busy or locked database) is retried as a whole, and a draft update's one conditional statement and every other store and catalog read retry the same way. A real host AutoMigrate/publish/stop/Validate/reload test covers its registration on SQLite, and the `etl-ef` container suite runs the design-store contracts on the three server engines. The SQLite chain under `Migrations/Sqlite` is hand-maintained; the server engines' migrations are generated with `tools/etl/generate-etl-design-migrations.sh`.
 - Runtime processing: bounded strict UTF-8 CSV parsing and byte offsets, typed exact-key lookup/map/filter, safe row diagnostics, immutable host binding pins, verified retained snapshots and a streamed logical-record index. Partition ranges are computed without allocating a range per requested partition.
 - Physical files: attempt-private staging, bounded writes, flush/close/hash verification, atomic create-only publication, matching-content replay and conflict refusal. The internal terminal materializer streams only manifest-accepted chunks into deterministic main/error JSONL routes, verifying exact pinned revisions/content and labelling cancelled/faulted output partial. Unix publication requires hard-link support; there is no copy fallback. Windows uses its no-replace move. A physical file is not an accepted ETL result.
 
 - `EtlRuntime`: bounded background attempts, retained executable validation, independently leased preparation/partitions and process-local record/input/lookup/output allowances. The Tasks lifecycle starts/stops shell workers; plain hosts use the same instance as a hosted service. Compute uses explicitly configured scopes, retained binding revisions and lookup row/cell ceilings. Terminal delivery discovers pending work in the composition's runtime database independently of the current binding catalog, validates each retained invocation's exact scope and run identity, and creates a scoped native operation. Removing file bindings therefore does not orphan an already-owed result. Invalid candidates remain pending while valid later candidates can progress; this is not a tenant-default fallback or permission to execute files outside configured bindings.
-- `EtlRuntimeEntityFrameworkCore`: separate SQLite runtime context, schema and migration history; short idempotent admission, pinned bindings, immutable preparation metadata, durable batch reservations, fenced manifest/cursor/quota settlement, first-wins terminal result and recoverable delivery outbox. Runtime DI/database composition does not require design services or design tables. The shared persistence package still references the design assembly.
+- `EtlRuntimeEntityFrameworkCore`: separate runtime context. Its schema is qualified on SQL Server, PostgreSQL and MySQL as well as SQLite ([spec 1203](../../specs/1203-etl-runtime-store-schema/spec.md)): run keys are a 64-character hash of the run id there (the id itself is kept in full), check constraints are rendered per engine, and the runtime-store contracts pass on all four. Its registration still refuses the server engines until its transitions are qualified under concurrent writers (spec 1206), schema and migration history; short idempotent admission, pinned bindings, immutable preparation metadata, durable batch reservations, fenced manifest/cursor/quota settlement, first-wins terminal result and recoverable delivery outbox. Runtime DI/database composition does not require design services or design tables. The shared persistence package still references the design assembly.
 - [Native workflow adapter](src/Workflows/Runtime/README.md): typed `RunEtl` wait, actual-bookmark admission, private-state/consumed-receipt cancellation, scoped terminal delivery and durable acknowledgement proofs. The [publication contributor](src/Workflows/Design/README.md) binds the full artifact hash through a literal selection and embeds the artifact without workflow dependency edges. [Persisted parent publication](../../specs/255-finite-file-etl/evidence/persisted-parent-publication.md) and [native cancellation evidence](../../specs/255-finite-file-etl/evidence/native-subtree-cancellation.md) cover the ordinary catalog/compiler and native composite boundaries.
 - `EtlDesignApi` and `EtlRuntimeApi`: independently composed, permission-checked operations for authoring/publication and runtime inspection, cancellation and continuous-run completion. Bounded signed cursors preserve scope and query identity. Responses expose safe binding aliases and retained facts, not host paths. New publication rechecks current binding approval; replay of an existing immutable publication does not. Runtime inspection does not require design services or active workers. Connector runs use the optional inspector and a separately advertised typed partition endpoint; page/item positions, retry state and owed receipts remain distinct from accepted route-body counts. [Inspection evidence and limits](../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).
 - [EtlStudio](studio/Elsa.Studio.Etl/EXTENSION_POINTS.md): structured finite-stage authoring, saved-revision validation/publication, exact published selection through the public `RunEtl` property editor, and run/partition inspection. [Component evidence](../../specs/255-finite-file-etl/evidence/studio-components.md) records executed checks without substituting them for browser acceptance.
@@ -196,7 +279,7 @@ Enable only the responsibilities a host needs:
 
 The Workbench references the modules for discovery but does not enable ETL in its default shell. The reproducible
 [HTTP/browser fixtures](../../e2e-tests/etl/README.md) show opt-in configuration with isolated databases and file
-bindings. They use SQLite, the qualified provider for this slice; they are not production deployment templates.
+bindings. They use SQLite, the only engine qualified for both ETL stores; they are not production deployment templates.
 Set API cursor signing keys consistently across replicas. Set tenant and persistence partition explicitly;
 `null` tenant is a distinct global scope, not an alias for `default`.
 
@@ -225,6 +308,6 @@ Native invocation/result delivery and native cancellation now have real durable 
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 
-Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot; process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
+Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
 
 Physical effects remain at least once. Lease expiry cannot terminate a worker or release its live buffers. Only the fenced manifest/cursor transaction makes output authoritative. Logical payload allowances are not a heap/RSS limit, and retained chunks are not automatically removed or compensated.

@@ -29,7 +29,8 @@ internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<
     EtlWorkerStoreGate StoreGate = EtlWorkerStoreGate.BeforeAcceptance,
     List<EtlHostHttpBindingOptions>? HttpBindings = null,
     EtlConnectorWorkerGate ConnectorGate = EtlConnectorWorkerGate.None,
-    List<EtlHostSqlBindingOptions>? SqlBindings = null);
+    List<EtlHostSqlBindingOptions>? SqlBindings = null,
+    List<EtlHostRabbitMqBindingOptions>? RabbitMqBindings = null);
 
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
 internal sealed record EtlWorkerCommittedAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance,
@@ -55,6 +56,9 @@ internal static class EtlWorkerProtocol
     }
 
     public static string JournalDirectory(string root) => Path.Combine(root, "journal");
+
+    /// <summary>The JSON Lines file every fixture process's test RabbitMQ publisher appends to (spec 1200).</summary>
+    public static string RabbitMqJournalPath(string root) => Path.Combine(root, "rabbitmq-journal.jsonl");
 
     public static string AcceptancePath(string root, string role)
     {

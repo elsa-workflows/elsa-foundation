@@ -12,6 +12,7 @@ no implicit ephemeral encryption key or memory-journal fallback.
 | `IActivityActivationStrategy` | Scoped custom activation of `elsa.specialist/1`, without CLR hydration of dynamic business members. |
 | `IRuntimeActivityConsumerCapability` | Declares the installed specialist descriptor/schema consumer. |
 | `IStartupTask` | Registers the actual facade and background worker under their frozen runtime aliases. |
+| `IActivityStateViewProjector` | Projects every node of descriptor kind `elsa.specialist` (user-defined agents, whatever their activity type) as view `elsa.specialist.invocation` v1, carrying only whether it is the agent's own invocation boundary, so run inspection can link it to the invocation evidence page. |
 
 Within the domain, the feature also registers the scoped default `ISpecialistInvocationInspector` (`TryAdd`) over the
 native binding and the selected journal; see [Invocation evidence](../Core/EXTENSION_POINTS.md#invocation-evidence).

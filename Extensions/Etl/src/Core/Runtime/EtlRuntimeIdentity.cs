@@ -117,6 +117,16 @@ public static class EtlRuntimeIdentity
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".sql";
     }
 
+    /// <summary>
+    /// The opaque key recording a RabbitMQ route whose messages the broker confirmed: the effect identity's hash with an
+    /// <c>.amqp</c> suffix (spec 1200).
+    /// </summary>
+    public static string ConnectorRabbitMqEffectKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".amqp";
+    }
+
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null
         ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
 

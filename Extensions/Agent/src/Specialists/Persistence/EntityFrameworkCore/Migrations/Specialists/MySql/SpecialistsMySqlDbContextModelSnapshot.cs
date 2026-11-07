@@ -150,6 +150,230 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                     b.ToTable("elsa_specialist_turns", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasDefaultValue("1.0.0")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("WorkingCopyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("WorkingCopyKey", "Revision", "Key");
+
+                    b.ToTable("elsa_agent_sources_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasDefaultValue("1.0.0")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("SnapshotKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SnapshotKey");
+
+                    b.ToTable("elsa_agent_sources_pins", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CopyId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<bool>("Discarded")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<long>("Fence")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)");
+
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Partition")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasDefaultValue("1.0.0")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("SourceIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SourceIdentity")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "Discarded", "Key");
+
+                    b.ToTable("elsa_agent_sources_copies", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
@@ -226,6 +450,37 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                     b.HasIndex("SchemaVersion");
 
                     b.ToTable("__ElsaSchemaFinalization_ElsaAgentSpecialists", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", null)
+                        .WithMany()
+                        .HasForeignKey("WorkingCopyKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

@@ -120,10 +120,11 @@ describe("agent playground", () => {
       expectedRevision: 3,
       inputs: { "brief-key": { state: "Present", value: "moss gardens" }, "$specialist.options": { state: "Present", value: {} } }
     }));
-    expect(JSON.parse(container.querySelector("[data-testid='playground-output']")!.textContent!)).toEqual({ Article: "Moss gardens" });
-    expect(container.querySelector("[data-testid='playground-usage']")!.textContent).toBe("5 input, 3 output, 8 total tokens");
-    expect(container.querySelector("[data-testid='playground-requests']")!.textContent).toBe("1 of at most 8");
-    expect(container.querySelector("[data-testid='playground-application']")!.textContent).toBe("Accepted and used; settlement is being recorded");
+    expect(JSON.parse(container.querySelector("[data-testid='evidence-output']")!.textContent!)).toEqual({ Article: "Moss gardens" });
+    expect(container.querySelector("[data-testid='evidence-usage']")!.textContent).toBe("5 input, 3 output, 8 total tokens");
+    expect(container.querySelector("[data-testid='evidence-requests']")!.textContent).toBe("1 of at most 8");
+    expect(container.querySelector("[data-testid='evidence-application']")!.textContent).toBe("Accepted and used; settlement is being recorded");
+    expect(container.querySelector<HTMLAnchorElement>("[data-testid='playground-invocation-link']")!.getAttribute("href")).toBe("/agents/invocations/wf-1/act-1");
   });
 
   it("continues an accepted conversation explicitly, with the revision it expects", async () => {
@@ -167,7 +168,7 @@ describe("agent playground", () => {
 
     expect(container.textContent).toContain("The model may have received this request, but no result was accepted.");
     expect(container.textContent).toContain("Start a fresh conversation, or continue from the last accepted revision.");
-    expect(container.querySelector("[data-testid='playground-output']")).toBeNull();
+    expect(container.querySelector("[data-testid='evidence-output']")).toBeNull();
     expect(button(container, "Continue this conversation")).toBeNull();
   });
 
@@ -176,7 +177,7 @@ describe("agent playground", () => {
     type(container, "Brief", "moss gardens");
     await submit(container);
 
-    expect(container.querySelector("[data-testid='playground-output-withheld']")!.textContent).toContain("permission to inspect captured values");
+    expect(container.querySelector("[data-testid='evidence-output-withheld']")!.textContent).toContain("permission to inspect captured values");
   });
 
   it("explains a result the host's capture policy keeps out", async () => {
@@ -184,7 +185,7 @@ describe("agent playground", () => {
     type(container, "Brief", "moss gardens");
     await submit(container);
 
-    expect(container.querySelector("[data-testid='playground-output-withheld']")!.textContent).toContain("DiagnosticSnapshot");
+    expect(container.querySelector("[data-testid='evidence-output-withheld']")!.textContent).toContain("DiagnosticSnapshot");
   });
 
   it("stops a running turn without claiming a sent request was recalled", async () => {

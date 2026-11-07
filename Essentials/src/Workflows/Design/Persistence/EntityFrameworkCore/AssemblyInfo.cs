@@ -31,7 +31,6 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 // EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt holds the result it replays to a retrying caller, deserialized into that result, so it is
 // content; its fingerprint is checked over the stored bytes first (#2140).
-[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionDraft), nameof(WorkflowDefinitionDraft.StateSource))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionVersion), nameof(WorkflowDefinitionVersion.StateSource))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionDraftLayout),
     nameof(WorkflowDefinitionDraftLayout.RecordsJson), nameof(WorkflowDefinitionDraftLayout.ActivityPresentationJson))]

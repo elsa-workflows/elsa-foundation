@@ -16,6 +16,7 @@
     <Compile Include="../Shared/ForwardingEtlRuntimeStore.cs" Link="Support/ForwardingEtlRuntimeStore.cs" />
     <Compile Include="../Shared/ForwardingEtlConnectorRuntimeStore.cs" Link="Support/ForwardingEtlConnectorRuntimeStore.cs" />
     <Compile Include="../Shared/SqliteEtlSqlEngine.cs" Link="Support/SqliteEtlSqlEngine.cs" />
+    <Compile Include="../Shared/TestRabbitMqPublisher.cs" Link="Support/TestRabbitMqPublisher.cs" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
