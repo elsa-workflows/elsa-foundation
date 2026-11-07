@@ -40,8 +40,8 @@ internal sealed record ActivityDataReadBinding(
         }
 
         if (argument.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
-            !payload.TryGetProperty("language", out var language) || language.ValueKind != JsonValueKind.String ||
-            !payload.TryGetProperty("parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object)
+            !TryProperty(payload, "language", out var language) || language.ValueKind != JsonValueKind.String ||
+            !TryProperty(payload, "parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object)
             yield break;
 
         foreach (var parameter in parameters.EnumerateObject())
@@ -59,8 +59,8 @@ internal sealed record ActivityDataReadBinding(
         if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         var json = value is JsonElement element ? element : default;
         if (json.ValueKind == JsonValueKind.Object &&
-            (json.TryGetProperty("memberPath", out _) ||
-             (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && json.TryGetProperty("path", out _))))
+            (HasProperty(json, "memberPath") ||
+             (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && HasProperty(json, "path"))))
             return new(role, Error: "UnsupportedMemberSelection");
 
         if (role.Equals("Variable", StringComparison.OrdinalIgnoreCase))
@@ -82,7 +82,7 @@ internal sealed record ActivityDataReadBinding(
             var binding = Required("ActivityResult", String(json, "producerNodeId"), String(json, "producerScopeId"), String(json, "projectionKey"));
             return binding.Error is null && (string.IsNullOrWhiteSpace(binding.Projection) || (!portable && string.IsNullOrWhiteSpace(binding.Scope)))
                 ? binding with { Error = "InvalidSource" }
-                : binding with { IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
+                : binding with { IsOptional = json.ValueKind == JsonValueKind.Object && TryProperty(json, "isOptional", out var optional)
                     && optional.ValueKind == JsonValueKind.True };
         }
         return new(role, Error: "InvalidSource");
@@ -100,8 +100,33 @@ internal sealed record ActivityDataReadBinding(
         string.IsNullOrWhiteSpace(key) ? new(role, Error: "InvalidSource") : new(role, key, scope, projection, Path: path);
 
     internal static string? String(JsonElement value, string key) =>
-        value.ValueKind == JsonValueKind.Object && value.TryGetProperty(key, out var property) && property.ValueKind == JsonValueKind.String
+        TryProperty(value, key, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString() : null;
+
+    // Portable expression JSON is admitted with the payload serializer's case-insensitive envelope
+    // keys (kind, producerNodeId, memberKey, …). Literal memberPath segments stay ordinal.
+    private static bool HasProperty(JsonElement value, string key) => TryProperty(value, key, out _);
+
+    private static bool TryProperty(JsonElement value, string key, out JsonElement property)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            property = default;
+            return false;
+        }
+        if (value.TryGetProperty(key, out property))
+            return true;
+        foreach (var candidate in value.EnumerateObject())
+        {
+            if (string.Equals(candidate.Name, key, StringComparison.OrdinalIgnoreCase))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+        property = default;
+        return false;
+    }
 
     private static bool IsRole(string? role) => role is not null &&
         new[] { "Input", "WorkflowRequest", "Variable", "ActivityResult" }.Contains(role, StringComparer.OrdinalIgnoreCase);

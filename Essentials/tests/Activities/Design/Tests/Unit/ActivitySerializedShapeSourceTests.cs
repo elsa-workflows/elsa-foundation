@@ -196,6 +196,17 @@ public sealed class ActivitySerializedShapeSourceTests
         var property = await propertyHost.Source.DescribeResultAsync(propertyHost.Version<PropertyConverterResultActivity>(), "$result", ["value", "anything"], new());
         Assert.Equal("activity.shape.converter-opaque", property!.ReasonCode);
         Assert.True(property.IsNullable);
+
+        using var convertedEnum = ResultHost(typeof(ConvertedNullableEnumResultActivity));
+        var converted = (await convertedEnum.Source.DescribeResultAsync(convertedEnum.Version<ConvertedNullableEnumResultActivity>(), "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, converted.State);
+        Assert.Equal("activity.shape.converter-opaque", converted.ReasonCode);
+        using var holderHost = ResultHost(typeof(NullableEnumHolderActivity));
+        var holder = (await holderHost.Source.DescribeResultAsync(holderHost.Version<NullableEnumHolderActivity>(), "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Known, holder.State);
+        Assert.Equal(ActivitySerializedValueKind.Scalar, Member(holder, "plain").Kind);
+        Assert.True(Member(holder, "plain").IsNullable);
+        Assert.Equal("activity.shape.converter-opaque", Member(holder, "converted").ReasonCode);
     }
 
     [Fact]
@@ -353,6 +364,8 @@ public sealed class ActivitySerializedShapeSourceTests
     }
     public sealed class MetadataOnlyResultActivity : MetadataResultActivity<MetadataOnlyPayload>;
     public sealed class ConverterResultActivity : MetadataResultActivity<ConverterPayload>;
+    public sealed class ConvertedNullableEnumResultActivity : MetadataResultActivity<ConvertedEnum?>;
+    public sealed class NullableEnumHolderActivity : MetadataResultActivity<NullableEnumHolder>;
     public sealed class PropertyConverterResultActivity : MetadataResultActivity<PropertyConverterPayload>;
     public sealed class ExtensionResultActivity : MetadataResultActivity<ExtensionDataPayload>;
     public sealed class IncludeResultActivity : MetadataResultActivity<IncludedFieldPayload>;

@@ -74,6 +74,24 @@ public sealed class MetadataSideEffectAttribute : Attribute
 [JsonConverter(typeof(ExplodingPayloadConverter))]
 public sealed class ConverterPayload;
 
+public enum PlainNullableEnum { One }
+
+[JsonConverter(typeof(ExplodingEnumConverter))]
+public enum ConvertedEnum { One }
+
+public sealed class NullableEnumHolder
+{
+    public PlainNullableEnum? Plain { get; set; }
+    public ConvertedEnum? Converted { get; set; }
+}
+
+public sealed class ExplodingEnumConverter : JsonConverter<ConvertedEnum>
+{
+    public ExplodingEnumConverter() => throw new InvalidOperationException("Discovery must not construct a converter.");
+    public override ConvertedEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
+    public override void Write(Utf8JsonWriter writer, ConvertedEnum value, JsonSerializerOptions options) => throw new NotSupportedException();
+}
+
 public sealed class PropertyConverterPayload
 {
     [JsonConverter(typeof(ExplodingPayloadConverter))]

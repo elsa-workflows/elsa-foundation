@@ -112,6 +112,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
+    [InlineData("json-pascal")]
     public async Task Missing_producer_is_invalid_even_when_occurrence_is_optional(string form)
     {
         using var provider = Provider();
@@ -123,6 +124,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
+    [InlineData("json-pascal")]
     public async Task Named_projection_is_resolved_from_the_actual_producer_contract_without_metadata(string form)
     {
         using var provider = Provider();
@@ -134,6 +136,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
+    [InlineData("json-pascal")]
     public async Task Direct_and_portable_results_keep_the_same_structured_scope_boundary(string form)
     {
         using var provider = Provider();
@@ -181,6 +184,40 @@ public sealed class ActivityDataSelectionAnalyzerTests
             producerScopeId = "root", memberPath = new[] { "CustomerId" } });
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(new(payload, role))))));
         Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
+    }
+
+    [Fact]
+    public async Task Portable_expression_envelope_keys_match_payload_serializer_casing_without_folding_member_paths()
+    {
+        using var provider = Provider();
+        var envelope = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+        {
+            ["Language"] = "JavaScript",
+            ["Parameters"] = new Dictionary<string, object?>
+            {
+                ["p"] = new Dictionary<string, object?>
+                {
+                    ["Kind"] = "ActivityResult",
+                    ["ProducerNodeId"] = "missing",
+                    ["ProjectionKey"] = "$result",
+                    ["ProducerScopeId"] = "root",
+                    ["IsOptional"] = true
+                }
+            }
+        });
+        var missing = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(envelope, "JavaScript"))))));
+        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(missing.Findings, finding => finding.Type == "ValueFlow/UnavailableProducer").Path);
+
+        var memberPath = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+        {
+            ["Kind"] = "ActivityResult",
+            ["ProducerNodeId"] = "producer",
+            ["ProjectionKey"] = "$result",
+            ["ProducerScopeId"] = "root",
+            ["MemberPath"] = new[] { "CustomerId" }
+        });
+        var refused = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(new(memberPath, "ActivityResult"))))));
+        Assert.Contains(refused.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
     }
 
     [Theory]
@@ -469,6 +506,21 @@ public sealed class ActivityDataSelectionAnalyzerTests
         return Input(form switch {
             "direct" => Result(producer, projection, optional),
             "typed" => new(definition, "JavaScript"),
+            "json-pascal" => new(JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+            {
+                ["Language"] = "JavaScript",
+                ["Parameters"] = new Dictionary<string, object?>
+                {
+                    ["p"] = new Dictionary<string, object?>
+                    {
+                        ["Kind"] = "ActivityResult",
+                        ["ProducerNodeId"] = producer,
+                        ["ProjectionKey"] = projection,
+                        ["ProducerScopeId"] = "root",
+                        ["IsOptional"] = optional
+                    }
+                }
+            }), "JavaScript"),
             _ => new(JsonSerializer.SerializeToElement(definition, Web), "JavaScript")
         });
     }
