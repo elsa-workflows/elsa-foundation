@@ -1,0 +1,51 @@
+name: Runtime prototype cloud experiment
+
+on:
+  push:
+    branches: [codex/runtime-prototype-cloud-runner]
+    paths:
+      - .github/workflows/runtime-prototype-cloud.yml
+      - tools/experiments/runtime-architecture-cloud/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-prototype-cloud-arm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Build and qualify runtime prototypes
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      DOTNET_TieredCompilation: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Verify and materialize pinned experiment sources
+        run: python3 tools/experiments/runtime-architecture-cloud/runner.py --root "$RUNNER_TEMP/elsa-runtime-prototypes" materialize
+      - name: Verify Linux process ownership controls
+        run: |
+          set -o pipefail
+          python3 -m unittest discover -s tools/experiments/runtime-architecture-cloud/helpers -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/elsa-runtime-prototypes/evidence/linux-ownership-controls.log"
+      - name: Compile baseline harness and preserve diagnostics
+        timeout-minutes: 25
+        run: python3 tools/experiments/runtime-architecture-cloud/runner.py --root "$RUNNER_TEMP/elsa-runtime-prototypes" build --variant baseline
+      - name: Preserve experiment receipts and raw diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-prototype-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/elsa-runtime-prototypes/evidence/
+          if-no-files-found: warn
+          retention-days: 14

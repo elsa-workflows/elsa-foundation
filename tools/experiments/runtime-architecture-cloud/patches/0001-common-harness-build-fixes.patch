@@ -1,0 +1,25 @@
+diff --git a/tools/experiments/runtime-architecture/Semantics.cs b/tools/experiments/runtime-architecture/Semantics.cs
+index e489133c34537cf2540a66a318b7efd7b5fec283..15ec04d1f124a904634f6dc7e90375cb509b0925 100644
+--- a/tools/experiments/runtime-architecture/Semantics.cs
++++ b/tools/experiments/runtime-architecture/Semantics.cs
+@@ -211,7 +211,7 @@ internal static class Semantics
+         if (attempts.Count == 0 || attempts.Any(x => x.InvocationId != activity.InvocationId) ||
+             attempts.Select(x => x.AttemptId).Distinct(StringComparer.Ordinal).Count() != attempts.Count ||
+             attempts.Select(x => x.Ordinal).Distinct().Count() != attempts.Count ||
+-            !attempts.Any(x => x.AttemptId == completion.AttemptId && x.EndedAt is not null && x.TransitionKind == ActivityTransitionKind.Complete))
++            !attempts.Any(x => x.AttemptId == completion.AttemptId && x.EndedAt is not null && x.TransitionKind == Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete))
+             throw new InvalidOperationException("Completion is not tied to one preserved completed attempt.");
+     }
+ 
+diff --git a/tools/experiments/runtime-architecture/VariantLoader.cs b/tools/experiments/runtime-architecture/VariantLoader.cs
+index 52b08a843d97eef0abeb8ee318922b19bce1a9c8..8255f81937677aa4a694d30453546f5928b05158 100644
+--- a/tools/experiments/runtime-architecture/VariantLoader.cs
++++ b/tools/experiments/runtime-architecture/VariantLoader.cs
+@@ -4,6 +4,7 @@ using System.Text.Json;
+ using Microsoft.Extensions.DependencyInjection;
+ using Elsa.Primitives.Models;
+ using Elsa.Workflows.Runtime.Core.Contracts;
++using Elsa.Workflows.Runtime.Core.Models;
+ using Elsa.Workflows.Runtime.Extensions;
+ 
+ namespace Elsa.RuntimeArchitectureProbe;
