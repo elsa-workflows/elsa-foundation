@@ -929,6 +929,46 @@ describe("activity property organization", () => {
     expect(entries()[0]!.hasAttribute("aria-invalid")).toBe(false);
   });
 
+  it("lets a dedicated expression editor replace the generic dictionary table", async () => {
+    const dedicated: StudioExpressionEditorContribution = {
+      id: "test.decision-inputs",
+      order: 40,
+      supports: context => context.descriptor.name === "Inputs",
+      surfaces: {
+        inline: ({ value, onChange }) => (
+          <label>
+            amount
+            <input
+              aria-label="amount"
+              value={String((value as { amount?: { value?: string } } | null)?.amount?.value ?? "")}
+              onChange={event => onChange({ amount: { kind: "number", value: event.target.value } })}
+            />
+          </label>
+        ),
+        expanded: ({ onChange }) => <textarea aria-label="Decision inputs JSON" onChange={event => onChange(JSON.parse(event.target.value))} />
+      },
+      createDefaultValue: () => ({})
+    };
+    const container = renderPanel([input("Inputs", {
+      referenceKey: "Inputs",
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      collectionKind: "Dictionary",
+      isWrapped: true
+    })], {
+      editors: builtInPropertyEditors,
+      expressionEditors: [dedicated, createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        Inputs: {
+          typeName: "Elsa.Decisions.Core.DecisionValue",
+          expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } }
+        }
+      })
+    });
+    await nextFrame();
+    expect(container.querySelector(".wf-dictionary-editor")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('[aria-label="amount"]')?.value).toBe("950");
+  });
+
   it("keeps a new dictionary's blank-key error visible after opening and closing its expanded editor", async () => {
     const container = renderPanel([input("Headers", {
       typeName: "System.String",

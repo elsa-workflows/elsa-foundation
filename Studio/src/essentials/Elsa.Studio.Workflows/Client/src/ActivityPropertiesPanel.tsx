@@ -27,6 +27,7 @@ import type {
   StudioExpressionDescriptor,
   StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
+import { objectExpressionEditorId } from "./objectExpressionEditor";
 import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
@@ -621,8 +622,9 @@ function PropertyRow({
     onToolingAuthorizationConfirmed
   );
   // A value whose shape disagrees with the editor is left to the generic Object editor — routing it here
-  // would let that editor coerce the authored value away on first edit.
-  const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
+  // would let that editor coerce the authored value away on first edit. A module-owned expression editor
+  // that claims this input (not the generic Object JSON editor) replaces the dictionary table.
+  const genericDictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
     && !conflictsWithStructuredEditor("dictionary", value)
     ? describeDictionaryForInput(effectiveInput)
     : null;
@@ -663,6 +665,7 @@ function PropertyRow({
   const inlineExpressionEditor = inlineExpressionContext
     ? currentRequiresAdmission ? admittedExpressionEditor : resolveExpressionEditor(expressionEditors, inlineExpressionContext)
     : null;
+  const dictionaryType = replacesGenericDictionaryEditor(inlineExpressionEditor, syntax) ? null : genericDictionaryType;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
   const inlineDiagnosticProvider = inlineExpressionContext
     ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
@@ -1324,6 +1327,7 @@ function ExpandedPropertyEditor({
   const useTextFallback = editingMode === "text";
   const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
     && !conflictsWithStructuredEditor("dictionary", value)
+    && !replacesGenericDictionaryEditor(expressionEditor, syntax)
     ? describeDictionaryForInput(input)
     : null;
   const fallbackHint = useTextFallback && !ExpressionEditorComponent
@@ -1810,6 +1814,13 @@ function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): Luci
   if (descriptor?.editingMode === "reference") return Cable;
   if (descriptor?.editingMode === "literal") return Type;
   return Code2;
+}
+
+function replacesGenericDictionaryEditor(
+  editor: StudioExpressionEditorContribution | null | undefined,
+  syntax: string
+) {
+  return !!editor && editor.id !== objectExpressionEditorId && (syntax === "Object" || syntax === "Literal");
 }
 
 function resolveEditor(
