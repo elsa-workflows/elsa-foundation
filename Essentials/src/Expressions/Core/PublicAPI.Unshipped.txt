@@ -119,12 +119,23 @@ Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpressionType.get -> s
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpressionType.init -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.NodeId.get -> string!
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.NodeId.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Owner.get -> Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner?
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Owner.init -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.PropertyKey.get -> string!
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.PropertyKey.init -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Source.get -> string?
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Source.init -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.WorkflowDraftId.get -> string!
 Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.WorkflowDraftId.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Deconstruct(out string! Kind, out string! Id) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Equals(Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.ExpressionAuthoringDocumentOwner(string! Kind, string! Id) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Id.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Id.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Kind.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Kind.init -> void
 Elsa.Expressions.Core.Models.ExpressionCallableSignature
 Elsa.Expressions.Core.Models.ExpressionCallableSignature.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionCallableSignature!
 Elsa.Expressions.Core.Models.ExpressionCallableSignature.Deconstruct(out string! Display, out System.Collections.Generic.IReadOnlyList<string!>? Parameters, out Elsa.Expressions.Core.Models.ExpressionValueShape? ReturnShape) -> void
@@ -247,6 +258,8 @@ Elsa.Expressions.Core.Models.ExpressionSymbol.Kind.get -> Elsa.Expressions.Core.
 Elsa.Expressions.Core.Models.ExpressionSymbol.Kind.init -> void
 Elsa.Expressions.Core.Models.ExpressionSymbol.Name.get -> string!
 Elsa.Expressions.Core.Models.ExpressionSymbol.Name.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.ParameterBinding.get -> Elsa.Expressions.Core.Models.ExpressionParameterBinding?
+Elsa.Expressions.Core.Models.ExpressionSymbol.ParameterBinding.init -> void
 Elsa.Expressions.Core.Models.ExpressionSymbol.Signatures.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionCallableSignature!>?
 Elsa.Expressions.Core.Models.ExpressionSymbol.Signatures.init -> void
 Elsa.Expressions.Core.Models.ExpressionSymbol.SymbolId.get -> string!
@@ -513,6 +526,9 @@ override Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ToString() -> s
 override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.GetHashCode() -> int
 override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.ToString() -> string!
 override Elsa.Expressions.Core.Models.ExpressionCallableSignature.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.ExpressionCallableSignature.GetHashCode() -> int
 override Elsa.Expressions.Core.Models.ExpressionCallableSignature.ToString() -> string!
@@ -603,6 +619,8 @@ static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator !=(Elsa.
 static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocumentOwner? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionCallableSignature.operator !=(Elsa.Expressions.Core.Models.ExpressionCallableSignature? left, Elsa.Expressions.Core.Models.ExpressionCallableSignature? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionCallableSignature.operator ==(Elsa.Expressions.Core.Models.ExpressionCallableSignature? left, Elsa.Expressions.Core.Models.ExpressionCallableSignature? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionCompletionRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionCompletionRequest? left, Elsa.Expressions.Core.Models.ExpressionCompletionRequest? right) -> bool

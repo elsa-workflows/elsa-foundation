@@ -188,3 +188,66 @@ Each slice is testable on its own and follows the spec's story priorities:
 |---|---|---|
 | Closed-scope node metadata derived from the hashed descriptor (D-3 as amended by A-1) | Runtime must recognise a closed scope without depending on Graph, and the flag must be content-addressed | A new hashed `ExecutableNode` field widens seven public constructors for no added guarantee. Reading the Graph descriptor from `Workflows.Runtime` breaks the domain boundary. |
 | Synthetic graph frame (D-5) | Body JavaScript and bindings use the frame machinery | A real stored frame changes the checkpoint, rehydration and retry contracts for the same behaviour (R-3) |
+
+## #3197 follow-up — activity draft result tooling (2026-11-06)
+
+The follow-up implements the earlier-body-result picker and browser work deferred by D11/A7/T051–T053.
+The activity authoring API owns the request location, read permission, tenant and provider-payload boundary.
+An additive neutral expression document owner distinguishes activity drafts from workflow drafts without
+changing existing constructors or accepting activity ownership through workflow wire requests. Exactly one
+source authority is required before reading metadata, and the returned document owner/location must match.
+
+`Elsa.Activities.Design.Core.Contracts.IActivityDraftAuthoringReader` is a scoped replacement authority with one selected
+implementation in `Elsa.Activities.Design.Api`. Duplicate readers fail configuration/startup with a diagnostic;
+missing readers remain valid and request consumers fail closed. Its source read checks
+the current actor's read permission, tenant and provider-payload visibility. The graph provider registers the
+scoped keyed strategy
+`Elsa.Workflows.Design.Core.Contracts.IActivityDraftExpressionGraphProjection`. A registry selects only the
+authorized persisted provider key; blank/duplicate keys fail startup without projecting payloads. Only
+provider-owned supported manifests project to an in-memory scope shape. No workflow draft is persisted.
+Missing strategies or unsupported manifests offer no metadata. `PersistedExpressionAuthoringContextSource`
+reuses the existing target-shape,
+order, scope and host filters for the explicit activity owner.
+
+`IExpressionToolingOperations` is a scoped replacement contract in `Elsa.Workflows.Design.Core`, implemented
+by `Elsa.Workflows.Design.Api`. The activity API consumes this contract through its own protected endpoints
+and capability; duplicate operations fail configuration/startup, while missing operations remain valid and
+request consumers report unavailable. The capability is absent without the graph
+projection, source authority, shared operations or language providers. No API-to-API reference is introduced.
+New seams are documented in both API extension catalogs and the graph provider strategy inventory;
+opted-in public API baselines are updated in the same change. No #3052 S5/S8 decision is implemented here.
+
+The editor uses the existing client and auth/session lifecycle with an activity-owned transport and cache
+identity, and passes the persisted draft ID/tooling/session to `InspectorPanel`. Acceptance requires the composed
+Add-two-numbers browser goal, including A/B input picks, an earlier result picked by a later node, Sum mapped
+from that later node, save/reopen and persisted producer/projection/scope assertions. The caller supplies A=2
+and B=3 while its own A/B values differ, and must receive Sum=5. T052 includes explicit body-output capture
+into a graph variable and save/reopen. Self/later/hidden graph results stay absent; graph/container variables
+and public inputs remain available in their approved scopes. Current-head narrow/light/dark/read-only states
+and independent opened visual acceptance are required.
+
+Heavy validation requires this issue's own reviewed immutable phase packet and an explicit capacity/scope
+handoff within the standing grant. The current Azure19 allocation belongs exclusively to #3191. Source work,
+focused light controls and review continue locally; backend whole suites, browser hosts, maps/architecture
+and hosted required CI remain explicit pending gates until their actual execution.
+
+The result picker authors the existing `ActivityResultExpressionParameterBinding` (producer node ID,
+projection key, optional flag), never a new scope field. Safe optional symbol metadata carries that typed
+reference; opaque symbol IDs are not parsed. The source escapes symbol-ID components, and UI identity is the
+unambiguous existing binding tuple. Distinct colon-containing producer/projection tuples remain distinct.
+The client consumes the existing typed context pages and validates raw row counts, document owner/location,
+revisions and duplicate reference tuples before exposing merged symbols/shapes. Cancellation, denial, stale,
+malformed pages or the known 5,500-symbol source limit discard partial data and report unavailable/incompatible;
+unsupported reference metadata is visibly unavailable instead of a false empty picker.
+
+Workbench composes the existing canonical `ActivitiesScripting` feature alongside the compatibility JavaScript
+feature so the accepted Add-two-numbers example is usable in the reference host. Its project, discovery and
+shell/lock metadata change together; no scripting/effect/outcome semantics change. Locked restore and the actual
+composed host remain required remote checks.
+
+Round-1 source review of `af92dec505c50fdbebde38fd721dffa20bfea21d` found an overlapping optional constructor
+and two composition gaps. The successor preserves the original optional seven-argument constructor, makes
+the activity-aware nine-argument path explicit in the composition-root factory, validates replacement duplicates
+against each configuring collection, and replaces graph projection fan-in with a keyed strategy registry. Controls
+cover late registrations, copied child shells, missing dependencies, invalid/duplicate keys, exact provider
+selection, legacy calls and actual DI activation. Native execution and composed UX remain pending.

@@ -2,12 +2,14 @@ import type {
   StudioEndpointContext,
   StudioExpressionToolingClient
 } from "@elsa-workflows/studio-sdk";
+import type { ExpressionToolingOwnerKind } from "../api/expressionTooling";
 import type { ExpressionToolingCacheIdentity } from "./expressionToolingClient";
 
 export function createLazyExpressionToolingClient(
   context: StudioEndpointContext,
   cacheIdentity: ExpressionToolingCacheIdentity,
-  authorizationScope?: string
+  authorizationScope?: string,
+  ownerKind: ExpressionToolingOwnerKind = "workflow"
 ): StudioExpressionToolingClient {
   let client: StudioExpressionToolingClient | undefined;
   let loading: Promise<StudioExpressionToolingClient> | undefined;
@@ -16,7 +18,7 @@ export function createLazyExpressionToolingClient(
   let disposed = false;
   const getClient = () => {
     loading ??= import("./expressionToolingClient").then(module => {
-      client = module.createExpressionToolingClient(context, cacheIdentity, authorizationScope);
+      client = module.createExpressionToolingClient(context, cacheIdentity, authorizationScope, ownerKind);
       if (pendingInvalidation !== undefined)
         client.invalidateAuthorization(pendingInvalidation ?? undefined);
       if (authorizationRevoked) client.revokeAuthorization?.();

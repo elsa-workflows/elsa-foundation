@@ -101,3 +101,27 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await expect(page.getByText(/Schema 1 retains its historical single/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
 });
+
+// Supporting mounted-browser proof. The owned composed Add-two-numbers journey is registered in
+// tests/acceptance/journeys.spec.ts and separately requires real publication and caller Sum=5.
+test("Activity graph result picker persists the authoritative earlier producer", async ({ page }) => {
+  await mockGraphAuthoring(page, true);
+  await page.goto("/?mode=activity-definition-graph-authoring&results=1&theme=dark");
+  await page.locator("[data-graph-node-id='later']").first().click();
+  const picker = page.getByLabel("Earlier result bindings", { exact: true });
+  const contextRequest = page.waitForRequest(request => request.url().endsWith("/design/activities/expression-tooling/context"));
+  await picker.focus();
+  const request = await contextRequest;
+  expect(request.postDataJSON()).toMatchObject({ activityDraftId: "activity-graph-authoring-draft", nodeId: "later", propertyKey: "message" });
+  expect(request.postDataJSON()).not.toHaveProperty("workflowDraftId");
+  await expect(picker.locator("option").filter({ hasText: "first.Result" })).toHaveCount(1);
+  await picker.selectOption({ label: "first.Result" });
+  await expect(page.getByLabel("Bound earlier results")).toContainText("args.result");
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
+  const projection = JSON.parse(await page.getByRole("textbox", { name: "Activity Definition JSON", exact: true }).inputValue()) as {
+    provider: { payload: { rootActivity: { structure: { payload: { activities: { inputs: { referenceKey: string; value: { value: { parameters: unknown } } }[] }[] } } } } }
+  };
+  expect(projection.provider.payload.rootActivity.structure.payload.activities[1]!.inputs.find(input => input.referenceKey === "message")!.value.value.parameters).toEqual({
+    result: { kind: "ActivityResult", producerNodeId: "first", projectionKey: "result", isOptional: false }
+  });
+});

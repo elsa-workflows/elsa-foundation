@@ -60,7 +60,7 @@ internal sealed class HttpActivityAuthoringCatalog(
             input.IsRequired, input.IsSensitive, input.IsCredential) { UiHint = input.UiHint }).ToArray());
 }
 
-/// <summary>Rejects an ambiguous activity authoring catalog before the shell accepts requests.</summary>
+/// <summary>Rejects ambiguous activity authoring read authorities before the shell accepts requests.</summary>
 /// <remarks>Captures only the configuring collection's metadata; a copied child shell rebinds it to its own collection.</remarks>
 internal sealed class ActivityAuthoringCatalogStartupTask(IServiceCollection registrations) : Elsa.Tasks.Core.IStartupTask
 {
@@ -73,10 +73,12 @@ internal sealed class ActivityAuthoringCatalogStartupTask(IServiceCollection reg
         return Task.CompletedTask;
     }
 
-    /// <summary>Throws when the collection holds more than one catalog registration.</summary>
+    /// <summary>Throws when the collection holds more than one registration for either read authority.</summary>
     internal static void Validate(IServiceCollection registrations)
     {
         if (registrations.Count(item => item.ServiceType == typeof(IActivityAuthoringCatalog)) > 1)
             throw new InvalidOperationException("IActivityAuthoringCatalog has multiple registrations; select one explicit activity authoring catalog.");
+        if (registrations.Count(item => item.ServiceType == typeof(IActivityDraftAuthoringReader)) > 1)
+            throw new InvalidOperationException("IActivityDraftAuthoringReader has multiple registrations; select one explicit activity draft authoring reader.");
     }
 }

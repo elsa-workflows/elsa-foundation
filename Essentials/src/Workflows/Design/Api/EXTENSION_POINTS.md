@@ -476,3 +476,28 @@ relations instead of constructing routes; code-owned Blank/HTTP recipes remain c
 - **Signature:** `ActivityStructureInputProjection ProjectInputs(ActivityNode activity)`, defaulting to an empty projection for existing handlers.
 - **Obligations:** project stable owner-derived reference keys, normal `InputDefinition` declarations and optional `ArgumentState` values. Declare consumed ordinary catalog keys explicitly; a null projected definition uses that catalog declaration. Publishing normalizes state keys, rejects duplicate declarations and compiles through the ordinary typed binding compiler. Expression authoring and draft validation use the same projection. Keep child traversal/replacement lossless for structure-owned arguments and unknown members.
 - **Known implementation:** Switch schema 2.0.0 projects Boolean case predicates, consumes Value and reintroduces it only when legacy matching remains. No Runtime project reads the Design projection.
+
+### Activity-owned expression locations and shared operations (#3197)
+
+`IExpressionToolingOperations` (`Elsa.Workflows.Design.Core.Contracts`) is a scoped replacement contract.
+`WorkflowsDesignApiFeature` installs `ExpressionToolingOperations` with `TryAddScoped`. HTTP adapters require
+one selected implementation and return `Unavailable` for missing or duplicate registrations. The collection-bound
+`ExpressionToolingStartupTask` rejects duplicates at configuration and startup without resolving optional
+request services; copied child shells validate their own collection. Optional absence remains valid. The
+implementation
+reuses the existing provider capability/cancellation/failure handling. Adapters supply their own authorized
+location; workflow wire DTOs retain `WorkflowDraftId` and cannot override the document owner. Activity-owned
+HTTP operations are registered and permission-protected by Activities Design API through the Core contract.
+
+`IActivityDraftExpressionGraphProjection` (`Elsa.Workflows.Design.Core.Contracts`) is a scoped keyed strategy.
+Features register strategies through DI. The internal `ActivityDraftExpressionGraphProjectionRegistry` indexes
+nonblank ordinal `ProviderKey` values, and `ValidateActivityDraftExpressionGraphProjectionsStartupTask` rejects
+blank or duplicate keys before requests without invoking payload projection. This is selection, with no fan-in:
+only the strategy matching the authorized persisted provider key interprets its supported manifest and projects
+the body/public contract into the existing in-memory scope shape. No matching strategy or an unsupported
+manifest returns unavailable. Missing strategies are valid. This is not workflow persistence.
+`PersistedExpressionAuthoringContextSource` reads an activity location only
+through exactly one `IActivityDraftAuthoringReader` authority, then reuses its existing result-order, target-shape,
+scoped-variable and host context/symbol filters. The document/cache identity includes explicit owner kind and ID;
+activity revision and authoring authorization profile invalidate stale metadata. A placed reusable graph exposes
+its public results only; hidden body nodes never enter the caller's authored graph projection.

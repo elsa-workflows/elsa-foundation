@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Expressions.Core.Models;
@@ -20,15 +21,31 @@ public sealed class PersistedExpressionAuthoringContextSource(
     IEnumerable<IWorkflowDefinitionDraftStore> draftStores,
     IActivityStructureService structures,
     ScopedVariablePicker scopedVariables,
-    IActivityDefinitionVersionStore? activityVersions = null,
-    IEnumerable<IExpressionAuthoringContextFilter>? contextFilters = null,
-    IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters = null,
-    IServiceProvider? serviceProvider = null) : IExpressionAuthoringContextSource
+    IActivityDefinitionVersionStore? activityVersions,
+    IEnumerable<IExpressionAuthoringContextFilter>? contextFilters,
+    IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters,
+    IServiceProvider? serviceProvider,
+    IEnumerable<IActivityDraftAuthoringReader>? activityDraftReaders,
+    IEnumerable<IActivityDraftExpressionGraphProjection>? activityGraphProjections) : IExpressionAuthoringContextSource
 {
     private const string SequenceStructureKind = "elsa.sequence.structure";
     private const int MaximumContextSymbols = 5_500;
+    private readonly ActivityDraftExpressionGraphProjectionRegistry _activityGraphProjections = new(activityGraphProjections ?? []);
     private IWellKnownTypeRegistry? WellKnownTypes =>
         serviceProvider?.GetService(typeof(IWellKnownTypeRegistry)) as IWellKnownTypeRegistry;
+
+    // Retain the original public constructor for callers compiled before activity-draft tooling.
+    public PersistedExpressionAuthoringContextSource(
+        IEnumerable<IWorkflowDefinitionDraftStore> draftStores,
+        IActivityStructureService structures,
+        ScopedVariablePicker scopedVariables,
+        IActivityDefinitionVersionStore? activityVersions = null,
+        IEnumerable<IExpressionAuthoringContextFilter>? contextFilters = null,
+        IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters = null,
+        IServiceProvider? serviceProvider = null)
+        : this(draftStores, structures, scopedVariables, activityVersions, contextFilters, symbolFilters, serviceProvider, null, null)
+    {
+    }
 
     public PersistedExpressionAuthoringContextSource(
         IWorkflowDefinitionDraftStore drafts,
@@ -47,12 +64,41 @@ public sealed class PersistedExpressionAuthoringContextSource(
         ExpressionAuthoringAuthorization authorization,
         CancellationToken cancellationToken)
     {
-        var drafts = draftStores.FirstOrDefault();
-        if (drafts is null)
-            return null;
-
-        var draft = await drafts.FindByIdAsync(request.WorkflowDraftId, cancellationToken);
-        if (draft is null || FindNode(draft.State.RootActivity, request.NodeId, cancellationToken) is not { } node)
+        WorkflowDefinitionState state;
+        string draftRevision;
+        string documentIdentity;
+        if (request.Owner is { Kind: "activity-draft" } owner)
+        {
+            if (!string.IsNullOrWhiteSpace(request.WorkflowDraftId))
+                return null;
+            var readers = activityDraftReaders?.ToArray() ?? [];
+            if (readers.Length != 1)
+                return null;
+            var activityDraft = await readers[0].FindAsync(owner.Id, cancellationToken);
+            if (activityDraft is null || activityDraft.DraftId != owner.Id)
+                return null;
+            var graphProjection = _activityGraphProjections.Find(activityDraft.State.Provider.ProviderKey);
+            if (graphProjection?.TryProject(activityDraft.State) is not { } activityGraph)
+                return null;
+            state = activityGraph;
+            documentIdentity = $"{owner.Kind}:{Uri.EscapeDataString(owner.Id)}";
+            draftRevision = $"{documentIdentity}:{activityDraft.Revision:x}:{activityDraft.AuthorizationRevision}";
+        }
+        else
+        {
+            if (request.Owner is not null)
+                return null;
+            var drafts = draftStores.FirstOrDefault();
+            if (drafts is null)
+                return null;
+            var draft = await drafts.FindByIdAsync(request.WorkflowDraftId, cancellationToken);
+            if (draft is null)
+                return null;
+            state = draft.State;
+            documentIdentity = Uri.EscapeDataString(draft.Id);
+            draftRevision = $"{draft.LastModifiedAt.UtcTicks:x}";
+        }
+        if (FindNode(state.RootActivity, request.NodeId, cancellationToken) is not { } node)
             return null;
         var projection = structures.ProjectInputs(node);
         if (!node.Inputs.Where(argument => !projection.ConsumedInputKeys.Contains(argument.ReferenceKey, StringComparer.Ordinal))
@@ -63,14 +109,13 @@ public sealed class PersistedExpressionAuthoringContextSource(
         var target = await FindTargetAsync(node, request.PropertyKey, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var document = new ExpressionAuthoringDocument(
-            $"{draft.Id}:{node.NodeId}:{request.PropertyKey}:{request.ExpressionType}",
-            draft.Id,
+            $"{documentIdentity}:{Uri.EscapeDataString(node.NodeId)}:{Uri.EscapeDataString(request.PropertyKey)}:{Uri.EscapeDataString(request.ExpressionType)}",
+            request.WorkflowDraftId,
             node.NodeId,
             request.PropertyKey,
             request.ExpressionType,
             request.DocumentRevision,
-            target?.Type.Alias);
-        var draftRevision = $"{draft.LastModifiedAt.UtcTicks:x}";
+            target?.Type.Alias) { Owner = request.Owner };
         ExpressionAuthoringContext? context = new(
             ExpressionToolingContractVersion.V1,
             document,
@@ -91,7 +136,7 @@ public sealed class PersistedExpressionAuthoringContextSource(
         }
 
         var symbols = new List<ExpressionSymbol>(Math.Min(MaximumContextSymbols, 256));
-        foreach (var input in draft.State.Inputs)
+        foreach (var input in state.Inputs)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = new ExpressionSymbol(
@@ -105,7 +150,7 @@ public sealed class PersistedExpressionAuthoringContextSource(
         }
         if (symbols.Count < MaximumContextSymbols)
         {
-            foreach (var visible in scopedVariables.GetVisibleVariables(draft.State, node.NodeId))
+            foreach (var visible in scopedVariables.GetVisibleVariables(state, node.NodeId))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = new ExpressionSymbol(
@@ -121,7 +166,7 @@ public sealed class PersistedExpressionAuthoringContextSource(
         if (symbols.Count < MaximumContextSymbols)
         {
             await foreach (var candidate in GetActivityOutputSymbolsAsync(
-                               draft.State.RootActivity,
+                               state.RootActivity,
                                node.NodeId,
                                cancellationToken))
             {
@@ -213,11 +258,11 @@ public sealed class PersistedExpressionAuthoringContextSource(
                 cancellationToken.ThrowIfCancellationRequested();
                 var name = $"{node.NodeId}.{output.Name}";
                 yield return new(
-                    $"activity-result:{node.NodeId}:{output.ReferenceKey}",
+                    $"activity-result:{Uri.EscapeDataString(node.NodeId)}:{Uri.EscapeDataString(output.ReferenceKey)}",
                     name,
                     ExpressionSymbolKind.ActivityResult,
                     ToValueShape(output.Type, output.IsNullable, cancellationToken),
-                    "Activity output");
+                    "Activity output") { ParameterBinding = new ActivityResultExpressionParameterBinding(node.NodeId, output.ReferenceKey) };
             }
         }
     }

@@ -29,143 +29,69 @@ internal static class ExpressionToolingApiHandlers
         return policy.AuthorizeAsync(new(true, subjectId, permissionRevision, permissionRevision), cancellationToken);
     }
 
-    public static async ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveContextAsync(
-        HttpContext context,
-        ExpressionToolingContextRequest request)
+    public static async ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveContextAsync(HttpContext context, ExpressionToolingContextRequest request)
     {
-        var contextService = context.RequestServices.GetRequiredService<IExpressionAuthoringContextService>();
-        var providerResolver = context.RequestServices.GetRequiredService<IExpressionToolingProviderResolver>();
-        var authorizationPolicy = context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>();
-        var authorization = await AuthorizationAsync(context, authorizationPolicy, context.RequestAborted);
-        var resolved = await contextService.ResolveAsync(
-            new(request.ContractVersion, request.WorkflowDraftId, request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision, request.Search, request.Skip, request.Take),
-            authorization,
-            context.RequestAborted);
-        if (!resolved.IsSuccess)
-            return resolved;
-        if (providerResolver.Find(request.ExpressionType) is not { } provider)
-            return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(
-                ExpressionToolingOutcomeState.Unavailable,
-                ExpressionToolingContractVersion.V1,
-                "provider-unavailable",
-                documentRevision: resolved.Payload!.Document.DocumentRevision,
-                contextRevision: resolved.Payload.ContextRevision);
-
-        var capabilities = await InvokeProviderAsync(
-            () => provider.GetCapabilitiesAsync(new(request.ContractVersion, resolved.Payload!.Document, resolved.Payload), context.RequestAborted),
-            resolved.Payload!, context.RequestAborted);
-        if (!capabilities.IsSuccess)
-            return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(
-                capabilities.State, capabilities.ContractVersion, capabilities.Code, capabilities.Message,
-                capabilities.DocumentRevision, capabilities.ContextRevision);
-
-        var payload = resolved.Payload! with { Capabilities = capabilities.Payload! };
-        return resolved.State == ExpressionToolingOutcomeState.SupportedEmpty
-            ? ExpressionToolingOutcome<ExpressionAuthoringContext>.SupportedEmpty(payload, resolved.ContractVersion, payload.Document.DocumentRevision, payload.ContextRevision)
-            : ExpressionToolingOutcome<ExpressionAuthoringContext>.Success(payload, resolved.ContractVersion, payload.Document.DocumentRevision, payload.ContextRevision);
-    }
-
-    public static async ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> SearchSymbolsAsync(
-        HttpContext context,
-        ExpressionToolingContextRequest request)
-    {
-        var contextService = context.RequestServices.GetRequiredService<IExpressionAuthoringContextService>();
-        var providerResolver = context.RequestServices.GetRequiredService<IExpressionToolingProviderResolver>();
+        var operations = context.RequestServices.GetServices<IExpressionToolingOperations>().Take(2).ToArray();
+        if (operations.Length != 1)
+            return ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "expression-tooling-unavailable");
         var authorization = await AuthorizationAsync(context,
             context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
-        var resolved = await contextService.ResolveAsync(
-            new(request.ContractVersion, request.WorkflowDraftId, request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision, request.Search, request.Skip, request.Take),
-            authorization, context.RequestAborted);
-        if (!resolved.IsSuccess)
-            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(resolved.State, resolved.ContractVersion, resolved.Code, resolved.Message, resolved.DocumentRevision, resolved.ContextRevision);
-        if (providerResolver.Find(request.ExpressionType) is null)
-            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "provider-unavailable", documentRevision: resolved.Payload!.Document.DocumentRevision, contextRevision: resolved.Payload.ContextRevision);
-        return resolved.Payload!.RootSymbols.Count == 0
-            ? ExpressionToolingOutcome<ExpressionToolingItems>.SupportedEmpty(new([]), ExpressionToolingContractVersion.V1, resolved.Payload.Document.DocumentRevision, resolved.Payload.ContextRevision)
-            : ExpressionToolingOutcome<ExpressionToolingItems>.Success(new(resolved.Payload.RootSymbols.Select(symbol => new ExpressionToolingItem(symbol.Name, symbol.ValueShape?.DisplayName, symbol.Documentation, symbol.Name, symbol.Kind)).ToArray()), ExpressionToolingContractVersion.V1, resolved.Payload.Document.DocumentRevision, resolved.Payload.ContextRevision);
+        var location = new ResolveExpressionAuthoringContextRequest(request.ContractVersion, request.WorkflowDraftId, request.NodeId,
+            request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision, request.Search, request.Skip, request.Take);
+        return await operations[0].ResolveContextAsync(location, authorization, context.RequestAborted);
     }
 
-    public static async ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> CompleteAsync(
-        HttpContext context,
-        ExpressionToolingCompletionRequest request)
+    public static async ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> SearchSymbolsAsync(HttpContext context, ExpressionToolingContextRequest request)
     {
-        var contextService = context.RequestServices.GetRequiredService<IExpressionAuthoringContextService>();
-        var providerResolver = context.RequestServices.GetRequiredService<IExpressionToolingProviderResolver>();
+        var operations = context.RequestServices.GetServices<IExpressionToolingOperations>().Take(2).ToArray();
+        if (operations.Length != 1)
+            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "expression-tooling-unavailable");
         var authorization = await AuthorizationAsync(context,
             context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
-        var resolved = await contextService.ResolveForProviderAsync(new(request.ContractVersion, request.WorkflowDraftId, request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision), authorization, context.RequestAborted);
-        if (!resolved.IsSuccess)
-            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(resolved.State, resolved.ContractVersion, resolved.Code, resolved.Message, resolved.DocumentRevision, resolved.ContextRevision);
-        if (providerResolver.Find(request.ExpressionType) is not { } provider)
-            return Unavailable<ExpressionToolingItems>(resolved.Payload!);
-        if (!request.Cursor.IsValid)
-            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(ExpressionToolingOutcomeState.Incompatible, ExpressionToolingContractVersion.V1, "invalid-cursor", documentRevision: resolved.Payload!.Document.DocumentRevision, contextRevision: resolved.Payload.ContextRevision);
-        return await InvokeSupportedProviderAsync(provider, resolved.Payload!, capabilities => capabilities.SupportsCompletions, "completion-unsupported", () => provider.GetCompletionsAsync(new(new(request.ContractVersion, resolved.Payload!.Document, resolved.Payload), request.Source, request.Cursor), context.RequestAborted), context.RequestAborted);
+        var location = new ResolveExpressionAuthoringContextRequest(request.ContractVersion, request.WorkflowDraftId, request.NodeId,
+            request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision, request.Search, request.Skip, request.Take);
+        return await operations[0].SearchSymbolsAsync(location, authorization, context.RequestAborted);
+    }
+
+    public static async ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> CompleteAsync(HttpContext context, ExpressionToolingCompletionRequest request)
+    {
+        var operations = context.RequestServices.GetServices<IExpressionToolingOperations>().Take(2).ToArray();
+        if (operations.Length != 1)
+            return ExpressionToolingOutcome<ExpressionToolingItems>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "expression-tooling-unavailable");
+        var authorization = await AuthorizationAsync(context,
+            context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
+        var location = new ResolveExpressionAuthoringContextRequest(request.ContractVersion, request.WorkflowDraftId, request.NodeId,
+            request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision);
+        return await operations[0].CompleteAsync(location, request.Source, request.Cursor, authorization, context.RequestAborted);
     }
 
     public static async ValueTask<ExpressionToolingOutcome<ExpressionHover>> HoverAsync(HttpContext context, ExpressionToolingHoverRequest request)
     {
-        var contextService = context.RequestServices.GetRequiredService<IExpressionAuthoringContextService>();
-        var providerResolver = context.RequestServices.GetRequiredService<IExpressionToolingProviderResolver>();
-        var authorization = await AuthorizationAsync(context, context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
-        var resolved = await contextService.ResolveForProviderAsync(new(request.ContractVersion, request.WorkflowDraftId, request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision), authorization, context.RequestAborted);
-        if (!resolved.IsSuccess)
-            return ExpressionToolingOutcome<ExpressionHover>.Failure(resolved.State, resolved.ContractVersion, resolved.Code, resolved.Message, resolved.DocumentRevision, resolved.ContextRevision);
-        if (providerResolver.Find(request.ExpressionType) is not { } provider)
-            return Unavailable<ExpressionHover>(resolved.Payload!);
-        if (!request.Position.IsValid)
-            return ExpressionToolingOutcome<ExpressionHover>.Failure(ExpressionToolingOutcomeState.Incompatible, ExpressionToolingContractVersion.V1, "invalid-position", documentRevision: resolved.Payload!.Document.DocumentRevision, contextRevision: resolved.Payload.ContextRevision);
-        return await InvokeSupportedProviderAsync(provider, resolved.Payload!, capabilities => capabilities.SupportsHover, "hover-unsupported", () => provider.GetHoverAsync(new(new(request.ContractVersion, resolved.Payload!.Document, resolved.Payload), request.Source, request.Position), context.RequestAborted), context.RequestAborted);
+        var operations = context.RequestServices.GetServices<IExpressionToolingOperations>().Take(2).ToArray();
+        if (operations.Length != 1)
+            return ExpressionToolingOutcome<ExpressionHover>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "expression-tooling-unavailable");
+        var authorization = await AuthorizationAsync(context,
+            context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
+        var location = new ResolveExpressionAuthoringContextRequest(request.ContractVersion, request.WorkflowDraftId, request.NodeId,
+            request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision);
+        return await operations[0].HoverAsync(location, request.Source, request.Position, authorization, context.RequestAborted);
     }
 
     public static async ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(HttpContext context, ExpressionToolingSourceRequest request)
     {
-        var contextService = context.RequestServices.GetRequiredService<IExpressionAuthoringContextService>();
-        var providerResolver = context.RequestServices.GetRequiredService<IExpressionToolingProviderResolver>();
-        var authorization = await AuthorizationAsync(context, context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
-        var resolved = await contextService.ResolveForProviderAsync(new(request.ContractVersion, request.WorkflowDraftId, request.NodeId, request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision), authorization, context.RequestAborted);
-        if (!resolved.IsSuccess)
-            return ExpressionToolingOutcome<ExpressionDiagnosticSet>.Failure(resolved.State, resolved.ContractVersion, resolved.Code, resolved.Message, resolved.DocumentRevision, resolved.ContextRevision);
-        if (providerResolver.Find(request.ExpressionType) is not { } provider)
-            return Unavailable<ExpressionDiagnosticSet>(resolved.Payload!);
-        return await InvokeSupportedProviderAsync(provider, resolved.Payload!, capabilities => capabilities.SupportsValidation, "validation-unsupported", () => provider.ValidateAsync(new(new(request.ContractVersion, resolved.Payload!.Document, resolved.Payload), request.Source), context.RequestAborted), context.RequestAborted);
+        var operations = context.RequestServices.GetServices<IExpressionToolingOperations>().Take(2).ToArray();
+        if (operations.Length != 1)
+            return ExpressionToolingOutcome<ExpressionDiagnosticSet>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "expression-tooling-unavailable");
+        var authorization = await AuthorizationAsync(context,
+            context.RequestServices.GetRequiredService<IExpressionAuthoringAuthorizationPolicy>(), context.RequestAborted);
+        var location = new ResolveExpressionAuthoringContextRequest(request.ContractVersion, request.WorkflowDraftId, request.NodeId,
+            request.PropertyKey, request.ExpressionType, request.DocumentRevision, request.ContextRevision);
+        return await operations[0].ValidateAsync(location, request.Source, authorization, context.RequestAborted);
     }
 
-    private static async ValueTask<ExpressionToolingOutcome<T>> InvokeSupportedProviderAsync<T>(IExpressionToolingProvider provider, ExpressionAuthoringContext context, Func<ExpressionToolingCapabilities, bool> supported, string unsupportedCode, Func<ValueTask<ExpressionToolingOutcome<T>>> invoke, CancellationToken cancellationToken)
+    private static string Revision(IEnumerable<string> values)
     {
-        if (!supported(context.Capabilities))
-            return Unavailable<T>(context, unsupportedCode);
-        var capabilities = await InvokeProviderAsync(() => provider.GetCapabilitiesAsync(new(ExpressionToolingContractVersion.V1, context.Document, context), cancellationToken), context, cancellationToken);
-        if (!capabilities.IsSuccess)
-            return ExpressionToolingOutcome<T>.Failure(capabilities.State, capabilities.ContractVersion, capabilities.Code, capabilities.Message, capabilities.DocumentRevision, capabilities.ContextRevision);
-        if (!supported(capabilities.Payload!))
-            return Unavailable<T>(context, unsupportedCode);
-        return await InvokeProviderAsync(invoke, context, cancellationToken);
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001e', values)));
+        return Convert.ToHexString(digest.AsSpan(0, 16)).ToLowerInvariant();
     }
-
-    private static async ValueTask<ExpressionToolingOutcome<T>> InvokeProviderAsync<T>(Func<ValueTask<ExpressionToolingOutcome<T>>> invoke, ExpressionAuthoringContext context, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await invoke();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            return ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Canceled, ExpressionToolingContractVersion.V1, "provider-canceled", documentRevision: context.Document.DocumentRevision, contextRevision: context.ContextRevision);
-        }
-        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
-        {
-            return ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, "provider-failed", documentRevision: context.Document.DocumentRevision, contextRevision: context.ContextRevision);
-        }
-    }
-
-    private static ExpressionToolingOutcome<T> Unavailable<T>(ExpressionAuthoringContext context, string code = "provider-unavailable") =>
-        ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Unavailable, ExpressionToolingContractVersion.V1, code, documentRevision: context.Document.DocumentRevision, contextRevision: context.ContextRevision);
-
-    private static string Revision(IEnumerable<string> values) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001e', values))).AsSpan(0, 16)).ToLowerInvariant();
 }

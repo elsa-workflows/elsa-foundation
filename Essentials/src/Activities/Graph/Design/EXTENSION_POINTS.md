@@ -53,3 +53,15 @@ None.
 `ActivityTemplateCompilation.ExecutableRoot` is a typed `ExecutableNode`. The graph provider pins its
 stable descriptor, value-flow contract, dynamic input/result projection schema, and exact runtime
 requirements before Publishing hashes and places the immutable template.
+
+## Expression authoring graph strategy (#3197)
+
+`GraphActivitiesDesignFeature` registers scoped `ActivityGraphExpressionProjection` through
+`IActivityDraftExpressionGraphProjection` (`Elsa.Workflows.Design.Core.Contracts`). This keyed strategy declares `ProviderKey = "elsa.activity-graph"` and
+accepts already-authorized persisted draft state only, recognizes `elsa.activity-graph` schemas 1/2 with the
+provider's manifest parser, and projects its public inputs, graph-variable declarations and body root. It never
+reads a workflow draft, caller environment or placed graph's hidden implementation. Unsupported or malformed
+source returns no projection. The Workflows Design API registry rejects blank or duplicate strategy keys at
+startup and selects only the authorized persisted provider key. Missing strategies remain valid. The shared Workflows
+Design API projection retains the approved scope/order semantics and host filters. The activity API owns read,
+tenant and provider-payload authorization before the selected strategy is invoked.

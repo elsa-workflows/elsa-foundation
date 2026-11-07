@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Expressions.Core.Models;
 
 /// <summary>Version negotiated by expression-tooling clients and providers.</summary>
@@ -56,7 +58,15 @@ public sealed record ExpressionAuthoringDocument(
     string ExpressionType,
     string DocumentRevision,
     string? ExpectedResultType = null,
-    string? Source = null);
+    string? Source = null)
+{
+    /// <summary>Explicit non-workflow authority. WorkflowDraftId is empty when this is supplied.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpressionAuthoringDocumentOwner? Owner { get; init; }
+}
+
+/// <summary>Host-owned document identity; kinds are interpreted by authoritative Design sources.</summary>
+public sealed record ExpressionAuthoringDocumentOwner(string Kind, string Id);
 
 public readonly record struct ExpressionToolingPosition(int Line, int Character)
 {
@@ -94,7 +104,12 @@ public sealed record ExpressionSymbol(
     ExpressionValueShape? ValueShape = null,
     string? Documentation = null,
     IReadOnlyList<ExpressionCallableSignature>? Signatures = null,
-    string? ChildrenLink = null);
+    string? ChildrenLink = null)
+{
+    /// <summary>Safe existing binding representation for selecting this symbol; no runtime value is included.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpressionParameterBinding? ParameterBinding { get; init; }
+}
 
 public sealed record ExpressionToolingCapabilities(
     bool SupportsCompletions = true,
