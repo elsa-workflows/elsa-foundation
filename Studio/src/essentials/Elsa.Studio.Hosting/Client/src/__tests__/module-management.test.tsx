@@ -8,6 +8,53 @@ import { createEndpointContext, StudioHttpError, type ElsaStudioModuleApi } from
 import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
+  it.each([renderModuleManagementPage, renderPackageFeedsPage])("keeps loading content inside the selected host panel (%#)", async render => {
+    let release = (_value: unknown) => {};
+    const pending = new Promise(resolve => { release = resolve; });
+    const { container, unmount } = await render(stubApi({ bridgeRegistryGetJson: async () => pending }), "server");
+    try {
+      assertLinkedPanels(container);
+      const selected = container.querySelector("[aria-label='Hosts'] [aria-selected='true']")!;
+      const panel = document.getElementById(selected.getAttribute("aria-controls")!)!;
+      expect(panel.querySelector('[aria-label^="Loading Server"]')).not.toBeNull();
+      release(bridgeRegistryEnvelope(null, "unreachable"));
+      await flushPromises();
+      assertLinkedPanels(container);
+      expect(panel.textContent).toContain("Server module registry is unavailable");
+    } finally { release(bridgeRegistryEnvelope(null, "unreachable")); await unmount(); }
+  });
+
+  it.each([renderModuleManagementPage, renderPackageFeedsPage])("links host panels through keyboard selection (%#)", async render => {
+    const { container, unmount } = await render(stubApi());
+    try {
+      assertLinkedPanels(container);
+      for (const key of ["End", "Home", "ArrowRight", "ArrowLeft"]) {
+        const selected = container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [aria-selected='true']")!;
+        selected.focus();
+        flushSync(() => selected.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+        await flushPromises();
+        expect(document.activeElement).toBe(container.querySelector("[aria-label='Hosts'] [aria-selected='true']"));
+        assertLinkedPanels(container);
+      }
+      for (const tab of container.querySelectorAll<HTMLButtonElement>("[aria-label='Inspector'] [role='tab']")) {
+        flushSync(() => tab.click());
+        await flushPromises();
+        assertLinkedPanels(container);
+      }
+    } finally { await unmount(); }
+  });
+
+  it.each([renderModuleManagementPage, renderPackageFeedsPage])("keeps unavailable host recovery inside its linked panel (%#)", async render => {
+    const { container, unmount } = await render(stubApi({ bridgeRegistryGetJson: async () => bridgeRegistryEnvelope(null, "unreachable") }), "server");
+    try {
+      expect(container.textContent).toContain("Server module registry is unavailable");
+      assertLinkedPanels(container);
+      const selected = container.querySelector("[aria-label='Hosts'] [aria-selected='true']")!;
+      const panel = document.getElementById(selected.getAttribute("aria-controls")!);
+      expect(panel?.textContent).toContain("Server module registry is unavailable");
+    } finally { await unmount(); }
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -1230,5 +1277,19 @@ async function flushPromises() {
   // re-render), so flush a handful of macrotasks to let the registry queries reach their terminal state.
   for (let i = 0; i < 5; i++) {
     await new Promise(resolve => setTimeout(resolve, 0));
+  }
+}
+
+function assertLinkedPanels(container: Element) {
+  const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  expect(tabs.length).toBeGreaterThan(0);
+  const ids = Array.from(container.querySelectorAll('[id]'), element => element.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const tab of tabs) {
+    const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+    expect(panel, `Panel for ${tab.textContent}`).not.toBeNull();
+    expect(panel?.getAttribute("role")).toBe("tabpanel");
+    expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
+    expect(panel?.hidden).toBe(tab.getAttribute("aria-selected") !== "true");
   }
 }
