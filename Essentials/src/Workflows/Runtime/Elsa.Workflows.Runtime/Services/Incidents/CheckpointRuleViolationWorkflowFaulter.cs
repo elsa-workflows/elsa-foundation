@@ -120,7 +120,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
             return;
 
         await _checkpointCommitter.CommitAsync(
-            NewFaultCommit(faultable, violation, occurredAt, hasAcceptedState: stored is not null),
+            NewFaultCommit(faultable, violation, occurredAt, hasAcceptedState: stored is not null,
+                RuntimeHistorySourceFacts.IsFinalProfile(faultable.HistoryCapturePolicy) ? StartCommandExecution.ReadHistoryCausation(envelope) : null),
             cancellationToken);
         _logger.LogWarning(
             drainFailure,
@@ -132,31 +133,29 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
 
     /// <summary>
     /// The execution a refused first commit would have created, read back from the start command that carried it. Only a
-    /// start that declares a parent qualifies: it is the case whose refusal has nowhere else to go, and the payload carries
-    /// every field a dispatch is matched on, so the synthesized child cannot drift from the dispatch that is waiting on it.
-    /// A root start reports its refusal to its caller.
+    /// captured root retains its admitted failure; legacy roots keep reporting refusal to their caller. A dispatched
+    /// child still requires queryable dispatch support, and carries the exact source fields its parent waits on.
     /// </summary>
     private WorkflowExecutionState? SynthesizeDispatchedStart(
         WorkflowExecutionCommandEnvelope? envelope,
         string workflowExecutionId,
         DateTimeOffset occurredAt)
     {
-        // Leave a store that cannot project the dispatch on the path it already had (see CanFaultDispatchedChild).
-        if (!StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore))
-            return null;
-
         var execution = StartCommandExecution.Read(envelope, workflowExecutionId, occurredAt, exception => _logger.LogWarning(
             exception,
             "Workflow execution {WorkflowExecutionId} could not be faulted from its start command because the command payload could not be read; its refusal stays with the start's delivery result",
             workflowExecutionId));
-        return execution?.ParentWorkflowExecutionId is null ? null : execution;
+        if (execution is null) return null;
+        if (execution.ParentWorkflowExecutionId is null)
+            return execution.HistoryCaptureEnabledAtAdmission == true && execution.HistoryCapturePolicy?.Version >= 2 ? execution : null;
+        return StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore) ? execution : null;
     }
 
     private static RuntimeCheckpointCommit NewFaultCommit(
         WorkflowExecutionState workflow,
         string violation,
         DateTimeOffset occurredAt,
-        bool hasAcceptedState)
+        bool hasAcceptedState, RuntimeHistoryCausation? cause)
     {
         var workflowExecutionId = workflow.WorkflowExecutionId;
         var incidentId = IncidentId(workflowExecutionId);
@@ -200,7 +199,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [],
-                Metadata: metadata),
+                Metadata: metadata)
+            { HistoryCausation = cause, HistoryStartsAtAdmission = !hasAcceptedState && workflow.HistoryCaptureEnabledAtAdmission == true && workflow.HistoryCapturePolicy?.Version >= 2 ? true : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(workflowExecutionId, RuntimeStateChangeOperation.Upsert, faulted, metadata),
                 scheduler: null,
@@ -211,6 +211,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
                 operational: [],
                 activityExecutionInspections: []),
             PostCommitIntents: [],
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(workflow.HistoryCapturePolicy,
+                () => [RuntimeHistoryIncidentFacts.Created(incident)]) };
     }
 }

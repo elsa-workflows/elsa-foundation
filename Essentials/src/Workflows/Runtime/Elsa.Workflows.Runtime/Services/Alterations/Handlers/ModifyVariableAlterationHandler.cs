@@ -115,9 +115,14 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
     private sealed record ModifyRootVariableStagedChange(
         int Ordinal,
         string VariableKey,
-        WorkflowExecutionState Workflow) : IWorkflowAlterationRuntimeCheckpointStagedChange
+        WorkflowExecutionState Workflow) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
         public string ChangeKey => $"runtime.alteration.modify-root-variable:{Ordinal}:{VariableKey}";
+
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt) =>
+            [new(RuntimeHistorySourceFactKind.DurableStateRecorded,
+                RuntimeHistoryIdentity.CreateBinding([Workflow.WorkflowExecutionId, "root-variable", VariableKey]), occurredAt,
+                reasonCode: "root-variable-assignment")];
 
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
         {

@@ -241,8 +241,17 @@ internal static class ActivitySuccessorStaging
         ActivityExecutionInspectionProjection SupersededInspection,
         ActivityExecutionInspectionProjection SuccessorInspection,
         RuntimePostCommitIntent Continuation,
-        IReadOnlyCollection<IncidentState> Incidents) : IWorkflowAlterationRuntimeCheckpointStagedChange
+        IReadOnlyCollection<IncidentState> Incidents) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt)
+        {
+            foreach (var incident in Incidents)
+                yield return RuntimeHistoryIncidentFacts.Resolved(incident);
+            if (Incidents.Count > 0)
+                yield return new(RuntimeHistorySourceFactKind.ActivityRetryScheduled, Superseded.InvocationId, SupersededAt(),
+                    Superseded.InvocationId, relatedActivityExecutionId: Successor.InvocationId, reasonCode: "operator-retry");
+        }
+
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
         {
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal);

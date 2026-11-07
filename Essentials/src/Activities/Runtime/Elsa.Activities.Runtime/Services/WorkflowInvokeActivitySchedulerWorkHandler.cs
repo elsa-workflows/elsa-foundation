@@ -90,6 +90,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         BackgroundActivityWorkItem? backgroundResult = null;
         if (executableNode.ExecutionPlacement == ActivityExecutionPlacement.Background)
         {
+            await ActivityHistory.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
             try
             {
                 backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
@@ -145,6 +146,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         BackgroundActivityWorkItem? backgroundResult,
         CancellationToken cancellationToken)
     {
+        var history = await ActivityHistory.CreateAsync(serviceProvider, workItem, state, TimeProvider, cancellationToken);
         var workflowDispatchStaging = serviceProvider.GetService<IWorkflowDispatchStagingAccessor>();
         workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
         // The PublishEvent send surface stages durable-first publish intents on this same invocation-keyed
@@ -310,6 +312,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
         IReadOnlyCollection<RuntimeSchedulerWorkItem> ancestorNotificationWorkItems = [];
         var stagedState = state;
+        history?.SetAttempt(valueFlowAttempt?.AttemptId);
         try
         {
             var checkpointParticipant = activity as IRuntimeActivityCheckpointParticipant;
@@ -330,7 +333,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 returnedTransition = committedTransition;
             else if (activity is IRuntimeStructuralActivity structuralActivity)
             {
-                structuralContinuation = await structuralActivity.ExecuteStructureAsync(context!);
+                structuralContinuation = await ActivityHistory.ObserveAsync(history, () => structuralActivity.ExecuteStructureAsync(context!), continuation => continuation?.Kind.ToString() ?? "Unknown");
                 stagedState = RuntimeStructuralStateProjector.Apply(stagedState, structuralContinuation, TimeProvider.GetUtcNow());
                 returnedTransition = structuralContinuation.Kind switch
                 {
@@ -342,7 +345,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 };
             }
             else
-                returnedTransition = await activity!.ExecuteAsync(context!.ToActivityExecutionContext());
+                returnedTransition = await ActivityHistory.ObserveAsync(history, () => activity!.ExecuteAsync(context!.ToActivityExecutionContext()), transition => transition?.Kind.ToString() ?? "Unknown");
 
             var childScheduleRequests = context?.GetChildActivityScheduleRequests() ?? [];
             if (structuralContinuation is null && childScheduleRequests.Count > 0)
@@ -556,7 +559,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken, history?.Materialize());
             return;
         }
 
@@ -575,7 +578,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, history?.Materialize());
             return;
         }
 
@@ -616,6 +619,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         if (returnedFault is not null)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationFaulted);
             // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
             // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
@@ -635,12 +639,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 valueSnapshots,
                 cancellationToken,
                 parentOutcomeFault: returnedFault,
-                parentOutcomeNotifications: parentOutcomeNotifications);
+                parentOutcomeNotifications: parentOutcomeNotifications, historyFacts: history?.Materialize(structuralContinuation));
             return;
         }
 
         if (returnedCancellationReason is not null)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationCancelled);
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter,
                 inspectionAccumulator,
@@ -649,12 +654,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 state,
                 returnedCancellationReason,
                 valueSnapshots,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken, historySourceFacts: history?.Materialize(structuralContinuation));
             return;
         }
 
         if (typedSuspendedState is not null)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationSuspended);
             await CommitStatefulSuspensionAsync(
                 checkpointCommitter,
                 inspectionAccumulator,
@@ -665,12 +671,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 valueSnapshots,
                 stagedWorkflowDispatch,
                 stagedPublishIntents,
-                cancellationToken);
+                cancellationToken, history?.Materialize(structuralContinuation));
             return;
         }
 
         if (pendingChildScheduling is { } childScheduling)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationSuspended);
             await CommitChildSchedulingActivityAsync(
                 checkpointCommitter,
                 inspectionAccumulator,
@@ -682,7 +689,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 parentNotificationWorkItems,
                 valueSnapshots,
                 durableValueChanges,
-                cancellationToken);
+                cancellationToken, history?.Materialize(structuralContinuation));
             return;
         }
 
@@ -708,6 +715,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             },
             cancellationToken);
 
+        history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, SkippedSubStatus).ToArray());
         await CommitCompletedActivityAsync(
             checkpointCommitter,
             inspectionAccumulator,
@@ -723,7 +731,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             stagedWorkflowDispatch,
             stagedPublishIntents,
             occurredAt,
-            cancellationToken);
+            cancellationToken, history?.Materialize(structuralContinuation));
     }
 
     // This is where an activity fault stops: it is recorded here, not re-thrown, so it never reaches the scheduler
@@ -753,10 +761,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null) =>
         RecordMaskedFaultAsync(
             activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state,
-            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken);
+            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken, historyFacts: historyFacts);
 
     private async ValueTask RecordMaskedFaultAsync(
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
@@ -770,9 +778,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken,
         ActivityFault? parentOutcomeFault = null,
-        IReadOnlyList<ActivityChildNotifiedContext>? parentOutcomeNotifications = null)
+        IReadOnlyList<ActivityChildNotifiedContext>? parentOutcomeNotifications = null, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
-        var request = ActivityExecutionInspection.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, maskedException, subStatus, valueSnapshots);
+        var request = ActivityExecutionInspection.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, maskedException, subStatus, valueSnapshots)
+            with { HistorySourceFacts = historyFacts };
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, invokePayload.ActivityExecutionId, subStatus);
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore,
@@ -803,7 +812,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         IReadOnlyList<RuntimePostCommitIntent> publishIntents,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var occurredAt = TimeProvider.GetUtcNow();
         var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-suspended:{invokePayload.ActivityExecutionId}";
@@ -821,10 +830,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         };
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 suspendedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(invokeWorkItem),
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
@@ -955,7 +965,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 .Concat(workflowDispatchIntents)
                 .Concat(publishIntents)
                 .ToArray(),
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = historyFacts };
 
         var commitResult = await checkpointCommitter.CommitAsync(commit, cancellationToken);
         if (!commitResult.Succeeded || bookmarkLifecycleNotifier is null)
@@ -1020,7 +1030,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var occurredAt = TimeProvider.GetUtcNow();
         var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-inspection-captured:{invokePayload.ActivityExecutionId}";
@@ -1043,10 +1053,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 new(
                     StateId: invokePayload.ActivityExecutionId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    State: await inspectionAccumulator.BuildProjectionAsync(
+                    State: await inspectionAccumulator.BuildProjectionWithSourceAsync(
                         state,
                         checkpointId,
                         occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(invokeWorkItem),
                         valueSnapshots: valueSnapshots,
                         metadata: metadata,
                         cancellationToken: cancellationToken),
@@ -1089,7 +1100,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 .Concat(parentNotifications)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = historyFacts };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
@@ -1146,7 +1157,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         IReadOnlyList<RuntimePostCommitIntent> publishIntents,
         DateTimeOffset occurredAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var core = await BuildCompletedCommitAsync(
             inspectionAccumulator,
@@ -1159,7 +1170,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             workflowVariableWriteBack,
             workflowDispatch,
             occurredAt,
-            cancellationToken);
+            cancellationToken, historyFacts);
 
         var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
             invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
@@ -1203,7 +1214,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         DateTimeOffset occurredAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-completed:{invokePayload.ActivityExecutionId}";
         var metadata = new Dictionary<string, string>
@@ -1220,10 +1231,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         };
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 completedState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(invokeWorkItem),
                 outcomeNames: outcomeNames,
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
@@ -1278,7 +1290,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             PostCommitIntents: workflowDispatch is null
                 ? []
                 : [workflowDispatch.StartIntent],
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = historyFacts };
 
         return new CompletedCommitCore(commit, completionWorkItem, occurredAt);
     }

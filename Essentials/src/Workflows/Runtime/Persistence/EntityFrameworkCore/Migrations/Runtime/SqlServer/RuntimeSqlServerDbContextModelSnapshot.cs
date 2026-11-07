@@ -622,6 +622,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<int>("FailureCount")
                         .HasColumnType("int");
 
+                    b.Property<bool>("HistoryPending")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HistoryRetired")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("HistoryRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -695,10 +705,22 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "DueTimeUtcTicks", "TimerIdOrderKey");
 
+                    b.HasIndex("ScopeKeyHash", "HistoryRetired", "ClaimOrderKey")
+                        .HasDatabaseName("IX_runtime_timer_live_claim");
+
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdHash")
                         .IsUnique();
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey");
+
+                    b.HasIndex("ScopeKeyHash", "HistoryPending", "WorkflowExecutionIdHash", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_history_pending");
+
+                    b.HasIndex("ScopeKeyHash", "HistoryRetired", "DueTimeUtcTicks", "TimerIdOrderKey")
+                        .HasDatabaseName("IX_runtime_timer_live_due");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
 
                     b.ToTable("elsa_runtime_durable_timer", (string)null);
                 });
@@ -1407,6 +1429,374 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeHistoryActivityEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ActivityExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ActivityExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ParentActivityExecutionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ActivityExecutionIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_activity_owner");
+
+                    b.ToTable("elsa_runtime_history_activity", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeHistoryBookmarkCountEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("ActiveCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ActivityExecutionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ActivityExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("TotalCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ActivityExecutionIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_bookmark_count_owner");
+
+                    b.ToTable("elsa_runtime_history_bookmark_count", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeHistoryBookmarkEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ActivityExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ActivityExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("BookmarkId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BookmarkIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("FirstRecordedSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "BookmarkIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_bookmark_id");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstRecordedSequence")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_bookmark_sequence");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ActivityExecutionIdHash", "FirstRecordedSequence")
+                        .HasDatabaseName("IX_runtime_history_bookmark_activity");
+
+                    b.ToTable("elsa_runtime_history_bookmark", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeHistoryEventEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ActivityExecutionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ActivityExecutionIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("BookmarkId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BookmarkIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CandidateFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HistoryEventId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HistoryEventIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsPurged")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NameHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryEventIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_event_id");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_event_sequence");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ActivityExecutionIdHash", "Sequence")
+                        .HasDatabaseName("IX_runtime_history_event_activity");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "BookmarkIdHash", "Sequence")
+                        .HasDatabaseName("IX_runtime_history_event_bookmark");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "Category", "Sequence")
+                        .HasDatabaseName("IX_runtime_history_event_category");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "NameHash", "Sequence")
+                        .HasDatabaseName("IX_runtime_history_event_kind");
+
+                    b.ToTable("elsa_runtime_history_event", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeHistoryHeadEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("FirstSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PurgedThroughSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowExecutionIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_runtime_history_head_scope_run");
+
+                    b.ToTable("elsa_runtime_history_head", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeModelExecutionEntity", b =>

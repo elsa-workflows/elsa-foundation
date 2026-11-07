@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Primitives.Models;
@@ -26,6 +27,21 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeStartCommandSchedulingTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Actual_serialized_start_checkpoint_handoff_preserves_the_source_recorded_predecessor()
+    {
+        var material = new InMemoryWorkflowExecutableStore(); var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]); await material.SaveAsync(executable);
+        var cause = new RuntimeHistoryCausation("parent-request-event", "parent-run", "parent-physical-source");
+        var payload = new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId) { HistoryCausation = cause };
+        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload)));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(cause, checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!.HistoryCausation);
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        await NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), writer, queue, material).HandleAsync(checkpointWork);
+        Assert.Equal(cause, Assert.Single(writer.ListCommits()).Commit.Checkpoint.HistoryCausation);
+    }
 
     [Fact]
     public async Task HandleAsync_EnqueuesWorkflowStartedCheckpointWithStartNodeSchedulingIntent()
@@ -135,6 +151,38 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
         Assert.Equal(IncidentResolutionSystemSources.MissingStrategyImplementation, incident.ResolutionOutcome.SystemSource);
         Assert.Equal(strategy, incident.ResolutionOutcome.Strategy);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("parent")]
+    public async Task Captured_admission_with_missing_strategy_retains_owed_root_or_child_start_without_inventing_a_run(string? parent)
+    {
+        var executables = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflows = new InMemoryWorkflowExecutionStateStore();
+        var incidents = new InMemoryIncidentStateStore();
+        var executable = NewExecutable(["node-start"], ["node-start"], new("Contoso.Missing", "1"));
+        await executables.SaveAsync(executable);
+        var payload = new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId,
+            variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.PublishedRun,
+            pinnedSource: null, parentWorkflowExecutionId: parent, correlationId: null, tenantId: null, partition: null, authority: null)
+        { HistoryCaptureEnabledAtAdmission = true, HistoryCapturePolicy = new("runtime-history-v2", 2, true, ["WorkflowStarted", "IncidentRecorded"]) };
+        var original = await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload)));
+        var commits = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: workflows, incidentStateStore: incidents);
+        using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
+        var handler = new WorkflowStartSchedulerWorkHandler(executables, queue, new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now), workflows,
+            incidentStrategyCatalog: provider.GetRequiredService<IIncidentStrategyCatalog>(),
+            checkpointCommitter: new(new ImmediateRuntimeCheckpointPersistencePolicy(), commits, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []));
+
+        var drainer = TestSchedulerDrainer.Create(queue, [handler], new FakeTimeProvider(_now));
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => drainer.DrainAsync(new("wfexec-1")).AsTask());
+
+        Assert.Equal("runtime.incident-strategy.unavailable", failure.Code);
+        Assert.Equal(original.WorkItemId, Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).WorkItemId);
+        Assert.Null(await workflows.FindAsync("wfexec-1"));
+        Assert.Empty(await incidents.ListBlockingAsync("wfexec-1"));
+        Assert.Empty(commits.ListCommits());
     }
 
     [Fact]

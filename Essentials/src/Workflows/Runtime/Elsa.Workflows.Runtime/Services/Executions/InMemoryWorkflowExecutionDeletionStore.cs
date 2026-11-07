@@ -13,6 +13,8 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 /// <summary>Atomically removes terminal execution history from the coherent in-memory Runtime composition.</summary>
 public sealed class InMemoryWorkflowExecutionDeletionStore : IWorkflowExecutionDeletionStore
 {
+    internal IPersistenceAccessContextAccessor? HistoryAccess { get; init; }
+
     private static readonly ConditionalWeakTable<WorkflowExecutionState, CandidateToken> CandidateTokens = new();
 
     private readonly InMemoryRuntimeCheckpointStoreState _checkpointState;
@@ -130,17 +132,38 @@ public sealed class InMemoryWorkflowExecutionDeletionStore : IWorkflowExecutionD
         if (!IsSupported)
             return ValueTask.FromResult(WorkflowExecutionDeletionResult.Unsupported);
 
+        string? historyScope = null;
+        if (HistoryAccess is not null)
+        {
+            try
+            {
+                historyScope = HistoryAccess.Current.RequireScope().Value;
+                HistoryAccess.Current.EnsureTenantScope(candidate.State.TenantId);
+            }
+            catch (InvalidOperationException)
+            {
+                lock (_checkpointState.SyncRoot)
+                    if (candidate.State.HistoryCapturePolicy is not null || _checkpointState.HistoryHeads.Keys.Any(key => key.Run == candidate.State.WorkflowExecutionId))
+                        return ValueTask.FromResult(WorkflowExecutionDeletionResult.Unsupported);
+            }
+        }
+        else
+        {
+            lock (_checkpointState.SyncRoot)
+                if (_checkpointState.HistoryHeads.Keys.Any(key => key.Run == candidate.State.WorkflowExecutionId))
+                    return ValueTask.FromResult(WorkflowExecutionDeletionResult.Unsupported);
+        }
         var tokenIsValid = StringComparer.Ordinal.Equals(
             candidate.ConcurrencyToken,
             GetConcurrencyToken(candidate.State));
         return _inMemoryWorkflowExecutionStateStore!.TryDeleteTerminalAsync(
             candidate,
             tokenIsValid,
-            () => DeleteRunOwnedState(candidate.State.WorkflowExecutionId),
+            () => DeleteRunOwnedState(candidate.State.WorkflowExecutionId, historyScope),
             cancellationToken);
     }
 
-    private void DeleteRunOwnedState(string workflowExecutionId)
+    private void DeleteRunOwnedState(string workflowExecutionId, string? historyScope)
     {
         // These are the runtime-owned per-execution projections. Operational receipts, shared definitions, triggers,
         // dispatch records, test scopes and independent execution evidence deliberately remain outside this boundary.
@@ -157,6 +180,7 @@ public sealed class InMemoryWorkflowExecutionDeletionStore : IWorkflowExecutionD
         _incidentStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
         _schedulerPoisonStore!.DeleteForWorkflowExecution(workflowExecutionId);
         _workflowHoldStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
+        if (historyScope is not null) _checkpointState.DeleteHistoryForRun(historyScope, workflowExecutionId);
     }
 
     private static string GetConcurrencyToken(WorkflowExecutionState state) =>

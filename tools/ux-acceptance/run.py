@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import json
 import os
 import re
@@ -29,7 +29,11 @@ CAPTURES = {
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
 }
+HISTORY_JOURNEY = 'durable run timeline across a native task resume and owned process restart'
+CAPTURES[HISTORY_JOURNEY] = ['reference', 'minimal-controls', 'bookmark-waiting', 'after-restart', 'retained-bookmark-consumed', 'resumed-event', 'bookmark-consumed', 'activity-journal-context', 'activity-journal', 'causal-delivery', 'causal-successors', 'recording-coverage', 'atomic-group', 'activity-data', 'recorded-value', 'no-matches', 'faulted-timeline', 'diagram', 'stale-history', 'reconnected-history']
 JOURNEYS = set(CAPTURES)
+EXPECTED_JOURNEYS = {(project, journey) for project in PROJECTS for journey in JOURNEYS - {HISTORY_JOURNEY}}
+EXPECTED_JOURNEYS |= {(project, HISTORY_JOURNEY) for project in ('desktop-light', 'desktop-dark', 'timeline-320-light', 'timeline-320-dark')}
 
 
 def stop_group(process):
@@ -51,11 +55,20 @@ def stop_group(process):
         process.wait(timeout=10)
 
 
-def command(args, log, *, cwd=ROOT, env=None):
+def command(args, log, *, cwd=ROOT, env=None, supervise=None):
     with log.open('w') as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            result = process.wait()
+            if supervise:
+                while True:
+                    supervise()
+                    try:
+                        result = process.wait(timeout=.25)
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+            else:
+                result = process.wait()
             if result:
                 raise subprocess.CalledProcessError(result, args)
         finally:
@@ -75,7 +88,7 @@ def verdict(report, artifacts, journeys=None):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    expected = {(project, journey) for project in PROJECTS for journey in journeys}
+    expected = {(project, title) for project, title in EXPECTED_JOURNEYS if title in journeys}
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -87,7 +100,7 @@ def verdict(report, artifacts, journeys=None):
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        required = {'trace'} | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        required = ({'trace', 'restart-receipt', 'durable-facts'} if title == HISTORY_JOURNEY else {'trace'}) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
         for item in attachments:
@@ -144,6 +157,59 @@ def host(directory, dll, url, ready_path, log, env):
             stop_group(process)
 
 
+class OwnedRestartSupervisor:
+    """A private, serial request can restart only this runner's current owned backend process."""
+    def __init__(self, directory, dll, url, ready_path, output, env, requests):
+        self.directory, self.dll, self.url, self.ready_path = directory, dll, url, ready_path
+        self.output, self.env, self.requests = output, env, requests
+        self.stack = ExitStack()
+        self.process = None
+        self.completed = set()
+        self.restarted_projects = set()
+        self.count = 0
+
+    def __enter__(self):
+        self.requests.mkdir()
+        (self.output / 'restarts').mkdir()
+        self.process = self.stack.enter_context(host(self.directory, self.dll, self.url, self.ready_path, self.output / 'backend.log', self.env))
+        return self
+
+    def __exit__(self, *exception):
+        return self.stack.__exit__(*exception)
+
+    def supervise(self):
+        request_file = self.requests / 'request.json'
+        if not request_file.exists():
+            return
+        if request_file.stat().st_size > 4096:
+            raise ValueError('Restart request exceeded the private protocol bound')
+        request = json.loads(request_file.read_text())
+        identity = request.get('id', '')
+        if not re.fullmatch(r'[a-f0-9-]{36}', identity) or not request.get('workflowExecutionId'):
+            raise ValueError('Invalid owned restart request')
+        if identity in self.completed:
+            return
+        if (request.get('project'), HISTORY_JOURNEY) not in EXPECTED_JOURNEYS:
+            raise ValueError('Restart request came from an unexpected project')
+        if request['project'] in self.restarted_projects:
+            raise ValueError('Only one owned backend restart per history project is allowed')
+        old_pid = self.process.pid
+        self.stack.close()  # Terminate and reap only the current owned process group before rebinding.
+        self.stack = ExitStack()
+        self.count += 1
+        self.process = self.stack.enter_context(host(self.directory, self.dll, self.url, self.ready_path,
+                                                    self.output / 'restarts' / f'backend-{self.count}.log', self.env))
+        receipt = {**request, 'status': 'restarted', 'oldPid': old_pid, 'newPid': self.process.pid,
+                   'backendUrl': self.url, 'store': 'same runner-owned private content root',
+                   'restartedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+        (self.output / 'restarts' / f'{identity}.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        temporary = self.requests / 'ack.tmp'
+        temporary.write_text(json.dumps(receipt))
+        temporary.replace(self.requests / 'ack.json')
+        self.completed.add(identity)
+        self.restarted_projects.add(request['project'])
+
+
 def prepare_host(project, destination):
     output = project.parent / 'bin/Debug/net10.0'
     shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
@@ -173,6 +239,11 @@ def run(output, journey=None):
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
+            from diagnostics import build_fixture_tool, run_diagnostics
+            if journey is None:
+                diagnostics_output = output / 'diagnostics'
+                diagnostics_output.mkdir()
+                fixture_tool = build_fixture_tool(ROOT, backend_project.parent / 'bin/Debug/net10.0', data / 'fixture-tool', diagnostics_output, command)
             backend, studio = data / 'workbench', data / 'studio'
             prepare_host(backend_project, backend)
             prepare_host(studio_project, studio)
@@ -190,18 +261,27 @@ def run(output, journey=None):
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
             report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url)
-            with host(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', output / 'backend.log', env):
+            with OwnedRestartSupervisor(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', output, env, data / 'restart') as restarts:
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     report['stage'] = 'journeys'
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
-                                       ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
-                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha)
+                                       ELSA_WORKBENCH_URL=backend_url, ELSA_BACKEND_URL=backend_url, UX_BACKEND_URL=backend_url,
+                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha,
+                                       UX_ACCEPTANCE_RESTART_DIR=str(data / 'restart'))
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                     if journey:
                         browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
-                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env, supervise=restarts.supervise)
                     report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
+            report.update(primaryExecuted=report['executed'], phaseReports={'primary': 'playwright.json'})
+            if journey is None:
+                # Full qualification keeps every primary journey and both diagnostics, after primary hosts close.
+                report.update(stage='diagnostics',
+                              phaseReports={'primary': 'playwright.json', 'diagnostics': 'diagnostics/playwright.json'})
+                report['diagnosticsExecuted'] = run_diagnostics(diagnostics_output, source_root=ROOT, source_sha=sha, tool=fixture_tool,
+                    command=command, host=host, prepare_host=prepare_host, clean_environment=clean_environment, free_port=free_port)
+                report['executed'] += report['diagnosticsExecuted']
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
         if sha != end_sha or dirty != end_dirty:

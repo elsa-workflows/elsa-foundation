@@ -25,6 +25,17 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
     {
         switch (exception)
         {
+            case RuntimeSchedulerWorkUnavailableException unavailable when unavailable.Code.StartsWith("runtime.history.", StringComparison.Ordinal):
+                await RuntimeProblemWriting.HistoryUnavailableAsync(context);
+                return true;
+            case RuntimeHistoryUnsupportedSignal:
+                await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status501NotImplemented,
+                    "This host does not provide run history.");
+                return true;
+            case RuntimeHistoryIntegrityException:
+                await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status409Conflict,
+                    "The requested history evidence cannot be read consistently.");
+                return true;
             case Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException task:
                 var status = task.Code switch { "unauthorized" => 401, "forbidden" => 403, "missing" => 404, "conflict" => 409, "validation" => 400, _ => 503 };
                 context.Response.StatusCode = status;

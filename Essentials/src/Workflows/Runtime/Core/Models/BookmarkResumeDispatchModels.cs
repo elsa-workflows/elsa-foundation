@@ -65,6 +65,8 @@ public sealed class BookmarkResumeDispatchRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedRecipient { get; init; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
@@ -128,6 +130,8 @@ public sealed class BookmarkResumeDispatchResult
     public WorkflowExecutionActorDescriptor? Agent { get; }
     public string? Reason { get; }
     public BookmarkStimulusLookupResult? Lookup { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
 }
 
 public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayload
@@ -189,6 +193,8 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
     /// <summary>Optional captured physical wait condition; only initial trigger admission consumes it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }

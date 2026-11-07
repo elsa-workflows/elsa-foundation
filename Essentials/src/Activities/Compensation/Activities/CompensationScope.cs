@@ -361,7 +361,7 @@ public sealed class CompensationScope : StructuralActivity,
         var continuation = notification.Code switch
         {
             Notifications.Register => OnHandOver(context, state, notification),
-            Notifications.Confirm => OnConfirm(state, navigator, notification),
+            Notifications.Confirm => OnConfirm(context, state, navigator, notification),
             Notifications.Compensate => OnCompensateRequested(context, navigator, state, notification),
             _ => null
         };
@@ -382,6 +382,7 @@ public sealed class CompensationScope : StructuralActivity,
             return null;
 
         var journaled = state;
+        var acceptedEntries = new List<CompensationEntry>();
         foreach (var handed in handOver.Entries)
         {
             var origin = handed.Origin ?? new CompensationEntryOrigin(handOver.OriginScope, handed.OriginEntryId);
@@ -399,6 +400,7 @@ public sealed class CompensationScope : StructuralActivity,
                 handed.ForwardIterationId,
                 handlerExecutableNodeId: handed.HandlerExecutableNodeId,
                 origin: origin);
+            acceptedEntries.Add(entry);
             journaled = journaled with { NextOrdinal = journaled.NextOrdinal + 1, Entries = [.. journaled.Entries, entry] };
         }
 
@@ -412,12 +414,13 @@ public sealed class CompensationScope : StructuralActivity,
             : journaled with { HandOversInProgress = [.. others, new CompensationHandOverProgress(handOver.OriginScope, batches)] };
 
         // In recovery the new entries are eligible: the next handler to run picks the newest (late result, FR-306).
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, journaled);
+        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, journaled).WithHistorySourceFacts(at =>
+            acceptedEntries.Select(entry => NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, at, entry)));
     }
 
     // Confirms every entry still eligible, while the scope runs forward (FR-310). During recovery the scope decides
     // alone, so a Confirm then changes nothing (spec 258 research R11).
-    private static RuntimeStructuralContinuation? OnConfirm(CompensationScopeState state, CompensationScopeNavigator navigator, ActivityChildNotifiedContext notification)
+    private static RuntimeStructuralContinuation? OnConfirm(IRuntimeActivityExecutionContext runtimeContext, CompensationScopeState state, CompensationScopeNavigator navigator, ActivityChildNotifiedContext notification)
     {
         if (state.Phase != CompensationScopePhase.Running || navigator.StepIndexOfForward(notification.ViaChildExecutableNodeId) is null)
             return null;
@@ -427,7 +430,7 @@ public sealed class CompensationScope : StructuralActivity,
         if (state.Confirmations.Any(confirmation => StringComparer.Ordinal.Equals(confirmation.ActivityExecutionId, confirmingActivityExecutionId)))
             return null;
 
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, ConfirmEligible(state, confirmingActivityExecutionId));
+        return ConfirmedHistory(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, ConfirmEligible(state, confirmingActivityExecutionId)), runtimeContext, state);
     }
 
     private static CompensationScopeState ConfirmEligible(CompensationScopeState state, string confirmingActivityExecutionId)
@@ -470,7 +473,7 @@ public sealed class CompensationScope : StructuralActivity,
 
         // A step that is the Compensate itself has no effect and is already completing: nothing to journal or stop.
         if (StringComparer.Ordinal.Equals(notification.NotifyingChildActivityExecutionId, notification.ViaChildActivityExecutionId))
-            return ScheduleNextHandlerOrFinish(runtimeContext, navigator, state with { Phase = CompensationScopePhase.Compensating, Cause = state.Cause ?? cause });
+            return History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, state with { Phase = CompensationScopePhase.Compensating, Cause = state.Cause ?? cause }), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted);
 
         // The step was running, so it may have had an effect: it is journaled uncertain, and undone when it has a handler.
         var entry = NewEntry(runtimeContext, state, stepIndex, step.Name, notification.ViaChildActivityExecutionId, forwardIterationId: null,
@@ -489,13 +492,13 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, compensating) is null && FinishFault(navigator, compensating) is { } fault)
             return CompensationScopeStatePersister.Stage(
                 RuntimeStructuralContinuation.Faulted(fault),
-                compensating with { Phase = CompensationScopePhase.Compensated });
+                compensating with { Phase = CompensationScopePhase.Compensated }).WithHistorySourceFacts(at => [NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, at, entry), NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted, at), NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationCompleted, at)]);
 
         runtimeContext.RequestChildSubtreeCancellation(
             notification.ViaChildActivityExecutionId,
             $"Compensation scope stopped step '{step.Name}' because a Compensate activity asked for recovery.",
             new Dictionary<string, string>(StringComparer.Ordinal) { [MetadataKeys.Cause] = MetadataKeys.ExplicitCause });
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+        return History(History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted), runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, entry);
     }
 
     /// <summary>
@@ -547,7 +550,7 @@ public sealed class CompensationScope : StructuralActivity,
             CompensationEntryStatus.Registered or CompensationEntryStatus.Uncertain or CompensationEntryStatus.Failed or CompensationEntryStatus.Compensating);
         return CompensationScopeStatePersister.Stage(
             RuntimeStructuralContinuation.Faulted(AbandonedFault(runtimeContext.ExecutableNode.AuthoredActivityId, notUndone)),
-            abandoned);
+            abandoned).WithHistorySourceFacts(at => [NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationAbandoned, at, entry)]);
     }
 
     // Resolve (FR-408, FR-409): the entry is settled as the operator declared, without running anything. A waiting handler
@@ -586,7 +589,7 @@ public sealed class CompensationScope : StructuralActivity,
                 decision.ViaChildActivityExecutionId,
                 $"Compensation scope stopped '{entry.Step}' because an operator resolved it.");
 
-        return continuation;
+        return History(continuation, runtimeContext, RuntimeHistorySourceFactKind.CompensationResolved, entry, decision.FaultedActivityExecutionId, outcome.ToString());
     }
 
     private RuntimeStructuralContinuation? OnStepFaulted(
@@ -614,13 +617,13 @@ public sealed class CompensationScope : StructuralActivity,
             var journaled = state with { NextOrdinal = state.NextOrdinal + 1, Entries = [.. state.Entries, entry], Cause = cause };
 
             if (step.Handler is null)
-                return WaitForStep(runtimeContext, journaled, entry, incidentId);
+                return History(WaitForStep(runtimeContext, journaled, entry, incidentId), runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, entry);
 
             runtimeContext.RequestChildFaultAbsorption(
                 incidentId,
                 $"Compensation scope started recovery because step '{step.Name}' could not confirm its outcome.",
                 new Dictionary<string, string>(StringComparer.Ordinal) { [MetadataKeys.ForwardOutcome] = MetadataKeys.UnknownForwardOutcome });
-            return ScheduleNextHandlerOrFinish(runtimeContext, navigator, journaled with { Phase = CompensationScopePhase.Compensating });
+            return History(History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, journaled with { Phase = CompensationScopePhase.Compensating }), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted), runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, entry);
         }
 
         var faultCause = new CompensationRecoveryCause(CompensationRecoveryCause.FaultKind, step.Name, fault.ActivityExecutionId, incidentId);
@@ -631,11 +634,11 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
         {
             var finished = compensating with { Phase = CompensationScopePhase.Compensated };
-            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished);
+            return History(History(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished), runtimeContext, RuntimeHistorySourceFactKind.CompensationCompleted), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted);
         }
 
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+        return History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted);
     }
 
     // The step is an inner scope that compensated itself because a Compensate aimed further out (FR-314). The target
@@ -658,10 +661,11 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, compensating) is null && target is not null)
             return CompensationScopeStatePersister.Stage(
                 RuntimeStructuralContinuation.Faulted(CompensateRequestedFault(target)),
-                compensating with { Phase = CompensationScopePhase.Compensated });
+                compensating with { Phase = CompensationScopePhase.Compensated }).WithHistorySourceFacts(at =>
+                    [NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted, at), NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationCompleted, at)]);
 
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' compensated itself on request.");
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+        return History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted);
     }
 
     // An uncertain step without a handler, retried by an operator (spec 251 FR-213), faulted again.
@@ -699,10 +703,11 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
             return CompensationScopeStatePersister.Stage(
                 RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)),
-                compensating with { Phase = CompensationScopePhase.Compensated });
+                compensating with { Phase = CompensationScopePhase.Compensated }).WithHistorySourceFacts(at =>
+                    [NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted, at), NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationCompleted, at)]);
 
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+        return History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating), runtimeContext, RuntimeHistorySourceFactKind.CompensationStarted);
     }
 
     private RuntimeStructuralContinuation? OnHandlerFaulted(
@@ -728,7 +733,7 @@ public sealed class CompensationScope : StructuralActivity,
                 $"Compensation scope retries the compensation of step '{entry.Step}'.",
                 AttemptMetadata(recorded.HandlerAttempts.Count));
             var retrying = Replace(state, recorded with { InterventionIncidentId = null }) with { Phase = CompensationScopePhase.Compensating };
-            return ScheduleHandler(runtimeContext, navigator, retrying, recorded, RetryWait(FailedAttempts(recorded)));
+            return History(ScheduleHandler(runtimeContext, navigator, retrying, recorded, RetryWait(FailedAttempts(recorded))), runtimeContext, RuntimeHistorySourceFactKind.CompensationHandlerFaulted, entry, fault.ActivityExecutionId);
         }
 
         // Every attempt failed: the incident stays blocking for an operator, and nothing is reported as compensated.
@@ -744,7 +749,7 @@ public sealed class CompensationScope : StructuralActivity,
             Decisions.Offer);
         return CompensationScopeStatePersister.Stage(
             RuntimeStructuralContinuation.Defer,
-            Replace(state, failed) with { Phase = CompensationScopePhase.AwaitingIntervention });
+            Replace(state, failed) with { Phase = CompensationScopePhase.AwaitingIntervention }).WithHistorySourceFacts(at => [NewHistoryFact(runtimeContext, RuntimeHistorySourceFactKind.CompensationHandlerFaulted, at, entry, fault.ActivityExecutionId)]);
     }
 
     private RuntimeStructuralContinuation? OnStepCompleted(
@@ -766,7 +771,7 @@ public sealed class CompensationScope : StructuralActivity,
             step.Handler is null ? CompensationEntryStatus.NoHandler : CompensationEntryStatus.Registered,
             CompensationForwardOutcome.Completed);
         var journaled = state with { NextOrdinal = state.NextOrdinal + 1, Entries = [.. state.Entries, entry] };
-        return ContinueForward(runtimeContext, navigator, journaled, context.CompletedChildActivityExecutionId);
+        return History(ContinueForward(runtimeContext, navigator, journaled, context.CompletedChildActivityExecutionId), runtimeContext, RuntimeHistorySourceFactKind.CompensationRegistered, entry);
     }
 
     // An uncertain step without a handler, retried by an operator (spec 251 FR-213), completed: the scope moves on.
@@ -807,7 +812,7 @@ public sealed class CompensationScope : StructuralActivity,
         if (ConfirmOnComplete)
         {
             var confirmed = ConfirmEligible(state, scopeActivityExecutionId) with { Phase = CompensationScopePhase.Completed };
-            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), confirmed);
+            return ConfirmedHistory(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), confirmed), runtimeContext, state);
         }
 
         HandOver(runtimeContext, navigator, state);
@@ -859,7 +864,7 @@ public sealed class CompensationScope : StructuralActivity,
         var compensated = RecordAttempt(entry, new CompensationHandlerAttempt(CompensationAttemptResult.Completed, context.CompletedChildActivityExecutionId))
             with { Status = CompensationEntryStatus.Compensated, InterventionIncidentId = null };
         var resumed = Replace(state, compensated) with { Phase = CompensationScopePhase.Compensating };
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, resumed);
+        return History(ScheduleNextHandlerOrFinish(runtimeContext, navigator, resumed), runtimeContext, RuntimeHistorySourceFactKind.CompensationHandlerCompleted, entry, context.CompletedChildActivityExecutionId);
     }
 
     private RuntimeStructuralContinuation ScheduleNextHandlerOrFinish(
@@ -873,7 +878,7 @@ public sealed class CompensationScope : StructuralActivity,
             var continuation = FinishFault(navigator, state) is { } fault
                 ? RuntimeStructuralContinuation.Faulted(fault)
                 : RuntimeStructuralContinuation.Complete(CompensatedOutcome);
-            return CompensationScopeStatePersister.Stage(continuation, finished);
+            return History(CompensationScopeStatePersister.Stage(continuation, finished), runtimeContext, RuntimeHistorySourceFactKind.CompensationCompleted);
         }
 
         return ScheduleHandler(runtimeContext, navigator, state, next);
@@ -963,8 +968,26 @@ public sealed class CompensationScope : StructuralActivity,
                 new CompensationHandlerAttempt(CompensationAttemptResult.Running, notBefore: notBefore, delayClamped: wait is { Clamped: true } ? true : null)
             ]
         };
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, Replace(state, compensating));
+        return History(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, Replace(state, compensating)), runtimeContext, RuntimeHistorySourceFactKind.CompensationHandlerScheduled, entry);
     }
+
+    private static RuntimeStructuralContinuation History(RuntimeStructuralContinuation continuation, IRuntimeActivityExecutionContext context,
+        RuntimeHistorySourceFactKind kind, CompensationEntry? entry = null, string? relatedActivity = null, string? reason = null) =>
+        continuation.WithHistorySourceFacts(at => [NewHistoryFact(context, kind, at, entry, relatedActivity, reason)]);
+
+    private static RuntimeStructuralContinuation ConfirmedHistory(RuntimeStructuralContinuation continuation, IRuntimeActivityExecutionContext context, CompensationScopeState state) =>
+        // Confirm is one scope decision, even when the native journal contains thousands of eligible entries.
+        // Its exact entry set remains in the native confirmation journal; history never truncates that decision.
+        continuation.WithHistorySourceFacts(at => state.Entries.Any(IsConfirmable)
+            ? [NewHistoryFact(context, RuntimeHistorySourceFactKind.CompensationConfirmed, at, reason: "all-eligible-entries")]
+            : []);
+
+    private static RuntimeHistorySourceFact NewHistoryFact(IRuntimeActivityExecutionContext context, RuntimeHistorySourceFactKind kind,
+        DateTimeOffset at, CompensationEntry? entry = null, string? relatedActivity = null, string? reason = null) =>
+        new(kind, RuntimeHistoryIdentity.CreateBinding([context.ActivityExecutionState.InvocationId, context.SchedulerWorkItem.WorkItemId, kind.ToString(), entry?.Id]), at,
+            context.ActivityExecutionState.InvocationId, context.ActivityExecutionState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId,
+            new(CommandId: context.SchedulerWorkItem.CommandId, SchedulerWorkItemId: context.SchedulerWorkItem.WorkItemId),
+            relatedActivityExecutionId: relatedActivity ?? entry?.ForwardActivityExecutionId, compensationEntryId: entry?.Id, reasonCode: reason);
 
     // Recovery undoes completed entries and uncertain entries that have a handler, newest first (spec 251 FR-207).
     // Confirmed entries are never eligible (FR-311); handed-over entries take part in the one newest-first order.

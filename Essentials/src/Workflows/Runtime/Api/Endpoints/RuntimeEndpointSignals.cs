@@ -1,5 +1,7 @@
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
+internal sealed class RuntimeHistoryUnsupportedSignal : Exception;
+
 // Internal control flow only: endpoints throw these for the non-success outcomes the hand-written
 // mapper decided inline — a bare 404, a pre-dispatch alteration rejection, or an activity-inspection
 // problem document — and the owner's fault renderer turns each into the exact published response.

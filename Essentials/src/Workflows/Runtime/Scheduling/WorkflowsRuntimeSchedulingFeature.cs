@@ -8,6 +8,8 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -79,7 +81,13 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 
         // In-memory default; a durable persistence provider swaps IDurableTimerStore for a scoped,
         // restart-surviving adapter.
-        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.TryAddSingleton<InMemoryDurableTimerStoreState>();
+        services.TryAddScoped<IDurableTimerStore>(provider => new InMemoryDurableTimerStore(
+            provider.GetRequiredService<InMemoryDurableTimerStoreState>(), provider.GetService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>(),
+            provider.GetService<InMemoryRuntimeCheckpointStoreState>(),
+            provider.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value ?? provider.GetService<IWorkflowExecutionStateStore>(),
+            provider.GetService<IExecutionLivenessStateStore>()));
+        services.AddSingleton(new RuntimeHistorySourceSupport([], timerOwner: true));
         services.TryAddScoped<IDurableTimerScheduler, DurableTimerScheduler>();
 
         services.AddSingleton<IRecurringTask>(sp => new DurableTimerPumpTask(

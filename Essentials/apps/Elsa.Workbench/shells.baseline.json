@@ -54,6 +54,7 @@
               "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
             }
           },
+          "WorkflowsRuntimeHistory": {},
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Balanced",

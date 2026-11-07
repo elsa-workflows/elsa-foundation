@@ -1,0 +1,267 @@
+{
+  "head": "25e652d9df0f250d905f43ff939581e5069a7636",
+  "prior": "8baecc12ff1a6807abeeed2dce09badef4d87abb",
+  "startedAt": "2026-11-05T10:00:30.368329+00:00",
+  "phases": [
+    {
+      "name": "canonical-evidence",
+      "command": [
+        "python3",
+        "tools/bpmn/restore_evidence.py"
+      ],
+      "exitCode": 0,
+      "counts": null,
+      "log": "canonical-evidence.log"
+    },
+    {
+      "name": "locked-restore",
+      "command": [
+        "dotnet",
+        "restore",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--locked-mode",
+        "--disable-parallel",
+        "-maxcpucount:2"
+      ],
+      "exitCode": 0,
+      "counts": null,
+      "log": "locked-restore.log"
+    },
+    {
+      "name": "negative",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal",
+        "-maxcpucount:2",
+        "--filter",
+        "FullyQualifiedName~History_provider_boundary"
+      ],
+      "exitCode": 1,
+      "counts": {
+        "failed": 19,
+        "passed": 5,
+        "skipped": 0
+      },
+      "log": "negative.log",
+      "binaries": [
+        {
+          "path": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+          "sha256": "6d6929e73bb84a7aff798164f0547e7acfc1cc97a7d2633d67159614a6f16c40",
+          "bytes": 3552768,
+          "mtimeNs": 1793872837128479564
+        },
+        {
+          "path": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll",
+          "sha256": "bbea16393078cc439f1c05c592512cad7c683b420bd621b754772497cdff01c7",
+          "bytes": 5522944,
+          "mtimeNs": 1793872839917370675
+        },
+        {
+          "path": "Elsa.Workflows.Runtime.Core.dll",
+          "sha256": "25dd8de159f73ad3b3d057cb7cf3339f837fd4052d27072737b1c8d2a7733174",
+          "bytes": 1873408,
+          "mtimeNs": 1793872589148462847
+        }
+      ]
+    },
+    {
+      "name": "restored-positive",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal",
+        "-maxcpucount:2",
+        "--filter",
+        "FullyQualifiedName~History_provider_boundary"
+      ],
+      "exitCode": 0,
+      "counts": {
+        "failed": 0,
+        "passed": 24,
+        "skipped": 0
+      },
+      "log": "restored-positive.log",
+      "binaries": [
+        {
+          "path": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+          "sha256": "62c62afab33f9606153b8ae2b6d54e155303302154c0186252ebf4dd9030bd5e",
+          "bytes": 3553792,
+          "mtimeNs": 1793872846965863794
+        },
+        {
+          "path": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll",
+          "sha256": "c13ed1c016adf6527b8af317c5f40336a542fd915e7df1eecc1e175bdd474186",
+          "bytes": 5522944,
+          "mtimeNs": 1793872849129977927
+        },
+        {
+          "path": "Elsa.Workflows.Runtime.Core.dll",
+          "sha256": "25dd8de159f73ad3b3d057cb7cf3339f837fd4052d27072737b1c8d2a7733174",
+          "bytes": 1873408,
+          "mtimeNs": 1793872589148462847
+        }
+      ]
+    }
+  ],
+  "sourceRestored": true,
+  "implementationBinaryChanged": true,
+  "cleanAfter": true,
+  "completedAt": "2026-11-05T10:00:52.023727+00:00",
+  "manifests": {
+    "negative": {
+      "head": "25e652d9df0f250d905f43ff939581e5069a7636",
+      "files": [
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.cs",
+          "sha256": "36a48b15b3c5bfe8b0b4d12bae95b2e7766b34583a3fa60446d3634f22206205",
+          "gitBlob": "91eff8d8c3e7c9868e048c1befea2acda1b5801d"
+        },
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.Mutations.cs",
+          "sha256": "3aa60137835673d595030b09bab33f06f8b663e7cc2619fd33175dcbdc68d0e7",
+          "gitBlob": "1373aaa72f1ced7e146f19ba6108461b1e112e88"
+        },
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeHistoryEntityFrameworkPersistenceException.cs",
+          "sha256": "86e1a8eba49576f62a03a099b998205d7aca1088733d61f55f43527455e71681",
+          "gitBlob": "e1fff79bd768ed31b81bc2bc13afa3479fabad52"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.HistoryFailures.cs",
+          "sha256": "3cea28e27f8c0b252168a9135f00858676754cc9e6921bd2b935a0b1e61249c4",
+          "gitBlob": "dd259e972b5dbf3600b311b322c80b7efcdb052e"
+        }
+      ],
+      "trackedDiff": [
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.Mutations.cs",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.cs"
+      ]
+    },
+    "restored-positive": {
+      "head": "25e652d9df0f250d905f43ff939581e5069a7636",
+      "files": [
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.cs",
+          "sha256": "c6ad670ba89627b9773777745b2ccce08f20982fb74e7c5879f9c9afca1d4609",
+          "gitBlob": "6d1535d7c811e9221f55173d284228ad98961c28"
+        },
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeHistoryStore.Mutations.cs",
+          "sha256": "3cfb96103eb98ef1f04c2096f0e4fe34937a400eb9918111584488aba9dac3e7",
+          "gitBlob": "0be5a94a704e30a220653b7969a13581e06db7b2"
+        },
+        {
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeHistoryEntityFrameworkPersistenceException.cs",
+          "sha256": "86e1a8eba49576f62a03a099b998205d7aca1088733d61f55f43527455e71681",
+          "gitBlob": "e1fff79bd768ed31b81bc2bc13afa3479fabad52"
+        },
+        {
+          "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.HistoryFailures.cs",
+          "sha256": "3cea28e27f8c0b252168a9135f00858676754cc9e6921bd2b935a0b1e61249c4",
+          "gitBlob": "dd259e972b5dbf3600b311b322c80b7efcdb052e"
+        }
+      ],
+      "trackedDiff": []
+    }
+  },
+  "surrounding": {
+    "head": "25e652d9df0f250d905f43ff939581e5069a7636",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "--no-restore",
+      "--logger",
+      "console;verbosity=minimal",
+      "-maxcpucount:2",
+      "--filter",
+      "Feature=RunHistory"
+    ],
+    "startedAt": "2026-11-05T10:03:36.444521+00:00",
+    "exitCode": 0,
+    "counts": {
+      "failed": 0,
+      "passed": 64,
+      "skipped": 0
+    },
+    "cleanAfter": true,
+    "completedAt": "2026-11-05T10:03:46.145961+00:00"
+  },
+  "compensationScheduling": {
+    "head": "25e652d9df0f250d905f43ff939581e5069a7636",
+    "startedAt": "2026-11-05T10:07:02.219098+00:00",
+    "results": [
+      {
+        "name": "bulk-focused",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
+          "--no-restore",
+          "--logger",
+          "console;verbosity=minimal",
+          "-maxcpucount:2",
+          "--filter",
+          "FullyQualifiedName~Bulk_confirmation_keeps_every_native_entry_but_contributes_one_scope_decision"
+        ],
+        "exitCode": 0,
+        "counts": {
+          "failed": 0,
+          "passed": 1,
+          "skipped": 0
+        },
+        "log": "/tmp/1211-r2-compensation-scheduling-owned/bulk-focused.log"
+      },
+      {
+        "name": "compensation",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
+          "--no-restore",
+          "--logger",
+          "console;verbosity=minimal",
+          "-maxcpucount:2"
+        ],
+        "exitCode": 0,
+        "counts": {
+          "failed": 0,
+          "passed": 431,
+          "skipped": 0
+        },
+        "log": "/tmp/1211-r2-compensation-scheduling-owned/compensation.log"
+      },
+      {
+        "name": "scheduling",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj",
+          "--no-restore",
+          "--logger",
+          "console;verbosity=minimal",
+          "-maxcpucount:2"
+        ],
+        "exitCode": 0,
+        "counts": {
+          "failed": 0,
+          "passed": 27,
+          "skipped": 0
+        },
+        "log": "/tmp/1211-r2-compensation-scheduling-owned/scheduling.log"
+      }
+    ],
+    "observedHead": "25e652d9df0f250d905f43ff939581e5069a7636",
+    "dirty": false,
+    "completedAt": "2026-11-05T10:11:19.257361+00:00"
+  },
+  "scope": "Supporting serial backend qualification of exact25e only; frontend/native/independent UX and subsequent R3 are unqualified.",
+  "retainedAttempts": "Initial equal causal control omitted negative DLL hash. Its original receipt remains untouched; this separate bounded replay supplies actual old/new binary manifests. No product failure retry."
+}

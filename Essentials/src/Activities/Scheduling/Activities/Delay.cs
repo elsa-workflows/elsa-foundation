@@ -53,7 +53,8 @@ public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timePro
                 CreatedAt: now,
                 Input: JsonSerializer.SerializeToElement(trigger),
                 PayloadType: registration.PayloadType,
-                ProviderId: TimerTriggerProviderId),
+                ProviderId: TimerTriggerProviderId,
+                ActivityExecutionId: context.InvocationId),
             context.CancellationToken);
 
         return Suspend(new DelayState(timerId), [registration]);

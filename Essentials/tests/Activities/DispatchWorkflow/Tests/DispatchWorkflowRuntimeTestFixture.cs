@@ -21,6 +21,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -43,12 +44,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     private readonly FakeTimeProvider _timeProvider;
 
     private readonly Type _childActivityType;
+    private readonly bool _history;
 
-    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, FakeTimeProvider timeProvider, Type childActivityType)
+    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, FakeTimeProvider timeProvider, Type childActivityType, bool history)
     {
         _provider = provider;
         _timeProvider = timeProvider;
         _childActivityType = childActivityType;
+        _history = history;
     }
 
     internal IServiceProvider Services => _provider;
@@ -71,9 +74,11 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         bool authoredNotificationChild = false,
         bool terminalAfterNotification = false,
         bool ordinaryFaultAfterNotification = false,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        bool history = false)
     {
         var services = new ServiceCollection();
+        if (history) services.AddPersistenceCore("tenant-42");
         var timeProvider = new FakeTimeProvider(Now);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
@@ -102,8 +107,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             new RecordingRuntimeCheckpointCommitStore(
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
-                failDispatchCommit)));
+                failDispatchCommit, history)));
         services.AddPersistenceModes(persistenceModes ?? (options => options.Mode = PersistenceMode.Durable));
+        if (history)
+        {
+            services.AddRuntimeHistory();
+        }
         configureServices?.Invoke(services);
 
         RegisterActivityTypes(typeRegistry);
@@ -114,10 +123,11 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             authoredNotificationChild ? ordinaryFaultAfterNotification ? typeof(NotificationThenFaultRootProbeActivity) :
                 terminalAfterNotification ? typeof(NotificationThenCompleteRootProbeActivity) : typeof(NotificationRootProbeActivity) :
             authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
-            replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
+            replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity), history);
         await fixture.SeedChildAsync();
         return fixture;
     }
+
 
     internal async ValueTask<ParentDispatchRun> StartParentAsync(
         string caseId,
@@ -182,7 +192,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 parentWorkflowExecutionId: null,
                 correlationId: parentCorrelationId,
                 tenantId: "tenant-42",
-                partition: new WorkflowExecutionPartition("partition-eu"),
+                partition: new WorkflowExecutionPartition(_history ? "tenant-42" : "partition-eu"),
                 authority: authority,
                 startAuthority: null,
                 dispatchNestingDepth: dispatchNestingDepth,
@@ -918,8 +928,14 @@ internal sealed class CheckpointRecorder
 internal sealed class RecordingRuntimeCheckpointCommitStore(
     InMemoryRuntimeCheckpointCommitStore inner,
     CheckpointRecorder recorder,
-    bool failDispatchCommit = false) : IRuntimeCheckpointCommitStore
+    bool failDispatchCommit = false,
+    bool historyCapabilities = false) : IRuntimeCheckpointCommitStore
 {
+    public bool SupportsHistory => historyCapabilities && ((IRuntimeCheckpointCommitStore)inner).SupportsHistory;
+    public bool CanCommitHistory(IRuntimeHistoryStore reader) => historyCapabilities && ((IRuntimeCheckpointCommitStore)inner).CanCommitHistory(reader);
+    public bool SupportsExactBookmarkResume => historyCapabilities && ((IRuntimeCheckpointCommitStore)inner).SupportsExactBookmarkResume;
+    public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities) =>
+        historyCapabilities && ((IRuntimeCheckpointCommitStore)inner).CanCommitExactBookmarkResume(bookmarks, workflows, activities);
     public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,

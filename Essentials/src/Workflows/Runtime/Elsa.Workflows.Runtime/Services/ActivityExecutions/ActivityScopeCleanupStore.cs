@@ -9,6 +9,10 @@ public sealed class ActivityScopeCleanupStore(
     IDurableTimerStore durableTimerStore,
     IWorkflowSchedulerWorkQueue schedulerWorkQueue) : IActivityScopeCleanupStore
 {
+    private readonly IWorkflowExecutionStateStore? _historyExecutions;
+    public ActivityScopeCleanupStore(IBookmarkStateStore bookmarks, IDurableTimerStore timers, IWorkflowSchedulerWorkQueue queue,
+        IWorkflowExecutionStateStore historyExecutions) : this(bookmarks, timers, queue) { _historyExecutions = historyExecutions; }
+
     public async ValueTask<ActivityScopeCleanupRequest> CaptureAsync(
         string workflowExecutionId,
         string executionScopeId,
@@ -38,13 +42,15 @@ public sealed class ActivityScopeCleanupStore(
             .ThenBy(item => item.WorkItemId, StringComparer.Ordinal)
             .ToArray();
 
+        var policy = _historyExecutions is null ? null : (await _historyExecutions.FindAsync(workflowExecutionId, cancellationToken))?.HistoryCapturePolicy;
         return new ActivityScopeCleanupRequest(
             workflowExecutionId,
             executionScopeId,
             activityExecutionIds.Order(StringComparer.Ordinal).ToArray(),
             bookmarks.Select(item => item.BookmarkId).ToArray(),
             timers.Select(item => item.TimerId).ToArray(),
-            workItems.Select(item => item.WorkItemId).ToArray());
+            workItems.Select(item => item.WorkItemId).ToArray())
+        { HistoryBookmarks = policy?.Version >= 2 ? Array.AsReadOnly(bookmarks.Select(ActivityExecutionBookmarkSummary.From).ToArray()) : null };
     }
 
     public async ValueTask ApplyAsync(ActivityScopeCleanupRequest request, CancellationToken cancellationToken = default)

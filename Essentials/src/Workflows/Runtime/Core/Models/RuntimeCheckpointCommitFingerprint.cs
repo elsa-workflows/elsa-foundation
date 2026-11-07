@@ -68,6 +68,12 @@ public static class RuntimeCheckpointCommitFingerprint
             Append(pair.Key);
             Append(pair.Value);
         }
+        if (intent.HistoryCausation is { } cause)
+        {
+            Append("elsa.post-commit.intent.history.v1");
+            Append(cause.HistoryEventId); Append(cause.WorkflowExecutionId); Append(cause.DeliveryId);
+            Append(cause.CommandId); Append(cause.SchedulerWorkItemId);
+        }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
 
         void Append(string? value)
@@ -275,6 +281,10 @@ public static class RuntimeCheckpointCommitFingerprint
         var element = commit.ExpectedBookmarkResume is null
             ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        if (commit.HistorySourceFacts is { Count: > 0 } facts)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
+        if (commit.HistoryBatches is { Count: > 0 } history)
+            element = JsonSerializer.SerializeToElement(new { RuntimeHistoryVersion = 1, Payload = element, HistoryBatches = history }, ExactBookmarkOptions);
         if (commit.ModelState is not null)
             element = JsonSerializer.SerializeToElement(new { ModelStateVersion = 1, Payload = element, commit.ModelState }, ExactBookmarkOptions);
         // ExpectedModelExecution, like ExpectedFence, is an attempt's concurrency condition. A retry can

@@ -226,6 +226,10 @@ public sealed class DecideInterventionAlterationHandlerTests
 
         Assert.True(result.IsAccepted, result.Failure?.Message);
         var builder = Apply(Assert.Single(staging.StagedChanges));
+        var facts = Assert.IsAssignableFrom<IAlterationHistorySource>(Assert.Single(staging.StagedChanges)).HistoryFacts(DateTimeOffset.UnixEpoch).ToArray();
+        Assert.Equal([RuntimeHistorySourceFactKind.IncidentResolved, RuntimeHistorySourceFactKind.IncidentDecisionApplied], facts.Select(fact => fact.Kind));
+        Assert.All(facts, fact => Assert.Equal("incident", fact.IncidentId));
+        Assert.DoesNotContain("FIN-221", JsonSerializer.Serialize(facts), StringComparison.Ordinal);
         Assert.Empty(builder.ActivityExecutions);
 
         var incident = Assert.Single(builder.Incidents).State;

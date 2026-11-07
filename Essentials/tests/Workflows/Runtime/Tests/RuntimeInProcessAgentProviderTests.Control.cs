@@ -233,6 +233,49 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         Assert.False(logger.Logged.Task.IsCompleted);
     }
 
+    [Fact]
+    public async Task A_cancelled_mailbox_acquisition_does_not_invoke_the_executor_or_consume_its_key()
+    {
+        var processor = new MailboxAdmissionProcessor();
+        using var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var queuedToken = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var running = agent.EnqueueAsync(NewEnvelope(1), timeout.Token).AsTask();
+        await processor.Entered.Task.WaitAsync(timeout.Token);
+
+        // Pause the queued command's continuation after SemaphoreSlim grants the mailbox. This fixes the
+        // cancellation/acquisition ordering without relying on thread-pool timing or changing its limits.
+        var context = new QueuedMailboxSynchronizationContext();
+        var previous = SynchronizationContext.Current;
+        var envelope = NewEnvelope(2);
+        Task<WorkflowExecutionCommandDispatchResult> queued;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            queued = agent.EnqueueAsync(envelope, queuedToken.Token).AsTask();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+        Assert.False(queued.IsCompleted);
+        processor.Release.TrySetResult();
+        await running.WaitAsync(timeout.Token);
+        await context.Posted.Task.WaitAsync(timeout.Token);
+        Assert.Equal(["envelope-1"], processor.EnvelopeIds.ToArray());
+
+        await queuedToken.CancelAsync();
+        await context.PumpUntilCompletedAsync(queued, timeout.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued);
+        Assert.Equal(["envelope-1"], processor.EnvelopeIds.ToArray());
+
+        // Cancellation after acquisition must release the mailbox and leave the unprocessed key available.
+        var retry = await agent.EnqueueAsync(envelope, timeout.Token).AsTask().WaitAsync(timeout.Token);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, retry.Status);
+        Assert.Equal(["envelope-1", "envelope-2"], processor.EnvelopeIds.ToArray());
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -478,6 +521,56 @@ public sealed partial class RuntimeInProcessAgentProviderTests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
             Logged.TrySetResult((logLevel, exception, formatter(state, exception)));
+    }
+
+    private sealed class QueuedMailboxSynchronizationContext : SynchronizationContext
+    {
+        private readonly Channel<(SendOrPostCallback Callback, object? State)> continuations =
+            Channel.CreateUnbounded<(SendOrPostCallback, object?)>();
+        public TaskCompletionSource Posted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            if (!continuations.Writer.TryWrite((callback, state)))
+                throw new InvalidOperationException("The controlled mailbox continuation could not be queued.");
+            Posted.TrySetResult();
+        }
+
+        public async Task PumpUntilCompletedAsync(Task task, CancellationToken cancellationToken)
+        {
+            while (!task.IsCompleted)
+            {
+                var continuation = await continuations.Reader.ReadAsync(cancellationToken);
+                var previous = Current;
+                try
+                {
+                    SetSynchronizationContext(this);
+                    continuation.Callback(continuation.State);
+                }
+                finally
+                {
+                    SetSynchronizationContext(previous);
+                }
+            }
+        }
+    }
+
+    private sealed class MailboxAdmissionProcessor : IWorkflowExecutionCommandExecutor
+    {
+        public ConcurrentQueue<string> EnvelopeIds { get; } = new();
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            EnvelopeIds.Enqueue(envelope.EnvelopeId);
+            if (envelope.EnvelopeId == "envelope-1")
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return WorkflowExecutionCommandProcessResult.NoDrain;
+        }
     }
 
     // The first scheduler turn, after a step the test may hold, yields once a Cancel waits, holding the mailbox until the

@@ -9,6 +9,9 @@ public interface IRuntimePostCommitIntentDispatcher
     /// <summary>Legacy dispatchers have no required-source contributions.</summary>
     bool RequiresDurableSource(string intentKind) => false;
 
+    /// <summary>Qualifies the actual selected semantic receiver; legacy or replaced dispatchers opt out.</summary>
+    bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>The additive context path requires explicit dispatcher support; legacy dispatchers retain their intent-only path.</summary>
     /// <remarks>The context is not independent authorization; a consumer revalidates its domain/provider boundary before effects.</remarks>
     /// <exception cref="RuntimePostCommitSourceBoundaryException">The selected dispatcher cannot preserve a required source; delivery remains owed.</exception>

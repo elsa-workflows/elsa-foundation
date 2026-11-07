@@ -82,6 +82,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         if (_incidentStrategyCatalog is not null &&
             !_incidentStrategyCatalog.TryGet(executable.IncidentStrategy, out _))
         {
+            if (startPayload.HistoryCaptureEnabledAtAdmission == true && startPayload.HistoryCapturePolicy?.Version >= 2)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.incident-strategy.unavailable", "The admitted workflow's incident strategy is unavailable in this deployment.");
             if (_checkpointCommitter is null)
                 throw new InvalidOperationException("The runtime cannot record a missing incident strategy without a checkpoint committer.");
 
@@ -338,7 +340,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             authority: startPayload.Authority,
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
-        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork };
+        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork, HistoryCapturePolicy = startPayload.HistoryCapturePolicy, HistoryCaptureEnabledAtAdmission = startPayload.HistoryCaptureEnabledAtAdmission, HistoryCausation = startPayload.HistoryCausation };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),

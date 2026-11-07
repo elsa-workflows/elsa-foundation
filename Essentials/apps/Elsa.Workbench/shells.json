@@ -209,6 +209,7 @@
               "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
             }
           },
+          "WorkflowsRuntimeHistory": {},
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeScheduling": {},
           "WorkflowsRuntimeRecurringTriggers": {},

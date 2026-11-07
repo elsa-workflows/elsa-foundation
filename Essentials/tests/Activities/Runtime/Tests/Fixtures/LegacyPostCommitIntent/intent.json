@@ -1,0 +1,18 @@
+{
+  "intentId": "old-intent",
+  "workflowExecutionId": "old-workflow",
+  "kind": "legacy.safe.fixture",
+  "recordedAt": "2026-11-04T00:00:00+00:00",
+  "activityExecutionId": "old-activity",
+  "idempotencyKey": "old-key",
+  "payload": {
+    "amount": 42
+  },
+  "metadata": {
+    "safe": "old"
+  },
+  "dependsOnWaitRegistrationId": null,
+  "waitFailurePolicy": null,
+  "isWaitDependent": false,
+  "notBefore": null
+}

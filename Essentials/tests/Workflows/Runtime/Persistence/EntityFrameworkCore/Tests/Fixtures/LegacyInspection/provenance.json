@@ -1,0 +1,17 @@
+{
+  "oldSourceCommit": "074259b3565e046701acbce69613120d7bed5f64",
+  "oldWorktreeTrackedDiff": [],
+  "oldWriterCommand": "dotnet run --project tools/RunHistoryLegacyWitness/RunHistoryLegacyWitness.csproj --no-restore -c Release -- <owned-export-directory>",
+  "oldWriterRestore": "new standalone export project restored with lock generation, then --locked-mode; normal Release analyzers enabled",
+  "fixture": "one actual old native checkpoint with inspection and captured numeric42; no capture policy exists in old binary",
+  "fingerprint": "f7f6ae34d947cd510ff3f514206b604edddc84a210b956d0424afd15521e1cc8",
+  "files": {
+    "checkpoint.json": "4e5d6cbbe03959ff9bc09f279e415b4eb67c4f957d4569e67eb476fb0b26d9df",
+    "fingerprint.txt": "2fa65b57a8a62ff64631ad21f35387cd5fa4aa44d3fac124b9ce1c47f852e564",
+    "marker.json": "49d9b2417c12ae1016f33204f0c97b5b3ac4f2f08386deada27ca63a03078450",
+    "old-binary.json": "a50484928636f7e0a0ac0674d663bca95b0beef15b5c293db5f66ca9d4880994",
+    "old-writer-program.cs.txt": "3ceda20d01a063839dd7698de5011b15a200d13ea67850c97e4fd38fdf6b6c75",
+    "old-writer-project.csproj.txt": "8cb01586fc96e64e06428d45e911948a59db31f1eb39299ca7230193717b4716",
+    "runtime.sqlite.gz": "06e9cce4130158675fe7e0b63c8c4053fd424995a7acb7d0f7cc33e3e607f537"
+  }
+}

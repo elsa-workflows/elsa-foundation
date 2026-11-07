@@ -89,3 +89,10 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(UserTasksEfModule.SchemaFamily, "Workflows.Runtime", UserTasksEfModule.SchemaVersion, Entities = [typeof(UserTaskEntity), typeof(UserTaskFormEntity)])]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskEntity), nameof(UserTaskEntity.ContentJson))]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskFormEntity), nameof(UserTaskFormEntity.ContentJson))]
+
+[assembly: EfSchemaFamily(RuntimeHistoryEfModule.SchemaFamily, "Workflows.Runtime", RuntimeHistoryEfModule.SchemaVersion, Entities = [typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity), typeof(RuntimeHistoryBookmarkCountEntity), typeof(RuntimeHistoryActivityEntity)])]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryHeadEntity), nameof(RuntimeHistoryHeadEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryEventEntity), nameof(RuntimeHistoryEventEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryBookmarkEntity), nameof(RuntimeHistoryBookmarkEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryBookmarkCountEntity), nameof(RuntimeHistoryBookmarkCountEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryActivityEntity), nameof(RuntimeHistoryActivityEntity.ContentJson))]

@@ -263,7 +263,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     for (const [summary, expected] of cases) {
       rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
-      expect(metadataValue(container, "Bookmarks")).toBe(expected);
+      expect(metadataValue(container, "Current bookmarks")).toBe(expected);
     }
   });
 
@@ -1760,4 +1760,17 @@ describe("buildInstanceCanvas", () => {
       domAttributes: { "aria-pressed": false }
     });
   });
+});
+
+
+it("keeps captured values behind an explicit Data view while an activity journal is being inspected", async () => {
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({ name: "Private input preview", captureMode: "DiagnosticSnapshot", accessState: "visible", snapshot: { kind: "string", preview: "permitted preview", length: 17, truncated: false } })]));
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="journal" />);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
+  expect(container.textContent).not.toContain("Private input preview"); expect(container.textContent).not.toContain("permitted preview");
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  const data = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(tab => tab.textContent === "Data");
+  flushSync(() => data!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Private input preview"));
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });

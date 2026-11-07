@@ -25,11 +25,149 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>Real feature, staging, committer, native provider, processor, router and default dispatchers; recording mailbox only.</summary>
-public sealed class PublishStimulusSourcePipelineTests
+public sealed partial class PublishStimulusSourcePipelineTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 27, 6, 0, 0, TimeSpan.Zero);
     private static readonly PersistenceScope Scope = new("tenant");
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1.0.0", "hash");
+    private static readonly RuntimeHistoryCapturePolicy PublicationHistoryPolicy = new("runtime-history-v3", 3, true,
+        ["StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"]);
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    [Trait("Feature", "RunHistory")]
+    public async Task Publication_history_records_owned_commit_then_distinct_actual_routing_observations(bool coalescing)
+    {
+        await using var harness = new Harness(coalescing, history: true); await harness.SeedMaterial();
+        await harness.Bind("one-start"); await harness.Wait("existing", "first"); await harness.Wait("existing", "second");
+        var source = await harness.Commit();
+        var committed = Assert.Single((await harness.History.ReadPageAsync(new("publisher"))).Items);
+        Assert.Equal("StimulusPublicationCommitted", committed.Name); Assert.Equal(RuntimeHistoryAuthority.CommittedTransition, committed.Authority);
+        Assert.Empty(harness.Actors.Accepted);
+        Assert.Equal(committed.HistoryEventId, source.Intent.HistoryCausation!.HistoryEventId);
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, (await harness.Processor.ProcessAsync(new(10))).DeliveredCount);
+        var events = (await harness.History.ReadPageAsync(new("publisher"))).Items;
+        Assert.Equal(["StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"], events.Select(item => item.Name));
+        Assert.All(events.Skip(1), item =>
+        {
+            Assert.Equal(harness.Clock.GetUtcNow(), item.OccurredAt); Assert.Equal(RuntimeHistoryAuthority.DeliveryObservation, item.Authority);
+            Assert.Equal(committed.HistoryEventId, item.Causation!.HistoryEventId); Assert.Equal(source.OutboxItemId, item.Causation.DeliveryId);
+            Assert.Equal("publisher", item.Causation.WorkflowExecutionId); Assert.Null(item.Payload);
+        });
+        Assert.Equal(3, harness.Actors.Accepted.Count);
+        var resumed = harness.Actors.Accepted.Where(item => item.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark).ToArray();
+        Assert.Equal(2, resumed.Length); Assert.All(resumed, item => Assert.Equal("existing", item.WorkflowExecutionId));
+        Assert.Equal(2, resumed.Select(item => item.IdempotencyKey).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    [Trait("Feature", "RunHistory")]
+    public async Task Same_source_claim_reinvocation_observes_two_attempts_but_one_saved_cohort_and_effect()
+    {
+        await using var harness = new Harness(history: true, observationAckLoss: true); await harness.SeedMaterial(); await harness.Bind("one-start");
+        var item = await harness.Commit(); harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        var claim = Assert.Single(await ((IRuntimePostCommitOutboxClaimStore)harness.Store).ClaimAsync(new("history-owner", harness.Clock.GetUtcNow(), TimeSpan.FromMinutes(5), 1)));
+        var source = new PostCommitDeliveryContext(claim, Scope);
+        await harness.HandleSource(source);
+        Assert.Single(harness.Actors.Accepted); Assert.Single(harness.Actors.Attempts);
+        var repeatedWrite = harness.AckLoss!.Calls.Where(observation => observation.Event.Name == "StimulusRoutingDispositionObserved").ToArray();
+        Assert.Equal(2, repeatedWrite.Length); Assert.Same(repeatedWrite[0], repeatedWrite[1]);
+        var cohort = (await harness.Find(item.OutboxItemId))!.RecipientSnapshot;
+        harness.Clock.Advance(TimeSpan.FromSeconds(1)); await harness.HandleSource(source);
+        Assert.Single(harness.Actors.Accepted); Assert.Equal(2, harness.Actors.Attempts.Count);
+        Assert.Equal(cohort!.SelectedAt, (await harness.Find(item.OutboxItemId))!.RecipientSnapshot!.SelectedAt);
+        var events = (await harness.History.ReadPageAsync(new("publisher"))).Items;
+        Assert.Equal(5, events.Count); Assert.Equal(2, events.Count(e => e.Name == "StimulusRoutingAttemptObserved"));
+        Assert.Equal(2, events.Count(e => e.Name == "StimulusRoutingDispositionObserved"));
+        Assert.Equal(5, events.Select(e => e.HistoryEventId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    [Trait("Feature", "RunHistory")]
+    public async Task Capable_routing_receiver_does_not_retrofit_observations_to_original_native_only_pin()
+    {
+        var pin = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["StimulusPublicationCommitted"]);
+        await using var harness = new Harness(history: true, historyPolicy: pin); await harness.SeedMaterial(); await harness.Bind("one-start");
+        Assert.True(harness.CanObservePublication());
+        var source = await harness.Commit(); Assert.Null(source.Intent.HistoryCausation);
+        Assert.Equal(1, (await harness.Processor.ProcessAsync(new(10))).DeliveredCount);
+        harness.Clock.Advance(TimeSpan.FromSeconds(1)); await harness.ReplayRaw();
+        Assert.Null((await harness.Find(source.OutboxItemId))!.Intent.HistoryCausation);
+        Assert.Single((await harness.History.ReadPageAsync(new("publisher"))).Items, item => item.Name == "StimulusPublicationCommitted");
+        Assert.Single(harness.Actors.Accepted);
+    }
+
+    [Fact]
+    [Trait("Feature", "RunHistory")]
+    public async Task Legacy_selected_routing_receiver_keeps_native_publication_and_legacy_delivery_without_observation_claims()
+    {
+        var pin = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["StimulusPublicationCommitted"]);
+        await using var harness = new Harness(history: true, historyPolicy: pin, legacyReceiver: true); await harness.SeedMaterial(); await harness.Bind("one-start");
+        Assert.False(harness.CanObservePublication());
+        var source = await harness.Commit(); Assert.Null(source.Intent.HistoryCausation);
+        Assert.Equal(1, (await harness.Processor.ProcessAsync(new(10))).DeliveredCount);
+        Assert.Single(harness.Actors.Accepted);
+        Assert.Single((await harness.History.ReadPageAsync(new("publisher"))).Items, item => item.Name == "StimulusPublicationCommitted");
+    }
+
+    [Fact]
+    [Trait("Feature", "RunHistory")]
+    public async Task Fresh_raw_publication_replay_preserves_original_source_fact_and_marker_after_delivery()
+    {
+        await using var harness = new Harness(history: true); await harness.SeedMaterial(); await harness.Bind("one-start");
+        var source = await harness.Commit(); harness.Clock.Advance(TimeSpan.FromSeconds(1));
+        await harness.Processor.ProcessAsync(new(10));
+        var before = await harness.History.ReadPageAsync(new("publisher")); var commits = harness.Store.ListCommits().Count;
+        harness.Clock.Advance(TimeSpan.FromSeconds(1)); await harness.ReplayRaw();
+        var after = await harness.History.ReadPageAsync(new("publisher"));
+        Assert.Equal(commits, harness.Store.ListCommits().Count); Assert.Equal(before.Head, after.Head);
+        Assert.Equal(before.Items.Select(e => e.HistoryEventId), after.Items.Select(e => e.HistoryEventId));
+        Assert.Single(harness.Actors.Accepted); Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await harness.Find(source.OutboxItemId))!.Status);
+    }
+
+    [Theory]
+    [InlineData("missing")] [InlineData("payload")] [InlineData("scope")]
+    [InlineData("expired")] [InlineData("reclaimed")] [InlineData("delivered")]
+    [Trait("Feature", "RunHistory")]
+    public async Task Rejected_publication_source_context_adds_no_observation_and_routes_no_recipient(string scenario)
+    {
+        await using var harness = new Harness(history: true); await harness.SeedMaterial(); await harness.Bind("one-start");
+        var item = await harness.Commit(); var claims = (IRuntimePostCommitOutboxClaimStore)harness.Store;
+        var claim = Assert.Single(await claims.ClaimAsync(new("source-context-owner", harness.Clock.GetUtcNow(), TimeSpan.FromMinutes(5), 1)));
+        var context = new PostCommitDeliveryContext(claim, Scope);
+        if (scenario is "missing" or "payload" or "scope") context = TamperSource(context, scenario);
+        if (scenario is "expired" or "reclaimed") harness.Clock.Advance(TimeSpan.FromMinutes(6));
+        if (scenario == "reclaimed") Assert.Single(await claims.ClaimAsync(new("replacement-owner", harness.Clock.GetUtcNow(), TimeSpan.FromMinutes(5), 1)));
+        if (scenario == "delivered") await claims.RecordDeliveryResultAsync(claim, new(claim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, harness.Clock.GetUtcNow()));
+        var beforeSource = (await harness.Find(item.OutboxItemId))!;
+        var before = await harness.History.ReadPageAsync(new("publisher"));
+        if (scenario is "expired" or "reclaimed" or "delivered")
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(async () => { await harness.HandleSource(context); });
+        else
+            Assert.False((await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(async () => { await harness.HandleSource(context); })).IsUnavailable);
+        Assert.Empty(harness.Actors.Accepted); Assert.Empty(harness.Actors.Attempts); Assert.Equal(0, harness.Lookup.Reads);
+        var after = await harness.History.ReadPageAsync(new("publisher"));
+        Assert.Equal(before.Head, after.Head); Assert.Equal(before.Items.Select(e => e.HistoryEventId), after.Items.Select(e => e.HistoryEventId));
+        Assert.True(beforeSource.IsEquivalentTo(await harness.Find(item.OutboxItemId)));
+    }
+
+    private static PostCommitDeliveryContext TamperSource(PostCommitDeliveryContext source, string scenario)
+    {
+        if (scenario == "scope") return new(source.Claim, new("another-tenant"));
+        var item = source.Claim.Item; var id = scenario == "missing" ? "fabricated-commit:" + item.Intent.IntentId : item.OutboxItemId;
+        var intent = new RuntimePostCommitIntent(item.Intent.IntentId, item.Intent.WorkflowExecutionId, item.Intent.Kind,
+            item.Intent.RecordedAt, item.Intent.ActivityExecutionId, item.Intent.IdempotencyKey,
+            scenario == "payload" ? JsonSerializer.SerializeToElement(new { forged = true }) : item.Intent.Payload,
+            item.Intent.Metadata, item.Intent.DependsOnWaitRegistrationId, item.Intent.WaitFailurePolicy,
+            item.Intent.MaterializedSchedulerWorkItem, item.Intent.NotBefore)
+            { HistoryCausation = item.Intent.HistoryCausation! with { DeliveryId = id } };
+        var forged = new RuntimePostCommitOutboxItem(id, intent, item.Status, item.RecordedAt, item.AvailableAt, item.RetryPolicy,
+            item.DeliveryAttemptCount, item.DeliveringOwnerId, item.DeliveryStartedAt, item.DeliveredAt, item.LastFailureMessage,
+            item.Metadata, item.DeliveryFencingToken, item.DeliveryVisibleAfter, item.StimulusDeliveryProtocolVersion,
+            item.StimulusDeliverySourceScope, item.RecipientSnapshot);
+        return new(new(forged, source.Claim.OwnerId, source.Claim.FencingToken, source.Claim.ClaimedAt, source.Claim.VisibleAfter), source.Scope);
+    }
 
     [Theory]
     [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
@@ -208,22 +346,33 @@ public sealed class PublishStimulusSourcePipelineTests
     }
     private sealed class Harness : IAsyncDisposable
     {
+        private readonly bool history;
+        private readonly RuntimeHistoryCapturePolicy historyPolicy;
         private readonly ServiceProvider provider; private readonly IServiceScope scope; private RuntimeCheckpointCommit? lateEnvelope;
         public RuntimeCheckpointCommitResult? CommitResult { get; private set; }
+        private RuntimeCheckpointCommit? rawCommit;
         private IServiceProvider Services => scope.ServiceProvider;
         public FakeTimeProvider Clock { get; } = new(Now);
         public RecordingActors Actors { get; } = new();
         public IStimulusRouter Router => Services.GetRequiredService<IStimulusRouter>();
         public IBookmarkResumeDispatcher Resume => Services.GetRequiredService<IBookmarkResumeDispatcher>();
         public IWorkflowExecutionStateStore Executions => Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        public IRuntimeHistoryStore History => Services.GetRequiredService<IRuntimeHistoryStore>();
+        public bool CanObservePublication() => Services.GetRequiredService<IRuntimePostCommitIntentDispatcher>().CanRecordHistory(
+            PublishStimulusConstants.PublishStimulusIntentKind, Services.GetRequiredService<IRuntimeHistoryObservationWriter>(), History);
+        public AckLossObservationWriter? AckLoss => Services.GetService<AckLossObservationWriter>();
+        public ValueTask HandleSource(PostCommitDeliveryContext source) => ((IRuntimePostCommitDurableSourceIntentHandler)Services.GetRequiredService<PublishStimulusExecutor>()).HandleAsync(source);
+        public ValueTask<RuntimeCheckpointCommitResult> ReplayRaw() => Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(rawCommit!);
         public InMemoryRuntimeCheckpointCommitStore Store => Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
         public IBookmarkStateStore Bookmarks => Services.GetRequiredService<IBookmarkStateStore>();
         public IWorkflowTriggerBindingStore Bindings => Services.GetRequiredService<IWorkflowTriggerBindingStore>();
         public IWorkflowExecutableSourceReferenceStore References => Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
         public InMemoryExecutionLivenessStateStore Ownership => (InMemoryExecutionLivenessStateStore)Services.GetRequiredService<IExecutionLivenessStateStore>();
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
-        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false)
+        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false, bool history = false, bool observationAckLoss = false, RuntimeHistoryCapturePolicy? historyPolicy = null, bool legacyReceiver = false,
+            Action<IServiceCollection>? configureServices = null)
         {
+            this.history = history; this.historyPolicy = historyPolicy ?? PublicationHistoryPolicy;
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
             services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
             if (schema != "missing") services.AddSingleton<ISchemaDormancyCheck>(new SchemaDormancyCheck(observed: schema == "unobserved" ? null : new Observed(schema)));
@@ -231,9 +380,19 @@ public sealed class PublishStimulusSourcePipelineTests
             if (skip) services.AddSingleton<IRuntimeCheckpointPersistencePolicy, SkipPolicy>();
             if (laterEnricher) services.AddSingleton<IRuntimeCheckpointCommitEnricher>(new LateEnricher(() => lateEnvelope));
             services.AddSingleton(new PersistenceModeOptions()); services.AddWorkflowRuntime(); if (coalescing) services.AddPersistenceModes();
+            if (history) services.AddRuntimeHistory();
+            if (legacyReceiver) services.AddScoped<PublishStimulusExecutor>(sp => new(sp.GetRequiredService<IStimulusRouter>()));
+            if (observationAckLoss)
+            {
+                var original = services.Single(descriptor => descriptor.ServiceType == typeof(IRuntimeHistoryObservationWriter));
+                services.Remove(original);
+                services.AddScoped<AckLossObservationWriter>(sp => new((IRuntimeHistoryObservationWriter)ActivatorUtilities.CreateInstance(sp, original.ImplementationType!)));
+                services.AddScoped<IRuntimeHistoryObservationWriter>(sp => sp.GetRequiredService<AckLossObservationWriter>());
+            }
             services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
             services.AddScoped<CountingLookup>(sp => new(new GlobalBookmarkStimulusLookup((IBookmarkStimulusIndex)sp.GetRequiredService<IBookmarkStateStore>(), sp.GetRequiredService<IWorkflowExecutionStateStore>())));
             services.AddScoped<IGlobalBookmarkStimulusLookup>(sp => sp.GetRequiredService<CountingLookup>()); services.AddWorkflowStimulusRouter();
+            configureServices?.Invoke(services);
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }); scope = provider.CreateScope();
         }
         public async Task SeedMaterial()
@@ -242,7 +401,18 @@ public sealed class PublishStimulusSourcePipelineTests
             await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(Pin,
                 new ExecutableNode("node", "authored", "test/activity", "1.0.0", new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "test", new Dictionary<string, string>()) }, Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
-            await Services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Execution("publisher"));
+            if (history)
+            {
+                var publisher = Execution("publisher") with { Status = WorkflowExecutionStatus.Running,
+                    HistoryCapturePolicy = historyPolicy, HistoryCaptureEnabledAtAdmission = true };
+                var start = new RuntimeCheckpointCommit("publisher-start", new("publisher-start-checkpoint", RuntimeCheckpointNames.WorkflowStarted,
+                    "publisher", Now, [], new Dictionary<string, string>()),
+                    new(new("publisher", RuntimeStateChangeOperation.Upsert, publisher, new Dictionary<string, string>()), null, [], [], [], [], []),
+                    [], new Dictionary<string, string>());
+                var result = await Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(start);
+                Assert.True(result.Succeeded);
+            }
+            else await Services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Execution("publisher"));
         }
         public async Task<RuntimePostCommitOutboxItem> Commit(bool local = false, bool materialized = false, bool late = false, bool mixed = false, bool duplicate = false, bool conflicting = false)
         {
@@ -268,6 +438,7 @@ public sealed class PublishStimulusSourcePipelineTests
                 lateEnvelope = commit;
                 commit = commit with { PostCommitIntents = [], StateChanges = new(null, null, [], [], [], [], []) };
             }
+            rawCommit = commit;
             CommitResult = await Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
             return (await Store.FindAsync(RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent)))!;
         }
@@ -287,5 +458,18 @@ public sealed class PublishStimulusSourcePipelineTests
         private static WorkflowExecutionState Execution(string id) => new(id, Pin, WorkflowExecutionStatus.Suspended, null, Now, Now, Now,
             null, null, null, "tenant", new Dictionary<string, string>()) { RunKind = WorkflowRunKind.PublishedRun, Partition = new("partition") };
         public async ValueTask DisposeAsync() { scope.Dispose(); await provider.DisposeAsync(); }
+    }
+
+    private sealed class AckLossObservationWriter(IRuntimeHistoryObservationWriter inner) : IRuntimeHistoryObservationWriter
+    {
+        private bool lose = true;
+        public List<RuntimeHistoryObservation> Calls { get; } = [];
+        public bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => inner.CanRecordHistory(selectedStore);
+        public async ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(observation); var result = await inner.RecordAsync(observation, cancellationToken);
+            if (lose && observation.Event.Name == "StimulusRoutingDispositionObserved") { lose = false; throw new IOException("Constructed observation acknowledgement loss."); }
+            return result;
+        }
     }
 }

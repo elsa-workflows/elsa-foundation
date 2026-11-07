@@ -33,6 +33,12 @@ public sealed class ModifyVariableAlterationHandlerTests
         Assert.Equal("String", replacement.Type.Alias);
         Assert.Equal(ValueProtectionPolicy.InstanceInline, replacement.Policy);
         Assert.Equal("replacement", replacement.InlineValue!.Value.GetString());
+        var fact = Assert.Single(Assert.IsAssignableFrom<IAlterationHistorySource>(change).HistoryFacts(DateTimeOffset.UnixEpoch));
+        Assert.Equal(RuntimeHistorySourceFactKind.DurableStateRecorded, fact.Kind);
+        Assert.Equal("root-variable-assignment", fact.ReasonCode);
+        var history = JsonSerializer.Serialize(fact);
+        Assert.DoesNotContain("stable-name", history, StringComparison.Ordinal);
+        Assert.DoesNotContain("replacement", history, StringComparison.Ordinal);
     }
 
     [Fact]

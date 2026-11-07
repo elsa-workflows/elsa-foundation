@@ -6,11 +6,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>Delivers a committed child-start intent through the existing workflow start dispatcher.</summary>
-public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
+public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHandler, IRuntimeHistoryDeliverySource
 {
     private const string DeliveryFailureCode = "child-start-delivery-failed";
     private const string DeliveryFailureSummary = "The child workflow could not be started.";
@@ -22,39 +23,25 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
+    private readonly IServiceProvider? _historyServices;
 
     public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
-        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), null, TimeProvider.System)
-    {
-    }
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), null, TimeProvider.System, null, null) { }
 
-    public ChildStartExecutor(
-        IWorkflowStartDispatcher workflowStartDispatcher,
-        IOptions<DispatchWorkflowOptions> options)
-        : this(workflowStartDispatcher, options, null, TimeProvider.System)
-    {
-    }
+    public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher, IOptions<DispatchWorkflowOptions> options)
+        : this(workflowStartDispatcher, options, null, TimeProvider.System, null, null) { }
 
-    public ChildStartExecutor(
-        IWorkflowStartDispatcher workflowStartDispatcher,
-        IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
-        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider, workflowExecutionStateStore)
-    {
-    }
+    public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher, IWorkflowDispatchStore? workflowDispatchStore,
+        TimeProvider timeProvider, IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider, workflowExecutionStateStore, null) { }
 
-    /// <param name="workflowExecutionStateStore">
-    /// Reads the child a duplicate start may already have reached. Composition always supplies it; without it a duplicate
-    /// can only be recognised once its dispatch is terminal, so a legitimate one spends its delivery budget before the
-    /// claim completion's child-evidence rule resolves it as delivered. That degrades latency and logs, not the outcome.
-    /// </param>
-    public ChildStartExecutor(
-        IWorkflowStartDispatcher workflowStartDispatcher,
-        IOptions<DispatchWorkflowOptions> options,
-        IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+    public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher, IOptions<DispatchWorkflowOptions> options,
+        IWorkflowDispatchStore? workflowDispatchStore, TimeProvider timeProvider, IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        : this(workflowStartDispatcher, options, workflowDispatchStore, timeProvider, workflowExecutionStateStore, null) { }
+
+    public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher, IOptions<DispatchWorkflowOptions> options,
+        IWorkflowDispatchStore? workflowDispatchStore, TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore, IServiceProvider? historyServices)
     {
         ArgumentNullException.ThrowIfNull(workflowStartDispatcher);
         ArgumentNullException.ThrowIfNull(options);
@@ -65,9 +52,79 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         _workflowDispatchStore = workflowDispatchStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _timeProvider = timeProvider;
+        _historyServices = historyServices;
+    }
+
+    bool IRuntimeHistoryDeliverySource.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        if (_historyServices is null || _workflowDispatchStore is null || _workflowExecutionStateStore is null) return false;
+        try
+        {
+            _ = _historyServices.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
+            return ReferenceEquals(writer, _historyServices.GetService<IRuntimeHistoryObservationWriter>()) &&
+                ReferenceEquals(reader, _historyServices.GetService<IRuntimeHistoryStore>()) && writer.CanRecordHistory(reader) &&
+                ReferenceEquals(_timeProvider, _historyServices.GetService<TimeProvider>()) &&
+                ReferenceEquals(_workflowStartDispatcher, _historyServices.GetService<IWorkflowStartDispatcher>()) &&
+                ReferenceEquals(_workflowDispatchStore, _historyServices.GetService<IWorkflowDispatchStore>()) &&
+                ReferenceEquals(_workflowExecutionStateStore, _historyServices.GetService<IWorkflowExecutionStateStore>());
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { return false; }
     }
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (intent.HistoryCausation is not null)
+            throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
+                new InvalidOperationException("A history-stamped child start requires its verified durable source."), false);
+        _ = await HandleCoreAsync(intent, cancellationToken);
+    }
+
+    public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.Intent.Kind != DispatchWorkflowConstants.StartChildIntentKind || string.IsNullOrWhiteSpace(source.Intent.ActivityExecutionId))
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                new InvalidOperationException("The child-start source does not name its actual dispatching activity."), false);
+        var identity = new WorkflowDispatchIdentity(source.Intent.WorkflowExecutionId, source.Intent.ActivityExecutionId!);
+        var observation = await ChildStartHistoryObservations.BeginAsync(source, _historyServices, _timeProvider, identity.ChildWorkflowExecutionId, cancellationToken);
+        string disposition;
+        try
+        {
+            disposition = await HandleCoreAsync(source.Intent, cancellationToken, source.Intent.HistoryCausation);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (WorkflowDispatchAdmissionProjectionException) { throw; }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception primary)
+        {
+            if (observation is not null)
+            {
+                try { await observation.DispositionAsync("child-start-failure-observed", cancellationToken); }
+                catch (Exception secondary)
+                {
+                    throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                        new AggregateException("Child delivery and its failure observation both failed.", primary, secondary),
+                        ObservationUnavailable(primary) && ObservationUnavailable(secondary));
+                }
+            }
+            throw;
+        }
+        if (observation is not null) await observation.DispositionAsync(disposition, cancellationToken);
+    }
+
+    private static bool ObservationUnavailable(Exception failure) => failure switch
+    {
+        RuntimePostCommitSourceBoundaryException source => source.IsUnavailable,
+        StimulusDeliveryBoundaryException source => source.IsUnavailable,
+        RuntimePostCommitDeliveryException delivery => delivery.Kind == PostCommitFailureKind.Transient,
+        RuntimeHistoryIntegrityException or InvalidDataException or ArgumentException or NotSupportedException => false,
+        _ => failure is not InvalidOperationException
+    };
+
+    private async ValueTask<string> HandleCoreAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken,
+        RuntimeHistoryCausation? sourceCause = null)
     {
         ArgumentNullException.ThrowIfNull(intent);
         if (!StringComparer.Ordinal.Equals(intent.Kind, DispatchWorkflowConstants.StartChildIntentKind))
@@ -115,7 +172,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             if (durableDispatch is null)
                 throw DeliveryFailure(PostCommitFailureKind.Transient);
             if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(durableDispatch) || IsTerminal(durableDispatch.Status))
-                return;
+            return "source-terminal-or-retired-observed";
             ValidatePayloadAgainstDispatch(intent.IntentId, payload, durableDispatch);
 
             WorkflowDispatchAdmissionResult admission;
@@ -138,7 +195,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission or
                 WorkflowDispatchAdmissionDisposition.Terminal)
             {
-                return;
+                return "source-terminal-or-retired-observed";
             }
 
             durableDispatch = admission.Record;
@@ -191,7 +248,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                             payload.DispatchNodeId!)
                         : null,
                     dispatchNestingDepth: payload.DispatchNestingDepth,
-                    testScope: testScope),
+                    testScope: testScope) { HistoryCausation = sourceCause },
                 WorkflowExecutableReferenceScope.Published,
                 cancellationToken: cancellationToken);
         }
@@ -204,7 +261,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             // The child's runtime faults a child a checkpoint rule refused, which ends its dispatch and queues the parent's
             // resume, and then still reports the refusal. The child really ran, so its start is delivered.
             if (await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
-                return;
+            return "committed-child-outcome-observed";
             throw DeliveryFailure(exception);
         }
         catch (Exception exception)
@@ -266,6 +323,14 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 throw new WorkflowDispatchAdmissionProjectionException(payload.DispatchId, exception);
             }
         }
+        return result.CommandDispatch.Status switch
+        {
+            WorkflowExecutionCommandDispatchStatus.Deferred => "durable-start-forwarding-observed",
+            WorkflowExecutionCommandDispatchStatus.Duplicate => "existing-child-start-observed",
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted => "child-start-accepted-faulted-observed",
+            WorkflowExecutionCommandDispatchStatus.Accepted => "child-start-queue-acceptance-observed",
+            _ => "child-start-failure-observed"
+        };
     }
 
     private async ValueTask MarkStartedAsync(string dispatchId, CancellationToken cancellationToken)
@@ -371,7 +436,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             RuntimeCheckpointCommitValidationException.IsCauseOf(exception) ? PostCommitFailureKind.Permanent : PostCommitFailureKind.Transient,
             exception);
 
-    private static void ValidatePayloadAgainstDispatch(
+    internal static void ValidatePayloadAgainstDispatch(
         string intentId,
         WorkflowDispatchStartPayload payload,
         WorkflowDispatchRecord dispatch)

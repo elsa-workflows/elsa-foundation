@@ -4,6 +4,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -28,6 +29,12 @@ public class ActivitiesCompensationFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton(new RuntimeHistorySourceSupport([
+            RuntimeHistorySourceFactKind.CompensationRegistered, RuntimeHistorySourceFactKind.CompensationStarted,
+            RuntimeHistorySourceFactKind.CompensationHandlerScheduled, RuntimeHistorySourceFactKind.CompensationHandlerCompleted,
+            RuntimeHistorySourceFactKind.CompensationHandlerFaulted, RuntimeHistorySourceFactKind.CompensationConfirmed,
+            RuntimeHistorySourceFactKind.CompensationResolved, RuntimeHistorySourceFactKind.CompensationCompleted,
+            RuntimeHistorySourceFactKind.CompensationAbandoned]));
         services.AddSingleton<IActivityStructureHandler, CompensationScopeStructureHandler>();
         services.AddScoped<IDraftValidator, CompensationScopeValidator>();
         services.AddScoped<IDraftValidator, CompensationTargetValidator>();

@@ -25,7 +25,8 @@ internal static class ActivityCancellationCheckpointService
         string reason,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken = default,
-        StructuralChildControlContribution? childControlContribution = null)
+        StructuralChildControlContribution? childControlContribution = null,
+        IReadOnlyList<RuntimeHistorySourceFact>? historySourceFacts = null)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -55,10 +56,11 @@ internal static class ActivityCancellationCheckpointService
         var checkpointId = $"checkpoint:{sourceWorkItem.WorkItemId}:activity-cancelled:{state.InvocationId}";
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 cancelledState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureSource.FromWorkItem(sourceWorkItem),
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
@@ -105,9 +107,11 @@ internal static class ActivityCancellationCheckpointService
                     workflowCancelWorkItem,
                     occurredAt)
             ],
-            Metadata: metadata);
+            Metadata: metadata) { HistorySourceFacts = historySourceFacts };
 
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        if (childControlContribution is not null)
+            commit = await childControlContribution.ApplyAsync(checkpointCommitter, commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     private static ActivityExecutionState EndOpenAttempt(ActivityExecutionState state, DateTimeOffset endedAt)

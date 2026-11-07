@@ -34,7 +34,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
 /// <summary>Direct Minimal API regression coverage for the high-risk behavior formerly exercised through endpoint classes.</summary>
-public sealed class RuntimeMinimalApiBehaviorTests
+public sealed partial class RuntimeMinimalApiBehaviorTests
 {
     private const string ExecutePath = "/runtime/workflows/executables/artifact-1/execute";
     private const string ActivityPath = "/runtime/workflows/instances/wf-1/activity-executions/ae-1";
@@ -123,7 +123,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private sealed class BrowserAuthorization : IActivityInspectionContextAsync
     {
         public string TenantScope { get; set; } = "tenant-a";
-        public string AuditSubject => "browser-test";
+        public string AuditSubject { get; set; } = "browser-test";
         public string RequestCorrelationId => "test";
         public string Profile { get; set; } = "structure-only";
         public bool Allowed { get; set; } = true;

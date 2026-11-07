@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
 acceptance = importlib.util.module_from_spec(spec)
@@ -25,12 +27,12 @@ class VerdictTests(unittest.TestCase):
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
                         {'name': name, 'path': str(self.artifact)} for name in
-                        ['trace'] + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
-                for project in acceptance.PROJECTS]}
+                        (['trace', 'restart-receipt', 'durable-facts'] if journey == acceptance.HISTORY_JOURNEY else ['trace']) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
+                for project, selected_journey in sorted(acceptance.EXPECTED_JOURNEYS) if selected_journey == journey]}
             for journey in acceptance.JOURNEYS]}]}
 
     def test_complete_evidence(self):
-        self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+        self.assertEqual(len(acceptance.EXPECTED_JOURNEYS), acceptance.verdict(self.report, self.root))
 
     def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
         journey = sorted(acceptance.JOURNEYS)[0]
@@ -43,6 +45,19 @@ class VerdictTests(unittest.TestCase):
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['unknown'])
         report['suites'][0]['specs'][0]['tests'].pop()
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
+
+    def test_scoped_history_requires_the_dedicated_320px_projects(self):
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == acceptance.HISTORY_JOURNEY]
+        tests = report['suites'][0]['specs'][0]['tests']
+        self.assertEqual({'desktop-light', 'desktop-dark', 'timeline-320-light', 'timeline-320-dark'},
+                         {row['projectName'] for row in tests})
+        self.assertEqual(4, acceptance.verdict(report, self.root, [acceptance.HISTORY_JOURNEY]))
+        for replacement in ('narrow-light', 'desktop-light'):
+            changed = copy.deepcopy(report)
+            row = next(row for row in changed['suites'][0]['specs'][0]['tests'] if row['projectName'] == 'timeline-320-light')
+            row['projectName'] = replacement
+            with self.assertRaises(ValueError): acceptance.verdict(changed, self.root, [acceptance.HISTORY_JOURNEY])
 
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
         for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
@@ -77,6 +92,47 @@ class VerdictTests(unittest.TestCase):
                     target = next(row for row in report['suites'][0]['specs'] if row['title'] == spec['title'])
                     target['tests'][0]['results'][0]['attachments'].remove(attachment)
                     with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+
+    def test_restart_supervisor_owns_one_current_process_and_acknowledges_idempotently(self):
+        starts, stops = [], []
+        @contextmanager
+        def owned_host(*args):
+            process = SimpleNamespace(pid=100 + len(starts))
+            starts.append((process.pid, args))
+            try:
+                yield process
+            finally:
+                stops.append(process.pid)
+        with patch.object(acceptance, 'host', owned_host):
+            requests = self.root / 'requests'
+            with acceptance.OwnedRestartSupervisor(self.root, 'owned.dll', 'http://localhost:1', '/', self.root, {}, requests) as supervisor:
+                identity = '12345678-1234-1234-1234-123456789012'
+                request = {'id': identity, 'workflowExecutionId': 'run', 'project': 'timeline-320-light', 'pid': 99999}
+                (requests / 'request.json').write_text(json.dumps(request))
+                supervisor.supervise()
+                supervisor.supervise()
+                ack = json.loads((requests / 'ack.json').read_text())
+                self.assertEqual((100, 101), (ack['oldPid'], ack['newPid']))
+                self.assertEqual([100], stops)
+                self.assertEqual(2, len(starts))
+                self.assertEqual(starts[0][1][:4], starts[1][1][:4])
+                self.assertTrue((self.root / 'restarts' / f'{identity}.json').is_file())
+            self.assertEqual([100, 101], stops)
+
+    def test_restart_supervisor_refuses_unexpected_or_repeated_project_requests(self):
+        @contextmanager
+        def owned_host(*args):
+            yield SimpleNamespace(pid=100)
+        with patch.object(acceptance, 'host', owned_host):
+            requests = self.root / 'requests'
+            with acceptance.OwnedRestartSupervisor(self.root, 'owned.dll', 'http://localhost:1', '/', self.root, {}, requests) as supervisor:
+                request = {'id': '12345678-1234-1234-1234-123456789012', 'workflowExecutionId': 'run', 'project': 'unrelated'}
+                (requests / 'request.json').write_text(json.dumps(request))
+                with self.assertRaises(ValueError): supervisor.supervise()
+                request['project'] = 'desktop-light'
+                supervisor.restarted_projects.add('desktop-light')
+                (requests / 'request.json').write_text(json.dumps(request))
+                with self.assertRaises(ValueError): supervisor.supervise()
 
     def test_stale_development_overlays_never_reach_owned_content_root(self):
         project = self.root / 'source/Host.csproj'

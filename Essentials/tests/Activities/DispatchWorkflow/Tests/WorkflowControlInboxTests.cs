@@ -8,8 +8,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.Executions;
-using Elsa.Workflows.Runtime.Services.Coalescing;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -50,12 +48,14 @@ public sealed class WorkflowControlInboxTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Terminal_barrier_delivered_first_buffers_without_callback_then_releases_one_ordered_prefix(bool ordinaryFault)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Terminal_barrier_delivered_first_buffers_without_callback_then_releases_one_ordered_prefix(bool ordinaryFault, bool history)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(authoredNotificationChild: true,
-            terminalAfterNotification: true, ordinaryFaultAfterNotification: ordinaryFault, configureServices: EnableCoherentDeletion);
+            terminalAfterNotification: true, ordinaryFaultAfterNotification: ordinaryFault, configureServices: EnableCoherentDeletion, history: history);
         var run = await fixture.StartParentAsync("terminal-gap-" + ordinaryFault, "terminal-gap-parent-" + ordinaryFault, "correlation",
             waitForCompletion: true, controlConsumerVersion: 1, controlResponse: "defer");
         await fixture.SweepAsync();
@@ -82,6 +82,14 @@ public sealed class WorkflowControlInboxTests
         Assert.Null(waiting.PrivateState);
         Assert.True(buffered.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
         AssertAtomicDecision(fixture, buffered, waiting);
+        if (history)
+        {
+            var bufferedHistory = await ControlHistoryAsync(scope.ServiceProvider, run.Dispatch.ParentWorkflowExecutionId);
+            var accepted = Assert.Single(bufferedHistory, item => item.Name == "ChildControlAccepted");
+            Assert.DoesNotContain(bufferedHistory, item => item.Name == "ChildControlApplied");
+            AssertControlAccepted(accepted, barrier, buffered.InvocationId);
+            AssertControlHistoryAtomic(fixture, accepted, buffered, waiting);
+        }
         var deletion = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionDeletionStore>();
         Assert.True(deletion.IsSupported);
         var candidate = (await deletion.ReadAsync(run.Dispatch.ChildWorkflowExecutionId))!;
@@ -104,23 +112,54 @@ public sealed class WorkflowControlInboxTests
         Assert.Equal([0L, 1L], data.GetProperty("ordinals").EnumerateArray().Select(item => item.GetInt64()));
         Assert.Equal(["first", "second"], data.GetProperty("codes").EnumerateArray().Select(item => item.GetString()));
         AssertAtomicDecision(fixture, consumed, finished);
+        if (history)
+        {
+            var delivered = notification.Payload!.Value.Deserialize<RuntimeChildControlTransport>(Json)!;
+            var controlHistory = await ControlHistoryAsync(scope.ServiceProvider, run.Dispatch.ParentWorkflowExecutionId);
+            var accepted = controlHistory.Where(item => item.Name == "ChildControlAccepted").ToArray();
+            Assert.Equal(2, accepted.Length);
+            AssertControlAccepted(Assert.Single(accepted, item => item.Causation!.DeliveryId == barrier.SourceOutboxItemId), barrier, consumed.InvocationId);
+            var acceptedNotification = Assert.Single(accepted, item => item.Causation!.DeliveryId == delivered.SourceOutboxItemId);
+            AssertControlAccepted(acceptedNotification, delivered, consumed.InvocationId);
+            var applied = Assert.Single(controlHistory, item => item.Name == "ChildControlApplied");
+            Assert.Equal(RuntimeHistoryAuthority.CommittedTransition, applied.Authority);
+            Assert.Equal(finished.InvocationId, applied.ActivityExecutionId);
+            Assert.Equal(delivered.Batch.ChildWorkflowExecutionId, applied.Causation!.WorkflowExecutionId);
+            Assert.Equal(delivered.SourceOutboxItemId, applied.Causation.DeliveryId);
+            Assert.Equal("ordered-prefix-consumed", applied.Metadata["history.reasonCode"]);
+            Assert.Equal(delivered.Batch.ChildWorkflowExecutionId, applied.Metadata["history.relatedWorkflowExecutionId"]);
+            Assert.Equal(consumed.InvocationId, applied.Metadata["history.relatedActivityExecutionId"]);
+            Assert.Equal(RuntimeHistoryIdentity.CreateId(applied.CheckpointId!, "ChildControlApplied", RuntimeHistoryIdentity.CreateBinding(
+                [barrier.DispatchId, delivered.SourceOutboxItemId, barrier.SourceOutboxItemId])), applied.HistoryEventId);
+            Assert.True(acceptedNotification.Sequence < applied.Sequence);
+            Assert.Equal(acceptedNotification.CheckpointId, applied.CheckpointId);
+            AssertControlHistoryAtomic(fixture, applied, consumed, finished);
+        }
         Assert.Equal(ordinaryFault ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed,
             (await fixture.FindWorkflowAsync(run.Dispatch.ChildWorkflowExecutionId))!.Status);
         if (ordinaryFault)
             Assert.True(Assert.Single(await fixture.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run.Dispatch.ChildWorkflowExecutionId)).IsBlocking);
         var prior = JsonSerializer.Serialize(finished, Json);
+        IReadOnlyList<RuntimeHistoryEvent> historyBeforeDuplicate = history
+            ? await ControlHistoryAsync(scope.ServiceProvider, run.Dispatch.ParentWorkflowExecutionId) : [];
         await Handler(scope.ServiceProvider, NotificationKind).HandleAsync(notification);
-        await Handler(scope.ServiceProvider, DispatchWorkflowConstants.ResumeParentIntentKind).HandleAsync(terminal);
+        // A captured parent-resume source requires its live physical claim; stale-context refusal has separate controls.
+        // The validated duplicate notification exercises the actual inbox AlreadyAccepted protocol decision here.
+        if (!history) await Handler(scope.ServiceProvider, DispatchWorkflowConstants.ResumeParentIntentKind).HandleAsync(terminal);
         Assert.Equal(prior, JsonSerializer.Serialize(await ConsumerAsync(fixture, barrier), Json));
+        if (history)
+            Assert.Equal(historyBeforeDuplicate.Select(item => item.HistoryEventId),
+                (await ControlHistoryAsync(scope.ServiceProvider, run.Dispatch.ParentWorkflowExecutionId)).Select(item => item.HistoryEventId));
     }
 
     [Theory]
-    [InlineData("defer", ActivityExecutionStatus.Running)]
-    [InlineData("fault", ActivityExecutionStatus.Faulted)]
-    [InlineData("cancel", ActivityExecutionStatus.Cancelled)]
-    public async Task Returned_consumer_decision_commits_the_cursor_private_state_and_owed_work_together(string response, ActivityExecutionStatus status)
+    [InlineData("defer", ActivityExecutionStatus.Running, false)]
+    [InlineData("fault", ActivityExecutionStatus.Faulted, false)]
+    [InlineData("cancel", ActivityExecutionStatus.Cancelled, false)]
+    [InlineData("fault", ActivityExecutionStatus.Faulted, true)]
+    public async Task Returned_consumer_decision_commits_the_cursor_private_state_and_owed_work_together(string response, ActivityExecutionStatus status, bool history)
     {
-        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(history: history);
         var run = await fixture.StartParentAsync("decision-" + response, "decision-parent-" + response, "correlation",
             waitForCompletion: true, controlConsumerVersion: 1, controlResponse: response);
         await fixture.SweepAsync();
@@ -133,6 +172,21 @@ public sealed class WorkflowControlInboxTests
         Assert.Equal(status, root.Status);
         Assert.Equal(1, Count(root));
         AssertAtomicDecision(fixture, child, root);
+        if (history)
+        {
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var events = await ControlHistoryAsync(scope.ServiceProvider, run.Dispatch.ParentWorkflowExecutionId);
+            var accepted = Assert.Single(events, item => item.Name == "ChildControlAccepted");
+            AssertControlAccepted(accepted, child.ChildControl!, child.InvocationId);
+            var applied = Assert.Single(events, item => item.Name == "ChildControlApplied");
+            Assert.Equal(root.InvocationId, applied.ActivityExecutionId);
+            Assert.Equal("ordered-prefix-consumed", applied.Metadata["history.reasonCode"]);
+            Assert.Equal(child.ChildControl!.SourceOutboxItemId, applied.Causation!.DeliveryId);
+            Assert.True(accepted.Sequence < applied.Sequence);
+            Assert.Equal(accepted.CheckpointId, applied.CheckpointId);
+            // Applied describes the atomically consumed inbox prefix even when that decision committed a consumer fault.
+            AssertControlHistoryAtomic(fixture, applied, child, root);
+        }
         if (response == "fault")
         {
             // Run inspection always withholds a message raised on this child's control batches, which came from another Run.
@@ -205,28 +259,22 @@ public sealed class WorkflowControlInboxTests
         Assert.True(await fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().IsDeletionTombstonedAsync(workflow.WorkflowExecutionId));
     }
 
-    private static void EnableCoherentDeletion(IServiceCollection services) =>
+    private static void EnableCoherentDeletion(IServiceCollection services)
+    {
+        var factory = services.Last(item => item.ServiceType == typeof(IWorkflowExecutionDeletionStore)).ImplementationFactory
+            ?? throw new InvalidOperationException("The fixture requires the registered Runtime deletion factory.");
         services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionDeletionStore>(provider =>
-            // Keep checkpoint recording for the witness, but qualify deletion against the same raw provider
-            // aggregate used by that recorder and the coalescing overlays, as production composition does.
-            new InMemoryWorkflowExecutionDeletionStore(
-                provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
-                provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
-                Underlying<IActivityExecutionInspectionStore>(provider),
-                provider.GetRequiredService<IActivityExecutionHierarchyStore>(),
-                Underlying<IWorkflowExecutionStateStore>(provider),
-                provider.GetRequiredService<IExecutionLivenessStateStore>(),
-                Underlying<IActivityExecutionStateStore>(provider),
-                provider.GetRequiredService<IActivityExecutionInspectionWriter>(),
-                provider.GetRequiredService<IActivityExecutionHierarchyWriter>(),
-                provider.GetRequiredService<IBookmarkStateStore>(),
-                Underlying<IDurableValueStateStore>(provider), Underlying<ISchedulerStateStore>(provider),
-                provider.GetRequiredService<IDurableTimerStore>(), Underlying<IWorkflowSchedulerWorkQueue>(provider),
-                provider.GetRequiredService<IIncidentStateStore>(), provider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
-                provider.GetRequiredService<IWorkflowHoldStateStore>())));
+            (IWorkflowExecutionDeletionStore)factory(new DeletionParticipants(provider))));
+    }
 
-    private static T Underlying<T>(IServiceProvider provider) where T : class =>
-        provider.GetService<CoalescingInner<T>>()?.Value ?? provider.GetRequiredService<T>();
+    // Reuse the production composition, including its scoped history participation. Substitute only the
+    // fixture's recording checkpoint decorator with the same actual native writer that it records.
+    private sealed class DeletionParticipants(IServiceProvider services) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType == typeof(IRuntimeCheckpointCommitStore)
+            ? services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>()
+            : services.GetService(serviceType);
+    }
 
     [Fact]
     public async Task A_valid_terminal_source_read_outage_keeps_the_bookmark_and_barrier_owed_until_retry()
@@ -367,6 +415,34 @@ public sealed class WorkflowControlInboxTests
             return Inner.FindAsync(outboxItemId, cancellationToken);
         }
     }
+
+    private static async ValueTask<IReadOnlyList<RuntimeHistoryEvent>> ControlHistoryAsync(IServiceProvider services, string run) =>
+        (await services.GetRequiredService<IRuntimeHistoryStore>().ReadPageAsync(new(run, 500))).Items
+            .Where(item => item.Name is "ChildControlAccepted" or "ChildControlApplied").ToArray();
+
+    private static void AssertControlAccepted(RuntimeHistoryEvent item, RuntimeChildControlTransport incoming, string call)
+    {
+        Assert.Equal(RuntimeHistoryAuthority.CommittedTransition, item.Authority);
+        Assert.Equal(incoming.ParentWorkflowExecutionId, item.WorkflowExecutionId);
+        Assert.Equal(call, item.ActivityExecutionId);
+        Assert.Equal(incoming.Batch.ChildWorkflowExecutionId, item.Causation!.WorkflowExecutionId);
+        Assert.Equal(incoming.SourceOutboxItemId, item.Causation.DeliveryId);
+        Assert.Equal(incoming.Batch.ChildWorkflowExecutionId, item.Metadata["history.relatedWorkflowExecutionId"]);
+        Assert.Equal(incoming.ConsumerActivityExecutionId, item.Metadata["history.relatedActivityExecutionId"]);
+        Assert.Equal("inbox-accepted", item.Metadata["history.reasonCode"]);
+        Assert.Equal(RuntimeHistoryIdentity.CreateId(item.CheckpointId!, "ChildControlAccepted", RuntimeHistoryIdentity.CreateBinding(
+            [incoming.DispatchId, incoming.SourceOutboxItemId])), item.HistoryEventId);
+        Assert.Null(item.Payload);
+    }
+
+    private static void AssertControlHistoryAtomic(DispatchWorkflowRuntimeTestFixture fixture, RuntimeHistoryEvent item,
+        ActivityExecutionState call, ActivityExecutionState consumer) =>
+        Assert.Contains(fixture.Checkpoints.Commits, commit =>
+            commit.HistoryBatches?.Any(batch => batch.Candidates.Any(candidate => candidate.Event.HistoryEventId == item.HistoryEventId)) == true &&
+            commit.StateChanges.ActivityExecutions.Any(change => change.State.InvocationId == call.InvocationId &&
+                JsonSerializer.Serialize(change.State.ChildControlInbox, Json) == JsonSerializer.Serialize(call.ChildControlInbox, Json)) &&
+            commit.StateChanges.ActivityExecutions.Any(change => change.State.InvocationId == consumer.InvocationId && change.State.Status == consumer.Status &&
+                JsonSerializer.Serialize(change.State.PrivateState, Json) == JsonSerializer.Serialize(consumer.PrivateState, Json)));
 
     private static IRuntimePostCommitIntentHandler Handler(IServiceProvider services, string kind) =>
         (IRuntimePostCommitIntentHandler)services.GetRequiredService(services.GetServices<RuntimePostCommitIntentHandlerContribution>()

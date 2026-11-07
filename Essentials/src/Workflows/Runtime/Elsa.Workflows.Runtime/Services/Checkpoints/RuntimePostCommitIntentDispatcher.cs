@@ -30,7 +30,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         ArgumentNullException.ThrowIfNull(intent);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (RequiresDurableSource(intent.Kind))
+        if (intent.HistoryCausation is not null || RequiresDurableSource(intent.Kind))
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("The contributed handler requires durable source context."), false);
 
@@ -50,14 +50,39 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         return _requiredSourceKinds.Contains(intentKind);
     }
 
+    public bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
+        try { return _handlerTypes.TryGetValue(intentKind, out var type) && Qualifies(_serviceProvider.GetRequiredService(type), writer, reader); }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or IOException or TimeoutException) { return false; }
+    }
+
+    private static bool Qualifies(object handler, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        handler is IRuntimePostCommitDurableSourceIntentHandler && handler is IRuntimeHistoryDeliverySource source &&
+        writer.CanRecordHistory(reader) && source.CanRecordHistory(writer, reader);
+
     public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!RequiresDurableSource(source.Intent.Kind))
+        if (source.Intent.HistoryCausation is null && !RequiresDurableSource(source.Intent.Kind))
             return DispatchAsync(source.Intent, cancellationToken);
-        var handler = (IRuntimePostCommitDurableSourceIntentHandler)_serviceProvider
-            .GetRequiredService(_handlerTypes[source.Intent.Kind]);
+        object? selected = null;
+        try
+        {
+            if (_handlerTypes.TryGetValue(source.Intent.Kind, out var type)) selected = _serviceProvider.GetRequiredService(type);
+            if (source.Intent.HistoryCausation is not null &&
+                (selected is null || _serviceProvider.GetService<IRuntimeHistoryObservationWriter>() is not { } writer ||
+                 _serviceProvider.GetService<IRuntimeHistoryStore>() is not { } reader || !Qualifies(selected, writer, reader)))
+                throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                    new NotSupportedException("The captured delivery owner is unavailable in this composition."), true);
+        }
+        catch (Exception exception) when (source.Intent.HistoryCausation is not null && exception is not RuntimePostCommitSourceBoundaryException &&
+            exception is InvalidOperationException or NotSupportedException or IOException or TimeoutException)
+        { throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, true); }
+        if (selected is not IRuntimePostCommitDurableSourceIntentHandler handler)
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                new InvalidOperationException("The captured delivery owner requires durable source support."), source.Intent.HistoryCausation is not null);
         return handler.HandleAsync(source, cancellationToken);
     }
 

@@ -3,7 +3,9 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
@@ -15,6 +17,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IRuntimeWorkflowControlBoundary? _controlBoundary;
+    private readonly IServiceProvider? _historyServices;
 
     public WorkflowDispatchCompletionEnricher(
         IWorkflowOutputSource workflowOutputSource,
@@ -36,6 +39,16 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         IPostCommitOutboxLookupStore outboxLookupStore,
         IIncidentStateStore? incidentStateStore,
         IRuntimeWorkflowControlBoundary? controlBoundary)
+        : this(workflowOutputSource, outboxLookupStore, incidentStateStore, controlBoundary, null)
+    {
+    }
+
+    public WorkflowDispatchCompletionEnricher(
+        IWorkflowOutputSource workflowOutputSource,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IIncidentStateStore? incidentStateStore,
+        IRuntimeWorkflowControlBoundary? controlBoundary,
+        IServiceProvider? historyServices)
     {
         ArgumentNullException.ThrowIfNull(workflowOutputSource);
         ArgumentNullException.ThrowIfNull(outboxLookupStore);
@@ -43,6 +56,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         _outboxLookupStore = outboxLookupStore;
         _incidentStateStore = incidentStateStore;
         _controlBoundary = controlBoundary;
+        _historyServices = historyServices;
     }
 
     public int Order => 100;
@@ -58,16 +72,17 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             !TryGetDispatchStatus(child.Status, out var terminalStatus))
             return commit;
 
-        var dispatches = commit.StateChanges.WorkflowDispatches
+        var terminalDispatches = commit.StateChanges.WorkflowDispatches
             .Where(change => change.Operation != RuntimeStateChangeOperation.Delete)
             .Select(change => change.State)
-            .Where(record => record.Mode == WorkflowDispatchMode.WaitForCompletion &&
-                             record.Status == terminalStatus &&
+            .Where(record => record.Status == terminalStatus &&
                              StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, child.WorkflowExecutionId))
             .OrderBy(record => record.DispatchId, StringComparer.Ordinal)
             .ToArray();
-        if (dispatches.Length == 0)
+        if (terminalDispatches.Length == 0)
             return commit;
+
+        var dispatches = terminalDispatches.Where(record => record.Mode == WorkflowDispatchMode.WaitForCompletion).ToArray();
 
         var intents = commit.PostCommitIntents.ToList();
         IReadOnlyCollection<RuntimeWorkflowOutput>? safeOutputs = null;
@@ -118,6 +133,12 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                         incidentIds ?? [],
                         commit.Checkpoint.OccurredAt,
                         control);
+                    if (existing?.HistoryCausation is { } retainedCause)
+                    {
+                        if (retainedCause != ResumeCause(commit, dispatch, canonical))
+                            throw TerminalConflict(controlEnabled, "Parent-resume source causation differs from its actual child terminal checkpoint.");
+                        canonical = CopyCause(canonical, retainedCause);
+                    }
                     if (existing is not null && !canonical.IsEquivalentTo(existing))
                         throw TerminalConflict(controlEnabled, $"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
 
@@ -127,6 +148,8 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                 }
 
                 var payload = ValidateIntent(intent, dispatch, identity, commit.Checkpoint.OccurredAt);
+                if (intent.HistoryCausation is { } existingCause && existingCause != ResumeCause(commit, dispatch, intent))
+                    throw TerminalConflict(controlEnabled, "Parent-resume source causation differs from its actual child terminal checkpoint.");
                 if (!WorkflowControlTransport.Equivalent(payload.Result.Control, control))
                     throw WorkflowDispatchControlPolicy.Failure("terminal resume differs from its whole staged root control");
             }
@@ -137,8 +160,66 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             }
         }
 
-        return commit with { PostCommitIntents = intents };
+        var enriched = commit with { PostCommitIntents = intents };
+        if (_historyServices is null || commit.Checkpoint.Name != TerminalCheckpointName(child.Status) ||
+            _historyServices.GetService<IRuntimeHistorySourceContributor>() is not { } contributor) return enriched;
+        RuntimeHistoryCapturePolicy? pin = null;
+        var captured = await contributor.AddFactsAsync(enriched, policy =>
+        {
+            pin = policy;
+            if (!policy.SupportedKinds.Contains(nameof(RuntimeHistorySourceFactKind.ChildWorkflowSettled), StringComparer.Ordinal)) return [];
+            return terminalDispatches.Select(dispatch => new RuntimeHistorySourceFact(RuntimeHistorySourceFactKind.ChildWorkflowSettled,
+                dispatch.DispatchId, commit.Checkpoint.OccurredAt,
+                activityExecutionId: commit.StateChanges.ActivityExecutions.Where(change => change.Operation != RuntimeStateChangeOperation.Delete &&
+                    change.State.Execution.WorkflowExecutionId == child.WorkflowExecutionId && change.State.ParentActivityExecutionId is null)
+                    .Select(change => change.State.InvocationId).SingleOrDefault(),
+                causation: dispatch.Mode == WorkflowDispatchMode.WaitForCompletion
+                    ? new(WorkflowExecutionId: commit.WorkflowExecutionId, DeliveryId: RuntimePostCommitOutboxIdentity.CreateLogicalValue(
+                        commit.CommitId, new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).ParentResumeIntentId))
+                    : null,
+                relatedWorkflowExecutionId: dispatch.ParentWorkflowExecutionId, relatedActivityExecutionId: dispatch.ParentActivityExecutionId,
+                reasonCode: terminalStatus.ToString()));
+        }, cancellationToken);
+        if (pin is null || !pin.SupportedKinds.Contains(nameof(RuntimeHistorySourceFactKind.ChildWorkflowSettled), StringComparer.Ordinal) ||
+            !pin.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) || !pin.SupportedKinds.Contains("DeliveryDispatched", StringComparer.Ordinal) ||
+            captured.HistorySourceFacts is null) return captured;
+        var settled = captured.HistorySourceFacts.Where(fact => fact.Kind == RuntimeHistorySourceFactKind.ChildWorkflowSettled)
+            .Select(fact => fact.SubjectId).ToHashSet(StringComparer.Ordinal);
+        var resumeIds = dispatches.Where(item => settled.Contains(item.DispatchId))
+            .Select(item => new WorkflowDispatchIdentity(item.ParentWorkflowExecutionId, item.ParentActivityExecutionId).ParentResumeIntentId)
+            .ToHashSet(StringComparer.Ordinal);
+        if (!captured.PostCommitIntents.Concat(captured.StateChanges.PostCommitOutbox
+                .Where(change => change.Operation == RuntimeStateChangeOperation.Upsert).Select(change => change.State.Intent))
+                .Any(intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind && resumeIds.Contains(intent.IntentId))) return captured;
+        if (_historyServices.GetService<IRuntimeHistoryObservationWriter>() is not { } writer ||
+            _historyServices.GetService<IRuntimeHistoryStore>() is not { } reader ||
+            _historyServices.GetService<IRuntimePostCommitIntentDispatcher>() is not { } dispatcher ||
+            !dispatcher.CanRecordHistory(DispatchWorkflowConstants.ResumeParentIntentKind, writer, reader))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The originally captured parent-resume history owner is unavailable.");
+        return RuntimeHistorySourceFacts.WithPostCommitCausation(captured, intent =>
+        {
+            var dispatch = dispatches.SingleOrDefault(item => settled.Contains(item.DispatchId) &&
+                new WorkflowDispatchIdentity(item.ParentWorkflowExecutionId, item.ParentActivityExecutionId).ParentResumeIntentId == intent.IntentId);
+            return dispatch is null ? null : ResumeCause(commit, dispatch, intent);
+        }, _historyServices.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope());
     }
+
+    private static RuntimeHistoryCausation ResumeCause(RuntimeCheckpointCommit commit, WorkflowDispatchRecord dispatch, RuntimePostCommitIntent intent) =>
+        new(RuntimeHistoryIdentity.CreateId(commit.Checkpoint.CheckpointId, nameof(RuntimeHistorySourceFactKind.ChildWorkflowSettled), dispatch.DispatchId),
+            commit.WorkflowExecutionId, RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId));
+
+    private static RuntimePostCommitIntent CopyCause(RuntimePostCommitIntent intent, RuntimeHistoryCausation cause) =>
+        new(intent.IntentId, intent.WorkflowExecutionId, intent.Kind, intent.RecordedAt, intent.ActivityExecutionId, intent.IdempotencyKey,
+            intent.Payload, intent.Metadata, intent.DependsOnWaitRegistrationId, intent.WaitFailurePolicy, intent.MaterializedSchedulerWorkItem, intent.NotBefore)
+        { HistoryCausation = cause };
+
+    private static string? TerminalCheckpointName(WorkflowExecutionStatus status) => status switch
+    {
+        WorkflowExecutionStatus.Completed => RuntimeCheckpointNames.WorkflowCompleted,
+        WorkflowExecutionStatus.Faulted => RuntimeCheckpointNames.WorkflowFaulted,
+        WorkflowExecutionStatus.Cancelled => RuntimeCheckpointNames.WorkflowCancelled,
+        _ => null
+    };
 
     private static Exception TerminalConflict(bool controlEnabled, string message) => controlEnabled
         ? new WorkflowDispatchControlConflictException(message)

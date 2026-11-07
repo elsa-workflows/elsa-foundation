@@ -103,6 +103,9 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
             services.Add(contract);
             owned.Add(concrete);
             owned.Add(contract);
+            var historyContract = ServiceDescriptor.Scoped<IDurableTimerHistoryStore>(serviceProvider => serviceProvider.GetRequiredService<EfDurableTimerStore>());
+            services.Add(historyContract);
+            owned.Add(historyContract);
             DurableTimerStoreBackend.Register(
                 services,
                 new DurableTimerStoreBackend(

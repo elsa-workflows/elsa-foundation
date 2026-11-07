@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -30,6 +32,9 @@ public sealed record ActivityExecutionInspectionProjection(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeCheckpointValueCapture? CheckpointValueCapture { get; init; }
+
     /// <summary>The hierarchy scope containing this projection when its own execution scope is nested.</summary>
     public string? EnclosingExecutionScopeId { get; init; }
 

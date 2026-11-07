@@ -39,9 +39,13 @@ public sealed class CancelWorkflowAlterationHandler(
     private static bool IsEmptyPayload(JsonElement payload) =>
         payload.ValueKind == JsonValueKind.Object && !payload.EnumerateObject().Any();
 
-    private sealed record CancelWorkflowStagedChange(WorkflowCancellationPlan Plan) : IWorkflowAlterationRuntimeCheckpointStagedChange
+    private sealed record CancelWorkflowStagedChange(WorkflowCancellationPlan Plan) : IWorkflowAlterationRuntimeCheckpointStagedChange, IAlterationHistorySource
     {
         public string ChangeKey => "runtime.alteration.cancel-workflow";
+
+        public IEnumerable<RuntimeHistorySourceFact> HistoryFacts(DateTimeOffset occurredAt) =>
+            [new(RuntimeHistorySourceFactKind.ControlApplied, Plan.WorkflowExecution.WorkflowExecutionId,
+                Plan.WorkflowExecution.CompletedAt!.Value, reasonCode: "workflow-cancelled")];
 
         public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
         {

@@ -9,9 +9,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class RuntimeArtifactJson
 {
     private static readonly JsonSerializerOptions Options = CreateOptions();
+    private static readonly JsonSerializerOptions NumericEnumOptions = CreateOptions(writeEnumNames: false);
+    internal static string SerializeNumericEnums<T>(T value) => JsonSerializer.Serialize(value, NumericEnumOptions);
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
     public static T Deserialize<T>(string value) => JsonSerializer.Deserialize<T>(value, Options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
-    private static JsonSerializerOptions CreateOptions()
+    private static JsonSerializerOptions CreateOptions(bool writeEnumNames = true)
     {
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
@@ -21,7 +23,7 @@ internal static class RuntimeArtifactJson
             info.Properties.Remove(info.Properties.Single(x => x.Name.Equals(nameof(WorkflowExecutable.NodesById), StringComparison.OrdinalIgnoreCase)));
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
-        options.Converters.Add(new JsonStringEnumConverter());
+        if (writeEnumNames) options.Converters.Add(new JsonStringEnumConverter());
         // Runtime artifact identities are opaque UTF-16 values. Encoding string values as framed UTF-16
         // preserves accepted lone surrogates in JSON before the payload reaches a provider.
         options.Converters.Add(new LosslessUtf16StringConverter());

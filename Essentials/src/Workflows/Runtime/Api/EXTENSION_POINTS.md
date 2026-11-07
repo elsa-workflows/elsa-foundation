@@ -45,3 +45,8 @@ Canonical ownership and retention rules are defined in the [domain-owned API spe
 `WorkflowsRuntimeApi` owns User Task routes, source-generated JSON/error DTOs and its five task/form permissions through `WorkflowRuntimePermissionContributor`. `TaskRequestAccess` is the default scoped `IUserTaskAccess` adapter only when the host has not selected another one. It requires normalized canonical user/tenant claims and reloads active users, roles, memberships and current global/resource permissions. Incomplete directories fail task operations closed without making unrelated minimal hosts unstartable.
 
 `UserTaskCapabilitySource` advertises `elsa.api.user-tasks` v1 only for the selected qualified durable journal/execution pair or the explicit volatile development composition. It contributes task/lifecycle/forms/version/targets/identity relations. Task views omit private invocation/recipient details; field-error keys remain opaque JSON. Revision/request receipts distinguish durable `CompletionPending` (202) from canonical completion (200). All routes participate in Runtime's schema refusal/fault family. See the [guide](../../../../../docs/user-tasks.md) and [owning runtime contract catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks).
+
+
+## Run history capability discovery
+
+`RuntimeHistoryCapabilitySource` contributes the four `workflow-history-*` links to `elsa.api.runtime` only for a qualified selected writer/reader pair. It uses the existing per-run inspection authorization extension above. Capture composition and provider extension contracts remain owned by the [Runtime history catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#run-history); supported routes are listed in [the module README](README.md#supported-routes).

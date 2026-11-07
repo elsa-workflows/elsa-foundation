@@ -53,6 +53,9 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
     private readonly ConcurrentDictionary<TimerKey, TimerBackoff> _timerBackoff = new();
     private readonly string _claimOwnerId = $"durable-timer-pump:{Guid.NewGuid():N}";
     private readonly DurableTimerWakeup _wakeup = new();
+    private readonly ConcurrentDictionary<PersistenceScope, string> _historyCursors = new();
+    internal IRuntimeHistoryObservationWriter? HistoryWriter { get; init; }
+    internal IRuntimeHistoryStore? HistoryReader { get; init; }
     private volatile bool _healthy = true;
 
     internal DurableTimerPumpTask(IPersistenceScopeRunner scopeRunner, IOptions<DurableTimerPumpOptions> options,
@@ -126,13 +129,19 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
 
         if (_scopeRunner is null)
         {
+            await FlushHistoryAsync(DirectConstructionScope, _timerStore!, HistoryWriter, HistoryReader, options.MaxTimersPerTick, cancellationToken);
             await SweepAsync(DirectConstructionScope, _timerStore!, _dispatcher!, options, now, cancellationToken);
+            await FlushHistoryAsync(DirectConstructionScope, _timerStore!, HistoryWriter, HistoryReader, options.MaxTimersPerTick, cancellationToken);
             nextDeadline = await NextDeadlineAsync(_timerStore!, cancellationToken);
         }
         else
         {
             await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
             {
+                var timerSource = operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>();
+                var historyWriter = operationScope.ServiceProvider.GetService<IRuntimeHistoryObservationWriter>();
+                var historyReader = operationScope.ServiceProvider.GetService<IRuntimeHistoryStore>();
+                await FlushHistoryAsync(persistenceScope, timerSource, historyWriter, historyReader, options.MaxTimersPerTick, operationCancellationToken);
                 await SweepAsync(
                     persistenceScope,
                     operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
@@ -142,6 +151,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
                     operationCancellationToken,
                     operationScope.ServiceProvider.GetService<IPersistenceOperationScopeFactory>(),
                     operationScope.ServiceProvider.GetService<IRuntimeAdmissionLoadSignal>());
+                await FlushHistoryAsync(persistenceScope, timerSource, historyWriter, historyReader, options.MaxTimersPerTick, operationCancellationToken);
                 var next = await NextDeadlineAsync(operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
                     operationCancellationToken);
                 if (next is not null && (nextDeadline is null || next < nextDeadline))
@@ -303,12 +313,12 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             case BookmarkResumeDispatchStatus.Duplicate:
             case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
             case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken);
+                await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken, result.Status, result.HistoryCausation);
                 return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
             case BookmarkResumeDispatchStatus.NotFound:
                 if (now - claim.Timer.DueTime > options.NotFoundGrace)
-                    await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken);
+                    await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken, result.Status, result.HistoryCausation);
                 else
                     await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
                 return false;
@@ -362,14 +372,14 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             // The workflow execution or its executable is gone: the timer is orphaned, nothing to resume.
             case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
             case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken);
+                await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken, result.Status, result.HistoryCausation);
                 return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
             case BookmarkResumeDispatchStatus.NotFound:
                 // Past grace: the bookmark was consumed by an earlier fire (or never will match) — delete.
                 // Within grace: a very short delay may still be committing its bookmark — keep and retry.
                 if (now - timer.DueTime > options.NotFoundGrace)
-                    await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken);
+                    await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken, result.Status, result.HistoryCausation);
                 else
                     BackOff(persistenceScope, timer, options, now);
                 return false;
@@ -388,9 +398,14 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         PersistenceScope persistenceScope,
         IDurableTimerStore timerStore,
         DurableTimer timer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, BookmarkResumeDispatchStatus status, RuntimeHistoryCausation? cause)
     {
-        await timerStore.DeleteAsync(timer.WorkflowExecutionId, timer.TimerId, cancellationToken);
+        var fact = status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate
+            ? DurableTimerHistoryFacts.CreateDispatched(timer, _timeProvider.GetUtcNow(), status, cause)
+            : DurableTimerHistoryFacts.CreateRetired(timer, _timeProvider.GetUtcNow(), status.ToString(), cause);
+        if (fact is not null && timerStore is IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } source)
+            await source.RetireWithHistoryAsync(timer.WorkflowExecutionId, timer.TimerId, fact, cancellationToken);
+        else await timerStore.DeleteAsync(timer.WorkflowExecutionId, timer.TimerId, cancellationToken);
         _timerBackoff.TryRemove(new TimerKey(persistenceScope, timer.WorkflowExecutionId, timer.TimerId), out _);
     }
 
@@ -398,9 +413,14 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         PersistenceScope persistenceScope,
         IDurableTimerStore timerStore,
         RuntimeDurableTimerClaim claim,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, BookmarkResumeDispatchStatus status, RuntimeHistoryCausation? cause)
     {
-        var completion = await timerStore.CompleteClaimAsync(claim, cancellationToken);
+        var fact = status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate
+            ? DurableTimerHistoryFacts.CreateDispatched(claim.Timer, _timeProvider.GetUtcNow(), status, cause)
+            : DurableTimerHistoryFacts.CreateRetired(claim.Timer, _timeProvider.GetUtcNow(), status.ToString(), cause);
+        var completion = fact is not null && timerStore is IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } source
+            ? await source.CompleteClaimWithHistoryAsync(claim, fact, cancellationToken)
+            : await timerStore.CompleteClaimAsync(claim, cancellationToken);
         if (!completion.Succeeded)
         {
             LogClaimLost(claim, "complete", completion.Status, exception: null);
@@ -445,6 +465,30 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             payloadType: timer.PayloadType,
             providerId: timer.ProviderId);
 
+
+    private async ValueTask FlushHistoryAsync(PersistenceScope scope, IDurableTimerStore timerStore,
+        IRuntimeHistoryObservationWriter? writer, IRuntimeHistoryStore? reader, int limit, CancellationToken cancellationToken)
+    {
+        if (timerStore is not IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } source || writer is null || reader is null || !writer.CanRecordHistory(reader)) return;
+        _historyCursors.TryGetValue(scope, out var cursor);
+        var page = await source.ListPendingHistoryAsync(new(limit, cursor), cancellationToken);
+        if (page.NextContinuationToken is { } next) _historyCursors[scope] = next; else _historyCursors.TryRemove(scope, out _);
+        foreach (var timer in page.Items)
+        {
+            if (timer.HistoryResponsibility is not { } responsibility) continue;
+            foreach (var e in responsibility.PendingEvents)
+            {
+                try
+                {
+                    var result = await writer.RecordAsync(new(responsibility.Policy, e), cancellationToken);
+                    if (result.Recorded) await source.AcknowledgeHistoryAsync(timer.WorkflowExecutionId, timer.TimerId, e.HistoryEventId, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception)
+                { Logger.LogWarning(exception, "Timer source history remains pending for its next bounded recovery pass"); }
+            }
+        }
+    }
 
     private void LogClaimLost(
         RuntimeDurableTimerClaim claim,

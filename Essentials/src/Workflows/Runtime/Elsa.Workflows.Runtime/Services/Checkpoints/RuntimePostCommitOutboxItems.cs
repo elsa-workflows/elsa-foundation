@@ -18,6 +18,11 @@ public static class RuntimePostCommitOutboxItems
     public static string OutboxItemId(string commitId, string intentId)
         => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, intentId);
 
+    /// <summary>Attaches validated source-owned causation before raw checkpoint persistence.</summary>
+    public static RuntimeCheckpointCommit WithHistoryCausation(RuntimeCheckpointCommit commit,
+        Func<RuntimePostCommitIntent, RuntimeHistoryCausation?> ownerFactory, PersistenceScope scope) =>
+        RuntimeHistorySourceFacts.WithPostCommitCausation(commit, ownerFactory, scope);
+
     /// <summary>Builds the pending outbox item for a single intent.</summary>
     public static RuntimePostCommitOutboxItem CreatePending(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>
         CreatePending(commit, intent, []);
@@ -39,7 +44,7 @@ public static class RuntimePostCommitOutboxItems
         var materialized = contributions.ToArray();
         ValidateContributions(materialized);
         var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
-        var required = contribution?.RequiresDurableSource == true;
+        var required = intent.HistoryCausation is not null || contribution?.RequiresDurableSource == true;
         if (required && sourceScope is null)
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);

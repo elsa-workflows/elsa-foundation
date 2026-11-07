@@ -21,6 +21,13 @@ public sealed class DurableTimerEntityConfiguration : IEntityTypeConfiguration<D
         b.Property(x => x.StimulusHash).HasMaxLength(RuntimeOperationalStateEfModule.DurableTimerStimulusHashProjectionMaximumLength).IsRequired();
         b.Property(x => x.ClaimOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.DurableTimerClaimOrderKeyMaximumLength).IsRequired();
         b.Property(x => x.ClaimOwnerId).HasMaxLength(RuntimeOperationalStateEfModule.IdentityProjectionMaximumLength).IsRequired(false);
+        b.Property(x => x.HistoryRevision).IsConcurrencyToken();
+        b.Property(x => x.HistoryPending);
+        b.Property(x => x.HistoryRetired);
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.HistoryPending, x.HistoryRetired, x.TimerIdHash }).HasDatabaseName("IX_runtime_timer_run_history_pending");
+        b.HasIndex(x => new { x.ScopeKeyHash, x.HistoryPending, x.WorkflowExecutionIdHash, x.TimerIdHash }).HasDatabaseName("IX_runtime_timer_history_pending");
+        b.HasIndex(x => new { x.ScopeKeyHash, x.HistoryRetired, x.DueTimeUtcTicks, x.TimerIdOrderKey }).HasDatabaseName("IX_runtime_timer_live_due");
+        b.HasIndex(x => new { x.ScopeKeyHash, x.HistoryRetired, x.ClaimOrderKey }).HasDatabaseName("IX_runtime_timer_live_claim");
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.TimerIdHash }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.DueTimeUtcTicks, x.TimerIdOrderKey });
         b.HasIndex(x => new { x.ScopeKeyHash, x.ClaimOrderKey });

@@ -58,7 +58,7 @@ public sealed class EfWorkflowExecutionDeletionStore(
 
     private bool HasSelectedEfStores()
     {
-        return IsSelected<EfWorkflowExecutionStateStore, IWorkflowExecutionStateStore>(
+        return HasSelectedHistoryStores() && IsSelected<EfWorkflowExecutionStateStore, IWorkflowExecutionStateStore>(
                    typeof(CoalescingWorkflowExecutionStateStore)) &&
                IsSelected<EfActivityExecutionStateStore, IActivityExecutionStateStore>(
                    typeof(CoalescingActivityExecutionStateStore)) &&
@@ -85,6 +85,15 @@ public sealed class EfWorkflowExecutionDeletionStore(
                IsSelected<EfRuntimePostCommitOutboxStore, IRuntimePostCommitOutboxStore>(
                    typeof(CoalescingRuntimePostCommitOutboxStore)) &&
                IsSelected<EfWorkflowDispatchStore, IWorkflowDispatchStore>();
+    }
+
+    private bool HasSelectedHistoryStores()
+    {
+        var access = _serviceProvider.GetService<IPersistenceAccessContextAccessor>();
+        return access is not null &&
+            _serviceProvider.GetService<IRuntimeHistoryStore>() is EfRuntimeHistoryStore reader && reader.Uses(_executionStateStore.Context, access) &&
+            _serviceProvider.GetService<IRuntimeHistoryObservationWriter>() is EfRuntimeHistoryStore observations && observations.Uses(_executionStateStore.Context, access) &&
+            _serviceProvider.GetService<IRuntimeHistoryRetentionStore>() is EfRuntimeHistoryStore retention && retention.Uses(_executionStateStore.Context, access);
     }
 
     private bool IsEf<TBackend>(Func<TBackend, bool> predicate)

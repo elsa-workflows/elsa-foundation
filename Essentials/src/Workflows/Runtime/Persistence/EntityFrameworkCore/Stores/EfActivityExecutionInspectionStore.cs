@@ -104,7 +104,7 @@ public sealed partial class EfActivityExecutionInspectionStore(
         var (rows, totalCount) = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", query.WorkflowExecutionId, async () =>
         {
             await using var transaction = callerTransaction is null
-                ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                ? await EfRuntimeReadTransaction.BeginAsync(context, cancellationToken)
                 : null;
             var result = await ReadSummaryRowsAsync(query, cursor, scope, cancellationToken);
             if (transaction is not null)

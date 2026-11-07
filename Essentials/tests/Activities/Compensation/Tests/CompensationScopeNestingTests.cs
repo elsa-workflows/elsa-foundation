@@ -136,6 +136,28 @@ public sealed class CompensationScopeNestingTests
     }
 
     [Fact]
+    public async Task Bulk_confirmation_keeps_every_native_entry_but_contributes_one_scope_decision()
+    {
+        var entries = Enumerable.Range(1, 300).Select(ordinal => new CompensationEntry($"entry-{ordinal}", "Reserve inventory", ordinal,
+            CompensationEntryStatus.Registered, $"activity-{ordinal}", $"operation-{ordinal}")).ToArray();
+        var state = CompensationScopeState.Initial with { NextStepIndex = 3, NextOrdinal = 301, Entries = entries };
+        var done = await CompletedAsync(Stage(state), Child("confirm-order", Step("Confirm order")), "actexec-confirm-order", confirmOnComplete: true);
+        Assert.True(done.Continuation.IsComplete);
+        Assert.Equal(301, Assert.Single(StateOf(done).Confirmations).EntryIds.Count);
+        Assert.All(StateOf(done).Entries, entry => Assert.Equal(CompensationEntryStatus.Confirmed, entry.Status));
+        // Ordinary cloning/serialization is passive; only the final capture handoff materializes the owner factory.
+        var cloned = done.Continuation.WithState(done.Continuation.StateUpdate!.Value, done.Continuation.StateUpdate.StateVersion);
+        Assert.Null(cloned.HistorySourceFacts);
+        var facts = cloned.MaterializeHistorySourceFacts(DateTimeOffset.UnixEpoch);
+        Assert.Equal(2, facts.Count); // The newly completed forward step is also actually registered.
+        var confirmation = Assert.Single(facts, fact => fact.Kind == RuntimeHistorySourceFactKind.CompensationConfirmed);
+        Assert.Equal(RuntimeHistorySourceFactKind.CompensationConfirmed, confirmation.Kind);
+        Assert.Equal("all-eligible-entries", confirmation.ReasonCode);
+        Assert.Null(confirmation.CompensationEntryId);
+        Assert.Equal(2, RuntimeHistorySourceFacts.ForPolicy(new("runtime-history-v3", 3, true, ["CompensationConfirmed"]), facts)!.Count);
+    }
+
+    [Fact]
     public async Task A_hand_over_is_journaled_with_fresh_ordinals_and_its_origin_and_a_repeat_changes_nothing()
     {
         var running = await StartAsync();

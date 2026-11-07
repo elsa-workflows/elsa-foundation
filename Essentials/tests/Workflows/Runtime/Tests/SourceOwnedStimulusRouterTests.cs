@@ -19,7 +19,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>Actual native source provider/router/dispatchers with a recording mailbox boundary; not callback/host proof.</summary>
-public sealed class SourceOwnedStimulusRouterTests
+public sealed partial class SourceOwnedStimulusRouterTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 27, 4, 0, 0, TimeSpan.Zero);
     private static readonly PersistenceScope Scope = new("tenant");
@@ -455,6 +455,7 @@ public sealed class SourceOwnedStimulusRouterTests
         public FakeTimeProvider Clock { get; } = new(Now);
         public RecordingActors Actors { get; } = new();
         public IStimulusRouter Router => Services.GetRequiredService<IStimulusRouter>();
+        public IWorkflowStartDispatcher Start => Services.GetRequiredService<IWorkflowStartDispatcher>();
         public IBookmarkResumeDispatcher Resume => Services.GetRequiredService<IBookmarkResumeDispatcher>();
         public IWorkflowExecutionStateStore Executions => Services.GetRequiredService<IWorkflowExecutionStateStore>();
         public InMemoryRuntimeCheckpointCommitStore Store => Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
@@ -465,10 +466,15 @@ public sealed class SourceOwnedStimulusRouterTests
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
         private readonly WorkflowExecutableInputContract? inputContract;
         public Harness(bool coalescing = false, bool adapter = true, bool legacyStart = false, bool legacyResume = false, bool duplicateAdapter = false,
-            WorkflowExecutableInputContract? inputContract = null)
+            WorkflowExecutableInputContract? inputContract = null, ObservationRecorder? observations = null)
         {
             this.inputContract = inputContract;
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
+            if (observations is not null)
+            {
+                services.AddSingleton<IRuntimeHistoryObservationWriter>(observations);
+                services.AddSingleton<IRuntimeHistoryStore>(observations);
+            }
             services.AddSingleton<IWorkflowExecutionActorProvider>(Actors); if (adapter) services.AddSingleton<IStimulusDeliveryIntentAdapter, Adapter>();
             if (duplicateAdapter) services.AddSingleton<IStimulusDeliveryIntentAdapter>(new Adapter());
             if (legacyStart) services.AddSingleton<IWorkflowStartDispatcher, LegacyStart>();
@@ -488,9 +494,10 @@ public sealed class SourceOwnedStimulusRouterTests
                 inputContract, null, IncidentStrategyBuiltIns.FaultReference));
             await Services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Execution("publisher"));
         }
-        public async Task<PostCommitDeliveryContext> Source(bool local = false, string? correlation = null)
+        public async Task<PostCommitDeliveryContext> Source(bool local = false, string? correlation = null, RuntimeHistoryCausation? historyCausation = null)
         {
-            var intent = new RuntimePostCommitIntent("send", "publisher", "test.saved-event", Now, "publisher-activity", "original-key", JsonSerializer.SerializeToElement(new { value = "immutable-value", local, correlation }));
+            var intent = new RuntimePostCommitIntent("send", "publisher", "test.saved-event", Now, "publisher-activity", "original-key", JsonSerializer.SerializeToElement(new { value = "immutable-value", local, correlation }))
+                { HistoryCausation = historyCausation };
             await Store.AddPendingForTestingAsync(new("source-commit:send", intent, RuntimePostCommitOutboxStatus.Pending, Now, Now, new(4, TimeSpan.FromSeconds(1)), 0, null, null, null, null, null, 0, null, 1, Scope, null));
             return new(Assert.Single(await Store.ClaimAsync(new("owner", Clock.GetUtcNow(), TimeSpan.FromMinutes(1), 1))), Scope);
         }

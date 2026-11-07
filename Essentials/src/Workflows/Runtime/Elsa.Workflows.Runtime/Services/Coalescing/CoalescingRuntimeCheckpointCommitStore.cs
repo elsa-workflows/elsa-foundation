@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
@@ -29,6 +30,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 {
     private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
     private readonly IRuntimeExecutionOwnershipService? ownershipService;
+    internal Func<IDurableTimerStore?>? NoRecordTimerSource { get; set; }
 
     public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
         IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
@@ -56,6 +58,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 
     private readonly IRuntimeCheckpointCommitStore _inner;
 
+    public bool SupportsHistory => _inner.SupportsHistory;
+    public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => _inner.CanCommitHistory(selectedStore);
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
@@ -167,6 +171,17 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 // that lost the run must not remove the work its new owner is about to run.
                 if (commit.ExpectedFence is { } fence && ownershipService is not null)
                     await ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, fence.FencingToken, cancellationToken);
+                if (commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy?.SupportedKinds.Intersect(DurableTimerHistoryFacts.Kinds, StringComparer.Ordinal).Any() == true)
+                {
+                    try
+                    {
+                        if (NoRecordTimerSource?.Invoke() is not IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } source ||
+                            !await source.DischargeUnrecordedCompletionAsync(commit, cancellationToken: cancellationToken))
+                            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Timer-source cleanup remains owed before unrecorded completion can advance its queue.");
+                    }
+                    catch (Exception exception) when (exception is NotSupportedException or IOException)
+                    { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The timer owner is unavailable for unrecorded completion cleanup.", exception); }
+                }
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
             finally
@@ -186,6 +201,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             var foldedCommit = commit with
             {
                 StateChanges = foldedState.WithPostCommitOutbox(outbox),
+                HistoryBatches = session.FoldHistoryBatchesWith(commit),
                 PostCommitIntents = [],
             };
 

@@ -183,3 +183,4 @@ static Elsa.Activities.Primitives.Activities.ReadLineResult.operator !=(Elsa.Act
 static Elsa.Activities.Primitives.Activities.ReadLineResult.operator ==(Elsa.Activities.Primitives.Activities.ReadLineResult? left, Elsa.Activities.Primitives.Activities.ReadLineResult? right) -> bool
 static Elsa.Activities.Primitives.Activities.UserTaskWait.operator !=(Elsa.Activities.Primitives.Activities.UserTaskWait? left, Elsa.Activities.Primitives.Activities.UserTaskWait? right) -> bool
 static Elsa.Activities.Primitives.Activities.UserTaskWait.operator ==(Elsa.Activities.Primitives.Activities.UserTaskWait? left, Elsa.Activities.Primitives.Activities.UserTaskWait? right) -> bool
+Elsa.Activities.Primitives.Services.PublishStimulusExecutor.PublishStimulusExecutor(Elsa.Workflows.Runtime.Core.Contracts.IStimulusRouter! stimulusRouter, System.IServiceProvider? historyServices, System.TimeProvider! clock) -> void
