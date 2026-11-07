@@ -1042,8 +1042,45 @@ jobs:
         working-directory: Studio
 
       - name: Run browser tests
-        run: pnpm test:browser --shard=${{ matrix.shard }}/2
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser-results.json
+        run: pnpm test:browser --shard=${{ matrix.shard }}/2 --reporter=line,json
         working-directory: Studio
+
+      - name: Identify Secret field comparison evidence
+        if: ${{ !cancelled() }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BROWSER_SHARD: ${{ matrix.shard }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          output = Path('Studio/test-results')
+          output.mkdir(parents=True, exist_ok=True)
+          captures = list(output.glob('secret-field-prototype-*/**/*.png'))
+          (output / 'secret-field-comparison-source.json').write_text(json.dumps({
+              'kind': 'isolated-preview-comparison',
+              'sourceSha': os.environ['GITHUB_SHA'],
+              'headSha': os.environ['PR_HEAD_SHA'],
+              'shard': os.environ['BROWSER_SHARD'],
+              'captureCount': len(captures)
+          }, indent=2) + '\n')
+          # Sharding may assign all comparison cases to another shard. Retain its
+          # complete test inventory as well as capture counts for cross-shard review.
+          PY
+
+      - name: Retain Secret field comparison captures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-fields-${{ github.event.pull_request.head.sha || github.sha }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            Studio/test-results/secret-field-prototype-*/
+            Studio/test-results/secret-field-comparison-source.json
+            Studio/test-results/browser-results.json
+          if-no-files-found: error
+          retention-days: 14
 
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)

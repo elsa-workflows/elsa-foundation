@@ -1,19 +1,9 @@
 import { templateToastJourney } from "./templateToastJourney";
+import { expect, test, type Page } from "@playwright/test";
+import { capture } from "./capture";
 import { executableDesignerJourney } from "./executableDesignerJourney";
-import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
-
-async function capture(page: Page, info: TestInfo, name: string) {
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
-  await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
-  const aria = info.outputPath(`${name}.aria.yml`);
-  writeFileSync(aria, await page.locator("body").ariaSnapshot());
-  await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
-}
 
 async function signIn(page: Page) {
   await page.goto("/workflows/definitions");
@@ -458,6 +448,53 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await capture(page, info, "template-catalog-entry");
   await submitAndInspect(templateNames[1], descriptions[1]);
   await capture(page, info, "template-persisted");
+});
+
+test("compact Secret create journey", async ({ page }, info) => {
+  const name = `compact-${info.project.name}-${Date.now()}`;
+  await page.goto("/security/secrets");
+  const open = page.getByRole("button", { name: "Create secret", exact: true }).first();
+  await expect(open).toBeEnabled();
+  await open.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const technicalName = dialog.getByLabel("Technical name", { exact: true });
+  await expect(technicalName).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
+  await capture(page, info, "secret-empty");
+  await technicalName.fill("invalid name");
+  await expect(technicalName).toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await capture(page, info, "secret-invalid");
+  await technicalName.fill(name);
+  await dialog.getByLabel("Value", { exact: true }).fill("disposable-compact-acceptance-value");
+  await expect(dialog.getByLabel("Value", { exact: true })).toHaveAttribute("type", "password");
+  await capture(page, info, "secret-filled");
+  await dialog.getByRole("button", { name: /^More options/ }).click();
+  await dialog.getByLabel("Display name", { exact: true }).fill(`Compact ${info.project.name}`);
+  await dialog.getByLabel("Description", { exact: true }).fill("Metadata retained through creation and reopening.");
+  await dialog.getByLabel("Scope", { exact: true }).selectOption({ label: "Custom…" });
+  await dialog.getByLabel("Custom scope value", { exact: true }).fill("Team:Compact");
+  await dialog.getByLabel("Scope", { exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, info, "secret-options");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(open).toBeFocused();
+  const edit = page.getByRole("button", { name: `Edit ${name}`, exact: true });
+  await expect(edit).toBeVisible();
+  await capture(page, info, "secret-list");
+  await edit.click();
+  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  await expect(editor.getByLabel("Display name", { exact: true })).toHaveValue(`Compact ${info.project.name}`);
+  await expect(editor.getByLabel("Description", { exact: true })).toHaveValue("Metadata retained through creation and reopening.");
+  await expect(editor.getByLabel("Scope", { exact: true })).toHaveValue("Team:Compact");
+  await capture(page, info, "secret-reopened");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await open.press("Enter");
+  await dialog.getByLabel("Technical name", { exact: true }).fill("cancelled-draft");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(open).toBeFocused();
+  await capture(page, info, "secret-cancelled");
 });
 
 test("executable designer parity", async ({ page }, info) => {
