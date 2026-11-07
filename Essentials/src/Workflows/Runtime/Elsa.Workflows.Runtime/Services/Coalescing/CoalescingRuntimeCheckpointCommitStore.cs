@@ -121,6 +121,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             {
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+                session.ConfirmReconciledContinuations(commit.ExpectedFence);
             }
             catch
             {
@@ -215,6 +216,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                     consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                     cancellationToken,
                     preserveActiveFusedScheduleAnchors: continueAfterBoundary);
+                session.ConfirmReconciledContinuations(commit.ExpectedFence);
             }
             catch
             {
@@ -245,6 +247,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                 cancellationToken,
                 preserveActiveFusedScheduleAnchors: continueAfterBoundary);
+            session.ConfirmReconciledContinuations(commit.ExpectedFence);
         }
         catch
         {

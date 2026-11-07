@@ -57,6 +57,9 @@ public sealed class RuntimeCoalescingSession
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyPersistedOutboxIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DeliveredContinuation> _deliveredContinuations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _reconciledContinuations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _committedContinuations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _immediateSchedulerOutboxIds = new(StringComparer.Ordinal);
     private bool _mayReceiveDurableSchedulerDeliveries;
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
@@ -121,6 +124,57 @@ public sealed class RuntimeCoalescingSession
     }
 
     public string WorkflowExecutionId { get; }
+
+    // A receipt is confined to this drain and this exact provider. Overlay delivery alone is not crash-safe:
+    // eligibility is promoted only after a later fenced commit AND durable queue advancement both succeed.
+    internal void RememberDeliveredContinuation(RuntimePostCommitOutboxItem item,
+        CoalescingRuntimePostCommitOutboxStore store, PersistenceAccessContext? access, RuntimeExecutionLease? lease)
+    {
+        if (!IsActive || !store.UsesInnerStore(_innerOutboxStore) || !OrdinaryAccess(access) ||
+            lease is null || !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, WorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) ||
+            item.Intent.Kind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork ||
+            !_durablyPersistedOutboxIds.Contains(item.OutboxItemId) ||
+            !_outboxItems.TryGetValue(item.OutboxItemId, out var overlay) ||
+            overlay.Status != RuntimePostCommitOutboxStatus.Delivered || !overlay.Intent.IsEquivalentTo(item.Intent))
+            return;
+
+        // Once captured, another delivery cannot replace the authority behind a previously promoted receipt.
+        _deliveredContinuations.TryAdd(item.OutboxItemId, new(store, access, lease.ToFence(),
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(item.Intent)));
+    }
+
+    internal void ConfirmReconciledContinuations(RuntimeExecutionFence? fence)
+    {
+        foreach (var id in _reconciledContinuations)
+            if (_deliveredContinuations.TryGetValue(id, out var receipt) && receipt.Fence == fence)
+                _committedContinuations.Add(id);
+        _reconciledContinuations.Clear();
+    }
+
+    internal void DiscardContinuationReceipts()
+    {
+        _deliveredContinuations.Clear();
+        _reconciledContinuations.Clear();
+        _committedContinuations.Clear();
+    }
+
+    internal bool HasCommittedContinuation(RuntimePostCommitOutboxItem item, RuntimePostCommitIntent intent,
+        IRuntimePostCommitOutboxStore store, PersistenceAccessContext? access, RuntimeExecutionLease? lease) =>
+        intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && OrdinaryAccess(access) &&
+        lease is not null && StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(intent.WorkflowExecutionId, WorkflowExecutionId) &&
+        _committedContinuations.Contains(item.OutboxItemId) &&
+        _deliveredContinuations.TryGetValue(item.OutboxItemId, out var receipt) &&
+        ReferenceEquals(store, receipt.Store) && receipt.Store.UsesInnerStore(_innerOutboxStore) &&
+        access == receipt.Access && lease.ToFence() == receipt.Fence &&
+        StringComparer.Ordinal.Equals(receipt.IntentFingerprint, RuntimeCheckpointCommitFingerprint.ComputeIntent(intent));
+
+    private static bool OrdinaryAccess(PersistenceAccessContext? access) => access is null ||
+        access is { AccessPolicy: PersistenceAccessPolicy.Ordinary, Scope: not null, AcrossScopes: false };
+
+    private sealed record DeliveredContinuation(CoalescingRuntimePostCommitOutboxStore Store,
+        PersistenceAccessContext? Access, RuntimeExecutionFence Fence, string IntentFingerprint);
 
     // The overlay records a delay only when its flush can persist that delay on the same item, wherever it then sits.
     internal bool SupportsDeferredOverlayRelease =>
@@ -428,6 +482,8 @@ public sealed class RuntimeCoalescingSession
                         : null),
                 cancellationToken);
             (reconciled ??= []).Add(outboxItemId);
+            if (item.Status == RuntimePostCommitOutboxStatus.Delivered && _deliveredContinuations.ContainsKey(outboxItemId))
+                _reconciledContinuations.Add(outboxItemId);
         }
 
         if (reconciled is not null)
