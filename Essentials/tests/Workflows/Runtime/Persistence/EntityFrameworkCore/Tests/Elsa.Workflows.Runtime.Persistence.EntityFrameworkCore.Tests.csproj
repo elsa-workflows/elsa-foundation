@@ -28,6 +28,8 @@
   <ItemGroup>
     <!-- Built as a real child host; the tests drive its Kestrel endpoints and private fixture control pipe. -->
     <ProjectReference Include="..\..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <!-- Real durable membership for same-file Runtime confirmation controls; no fake fleet. -->
+    <ProjectReference Include="../../../../../../src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\Fixtures\WorkerOidcHost\WorkerOidcHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

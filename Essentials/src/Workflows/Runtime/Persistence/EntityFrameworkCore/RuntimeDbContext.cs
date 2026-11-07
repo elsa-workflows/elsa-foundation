@@ -13,6 +13,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
+    internal DbSet<WorkflowPreparationRetentionEntity> WorkflowPreparationRetentions => Set<WorkflowPreparationRetentionEntity>();
     internal DbSet<UserTaskEntity> UserTasks => Set<UserTaskEntity>();
     internal DbSet<UserTaskFormEntity> UserTaskForms => Set<UserTaskFormEntity>();
 
@@ -62,6 +63,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateHashClaimEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableSourceReferenceEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowPreparationRetentionEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionInspectionEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionHierarchyEntityConfiguration());

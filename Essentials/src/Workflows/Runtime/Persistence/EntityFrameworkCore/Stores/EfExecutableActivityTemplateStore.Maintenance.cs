@@ -133,6 +133,10 @@ public sealed partial class EfExecutableActivityTemplateStore
             {
                 context.Attach(row); context.Attach(claim);
                 row.Revision = checked(row.Revision + 1); claim.Revision = checked(claim.Revision + 1);
+                row.SchemaVersion = RuntimeSchemaWriteVersion.Artifact(context, row.SchemaVersion);
+                claim.SchemaVersion = RuntimeSchemaWriteVersion.Artifact(context, claim.SchemaVersion);
+                context.Entry(row).Property(candidate => candidate.SchemaVersion).IsModified = true;
+                context.Entry(claim).Property(candidate => candidate.SchemaVersion).IsModified = true;
                 context.Entry(row).Property(candidate => candidate.Revision).IsModified = true;
                 context.Entry(claim).Property(candidate => candidate.Revision).IsModified = true;
                 context.Remove(source!.Value.Row);

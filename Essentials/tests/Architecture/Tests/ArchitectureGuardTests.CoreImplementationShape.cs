@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -169,7 +171,30 @@ public sealed partial class ArchitectureGuardTests
             .Select(project => Assembly.Load(new AssemblyName(project.Name)));
     }
 
+    [Fact]
+    public void Opaque_preparation_handle_does_not_admit_lease_or_infrastructure_implementations()
+    {
+        Assert.True(RuntimeCoreEngineShapeGuardTests.IsPreparationContractHandle(typeof(WorkflowPreparationOwnerSession)));
+        Assert.False(IsImplementationShaped(typeof(WorkflowPreparationOwnerSession)));
+        // Neither fixture implements a service interface or matches an engine suffix: only its constructor
+        // exercises the generic injected-dependency branch that reported the approved handle.
+        Assert.False(RuntimeCoreEngineShapeGuardTests.IsPreparationContractHandle(typeof(LeaseDrivenImplementation)));
+        Assert.True(IsImplementationShaped(typeof(LeaseDrivenImplementation)));
+        Assert.True(IsImplementationShaped(typeof(InfrastructureDrivenImplementation)));
+    }
+
+    private sealed class LeaseDrivenImplementation
+    {
+        public LeaseDrivenImplementation(IWorkflowPreparationOwnerLease lease) { }
+    }
+
+    private sealed class InfrastructureDrivenImplementation
+    {
+        public InfrastructureDrivenImplementation(IServiceProvider services) { }
+    }
+
     private static bool IsImplementationShaped(Type type) =>
+        !RuntimeCoreEngineShapeGuardTests.IsPreparationContractHandle(type) &&
         type is { IsClass: true, IsAbstract: false } &&
         !IsCompilerGenerated(type) &&
         !IsRecord(type) &&

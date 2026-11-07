@@ -36,7 +36,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(BookmarkStateEfModule.SchemaFamily, Runtime, [BookmarkStateEfModule.SchemaVersion]),
         new(RuntimeActivationSlotEfModule.SchemaFamily, Runtime, [RuntimeActivationSlotEfModule.SchemaVersion]),
         new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion]),
-        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
+        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, ["1.0.0", "1.1.0", "1.2.0"]),
         new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
         // Model state/input is a separately versioned family; keep this expectation independent of discovery.
         new("RuntimeModelState", Runtime, ["1.0.0"]),
@@ -110,7 +110,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Null(Entry().DatabaseIdentity);
         observations.EndActivation([family]);
         Assert.Equal(("database-a", "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+        Assert.Equal(["1.0.0", "1.1.0", "1.2.0"], Entry().ReadableVersions);
 
         observations.Observe(family, "database-b", "1.0.0");
         Assert.Equal((null, "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
@@ -140,7 +140,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
 
         observations.Deactivate(gate, [family]);
         Assert.False(Entry().ModuleActive);
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+        Assert.Equal(["1.0.0", "1.1.0", "1.2.0"], Entry().ReadableVersions);
     }
 
     /// <summary>

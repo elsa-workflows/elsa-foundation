@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class ModulePayloadColumnTests
     {
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
-            ["ContentJson"] = 35, // Includes model execution, accepted input, User Tasks and immutable task forms.
+            ["ContentJson"] = 36, // Also includes permanent preparation-retention metadata.
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1
@@ -78,6 +79,14 @@ public sealed class ModulePayloadColumnTests
             var converted = Converted(context);
 
             Assert.Equal(expected.OrderBy(pair => pair.Key, StringComparer.Ordinal), converted.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+            if (BaseName(type) == "RuntimeDbContext")
+            {
+                var retention = Assert.Single(context.Model.GetEntityTypes(),
+                    entity => entity.GetTableName() == RuntimeArtifactEfModule.PreparationRetentionTableName);
+                var content = retention.FindProperty("ContentJson");
+                Assert.NotNull(content);
+                Assert.True(EfPayloadColumns.IsPayloadColumn(content));
+            }
         }
     }
 

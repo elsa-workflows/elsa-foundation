@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
@@ -129,6 +130,8 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         // in the same commit as the native material revision, without rewriting its source payload.
         context.Attach(existing);
         existing.Revision = checked(existing.Revision + 1);
+        existing.SchemaVersion = SourcePublicationWriteVersion.For(context, current, existing.SchemaVersion);
+        context.Entry(existing).Property(row => row.SchemaVersion).IsModified = true;
         context.Entry(existing).Property(row => row.Revision).IsModified = true;
         return (false, current);
     }
@@ -144,6 +147,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         StringComparer.Ordinal.Equals(current.DefinitionId, candidate.DefinitionId) &&
         StringComparer.Ordinal.Equals(current.DefinitionVersionId, candidate.DefinitionVersionId) &&
         StringComparer.Ordinal.Equals(current.TenantId, candidate.TenantId) &&
+        current.PublicationScope == candidate.PublicationScope &&
         current.Scope == candidate.Scope;
 
     public async ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
@@ -280,8 +284,8 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     private async ValueTask<bool> TryReplace(WorkflowExecutableSourceReference expected, WorkflowExecutableSourceReference replacement, bool restore, CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
-        Validate(expected);
-        Validate(replacement);
+        Validate(expected, allowPersistedPublicationScope: true);
+        Validate(replacement, allowPersistedPublicationScope: true);
         var valid = WorkflowExecutableSourceReferenceComparer.SameIdentity(expected, replacement) &&
                     (restore
                         ? expected.DeletedAt is not null && replacement.DeletedAt is null
@@ -352,7 +356,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         {
             return await new EfWorkflowExecutableStore(context, access).ExecuteUnderDeletionGuardAsync(deletionGuard, now, async () =>
             {
-                Validate(expectedDoomedReference);
+                Validate(expectedDoomedReference, allowPersistedPublicationScope: true);
                 var scope = RequireScope();
                 var row = await RowsOf(scope, expectedDoomedReference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
                 if (row is null) return false;
@@ -373,7 +377,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     {
         context.ChangeTracker.Clear();
         ArgumentNullException.ThrowIfNull(expectedDoomedReference);
-        Validate(expectedDoomedReference);
+        Validate(expectedDoomedReference, allowPersistedPublicationScope: true);
         var scope = RequireScope();
         var sourceReferenceId = expectedDoomedReference.SourceReferenceId;
         var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
@@ -542,17 +546,21 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     private string ScopeForWrite(WorkflowExecutableSourceReference reference)
     {
         var scope = RequireScope();
-        if (reference.TenantId is not null)
+        if (reference.PublicationScope is { } physical)
+        {
+            if (physical.Value != scope) throw new InvalidDataException("The logical publication differs from its actual source scope.");
+        }
+        else if (reference.TenantId is not null)
             access.Current.EnsureTenantScope(reference.TenantId);
         return scope;
     }
-    private static WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
+    private WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
     {
         var row = new WorkflowExecutableSourceReferenceEntity { Id = id, IncarnationId = NewIncarnationId() };
         Copy(row, value, scope);
         return row;
     }
-    private static void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
+    private void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
     {
         row.SourceReferenceId = Encode(value.SourceReferenceId);
         row.SourceReferenceIdHash = Hash(value.SourceReferenceId);
@@ -570,7 +578,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks;
         row.ContentJson = SerializeEnvelope(value);
-        row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+        row.SchemaVersion = SourcePublicationWriteVersion.For(context, value, row.SchemaVersion);
         if (row.Revision <= 0)
             row.Revision = 1;
         else
@@ -600,8 +608,8 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 envelope["reference"] is null)
                 throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
             var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
-            Validate(value);
-            if ((value.TenantId is not null && value.TenantId != expectedScope) ||
+            Validate(value, allowPersistedPublicationScope: true);
+            if ((value.PublicationScope is { } physical ? physical.Value != expectedScope : value.TenantId is not null && value.TenantId != expectedScope) ||
                 EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
                 value.SourceReferenceId != expectedId ||
                 value.ArtifactId != Decode(row.ArtifactId) ||
@@ -618,7 +626,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             throw new InvalidDataException("The persisted workflow executable source reference payload is corrupt.", exception);
         }
     }
-    private static void Validate(WorkflowExecutableSourceReference value)
+    private static void Validate(WorkflowExecutableSourceReference value, bool allowPersistedPublicationScope = false)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceReferenceId);
@@ -636,6 +644,33 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceVersion);
         if (!Enum.IsDefined(value.Scope))
             throw new ArgumentOutOfRangeException(nameof(value.Scope));
+        if (value.PublicationScope is not null)
+        {
+            if (value.Scope != WorkflowExecutableReferenceScope.Published || value.PublishedAt is null || value.ActivationId is null ||
+                value.SlotId is null || value.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(value.ActivationId) ||
+                !IsCanonicalSlotForDefinition(value.SlotId, value.DefinitionId))
+                throw new InvalidDataException("Scoped publication requires its exact logical activation source provenance.");
+            // Read/preserve existing metadata only. Generic and generic-fenced entry points use the
+            // default and cannot mint scope authority; no protected publication producer is installed.
+            if (!allowPersistedPublicationScope)
+                throw new NotSupportedException("Generic source writes cannot assert protected logical publication scope.");
+        }
+    }
+
+    private static bool IsCanonicalSlotForDefinition(string slotId, string definitionId)
+    {
+        // Consume the known definition by its UTF-16 length before reading the final frame: both
+        // the definition and slot name may themselves contain separators or surrogate pairs.
+        var prefix = $"activation-slot:{definitionId.Length.ToString(CultureInfo.InvariantCulture)}:{definitionId}:";
+        if (!slotId.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var suffix = slotId.AsSpan(prefix.Length);
+        var separator = suffix.IndexOf(':');
+        if (separator <= 0 || !int.TryParse(suffix[..separator], NumberStyles.None, CultureInfo.InvariantCulture, out var length))
+            return false;
+        var name = suffix[(separator + 1)..];
+        if (name.Length != length || name.IsWhiteSpace()) return false;
+        // Round-trip through the canonical factory also excludes noncanonical length spellings.
+        return StringComparer.Ordinal.Equals(slotId, WorkflowActivationSlotIdentity.Create(definitionId, name.ToString()));
     }
 
     private static void ValidateBound(string value, string parameterName)

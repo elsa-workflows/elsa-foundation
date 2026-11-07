@@ -37,7 +37,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
         var self = Assert.Single((await _membership.ReadFleetAsync(FleetReadMode.Fresh)).Members);
 
         Assert.Equal(ClusterProviderKind.InProcess, _membership.ProviderKind);
-        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", [CurrentVersion], moduleActive: false), Entry(self));
+        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", [CurrentVersion, "1.1.0", "1.2.0"], moduleActive: false), Entry(self));
     }
 
     [Fact]
@@ -45,6 +45,16 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
     {
         var answer = await CountAsync(CurrentVersion);
 
+        Assert.True(answer.EveryConsideredMemberMatches);
+        Assert.Single(answer.Matches);
+    }
+
+    [Theory]
+    [InlineData("1.1.0")]
+    [InlineData("1.2.0")]
+    public async Task Every_counted_member_can_read_a_supported_additive_RuntimeArtifact_version(string version)
+    {
+        var answer = await CountAsync(version);
         Assert.True(answer.EveryConsideredMemberMatches);
         Assert.Single(answer.Matches);
     }
@@ -61,7 +71,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
         Assert.False(answer.EveryConsideredMemberMatches);
         var blocker = Assert.Single(answer.Failures);
         Assert.Equal(new ReadsSchemaVersion(Family, NewerVersion), blocker.Requirement);
-        Assert.Equal([CurrentVersion], Entry(blocker.Member).ReadableVersions);
+        Assert.Equal([CurrentVersion, "1.1.0", "1.2.0"], Entry(blocker.Member).ReadableVersions);
     }
 
     [Fact]

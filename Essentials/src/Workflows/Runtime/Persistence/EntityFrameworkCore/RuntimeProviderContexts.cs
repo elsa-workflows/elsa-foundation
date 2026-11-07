@@ -88,13 +88,15 @@ file static class RuntimeProviderModel
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.PayloadJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.MetadataJson).HasColumnType(type);
-        foreach (var entity in new[] { typeof(WorkflowExecutableEntity), typeof(WorkflowExecutableCoordinationEntity), typeof(ExecutableActivityTemplateEntity), typeof(ExecutableActivityTemplateHashClaimEntity), typeof(WorkflowExecutableSourceReferenceEntity), typeof(ActivityExecutionStateEntity), typeof(ActivityExecutionInspectionEntity), typeof(ActivityExecutionHierarchyEntity) })
+        foreach (var entity in new[] { typeof(WorkflowExecutableEntity), typeof(WorkflowExecutableCoordinationEntity), typeof(ExecutableActivityTemplateEntity), typeof(ExecutableActivityTemplateHashClaimEntity), typeof(WorkflowExecutableSourceReferenceEntity), typeof(WorkflowPreparationRetentionEntity), typeof(ActivityExecutionStateEntity), typeof(ActivityExecutionInspectionEntity), typeof(ActivityExecutionHierarchyEntity) })
         {
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
             modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
             if (entity == typeof(WorkflowExecutableSourceReferenceEntity))
                 modelBuilder.Entity(entity).Property("ScopeKeyOrderKey").HasColumnType(type);
         }
+        modelBuilder.Entity<WorkflowPreparationRetentionEntity>().Property(row => row.OwnerAddress).HasColumnType(type);
+        modelBuilder.Entity<WorkflowPreparationRetentionEntity>().Property(row => row.OperationId).HasColumnType(type);
         modelBuilder.Entity<WorkflowExecutableRootWriteLeaseEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<WorkflowExecutableRootWriteLeaseEntity>().Property(row => row.LeaseId).HasColumnType(type);
         modelBuilder.Entity<WorkflowExecutionStateEntity>().Property("ContentJson").HasColumnType(type);

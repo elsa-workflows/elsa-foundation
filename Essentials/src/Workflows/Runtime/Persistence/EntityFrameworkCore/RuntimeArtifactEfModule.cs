@@ -5,6 +5,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class RuntimeArtifactEfModule
 {
     public const string SchemaVersion = "1.0.0";
+    // Preparation metadata is unreadable by the legacy family; ordinary material retains its legacy format.
+    public const string ScopedPublicationSchemaVersion = "1.1.0";
+    public const string PreparationSchemaVersion = "1.2.0";
     public const string SchemaFamily = "RuntimeArtifact";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>
@@ -14,6 +17,7 @@ public static class RuntimeArtifactEfModule
     public const string WorkflowExecutableRootWriteLeaseTableName = "elsa_runtime_workflow_executable_root_write_lease";
     public const string ExecutableActivityTemplateTableName = "elsa_runtime_executable_activity_template";
     public const string ExecutableActivityTemplateHashClaimTableName = "elsa_runtime_executable_activity_template_hash_claim";
+    public const string PreparationRetentionTableName = "elsa_runtime_workflow_preparation_retention";
     public const string SourceReferenceTableName = "elsa_runtime_workflow_executable_source_reference";
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = IdentityMaximumLength * sizeof(char) * 2;

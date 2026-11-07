@@ -1,0 +1,213 @@
+{
+  "status": "PARTIAL_T003_SOURCE_PUBLICATION_NOT_IMPLEMENTATION_ACCEPTANCE",
+  "source": {
+    "baseHead": "49a456dc53e60e17261d5ceff71e5705ae1abf8a",
+    "source47ManifestSha256": "c4a08b5e6138014825a0ade9ded46c36fb040a750f7922471148049a985f6f18",
+    "codeTree": "91328419f0d11367bf3efc187ed7b7fa145def2b",
+    "fileHashes": {
+      "Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaModuleGate.cs": "8c497010a3e5a3bb63347b13ba3b5c999e6f229f724f6db75b85f303756a7527",
+      "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutableSourceReference.cs": "3a0d7e9f0f15d153878dd67e7c10e2c0106e6fcb316a77f2166a6a2e0f1267ee",
+      "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutableSourceReferenceComparer.cs": "dc7d7b49188e08c8d808d98398acaf0301aab74aa6d4edd9e81772979324474a",
+      "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "dfd341afbcac4f851204695aec17087f273b5eec019fdcda3295940a35e0ce8b",
+      "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.RootWrites.cs": "b21f8b22050a41a26a84822940e1b02a1bb8ed6928f5808654c97af43326f2ed",
+      "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "822e1ede21f8448581825ee102fcac0b4b0edb4d482ad9779ec101ab1b95a202",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/AssemblyInfo.cs": "081e9f8ce12b3100202fa6564a0da23fe11b74e8d17d672be4116f189abbc5ed",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/WorkflowPreparationRetentionEntityConfiguration.cs": "2c29aa51689141c1b50ca62b96f3c1cabe468fef090f0ccfb6447dca707c9732",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/WorkflowPreparationRetentionEntity.cs": "94a1092e6ecc1e9e9d4bcb7bc8d33b400001280ae1189099d55673cebea5cedf",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261106160209_PreparationRetention.Designer.cs": "ce181f199e548d1dde8e56561f94e5dfe5c2e56133a41ce883fa5a69c938df07",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261106160209_PreparationRetention.cs": "b1a7c600ac6fcb7e5be98fbf3cabdb5a5f0f2659ace162e8eb4c5de79fd54030",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/RuntimeMySqlDbContextModelSnapshot.cs": "863b95dcf515a0c40aee40e57f491906a72c92036db585179d86ea71425b5ea7",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261106160208_PreparationRetention.Designer.cs": "bdc0edb5628c430b0b016e8ad756c09d86b3ae8ff35b25f8a51861972e9562ac",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261106160208_PreparationRetention.cs": "03ae8cfff66970821fd03b6de98d863a0ba7d3bc1adbf8eebe03a7f8801cc8da",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/RuntimePostgreSqlDbContextModelSnapshot.cs": "0c029808359c5b2a67b01b52f598e970382101583f536d6795ad6edf09149f99",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PreparationRetentionDowngradeNotSupportedOperation.cs": "9c62b8e86a8e7d89020dc6d488baf229f17919ae43e5a1218775282751a86b00",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261106160206_PreparationRetention.Designer.cs": "33e48b57074f53e6920a2e8b641eff502c1a5930ea23e8d3321289d05221647e",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261106160206_PreparationRetention.cs": "8dfd904d8d2507034a259d233c7b6dd3b71b10344a0973bb329681d26aa0b21a",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/RuntimeSqlServerDbContextModelSnapshot.cs": "da1f39191726a3700dd2b0df0cd863694d95b212539397d976b8072157d040af",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261106160205_PreparationRetention.Designer.cs": "a40417ef50eec929d70bee5dfb92ed8e0ba3b57aca62d9ed6006ff93a79027fe",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261106160205_PreparationRetention.cs": "5368767aeaf98ac4e1b058c06f1b590c23e6bea55f61eb642fead1a94b0e8d2c",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/RuntimeSqliteDbContextModelSnapshot.cs": "24510aa61861100c9ccd277ee0de470a9e461c0917023eb5ad07e6f7f9c27593",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeArtifactEfModule.cs": "c50f5675d428c7b7c7ad8bc283eda76d03c6a4d163cdd75a2b19288d1ef5651c",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs": "32c58c60dc7aa83536f2ca3944e9f3b9420488780a49fe0ca5d6dfaffd076a27",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimePreparationV11Upcaster.cs": "e9e2d84a27095c13bb82c01b9cfb19982ab81af26ea90eb8a8cb6cd24c1a0e0c",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeProviderContexts.cs": "77a075165ee3cd6a3484cc8c0e9c7efc0be254fe72d4a3b8df406790b9e130bd",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeScopedPublicationV1Upcaster.cs": "966c9673c27dc16cbb60290fcff760c8cbad9b460eb47dd5b0978d3cfa43b4e4",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.Maintenance.cs": "17a5091ca40d3c93dd71b9370cac963b36f839bc1485d94a6948e0a8548e0caf",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.ReferenceFences.cs": "3bb7cdd3ad44c6fe2d53062a1787ce389ebf7c1120380365240151b1c380365e",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.cs": "4b4cea2ace467207b2453222355f0e2cfdebd67f1cf3cf9a70876e4c3220912c",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "c2808403b5ea8f6928c54681e507a06d5ab355228a365cac8b163c2927cf3015",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs": "d9557f75d1d050e8fcb7a250c0c691a1ea483a6082018f29fdc982f7e1f90bfa",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "22edee34f6e0cbfee2724fee8c485b039f68210894704b63d05ab35ea53ebc5f",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeSchemaWriteVersion.cs": "39c1efb1953289ce062f63a059e10b42b133984281228246f596547098089031",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/SourcePublicationWriteVersion.cs": "12a7f5245e2da6005b8c500c6bf3ce2289f97f25c6adf965d9cf6c8217e14609",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/WorkflowPreparationRetentionCodec.cs": "63fd66d8b313075f62747728dfa85326bab2b61c8e472a797e22a10dbfeb0fa9",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/EfToolingFinalizationTests.cs": "afd123a07813ee959132ff49c046063b59ed664165c361fc9f606cf2e49aec69",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/RuntimePreparationRetentionMigrationTests.cs": "6364b7d7c22833a6d478d2d77a448f7e3061b9941a06cb103627aebcae8d8027",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationConfirmation.cs": "d2cd0e681f6344a52da07b0144f4d23683d6f8ad8ab8b0dc3a69e03399b2f995",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationConfirmationOrdering.cs": "badfa58328c0ac19385f9cd12ab7f9f0616c5013c402d6f96ada27bb87ac79ce",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationCorrections.cs": "27035ae0505c266aa9b9c1fbc1ae755bb4469e37f32d253f08a5f6de9c96bc7c",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationSchema.cs": "7c6384d13925115e92faaac79d394bba83d9197412edf736874b8e95196f532a",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationSchemaReadiness.cs": "bfc5540d44685ec12b6d372abd43e2c8c4ce5feebe50f357d665672feb769f1a",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.PreparationScopePredecessor.cs": "d490dd351971f1378863f7953191bca2923d9e53c781aa57fd98cf0c8d825bef",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.cs": "5927b0f0ffae29e4bc04fb0b39341f8a1c11b54cd786c9f38002ba8faf206d13",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj": "9513ffd584bd3cdb5326116fdcadf194c888af4b8aee60ccd51cba094fed7086",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json": "742cf937eac173efac150159eea630b8f77541128a853d98ba837d0663cdaecb"
+    },
+    "historicalMigrationsUnchanged": 40,
+    "mixedLockArtifactsUnchanged": 401,
+    "localCodeCommit": "a5096310f5e1c887434e0aef1e24386b45f65f18",
+    "evidenceBinding": "Tests ran before local commit on the exact source47 blobs/tree; binaries retain original working-copy HEAD provenance. No exact-commit rebuild/CI result is claimed."
+  },
+  "phases": [
+    {
+      "candidate": "pre-generation-source33",
+      "runtime": {
+        "passed": 404,
+        "newCasesIncluded": 115
+      },
+      "selectedPersistence": {
+        "passed": 27,
+        "failed": 2
+      },
+      "transferredToSource47": false
+    },
+    {
+      "candidate": "pre-generation-source33+observation-only-overlay",
+      "build": "Passed",
+      "selectedCase": "Failed",
+      "fourCommandExits": [
+        0,
+        4,
+        0,
+        1
+      ],
+      "receiptSha256": "5cb666e5496ddcac8c7ffc0849fbe367458d9e3cc233660770d5ea05af273312"
+    },
+    {
+      "candidate": "corrected-source47",
+      "build": "Passed",
+      "newCases": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      "affectedExisting": {
+        "passed": 68,
+        "failed": 0,
+        "skipped": 0
+      },
+      "bothPriorFailureNamesPresentAndPassed": true,
+      "receiptSha256": "b14a1727491957606aab9d29ad45dd734e8aeae822e583a020666eb8731ffaa0"
+    },
+    {
+      "candidate": "two-isolated-incorrect-four-Down-variants",
+      "buildsPassed": 2,
+      "rawDown": {
+        "failed": 6,
+        "passed": 0,
+        "skipped": 0,
+        "boundary": "first Default direct-generator assertion; no exception thrown"
+      },
+      "oldThrow": {
+        "failed": 6,
+        "passed": 0,
+        "skipped": 0,
+        "configuredSchemaFactoryFailures": 2,
+        "defaultDownInspectionFailures": 4
+      },
+      "expectedCausalBoundariesObserved": true,
+      "positiveSourceAndBinariesUnchanged": true,
+      "receiptSha256": "930b9703036d9997543837fe8b787e37294527017ded4bbfeaa1cdf465573b57"
+    }
+  ],
+  "qualifiedScope": "offline4provider SQL/default-custom schema +syntheticSQLite11fieldvalues/historyIDs only",
+  "unproven": [
+    "actual captured old-writer migration/recovery",
+    "native server provider apply/finalization",
+    "native participation and owner protocol",
+    "remaining maps/API checks and broader affected-project qualification",
+    "full exact-head PR review/required CI/merge/resulting main",
+    "T066/ETL/Studio/production acceptance"
+  ],
+  "reviewCountReset": false,
+  "formalRoundBound": 6,
+  "rawEvidence": "private retained; not claimed downloadable",
+  "ciD405Correction": {
+    "state": "THREE_AFFECTED_WHOLE_PROJECTS_AND_ISOLATED_CAUSAL_CONTROL_QUALIFIED; SOURCE_PUBLICATION_PROPOSED",
+    "publishedFailedHead": "d40575caa14dda8f0c575b1b3b750fbd9c64be21",
+    "originalCiRun": 42261646884,
+    "originalCiConclusion": "FAILURE",
+    "sourceFiveManifestSha256": "bff14a25d7ff835f4eb5f3edf04289ab405a3e78ed0c47ccfff3208b3c8764fa",
+    "sourceFileHashes": {
+      "Essentials/tests/Architecture/Tests/ArchitectureGuardTests.CoreImplementationShape.cs": "0c666aaa17193d71de4ed31b32b8fa27565c0e8469e411b675f8c01593cf5d03",
+      "Essentials/tests/Architecture/Tests/RuntimeCoreEngineShapeGuardTests.cs": "b19eb567cd3afceb0405081a055eb790c36ac17337125e65635f920850b25e16",
+      "Essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs": "7d0adf76bc64c4bd92b98f5c9dd9c63069f3929427e5bb05b3ff1fc3b9622d18",
+      "Essentials/tests/Cluster/Readability/Tests/ReadabilityMembershipTests.cs": "9df6e6512f609c93e28af5c430f5c1825f77797a461476694b67644381798a91",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/ModulePayloadColumnTests.cs": "32897c68581b50cc9b505b98dc1628e8c2d7123912cefd0de27514923108d6f6"
+    },
+    "wholeProjectChecks": {
+      "Architecture": {
+        "attempt": "ci-d405-architecture-whole-native-mac-02",
+        "passed": 620,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "fb8d3e350e38390bb30e2f26040a39cec14fd4e5131561abbb8178cfc72c48ce",
+        "rootCustodySha256": "95ef00eae8702ff80b020bd2424cdceea21562d01c3625812c327fa2343d11df",
+        "rootAdditiveReconciliationSha256": "6ef9919371247ca0dce5e6aa1dd4665d5cbe5b89fea537365e9f7f62b0ee5694"
+      },
+      "Migrations": {
+        "attempt": "ci-d405-migrations-whole-native-mac-02",
+        "passed": 525,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "8fe81ac558f2696266aa54a2e815db007f7ed53fa708ce88d576c4a1b3599bcc",
+        "rootCustodySha256": "4b25c2d487d9ae8e703f71c2ffe62d17366f94f8eba9c266869e558e66710028",
+        "rootAdditiveReconciliationSha256": "e9c559a4d817d5cf9ad973793541172c7c321ddd0ec4ec334dba6a0b15b970c1"
+      },
+      "Readability": {
+        "attempt": "ci-d405-readability-whole-native-mac-01",
+        "passed": 124,
+        "failed": 0,
+        "skipped": 0,
+        "originalReceiptSha256": "85ac5f85655e2b01c1544cc22c292d9a98bb959bf7cefde0cc9b806786c3a824",
+        "rootCustodySha256": "f3bf52e1e7f177936a67781f64a40020a63bfe71a961051175c77525ed7d3cbb"
+      }
+    },
+    "discoveryAccounting": "Architecture:603 exact+11+6 deferred=620. Migrations:510 ordinary entries including retained duplicate display multiplicities+15 source-bound deferred=525. Readability:124 discovery/actual exact. Execution IDs unique; shared deferred definition IDs retained. Original incomplete/refusal receipts unchanged; additive Root reconciliation qualifies counts.",
+    "sourceReview": "Three independent focused five-file source preflights clean; not full-PR approval.",
+    "unchanged": "Production API/type/constructor/schema/codec, ratchet, shared full-shape predicate body and unsupported2.0 refusal.",
+    "formalRoundBound": 6,
+    "formalCountReset": false,
+    "nativeOrProviderAcceptance": false,
+    "rawEvidence": "private retained; not claimed downloadable",
+    "causalControl": {
+      "mutation": "Remove ONLY generic classifier exact-handle helper exclusion in a separate d405 worktree",
+      "build": "Passed",
+      "actualCases": 7,
+      "failed": 2,
+      "passedUnchangedSpecializedControls": 5,
+      "skipped": 0,
+      "testExitCode": 1,
+      "expectedFailureBoundaries": "generic Core sole WorkflowPreparationOwnerSession; new Fact earlier handle Assert.False",
+      "laterCtorAssertionsNotClaimedRerun": true,
+      "positiveThreeSourceLockBinaryInventoriesUnchanged": true,
+      "allOwnedGroupsAbsent": true,
+      "receiptSha256": "7976c6e2cff10b19a25b6533ba22fcb16e9a413f7733103bd1d9247759c0fcc8",
+      "workerCustodySha256": "ab0e1592a6f2cf3c37a543a1a53122cef55a7e6490601bd0209f4cc853a4f486",
+      "rootCustodySha256": "c77c99ce90499e220acf8d01dc1c4a155b3c3004d554a3c9a5a516f430413d90",
+      "rootIndependentlyVerified": true
+    },
+    "reviewAccounting": {
+      "consumedCumulativeRounds": 1,
+      "countedOriginalReceipt": "T002R1 bounded12-path source review, tree486c63354ae2191c21b7c0d8a95fb9b223b57d62, basec7b0aed97ac5ce9edadcbff4ff15b338604845c9",
+      "publicReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3951#issuecomment-6684577017",
+      "reason": "Post-PR invocation classification unrecoverable: count conservatively, preserve original limited scope",
+      "planningR1R2R3": "Original design receipts04:59\u201306:59UTC precede07:22:40UTC PR creation; not counted as formal PR rounds",
+      "nextFormalRound": 2,
+      "maxCumulativeRounds": 6,
+      "reset": false,
+      "laterRecoveredOriginalFormalReceipts": "Add and reconcile immediately; zeroGitHubreviews does not prove private absence",
+      "countDispositionSha256": "b1f83f6d742dc6f1ddd3f82403c99fe8718d1e7c0ba6e5b031694833d3d13454"
+    }
+  }
+}
