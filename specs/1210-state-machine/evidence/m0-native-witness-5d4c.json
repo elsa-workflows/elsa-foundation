@@ -1,0 +1,209 @@
+{
+  "status": "Failed combined batch; bounded N9 supported; N10 unqualified",
+  "source": {
+    "head": "5d4c7359942ffc28d5fb89d32f9d913567953eb6",
+    "mainParent": "e8476790d6f9d146c04ff5e02af266566e0b9d24",
+    "packet": "M0-integration-5d4c-r3",
+    "manifestSha256": "b6f9c36fcc290ed5c4354a7889405bf9d9657affdc697f79d85259f7ba814d45",
+    "launcherSha256": "dac6dbb1f8dae5086a4ae8a3819250ae8f1b2e31027e60eaf63c217cba2d5e78",
+    "cleanBeforeAndAfter": true
+  },
+  "authorization": {
+    "scope": "One focused locked build then one serial21generation batch; no retry",
+    "mainHealth": "Overall main CI pending, not passed; coordinator explicitly allowed isolated prototype qualification without assuming healthy main",
+    "finalGatesWaived": false
+  },
+  "build": {
+    "exitCode": 0,
+    "elapsedSeconds": 33.944893333,
+    "warnings": 283,
+    "errors": 0,
+    "recordedDllHashes": 61,
+    "witnessDllSha256": "b2d1f5abb0b1c44f5ef935daac352a39a3a2fe7abb1a432efd4b5041f9deddaf"
+  },
+  "batch": {
+    "exitCode": 1,
+    "elapsedSeconds": 11.288683749999997,
+    "plannedGenerations": 21,
+    "actualGenerations": 8,
+    "distinctProcessIds": 8,
+    "observedExpected": 7,
+    "unexpectedFailures": 1,
+    "notRun": 13,
+    "processes": [
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 1,
+        "pid": 55625,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "cause-child-delayed",
+        "generation": 2,
+        "pid": 55631,
+        "exitCode": 1,
+        "expectedSuccess": true,
+        "observedExpectedResult": false,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-visits",
+        "generation": 1,
+        "pid": 55547,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-visits",
+        "generation": 2,
+        "pid": 55557,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-visits",
+        "generation": 3,
+        "pid": 55594,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-visits",
+        "generation": 4,
+        "pid": 55607,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-wrong-successor-binding",
+        "generation": 1,
+        "pid": 55609,
+        "exitCode": 0,
+        "expectedSuccess": true,
+        "observedExpectedResult": true,
+        "timedOut": false
+      },
+      {
+        "scenario": "scope-wrong-successor-binding",
+        "generation": 2,
+        "pid": 55618,
+        "exitCode": 1,
+        "expectedSuccess": false,
+        "observedExpectedResult": true,
+        "timedOut": false
+      }
+    ]
+  },
+  "N9": {
+    "status": "Six expected outcomes; independently accepted bounded evidence",
+    "positiveGenerations": 4,
+    "controlGenerations": 2,
+    "controlDiagnostic": "N9: successor leaf must bind its own initial value",
+    "observedValues": [
+      {
+        "stage": 1,
+        "machine": 10,
+        "parent": 20,
+        "leaf": 30
+      },
+      {
+        "stage": 2,
+        "machine": 11,
+        "parent": 21,
+        "leaf": 30
+      },
+      {
+        "stage": 3,
+        "machine": 12,
+        "parent": 20,
+        "leaf": 30
+      }
+    ],
+    "closedContainerFrames": 6,
+    "terminalBookmarks": 0,
+    "completedPrivateStateCleared": true,
+    "limits": [
+      "Actual native visit-container fixture, not production StateMachine topology",
+      "No secret/withholding/reusable-boundary or complete guard/phase coordination proof"
+    ]
+  },
+  "N10": {
+    "status": "Failed at generation2 of first scenario",
+    "observationDiagnostic": "N10: exact ordinary publish sources must be observable before the outbox sweep.",
+    "retainedCause": "Publisher SchedulerWorkPoisoned incident: SchemaDormancyRefusedException; no shared dormancy check; RuntimePostCommitOutbox finalized at1.0.0, publication requires2.0.0",
+    "publishSourceCount": 0,
+    "deliveredSchedulerSources": 6,
+    "observerTiming": "Not reached beyond this earlier schema refusal; not refuted or qualified",
+    "remainingScenariosAndNegativeControl": "Not run",
+    "correctionStatus": "Normal feature-composition/readiness correction proposed; not executed"
+  },
+  "independentReview": {
+    "acceptance": "Read retained raw receipts, native SQLite, frozen hashes, binary hashes and actual process absence; N9 supported, failed batch and unrun limits retained",
+    "correctness": "Read-only source/SQLite confirmed schema-composition refusal; normal trigger/router services also missing; observation timing remains untested"
+  },
+  "closeout": {
+    "sampledOwnedProcessIds": 50,
+    "ownedGroups": 3,
+    "remainingOwnedRows": [],
+    "timedOut": false,
+    "rootIndependentCloseout": "statemachine-m0-r3-root-closeout.json",
+    "samplingLimit": "Not a complete lifecycle trace; timeout closeout path unexercised",
+    "primarySlotReturned": true,
+    "protectedRiderGroup": 1105
+  },
+  "rawEvidence": [
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/build.result.json",
+      "sha256": "c430a3770d3974c840ad583c7c70cd23e9573e1224dfeff71c11c443968f2f46"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/integration.result.json",
+      "sha256": "c7156a33948eff840ffcdcadce18a7be57552701d62dc3f8998ede51046f480b"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/terminal-cross-check.json",
+      "sha256": "43e13b4e29df67a19f4ea500687e84542618fe4fc80b3dfcce061f4c2da03438"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/binary-hashes.json",
+      "sha256": "bb49c8858d41c27bcc378c5ad8482d18d072ca14c25deef4852afb7059e7f82e"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/generations/scopes/scope-processes.json",
+      "sha256": "092ca615338d351c22ca7180c9491930af1d8e831c6dbb7fa67a8e8861279d58"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/generations/scopes/scope-visits-g4.json",
+      "sha256": "be7137910a8eb1704421805fc7029bc835564bb76b3e875cdba85e015461cb5c"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/generations/causes/cause-child-delayed-g2.stderr.log",
+      "sha256": "0fae95ab134f8ae28c8e48dd904ea21f41804d7b1f9800d6bc5d74e25e51529c"
+    },
+    {
+      "localPath": "/private/tmp/elsa4-statemachine-program/integration-5d4c-first-run/generations/causes/cause-child-delayed.db",
+      "sha256": "9dc636d0d0cf7d8153ff8f3f2fdf4b5a454bda28c71f63078330401b92462ea8"
+    }
+  ],
+  "notQualified": [
+    "Full21generation batch",
+    "N10 common-cause/source-cohort contract",
+    "Production invocation inbox/retention/ambiguouscommit/terminal races",
+    "Full hierarchy/parallel selection/phases",
+    "Production schema/engine placement and Q1\u2013Q3",
+    "Studio author/save/reload/publish/inspect",
+    "Saga composition",
+    "Whole program completion/resulting-main qualification"
+  ]
+}

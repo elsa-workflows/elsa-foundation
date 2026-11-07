@@ -1,0 +1,1154 @@
+{
+  "schemaVersion": 1,
+  "status": "partial; generic native cancellation-after-retry defect blocks N7 closeout",
+  "sourceHead": "c0fd8010b921e6b75ff7789879d691bd7e914750",
+  "sourceCleanAtBuildAndLaunch": true,
+  "build": {
+    "command": "dotnet build specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj -m:1 --no-restore --nologo",
+    "exitCode": 0,
+    "warnings": 280,
+    "errors": 0,
+    "log": "/tmp/elsa4-statemachine-program/m0-c0fd-build.log"
+  },
+  "execution": {
+    "exitCode": 1,
+    "processCount": 47,
+    "distinctProcessIds": 47,
+    "expectedResults": 43,
+    "unexpectedResults": 4,
+    "exitZero": 38,
+    "intendedNegativeFailures": 5,
+    "processes": [
+      {
+        "scenario": "normal",
+        "generation": 1,
+        "pid": 2620,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 2,
+        "pid": 2630,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 3,
+        "pid": 2632,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 4,
+        "pid": 2635,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 1,
+        "pid": 2641,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 2,
+        "pid": 2657,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 3,
+        "pid": 2667,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 4,
+        "pid": 2683,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 1,
+        "pid": 2691,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 2,
+        "pid": 2695,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 3,
+        "pid": 2712,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 4,
+        "pid": 2759,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 1,
+        "pid": 2825,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 2,
+        "pid": 2830,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 3,
+        "pid": 2871,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 4,
+        "pid": 2906,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 1,
+        "pid": 2908,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 2,
+        "pid": 2931,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 3,
+        "pid": 2941,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 4,
+        "pid": 2942,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 1,
+        "pid": 2943,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 2,
+        "pid": 2995,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 3,
+        "pid": 3206,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 4,
+        "pid": 3230,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 1,
+        "pid": 3293,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 2,
+        "pid": 3314,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 3,
+        "pid": 3330,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 4,
+        "pid": 3346,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 1,
+        "pid": 3368,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 2,
+        "pid": 3390,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 3,
+        "pid": 3410,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 4,
+        "pid": 3430,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 1,
+        "pid": 3438,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 2,
+        "pid": 3494,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 3,
+        "pid": 3558,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 1,
+        "observedExpectedResult": false
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 4,
+        "pid": 3628,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 1,
+        "observedExpectedResult": false
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 1,
+        "pid": 3656,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 2,
+        "pid": 3708,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 3,
+        "pid": 3847,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 1,
+        "observedExpectedResult": false
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 4,
+        "pid": 3861,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 1,
+        "observedExpectedResult": false
+      },
+      {
+        "scenario": "negative-state",
+        "generation": 1,
+        "pid": 3881,
+        "mutation": "omit-state",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-provenance",
+        "generation": 1,
+        "pid": 3923,
+        "mutation": "corrupt-provenance",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-capacity-control",
+        "generation": 1,
+        "pid": 3993,
+        "mutation": "omit-in-flight-capacity",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 1,
+        "pid": 4074,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 2,
+        "pid": 4137,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 1,
+        "pid": 4149,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 2,
+        "pid": 4308,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      }
+    ]
+  },
+  "qualification": {
+    "N1-N6": "passed within previously declared bounded fixture limits, re-executed here",
+    "N7": {
+      "status": "partial; admission/race/recovery/budget checks pass, cancellation closeout fails",
+      "raceAdmission": [
+        {
+          "inputId": "A",
+          "disposition": "AcceptedReceipt",
+          "order": 1,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g1-activity-3:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g1-activity-3",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "competingSenders": [
+            {
+              "inputId": "B",
+              "disposition": "AcceptedReceipt",
+              "order": 2,
+              "attempts": [
+                {
+                  "bookmarkId": "admission-race-g1-activity-5:attempt:1:trigger:1",
+                  "activityExecutionId": "admission-race-g1-activity-5",
+                  "transportStatus": "Dispatched",
+                  "reason": null
+                }
+              ]
+            },
+            {
+              "inputId": "C",
+              "disposition": "Full",
+              "order": null,
+              "attempts": [
+                {
+                  "bookmarkId": "admission-race-g1-activity-5:attempt:1:trigger:1",
+                  "activityExecutionId": "admission-race-g1-activity-5",
+                  "transportStatus": "NotFound",
+                  "reason": "No active bookmark matched stimulus 'Event'/'sha256:577f022191f0d28f5dd0f5f28f59a8bbd396a7854ca28eeacf238371c28bacb1' for workflow execution 'm0-witness-workflow'."
+                },
+                {
+                  "bookmarkId": "admission-race-g1-activity-8:attempt:1:trigger:1",
+                  "activityExecutionId": "admission-race-g1-activity-8",
+                  "transportStatus": "Dispatched",
+                  "reason": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ignoredDuplicateResponseFor": "B",
+          "boundary": "request completed before response was ignored; not a provider-commit failure"
+        }
+      ],
+      "recoveryAndBudget": [
+        {
+          "lostResponseResolvedFromReceipt": {
+            "id": "B",
+            "content": {
+              "parentFirst": false,
+              "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+            },
+            "order": 2,
+            "status": "Queued",
+            "carrierInvocationId": "admission-race-g1-activity-5"
+          },
+          "duplicate": {
+            "inputId": "B",
+            "disposition": "AcceptedReceipt",
+            "order": 2,
+            "attempts": [
+              {
+                "bookmarkId": "admission-race-g1-activity-10:attempt:1:trigger:1",
+                "activityExecutionId": "admission-race-g1-activity-10",
+                "transportStatus": "Dispatched",
+                "reason": null
+              }
+            ]
+          },
+          "conflict": {
+            "inputId": "B",
+            "disposition": "Conflict",
+            "order": 2,
+            "attempts": [
+              {
+                "bookmarkId": "admission-race-g2-activity-1:attempt:1:trigger:1",
+                "activityExecutionId": "admission-race-g2-activity-1",
+                "transportStatus": "Dispatched",
+                "reason": null
+              }
+            ]
+          }
+        },
+        {
+          "jobId": "alteration-job-9d42cd25a91d10d0523fb3ca7c12acfa",
+          "sourceActivityExecutionId": "admission-race-g1-activity-7",
+          "status": "Succeeded"
+        },
+        {
+          "previouslyRejectedId": "C",
+          "admittedLater": {
+            "inputId": "C",
+            "disposition": "AcceptedReceipt",
+            "order": 3,
+            "attempts": [
+              {
+                "bookmarkId": "admission-race-g2-activity-2:attempt:1:trigger:1",
+                "activityExecutionId": "admission-race-g2-activity-2",
+                "transportStatus": "Dispatched",
+                "reason": null
+              }
+            ]
+          }
+        },
+        {
+          "inputId": "fill-4",
+          "disposition": "AcceptedReceipt",
+          "order": 4,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g2-activity-5:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g2-activity-5",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "inputId": "fill-5",
+          "disposition": "AcceptedReceipt",
+          "order": 5,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g2-activity-8:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g2-activity-8",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "inputId": "fill-6",
+          "disposition": "AcceptedReceipt",
+          "order": 6,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g2-activity-11:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g2-activity-11",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "inputId": "fill-7",
+          "disposition": "AcceptedReceipt",
+          "order": 7,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g2-activity-14:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g2-activity-14",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "inputId": "fill-8",
+          "disposition": "AcceptedReceipt",
+          "order": 8,
+          "attempts": [
+            {
+              "bookmarkId": "admission-race-g2-activity-17:attempt:1:trigger:1",
+              "activityExecutionId": "admission-race-g2-activity-17",
+              "transportStatus": "Dispatched",
+              "reason": null
+            }
+          ]
+        },
+        {
+          "overBudget": {
+            "inputId": "over-budget",
+            "disposition": "Full",
+            "order": null,
+            "attempts": [
+              {
+                "bookmarkId": "admission-race-g2-activity-20:attempt:1:trigger:1",
+                "activityExecutionId": "admission-race-g2-activity-20",
+                "transportStatus": "Dispatched",
+                "reason": null
+              }
+            ]
+          },
+          "retainedRetry": {
+            "inputId": "fill-8",
+            "disposition": "AcceptedReceipt",
+            "order": 8,
+            "attempts": [
+              {
+                "bookmarkId": "admission-race-g2-activity-23:attempt:1:trigger:1",
+                "activityExecutionId": "admission-race-g2-activity-23",
+                "transportStatus": "Dispatched",
+                "reason": null
+              }
+            ]
+          }
+        }
+      ],
+      "coldBeforeCancel": {
+        "rootInvocationId": "admission-race-g1-activity-1",
+        "rootStatus": "Running",
+        "state": {
+          "phase": "Idle",
+          "exitCompletions": 1,
+          "nextOrder": 8,
+          "pending": [],
+          "receipts": {
+            "A": {
+              "id": "A",
+              "content": {
+                "parentFirst": true,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 1,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g1-activity-3"
+            },
+            "B": {
+              "id": "B",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 2,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g1-activity-5"
+            },
+            "C": {
+              "id": "C",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 3,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-2"
+            },
+            "fill-4": {
+              "id": "fill-4",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 4,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-5"
+            },
+            "fill-5": {
+              "id": "fill-5",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 5,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-8"
+            },
+            "fill-6": {
+              "id": "fill-6",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 6,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-11"
+            },
+            "fill-7": {
+              "id": "fill-7",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 7,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-14"
+            },
+            "fill-8": {
+              "id": "fill-8",
+              "content": {
+                "parentFirst": false,
+                "payloadCanary": "public-payload-must-not-appear-in-terminal-output"
+              },
+              "order": 8,
+              "status": "Handled",
+              "carrierInvocationId": "admission-race-g2-activity-17"
+            }
+          },
+          "decisions": [
+            {
+              "carrierInvocationId": "admission-race-g1-activity-3",
+              "inputId": "A",
+              "status": "Accepted",
+              "order": 1
+            },
+            {
+              "carrierInvocationId": "admission-race-g1-activity-5",
+              "inputId": "B",
+              "status": "Accepted",
+              "order": 2
+            },
+            {
+              "carrierInvocationId": "admission-race-g1-activity-8",
+              "inputId": "C",
+              "status": "Full",
+              "order": null
+            },
+            {
+              "carrierInvocationId": "admission-race-g1-activity-9",
+              "inputId": "B",
+              "status": "Duplicate",
+              "order": 2
+            },
+            {
+              "carrierInvocationId": "admission-race-g1-activity-10",
+              "inputId": "B",
+              "status": "Duplicate",
+              "order": 2
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-1",
+              "inputId": "B",
+              "status": "Conflict",
+              "order": 2
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-2",
+              "inputId": "C",
+              "status": "Accepted",
+              "order": 3
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-5",
+              "inputId": "fill-4",
+              "status": "Accepted",
+              "order": 4
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-8",
+              "inputId": "fill-5",
+              "status": "Accepted",
+              "order": 5
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-11",
+              "inputId": "fill-6",
+              "status": "Accepted",
+              "order": 6
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-14",
+              "inputId": "fill-7",
+              "status": "Accepted",
+              "order": 7
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-17",
+              "inputId": "fill-8",
+              "status": "Accepted",
+              "order": 8
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-20",
+              "inputId": "over-budget",
+              "status": "Full",
+              "order": null
+            },
+            {
+              "carrierInvocationId": "admission-race-g2-activity-23",
+              "inputId": "fill-8",
+              "status": "Duplicate",
+              "order": 8
+            }
+          ],
+          "inFlight": null,
+          "readySources": [],
+          "callbacks": [
+            {
+              "invocationId": "admission-race-g1-activity-6",
+              "inputId": "A",
+              "source": "parent",
+              "operationKey": "admission-race-g1-activity-6"
+            },
+            {
+              "invocationId": "e9325905af2a9564:alteration-retry:0:admission-race-g1-activity-7",
+              "inputId": "A",
+              "source": "child",
+              "operationKey": "admission-race-g1-activity-7"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-3",
+              "inputId": "B",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-3"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-4",
+              "inputId": "B",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-4"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-6",
+              "inputId": "C",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-6"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-7",
+              "inputId": "C",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-7"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-9",
+              "inputId": "fill-4",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-9"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-10",
+              "inputId": "fill-4",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-10"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-12",
+              "inputId": "fill-5",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-12"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-13",
+              "inputId": "fill-5",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-13"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-15",
+              "inputId": "fill-6",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-15"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-16",
+              "inputId": "fill-6",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-16"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-18",
+              "inputId": "fill-7",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-18"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-19",
+              "inputId": "fill-7",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-19"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-21",
+              "inputId": "fill-8",
+              "source": "child",
+              "operationKey": "admission-race-g2-activity-21"
+            },
+            {
+              "invocationId": "admission-race-g2-activity-22",
+              "inputId": "fill-8",
+              "source": "parent",
+              "operationKey": "admission-race-g2-activity-22"
+            }
+          ],
+          "selections": [
+            {
+              "inputId": "A",
+              "source": "child"
+            },
+            {
+              "inputId": "B",
+              "source": "child"
+            },
+            {
+              "inputId": "C",
+              "source": "child"
+            },
+            {
+              "inputId": "fill-4",
+              "source": "child"
+            },
+            {
+              "inputId": "fill-5",
+              "source": "child"
+            },
+            {
+              "inputId": "fill-6",
+              "source": "child"
+            },
+            {
+              "inputId": "fill-7",
+              "source": "child"
+            },
+            {
+              "inputId": "fill-8",
+              "source": "child"
+            }
+          ],
+          "processed": [
+            "A",
+            "B",
+            "C",
+            "fill-4",
+            "fill-5",
+            "fill-6",
+            "fill-7",
+            "fill-8"
+          ],
+          "awaitingRecovery": false,
+          "awaitedNode": null,
+          "failedChild": "admission-race-g1-activity-7",
+          "incident": "incident:c3bda8cf6fdbc069:e58c2bc488c076e9:ActivityFaulted"
+        }
+      },
+      "cancelFailure": "System.InvalidOperationException: Cancel command was not accepted (status: AcceptedButFaulted). Reason: Elsa.Workflows.Runtime.Core.Exceptions.RuntimeCheckpointCommitValidationException: Only a superseded activity execution may carry supersession lineage.",
+      "coldAfterFailedCancel": {
+        "workflowStatus": "Faulted",
+        "rootStatus": "Running",
+        "terminal": null
+      }
+    },
+    "N8": {
+      "status": "passed; actual ordinary nested Sequence, typed binding, continuation and cold read",
+      "waitingHierarchy": {
+        "invocationId": "nested-g1-activity-1",
+        "machineInvocationId": "nested-g1-activity-2",
+        "parentActivityExecutionId": "nested-g1-activity-1",
+        "consumerCount": 0,
+        "outerStatus": "Running"
+      },
+      "completedColdBinding": {
+        "invocationId": "nested-g1-activity-1",
+        "machineInvocationId": "nested-g1-activity-2",
+        "parentActivityExecutionId": "nested-g1-activity-1",
+        "consumerInvocationId": "nested-g3-activity-4",
+        "boundInput": {
+          "invocationId": "nested-g3-activity-4",
+          "contractFingerprint": "sha256:bab8416b355279097e9b1abbb6c60766923b29a9d3b94bc5751c0f228238187f",
+          "bindingFingerprint": "sha256:cb8a335bb788eae01e4fa1e5d9efe01524bb9ac7e5bf0d898048bc1e6f2b9bce",
+          "values": {
+            "Evidence": {
+              "type": {
+                "alias": "Elsa.StateMachine.M0.Witness.ProbeTerminalEvidence",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "presence": 2,
+              "inlineValue": {
+                "formatVersion": 1,
+                "rootInvocationId": "nested-g1-activity-2",
+                "reason": "Completed",
+                "receipts": [
+                  {
+                    "id": "A",
+                    "order": 1,
+                    "status": "Handled",
+                    "carrierInvocationId": "nested-g1-activity-4"
+                  },
+                  {
+                    "id": "B",
+                    "order": 2,
+                    "status": "Handled",
+                    "carrierInvocationId": "nested-g1-activity-6"
+                  },
+                  {
+                    "id": "stop",
+                    "order": 3,
+                    "status": "Handled",
+                    "carrierInvocationId": "nested-g1-activity-10"
+                  }
+                ]
+              },
+              "externalReference": null,
+              "policy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              }
+            }
+          },
+          "materializedAt": "2026-11-05T01:52:20.12897+00:00"
+        },
+        "consumption": {
+          "rootInvocationId": "nested-g1-activity-2",
+          "receiptCount": 3,
+          "inputIds": [
+            "A",
+            "B",
+            "stop"
+          ]
+        },
+        "machineOutcome": "Done",
+        "outerOutcome": "Done"
+      }
+    },
+    "negativeControls": {
+      "negative-state": "System.InvalidOperationException: No committed native parent state is available.",
+      "negative-provenance": "System.InvalidOperationException: Provenance negative control: corrupted cause must fail the positive drain assertion.",
+      "negative-terminal": "System.InvalidOperationException: N6: terminal archive must retain the original receipt IDs and order.",
+      "negative-cancel": "System.InvalidOperationException: N6: queued cancellation must have an explicit not-processed reason.",
+      "admission-capacity-control": "System.InvalidOperationException: N7: selected work must occupy one pending-capacity slot."
+    }
+  },
+  "defect": {
+    "owner": "generic WorkflowCancellationPlanner",
+    "currentMainStillAffected": "4861104092dcc00a1ff111c9d17eda4b298c583a",
+    "cause": "IsCancellable excludes Completed/Faulted/Cancelled/Recovered but includes terminal Superseded. Cancellation changes historical superseded source to Cancelled while retaining SupersededBy/At; native checkpoint validation refuses invalid lineage.",
+    "scope": "Two actual cancellation failures plus two dependent cold-read failures, not four distinct bugs.",
+    "proposedFix": "Allowlist only live activity statuses, matching ActivitySubtreeCancellationPlanner; preserve supersession lineage and historical cleanup boundaries. No validator weakening or lineage deletion."
+  },
+  "sourceFiles": [
+    {
+      "path": "specs/1210-state-machine/witness/NativeProbe.cs",
+      "sha256": "240500fedf263bd9e9e4726fc19f418d4907176bf7e4374bee8b07e035daab99"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/AdmissionProbe.cs",
+      "sha256": "25afaa0bdba1457275195bd301ebc29d4f643a462e70b701bef1e2fe941eb2e8"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/Program.cs",
+      "sha256": "c44203cd58d3ed959c59222a675241a4b38b6ecfd3a884fbeaf7674e9db5e2f3"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/StateMachine.M0.Witness.csproj",
+      "sha256": "720d7d65cc2b82c9cf1dee6959cbddeed0f772495217376145b491904638f62c"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/packages.lock.json",
+      "sha256": "f65cd7c0b091f61f38e0f963ef0d9f9f46761434da4f477fff0e48140e4ec0ae"
+    }
+  ],
+  "executedRuntimeAssemblies": [
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Activities.Runtime.dll",
+      "sha256": "59a125980b232eb26c6504dd9a345ade549191e6445f0969ab02902ebde7ec84"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Activities.Sequence.dll",
+      "sha256": "6071288917ae50a8973ba367bdc14647e6bfea3b3ae916d0be4172e1f7152183"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "af5f3c39d1b9d08894b659b2c3ed5346639ac44a02c54f2f85722d710d52eb23"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "sha256": "b9d09ea5fafe18df59d930a0819120e2252104ce3ac1c2c06b818a8cb7bdfaf6"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+      "sha256": "974331fa7264e72984360e2e0b9d9b8a91fbf27c2f2bbe1b9e45cba9560b90dd"
+    },
+    {
+      "path": "specs/1210-state-machine/witness/bin/Debug/net10.0/StateMachine.M0.Witness.dll",
+      "sha256": "6e2a39082dfd2104a7cc74f6cabea6ffcfb55c1a27d6a4f3e55b7551fde68970"
+    }
+  ],
+  "retainedFullAttestation": {
+    "path": "/tmp/elsa4-statemachine-program/m0-c0fd-attestation.json",
+    "sha256": "6d1884aafe0b88e74e54c3f0a9d41f49b3952e53b277bae1db7adb5259a633e8"
+  },
+  "retainedRawEvidenceManifest": {
+    "path": "/tmp/elsa4-statemachine-program/m0-c0fd-run/raw-evidence-manifest.json",
+    "sha256": "4ff3ce39a809bbeb7a8e2a6d50682407390a9de8cc2870b44abc0260557dbfa7",
+    "fileCount": 287
+  },
+  "limits": [
+    "Research fixture, not a StateMachine implementation",
+    "Sequential ordinary Event carriers; no complete machine inbox/API guarantee",
+    "Guard helper adapter, not all inline expression recovery",
+    "No Studio, provider matrix or saga qualification",
+    "Admission gateway is fixture-only and bounded; no production public inbox guarantee",
+    "Lost response is ignored after request completion, not an ambiguous provider commit",
+    "No distributed multi-host admission, retention SLA or full trigger-event coalescing qualification",
+    "N8 proves ordinary result binding, not state-local values/secret paths or production outcome schema"
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/StimulusIngressEntityConfiguration.cs",
+    "beforeSha256": "ee45a97246c7aad7b096c6cfa46d5228bd3e6c9878daff5e416361e93e5bfb82",
+    "afterSha256": "0e3e2f4aa67b95d70d71d3b8f7390bee303a92eaedbe4b56aa7867287a3bcb06",
+    "delta": "Remove one extra blank line at EOF; no tokens changed"
+  },
+  {
+    "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/StimulusIngressSourceEntity.cs",
+    "beforeSha256": "ddd7914d9308ccb83a8b3394b0f9cc1748186e3ba9528023ee3c10589279dcb4",
+    "afterSha256": "b95cddb392da07ed5ab0e07c477214514725d40c7235f7cff9f83960da879c67",
+    "delta": "Remove one extra blank line at EOF; no tokens changed"
+  }
+]

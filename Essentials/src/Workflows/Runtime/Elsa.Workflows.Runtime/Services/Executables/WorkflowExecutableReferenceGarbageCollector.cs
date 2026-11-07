@@ -29,6 +29,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutionStateStore _physicalWorkflowExecutions;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
+    private IStimulusIngressSourceStore? IngressSources { get; init; }
     private readonly IStimulusDeliveryStore? _ordinaryCollectionGuard;
     private readonly IRuntimePostCommitOutboxStore? _ordinaryOutbox;
     private readonly bool _requiresOrdinaryProof;
@@ -222,9 +223,11 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             templates.CanMaintainReferences(material, references) && references.CanWriteRootReferences(material) &&
             delivery.CanRetainExecutables(physicalOutbox, material, references, physicalExecutions))
             return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
-                options, clock, logger, delivery, physicalExecutions);
+                options, clock, logger, delivery, physicalExecutions)
+                { IngressSources = sp.GetService<IStimulusIngressSourceStore>() };
         return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
-            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions);
+            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions)
+            { IngressSources = sp.GetService<IStimulusIngressSourceStore>() };
     }
 
     private WorkflowExecutableReferenceGarbageCollector(
@@ -555,6 +558,9 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var roots = new List<string>();
         if (_stimulusDeliveryStore is not null)
             roots.AddRange(await _stimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+                _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken));
+        if (IngressSources is not null)
+            roots.AddRange(await IngressSources.ListPinnedExecutableArtifactIdsAsync(
                 _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken));
         roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)

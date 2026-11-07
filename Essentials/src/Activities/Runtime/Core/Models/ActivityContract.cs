@@ -25,8 +25,9 @@ public sealed class ActivityContract
         IReadOnlyCollection<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External,
-        bool supportsBackgroundExecution = false)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution)
+        bool supportsBackgroundExecution = false,
+        ActivityInvocationInputCapability? invocationInput = null)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, invocationInput)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -67,6 +68,23 @@ public sealed class ActivityContract
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile,
         bool supportsBackgroundExecution)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs, result, outcomes,
+            activation, sideEffectProfile, supportsBackgroundExecution, invocationInput: null)
+    {
+    }
+
+    public ActivityContract(
+        string activityTypeKey,
+        string contractVersion,
+        string descriptorKind,
+        JsonElement descriptorPayload,
+        IEnumerable<ActivityInputContract> inputs,
+        ActivityResultContract result,
+        IEnumerable<string> outcomes,
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile,
+        bool supportsBackgroundExecution,
+        ActivityInvocationInputCapability? invocationInput)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -97,6 +115,7 @@ public sealed class ActivityContract
         Activation = activation;
         SideEffectProfile = sideEffectProfile;
         SupportsBackgroundExecution = supportsBackgroundExecution;
+        InvocationInput = invocationInput;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -128,6 +147,10 @@ public sealed class ActivityContract
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool SupportsBackgroundExecution { get; }
 
+    /// <summary>Optional exact receiver protocol, independent of authored activity input hydration.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ActivityInvocationInputCapability? InvocationInput { get; }
+
     private string ComputeFingerprint()
     {
         var payload = new
@@ -157,6 +180,9 @@ public sealed class ActivityContract
         // shape byte-identical for existing contracts.
         if (SupportsBackgroundExecution)
             node[nameof(SupportsBackgroundExecution)] = true;
+
+        if (InvocationInput is not null)
+            node[nameof(InvocationInput)] = JsonSerializer.SerializeToNode(InvocationInput);
 
         var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));

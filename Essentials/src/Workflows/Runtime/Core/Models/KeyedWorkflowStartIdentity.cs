@@ -39,6 +39,9 @@ public sealed class KeyedWorkflowStartIdentity
     /// <summary>The artifact-free derivation of one recurring-trigger occurrence (#2198), <see cref="ForOccurrence"/>.</summary>
     public const string OccurrenceVersion = "v2";
 
+    /// <summary>Domain-separated canonical ingress starts; legacy v1/v2 derivations remain unchanged.</summary>
+    public const string IngressVersion = "v3";
+
     private KeyedWorkflowStartIdentity(string startKey, string version)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(startKey);
@@ -54,14 +57,15 @@ public sealed class KeyedWorkflowStartIdentity
     /// <summary>The key the identity derives from. A keyed start request carries it as its idempotency key.</summary>
     public string StartKey { get; }
 
-    /// <summary>The derivation the ids carry: <see cref="Version"/> or <see cref="OccurrenceVersion"/>.</summary>
+    /// <summary>The derivation the ids carry: <see cref="Version"/>, <see cref="OccurrenceVersion"/> or <see cref="IngressVersion"/>.</summary>
     public string DerivationVersion { get; }
 
     /// <summary>
     /// Whether the start is scoped to one artifact (<see cref="Version"/>). An occurrence start (<see cref="OccurrenceVersion"/>)
     /// names its occurrence whichever publication of the trigger fires it, so its execution may be pinned to another artifact.
     /// </summary>
-    public bool IsArtifactScoped => DerivationVersion == Version;
+    public bool IsArtifactScoped => DerivationVersion == Version ||
+        DerivationVersion == IngressVersion && StartKey.StartsWith("ingress:a:", StringComparison.Ordinal);
 
     public string WorkflowExecutionId { get; }
     public string CommandId { get; }
@@ -91,6 +95,32 @@ public sealed class KeyedWorkflowStartIdentity
         return new($"{occurrenceKey}:start", OccurrenceVersion);
     }
 
+    /// <summary>One generated source start per original binding, distinct from all caller-provided v1/v2 keys.</summary>
+    public static KeyedWorkflowStartIdentity ForIngressSource(StimulusDeliveryScope origin, string sourceId, string triggerBindingId, string artifactId)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(triggerBindingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        return new($"ingress:a:{RuntimeCheckpointCommitFingerprint.ComputeIngressBindingStartKey(origin, sourceId, triggerBindingId, artifactId)}", IngressVersion);
+    }
+
+    /// <summary>A caller-keyed ingress start isolated by its full explicit origin. Null artifact names an occurrence.</summary>
+    public static KeyedWorkflowStartIdentity ForScopedIngressKey(StimulusDeliveryScope origin, string clientKey, string? artifactId)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientKey);
+        if (artifactId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        return Ingress(origin, artifactId is null ? "scoped-occurrence" : "scoped-artifact", clientKey, artifactId);
+    }
+
+    private static KeyedWorkflowStartIdentity Ingress(StimulusDeliveryScope origin, string kind, string key, string? artifactId) =>
+        new($"ingress:{(artifactId is null ? "o" : "a")}:{RuntimeCheckpointCommitFingerprint.ComputeIngressStartKey(origin, kind, key, artifactId)}", IngressVersion);
+
+    private static bool IsIngressKey(string key) => key.Length == 74 &&
+        (key.StartsWith("ingress:a:", StringComparison.Ordinal) || key.StartsWith("ingress:o:", StringComparison.Ordinal)) &&
+        key.AsSpan(10).IndexOfAnyExcept("0123456789abcdef") < 0;
+
     /// <summary>The keyed identity <paramref name="request"/> carries, or <see langword="null"/> when it is not a keyed start.</summary>
     public static KeyedWorkflowStartIdentity? TryGet(WorkflowExecutionStartDispatchRequest request)
     {
@@ -98,8 +128,9 @@ public sealed class KeyedWorkflowStartIdentity
         if (request.IdempotencyKey is not { } startKey || request.WorkflowExecutionId is not { } workflowExecutionId)
             return null;
 
-        foreach (var version in (ReadOnlySpan<string>)[Version, OccurrenceVersion])
+        foreach (var version in (ReadOnlySpan<string>)[Version, OccurrenceVersion, IngressVersion])
         {
+            if (version == IngressVersion && !IsIngressKey(startKey)) continue;
             var identity = new KeyedWorkflowStartIdentity(startKey, version);
             if (StringComparer.Ordinal.Equals(identity.WorkflowExecutionId, workflowExecutionId))
                 return identity;

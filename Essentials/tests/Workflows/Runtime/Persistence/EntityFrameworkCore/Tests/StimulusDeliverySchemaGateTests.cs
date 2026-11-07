@@ -188,7 +188,7 @@ public sealed class StimulusDeliverySchemaGateTests
             [], new Dictionary<string, string>()) { ExpectedBookmarkResume = expected, RetainSchedulerWork = true };
         await new EfRuntimeCheckpointCommitStore(context, new Accessor()).CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Immediate));
         var written = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
-        Assert.Equal(finalize ? "2.0.0" : "1.0.0", written.SchemaVersion);
+        Assert.Equal(finalize ? RuntimeWorkflowExecutionEfModule.IngressRetentionSchemaVersion : "1.0.0", written.SchemaVersion);
         Assert.Equal(content, written.ContentJson); Assert.Equal(checked(originalRevision + 1), written.Revision);
         Assert.Null(await bookmark.FindAsync("target", "wait"));
         Assert.Equal(ActivityExecutionStatus.Running, (await new EfActivityExecutionStateStore(context, new Accessor(), new NoTokens()).FindAsync("target", "activity"))!.Status);
@@ -250,8 +250,9 @@ public sealed class StimulusDeliverySchemaGateTests
             var fixture = new Fixture(family); await fixture.connection.OpenAsync();
             await using var context = fixture.Open(); await context.Database.EnsureCreatedAsync();
             var store = new EfSchemaFinalizationStore(context);
-            var record = await store.GetOrCreateAsync(family, "1.0.0", ["1.0.0", "2.0.0"], SchemaFinalizationActor.OfOperator("test"));
-            await store.PlaceHoldAsync(family, record.Revision, null, "controlled v1 rollout", "test", ["1.0.0", "2.0.0"]);
+            var versions = fixture.Gate.Families.Chains.Single(chain => chain.Family == family).ReadableVersions;
+            var record = await store.GetOrCreateAsync(family, "1.0.0", versions, SchemaFinalizationActor.OfOperator("test"));
+            await store.PlaceHoldAsync(family, record.Revision, null, "controlled v1 rollout", "test", versions);
             await fixture.Gate.ActivateAsync(context); fixture.gates.Register(typeof(RuntimeDbContext), fixture.Gate);
             return fixture;
         }

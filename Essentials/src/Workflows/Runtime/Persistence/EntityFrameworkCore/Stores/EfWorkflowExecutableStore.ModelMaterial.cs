@@ -64,7 +64,7 @@ public sealed partial class EfWorkflowExecutableStore
                 ArtifactId = Encode(artifactId), ArtifactIdHash = Hash(artifactId), ArtifactIdOrderKey = OrderKey(artifactId),
                 ArtifactHash = material.Identity.ArtifactHash, IncarnationId = incarnation,
                 ContentJson = RuntimeArtifactJson.Serialize(new ModelMaterialDocument(1, DateTimeOffset.UtcNow, material)),
-                SchemaVersion = RuntimeArtifactEfModule.SchemaVersion
+                SchemaVersion = RuntimeArtifactWriteVersion.For(context)
             });
             context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(artifactId, scope, id, incarnation));
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(context, "saving model material", artifactId, () => context.SaveChangesAsync(cancellationToken));

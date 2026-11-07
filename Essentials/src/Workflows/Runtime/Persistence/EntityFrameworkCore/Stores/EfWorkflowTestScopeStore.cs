@@ -15,6 +15,8 @@ public sealed class EfWorkflowTestScopeStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowTestScopeStore, IWorkflowTestScopeAdmissionStore
 {
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) => ReferenceEquals(_context, expected) && _access.Current.Scope == scope;
+
     private const string CursorPurpose = "ef-runtime-test-scope-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
     private readonly RuntimeDbContext _context = context ?? throw new ArgumentNullException(nameof(context));

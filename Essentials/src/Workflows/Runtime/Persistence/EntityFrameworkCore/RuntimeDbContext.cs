@@ -41,6 +41,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     public DbSet<RuntimeCheckpointCommitEntity> RuntimeCheckpointCommits => Set<RuntimeCheckpointCommitEntity>();
     public DbSet<BackgroundActivityWorkEntity> BackgroundActivityWorks => Set<BackgroundActivityWorkEntity>();
     public DbSet<RuntimePostCommitOutboxEntity> RuntimePostCommitOutbox => Set<RuntimePostCommitOutboxEntity>();
+    internal DbSet<StimulusIngressSourceEntity> StimulusIngressSources => Set<StimulusIngressSourceEntity>();
     public DbSet<WorkflowDispatchEntity> WorkflowDispatches => Set<WorkflowDispatchEntity>();
     public DbSet<WorkflowSchedulerPoisonEntity> WorkflowSchedulerPoisonRecords => Set<WorkflowSchedulerPoisonEntity>();
     public DbSet<WorkflowTriggerBindingEntity> WorkflowTriggerBindings => Set<WorkflowTriggerBindingEntity>();
@@ -82,6 +83,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new RuntimeCheckpointCommitEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BackgroundActivityWorkEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimePostCommitOutboxEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new StimulusIngressSourceEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowDispatchEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowSchedulerPoisonEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowTriggerBindingEntityConfiguration());

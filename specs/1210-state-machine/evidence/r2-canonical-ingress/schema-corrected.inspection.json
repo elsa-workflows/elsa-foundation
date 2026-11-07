@@ -1,0 +1,34 @@
+{
+  "status": "SCHEMA4_PASSED",
+  "at": "2026-11-06T03:56:38.605292+00:00",
+  "sourceManifestSha256": "b928d2226ce51038c994f3bbe73715928293584b91b6bb3ed61ab5a781edf47b",
+  "rawArchiveSha256": "3f9c094e3c7e444c1905cac68010d0f7e42b1aa58d7571f25ccf807a38b45b21",
+  "counters": {
+    "total": "4",
+    "executed": "4",
+    "passed": "4",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "trxSha256": "d476ab75bbaefd7ff42cddecae95b845ebdb5eca10aaa0ffdecca9810f082553",
+  "cases": [
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeEntityFrameworkCoreFeatureTests.The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeModelMigrationTests.Additive_model_tables_upgrade_an_actual_legacy_store_without_changing_any_legacy_rows",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.StimulusDeliverySchemaGateTests.Exact_resume_header_touch_uses_the_admitted_version_without_rewriting_native_content(finalize: True)",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.StimulusDeliverySchemaGateTests.Exact_resume_header_touch_uses_the_admitted_version_without_rewriting_native_content(finalize: False)"
+  ],
+  "elapsedSeconds": 62.43775110200022,
+  "cleanup": "Emptyownedgroups/unitinactive",
+  "scope": "Both exactresume variants, unknownfinalizedversionrefusal, genuinelegacySQLiteupgrade; notfullfeature/allproviders"
+}

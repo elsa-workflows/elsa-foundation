@@ -1,0 +1,598 @@
+{
+  "schemaVersion": 1,
+  "status": "bounded external native N1-N8 run matched all47expected outcomes; production contract remains provisional",
+  "productSourceHead": "4c313843c8f2493b9730dffe51df78ddb59a326e",
+  "fixtureSourceHead": "c0fd8010b921e6b75ff7789879d691bd7e914750",
+  "featureHeadAtRecording": "99c24c0e5a5313c457cefe7671882e1eba044bff",
+  "executionPlacement": "External fixture using byte-identical research C# and lock source plus canonical absolute project/import paths; not an execution of the later feature-branch head or resulting main.",
+  "sourceCleanAtBuildAndLaunch": true,
+  "build": {
+    "command": "dotnet build StateMachine.M0.Witness.csproj -m:1 -p:RestoreLockedMode=true --nologo",
+    "exitCode": 0,
+    "warnings": 283,
+    "errors": 0,
+    "sourceAndBinaryBinding": {
+      "manifestSha256": "dfe3d23e3c5f5f2ef1c2c4deb0bb1d5543445291ab82d3ead32df81ac6148687",
+      "buildBindingSha256": "699798d4d3cf3f844d588a5403af0f0fa4dc05a6195408556340414f72b82596",
+      "runtimeSha256": "6e9e6fba3a4fc89ae625b828cb1ebfd0d724ca66f333c47df8f56134d7790d7d",
+      "matchesWholeRuntimeH1Binary": true
+    }
+  },
+  "execution": {
+    "command": "dotnet bin/Debug/net10.0/StateMachine.M0.Witness.dll run /private/tmp/elsa4-statemachine-program/native-3871-canonical-run",
+    "exitCode": 0,
+    "processCount": 47,
+    "distinctProcessIds": 47,
+    "expectedResults": 47,
+    "unexpectedResults": 0,
+    "exitZero": 42,
+    "intendedNegativeFailures": 5,
+    "processes": [
+      {
+        "scenario": "normal",
+        "generation": 1,
+        "pid": 10019,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 2,
+        "pid": 10025,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 3,
+        "pid": 10053,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "normal",
+        "generation": 4,
+        "pid": 10054,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 1,
+        "pid": 10055,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 2,
+        "pid": 10076,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 3,
+        "pid": 10087,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "action-retry",
+        "generation": 4,
+        "pid": 10088,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 1,
+        "pid": 10093,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 2,
+        "pid": 10114,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 3,
+        "pid": 10118,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "guard-retry",
+        "generation": 4,
+        "pid": 10119,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 1,
+        "pid": 10120,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 2,
+        "pid": 10150,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 3,
+        "pid": 10161,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "retry-without-reschedule-marker",
+        "generation": 4,
+        "pid": 10162,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 1,
+        "pid": 10163,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 2,
+        "pid": 10165,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 3,
+        "pid": 10166,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "complete",
+        "generation": 4,
+        "pid": 10167,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 1,
+        "pid": 10168,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 2,
+        "pid": 10169,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 3,
+        "pid": 10170,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel",
+        "generation": 4,
+        "pid": 10177,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 1,
+        "pid": 10200,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 2,
+        "pid": 10214,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 3,
+        "pid": 10219,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "cancel-selected",
+        "generation": 4,
+        "pid": 10220,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 1,
+        "pid": 10226,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 2,
+        "pid": 10233,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 3,
+        "pid": 10253,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "nested",
+        "generation": 4,
+        "pid": 10254,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 1,
+        "pid": 10255,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 2,
+        "pid": 10272,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 3,
+        "pid": 10298,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-blocked",
+        "generation": 4,
+        "pid": 10299,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 1,
+        "pid": 10300,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 2,
+        "pid": 10301,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 3,
+        "pid": 10309,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-race",
+        "generation": 4,
+        "pid": 10316,
+        "mutation": null,
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-state",
+        "generation": 1,
+        "pid": 10322,
+        "mutation": "omit-state",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-provenance",
+        "generation": 1,
+        "pid": 10338,
+        "mutation": "corrupt-provenance",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "admission-capacity-control",
+        "generation": 1,
+        "pid": 10349,
+        "mutation": "omit-in-flight-capacity",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 1,
+        "pid": 10360,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-terminal",
+        "generation": 2,
+        "pid": 10366,
+        "mutation": "omit-terminal-export",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 1,
+        "pid": 10367,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": true,
+        "exitCode": 0,
+        "observedExpectedResult": true
+      },
+      {
+        "scenario": "negative-cancel",
+        "generation": 2,
+        "pid": 10435,
+        "mutation": "omit-cancel-projection",
+        "expectedSuccess": false,
+        "exitCode": 1,
+        "observedExpectedResult": true
+      }
+    ]
+  },
+  "qualification": {
+    "N1-N6": "All prior bounded positive and intended negative-control expectations matched in this run.",
+    "N7": "Both admission scenarios now cancel in generation3 and remain Cancelled with eight handled receipts in cold generation4. Admission/race/recovery/budget checks remain bounded fixture evidence.",
+    "N8": "Ordinary nested Sequence/result-binding/caller-continuation and cold inspection expectations matched.",
+    "independentEvidenceReview": "No verified defects;302raw evidence-file hashes,9preparation files,58assemblies and47process receipts reviewed.",
+    "liveOwnedProcessesAfterRun": []
+  },
+  "correction": {
+    "issue": "https://github.com/elsa-workflows/elsa-foundation/issues/3871",
+    "pullRequest": "https://github.com/elsa-workflows/elsa-foundation/pull/3886",
+    "mergedCommit": "b3653923e9683c775907262b58d3c923a6b313ec",
+    "mergedBy": "elsa-workflows-codex[bot]",
+    "fixFileBlobsVerifiedOnResultingMain": [
+      {
+        "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/ActivityExecutions/WorkflowCancellationPlanner.cs",
+        "blobSha": "cf19afd7aff6b1a8370fb646c8716263bddee628"
+      },
+      {
+        "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimeCancellationContractTests.cs",
+        "blobSha": "7c13a9c3e0ed1d9361ea972337fc73435afea0d0"
+      }
+    ],
+    "readyCi": {
+      "run": 42071899798,
+      "head": "4c313843c8f2493b9730dffe51df78ddb59a326e",
+      "requiredBuildAndTest": "success",
+      "requiredGeneratedMaps": "success",
+      "requiredActualFullTier": "success",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/42071899798"
+    },
+    "resultingMainCI": "Separate post-merge gate; this native receipt makes no resulting-main runtime-execution claim.",
+    "wholeRuntimeH1": {
+      "total": 3338,
+      "passed": 3338,
+      "failed": 0,
+      "skipped": 0,
+      "discoveryEntries": 3327,
+      "exactNames": 3324,
+      "memberDataRows": [
+        2,
+        4,
+        8
+      ]
+    },
+    "publicRestH3": {
+      "status": "independently accepted bounded local SQLite/Development run",
+      "elapsedSeconds": 166.066,
+      "buildWarnings": 206,
+      "unchangedSuite": "passed",
+      "focusedRescheduleCancelRestartColdRead": "passed",
+      "sampledOwnedIdentitiesAbsent": 144,
+      "outsideLiveObserver": "incomplete-or-failed;zerohosts;no positive corroboration",
+      "acceptanceReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3886#issuecomment-6664257809"
+    }
+  },
+  "historicalEvidencePreserved": {
+    "nativeC0fd": {
+      "file": "m0-native-witness-c0fd.json",
+      "sha256": "015388d766134e2f14b8694d6459a5327707856cc24e7b6a34b769c336fd871c",
+      "runnerExitCode": 1,
+      "expectedResults": 43,
+      "unexpectedResults": 4,
+      "dependency": "Two cancellation failures caused two subsequent cold-read failures."
+    },
+    "firstExternalBuild": {
+      "status": "failed before any witness generation",
+      "errors": 8,
+      "code": "CS0006",
+      "receiptSha256": "33f15fc1425554b611c84db2c12f37dca636b9b9b4c8441e202fe82dd91c6eec"
+    },
+    "preliminaryH3Tooling": "Original hash mismatch and source findings retained separately; corrected immutableR2 qualified. No historical outcome relabeled."
+  },
+  "receipts": {
+    "nativeResultSha256": "27bb27eea6d0feacf6c994eb7d37fd317a56c177808cb0561da8ccb04d2ac500",
+    "processReportSha256": "5aa155ca9754773945a6cc27d4d8d3714ca26d8835d89f67a407836854adee33",
+    "h1ResultSha256": "1c8770dd85361249f8a1b5be0e170e857d2c9e55808145bb41b08ce11e1fc068",
+    "nativePublicReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3886#issuecomment-6661315879",
+    "nativeIndependentReview": "https://github.com/elsa-workflows/elsa-foundation/pull/3886#issuecomment-6661327546",
+    "mergeAudit": "https://github.com/elsa-workflows/elsa-foundation/pull/3886#issuecomment-6665605267"
+  },
+  "limits": [
+    "Research fixture, not a StateMachine implementation",
+    "Sequential ordinary Event carriers; no complete machine inbox/API guarantee",
+    "Guard helper adapter, not all inline expression recovery",
+    "No Studio, provider matrix or saga qualification",
+    "Admission gateway is fixture-only and bounded; no production public inbox guarantee",
+    "Lost response is ignored after request completion, not an ambiguous provider commit",
+    "No distributed multi-host admission, retention SLA or full trigger-event coalescing qualification",
+    "N8 proves ordinary result binding, not state-local values/secret paths or production outcome schema",
+    "No new local producer or resulting-main witness run occurred while recording this evidence.",
+    "Q1-Q3, ordinary logical-event trigger provenance, state-visit variable/secret scopes, production admission/retention guarantees, hierarchy/parallel completeness, Studio and saga qualification remain open."
+  ],
+  "sourceFiles": [
+    {
+      "file": "AdmissionProbe.cs",
+      "sourceSha256": "25afaa0bdba1457275195bd301ebc29d4f643a462e70b701bef1e2fe941eb2e8",
+      "copiedSha256": "25afaa0bdba1457275195bd301ebc29d4f643a462e70b701bef1e2fe941eb2e8",
+      "adaptation": "byte-identical"
+    },
+    {
+      "file": "NativeProbe.cs",
+      "sourceSha256": "240500fedf263bd9e9e4726fc19f418d4907176bf7e4374bee8b07e035daab99",
+      "copiedSha256": "240500fedf263bd9e9e4726fc19f418d4907176bf7e4374bee8b07e035daab99",
+      "adaptation": "byte-identical"
+    },
+    {
+      "file": "Program.cs",
+      "sourceSha256": "c44203cd58d3ed959c59222a675241a4b38b6ecfd3a884fbeaf7674e9db5e2f3",
+      "copiedSha256": "c44203cd58d3ed959c59222a675241a4b38b6ecfd3a884fbeaf7674e9db5e2f3",
+      "adaptation": "byte-identical"
+    },
+    {
+      "file": "StateMachine.M0.Witness.csproj",
+      "sourceSha256": "720d7d65cc2b82c9cf1dee6959cbddeed0f772495217376145b491904638f62c",
+      "copiedSha256": "ca8f392473d8f6a94f9fa8ebdad399544e8a7e68cbaf066e95a490f7ce6dfd0e",
+      "adaptation": "canonical absolute ProjectReference paths only"
+    },
+    {
+      "file": "packages.lock.json",
+      "sourceSha256": "f65cd7c0b091f61f38e0f963ef0d9f9f46761434da4f477fff0e48140e4ec0ae",
+      "copiedSha256": "f65cd7c0b091f61f38e0f963ef0d9f9f46761434da4f477fff0e48140e4ec0ae",
+      "adaptation": "byte-identical"
+    }
+  ],
+  "executedKeyAssemblies": [
+    {
+      "name": "Elsa.Activities.Runtime.dll",
+      "sha256": "f5431c88c2376e79cb461ace4723be7f223202051384d343426e4940447ca338"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "bbb10da576f7c7c4b73be758aa654137e4563cf55500dd62e797c6ba6e40fee9"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "sha256": "6e9e6fba3a4fc89ae625b828cb1ebfd0d724ca66f333c47df8f56134d7790d7d"
+    },
+    {
+      "name": "StateMachine.M0.Witness.dll",
+      "sha256": "c55ae19c15d1b0f4786d603619aff30d7f70830b7106f2541142b6b83b1cc2be"
+    }
+  ]
+}

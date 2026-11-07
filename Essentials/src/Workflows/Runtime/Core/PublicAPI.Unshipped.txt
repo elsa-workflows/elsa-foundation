@@ -10344,3 +10344,96 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusIngressSourceStore
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusIngressSourceStore.FindByIdAsync(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin, string! sourceId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource?>
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusIngressSourceStore.FindByKeyAsync(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin, string! clientKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource?>
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusIngressSourceStore.InstallAsync(Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource!>
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusIngressSourceStore.ListPinnedExecutableArtifactIdsAsync(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! material, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Consumers.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Legacy.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Resumes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.SelectedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.Starts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort.StimulusIngressCohort(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset selectedAt, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusStartRecipient!>! starts, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient!>! resumes, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer!>! consumers, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution!>! legacy) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.ParentInvocationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.Protocol.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.ProtocolVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.Scope.get -> Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.Slots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.StimulusIngressConsumer(string! workflowExecutionId, string! invocationId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! scope, string! protocol, int protocolVersion, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot!>! slots, string? parentInvocationId = null) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressConsumer.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode.AllMatches = 1 -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode.SingleMatch = 0 -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.BookmarkIdsToResume.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.Mode.get -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.OriginalBookmarkIds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.Status.get -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.StimulusIngressLegacyResolution(string! workflowExecutionId, Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyMode mode, Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus status, System.Collections.Generic.IReadOnlyList<string!>! originalBookmarkIds, System.Collections.Generic.IReadOnlyList<string!>! bookmarkIdsToResume) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyResolution.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus.Ambiguous = 1 -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus.Resolved = 0 -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressLegacyStatus
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.CorrelationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.Input.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.InputPresent.get -> bool
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.Mode.get -> Elsa.Workflows.Runtime.Core.Models.StimulusRoutingMode
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.PayloadType.get -> Elsa.Primitives.Models.ValueTypeDescriptor?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.ProviderId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.RequestedBy.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.ResumeAllMatchingBookmarks.get -> bool
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.SelectionOwnerTriggerBindingId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.StartKeyScope.get -> Elsa.Workflows.Runtime.Core.Models.StimulusStartKeyScope
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.StimulusHash.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.StimulusIngressRequest(int version, string! stimulusType, string! stimulusHash, System.Text.Json.JsonElement? input, string? correlationId, Elsa.Workflows.Runtime.Core.Models.StimulusRoutingMode mode, string! requestedBy, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata, Elsa.Primitives.Models.ValueTypeDescriptor? payloadType, string? providerId, string? targetWorkflowExecutionId, Elsa.Workflows.Runtime.Core.Models.StimulusStartKeyScope startKeyScope, bool resumeAllMatchingBookmarks, string? selectionOwnerTriggerBindingId) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.StimulusIngressRequest(int version, string! stimulusType, string! stimulusHash, System.Text.Json.JsonElement? input, string? correlationId, Elsa.Workflows.Runtime.Core.Models.StimulusRoutingMode mode, string! requestedBy, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata, Elsa.Primitives.Models.ValueTypeDescriptor? payloadType, string? providerId, string? targetWorkflowExecutionId, Elsa.Workflows.Runtime.Core.Models.StimulusStartKeyScope startKeyScope, bool resumeAllMatchingBookmarks, string? selectionOwnerTriggerBindingId, bool inputPresent) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.StimulusType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.TargetWorkflowExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.Version.get -> int
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.ActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.Generation.get -> long
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.SlotId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.StimulusIngressSlot(string! slotId, string! bookmarkId, string! activityExecutionId, long generation, string! visitId, string! triggerOperationId, string! triggerActivationId) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.TriggerActivationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.TriggerOperationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSlot.VisitId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.ClientKey.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.Cohort.get -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.GetExecutionDependencies() -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.GetPinnedExecutables() -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!>!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.GetStartIdentity(string! triggerBindingId) -> Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.MatchesOrigin(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! expected) -> bool
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.OriginScope.get -> Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.Request.get -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.RequestFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.SourceId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.StimulusIngressSource(int version, string! sourceId, Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! originScope, string? clientKey, Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest! request, System.DateTimeOffset acceptedAt, Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort! cohort) -> void
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.Version.get -> int
+const Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest.CurrentVersion = 1 -> int
+const Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource.CurrentVersion = 1 -> int
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeIngressCohort(Elsa.Workflows.Runtime.Core.Models.StimulusIngressCohort! cohort) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeIngressKey(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin, string! clientKey) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeIngressOrigin(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeIngressRequest(Elsa.Workflows.Runtime.Core.Models.StimulusIngressRequest! request) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeIngressSource(Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource! source) -> string!
+const Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity.IngressVersion = "v3" -> string!
+static Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity.ForIngressSource(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin, string! sourceId, string! triggerBindingId, string! artifactId) -> Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity!
+static Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity.ForScopedIngressKey(Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! origin, string! clientKey, string? artifactId) -> Elsa.Workflows.Runtime.Core.Models.KeyedWorkflowStartIdentity!
+Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec
+static Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec.Decode(System.Text.Json.JsonElement header) -> Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource!
+static Elsa.Workflows.Runtime.Core.Models.StimulusIngressSourceCodec.Encode(Elsa.Workflows.Runtime.Core.Models.StimulusIngressSource! source) -> System.Text.Json.JsonElement
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeInvocationInput(int version, System.Text.Json.JsonElement semanticContent) -> string!

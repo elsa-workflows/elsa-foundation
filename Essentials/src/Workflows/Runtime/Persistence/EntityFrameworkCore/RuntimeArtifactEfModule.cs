@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 public static class RuntimeArtifactEfModule
 {
-    public const string SchemaVersion = "1.0.0";
+    public const string SchemaVersion = "2.0.0";
     public const string SchemaFamily = "RuntimeArtifact";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

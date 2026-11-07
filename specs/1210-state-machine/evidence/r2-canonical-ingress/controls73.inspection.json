@@ -1,0 +1,55 @@
+{
+  "status": "FAILED_BUILD_INPUT_MISSING_GENUINE_FIXTURE",
+  "inspectedAt": "2026-11-06T02:41:22.690625+00:00",
+  "sourceManifestSha256": "2c63de7e83e4370c3a62ee05cc2262b8379e25c273933f03105d1a323e2ca260",
+  "packetSha256": "a2ee860cf307a33d440a2a9d7bc145214ef2d94e679b050444e5e9a3b6601837",
+  "rawArchiveSha256": "f9fb4c00f22b77a38b9eb86290cfa0e19872b32d327abdf8117f363efedaeafc",
+  "files": {
+    "collection-receipt.json": "2474409cc5c9ce20ace7fe235b93b0d7f4157f1678f79369de4ea44496265207",
+    "controller.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "controller.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/ef-ingress.result.json": "edfcf9d2d1f47a5e6337344c884838134850cd11c2e2a39544427f2ca568000e",
+    "evidence/ef-ingress.started.json": "5501072a518e342950e23a79af461e619e439e987cd0570fa283080f581e8020",
+    "evidence/ef-ingress.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/ef-ingress.stdout.log": "86ac382b5bc509160c99cff908488daf2e57fbf606220c307ef8c7f0a1407ca6",
+    "evidence/launcher-result.json": "de369825bff14db242a9aa82d1b559c8aad66e49119c844125e6c34b38f8423c",
+    "evidence/preflight.json": "7ed688a9a3ea597f9cdda8e76f78784f1846e486687c10017465db97ffdf578c",
+    "evidence/runtime-ingress/runtime-ingress.trx": "4fa83fbda46ec198d275451ce2a9d8810944bdc9e16480da64d7621e9bcd53be",
+    "evidence/runtime-ingress.result.json": "e3f297a1451e11d27d666c4bc2398ea443a9cf86732999202e615c39c98e0fa2",
+    "evidence/runtime-ingress.started.json": "3f92c957e7e3f47c3b0f53e74c249fc67a27e02534219f3d6037cda54693aea1",
+    "evidence/runtime-ingress.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/runtime-ingress.stdout.log": "09c544e8e096e21a2185730022720545d05d308be8c6f54131865736c389e205",
+    "evidence/runtime-ingress.trx-summary.json": "41a3c843afd68f4c4f196238a664ec846bca15edcc076d844656abb8f7825a65",
+    "inputs/packet/packet.json": "a2ee860cf307a33d440a2a9d7bc145214ef2d94e679b050444e5e9a3b6601837",
+    "inputs/packet/run.py": "7e7d7bcd40347741b5ad0a83097ad379d66083b2f34c183f9eb4f3a1e8facf02",
+    "inputs/packet/runtime.runsettings": "fd929a6a6cfb4879b43a1c21eb042cb12e24533c2ebfb5ea1ffde65c125e0025",
+    "inputs/packet/source-manifest.json": "2c63de7e83e4370c3a62ee05cc2262b8379e25c273933f03105d1a323e2ca260",
+    "launch-receipt.json": "8f57c62ccfdc1b3e1a17a3c5e00f45d65c1f5c0f7caee01fc9f3e92d636e7ee9",
+    "run-unit.sh": "f2a2b64ec38551c247d80bbcef521c01e7e3befe2df318b8f91be2f6cd0805bf",
+    "setup-receipt.json": "8ff87bf752a26c71e55f60f70c0c55cd2e70b3ce152a45013ea056d1e6da8892",
+    "unit-command-terminal.json": "86eaa66b6c05504652ae2319f4f56b7ad57b8bfd8936be12ecb775a1af7f2fd8",
+    "unit.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "unit.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "Runtime": {
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "4fa83fbda46ec198d275451ce2a9d8810944bdc9e16480da64d7621e9bcd53be"
+  },
+  "EF": {
+    "build": "FAILED_MSB3030",
+    "tests": "NOT_RUN",
+    "errors": [
+      "/opt/elsa-tools/dotnet-10.0.300/sdk/10.0.300/Microsoft.Common.CurrentVersion.targets(5397,5): error MSB3030: Could not copy the file \"/srv/elsa-qualification/statemachine/r2-controls73-02/source/specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz\" because it was not found. [/srv/elsa-qualification/statemachine/r2-controls73-02/source/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj]"
+    ]
+  },
+  "regressions": "NOT_RUN",
+  "cleanup": {
+    "allOwnedGroupsEmpty": true,
+    "unitState": "failed",
+    "controlGroup": "",
+    "timeout": false
+  },
+  "correction": "Genuine historical fixture found in existing project checkout, exact gzip3fcd6e38 and databasec62347eb hashes match pinned legacy test/manifest; no product code/oracle edit. Migration generation separately approved."
+}
