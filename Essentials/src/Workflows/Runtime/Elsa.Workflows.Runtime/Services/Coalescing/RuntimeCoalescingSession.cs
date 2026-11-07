@@ -998,7 +998,7 @@ public sealed class RuntimeCoalescingSession
         // it is refused rather than deleting the durable copy out from under its holder, and nothing is recorded.
         if (deferred && !IsActive && _overlayClaims.ContainsKey(claim))
         {
-            if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt), cancellationToken) is not null)
+            if (!await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt), cancellationToken))
             {
                 _lostOverlayClaims.TryAdd(claim, 0);
                 _overlayClaims.TryRemove(claim, out _);
@@ -1256,17 +1256,22 @@ public sealed class RuntimeCoalescingSession
     {
         foreach (var (workItemId, pending) in _pendingReleases.ToArray())
         {
-            // A refusal means this drain lost the item: its durable copy is gone or held under another owner's live
-            // claim. The flush fails as it does when any other tracked work goes missing, although its commit may have
-            // landed; whoever holds the durable copy decides when the item runs (#3700).
-            if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
-                throw new InvalidOperationException(failure);
+            // The flush already committed. A refusal means the item is gone or belongs to a successor, so discard
+            // this drain's release without touching that durable copy (#3700). Forget the overlay identity too:
+            // another advance must neither re-enqueue it nor adopt and delete the successor's copy during refresh.
+            if (!await TryPersistReleaseAsync(pending, cancellationToken))
+            {
+                _lostOverlayClaims.TryAdd(pending.Claim, 0);
+                await _overlayQueue.DeleteAsync(WorkflowExecutionId, workItemId, CancellationToken.None);
+                _durableWorkItemIds.Remove(workItemId);
+                _knownOverlayWorkItemIds.Remove(workItemId);
+                _durableVisibility.Remove(workItemId);
+            }
             _pendingReleases.Remove(workItemId);
         }
     }
 
-    // Returns null once the release is durable, else why it was refused.
-    private async ValueTask<string?> TryPersistReleaseAsync(PendingRelease pending, CancellationToken cancellationToken)
+    private async ValueTask<bool> TryPersistReleaseAsync(PendingRelease pending, CancellationToken cancellationToken)
     {
         // The execution lease still owns this drain, but not the durable head: another writer can enqueue durably while
         // the overlay holds the segment, ahead of a continuation the flush persists only now (#3690). Delay the released
@@ -1279,11 +1284,8 @@ public sealed class RuntimeCoalescingSession
                 $"The durable scheduler queue does not implement {nameof(IWorkflowSchedulerWorkDeferral)}, so it cannot persist a deferred release.");
         }
 
-        var deferred = await deferral.DeferAsync(
+        return await deferral.DeferAsync(
             WorkflowExecutionId, pending.Claim.Item.WorkItemId, _timeProvider.GetUtcNow(), pending.VisibleAt, cancellationToken);
-        return deferred
-            ? null
-            : "The deferred scheduler work is no longer queued durably, or another owner holds its durable claim.";
     }
 
     private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt);
