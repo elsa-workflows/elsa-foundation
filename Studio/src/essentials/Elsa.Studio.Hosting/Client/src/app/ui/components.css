@@ -544,24 +544,33 @@ html[data-theme-material] .studio-action-notice {
 }
 
 /*
- * --studio-shell-header-bottom is published by the shell (ShellFrame) from the live top bar, whose
- * height and position change with the theme layout and the narrow-viewport stacked sidebar.
- * Toasts sit below dialogs (1200) and level with header menus, which portal later and so stay on top.
+ * ShellFrame publishes live header and dock bounds. Keep confirmations away from page-header
+ * actions and above the dock; constrain long stacks on narrow/short viewports. Toasts sit below
+ * all first-party modal backdrops (20 and above) and header menus, but above a maximized dock (10).
  */
 .studio-toast-host {
   position: fixed;
-  top: calc(var(--studio-shell-header-bottom, 54px) + 10px);
+  --studio-toast-bottom-inset: min(var(--studio-shell-bottom-inset, 0px), max(0px, calc((100vh - var(--studio-shell-header-bottom, 54px)) / 2)));
+  bottom: calc(var(--studio-toast-bottom-inset) + 16px);
   right: 16px;
-  z-index: 1000;
+  z-index: 15;
   display: flex;
   width: min(360px, calc(100vw - 32px));
+  max-height: max(0px, min(50vh, calc(100vh - var(--studio-shell-header-bottom, 54px) - var(--studio-toast-bottom-inset) - 32px)));
+  overflow-y: auto;
   flex-direction: column;
   gap: 8px;
   pointer-events: none;
 }
 
+/* A maximized dock owns the workspace, so feedback overlays its content within the viewport. */
+.bottom-panel-maximized .studio-toast-host {
+  --studio-toast-bottom-inset: 0px;
+}
+
 .studio-toast {
   --studio-toast-tone: var(--studio-accent);
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;

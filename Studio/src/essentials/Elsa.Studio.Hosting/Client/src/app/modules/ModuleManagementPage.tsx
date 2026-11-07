@@ -154,7 +154,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
-      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
         <SummaryItem label="Rows" value={rows.length} />
@@ -364,7 +364,7 @@ function InlinePackageUploads({
   registry: ModuleManagementRegistryResponse;
   busy: boolean;
   dragActive: boolean;
-  uploadInputRef: React.RefObject<HTMLInputElement>;
+  uploadInputRef: React.RefObject<HTMLInputElement | null>;
   onUploadFiles(files: FileList | File[]): void;
   onDragActiveChange(active: boolean): void;
   onDeleteDropFolderPackage(fileName: string): void;

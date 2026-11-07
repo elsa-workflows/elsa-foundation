@@ -29,13 +29,13 @@ export function register(api: ElsaStudioModuleApi) {
         id: "secrets", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
         path: "/security/secrets",
         label: "Secrets",
-        component: () => <SecretsPage context={api.backend} dialogs={api.dialogs} />
+        component: () => <SecretsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} />
       },
       {
         id: "secrets-legacy",
         path: "/secrets",
         label: "Secrets",
-        component: () => <SecretsPage context={api.backend} dialogs={api.dialogs} />
+        component: () => <SecretsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} />
       }
     ]
   });

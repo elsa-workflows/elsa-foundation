@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useDialogFocus, describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { AdvancedSection } from "@elsa-workflows/studio-ui";
@@ -24,7 +24,7 @@ export function ConnectionCreateDialog({
   context: StudioEndpointContext;
   descriptors: ConnectionDescriptorsResponse;
   onCancel(): void;
-  onCreated(connection: ConnectionMetadata): void;
+  onCreated(connection: ConnectionMetadata, canNotify: boolean): void;
 }) {
   const [name, setName] = useState("");
   const [typeName, setTypeName] = useState(() => initialTypeName(descriptors));
@@ -39,7 +39,8 @@ export function ConnectionCreateDialog({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const currentContextRef = useRef(context);
+  const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
+  const currentScopeRef = useRef(operationScope);
   const submittingRef = useRef(false);
   const dialogTitleId = useId();
   const nameId = useId();
@@ -49,7 +50,15 @@ export function ConnectionCreateDialog({
   const authenticationTitleId = useId();
   const addressGuidanceId = useId();
   const placementErrorId = useId();
-  currentContextRef.current = context;
+  currentScopeRef.current = operationScope;
+
+  useLayoutEffect(() => {
+    operationScope.active = true;
+    return () => {
+      operationScope.active = false;
+      operationScope.generation++;
+    };
+  }, [operationScope]);
 
   const contextIsCurrent = boundContext === context;
   const visibleTypeName = contextIsCurrent ? typeName : initialTypeName(descriptors);
@@ -191,15 +200,19 @@ export function ConnectionCreateDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (submittingRef.current || !contextIsCurrent || !canSubmit) return;
+    if (!operationScope.active || submittingRef.current || !contextIsCurrent || !canSubmit) return;
 
     submittingRef.current = true;
     setSubmitting(true);
     clearErrors();
     const operationContext = context;
+    const operationGeneration = operationScope.generation;
+    const isCurrent = () => operationScope.active
+      && currentScopeRef.current === operationScope
+      && operationScope.generation === operationGeneration;
     let closed = false;
     try {
-      if (currentContextRef.current !== operationContext) return;
+      if (!isCurrent()) return;
 
       const secretFields: CreateConnectionRequest["secretFields"] = {};
       for (const field of sensitiveFields) {
@@ -218,17 +231,17 @@ export function ConnectionCreateDialog({
         secretFields: secretFields!
       };
       const created = await createConnection(operationContext, request);
-      if (currentContextRef.current !== operationContext) return;
+      if (currentScopeRef.current !== operationScope) return;
 
       closed = true;
       submittingRef.current = false;
       setSubmitting(false);
-      onCreated(created);
-      onCancel();
+      onCreated(created, isCurrent());
+      if (isCurrent()) onCancel();
     } catch (cause) {
       const message = await describeApiError(cause);
       const validation = await tryExtractValidationErrors(cause);
-      if (currentContextRef.current === operationContext) {
+      if (currentScopeRef.current === operationScope) {
         const knownKeys = ["name", ...typeSettings.map(field => `settings.${field.name}`),
           ...nonSensitiveSchemeFields.map(field => `settings.${field.name}`),
           ...sensitiveFields.map(field => `secretFields.${field.name}`)];
@@ -243,7 +256,7 @@ export function ConnectionCreateDialog({
         setError(message || "The connection could not be created.");
       }
     } finally {
-      if (!closed && currentContextRef.current === operationContext) {
+      if (!closed && currentScopeRef.current === operationScope) {
         submittingRef.current = false;
         setSubmitting(false);
       }

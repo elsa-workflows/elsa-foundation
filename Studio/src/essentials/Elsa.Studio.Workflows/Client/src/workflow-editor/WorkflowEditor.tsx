@@ -119,6 +119,7 @@ import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPalette
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
+import { notifySuccess, useNotificationGuard } from "./notifications";
 import { assertLosslessBpmnImport, exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
@@ -235,6 +236,8 @@ export function WorkflowEditor({
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
   const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
+  const notificationScope = useMemo(() => ({ context, definitionId, documentAdapter }), [context, definitionId, documentAdapter]);
+  const captureNotificationGuard = useNotificationGuard(notificationScope);
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
   const [paletteSearch, setPaletteSearch] = useState("");
@@ -686,6 +689,7 @@ export function WorkflowEditor({
     updateTestDriveResult
   } = useWorkflowOperations({
     context,
+    notificationScope,
     draft: editableDraft,
     lineage: lineageHold.lineage,
     details,
@@ -1020,6 +1024,7 @@ export function WorkflowEditor({
   const exportBpmn = useCallback(async () => {
     const rootActivity = draft?.state.rootActivity;
     if (!rootActivity) return;
+    const canNotify = captureNotificationGuard();
     try {
       const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout));
       const blob = new Blob([xml], { type: "application/xml" });
@@ -1029,13 +1034,12 @@ export function WorkflowEditor({
       anchor.download = `${details?.definition?.name || "workflow"}.bpmn`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setError("");
-      setStatus("Exported BPMN 2.0 XML.");
+      if (canNotify.isOwned()) setError("");
+      if (canNotify()) notifySuccess("Exported BPMN 2.0 XML.");
     } catch {
-      setStatus("");
-      setError("BPMN export failed.");
+      if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
     }
-  }, [context, details?.definition?.name, draft, setError, setStatus]);
+  }, [captureNotificationGuard, context, details?.definition?.name, draft, setError, setStatus]);
 
   const importBpmn = useCallback(async (file: File) => {
     const rootActivity = draft?.state.rootActivity;
@@ -1508,7 +1512,11 @@ export function WorkflowEditor({
         <WorkflowAlert
           error={error}
           onDismiss={() => setError("")}
-          onCopied={label => setStatus(`${label} copied.`)}
+          scope={notificationScope}
+          onCopied={label => {
+            setStatus(current => current === `Could not copy ${label}.` ? "" : current);
+            notifySuccess(`${label} copied.`);
+          }}
           onCopyFailed={label => setStatus(`Could not copy ${label}.`)}
         />
       ) : null}
@@ -1605,7 +1613,7 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => notifySuccess("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
           ) : canvasView === "versions" ? (
             <div className="wf-properties-view">
               <section className="wf-properties-section">

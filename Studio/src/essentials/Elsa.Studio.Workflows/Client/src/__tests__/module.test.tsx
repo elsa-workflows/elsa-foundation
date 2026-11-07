@@ -1,3 +1,4 @@
+import { getNotifications } from "../workflow-editor/notifications";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -509,7 +510,8 @@ describe("workflows module", () => {
 
     favoriteFails = true;
     await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Add to favorites"));
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ level: "error" })));
+    await waitForText(container, "Favorites are unavailable");
+    expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ level: "error" }));
     expect(container.querySelector(".wf-status-line")).toBeNull();
 
     await unmount();
@@ -1344,7 +1346,8 @@ describe("workflows module", () => {
 
       await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
       expect(writeText).toHaveBeenCalledWith("artifact-current");
-      expect(container.textContent).toContain("Copied artifact ID");
+      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied artifact ID" }));
+      expect(container.textContent).not.toContain("Copied artifact ID");
 
       await click(buttonByLabel(container, "Run executable artifact-current"));
       await waitForText(container, "Provide the workflow inputs for this run.");
@@ -3083,7 +3086,7 @@ describe("workflows module", () => {
     await click(checkboxByLabel(container, "Run JavaScript available in new workflows"));
     expect(container.textContent).toContain("Unsaved changes");
     await click(buttonByText(container, "Save"));
-    await waitForText(container, "Activity availability saved.");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Activity availability saved." })));
     expect(savedBody).toEqual({ scope: "host-default", mode: 0, rules: { activityTypes: [runJavaScriptTypeKey], sets: [] } });
     expect(container.textContent).not.toContain("Unsaved changes");
 
@@ -3138,7 +3141,8 @@ describe("workflows module", () => {
       message: "Explain this workflow executable.",
       attachments: [expect.objectContaining({ contentType: "workflow.executable", sourceId: "artifact-1" })]
     }));
-    expect(container.textContent).toContain("Sent artifact-1 to Weaver");
+    expect(getNotifications().notify).toHaveBeenCalledWith({ level: "success", title: "Sent artifact-1 to Weaver" });
+    expect(container.textContent).not.toContain("Sent artifact-1 to Weaver");
 
     await unmount();
   });
@@ -3917,7 +3921,8 @@ describe("workflows module", () => {
 
       expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Incident: InputMaterializationFailed"));
       expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Input 'Collection' failed to evaluate its JavaScript expression."));
-      expect(container.textContent).toContain("Copied incident");
+      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied incident" }));
+      expect(container.textContent).not.toContain("Copied incident");
     } finally {
       await unmount();
       if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
@@ -4968,7 +4973,7 @@ describe("workflows module", () => {
     } finally {
       resolveDeletedRootRefresh?.(response({ items: [], nextContinuationToken: null }));
     }
-    await waitForText(container, "Deleted folder Delete me");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Deleted folder Delete me" })));
     await vi.waitFor(() => expect(allWorkflowRow()).not.toBeNull());
 
     expect(globalDefinitionRequests).toBe(globalRequestsBeforeDelete + 1);
@@ -5059,7 +5064,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(dialog(container), "Folder name"), "Platform operations");
     await click(buttonByText(dialog(container), "Rename"));
 
-    await waitForText(container, "Folder renamed");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Folder renamed" })));
     expect(childPageRequests).toBe(1);
     expect(folderTree(container).textContent).not.toContain("Platform operations");
     await click(buttonByLabel(container, `Expand ${parent.name}`));
@@ -5187,7 +5192,7 @@ describe("workflows module", () => {
 
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
     await click(buttonByText(container, "Move"));
-    await waitForText(dialog(container), "Platform");
+    await waitForText(await waitForDialog(container), "Platform");
     const destinationRadio = dialog(container).querySelector<HTMLInputElement>("input[value='folder-destination']");
     await vi.waitFor(() => expect(destinationRadio?.disabled).toBe(false));
     await click(destinationRadio);
@@ -5344,7 +5349,7 @@ describe("workflows module", () => {
     await waitForText(container, "Delete child workflow");
     await click(buttonByText(container, "Delete"));
 
-    await waitForText(container, `Deleted folder ${deletedChild.name}`);
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: `Deleted folder ${deletedChild.name}` })));
     expect(folderItem(deletedChild.id)).toBeUndefined();
     expect(container.textContent).toContain(firstChild.name);
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
@@ -5400,7 +5405,7 @@ describe("workflows module", () => {
     await waitForText(container, "Prototype workflow");
     await click(buttonByText(container, "Delete"));
 
-    await waitForText(container, `Deleted folder ${deletedChild.name}`);
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: `Deleted folder ${deletedChild.name}` })));
     expect(folderItem(deletedChild.id)).toBeUndefined();
     expect(folderItem(expandableChild.id)?.getAttribute("aria-expanded")).toBe("true");
     expect(container.textContent).toContain(grandchild.name);

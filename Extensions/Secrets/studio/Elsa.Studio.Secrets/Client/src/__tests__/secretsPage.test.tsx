@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { SecretsPage } from "../SecretsPage";
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 const cleanup = new Set<() => void>();
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 afterEach(() => {
+  notifications.notify.mockClear();
   for (const dispose of cleanup) dispose();
   if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
   else Reflect.deleteProperty(navigator, "clipboard");
@@ -125,7 +127,7 @@ describe("secrets page", () => {
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector("table")?.textContent).toContain("Updated payments");
     expect(document.activeElement?.getAttribute("data-secret-edit")).toBe("payments.api");
@@ -186,7 +188,7 @@ describe("secrets page", () => {
     expect(container.querySelector("[role=dialog]")).toBe(editor);
     expect(editor.querySelector<HTMLButtonElement>("button[aria-label='Close editor']")?.disabled).toBe(true);
     finishSave(paymentSecret());
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
   });
 
@@ -203,34 +205,123 @@ describe("secrets page", () => {
     expect(editor.querySelector("[role=alert]")?.textContent).toContain("Metadata save unavailable.");
     expect(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Retry payments");
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(putJson).toHaveBeenCalledTimes(2);
   });
 
-  it.each([false, true])("dismisses operation notifications and shows later results (error=%s)", async error => {
-    const postJson = error
-      ? vi.fn().mockRejectedValue(new Error("Test unavailable."))
-      : vi.fn().mockResolvedValue({ succeeded: true, code: "resolved", message: "Secret resolved successfully." });
+  it("toasts successful tests once and leaves failed test results inline", async () => {
+    const postJson = vi.fn().mockResolvedValueOnce({ succeeded: true, code: "resolved", message: "Secret resolved successfully." })
+      .mockResolvedValueOnce({ succeeded: false, code: "unavailable", message: "Provider unavailable." });
     const { container } = render({ postJson });
     await waitForText(container, "Payments API");
-    const runTest = () => clickSecretAction(container, "payments.api", "Test");
-    await runTest();
-    const message = error ? "Test unavailable." : "Secret resolved successfully.";
-    await waitForText(container, message);
-    const notice = container.querySelector<HTMLElement>(".secrets-notification")!;
-    const messageRegion = notice.querySelector("[role]")!;
-    expect(messageRegion.getAttribute("role")).toBe(error ? "alert" : "status");
-    expect(messageRegion.querySelector("button")).toBeNull();
-    const dismiss = notice.querySelector<HTMLButtonElement>("button")!;
-    expect(dismiss.getAttribute("aria-label")).toBe(error ? "Dismiss error" : "Dismiss notification");
-    flushSync(() => dismiss.click());
+    await clickSecretAction(container, "payments.api", "Test");
+    await waitFor(() => notifications.notify.mock.calls.length === 1);
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Secret test succeeded.", message: "(resolved): Secret resolved successfully." });
     expect(container.querySelector(".secrets-notification")).toBeNull();
-    expect(container.textContent).toContain("Payments API");
-    await runTest();
-    await waitForText(container, message);
-    expect(container.querySelector(".secrets-notification")).not.toBeNull();
+    await clickSecretAction(container, "payments.api", "Test");
+    await waitForText(container, "Test failed (unavailable): Provider unavailable.");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Provider unavailable.");
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Dismiss error"]')!.click());
+    expect(container.querySelector(".secrets-notification")).toBeNull();
+  });
+
+  it("does not toast a test result from an obsolete backend context", async () => {
+    let finish!: (value: unknown) => void;
+    const postJson = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const { container, changeEndpoint } = render({ postJson });
+    await waitForText(container, "Payments API");
+    await clickSecretAction(container, "payments.api", "Test");
+    changeEndpoint("https://other-context.example");
+    finish({ succeeded: true, code: "resolved" });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
+  it.each(["Test", "Revoke"])("does not toast a retired %s after hiding and showing the retained tab", async action => {
+    let finish!: (value: unknown) => void;
+    const work = new Promise(resolve => { finish = resolve; });
+    let revoked = false;
+    const postJson = vi.fn().mockImplementationOnce(async () => {
+      const result = await work; revoked = action === "Revoke"; return result;
+    }).mockResolvedValue({ succeeded: true, code: "resolved" });
+    let holdList = false;
+    let finishList!: (items: unknown[]) => void;
+    const resumedList = new Promise<unknown[]>(resolve => { finishList = resolve; });
+    const { container, setVisible } = render({ postJson, getItems: () => holdList
+      ? resumedList : [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
+    await waitForText(container, "Payments API");
+    await clickSecretAction(container, "payments.api", action);
+    await waitFor(() => postJson.mock.calls.length === 1);
+    holdList = true;
+    setVisible(false); setVisible(true);
+    await waitForText(container, "Loading secrets…");
+    finish({ succeeded: true, code: "resolved" }); await work; await Promise.resolve();
+    expect(notifications.notify).not.toHaveBeenCalled();
+    finishList([paymentSecret({ status: action === "Revoke" ? "Revoked" : "Active" })]);
+    await waitFor(() => !container.textContent?.includes("Loading secrets…") && container.querySelector('[data-secret-open="payments.api"]') !== null);
+    if (action === "Revoke") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    await clickSecretAction(container, "payments.api", "Test");
+    await waitFor(() => notifications.notify.mock.calls.length === 1);
     expect(postJson).toHaveBeenCalledTimes(2);
+    expect(notifications.notify.mock.calls[0][0].title).toBe("Secret test succeeded.");
+  });
+
+  it.each(["success", "failure"] as const)("reconciles an owned revoke %s after the resumed list read precedes its result", async outcome => {
+    let finish!: () => void; let revoked = false;
+    const delayed = new Promise<void>(resolve => { finish = resolve; });
+    const postJson = vi.fn(async () => { await delayed; if (outcome === "failure") throw new Error("Revoke refused."); revoked = true; return {}; });
+    const { container, setVisible, listRequests } = render({ postJson, getItems: () => [paymentSecret({ status: revoked ? "Revoked" : "Active" })] });
+    await waitForText(container, "Payments API"); await clickSecretAction(container, "payments.api", "Revoke");
+    await waitFor(() => postJson.mock.calls.length === 1);
+    const before = listRequests.length;
+    setVisible(false); setVisible(true);
+    await waitFor(() => listRequests.length > before && container.querySelector("tr td") !== null);
+    expect(revoked).toBe(false);
+    finish();
+    if (outcome === "success") await waitFor(() => container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    else await waitForText(container, "Revoke refused.");
+    if (outcome === "success") expect(listRequests.length).toBeGreaterThan(before + 1);
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
+  it.each([["Revoke", false], ["Revoke", true], ["Delete", false], ["Delete", true]] as const)("honors a confirmed %s after hiding its owning tab (returned=%s)", async (action, returnBeforeConfirm) => {
+    let finish!: (confirmed: boolean) => void;
+    const work = new Promise<boolean>(resolve => { finish = resolve; });
+    const confirm = vi.fn(() => work);
+    let accepted = false;
+    const mutation = vi.fn(async () => { accepted = true; return {}; });
+    const view = render({ confirm, postJson: mutation, deleteJson: mutation,
+      getItems: () => action === "Delete" && accepted ? [] : [paymentSecret({ status: accepted ? "Revoked" : "Active" })] });
+    await waitForText(view.container, "Payments API");
+    await clickSecretAction(view.container, "payments.api", action);
+    await waitFor(() => confirm.mock.calls.length === 1);
+    view.setVisible(false);
+    if (returnBeforeConfirm) view.setVisible(true);
+    finish(true);
+    await waitFor(() => mutation.mock.calls.length === 1);
+    view.setVisible(true);
+    await waitFor(() => action === "Delete"
+      ? view.container.querySelector('[data-secret-open="payments.api"]') === null && view.container.textContent?.includes("No secrets yet") === true
+      : view.container.querySelector(".secrets-badge")?.textContent === "Revoked");
+    expect(mutation).toHaveBeenCalledTimes(1);
+    expect(notifications.notify).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it.each(["cancel", "backend replacement"] as const)("does not write after confirmation %s", async change => {
+    let finish!: (confirmed: boolean) => void;
+    const work = new Promise<boolean>(resolve => { finish = resolve; });
+    const confirm = vi.fn(() => work), postJson = vi.fn();
+    const view = render({ postJson, confirm });
+    await waitForText(view.container, "Payments API");
+    await clickSecretAction(view.container, "payments.api", "Revoke");
+    await waitFor(() => confirm.mock.calls.length === 1);
+    if (change === "backend replacement") view.changeEndpoint("https://replacement.example");
+    finish(change !== "cancel"); await work; await Promise.resolve();
+    expect(postJson).not.toHaveBeenCalled();
+    expect(notifications.notify).not.toHaveBeenCalled();
   });
 
   it("clears entered rotation material and visibility when the target secret changes", async () => {
@@ -464,7 +555,7 @@ describe("secrets page", () => {
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
     clickButton(container, "Save changes");
-    await waitForText(container, "Secret metadata updated.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
 
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
     expect(getSearchTerm(listRequests.at(-1)!)).toBe("queryA");
@@ -757,7 +848,8 @@ describe("secrets page", () => {
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await waitFor(() => button.parentElement?.textContent === "Copied");
+      await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret name copied."));
+      expect(button.parentElement?.textContent).not.toContain("Copied");
     }
     expect(writeText.mock.calls).toEqual([["payments.api"], ["payments.api"]]);
     expect(JSON.stringify(writeText.mock.calls)).not.toContain("raw-secret-value");
@@ -795,11 +887,13 @@ describe("secrets page", () => {
     change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "secret-value");
     clickButton(container, "Create", ".secrets-modal");
 
-    await waitForText(container, "Secret created.");
+    await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret created."));
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector(".secrets-detail")).toBeNull();
     expect(container.textContent).toContain("smtp-password");
     expect(postJson).toHaveBeenCalledWith("/secrets", expect.objectContaining({ value: "secret-value" }));
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".secrets-notification")).toBeNull();
     unmount();
   });
 
@@ -826,13 +920,15 @@ function render(options: {
   getDescriptors?(): unknown | Promise<unknown>;
   postJson?: ReturnType<typeof vi.fn>;
   putJson?: ReturnType<typeof vi.fn>;
+  deleteJson?: ReturnType<typeof vi.fn>;
+  confirm?: ReturnType<typeof vi.fn>;
 } = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   const listRequests: string[] = [];
   const dialogs = {
-    confirm: vi.fn(async () => true),
+    confirm: options.confirm ?? vi.fn(async () => true),
     prompt: vi.fn(async () => null),
     alert: vi.fn(async () => {})
   };
@@ -858,12 +954,15 @@ function render(options: {
       },
       postJson: options.postJson ?? vi.fn(),
       putJson: options.putJson ?? vi.fn(),
-      deleteJson: vi.fn(),
+      deleteJson: options.deleteJson ?? vi.fn(),
       postForm: vi.fn()
     }
   });
-  const renderPage = (context = createContext()) => {
-    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} />));
+  let currentContext = createContext();
+  let visible = true;
+  const renderPage = (context = currentContext) => {
+    currentContext = context;
+    flushSync(() => root.render(<React.Activity mode={visible ? "visible" : "hidden"}><SecretsPage context={context} dialogs={dialogs} notifications={notifications} /></React.Activity>));
   };
   renderPage();
 
@@ -873,7 +972,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: host, unmount, listRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {
@@ -971,6 +1070,7 @@ function openEditor(container: HTMLElement) {
 
 async function clickSecretAction(container: HTMLElement, secretName: string, action: string) {
   const menu = await openSecretMenu(container, secretName);
+  await waitFor(() => !menuItem(menu, action).disabled);
   const item = menuItem(menu, action);
   flushSync(() => item.click());
   await waitFor(() => document.body.querySelector("[role='menu']") === null);

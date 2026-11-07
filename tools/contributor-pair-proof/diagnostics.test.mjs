@@ -477,3 +477,46 @@ test("the journey keeps its strict selector, visibility wait, original click and
   await assert.rejects(new AsyncFunction("page", `let stage; ${runSource.slice(start, end)}`)(page), /wait failed/);
   assert.deepEqual(calls, []);
 });
+
+test("workflow creation waits for an enabled root card without clicking its clipped radio", async () => {
+  const start = runSource.indexOf('  stage = "workflow-create";');
+  const end = runSource.indexOf('  await page.waitForFunction(', start);
+  assert.ok(start > 0 && end > start);
+  const ready = deferred();
+  const waitingForRoot = deferred();
+  const calls = [];
+  const createDialog = {
+    getByLabel: () => ({ fill: async () => {} }),
+    locator(selector) {
+      const root = /aria-label="([^"]+)"/.exec(selector)?.[1];
+      return { click: async () => {
+        // A card containing an enabled input does not match until the catalog is ready.
+        if (selector.includes(":enabled")) { waitingForRoot.resolve(); await ready.promise; }
+        calls.push(["root-card", root]);
+      } };
+    },
+    getByRole(role, options) {
+      return {
+        click: async () => {
+          // The pinned input has clip:rect(0 0 0 0); it has no pointer hit target.
+          assert.notEqual(role, "radio", "the visually clipped radio cannot receive a pointer click");
+          calls.push([role, options]); calls.push("submitted");
+        },
+        // An already checked default radio can short-circuit check() while still disabled.
+        check: async () => {}
+      };
+    }
+  };
+  const page = {
+    locator: () => ({ waitFor: async () => {}, click: async () => {} }),
+    getByRole: () => createDialog
+  };
+  const pending = new AsyncFunction("page", "workflowName", `let stage; ${runSource.slice(start, end)}`)(page, "Owned workflow");
+  await Promise.race([waitingForRoot.promise, pending]);
+  assert.deepEqual(calls, [], "Create must not run while the checked Flowchart root remains disabled");
+  ready.resolve(); await pending;
+  assert.deepEqual(calls, [
+    ["root-card", "Flowchart"],
+    ["button", { name: "Create", exact: true }], "submitted"
+  ]);
+});

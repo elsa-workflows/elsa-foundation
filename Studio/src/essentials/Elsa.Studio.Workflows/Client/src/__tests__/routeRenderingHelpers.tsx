@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, vi } from "vitest";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
+import { createAgentRegistry, StudioWorkspaceTabProvider } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition, StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
@@ -44,7 +44,8 @@ export async function renderRegisteredRoute(
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
   capabilities = capabilityDocument(),
-  historyState: unknown = {}
+  historyState: unknown = {},
+  retained = false
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -94,8 +95,19 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
+  let visible = true;
+  let retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const workspaceTab: StudioWorkspaceTabHandle = {
+    id: "retained-route",
+    get active() { return visible; },
+    get location() { return retainedLocation; },
+    isActive: () => visible,
+    markPendingWork: vi.fn(),
+    setTitle: vi.fn()
+  };
   const rerender = () => flushSync(() => {
-    root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
+    const route = <RegisteredRouteHost />;
+    root.render(<QueryClientProvider client={queryClient}>{retained ? <React.Activity mode={visible ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={workspaceTab}>{route}</StudioWorkspaceTabProvider></React.Activity> : route}</QueryClientProvider>);
   });
   rerender();
 
@@ -107,7 +119,10 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, rerender, unmount };
+  return { api, container, rerender, unmount, setVisible: (next: boolean) => {
+    if (visible) retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    visible = next; rerender();
+  } };
 }
 
 function routeMatchesPath(routePath: string, path: string) {

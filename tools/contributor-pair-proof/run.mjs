@@ -455,10 +455,18 @@ async function runBrowserJourney() {
   stage = "workflow-create";
   const createButton = page.locator('button[title="Create workflow"]');
   await createButton.waitFor({ state: "visible" });
+  stage = "workflow-create-open";
   await createButton.click();
   const createDialog = page.getByRole("dialog", { name: "Create Workflow" });
+  stage = "workflow-create-name";
   await createDialog.getByLabel("Display name", { exact: true }).fill(workflowName);
+  // The pinned root radio is visually clipped. Activate its visible card only
+  // after the linked Flowchart radio becomes enabled by the loaded catalog.
+  stage = "workflow-create-root";
+  await createDialog.locator('label.wf-root-card:has(input[type="radio"][aria-label="Flowchart"]:enabled)').click();
+  stage = "workflow-create-submit";
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  stage = "workflow-create-navigation";
   await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
   const definitionId = await page.evaluate(() => new URL(window.location.href).searchParams.get("definition"));
   assert.ok(definitionId, "created workflow definition ID is missing from the Studio URL");

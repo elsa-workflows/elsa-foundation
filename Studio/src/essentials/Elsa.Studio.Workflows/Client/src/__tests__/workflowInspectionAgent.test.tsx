@@ -9,6 +9,7 @@ import { useWorkflowInspectionContext } from "../workflow-editor/useWorkflowInsp
 import { WorkflowVersionHistory } from "../workflow-editor/WorkflowVersionHistory";
 import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "../workflowAgentContext";
 import { renderRegisteredRoute, response } from "./routeRenderingHelpers";
+import { waitForCondition } from "./workflowDefinitionTestHelpers";
 
 // Spec 1193 slices F and G (stories 8 and 9): the Executable Inspector's, the version history's and the run page's read-only
 // page contexts.
@@ -139,6 +140,8 @@ describe("Executable Inspector context (spec 1193 FR-028)", () => {
       configured.agent.promptActions.add(explain);
       configured.agent.dispatchPrompt = dispatchPrompt;
     });
+    // Resolve the routed lazy page and its data before checking the passive context registration.
+    await waitForCondition(() => expect(container.querySelector("section[aria-label='Executable canvas']")).not.toBeNull());
     await vi.waitFor(async () => expect(await collect(api.agent, "workflows.executable-inspector")).toHaveLength(1));
     const [attachment] = await collect(api.agent, "workflows.executable-inspector");
     expect(attachment).toMatchObject({ id: "workflows.executable:artifact-1", target: { resourceType: "workflow-executable", resourceId: "artifact-1", revision: "sha256:abc" },

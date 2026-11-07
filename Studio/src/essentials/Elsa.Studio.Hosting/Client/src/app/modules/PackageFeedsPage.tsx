@@ -39,7 +39,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its
   // explicit bridge state (#246) instead.
   const { registry, unavailable } = readActiveRegistry(activeQuery.data);
-  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error);
+  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error, [], title => api.notifications?.notify({ level: "success", title }));
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
   // Deleting a feed is destructive and irreversible from the UI, so confirm before firing.
@@ -69,7 +69,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
-      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
 
       {registry ? (
         <>
@@ -86,7 +86,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
             onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
             onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
             onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
-            onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
+            onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`, "toast")}
             onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
           />
         </>

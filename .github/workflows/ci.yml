@@ -1045,6 +1045,15 @@ jobs:
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
+      - name: Retain browser failure evidence
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-browser-${{ github.sha }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: Studio/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope
