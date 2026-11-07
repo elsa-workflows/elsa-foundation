@@ -10,6 +10,16 @@
 		<Compile Include="../../../e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs" Link="RecoveryProbe/BpmnRecoveryProbeFeature.cs" />
 	</ItemGroup>
 
+    <!-- Owned UX qualification only: real native Identity users/grants, no replacement auth/store.
+         Standard builds contain neither this bootstrap nor its fixed-profile observation routes. -->
+    <PropertyGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
+        <DefineConstants>$(DefineConstants);ELSA_DASHBOARD_QUALIFICATION</DefineConstants>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
+        <Compile Include="../../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
+        <Compile Include="../../../tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" Link="Qualification/QualificationPrincipals.cs" />
+    </ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="CShells.Nuplane" />
@@ -243,6 +253,14 @@
 		-->
 		<ProjectReference Include="..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+        <!-- Named definitions and source queries are independent of Home's widget preferences. -->
+        <ProjectReference Include="../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+        <ProjectReference Include="../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="../../src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+        <ProjectReference Include="../../../Extensions/Agent/src/Dashboard/Elsa.Agent.Dashboard.csproj" />
+    </ItemGroup>
 
 	<ItemGroup>
 		<!--

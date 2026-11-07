@@ -187,6 +187,7 @@ not automatic constitution violations.
 | User Tasks (durable human work, journal/retention/eligibility/form integration and recovery cadence) | [`Runtime domain User Tasks`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
+| Workflows runtime inspection authorization contracts | [`Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
@@ -249,5 +250,11 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard native queries/resources/authoring contracts](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
+
+## Reference modules
+
+- [Acme Processing replacement ports and cross-domain contributions](Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md)

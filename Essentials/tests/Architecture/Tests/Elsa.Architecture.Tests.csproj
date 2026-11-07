@@ -40,6 +40,13 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Dashboard/Elsa.Agent.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />

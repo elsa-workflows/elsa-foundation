@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
@@ -20,14 +21,24 @@ class VerdictTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.artifact = self.root / 'proof'
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         self.report = {'suites': [{'specs': [
             {'title': journey, 'tests': [
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
-                        {'name': name, 'path': str(self.artifact)} for name in
-                        ['trace'] + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
+                        {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)} for name in
+                        ['trace'] + sorted(acceptance.ADDITIONAL_ARTIFACTS.get(journey, set())) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in acceptance.PROJECTS]}
             for journey in acceptance.JOURNEYS]}]}
+
+    def test_native_reader_must_be_recorded_in_the_combined_trace(self):
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            archive.writestr('owner.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': 'owner'}) + '\n')
+        with self.assertRaisesRegex(ValueError, 'independent owner and reader'):
+            acceptance.verdict(self.report, self.root)
 
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
@@ -67,6 +78,10 @@ class VerdictTests(unittest.TestCase):
         self.artifact.write_text('')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root / 'different-run')
 
     def test_each_intermediate_capture_is_required(self):
@@ -92,6 +107,21 @@ class VerdictTests(unittest.TestCase):
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
 
+    def test_native_qualification_has_exact_private_grants_and_no_inference(self):
+        settings = {}
+        shells = {'CShells': {'Shells': {'default': {'Features': {'GitHubCopilotAgent': {'Enabled': True}}}}}}
+        acceptance.configure_dashboard_qualification(settings, shells)
+        qualification = settings['Qualification']
+        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual('default', qualification['Principals'][0]['tenant'])
+        profiles = qualification['GrantProfiles']
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
+                         set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
+        self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')
+                             for grant in qualification['Principals'][0]['exactDirectPermissions']))
+        self.assertFalse(shells['CShells']['Shells']['default']['Features']['GitHubCopilotAgent']['Enabled'])
+
     def test_exited_leader_does_not_hide_a_term_resistant_descendant(self):
         with patch.object(acceptance.os, 'killpg') as kill:
             from unittest.mock import Mock
@@ -99,6 +129,25 @@ class VerdictTests(unittest.TestCase):
             process.poll.return_value = 0
             acceptance.stop_group(process)
             self.assertEqual([(44, acceptance.signal.SIGTERM), (44, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+
+    def test_retired_group_permission_denial_does_not_fail_a_successful_command(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.poll.return_value = 0
+        # A zombie is already dead; a different user's group must never be touched.
+        members = f'{os.getuid()} 44 Z\n{os.getuid() + 1} 44 S\n'
+        with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('retired group')) as kill, \
+             patch.object(acceptance.subprocess, 'check_output', return_value=members):
+            acceptance.stop_group(process)
+        self.assertEqual(2, kill.call_count)
+        self.assertEqual(2, process.wait.call_count)
+
+    def test_permission_denial_cannot_hide_a_live_owned_process(self):
+        from unittest.mock import Mock
+        for leader in (None, 0):
+            process = Mock(pid=44); process.poll.return_value = leader
+            with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('live process')), \
+                 patch.object(acceptance.subprocess, 'check_output', return_value=f'{os.getuid()} 44 S\n'):
+                with self.assertRaises(PermissionError): acceptance.stop_group(process)
 
     def test_command_interrupt_stops_its_entire_group(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:

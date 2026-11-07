@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
@@ -28,26 +29,73 @@ CAPTURES = {
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
+    'native dashboard questions and sharing': ['reference', 'dashboard-native-reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-drill-values', 'question-saved', 'question-refreshed', 'question-editor-preview-appearance-1', 'question-editor-preview-appearance-2', 'question-saved-refresh-drill', 'question-saved-refresh-drill-values', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboards-collection-appearance-1', 'dashboards-collection-appearance-2', 'dashboard-and-dependency-dialogs-appearance-1-dashboard', 'dashboard-and-dependency-dialogs-appearance-1-share-review', 'dashboard-and-dependency-dialogs-appearance-1-copy-review', 'dashboard-and-dependency-dialogs-appearance-2-dashboard', 'dashboard-and-dependency-dialogs-appearance-2-share-review', 'dashboard-and-dependency-dialogs-appearance-2-copy-review', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-drill-values', 'dashboard-copy-dependency-review', 'dashboard-copy-independent-question', 'dashboard-copy', 'question-share', 'dashboard-share-dependency-review', 'dashboard-share', 'question-shared-search', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-new-reuse-confirmation', 'questions-collection-appearance-1', 'questions-collection-appearance-2', 'question-conflict', 'question-conflict-recovered'],
+    'existing home widgets and layout defaults': ['reference', 'home-widgets', 'home-module-picker-1', 'home-module-picker-2', 'home-module-run-health', 'home-module-portfolio', 'home-module-settings', 'home-module-settings-reopened', 'home-layout-edit', 'home-layout-reopened', 'home-populated-appearance-1', 'home-populated-appearance-2', 'home-widget-picker', 'home-server-default', 'home-existing-aliases'],
 }
+NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
+CAPTURES['native dashboard questions and sharing'] += (
+    [f'question-preview-{section}' for section in NATIVE_RESULT_CAPTURES]
+    + [f'question-editor-preview-appearance-{appearance}-{section}' for appearance in (1, 2)
+       for section in ('parameters', 'parameters-end', 'presentation', 'presentation-end', *NATIVE_RESULT_CAPTURES)]
+    + [f'dashboard-and-dependency-dialogs-appearance-{appearance}-tile-{tile}-{section}'
+       for appearance in (1, 2) for tile in (1, 2, 3, 4) for section in ('header', *NATIVE_RESULT_CAPTURES)]
+    + [f'dashboard-and-dependency-dialogs-appearance-{appearance}-{dialog}-end'
+       for appearance in (1, 2) for dialog in ('share-review', 'copy-review')]
+    + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
+       'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
+)
 JOURNEYS = set(CAPTURES)
+ADDITIONAL_ARTIFACTS = {
+    'native dashboard questions and sharing': {'native-agent-boundary.json', 'reader-agent-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
+    'existing home widgets and layout defaults': {'native-agent-boundary.json', 'home-populated-appearance-matrix.json', 'home-default-baseline.json', 'home-module-widgets.json', 'home-preferences-restored.json'},
+}
+
+
+def configure_dashboard_qualification(settings, shells):
+    """Only the temporary QA host gets native password principals and predefined CAS grant profiles."""
+    native = ['api-capabilities:read', 'studio/questions:read', 'studio/questions:create', 'studio/questions:edit',
+              'studio/dashboards:read', 'studio/dashboards:create', 'studio/dashboards:edit',
+              'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect',
+              'workflows/runtime:read', 'workflows/design:read']
+    no_source = [grant for grant in native if grant not in
+                 {'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'}]
+    settings['Qualification'] = {
+        'Principals': [{'subject': 'dashboard-qa-reader', 'tenant': 'default',
+                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native}],
+        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source},
+    }
+    # Keep the selected adapter composed, with inference explicitly unavailable in this native-only run.
+    features = shells['CShells']['Shells']['default']['Features']
+    features['GitHubCopilotAgent']['Enabled'] = False
+
+
+def signal_owned_group(process, signal_number):
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # macOS may deny signalling a retired group after its leader was reaped.
+        # Only tolerate this when no living process owned by us remains in that group.
+        if process.poll() is None:
+            raise
+        members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
+        if any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
+               and int(parts[1]) == process.pid and not parts[2].startswith('Z')
+               for line in members.splitlines()):
+            raise
 
 
 def stop_group(process):
     # The leader can exit before Chromium/workers, including a worker that ignores TERM.
     # Drain the group even after its leader exited, then kill any remaining owned members.
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    signal_owned_group(process, signal.SIGTERM)
     try:
         process.wait(timeout=15)
     except subprocess.TimeoutExpired:
         pass
     finally:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signal_owned_group(process, signal.SIGKILL)
         process.wait(timeout=10)
 
 
@@ -60,6 +108,18 @@ def command(args, log, *, cwd=ROOT, env=None):
                 raise subprocess.CalledProcessError(result, args)
         finally:
             stop_group(process)
+
+
+def recorded_browser_contexts(path):
+    contexts = set()
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if name.endswith('.trace'):
+                for line in archive.read(name).splitlines():
+                    event = json.loads(line)
+                    if event.get('type') == 'context-options' and event.get('origin') == 'library' and event.get('contextId'):
+                        contexts.add(event['contextId'])
+    return contexts
 
 
 def verdict(report, artifacts, journeys=None):
@@ -87,7 +147,7 @@ def verdict(report, artifacts, journeys=None):
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        required = {'trace'} | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        required = {'trace'} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
         for item in attachments:
@@ -96,6 +156,10 @@ def verdict(report, artifacts, journeys=None):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
+        if title == 'native dashboard questions and sharing':
+            trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
+            if len(recorded_browser_contexts(trace)) < 2:
+                raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
     return len(rows)
 
 
@@ -168,9 +232,9 @@ def run(output, journey=None):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
+        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             backend, studio = data / 'workbench', data / 'studio'
@@ -181,16 +245,19 @@ def run(output, journey=None):
             # Preserve normal module composition; only local origin routing changes in private copies.
             settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
             settings['Cors']['AllowedOrigins'] = [studio_url]
-            (backend / 'appsettings.json').write_text(json.dumps(settings))
             shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
+            configure_dashboard_qualification(settings, shells)
+            (backend / 'appsettings.json').write_text(json.dumps(settings))
             (backend / 'shells.json').write_text(json.dumps(shells))
             env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
-            report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url)
-            with host(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', output / 'backend.log', env):
+            report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url,
+                          hostProfile='ElsaDashboardQualification=true; private native principals; Copilot disabled',
+                          modelEvidence='Native browser Agent message submissions only; physical SDK calls not measured')
+            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env):
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     report['stage'] = 'journeys'

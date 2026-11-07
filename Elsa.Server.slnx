@@ -7,6 +7,7 @@
     <Project Path="Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
     <Project Path="Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+    <Project Path="Extensions/Agent/src/Dashboard/Elsa.Agent.Dashboard.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/src/Persistence/">
     <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
@@ -422,6 +423,7 @@
   </Folder>
   <Folder Name="/Essentials/src/Workflows/Dashboard/">
     <Project Path="Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj" />
+    <Project Path="Essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Workflows/Dashboard/Persistence/">
     <Project Path="Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
@@ -773,6 +775,7 @@
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Dashboard/">
     <Project Path="Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
+    <Project Path="Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Dashboard/Persistence/" />
   <Folder Name="/Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/">
@@ -857,6 +860,36 @@
   </Folder>
   <Folder Name="/Essentials/tests/Versioning/Publisher/">
     <Project Path="Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Studio/Dashboard/">
+    <Project Path="Essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <Project Path="Essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <Project Path="Essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Studio/Dashboard/Persistence/">
+    <Project Path="Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Workflows/Runtime/Inspection/">
+    <Project Path="Essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Studio/Dashboard/">
+    <Project Path="Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj" />
+    <Project Path="Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/src/Acme.Processing/">
+    <Project Path="Extensions/Examples/src/Acme.Processing/Core/Acme.Processing.Core.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Studio/Dashboard/Persistence/">
+    <Project Path="Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/src/Acme.Processing/Module/">
+    <Project Path="Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/tests/">
+    <Project Path="Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/tests/Dashboard/">
+    <Project Path="Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Decisions/tests/Evaluation/">
     <Project Path="Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj" />

@@ -1,0 +1,125 @@
+#nullable enable
+Acme.Processing.Core.IProcessingActorContext
+Acme.Processing.Core.IProcessingActorContext.GetAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Acme.Processing.Core.ProcessingActor!>
+Acme.Processing.Core.IProcessingRecordReader
+Acme.Processing.Core.IProcessingRecordReader.FindAsync(string! tenantId, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Acme.Processing.Core.ProcessingRecord?>
+Acme.Processing.Core.IProcessingRecordReader.ReadPageAsync(string! tenantId, int take, string? afterId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Acme.Processing.Core.ProcessingRecordPage!>
+Acme.Processing.Core.IProcessingRecords
+Acme.Processing.Core.IProcessingRecords.CreateAsync(Acme.Processing.Core.ProcessingCreate! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
+Acme.Processing.Core.IProcessingRecords.FindAsync(string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Acme.Processing.Core.ProcessingRecordView?>
+Acme.Processing.Core.IProcessingRecords.ReadAsync(int take = 25, string? cursor = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Acme.Processing.Core.ProcessingRecordViewPage!>
+Acme.Processing.Core.IProcessingRecordWriter
+Acme.Processing.Core.IProcessingRecordWriter.AddAsync(Acme.Processing.Core.ProcessingRecord! record, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Acme.Processing.Core.ProcessingActor
+Acme.Processing.Core.ProcessingActor.<Clone>$() -> Acme.Processing.Core.ProcessingActor!
+Acme.Processing.Core.ProcessingActor.Deconstruct(out string! TenantId, out string! SubjectId) -> void
+Acme.Processing.Core.ProcessingActor.Equals(Acme.Processing.Core.ProcessingActor? other) -> bool
+Acme.Processing.Core.ProcessingActor.ProcessingActor(string! TenantId, string! SubjectId) -> void
+Acme.Processing.Core.ProcessingActor.SubjectId.get -> string!
+Acme.Processing.Core.ProcessingActor.SubjectId.init -> void
+Acme.Processing.Core.ProcessingActor.TenantId.get -> string!
+Acme.Processing.Core.ProcessingActor.TenantId.init -> void
+Acme.Processing.Core.ProcessingCreate
+Acme.Processing.Core.ProcessingCreate.<Clone>$() -> Acme.Processing.Core.ProcessingCreate!
+Acme.Processing.Core.ProcessingCreate.CompletedAt.get -> System.DateTimeOffset?
+Acme.Processing.Core.ProcessingCreate.CompletedAt.init -> void
+Acme.Processing.Core.ProcessingCreate.CustomerCategory.get -> string!
+Acme.Processing.Core.ProcessingCreate.CustomerCategory.init -> void
+Acme.Processing.Core.ProcessingCreate.Deconstruct(out string! CustomerCategory, out System.DateTimeOffset StartedAt, out System.DateTimeOffset? CompletedAt, out string! Status, out System.Collections.Generic.IReadOnlyList<string!>? ReaderIds) -> void
+Acme.Processing.Core.ProcessingCreate.Equals(Acme.Processing.Core.ProcessingCreate? other) -> bool
+Acme.Processing.Core.ProcessingCreate.ProcessingCreate(string! CustomerCategory, System.DateTimeOffset StartedAt, System.DateTimeOffset? CompletedAt, string! Status, System.Collections.Generic.IReadOnlyList<string!>? ReaderIds = null) -> void
+Acme.Processing.Core.ProcessingCreate.ReaderIds.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Acme.Processing.Core.ProcessingCreate.ReaderIds.init -> void
+Acme.Processing.Core.ProcessingCreate.StartedAt.get -> System.DateTimeOffset
+Acme.Processing.Core.ProcessingCreate.StartedAt.init -> void
+Acme.Processing.Core.ProcessingCreate.Status.get -> string!
+Acme.Processing.Core.ProcessingCreate.Status.init -> void
+Acme.Processing.Core.ProcessingException
+Acme.Processing.Core.ProcessingException.Code.get -> string!
+Acme.Processing.Core.ProcessingException.ProcessingException(string! code, string! message, System.Exception? innerException = null) -> void
+Acme.Processing.Core.ProcessingRecord
+Acme.Processing.Core.ProcessingRecord.<Clone>$() -> Acme.Processing.Core.ProcessingRecord!
+Acme.Processing.Core.ProcessingRecord.CompletedAt.get -> System.DateTimeOffset?
+Acme.Processing.Core.ProcessingRecord.CompletedAt.init -> void
+Acme.Processing.Core.ProcessingRecord.CustomerCategory.get -> string!
+Acme.Processing.Core.ProcessingRecord.CustomerCategory.init -> void
+Acme.Processing.Core.ProcessingRecord.Deconstruct(out string! Id, out string! TenantId, out string! OwnerId, out System.Collections.Generic.IReadOnlySet<string!>! ReaderIds, out string! CustomerCategory, out System.DateTimeOffset StartedAt, out System.DateTimeOffset? CompletedAt, out string! Status) -> void
+Acme.Processing.Core.ProcessingRecord.Equals(Acme.Processing.Core.ProcessingRecord? other) -> bool
+Acme.Processing.Core.ProcessingRecord.Id.get -> string!
+Acme.Processing.Core.ProcessingRecord.Id.init -> void
+Acme.Processing.Core.ProcessingRecord.OwnerId.get -> string!
+Acme.Processing.Core.ProcessingRecord.OwnerId.init -> void
+Acme.Processing.Core.ProcessingRecord.ProcessingRecord(string! Id, string! TenantId, string! OwnerId, System.Collections.Generic.IReadOnlySet<string!>! ReaderIds, string! CustomerCategory, System.DateTimeOffset StartedAt, System.DateTimeOffset? CompletedAt, string! Status) -> void
+Acme.Processing.Core.ProcessingRecord.ReaderIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Acme.Processing.Core.ProcessingRecord.ReaderIds.init -> void
+Acme.Processing.Core.ProcessingRecord.StartedAt.get -> System.DateTimeOffset
+Acme.Processing.Core.ProcessingRecord.StartedAt.init -> void
+Acme.Processing.Core.ProcessingRecord.Status.get -> string!
+Acme.Processing.Core.ProcessingRecord.Status.init -> void
+Acme.Processing.Core.ProcessingRecord.TenantId.get -> string!
+Acme.Processing.Core.ProcessingRecord.TenantId.init -> void
+Acme.Processing.Core.ProcessingRecordPage
+Acme.Processing.Core.ProcessingRecordPage.<Clone>$() -> Acme.Processing.Core.ProcessingRecordPage!
+Acme.Processing.Core.ProcessingRecordPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecord!>! Items, out string? NextId) -> void
+Acme.Processing.Core.ProcessingRecordPage.Equals(Acme.Processing.Core.ProcessingRecordPage? other) -> bool
+Acme.Processing.Core.ProcessingRecordPage.Items.get -> System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecord!>!
+Acme.Processing.Core.ProcessingRecordPage.Items.init -> void
+Acme.Processing.Core.ProcessingRecordPage.NextId.get -> string?
+Acme.Processing.Core.ProcessingRecordPage.NextId.init -> void
+Acme.Processing.Core.ProcessingRecordPage.ProcessingRecordPage(System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecord!>! Items, string? NextId) -> void
+Acme.Processing.Core.ProcessingRecordView
+Acme.Processing.Core.ProcessingRecordView.<Clone>$() -> Acme.Processing.Core.ProcessingRecordView!
+Acme.Processing.Core.ProcessingRecordView.CategoryAvailable.get -> bool
+Acme.Processing.Core.ProcessingRecordView.CategoryAvailable.init -> void
+Acme.Processing.Core.ProcessingRecordView.CompletedAt.get -> System.DateTimeOffset?
+Acme.Processing.Core.ProcessingRecordView.CompletedAt.init -> void
+Acme.Processing.Core.ProcessingRecordView.CustomerCategory.get -> string?
+Acme.Processing.Core.ProcessingRecordView.CustomerCategory.init -> void
+Acme.Processing.Core.ProcessingRecordView.Deconstruct(out string! Id, out string? CustomerCategory, out bool CategoryAvailable, out System.DateTimeOffset StartedAt, out System.DateTimeOffset? CompletedAt, out string! Status) -> void
+Acme.Processing.Core.ProcessingRecordView.Equals(Acme.Processing.Core.ProcessingRecordView? other) -> bool
+Acme.Processing.Core.ProcessingRecordView.Id.get -> string!
+Acme.Processing.Core.ProcessingRecordView.Id.init -> void
+Acme.Processing.Core.ProcessingRecordView.ProcessingRecordView(string! Id, string? CustomerCategory, bool CategoryAvailable, System.DateTimeOffset StartedAt, System.DateTimeOffset? CompletedAt, string! Status) -> void
+Acme.Processing.Core.ProcessingRecordView.StartedAt.get -> System.DateTimeOffset
+Acme.Processing.Core.ProcessingRecordView.StartedAt.init -> void
+Acme.Processing.Core.ProcessingRecordView.Status.get -> string!
+Acme.Processing.Core.ProcessingRecordView.Status.init -> void
+Acme.Processing.Core.ProcessingRecordViewPage
+Acme.Processing.Core.ProcessingRecordViewPage.<Clone>$() -> Acme.Processing.Core.ProcessingRecordViewPage!
+Acme.Processing.Core.ProcessingRecordViewPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecordView!>! Items, out string? NextCursor) -> void
+Acme.Processing.Core.ProcessingRecordViewPage.Equals(Acme.Processing.Core.ProcessingRecordViewPage? other) -> bool
+Acme.Processing.Core.ProcessingRecordViewPage.Items.get -> System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecordView!>!
+Acme.Processing.Core.ProcessingRecordViewPage.Items.init -> void
+Acme.Processing.Core.ProcessingRecordViewPage.NextCursor.get -> string?
+Acme.Processing.Core.ProcessingRecordViewPage.NextCursor.init -> void
+Acme.Processing.Core.ProcessingRecordViewPage.ProcessingRecordViewPage(System.Collections.Generic.IReadOnlyList<Acme.Processing.Core.ProcessingRecordView!>! Items, string? NextCursor) -> void
+override Acme.Processing.Core.ProcessingActor.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingActor.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingActor.ToString() -> string!
+override Acme.Processing.Core.ProcessingCreate.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingCreate.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingCreate.ToString() -> string!
+override Acme.Processing.Core.ProcessingRecord.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingRecord.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingRecord.ToString() -> string!
+override Acme.Processing.Core.ProcessingRecordPage.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingRecordPage.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingRecordPage.ToString() -> string!
+override Acme.Processing.Core.ProcessingRecordView.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingRecordView.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingRecordView.ToString() -> string!
+override Acme.Processing.Core.ProcessingRecordViewPage.Equals(object? obj) -> bool
+override Acme.Processing.Core.ProcessingRecordViewPage.GetHashCode() -> int
+override Acme.Processing.Core.ProcessingRecordViewPage.ToString() -> string!
+static Acme.Processing.Core.ProcessingActor.operator !=(Acme.Processing.Core.ProcessingActor? left, Acme.Processing.Core.ProcessingActor? right) -> bool
+static Acme.Processing.Core.ProcessingActor.operator ==(Acme.Processing.Core.ProcessingActor? left, Acme.Processing.Core.ProcessingActor? right) -> bool
+static Acme.Processing.Core.ProcessingCreate.operator !=(Acme.Processing.Core.ProcessingCreate? left, Acme.Processing.Core.ProcessingCreate? right) -> bool
+static Acme.Processing.Core.ProcessingCreate.operator ==(Acme.Processing.Core.ProcessingCreate? left, Acme.Processing.Core.ProcessingCreate? right) -> bool
+static Acme.Processing.Core.ProcessingRecord.operator !=(Acme.Processing.Core.ProcessingRecord? left, Acme.Processing.Core.ProcessingRecord? right) -> bool
+static Acme.Processing.Core.ProcessingRecord.operator ==(Acme.Processing.Core.ProcessingRecord? left, Acme.Processing.Core.ProcessingRecord? right) -> bool
+static Acme.Processing.Core.ProcessingRecordPage.operator !=(Acme.Processing.Core.ProcessingRecordPage? left, Acme.Processing.Core.ProcessingRecordPage? right) -> bool
+static Acme.Processing.Core.ProcessingRecordPage.operator ==(Acme.Processing.Core.ProcessingRecordPage? left, Acme.Processing.Core.ProcessingRecordPage? right) -> bool
+static Acme.Processing.Core.ProcessingRecordView.operator !=(Acme.Processing.Core.ProcessingRecordView? left, Acme.Processing.Core.ProcessingRecordView? right) -> bool
+static Acme.Processing.Core.ProcessingRecordView.operator ==(Acme.Processing.Core.ProcessingRecordView? left, Acme.Processing.Core.ProcessingRecordView? right) -> bool
+static Acme.Processing.Core.ProcessingRecordViewPage.operator !=(Acme.Processing.Core.ProcessingRecordViewPage? left, Acme.Processing.Core.ProcessingRecordViewPage? right) -> bool
+static Acme.Processing.Core.ProcessingRecordViewPage.operator ==(Acme.Processing.Core.ProcessingRecordViewPage? left, Acme.Processing.Core.ProcessingRecordViewPage? right) -> bool

@@ -1,4 +1,6 @@
 using System.Threading.Channels;
+using System.Security.Cryptography;
+using System.Text;
 using GitHub.Copilot;
 using GitHub.Copilot.Rpc;
 using Microsoft.Extensions.AI;
@@ -9,12 +11,18 @@ namespace Elsa.Agent.GitHubCopilot.Services;
 internal sealed class GitHubCopilotSdkClientFactory(ILoggerFactory loggerFactory) : IGitHubCopilotClientFactory
 {
     public IGitHubCopilotClient Create(GitHubCopilotClientRequest request)
+        => new GitHubCopilotSdkClient(new CopilotClient(BuildOptions(request)));
+
+    internal CopilotClientOptions BuildOptions(GitHubCopilotClientRequest request)
     {
         var options = new CopilotClientOptions
         {
+            // Server integrations expose only the installed, policy-guarded Weaver tools. Empty
+            // mode also disables ambient instructions, skills, plugins, memory and environment.
+            Mode = CopilotClientMode.Empty,
             GitHubToken = request.GitHubToken,
             UseLoggedInUser = request.UseLoggedInUser,
-            BaseDirectory = request.BaseDirectory,
+            BaseDirectory = StateDirectory(request),
             WorkingDirectory = request.WorkingDirectory,
             Logger = loggerFactory.CreateLogger<CopilotClient>()
         };
@@ -22,7 +30,19 @@ internal sealed class GitHubCopilotSdkClientFactory(ILoggerFactory loggerFactory
         if (!string.IsNullOrWhiteSpace(request.RuntimeUrl))
             options.Connection = RuntimeConnection.ForUri(request.RuntimeUrl, request.RuntimeConnectionToken);
 
-        return new GitHubCopilotSdkClient(new CopilotClient(options));
+        return options;
+    }
+
+    internal static string StateDirectory(GitHubCopilotClientRequest request)
+    {
+        var root = Path.GetFullPath(request.BaseDirectory ?? Path.Combine(Path.GetTempPath(), "elsa-weaver-copilot"));
+        // Hash the trusted tenant so neither path syntax nor raw identifiers become filesystem names.
+        // Elsa still enforces exact actor/session ownership before any SDK resume.
+        if (request.TenantId is null) return Path.Combine(root, "diagnostics");
+        if (string.IsNullOrWhiteSpace(request.TenantId))
+            throw new ArgumentException("Session work requires a trusted tenant identity.", nameof(request));
+        var partition = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(request.TenantId)));
+        return Path.Combine(root, "tenants", partition);
     }
 }
 
@@ -52,7 +72,7 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
 
     public ValueTask DisposeAsync() => client.DisposeAsync();
 
-    private static SessionConfig BuildConfig(GitHubCopilotSessionRequest request)
+    internal static SessionConfig BuildConfig(GitHubCopilotSessionRequest request)
     {
         var config = new SessionConfig
         {
@@ -63,7 +83,7 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
         return config;
     }
 
-    private static ResumeSessionConfig BuildResumeConfig(GitHubCopilotSessionRequest request)
+    internal static ResumeSessionConfig BuildResumeConfig(GitHubCopilotSessionRequest request)
     {
         var config = new ResumeSessionConfig();
         ApplyConfig(config, request);
@@ -78,12 +98,22 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
         config.Streaming = request.Streaming;
         config.AvailableTools = request.AvailableTools.ToList();
         config.ExcludedTools = request.ExcludedTools.ToList();
-        if (request.CustomTools is { Count: > 0 })
+        var currentTools = (request.CustomTools ?? []).Where(tool =>
+            request.AvailableTools.Contains(tool.Name, StringComparer.Ordinal) &&
+            !request.ExcludedTools.Any(excluded => excluded == tool.Name || excluded == "custom:" + tool.Name || excluded == "custom:*"))
+            .ToArray();
+        if (currentTools.Length > 0)
         {
             // Tools backed by an AIFunction are auto-invoked by the harness during the turn.
-            config.Tools = request.CustomTools.Cast<AIFunctionDeclaration>().ToList();
+            config.Tools = currentTools.Cast<AIFunctionDeclaration>().ToList();
         }
-        config.OnPermissionRequest = (_, _) => Task.FromResult(PermissionDecision.Reject("Elsa requires mutations to be proposed through its own approval flow."));
+        var currentNames = currentTools.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+        // This approves entry into an installed callback, never an effect. The callback still
+        // executes through Elsa's current host policy, native authority and review-aware invoker.
+        config.OnPermissionRequest = (permission, invocation) => Task.FromResult(invocation.SessionId == request.SessionId &&
+            permission is PermissionRequestCustomTool custom && currentNames.Contains(custom.ToolName)
+                ? PermissionDecision.ApproveOnce()
+                : PermissionDecision.Reject("Only current installed Elsa tool callbacks may enter the guarded invoker."));
 
         if (!string.IsNullOrWhiteSpace(request.SystemMessage))
         {

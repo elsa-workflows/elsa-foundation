@@ -1,0 +1,179 @@
+import argparse
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import xml.etree.ElementTree as ET
+
+spec = importlib.util.spec_from_file_location('live_qualification', Path(__file__).with_name('live_qualify.py'))
+live = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(live)
+
+
+class ProfileTests(unittest.TestCase):
+    def test_default_preparation_does_not_access_credentials_start_hosts_or_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'proof'
+            options = argparse.Namespace(output=output, mode='prepare', model='explicit-model', account_access_restored=False, credential_environment_variable=None)
+            with patch.object(live, 'credential_environment', side_effect=AssertionError('credential read')), patch.object(live, 'build', side_effect=AssertionError('build')), patch.object(live, 'execute_live', side_effect=AssertionError('provider')), patch.object(live, 'source_state', return_value={'sha': 'test', 'dirty': 'preliminary'}):
+                live.run(options)
+            report = json.loads((output / 'report.json').read_text())
+            self.assertEqual('prepared', report['status'])
+            self.assertEqual('not run', report['providerCalls'])
+            self.assertFalse(report['liveQualified'])
+
+    def test_no_environment_lookup_before_explicit_live_restored_gate(self):
+        for mode, restored in [('prepare', False), ('build', True), ('live', False)]:
+            with self.subTest(mode=mode, restored=restored), patch.object(live.os.environ, 'get', side_effect=AssertionError('secret lookup')):
+                with self.assertRaises(ValueError):
+                    live.credential_environment(mode, restored, 'APPROVED_TOKEN', None)
+
+    def test_live_without_ack_fails_before_output_materialization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'proof'
+            options = argparse.Namespace(output=output, mode='live', model='pinned', account_access_restored=False)
+            with self.assertRaises(ValueError): live.run(options)
+            self.assertFalse(output.exists())
+
+    def test_auto_and_nonowned_outputs_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            for output, model in [(Path(temporary) / 'unused', 'auto'), (live.ROOT / 'unsafe', 'pinned'), (Path('relative'), 'pinned')]:
+                with self.subTest(output=output, model=model):
+                    with self.assertRaises(ValueError): live.run(argparse.Namespace(output=output, model=model, mode='prepare', account_access_restored=False))
+
+    def test_live_profile_uses_real_provider_normal_iam_and_current_category_profiles(self):
+        native = live.native_helpers()
+        settings = {'Cors': {}}
+        shells = {'CShells': {'Shells': {'default': {'Features': {'GitHubCopilotAgent': {}, 'FoundationIdentityAspNetCoreIdentity': {}}}}}}
+        live.profile(settings, shells, 'http://localhost:12345', 'pinned-model', native)
+        features = shells['CShells']['Shells']['default']['Features']
+        actual = features['GitHubCopilotAgent']
+        self.assertEqual(actual, features['DashboardLiveQualification'])
+        self.assertTrue(actual['Enabled'])
+        self.assertFalse(actual['UseLoggedInUser'])
+        self.assertNotIn('GitHubToken', actual)
+        self.assertNotIn('RuntimeUrl', actual)
+        self.assertEqual(live.MODEL_ENVIRONMENT, actual['GitHubTokenEnvironmentVariable'])
+        profiles = settings['Qualification']['GrantProfiles']
+        self.assertEqual({'acme/processing/category:read'}, set(profiles['dashboard-live-reader']) - set(profiles['dashboard-live-no-category']))
+        self.assertFalse(any('*' in grant or 'agent' in grant for grant in profiles['dashboard-live-reader']))
+
+    def test_conditional_dependency_patch_cannot_silently_return(self):
+        template = live.reviewed_host_template()
+        project = ET.fromstring(template)
+        refs = list(project.iter('ProjectReference'))
+        self.assertGreater(len(refs), 100)
+        self.assertEqual(1, sum('Acme.Processing/Module/Acme.Processing.csproj' in item.attrib['Include'] for item in refs))
+        self.assertTrue(all(not item.get('Condition') for item in refs))
+        self.assertNotIn('ElsaDashboardLiveQualification', (live.ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj').read_text())
+
+    def test_materialized_host_owns_graph_outputs_locks_and_checks_source_hooks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project, hook, seeded = live.materialize(root)
+            self.assertTrue(project.is_relative_to(root))
+            self.assertTrue(all(Path(name).is_relative_to(root / 'locks') for name in seeded))
+            self.assertIn('$(MSBuildProjectName).packages.lock.json', hook.read_text())
+            self.assertIn(str(root / 'artifacts'), ' '.join(live.build_options(root, hook)))
+            program = (project.parent / 'Program.cs').read_text()
+            self.assertEqual(1, program.count('new DashboardLiveCounters()'))
+            self.assertEqual(1, program.count('DashboardLiveQualificationRoutes.Map'))
+            self.assertIn('typeof(Acme.Processing.ProcessingFeature).Assembly', program)
+            with self.assertRaises(ValueError): live.replace_once('missing', 'hook', 'new')
+            with self.assertRaises(ValueError): live.replace_once('hook hook', 'hook', 'new')
+
+
+class PreflightTests(unittest.TestCase):
+    def test_actual_preflight_performs_one_normal_iam_bootstrap_attempt(self):
+        with patch.object(live, 'http_json', side_effect=[(200, {}), (200, {'accessToken': 'synthetic-test-only'}), (403, {})]) as http:
+            result = live.live_preflight('http://localhost:12345')
+        self.assertFalse(result['available'])
+        self.assertEqual(3, http.call_count)
+        self.assertEqual(['/_elsa/identity/login', '/_elsa/identity/token', '/_elsa/agent/bootstrap'], [call.args[2] for call in http.call_args_list])
+
+    def test_requested_live_unavailable_exits_nonzero(self):
+        with patch('sys.argv', ['live_qualify.py', '--output', '/unused-owned-proof', '--model', 'pinned', '--mode', 'live', '--account-access-restored']), patch.object(live, 'run', side_effect=live.LiveUnavailable('unavailable')):
+            with self.assertRaises(SystemExit) as failure:
+                live.main()
+        self.assertEqual(2, failure.exception.code)
+
+    def test_403_or_unavailable_is_single_attempt_without_retry_or_body_leakage(self):
+        for status, envelope in [(403, {'error': {'message': 'secret sentinel'}}), (200, {'data': {'enabled': False, 'provider': {'isAvailable': False, 'status': 'secret sentinel'}}})]:
+            with self.subTest(status=status):
+                result = live.classify_preflight(status, envelope)
+                self.assertFalse(result['available'])
+                self.assertEqual(1, result['attempts'])
+                self.assertFalse(result['automaticRetry'])
+                self.assertNotIn('secret sentinel', json.dumps(result))
+
+    def test_available_preflight_retains_only_public_declared_model_and_sdk_metadata(self):
+        result = live.classify_preflight(200, {'data': {'enabled': True, 'provider': {'isAvailable': True, 'metadata': {'sdkPackage': 'GitHub.Copilot.SDK', 'sdkVersion': '1', 'models': 'pinned,other', 'credential': 'sentinel'}}}})
+        self.assertTrue(result['available'])
+        self.assertEqual(['pinned', 'other'], result['declaredModels'])
+        self.assertNotIn('sentinel', json.dumps(result))
+
+
+class VerdictTests(unittest.TestCase):
+    @staticmethod
+    def evidence():
+        snapshot = lambda sends: {'category': 'actual-sdk-forwarding', 'counts': {'session.send': sends, 'event.Completed': sends,
+                                  'tool.return.dashboard_request_clarification': 1 if sends >= 2 else 0,
+                                  'tool.return.dashboard_preview_question': sends - 1 if sends >= 2 else 0}, 'privacyFailures': 0}
+        phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances', 'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-independent-viewer-refresh', 'native-current-field-revocation'}
+        return {'turns': {'before': snapshot(0), 'afterClarification': snapshot(2)}, 'refinement': {'before': snapshot(2), 'after': snapshot(3)}, 'after': snapshot(3),
+                'nativePhases': [{'phase': phase, 'before': 2 if phase == 'initial-native-preview' else 3,
+                                 'after': 2 if phase == 'initial-native-preview' else 3, 'delta': 0} for phase in phases]}
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.artifact = self.root / 'proof'
+        self.artifact.write_text('proof')
+        self.boundary = self.root / 'boundary.json'
+        self.boundary.write_text(json.dumps(self.evidence()))
+        def required(title):
+            return live.JSON_ARTIFACTS | {'trace', 'source', 'live-reader-trace'} | {f'{capture}.{suffix}' for capture in live.CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        self.report = {'suites': [{'specs': [{'title': title, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(self.boundary if name == 'live-counters.json' else self.artifact)} for name in required(title)]}]}]} for title in live.TITLES]}]}
+
+    def test_complete_actual_sdk_boundary_evidence(self):
+        self.assertEqual(2, live.verdict(self.report, self.root))
+
+    def test_missing_skipped_retried_extra_or_fake_provider_cannot_qualify(self):
+        for change in ('missing', 'skipped', 'retried', 'duplicate', 'artifact', 'fake-provider', 'native-send', 'hidden-send', 'no-authoring', 'missing-completion', 'missing-clarification', 'missing-proposal', 'privacy'):
+            with self.subTest(change=change):
+                report = copy.deepcopy(self.report)
+                row = report['suites'][0]['specs'][0]
+                result = row['tests'][0]['results'][0]
+                evidence = self.evidence()
+                if change == 'missing': report['suites'][0]['specs'].pop()
+                if change == 'skipped': result['status'] = 'skipped'
+                if change == 'retried': row['tests'][0]['results'].append(copy.deepcopy(result))
+                if change == 'duplicate': report['suites'][0]['specs'].append(copy.deepcopy(row))
+                if change == 'artifact': result['attachments'].pop()
+                if change == 'fake-provider': evidence['after']['category'] = 'deterministic-provider-protocol'
+                if change == 'native-send': evidence['nativePhases'][0]['delta'] = 1
+                if change == 'hidden-send': evidence['after']['counts']['session.send'] = 4
+                if change == 'no-authoring': evidence['refinement']['after']['counts']['session.send'] = 0
+                if change == 'missing-completion': evidence['refinement']['after']['counts']['event.Completed'] = 0
+                if change == 'missing-clarification': evidence['turns']['afterClarification']['counts']['tool.return.dashboard_request_clarification'] = 0
+                if change == 'missing-proposal': evidence['refinement']['after']['counts']['tool.return.dashboard_preview_question'] = 0
+                if change == 'privacy': evidence['after']['privacyFailures'] = 1
+                self.boundary.write_text(json.dumps(evidence))
+                with self.assertRaises(ValueError): live.verdict(report, self.root)
+
+    def test_external_or_empty_artifact_cannot_qualify(self):
+        self.artifact.write_text('')
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root)
+        self.artifact.write_text('proof')
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root / 'other')
+
+    def test_browser_source_attachment_must_match_current_committed_revision(self):
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root, 'different-sha')
+
+
+if __name__ == '__main__':
+    unittest.main()

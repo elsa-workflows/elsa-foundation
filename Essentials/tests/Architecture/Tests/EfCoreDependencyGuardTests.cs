@@ -128,6 +128,10 @@ public sealed class EfCoreDependencyGuardTests
     public void Every_admitted_Connections_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Spec1179ConnectionsEf.ExpectedEfPackagesByProject, "Connections metadata (#3578)");
 
+    [Fact]
+    public void Every_admitted_saved_Dashboard_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1217DashboardEf.ExpectedEfPackagesByProject, "saved Dashboard definitions (#3604)");
+
     private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
     {
         var offenders = projects.SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
@@ -724,6 +728,7 @@ public sealed class EfCoreDependencyGuardTests
                     Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
                     Spec1179SpecialistsEf.IsProjectPath(relativePath) ||
                     Spec1189AgentEf.IsProjectPath(relativePath) ||
+                    Spec1217DashboardEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
@@ -992,6 +997,26 @@ public sealed class EfCoreDependencyGuardTests
                 ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
+    /// <summary>Spec 1217 / #3604: finite saved-definition storage, native HTTP/migration tests and provider matrix.
+    /// Query/authoring/source contracts and implementations carry no EF dependency.</summary>
+    internal static class Spec1217DashboardEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj"] =
+                    [.. Providers(), "Microsoft.EntityFrameworkCore.Design"],
+                ["Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj"] = Providers(),
+                ["Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj"] =
+                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+        private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+        private static string[] Providers() => [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core",
+            "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"];
     }
 
     /// <summary>Spec 1189 T026-T028: the opt-in durable Weaver session record store and audit under #3441.</summary>

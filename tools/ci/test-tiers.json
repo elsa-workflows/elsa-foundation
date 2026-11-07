@@ -17,15 +17,15 @@
   ],
   "projects": [
     {
+      "project": "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.54
+    },
+    {
       "project": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
       "tier": "integration",
       "medianMinutes": null,
       "trait": "child-process"
-    },
-    {
-      "project": "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
-      "tier": "pr",
-      "medianMinutes": 0.54
     },
     {
       "project": "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
@@ -448,6 +448,22 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "medianMinutes": null,
+      "trait": "testcontainers"
+    },
+    {
+      "project": "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
@@ -499,6 +515,11 @@
       "project": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.18
+    },
+    {
+      "project": "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     },
     {
       "project": "Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
@@ -665,10 +686,33 @@
       "medianMinutes": 0.06
     },
     {
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
       "tier": "pr",
       "trait": "child-process",
       "medianMinutes": 1.83
+    },
+    {
+      "project": "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
     },
     {
       "project": "Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
@@ -702,25 +746,12 @@
       "medianMinutes": null
     },
     {
-      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
-      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
-      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
     },
@@ -925,6 +956,11 @@
           "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
           "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
           "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj",
+          "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+          "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+          "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+          "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
+          "Extensions/Agent/tests/Dashboard/Tests/Elsa.Agent.Dashboard.Tests.csproj",
           "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj"
         ]
       }
@@ -1004,7 +1040,8 @@
           "secrets-sqlserver",
           "etl-sql",
           "etl-rabbitmq",
-          "etl-ef"
+          "etl-ef",
+          "studio-dashboard"
         ]
       }
     ]
@@ -1163,6 +1200,11 @@
     {
       "suite": "specialist-journal",
       "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
+    {
+      "suite": "studio-dashboard",
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     }
   ],
