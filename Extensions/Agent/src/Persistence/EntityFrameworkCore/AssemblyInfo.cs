@@ -7,7 +7,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     Sqlite = typeof(AgentSqliteDbContext), SqlServer = typeof(AgentSqlServerDbContext),
     PostgreSql = typeof(AgentPostgreSqlDbContext), MySql = typeof(AgentMySqlDbContext))]
 [assembly: ManifestExtension("efModules", "Agent")]
-[assembly: EfSchemaFamily(AgentEfModule.SchemaFamily, "Agent", AgentEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(AgentEfModule.SchemaFamily, "Agent", AgentEfModule.SchemaVersion, Upcasters = [typeof(AgentEffectsV1Upcaster)])]
 [assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentSessionRow), nameof(AgentSessionRow.Payload), nameof(AgentSessionRow.PausedTurnPayload),
     nameof(AgentSessionRow.PendingAuditsPayload))]
 [assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentMessageRow), nameof(AgentMessageRow.Payload))]

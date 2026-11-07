@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -136,6 +137,7 @@ public static class AgentApi
         var diagnostics = providers.Active is null ? null : await providers.Active.GetDiagnosticsAsync(context.RequestAborted);
         var availability = await evaluator.EvaluateAvailabilityAsync(AgentPolicy.Default, context.RequestAborted);
         var listed = (await capabilities.ListAsync(context.RequestAborted)).ToList();
+        var privileges = context.RequestServices.GetRequiredService<IOptionsMonitor<AgentPrivilegePolicyOptions>>().CurrentValue;
         var enabled = availability.Allowed && diagnostics?.IsAvailable == true;
         var modes = enabled ? BuildModes(listed) : [];
         var response = new AgentBootstrapResponse(
@@ -150,7 +152,8 @@ public static class AgentApi
                 AgentPolicy.Default.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
                 AgentPolicy.Default.RetentionLabel))
         {
-            Recovery = DescribeRecovery(context)
+            Recovery = DescribeRecovery(context),
+            Privileges = new(privileges.Administrative, privileges.Irrecoverable, privileges.Activation)
         };
         await WriteAsync(context, AgentApiResponse<AgentBootstrapResponse>.Success(response), AgentJsonContext.Default.AgentApiResponseAgentBootstrapResponse);
     }

@@ -3,6 +3,7 @@
 | Surface | Purpose |
 | --- | --- |
 | `FoundationAgentEntityFrameworkCoreFeature` | Opt-in shell feature `FoundationAgentEntityFrameworkCore`: provider, connection, schema, pooling and lease. Depends on `FoundationAgentAbstractions` and `Secrets`. |
+| `FoundationAgentEfEffectsFeature` *(spec 1203 preview, not frozen)* | Extensible effects variation, directly requiring Agent 1.1 and the existing EF store feature. Select this variation without the common sibling; see [composition and migration](README.md#module-support-preview-spec-1203). |
 | `AgentEntityFrameworkCoreRegistration.AddAgentEntityFrameworkCore` | Registers the module-owned contexts and the shared migration lifecycle, and selects the durable record store and audit store. |
 | `AgentEntityFrameworkCoreOptions` | Explicit choices for that registration. |
 | `AgentModelBuilderExtensions.AddAgentModel` | Installs only the agent mappings in a consumer-owned context. The host owns migrations. |

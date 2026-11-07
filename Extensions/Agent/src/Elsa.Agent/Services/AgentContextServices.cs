@@ -89,7 +89,8 @@ internal sealed class DefaultAgentContextCollector(
         await events.Publish(collecting, cancellationToken);
         // A marker counts only where CollectAgentContext recorded it for a source's own diagnostic; any other is cleared.
         var diagnostics = collecting.Diagnostics
-            .Select(x => x.OwnerUnavailable && !AgentContextOwnerMarkers.IsRecorded(collecting, x) ? x with { OwnerUnavailable = false } : x)
+            .Select(x => x.OwnerUnavailable && !AgentContextOwnerMarkers.IsRecorded(collecting, x)
+                ? x with { OwnerUnavailable = false, Message = AgentModuleCodes.UnsupportedMessage } : x)
             .ToList();
         var sanitized = await sanitizer.SanitizeAsync(collecting.Attachments.ToList(), cancellationToken);
         foreach (var attachment in sanitized.Where(x => x.Sensitivity == AgentContextSensitivity.SecretRedacted))
@@ -128,7 +129,7 @@ internal sealed class DefaultAgentContextCollector(
         // engine's fixed message, never its own text. Only when every required failure says so: any definite refusal,
         // host diagnostic or reserved code keeps the ordinary incomplete-context failure exactly.
         if (requiredFailures.All(x => x.OwnerUnavailable && AgentContextOwnerMarkers.IsRecorded(collecting, x)))
-            return new(contribution, AgentContextOwnerMarkers.Unavailable(requiredFailures[0].Code));
+            return new(contribution, AgentContextOwnerMarkers.Unavailable(collecting, requiredFailures[0]));
         return new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
     }
 }

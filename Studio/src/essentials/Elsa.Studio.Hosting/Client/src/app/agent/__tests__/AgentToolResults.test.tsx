@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { AgentToolResults } from "../AgentToolResults";
+import type { StudioAgentEffectScope } from "../../../sdk";
 import { AgentProposalReview } from "../AgentProposalReview";
 
 it.each(["supports", "component"])("keeps owner evidence and shared review usable when contributed %s fails", failure => {
@@ -47,5 +48,36 @@ it("matches renderers by resource module and renders the owning module's result 
     expect(container.textContent?.match(/Owner undo/g)).toHaveLength(2);
     expect(container.textContent).not.toContain("Wrong type control");
     expect(container.textContent).not.toContain("Stranger control");
+  } finally { flushSync(() => root.unmount()); }
+});
+
+const scopeCases = [
+  { scope: "clientWorkingState", label: "Local working state" },
+  { scope: "ClientWorkingState", label: "Local working state" },
+  { scope: 0, label: "Local working state" },
+  { scope: "client-working-state", label: "Local working state" },
+  { scope: "serverPersisted", label: "Persisted resource" },
+  { scope: "ServerPersisted", label: "Persisted resource" },
+  { scope: 1, label: "Persisted resource" },
+  { scope: "server-persisted", label: "Persisted resource" },
+  { scope: "noPersistedEffect", label: "No persisted resource change" },
+  { scope: "NoPersistedEffect", label: "No persisted resource change" },
+  { scope: 2, label: "No persisted resource change" },
+  { scope: "no-persisted-effect", label: "No persisted resource change" },
+  ...["future-scope", 3, -1, 0.5, null].map(scope => ({ scope, label: "Effect scope unavailable" }))
+];
+it.each(scopeCases)("labels owning receipt scope $scope as $label without interpreting the module verdict", ({ scope, label }) => {
+  const container = document.createElement("div"); const root = createRoot(container);
+  const target = { moduleId: "Owner", resourceType: "sample", resourceId: "one", revision: "r1" };
+  const payload = { typeId: "owner.test-result", schemaVersion: "1", data: { passed: false } };
+  try {
+    flushSync(() => root.render(<AgentToolResults results={[{ toolCallId: "call", toolName: "owner_test", succeeded: true,
+      content: "The owner ran the test and reported a negative verdict.", payload,
+      receipt: { invocationId: "invocation", before: target, after: target, scope: scope as StudioAgentEffectScope, evidence: payload }
+    }]} renderers={[]} />));
+    expect(container.querySelector("article small")?.textContent).toBe(label);
+    expect(container.querySelector("article")?.getAttribute("data-succeeded")).toBe("true");
+    expect(container.textContent).toContain("negative verdict");
+    expect(container.textContent).toContain('"passed": false');
   } finally { flushSync(() => root.unmount()); }
 });

@@ -37,6 +37,34 @@ An application can instead call `modelBuilder.AddAgentModel(Database.ProviderNam
 Every operation resolves a fresh scoped context and commits independently; it never flushes pending
 application changes or enlists in an application transaction.
 
+## Module support preview (spec 1203)
+
+This section describes current source awaiting qualification; it does not extend the historical
+spec 1189 evidence to new binaries or consumers. Existing store-only hosts remain legacy-only.
+To admit the new effects contract, select `FoundationAgentEfEffects`, represented by the public
+extensible `FoundationAgentEfEffectsFeature`. It depends on the existing EF store feature and directly
+declares Agent schema `1.1.0`. Do not also select the common `FoundationAgentEffects` sibling.
+Both `AddAgentEntityFrameworkCore` and `AddAgentStores<TContext>` declare the EF effects type through
+the owned store-selection boundary; they do not by themselves select the effects feature.
+
+A specialization must directly repeat every base minimum schema declaration: the attributes are not
+inherited. Missing or unfinalized schema observation refuses new effects through the shared checker;
+loading a newer assembly is not schema finalization. Consumer-owned contexts must compose that shared
+host gate explicitly. Without an admitted gate they may write only representable legacy 1.0 content;
+unknown versions fail closed. A custom store declares its supported effects type with the additive
+`SelectAgentSessionRecordStore(factory, requiredEffectsFeatureType)` overload. Existing two-argument
+factories and explicit null remain valid without an effects selection, but selecting effects with them
+is a configuration error. Store runtime types are never used to infer support.
+
+Agent 1.1 adds content meanings rather than relational columns. The identity 1.0-to-1.1 upcaster
+preserves protected content bytes; authenticate and decode through the normal store. A write uses the
+version admitted in its metadata attempt and changes parent/children atomically. Existing audit sequence
+counters retain their original stamp: 1.0 readability is required for their retained lifetime, including
+after finalization. See the [recorded counter obligation](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6671508360)
+and [proposed durable contract](../../../../../specs/1203-weaver-module-support/contracts/outcomes.md).
+Source fixtures and selected component tests do not establish native-provider, old-binary, fleet or
+package-consumer compatibility; those gates remain open on [#3831](https://github.com/elsa-workflows/elsa-foundation/issues/3831).
+
 ## Tables
 
 | Table | Holds |

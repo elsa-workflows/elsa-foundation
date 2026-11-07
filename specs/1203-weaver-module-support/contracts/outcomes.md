@@ -68,7 +68,7 @@ Retain the initial raw owner/fence-guarded row-lock/version increment. Load the 
 
 Move encoding/stamp-bearing row materialization inside each safe attempt. On a verified forward gate-adoption mismatch only, roll back/dispose and use existing bounded metadata retry. Re-select and rebuild entities; do not reuse tracked objects. Do not retry arbitrary schema refusal, corruption or owner/domain dispatch. If receipt persistence cannot settle, preserve the existing uncertain/no-replay result.
 
-Existing audit sequence counter1.0 remains readable forever and never restamps when Last advances. New counters/owners/audits use that attempt's admitted stamp. Raw lease/fence-only bookkeeping may preserve a stamp but cannot smuggle content past the shared guard.
+An existing audit sequence counter1.0 remains readable for as long as that counter exists and never restamps when Last advances. The [Program obligation](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6671508360) records that retained lifetime, including after finalization. New counters/owners/audits use that attempt's admitted stamp. Raw lease/fence-only bookkeeping may preserve a stamp but cannot smuggle content past the shared guard.
 
 ## Complete mapping inventory
 

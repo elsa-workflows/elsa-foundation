@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,8 +13,16 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
     // The audit sink, reader and ownership are one store's facets; a durable replacement replaces all three together.
     private static readonly Type[] AuditTrio = [typeof(IAgentAuditSink), typeof(IAgentAuditReader), typeof(IAgentAuditOwnership)];
 
-    public void Validate()
+    public void Validate() => _ = GetEffectsSelection();
+
+    internal AgentEffectsSelection? GetEffectsSelection()
     {
+        var principals = registrations.Where(descriptor => descriptor.ServiceType == typeof(IAgentPrincipalSource)
+            && !descriptor.IsKeyedService).ToArray();
+        if (principals.Length > 1)
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentPrincipalSource).FullName}' allows at most one registration, but found {principals.Length}. Use services.Replace(...) to replace its existing implementation.");
+        if (principals.Any(descriptor => descriptor.Lifetime != ServiceLifetime.Scoped))
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentPrincipalSource).FullName}' must be scoped so it reads the genuine current principal for each operation.");
         var count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentToolAuthorizer));
         if (count != 1)
             throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentToolAuthorizer).FullName}' requires exactly one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
@@ -29,6 +38,7 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
             if (count > 1)
                 throw new InvalidOperationException($"Agent replacement contract '{contract.FullName}' allows at most one registration, but found {count}. Select the audit sink, reader and ownership together with services.SelectAgentAuditStore(...), which replaces the three defaults at once.");
         }
+        return AgentEffectsAdmission.ValidateSelection(registrations);
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken)

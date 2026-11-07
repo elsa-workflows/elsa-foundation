@@ -15,4 +15,7 @@
     <ProjectReference Include="../../../src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs" Link="Schema/EfSchemaFinalizationTestSupport.cs" />
+  </ItemGroup>
 </Project>

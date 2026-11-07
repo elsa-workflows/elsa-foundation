@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext, StudioHttpError, type StudioAgentContextCollection, type StudioAgentPreparedInvocation, type StudioAgentPromptRequest, type StudioAgentPromptResult } from "../../../sdk";
 import { AgentApiError, AgentExecutionError, createAgentClient, POLICY_CHANGED, type AgentClient } from "../../agent/agentClient";
-import type { AgentAutonomyMode, AgentSessionPolicy, AgentStreamEvent } from "../../agent/agentTypes";
+import type { AgentAutonomyMode, AgentProposalStatus, AgentSessionPolicy, AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
 import { useWeaverSession } from "../useWeaverSession";
 import { AgentContextChips } from "../../agent/AgentContextChips";
@@ -690,6 +690,63 @@ describe("WeaverSurface", () => {
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
     await flushPromises(); typeAndSend(container, "Inspect"); await flushPromises();
     expect(subscribeStream).not.toHaveBeenCalled(); expect(container.textContent).toContain("already accepted"); unmount();
+  });
+
+  it.each(["unknown-proposal", "unknown-approval", "approved"] as const)(
+    "requires recognized proposal and approval states before FullAuto executes: %s", async state => {
+      const api = readyApi(); const client = readyClient();
+      client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+      client.approveProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: state === "unknown-approval" ? "uncertain" as const : "approved" as const }));
+      const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = false;
+      const subscribeStream = ((_context, _url, emit) => {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: {
+          title: "Server operation", summary: "Review the current operation.", revision: "r1", preparedInvocation: invocation,
+          status: (state === "unknown-proposal" ? "future-status" : "awaiting-approval") as AgentProposalStatus
+        } });
+        emit({ type: "review-requested", messageId: "msg_1" });
+        return { close() {} };
+      }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+      const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "status-auto", message: "Run server operation" }} />);
+      try {
+        await flushPromises();
+        expect(client.approveProposal).toHaveBeenCalledTimes(state === "unknown-proposal" ? 0 : 1);
+        expect(client.executeProposal).toHaveBeenCalledTimes(state === "approved" ? 1 : 0);
+        expect(container.querySelector(`[data-status="${state === "approved" ? "executed" : "uncertain"}"]`)).toBeTruthy();
+      } finally { unmount(); }
+    });
+
+  it.each([
+    { status: "uncertain", executed: false, admitted: false },
+    { status: "performed", executed: false, admitted: false },
+    { status: "awaiting-client", executed: true, admitted: false },
+    { status: "awaiting-client", executed: undefined, admitted: false },
+    { status: "awaiting-client", executed: false, admitted: true }
+  ] as const)("gates the owning client runner and acknowledgement on pending-client admission: %j", async ({ status, executed, admitted }) => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    let workingValue = 1;
+    const mutate = vi.fn(async () => { workingValue = 2; return { outcome: "applied" as const, summary: "Observed working state.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: { value: workingValue } } }; });
+    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    client.executeProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: status, executed, clientInvocation: invocation }));
+    client.acknowledgeClient = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "executed" as const, executed: true }));
+    let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Client operation", summary: "Review the current operation.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg_1" });
+      } else emit({ type: "message-completed", messageId: "msg_1" });
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "status-client", message: "Change working state" }} />);
+    try {
+      await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
+      flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+      expect(client.executeProposal).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledTimes(admitted ? 1 : 0);
+      expect(client.acknowledgeClient).toHaveBeenCalledTimes(admitted ? 1 : 0);
+      if (admitted) expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ outcome: "applied", after: expect.objectContaining({ revision: "r2" }) }));
+      expect(workingValue).toBe(admitted ? 2 : 1);
+      expect(container.querySelector(`[data-status="${admitted ? "executed" : "uncertain"}"]`)).toBeTruthy();
+    } finally { unmount(); }
   });
 
   it("honors server review in FullAuto and continues a denial without executing or settling twice", async () => {

@@ -12,6 +12,33 @@ This is the domain catalog for framework §2.22.1. The [root index](../../../../
 
 `InMemoryAgentSessionService` (which also owns policy revisions and work claims), `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore` (sink, reader and audit ownership), `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee. Since #3441 the session owner writes through `IAgentSessionRecordStore`; the opt-in [EF store](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) makes that record durable ([below](#durable-recovery-3441-preview)).
 
+## Module support preview (spec 1203, not yet qualified)
+
+The following describes the implementation in the current leaf, not a frozen package contract.
+The dated [1186 effects](../../../../specs/1186-weaver-effects/spec.md) and
+[1189 recovery](../../../../specs/1189-weaver-recovery/spec.md) evidence covers its recorded source only.
+Current composed-host and independent-package journeys remain required before this extension freezes.
+
+| Host integration | Source contract and migration |
+| --- | --- |
+| Effects feature | Select `FoundationAgentEffects` for the known process-local store; select the store-specific variation for a declared custom store. [`FoundationAgentEffectsFeature`](FoundationAgentEffectsFeature.cs) is public and extensible; inherited registration captures the actual selected type. Do not select both common and store-specific siblings. |
+| Store selection | The existing two-argument `SelectAgentSessionRecordStore(factory)` remains a public overload and declares legacy-only support. New effects require `SelectAgentSessionRecordStore(factory, requiredEffectsFeatureType)`; explicit null is also legacy-only. The type must derive from `FoundationAgentEffectsFeature`, and the actual selected variation must derive from the store's required type. Unowned replacement or duplicate selection is diagnosed; a factory's return type never establishes support. See [EF composition](../Persistence/EntityFrameworkCore/README.md#module-support-preview-spec-1203). |
+| Privilege limits | [`AgentPrivilegePolicyOptions`](AgentPrivilegePolicyOptions.cs) is bound from `Elsa:Agent:Privileges`; `Administrative`, `Irrecoverable` and `Activation` default false. The internal scoped policy reads `IOptionsMonitor` at admission boundaries, independently of session autonomy. Configuration reload requires a reload-capable host provider. Bootstrap exposes current informational booleans; it grants no permission. |
+| Current principal | [`IAgentPrincipalSource`](../Core/IAgentPrincipalSource.cs) is an optional **replacement**, scoped per operation. Base Agent registers none. Agent API uses `TryAddScoped` for its HTTP implementation, preserving an earlier custom registration; use `Replace` afterward. More than one nonkeyed source or a non-scoped source fails validation. Missing integration cannot manufacture a principal. |
+
+The HTTP principal source returns the actual authenticated current request principal only after exact
+actor/tenant validation. A custom non-HTTP host must supply an equivalent genuine current principal;
+do not reconstruct claims from identifiers or retain a principal between requests. Modules obtain it
+again for explicit execution and independently check owning-resource permissions. Neither the principal
+nor its claims belong in context, prepared arguments, records, digests or provider transport.
+
+Feature admission, current host limits and owning-resource permission are separate checks. Approval
+uses retained core state and current privilege limits, without resolving a module or principal.
+An enabled class cannot authorize a tool, and an enabled feature cannot make an unobserved schema
+available. The exact proposed behavior and remaining qualification are in the
+[privilege/principal contract](../../../../specs/1203-weaver-module-support/contracts/privilege-policy.md)
+and [outcome contract](../../../../specs/1203-weaver-module-support/contracts/outcomes.md).
+
 ## Overridable contracts
 
 All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults are internal to `Elsa.Agent` unless another project is named. Override one contract with `services.Replace(...)`; additive module contribution belongs in the next section. The linked contract files are the signature authority.

@@ -1,10 +1,15 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Persistence.EntityFrameworkCore;
+using Elsa.Agent.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Services;
 using Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Services;
@@ -155,6 +160,8 @@ public sealed class AgentRecordStoreProviderTests
         Assert.Empty((await audit.ListOwnedAsync(new("actor-3", "tenant-1", null, 10))).Events);
         Assert.Equal(["padded-audit"], (await audit.ListOwnedAsync(new("actor-2 ", "tenant-1", null, 10))).Events.Select(x => x.Id));
 
+        await VerifySchemaAdmissionAsync(provider, connection, codec);
+
         // Unreadable state is unavailable and leaves the owner columns readable.
         await using (var scope = contexts.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<AgentDbContext>().Set<Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentMessageRow>()
@@ -163,13 +170,106 @@ public sealed class AgentRecordStoreProviderTests
         Assert.Equal(new AgentSessionOwner("actor-1", "tenant-1"), await store.FindOwnerAsync(session.Id));
     }
 
+    private static async Task VerifySchemaAdmissionAsync(string provider, string connection, AgentRecordCodec codec)
+    {
+        const string id = "schema-provider-session";
+        var gates = new EfSchemaFinalizationGates();
+        using var gateServices = new ServiceCollection().AddSingleton(gates).BuildServiceProvider();
+        using var contexts = Contexts(provider, connection, gateServices);
+        var gate = new EfSchemaModuleGate(EfSchemaModuleFamilies.ForContext(typeof(AgentDbContext))!, null, new(), new());
+        gates.Register(typeof(AgentDbContext), gate);
+        await using (var scope = contexts.CreateAsyncScope())
+            await gate.ActivateAsync(scope.ServiceProvider.GetRequiredService<AgentDbContext>());
+        Assert.Equal("1.0.0", gate.StateOf("Agent")!.WriteVersion);
+        var store = Store(contexts, codec);
+        var audit = Audit(contexts, codec);
+        var created = await store.CreateAsync(new(Session(id))
+        {
+            Messages = [new(Message(id, "schema-legacy-message"))],
+            Proposals = [new(Proposal(id, "schema-proposal"))]
+        }, Owner);
+        Assert.True(created.Succeeded);
+        var performed = new AgentProposalRecord(Proposal(id, "schema-proposal") with { Status = AgentActionProposalStatus.Performed }) { Version = 1 };
+        var write = new AgentSessionRecordWrite(id, created.Fence!) { Proposals = [performed] };
+        var before = JsonSerializer.Serialize(await store.LoadAsync(id));
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => store.WriteAsync(write));
+        Assert.Equal(("Agent", "1.0.0", "1.1.0"), (refusal.Family, refusal.WriteVersion, refusal.RequiredVersion));
+        Assert.Equal(before, JsonSerializer.Serialize(await store.LoadAsync(id)));
+        await audit.EmitAsync(Event("schema-legacy-audit"));
+        await using (var scope = contexts.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+            Assert.Equal("1.0.0", (await db.Set<AgentSessionRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            await EfSchemaFinalizationTestSupport.FinalizeAsync(new(db), "Agent", ["1.0.0", "1.1.0"], "1.1.0");
+            await gate.RefreshAsync(db);
+        }
+        Assert.Equal("1.1.0", gate.StateOf("Agent")!.WriteVersion);
+
+        // These are the same store/gate instances that refused the held-format write.
+        const string canonical = "{\"amount\":1.50,\"text\":\"café \\u2028\"}";
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+        write = write with
+        {
+            Messages = [new(Message(id, "schema-current-message"))],
+            Context = [new("schema-context", "test", null, "Context", "test.context", AgentContextSensitivity.Internal,
+                "scope", "Summary", JsonSerializer.SerializeToElement(new { opaque = true }), new Dictionary<string, string>())],
+            Snapshots = [new(digest, canonical)],
+            Keys = [new(AgentSessionKeyKinds.Call, "schema-call", "schema-proposal")]
+        };
+        Assert.True((await store.WriteAsync(write)).Succeeded);
+        var loaded = (await store.LoadAsync(id))!;
+        Assert.Equal(2, loaded.Version);
+        Assert.Equal(AgentActionProposalStatus.Performed, Assert.Single(loaded.Proposals).Proposal.Status);
+        Assert.Equal(canonical, Assert.Single(loaded.Snapshots).Canonical);
+        Assert.Equal(digest, loaded.Snapshots[0].Digest);
+        Assert.Equal(2, loaded.Messages.Count);
+        await audit.EmitAsync(Event("schema-current-audit"));
+        Assert.True(await audit.AssociateAsync(id, "actor-1", "tenant-1"));
+
+        // Session-only content saves must still pass the shared interceptor, without a second version increment.
+        Assert.True((await store.WriteAsync(new(id, created.Fence!)
+        {
+            PausedTurn = new(new(id, "turn", "schema-proposal", "schema-call", "tool", [], 1))
+        })).Succeeded);
+        Assert.True((await store.WriteAsync(new(id, created.Fence!) { PendingAudits = [Event("schema-pending")] })).Succeeded);
+        loaded = (await store.LoadAsync(id))!;
+        Assert.Equal(4, loaded.Version);
+        Assert.Equal("schema-proposal", loaded.PausedTurn!.Turn.ProposalId);
+        Assert.Equal("schema-pending", Assert.Single(loaded.PendingAudits).Id);
+        await using (var scope = contexts.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+            Assert.Equal("1.1.0", (await db.Set<AgentSessionRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.0.0", (await db.Set<AgentMessageRow>().AsNoTracking().SingleAsync(x => x.MessageId == "schema-legacy-message")).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentMessageRow>().AsNoTracking().SingleAsync(x => x.MessageId == "schema-current-message")).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentContextRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentDisclosureSnapshotRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentProposalRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentCallKeyRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.0.0", (await db.Set<AgentAuditRow>().AsNoTracking().SingleAsync(x => x.EventId == "schema-legacy-audit")).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentAuditRow>().AsNoTracking().SingleAsync(x => x.EventId == "schema-current-audit")).SchemaVersion);
+            Assert.Equal("1.1.0", (await db.Set<AgentAuditOwnerRow>().AsNoTracking().SingleAsync(x => x.SessionId == id)).SchemaVersion);
+            Assert.Equal("1.0.0", (await db.Set<AgentAuditSequenceRow>().AsNoTracking().SingleAsync()).SchemaVersion);
+        }
+
+        // An ordinary ungated direct consumer cannot lower the stamp adopted by the owning gate.
+        using var ungated = Contexts(provider, connection);
+        before = JsonSerializer.Serialize(loaded);
+        await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => Store(ungated, codec).WriteAsync(new(id, created.Fence!)
+        { Messages = [new(Message(id, "must-not-write"))] }));
+        Assert.Equal(before, JsonSerializer.Serialize(await store.LoadAsync(id)));
+
+        AgentAuditEvent Event(string eventId) => new(eventId, AgentAuditEventKind.MessageAccepted, id, "actor-1", "Recorded",
+            DateTimeOffset.UtcNow, new Dictionary<string, string>());
+    }
+
     private static EfAgentAuditStore Audit(ServiceProvider contexts, AgentRecordCodec codec)
         => new(contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec);
 
     private static EfAgentSessionRecordStore Store(ServiceProvider contexts, AgentRecordCodec codec)
         => new(contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec, TimeSpan.FromSeconds(30));
 
-    private static ServiceProvider Contexts(string provider, string connection)
+    private static ServiceProvider Contexts(string provider, string connection, ServiceProvider? gateServices = null)
     {
         var binding = EfModuleBinding.For(typeof(AgentDbContext));
         var services = new ServiceCollection();
@@ -180,7 +280,11 @@ public sealed class AgentRecordStoreProviderTests
 
         void Add<TContext>(IServiceCollection collection) where TContext : AgentDbContext
         {
-            collection.AddDbContext<TContext>((sp, builder) => binding.Apply(builder, sp, provider, connection, null));
+            collection.AddDbContext<TContext>((sp, builder) =>
+            {
+                binding.Apply(builder, sp, provider, connection, null);
+                if (gateServices is not null) builder.UseApplicationServiceProvider(gateServices);
+            });
             collection.AddScoped<AgentDbContext>(scoped => scoped.GetRequiredService<TContext>());
         }
     }

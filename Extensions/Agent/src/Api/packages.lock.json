@@ -52,6 +52,7 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )"
         }
       },
@@ -85,6 +86,12 @@
       },
       "elsa.api.capabilities.core": {
         "type": "Project"
+      },
+      "elsa.cluster.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "elsa.events.core": {
         "type": "Project",

@@ -132,6 +132,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
     IAgentContextCollector contextCollector,
     IAgentPolicyEvaluator policyEvaluator,
     IOptions<AgentTurnOptions> options,
+    AgentEffectsAdmission effects,
     IAgentAuditSink? auditSink = null) : IAgentStreamingService, IAgentSessionPolicyParticipant
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -1256,6 +1257,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         {
             var descriptor = tool.Descriptor;
             if (descriptor.AgentScopes.Count > 0 && !descriptor.AgentScopes.Any(scopes.Contains)) continue;
+            if (await effects.CheckPreparationAsync(descriptor, token) is not null) continue;
             if (!(await policyEvaluator.EvaluateCapabilityAsync(session.Policy, descriptor.Name, token)).Allowed) continue;
             var targets = prepared.Context.Where(x => x.ModuleId == descriptor.ModuleId && x.Target is not null)
                 .Select(x => x.Target).Distinct().ToList();
@@ -1263,6 +1265,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             foreach (var target in targets)
                 if ((await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, target, token)).Allowed)
                 {
+                    if (await effects.CheckPreparationAsync(descriptor, token) is not null) break;
                     // Availability is a preflight hint. Preparation/execution recheck the exact
                     // target; ordering a guidance attachment first cannot suppress a valid target.
                     tools.Add(tool);

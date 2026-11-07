@@ -31,7 +31,12 @@ public sealed record AgentBootstrapResponse(
     /// (this composition cannot recover them).
     /// </summary>
     public string Recovery { get; init; } = "unsupported";
+    /// <summary>Current host limits for display; this snapshot grants no owning-resource permission or execution authority.</summary>
+    public AgentPrivilegePolicyView Privileges { get; init; } = new(false, false, false);
 }
+
+/// <summary>Read-only host privilege configuration; session autonomy cannot change these limits.</summary>
+public sealed record AgentPrivilegePolicyView(bool Administrative, bool Irrecoverable, bool Activation);
 
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,

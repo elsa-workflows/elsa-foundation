@@ -73,6 +73,8 @@ public sealed class FeatureCompositionTests
                 "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
             ]),
         new("A shell runs exactly one agent harness.", ["AnthropicAgent"], ["GitHubCopilotAgent"]),
+        new("Agent effects select the variation matching the selected session record store.",
+            ["FoundationAgentEffects"], ["FoundationAgentEfEffects", "FoundationAgentEntityFrameworkCore"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["SpecialistsEntityFrameworkCore"]),
     ];

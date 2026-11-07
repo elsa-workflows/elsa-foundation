@@ -52,15 +52,16 @@ export function AgentProposalReview({
     <section className="agent-proposals" aria-label="Weaver proposals">
       {proposals.map(proposal => {
         const reviewable = isReviewable(proposal);
+        const risk = normalizeRisk(proposal.risk);
         const pending = pendingProposalIds?.has(proposal.id) ?? false;
         const controlsDisabled = disabled || pending || proposal.isLoading || Boolean(proposal.disabledReason);
         const resolvable = Boolean(onResolve) && proposal.status === "uncertain" && !proposal.confirmationPending && !proposal.ownerResolution
           && proposal.preparedInvocation?.executionLocation === "clientWorkingState";
         return (
-          <article key={proposal.id} className="agent-proposal" data-risk={proposal.risk} data-status={proposal.status}>
+          <article key={proposal.id} className="agent-proposal" data-risk={risk ?? "unknown"} data-status={proposal.status}>
             <header>
               <div className="agent-proposal-kicker">
-                <span className="agent-proposal-risk"><AlertTriangle size={14} /> {formatRisk(proposal.risk)}</span>
+                <span className="agent-proposal-risk"><AlertTriangle size={14} /> {risk?.split("-").join(" ") ?? "unknown risk"}</span>
                 <span>{formatStatus(proposal.status)}</span>
               </div>
               <strong>{proposal.title}</strong>
@@ -278,8 +279,12 @@ function AuditDetails({ proposal }: { proposal: AgentActionProposal }) {
   );
 }
 
-function formatRisk(risk: AgentActionProposal["risk"]) {
-  return risk.split("-").join(" ");
+function normalizeRisk(risk: unknown): string | undefined {
+  const risks = ["read-only", "review-required", "destructive", "admin"];
+  const value = typeof risk === "number" && Number.isInteger(risk) ? risks[risk]
+    : typeof risk === "string" ? risk.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase() : undefined;
+  // Keep the existing CSS/display aliases; they declare no new numeric ordinal or host privilege.
+  return [...risks, "low", "medium", "high", "critical"].find(item => item === value);
 }
 
 function formatStatus(status: string) {

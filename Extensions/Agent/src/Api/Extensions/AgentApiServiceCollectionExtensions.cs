@@ -1,4 +1,5 @@
 using Elsa.Agent.Api.Authorization;
+using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Foundation.Identity.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,7 @@ public static class AgentApiServiceCollectionExtensions
     public static IServiceCollection AddFoundationAgentApi(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        services.TryAddScoped<IAgentPrincipalSource, HttpAgentPrincipalSource>();
         services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer, HttpAgentToolAuthorizer>());
         services.AddPermissionContributor<AgentPermissionContributor>();
         return services;

@@ -3,15 +3,19 @@ using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Services;
 
+/// <summary>One live admission observation, held only across this dispatch and its result validation.</summary>
+internal sealed record AgentToolAdmission(IAgentTool Tool, AgentToolDescriptor Descriptor);
+
 /// <summary>Rechecks a frozen preparation without executing a module or custom proposal executor.</summary>
 internal sealed class AgentPreparedInvocationResolver(
     IAgentToolRegistry registry,
     IAgentSessionService sessions,
     IAgentToolAuthorizer authorizer,
     IAgentPolicyEvaluator policyEvaluator,
+    AgentEffectsAdmission effects,
     TimeProvider clock)
 {
-    internal async Task<(IAgentTool? Tool, AgentError? Error)> ResolveAsync(AgentActionProposal proposal, CancellationToken cancellationToken)
+    internal async Task<(AgentToolAdmission? Admission, AgentError? Error)> ResolveAsync(AgentActionProposal proposal, CancellationToken cancellationToken)
     {
         var prepared = proposal.PreparedInvocation;
         if (prepared is null)
@@ -38,6 +42,8 @@ internal sealed class AgentPreparedInvocationResolver(
         if (session.Policy.RequiresApprovalForMutations
             && (!proposal.RequiresApproval || proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
+        if (await effects.CheckInvocationAsync(prepared, cancellationToken: cancellationToken) is { } frozenVeto)
+            return (null, frozenVeto);
         IAgentTool? tool;
         try { tool = await registry.FindAsync(prepared.ToolName, cancellationToken); }
         catch (AgentContributionException)
@@ -47,23 +53,38 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.executor_unavailable",
                 $"The prepared tool '{prepared.ToolName}' or disclosure source '{prepared.DisclosureSourceId}' is unavailable with its reviewed contract.", 409));
         }
-        if (tool is null || tool.Descriptor.ModuleId != prepared.ModuleId || tool.Descriptor.ContractVersion != prepared.ToolContractVersion
-            || tool.Descriptor.DisclosureSourceId != prepared.DisclosureSourceId
-            || tool.Descriptor.ExecutionLocation != prepared.ExecutionLocation || tool.Descriptor.Mutability != AgentToolMutability.Mutating)
+        if (tool is null)
+            return (null, new("agent.proposal.executor_unavailable", "The prepared tool is no longer installed with its reviewed contract.", 409));
+        // Observe once before authority can await; a dynamic Descriptor getter is not later authority.
+        var observed = tool.Descriptor;
+        var descriptor = observed with
+        {
+            RequiredPermissions = Array.AsReadOnly(observed.RequiredPermissions.ToArray()),
+            AgentScopes = Array.AsReadOnly(observed.AgentScopes.ToArray())
+        };
+        if (descriptor.Name != prepared.ToolName || descriptor.ModuleId != prepared.ModuleId || descriptor.ContractVersion != prepared.ToolContractVersion
+            || descriptor.DisclosureSourceId != prepared.DisclosureSourceId || !Enum.IsDefined(descriptor.Risk)
+            || descriptor.ExecutionLocation != prepared.ExecutionLocation || descriptor.Mutability != AgentToolMutability.Mutating)
             return (null, new("agent.proposal.executor_unavailable", "The prepared tool is no longer installed with its reviewed contract.", 409));
         if (prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState
             && (prepared.Client is null || !proposal.RequiresApproval || proposal.ApprovedAt is null || tool is not IAgentClientTool))
             return (null, new("agent.proposal.client_unavailable", "The reviewed originating client execution contract is no longer available.", 409));
-        if (tool.Descriptor.Risk > prepared.Risk)
+        if (descriptor.Risk > prepared.Risk)
             return (null, new("agent.proposal.contract_changed", "The operation's current risk requires a new review.", 409));
-        if (session.Policy.DeniedCapabilityIds.Contains(tool.Descriptor.Name, StringComparer.OrdinalIgnoreCase))
+        if (session.Policy.DeniedCapabilityIds.Contains(descriptor.Name, StringComparer.OrdinalIgnoreCase))
             return (null, new("agent.tool.denied", "Current host policy disables this tool.", 403));
-        var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken);
-        if (AgentToolAccess.OwnerUnavailable(admission) is { } unavailable)
+        if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } contractVeto)
+            return (null, contractVeto);
+        var admission = await AgentToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken);
+        if (AgentToolAccess.OwnerUnavailable(admission, descriptor.ModuleCodes is not null) is { } unavailable)
             return (null, unavailable);
         if (!admission.Allowed)
             return (null, new("agent.proposal.forbidden", "Current server authority denies the prepared target.", 403));
-        return (tool, null);
+        if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } currentVeto)
+            return (null, currentVeto);
+        if (prepared.ExpiresAt <= clock.GetUtcNow())
+            return (null, new("agent.proposal.expired", "The prepared operation has expired.", 409));
+        return (new(tool, descriptor), null);
     }
 
 }

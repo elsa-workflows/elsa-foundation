@@ -57,6 +57,14 @@ public enum AgentRisk
     Admin
 }
 
+/// <summary>Host privileges required in addition to the current actor's owning-resource permissions.</summary>
+public enum AgentPrivilegeClass
+{
+    Administrative = 0,
+    Irrecoverable = 1,
+    Activation = 2
+}
+
 /// <summary>
 /// How much the agent may do without per-mutation human approval. Ordered from most to least restrictive:
 /// the integer value doubles as the autonomy "level" used when clamping a requested mode to a deployment ceiling.
@@ -86,7 +94,9 @@ public enum AgentActionProposalStatus
     Cancelled,
     Executing,
     AwaitingClient,
-    Uncertain
+    Uncertain,
+    /// <summary>The action ran with owning-resource evidence and no persisted change to that resource.</summary>
+    Performed = 12
 }
 
 public enum AgentAuditEventKind
@@ -166,6 +176,10 @@ public enum AgentProviderRiskProfile
 
 public sealed record AgentError(string Code, string Message, int StatusCode = 400)
 {
+    /// <summary>The installed owner could not decide. This transport value alone does not establish trusted owner origin.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OwnerUnavailable { get; init; }
+
     /// <summary>
     /// Preview: what an <c>agent.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
     /// session and offered a continuation: <c>snapshots</c> (64 distinct snapshots) and <c>bytes</c> (8 MiB of recorded

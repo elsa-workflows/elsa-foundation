@@ -45,7 +45,7 @@ public static class AgentEntityFrameworkCoreRegistration
         var lease = AgentEntityFrameworkCoreOptions.ValidateLease(leaseDuration ?? AgentEntityFrameworkCoreOptions.DefaultLeaseDuration);
         services.TryAddSingleton(provider => new AgentRecordCodec(provider.GetRequiredService<ISecretValueProtector>()));
         services.SelectAgentSessionRecordStore(provider => new EfAgentSessionRecordStore(provider.GetRequiredService<IServiceScopeFactory>(),
-            static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<AgentRecordCodec>(), lease));
+            static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<AgentRecordCodec>(), lease), typeof(FoundationAgentEfEffectsFeature));
         services.SelectAgentAuditStore(provider => new EfAgentAuditStore(provider.GetRequiredService<IServiceScopeFactory>(),
             static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<AgentRecordCodec>()));
         return services;

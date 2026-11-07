@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEfEffectsFeature
+Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEfEffectsFeature.FoundationAgentEfEffectsFeature() -> void
 Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext
 Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext.AgentDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
 Elsa.Agent.Persistence.EntityFrameworkCore.AgentEfModule

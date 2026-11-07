@@ -1,3 +1,4 @@
+import { readAgentProposalStatus } from "./agentProposalStatus";
 // The transport uses the public SDK bundle; its error class must have the same runtime identity.
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
@@ -421,8 +422,8 @@ function mapRecordedProposal(proposal: Record<string, unknown>): AgentRecordedPr
 function terminalExecutionError(envelope: unknown, proposalId: string, status?: number): AgentExecutionError | null {
   const error = readRecord(envelope, "error"); const data = readRecord(envelope, "data");
   if (!error || !data || readString(data, "proposalId") !== proposalId || readBoolean(data, "executed") !== false) return null;
-  const outcome = normalizeEnum(readField(data, "status"));
-  if (!["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
+  const outcome = readAgentProposalStatus(readField(data, "status"));
+  if (!outcome || !["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
   const errorStatus = readField(error, "statusCode");
   return new AgentExecutionError(status ?? (typeof errorStatus === "number" ? errorStatus : 409),
     readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "agent.execution.refused",
@@ -676,11 +677,15 @@ export function mapAdmittedContextAttachment(attachment: Record<string, unknown>
 }
 
 function mapExecution(result: BackendAgentProposalExecutionResult, fallbackId: string): AgentProposalDecisionResponse {
+  const status = getExecutionStatus(result);
+  const executed = readBoolean(result, "executed");
+  const clientInvocation = readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined;
+  const pendingClient = status === "awaiting-client" && executed === false;
   return {
     proposalId: readString(result, "proposalId") ?? fallbackId,
-    approvalStatus: getExecutionStatus(result),
-    executed: readBoolean(result, "executed"),
-    clientInvocation: readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined,
+    approvalStatus: clientInvocation && !pendingClient ? "uncertain" : status,
+    executed,
+    clientInvocation: pendingClient ? clientInvocation : undefined,
     toolResult: readField(result, "toolResult") as StudioAgentToolResult | undefined,
     result: {
       resourceType: readString(result, "resourceType") ?? "agent-proposal",
@@ -750,11 +755,10 @@ function mapProposalDecision(proposal: BackendAgentActionProposal): AgentProposa
 }
 
 function getExecutionStatus(result: BackendAgentProposalExecutionResult): AgentActionProposal["status"] {
-  const status = normalizeEnum(readField(result, "status") ?? readField(result, "approvalStatus"));
-  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired" || status === "failed" || status === "denied") return status;
-  const executed = readBoolean(result, "executed");
-  if (executed !== undefined) return executed ? "executed" : "failed";
-  return mapProposalStatus(status);
+  const status = readAgentProposalStatus(readField(result, "status") ?? readField(result, "approvalStatus"));
+  // A ran flag cannot distinguish a persisted effect from performed or make an unknown result successful.
+  if ((status === "executed" || status === "performed") && readBoolean(result, "executed") !== true) return "uncertain";
+  return status ?? "uncertain";
 }
 
 function mapMessageStatus(status: unknown): AgentMessageResponse["status"] {
@@ -787,13 +791,7 @@ function mapSessionStatus(status: unknown): AgentCreateSessionResponse["status"]
 }
 
 function mapProposalStatus(status: unknown): AgentActionProposal["status"] {
-  const value = normalizeEnum(status);
-  if (["draft", "edited", "expired", "cancelled", "executing", "awaiting-client", "uncertain"].includes(value)) return value as AgentActionProposal["status"];
-  if (value === "approved" || status === 1) return "approved";
-  if (value === "denied" || status === 2) return "denied";
-  if (value === "executed" || status === 3) return "executed";
-  if (value === "failed" || status === 4) return "failed";
-  return "awaiting-approval";
+  return readAgentProposalStatus(status) ?? "uncertain";
 }
 
 function mapSensitivity(sensitivity: AgentMessageRequest["contextAttachments"][number]["sensitivity"]) {

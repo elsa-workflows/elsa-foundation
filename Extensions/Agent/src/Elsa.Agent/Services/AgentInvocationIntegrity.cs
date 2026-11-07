@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Services;
@@ -40,12 +41,31 @@ internal static class AgentInvocationIntegrity
         return stream.ToArray();
     }
 
-    public static string PreparedDigest(AgentPreparedToolInvocation value) => Digest(new
+    /// <summary>Normalizes only a newly returned module preparation, never a retained legacy invocation.</summary>
+    public static IReadOnlyList<AgentPrivilegeClass>? PreparePrivilegeClasses(IReadOnlyList<AgentPrivilegeClass>? classes, AgentRisk effectiveRisk)
     {
-        value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
-        value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
-        value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
-    });
+        if (!Enum.IsDefined(effectiveRisk) || classes?.Any(value => !Enum.IsDefined(value)) == true)
+            throw new AgentContributionException("The preparation contains an unsupported privilege classification.");
+        var required = classes?.ToHashSet() ?? [];
+        if (effectiveRisk == AgentRisk.Admin) required.Add(AgentPrivilegeClass.Administrative);
+        return required.Count == 0 ? null : Array.AsReadOnly(required.Order().ToArray());
+    }
+
+    public static string PreparedDigest(AgentPreparedToolInvocation value) => value.RequiredPrivilegeClasses is not { Count: > 0 }
+        // Exact historical shape: even a null new member would change an already reviewed legacy digest.
+        ? Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
+        })
+        : Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId,
+            value.RequiredPrivilegeClasses
+        });
 
     public static bool SameTarget(AgentResourceTarget? left, AgentResourceTarget? right) => left is null
         ? right is null
@@ -57,8 +77,37 @@ internal static class AgentInvocationIntegrity
            && result.Payload is not null && result.Receipt is { } receipt
            && receipt.InvocationId == invocation.InvocationId && receipt.Scope == scope
            && SameTarget(invocation.Target, receipt.Before)
-           && receipt.After.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(receipt.After.ResourceType)
-           && receipt.Evidence.Data.ValueKind != JsonValueKind.Undefined;
+           && receipt.After is { } after && after.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(after.ResourceType)
+           && receipt.Evidence is { } evidence && evidence.Data.ValueKind != JsonValueKind.Undefined;
+
+    /// <summary>Derives an accepted outcome from this dispatch's actual admitted contract, never a later lookup.</summary>
+    internal static string? SuccessStatus(AgentPreparedToolInvocation invocation, AgentToolResult result, AgentToolDescriptor descriptor)
+    {
+        try
+        {
+            if (!ValidPayload(result.Payload) || !ValidPayload(result.Receipt?.Evidence)
+                || descriptor.Name != invocation.ToolName || descriptor.ModuleId != invocation.ModuleId
+                || descriptor.ContractVersion != invocation.ToolContractVersion || descriptor.ExecutionLocation != invocation.ExecutionLocation)
+                return null;
+            if (invocation.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
+                return ValidReceipt(invocation, result, AgentEffectScope.ClientWorkingState) ? "executed" : null;
+            if (invocation.ExecutionLocation != AgentExecutionLocation.Server) return null;
+            if (ValidReceipt(invocation, result, AgentEffectScope.ServerPersisted)) return "executed";
+            return descriptor.CanPerformWithoutPersistence && ValidReceipt(invocation, result, AgentEffectScope.NoPersistedEffect)
+                && SameTarget(result.Receipt!.Before, result.Receipt.After) ? "performed" : null;
+        }
+        catch (InvalidOperationException) { return null; } // Disposed/invalid owner JSON is not an admitted receipt.
+    }
+
+    internal static bool ValidSuccessOutcome(AgentActionProposal proposal, AgentProposalExecutionResult outcome, AgentToolDescriptor descriptor)
+        => proposal.PreparedInvocation is { } prepared && outcome.Executed && outcome.ClientInvocation is null
+            && outcome.ProposalId == proposal.Id && outcome.ResourceType == (prepared.Target?.ResourceType ?? proposal.ResourceType ?? "unavailable")
+            && outcome.ResourceId == (prepared.Target?.ResourceId ?? proposal.ResourceId ?? string.Empty)
+            && outcome.ToolResult is { } result && SuccessStatus(prepared, result, descriptor) is { } status && outcome.Status == status;
+
+    private static bool ValidPayload(AgentPayload? payload) => payload is not null
+        && !string.IsNullOrWhiteSpace(payload.TypeId) && !string.IsNullOrWhiteSpace(payload.SchemaVersion)
+        && payload.Data.ValueKind != JsonValueKind.Undefined;
 
     private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
     {
