@@ -49,6 +49,14 @@ of optional expression languages. This phase blocks production story integration
 **Checkpoint:** Real authorized API and headless publication agree; no optional validation fallback remains.
 Update owning extension-point catalogs with the new analysis port in the same delivery slice.
 
+#3922 / PR #3948 foundation-leaf receipt (this branch; not task completion): source on
+`agent/codex/3922-data-selection-analysis` implements T004–T010 shared analysis/static admission
+and CLR whole-`$result` metadata, including Evaluate Decision's typed `DecisionEvaluation` result
+(`status`/`result`/`trace`, Result as `activity.shape.dynamic-json`, outcomes Done/NoMatch/Refused,
+automatic producer still `binding: null` / `RuntimeScopeBindingUnavailable`). Tasks stay unchecked
+until owned proof-host qualification and resulting-main. This leaf does not add runtime member
+binding (T011–T017) or Studio chooser/inspector work (T018–T026).
+
 ## Phase 3: User Story 1 — Choose earlier data at an input (P1)
 
 **Independent test:** Quickstart journeys 1, 7 and 8: untouched pre-run Sequence/Flowchart inputs choose

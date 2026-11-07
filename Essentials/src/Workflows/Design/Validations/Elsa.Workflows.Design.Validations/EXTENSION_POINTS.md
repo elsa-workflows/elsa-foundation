@@ -3,7 +3,9 @@
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and the four built-in baseline validators. Three sections:
 
 - **Overridable contracts**: `ICredentialLiteralValidator`, the credential-literal rule (spec 188).
-- **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam.
+- **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam, plus the
+  shared analysis port (`IActivityDataSelectionAnalyzer`) and named input-source constraint
+  contribution (`IActivityInputSourceConstraintProvider`).
 - **Events** — the validation gate (`DraftValidating`) and outcome notification (`DraftValidated`).
 
 A closing note describes the credential-literal admission helper and the rule's exceptions, which are not extension points.
@@ -25,6 +27,20 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 ---
 
 ## Implementable contributor interfaces
+
+### `IActivityDataSelectionAnalyzer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+- **Kind:** Application service (one scoped analysis authority).
+- **Signature:** `ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document, ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default);`
+- **What it does:** Discovers eligible whole-value sources and admits authored direct/portable reads from the actual candidate and catalog. A null target validates the complete candidate without building a browser response. Automatic activity-result suggestions stay inspectable without inventing a runtime scope binding (`binding: null`, `RuntimeScopeBindingUnavailable`).
+- **Register:** `WorkflowDesignValidationsFeature` registers the default with `TryAddScoped`. Missing or duplicate analyzer authority is a composition error (`ActivityDataSelectionAnalyzerCompositionCheck`).
+- **Consumed by:** `ValueFlowValidator` and the authorized Design API snapshot endpoint. Publication and test-run compile paths require this feature rather than a fallback validator.
+
+### `IActivityInputSourceConstraintProvider` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+- **Kind:** Contributor (add-don't-replace).
+- **Signature:** `ValueTask<ActivityDataInputConstraint?> GetConstraintAsync(IActivityDefinitionVersion activityVersion, string inputKey, CancellationToken cancellationToken = default);`
+- **What it does:** Projects a module's actual input-source restrictions (allowed expression types) from the real catalog version and input key. A null contribution adds no restriction. The owning compiler remains final authority. Identification must not require a loaded EF `Definition` navigation.
+- **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityInputSourceConstraintProvider, MyProvider>())`.
+- **Known implementations (shipped):** `Elsa.Decisions.Workflows.Design` — `DecisionInputSourceConstraintProvider` (Evaluate Decision's publication-fixed `Decision` selector).
 
 ### `IDraftValidator` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (action-named contributor — inspects and **returns** findings).

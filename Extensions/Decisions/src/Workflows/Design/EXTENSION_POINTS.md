@@ -8,7 +8,8 @@ Host replacements must preserve tenant boundaries and current explicit domain gr
 
 ## Cross-domain contributions
 
-- IExecutableCompilationSource → DecisionPinSource (cross-domain Workflows publication).
+- `IExecutableCompilationSource` → `DecisionPinSource` (cross-domain Workflows publication).
+- `IActivityInputSourceConstraintProvider` → `DecisionInputSourceConstraintProvider` (shared analysis/admission). Restricts Evaluate Decision's `Decision` input to `Literal` with reason `decisions.selector-fixed-at-publication`. Identifies the activity from the loaded definition when present, otherwise from the CLR descriptor `typeAlias`, so catalog `FindVersion` rows without a `Definition` navigation still admit. Does not invent `[Output]` projections or change Done/NoMatch/Refused outcomes.
 
 ## Events
 

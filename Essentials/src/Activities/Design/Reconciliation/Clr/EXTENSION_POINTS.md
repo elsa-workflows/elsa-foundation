@@ -62,8 +62,9 @@ language is required. The new implementation reference is to Expressions Core on
 Admitted activity-result queries read metadata only. They retain literal serialized member names, outgoing nullability ReadState,
 conditional member omission and collection kind, with one global returned-member budget and bounded
 depth. A member-path subtree retains conservative nullable/optional prefix facts. Converters,
-polymorphism, extension data, unsupported inclusion/platform codecs and unavailable assets remain
-unknown or unavailable. No DTO, getter, attribute or converter is constructed or invoked. Scanner
+including a type-level converter on `Nullable<T>`'s underlying type, polymorphism, extension data,
+unsupported inclusion/platform codecs and unavailable assets remain unknown or unavailable. A
+nullable enum without a type-level converter stays a Known scalar. No DTO, getter, attribute or converter is constructed or invoked. Scanner
 MetadataLoadContext isolation and existing input WriteState contracts remain unchanged.
 
 Profile, admitted source contract and consulted metadata assets have separate revisions. They do not

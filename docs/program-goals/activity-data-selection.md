@@ -78,9 +78,12 @@ passed separately; the queued hosted aggregates were not relabelled passed. This
 
 Foundation [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922) now owns T004–T010 under
 its specific claim, with separate metadata, analysis, Graph and integrating transport/publication worktrees.
-Its initial base is qualified f6; newer Decisions/auth source is integrated but still needs candidate
-qualification. No production journey is accepted by these contracts or source changes. #3094 and the
-remaining runtime, Studio, expression/editing, causal/restart and final UX work retain their own gates.
+Draft [PR #3948](https://github.com/elsa-workflows/elsa-foundation/pull/3948) is the shared-analysis
+foundation leaf: T004–T010 source and Evaluate Decision whole-`$result` description, without runtime
+member binding or Studio chooser/inspector. Its initial base is qualified f6; newer Decisions/auth
+source is integrated but still needs candidate qualification. No production journey is accepted by
+these contracts or source changes. #3094 and the remaining runtime, Studio, expression/editing,
+causal/restart and final UX work retain their own gates.
 
 ## Completion
 
