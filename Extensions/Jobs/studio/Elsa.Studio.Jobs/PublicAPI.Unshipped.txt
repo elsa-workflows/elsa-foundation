@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Jobs.JobsStudioFeature
+Elsa.Studio.Jobs.JobsStudioFeature.JobsStudioFeature() -> void
+Elsa.Studio.Jobs.JobsStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

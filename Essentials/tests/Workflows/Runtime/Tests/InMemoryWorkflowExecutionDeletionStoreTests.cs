@@ -92,6 +92,72 @@ public sealed class InMemoryWorkflowExecutionDeletionStoreTests
 
     private static readonly DateTimeOffset Now = new(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(RuntimePostCommitOutboxStatus.Pending)]
+    [InlineData(RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(RuntimePostCommitOutboxStatus.Cancelled)]
+    public async Task Required_source_without_recipient_protocol_retains_exact_publisher_history_until_delivered(RuntimePostCommitOutboxStatus status)
+    {
+        using var fixture = new RuntimeFixture();
+        await SeedRunAsync(fixture, "required-publisher", WorkflowExecutionStatus.Completed);
+        await SeedRunAsync(fixture, "unrelated-publisher", WorkflowExecutionStatus.Completed);
+        var outbox = fixture.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        var source = RequiredSource("required-publisher", new(PersistenceScope.DefaultValue));
+        await outbox.AddPendingForTestingAsync(source);
+        if (status != RuntimePostCommitOutboxStatus.Pending)
+            await outbox.RecordDeliveryResultAsync(new(source.OutboxItemId, status, Now,
+                status == RuntimePostCommitOutboxStatus.FailedFinal ? "Unresolved required delivery." : null));
+        var retained = (await outbox.FindAsync(source.OutboxItemId))!;
+        Assert.Equal(status, retained.Status);
+        Assert.Null(retained.StimulusDeliveryProtocolVersion);
+        Assert.True(retained.RetainsPublisherForRequiredDelivery("required-publisher"));
+        Assert.False(retained.RetainsPublisherForRequiredDelivery("unrelated-publisher"));
+        Assert.False(retained.RetainsExecutionForStimulusDelivery("required-publisher"));
+        var candidate = (await fixture.DeletionStore.ReadAsync("required-publisher"))!;
+        Assert.False(await fixture.Executions.DeleteAsync("required-publisher"));
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await fixture.DeletionStore.TryDeleteTerminalAsync(candidate));
+        Assert.NotNull(await fixture.Executions.FindAsync("required-publisher"));
+        Assert.NotNull(await fixture.ActivityExecutions.FindAsync("required-publisher", "activity-required-publisher"));
+        Assert.NotNull(await fixture.Bookmarks.FindAsync("required-publisher", "bookmark-required-publisher"));
+        Assert.False(await fixture.Executions.IsDeletionTombstonedAsync("required-publisher"));
+        Assert.Null(await fixture.Liveness.FindAsync("required-publisher", RuntimeExecutionOwnershipStateId.For("required-publisher")));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted,
+            await fixture.DeletionStore.TryDeleteTerminalAsync((await fixture.DeletionStore.ReadAsync("unrelated-publisher"))!));
+        Assert.Null(await fixture.ActivityExecutions.FindAsync("unrelated-publisher", "activity-unrelated-publisher"));
+        if (status != RuntimePostCommitOutboxStatus.Pending) return; // Terminal failure/cancellation is not delivery acknowledgement.
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted,
+            await outbox.RecordDeliveryResultAsync(new(source.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now)));
+        Assert.False((await outbox.FindAsync(source.OutboxItemId))!.RetainsPublisherForRequiredDelivery("required-publisher"));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await fixture.DeletionStore.TryDeleteTerminalAsync(candidate));
+        Assert.Null(await fixture.Executions.FindAsync("required-publisher"));
+        Assert.Null(await fixture.ActivityExecutions.FindAsync("required-publisher", "activity-required-publisher"));
+        Assert.Null(await fixture.Bookmarks.FindAsync("required-publisher", "bookmark-required-publisher"));
+        Assert.True(await fixture.Executions.IsDeletionTombstonedAsync("required-publisher"));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await outbox.FindAsync(source.OutboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task Optional_observer_without_committed_source_scope_does_not_retain_publisher_history()
+    {
+        using var fixture = new RuntimeFixture();
+        await SeedRunAsync(fixture, "observer-publisher", WorkflowExecutionStatus.Completed);
+        var outbox = fixture.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        var source = RequiredSource("observer-publisher", null);
+        await outbox.AddPendingForTestingAsync(source);
+        Assert.False(source.RetainsPublisherForRequiredDelivery("observer-publisher"));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted,
+            await fixture.DeletionStore.TryDeleteTerminalAsync((await fixture.DeletionStore.ReadAsync("observer-publisher"))!));
+        Assert.Null(await fixture.Executions.FindAsync("observer-publisher"));
+        Assert.Null(await fixture.ActivityExecutions.FindAsync("observer-publisher", "activity-observer-publisher"));
+        Assert.True(await fixture.Executions.IsDeletionTombstonedAsync("observer-publisher"));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await outbox.FindAsync(source.OutboxItemId))!.Status);
+    }
+
+    private static RuntimePostCommitOutboxItem RequiredSource(string publisher, PersistenceScope? sourceScope) => new(
+        "required-source-row", new("required-source", publisher, "test.required-delivery", Now, null, null, null),
+        RuntimePostCommitOutboxStatus.Pending, Now, Now, null, 0, null, null, null, null, null, 0, null,
+        stimulusDeliveryProtocolVersion: null, stimulusDeliverySourceScope: sourceScope, recipientSnapshot: null);
+
     [Fact]
     public async Task TryDeleteTerminalAsync_PurgesRunOwnedStateAndPreservesOtherRunState()
     {

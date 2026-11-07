@@ -113,6 +113,10 @@ public sealed class EfCoreDependencyGuardTests
         AssertReviewedModuleClosure(Adr0088FiniteRulesEf.ExpectedEfPackagesByProject, "finite Rules");
 
     [Fact]
+    public void Every_admitted_Jobs_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Adr0096JobsEf.ExpectedEfPackagesByProject, "standalone Jobs");
+
+    [Fact]
     public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Adr0087FiniteEtlEf.ExpectedEfPackagesByProject, "finite ETL");
 
@@ -736,6 +740,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
                     Adr0087FiniteEtlEf.IsProjectPath(relativePath) ||
                     Adr0088FiniteRulesEf.IsProjectPath(relativePath) ||
+                    Adr0096JobsEf.IsProjectPath(relativePath) ||
                     Adr0095DecisionsEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
@@ -1293,6 +1298,26 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>The scoped Jobs EF admission: provider-free product and two explicitly selected host engines.</summary>
+    internal static class Adr0096JobsEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Extensions/Jobs/src/Tooling/Elsa.Jobs.Tooling.csproj"] = [.. ProviderPackages(), "Microsoft.EntityFrameworkCore.Design"],
+                ["Extensions/Jobs/tests/Persistence/ProviderTests/Elsa.Jobs.Persistence.ProviderTests.csproj"] = ProviderPackages()
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] CorePackages() =>
+            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+
+        private static string[] ProviderPackages() =>
+            [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Npgsql.EntityFrameworkCore.PostgreSQL"];
     }
 
     /// <summary>Exact Decisions provider/test/tooling EF closure admitted with ADR0095.</summary>

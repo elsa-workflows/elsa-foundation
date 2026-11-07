@@ -24,6 +24,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | `Elsa.Foundation` | Provides application-foundation services such as identity. |
 | `Elsa.Git` | Wraps the git executable for sources that reconcile workflow definitions from a repository. |
 | `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. |
+| `Elsa.Jobs` | Executes registered handler invocations with durable attempts and retained results. |
 | `Elsa.Locking` | Provides distributed locking. |
 | `Elsa.Mediator` | Routes commands and requests in-process. |
 | `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. |

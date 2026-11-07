@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Jobs.Bpmn.JobsBpmnFeature
+Elsa.Jobs.Bpmn.JobsBpmnFeature.JobsBpmnFeature() -> void
+virtual Elsa.Jobs.Bpmn.JobsBpmnFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

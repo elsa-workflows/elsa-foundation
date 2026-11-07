@@ -87,6 +87,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
 - `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` — `RebuildActivityUsageStartupTask` *(cross-domain; order 6, refreshes derived usage after reconciliation; owns its per-shell maintenance lock and logs rebuild/lock failures without failing activation)*
+- `Elsa.Jobs` — `JobsConfigurationValidator` *(cross-domain; diagnoses the standalone Jobs authorities and handler registrations before background startup; shared with its plain-host hosted service)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
@@ -103,6 +104,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 
 **Known implementations:**
 - `Elsa.Events` — `BackgroundEventPublisher` *(cross-domain — background event dispatch worker)*
+- `Elsa.Jobs` — `JobsWorker` *(cross-domain — standalone Jobs polling/attempt worker; shares its singleton hosted-service lifecycle, default polling interval 250ms)*
 
 ## Writing a bounded-sweep worker (`BackoffSweepWorkerTask`)
 
@@ -135,6 +137,7 @@ maximum failure backoff. See the [specialist runtime catalog](../../../../Extens
 
 ## Cross-references
 
+- `UtcRecurrence` in `Elsa.Tasks.Schedules` supplies pure arithmetic to local Tasks cron and the workflow/Jobs recurring adapters. `ParseInterval` accepts positive ISO-8601 or invariant durations; `NextCron` returns a UTC instant strictly after the supplied cursor, optionally allowing seconds. The caller owns its cursor and missed-occurrence policy. Tasks keeps its five-field cron contract; the existing workflow calculator remains a compatibility wrapper.
 - `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal and reached through `TaskSchedule`.
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

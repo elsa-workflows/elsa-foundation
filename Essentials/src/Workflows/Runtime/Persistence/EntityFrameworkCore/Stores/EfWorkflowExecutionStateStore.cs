@@ -526,7 +526,8 @@ public sealed class EfWorkflowExecutionStateStore(
         CancellationToken cancellationToken)
     {
         if ((await EfRuntimePostCommitOutboxStore.ReadRetentionSourcesAsync(context, scope, cancellationToken))
-            .Any(source => source.RetainsExecutionForStimulusDelivery(state.WorkflowExecutionId))) return true;
+            .Any(source => source.RetainsPublisherForRequiredDelivery(state.WorkflowExecutionId) ||
+                source.RetainsExecutionForStimulusDelivery(state.WorkflowExecutionId))) return true;
         var scopeHash = Hash(scope);
         var scopeKey = Encode(scope);
         var executionHash = Hash(state.WorkflowExecutionId);

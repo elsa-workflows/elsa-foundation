@@ -1,0 +1,28 @@
+#nullable enable
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreFeature
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreFeature.JobsEntityFrameworkCoreFeature() -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.JobsEntityFrameworkCoreOptions() -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumClaimScan.get -> int
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumClaimScan.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumPageSize.get -> int
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumPageSize.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumWriteAttempts.get -> int
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.MaximumWriteAttempts.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalInputRetention.get -> System.TimeSpan?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalInputRetention.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalResultRetention.get -> System.TimeSpan?
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions.TerminalResultRetention.set -> void
+Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreRegistration
+static Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreRegistration.AddJobsEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

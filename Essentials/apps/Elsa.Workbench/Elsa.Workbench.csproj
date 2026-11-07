@@ -5,6 +5,15 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
+	<!-- Source-only composed Jobs acceptance fixture; absent from ordinary hosts and packages. -->
+	<PropertyGroup Condition="'$(JobsUxAcceptance)' == 'true'">
+		<NuGetLockFilePath>$(MSBuildThisFileDirectory)packages.jobs-ux.lock.json</NuGetLockFilePath>
+		<DefineConstants>$(DefineConstants);JOBS_UX_ACCEPTANCE</DefineConstants>
+	</PropertyGroup>
+	<ItemGroup Condition="'$(JobsUxAcceptance)' == 'true'">
+		<ProjectReference Include="../../../tools/ux-acceptance/JobsFixture/Elsa.Jobs.UxAcceptance.csproj" />
+	</ItemGroup>
+
 	<!-- Finite host-recovery fault cuts. Standard builds contain no probe feature or control-file ports. -->
 	<ItemGroup Condition="'$(ElsaBpmnRecoveryProbe)' == 'true'">
 		<Compile Include="../../../e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs" Link="RecoveryProbe/BpmnRecoveryProbeFeature.cs" />
@@ -55,6 +64,16 @@
 
 	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
 	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
+
+	<!-- Jobs remains optional; the configured shell selects its producer/worker, storage, API and model adapters. -->
+	<ItemGroup>
+		<ProjectReference Include="../../../Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj" />
+		<ProjectReference Include="../../../Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="../../../Extensions/Jobs/src/Api/Elsa.Jobs.Api.csproj" />
+		<ProjectReference Include="../../../Extensions/Jobs/src/Workflows/Runtime/Elsa.Jobs.Workflows.Runtime.csproj" />
+		<ProjectReference Include="../../../Extensions/Jobs/src/Workflows/Design/Elsa.Jobs.Workflows.Design.csproj" />
+		<ProjectReference Include="../../../Extensions/Jobs/src/Bpmn/Elsa.Jobs.Bpmn.csproj" />
+	</ItemGroup>
 
 	<!-- Rules is discoverable here and enabled only by an explicit shell composition. -->
 	<ItemGroup>

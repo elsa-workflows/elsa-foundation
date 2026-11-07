@@ -1,0 +1,36 @@
+#nullable enable
+Elsa.Jobs.Api.Authorization.JobApiResource
+Elsa.Jobs.Api.Authorization.JobApiResource.Gate.get -> Elsa.Jobs.Core.JobGateKey?
+Elsa.Jobs.Api.Authorization.JobApiResource.Id.get -> string!
+Elsa.Jobs.Api.Authorization.JobApiResource.JobApiResource(string! tenantId, string! kind, string! id, string? queue = null, string? jobType = null, Elsa.Jobs.Core.JobGateKey? gate = null) -> void
+Elsa.Jobs.Api.Authorization.JobApiResource.JobType.get -> string?
+Elsa.Jobs.Api.Authorization.JobApiResource.Kind.get -> string!
+Elsa.Jobs.Api.Authorization.JobApiResource.Queue.get -> string?
+Elsa.Jobs.Api.Authorization.JobApiResource.TenantId.get -> string!
+Elsa.Jobs.Api.Authorization.JobsPermissions
+Elsa.Jobs.Api.JobsApi
+Elsa.Jobs.Api.JobsApiFeature
+Elsa.Jobs.Api.JobsApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Jobs.Api.JobsApiFeature.JobsApiFeature() -> void
+Elsa.Jobs.Api.JobsApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Jobs.Api.JobsApiFeature.PersistencePartition.get -> string!
+Elsa.Jobs.Api.JobsApiFeature.PersistencePartition.set -> void
+Elsa.Jobs.Api.JobsApiOptions
+Elsa.Jobs.Api.JobsApiOptions.JobsApiOptions() -> void
+Elsa.Jobs.Api.JobsApiOptions.PersistencePartition.get -> string!
+Elsa.Jobs.Api.JobsApiOptions.PersistencePartition.set -> void
+Elsa.Jobs.Api.JobsApiRegistration
+const Elsa.Jobs.Api.Authorization.JobsPermissions.Cancel = "jobs:cancel" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.CapacityManage = "jobs/capacity:manage" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.InputsRead = "jobs/inputs:read" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.Pause = "jobs:pause" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.Read = "jobs:read" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.ResultsRead = "jobs/results:read" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.Retry = "jobs:retry" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.SchedulesManage = "jobs/schedules:manage" -> string!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.Submit = "jobs:submit" -> string!
+static Elsa.Jobs.Api.JobsApi.MapJobsApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Jobs.Api.JobsApiRegistration.AddJobsApi(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Jobs.Api.JobsApiOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+const Elsa.Jobs.Api.Authorization.JobsPermissions.AuditRead = "jobs/audit:read" -> string!
+Elsa.Jobs.Api.Authorization.JobApiResource.Origin.get -> Elsa.Jobs.Core.JobOrigin?
+Elsa.Jobs.Api.Authorization.JobApiResource.Origin.init -> void

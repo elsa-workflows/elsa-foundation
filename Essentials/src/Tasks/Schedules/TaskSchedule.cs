@@ -1,4 +1,3 @@
-using Cronos;
 using Elsa.Primitives.Contracts;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.Logging;
@@ -40,7 +39,7 @@ public static class TaskSchedule
         ArgumentNullException.ThrowIfNull(systemClock);
         ArgumentNullException.ThrowIfNull(logger);
 
-        var cron = CronExpression.Parse(expression);
+        var cron = UtcRecurrence.ParseCron(expression, allowSeconds: false);
         if (cron.GetNextOccurrence(systemClock.UtcNow, TimeZoneInfo.Utc) is null)
             throw new ArgumentException($"The cron expression '{expression}' never occurs.", nameof(expression));
 

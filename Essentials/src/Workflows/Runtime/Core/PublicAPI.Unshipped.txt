@@ -9199,6 +9199,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ListPinnedExecutabl
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableReferenceGarbageCollector.SupportsStimulusDeliveryRetention.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceWriter.TryDeleteDoomedAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! expectedDoomedReference, System.DateTimeOffset now, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableDeletionGuard! deletionGuard, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.RetainsExecutionForStimulusDelivery(string! workflowExecutionId) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.RetainsPublisherForRequiredDelivery(string! workflowExecutionId) -> bool
 Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException
 Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException.StimulusDeliveryRetentionException(Elsa.Workflows.Runtime.Core.Models.PersistenceScope? scope, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?

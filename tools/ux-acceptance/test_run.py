@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import threading
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -31,6 +32,51 @@ class VerdictTests(unittest.TestCase):
 
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_jobs_selection_requires_all_six_real_journeys_in_every_project_and_its_own_artifacts(self):
+        model = self.root / 'model.json'
+        model.write_text(json.dumps({'state': 'PASSED', 'cleanupErrors': [], 'cases': [{'kind': 'native', 'state': 'PASSED'}, {'kind': 'bpmn', 'state': 'PASSED'}]}))
+        export_artifact = self.root / 'report-export.json'
+        export_artifact.write_text('{"payload":{"value":{"total":9007199254740993}}}')
+        report = {'suites': [{'specs': [
+            {'title': journey, 'tests': [
+                {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
+                    {'status': 'passed', 'attachments': [{'name': name, 'path': str(model if name == 'authored-native-genuine-bpmn-jobs.json' else export_artifact if name == 'report-export.json' else self.artifact)} for name in
+                        ['trace', 'source', 'console.json', 'network.json'] + (['authored-native-genuine-bpmn-jobs.json'] if journey == 'jobs native and BPMN continuation' else []) + (['report-export.json'] if journey == 'jobs standalone reports' else []) + [f'{capture}.{suffix}' for capture in captures for suffix in ('png', 'aria.yml')]]}]}
+                for project in acceptance.PROJECTS]}
+            for journey, captures in acceptance.JOBS_CAPTURES.items()]}]}
+        self.assertEqual(24, acceptance.verdict(report, self.root, 'jobs'))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs', journeys=['jobs standalone reports'])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs', journeys=acceptance.JOBS_CAPTURES)
+        with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, 'jobs')
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'baseline')
+        for fault in ('missing-journey', 'retried', 'skipped', 'missing-network', 'duplicate'):
+            with self.subTest(fault=fault):
+                damaged = copy.deepcopy(report)
+                row = damaged['suites'][0]['specs'][0]['tests'][0]
+                if fault == 'missing-journey': damaged['suites'][0]['specs'].pop()
+                if fault == 'retried': row['results'].append(copy.deepcopy(row['results'][0]))
+                if fault == 'skipped': row['results'][0]['status'] = 'skipped'
+                if fault == 'missing-network': row['results'][0]['attachments'] = [item for item in row['results'][0]['attachments'] if item['name'] != 'network.json']
+                if fault == 'duplicate': damaged['suites'][0]['specs'][0]['tests'].append(copy.deepcopy(row))
+                with self.assertRaises(ValueError): acceptance.verdict(damaged, self.root, 'jobs')
+        model.write_text(json.dumps({'state': 'PASSED', 'cleanupErrors': [], 'cases': [{'kind': 'native', 'state': 'PASSED'}, {'kind': 'bpmn', 'state': 'NOT RUN'}]}))
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs')
+        model.write_text(json.dumps({'state': 'PASSED', 'cleanupErrors': [], 'cases': [{'kind': 'native', 'state': 'PASSED'}, {'kind': 'bpmn', 'state': 'PASSED'}]}))
+        export_artifact.write_text('{"payload":{"value":{"total":9007199254740992}}}')
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs')
+        export_artifact.write_text('{"payload":{"value":{"total":9007199254740993}}}')
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, 'jobs', source_sha='0' * 40)
+
+    def test_jobs_private_shell_has_only_fixture_owned_scopes_and_real_model_features(self):
+        shells = {'CShells': {'Shells': {'default': {'Features': {'Jobs': {'TenantId': 'caller'}}}}}}
+        acceptance.configure_jobs_shell(shells)
+        features = shells['CShells']['Shells']['default']['Features']
+        self.assertNotIn('Jobs', features)
+        self.assertEqual('default', features['JobsApi']['PersistencePartition'])
+        self.assertEqual('default', features['JobsWorkflowsRuntime']['TenantId'])
+        self.assertTrue(features['ActivitiesBpmnHosting']['AdmitNewExecutions'])
+        self.assertEqual('Data Source=jobs-ux.db;Pooling=False', features['JobsEntityFrameworkCore']['ConnectionString'])
 
     def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
         journey = sorted(acceptance.JOURNEYS)[0]
@@ -149,6 +195,119 @@ class VerdictTests(unittest.TestCase):
                     if not fail_start:
                         self.assertEqual([(42, acceptance.signal.SIGTERM), (42, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
                         self.assertEqual(2, process.wait.call_count)
+
+    def test_control_start_and_restart_cancel_published_child_and_drain_handlers_before_owned_store_cleanup(self):
+        # Actual host generator/lifecycle/control dispatch and handler bookkeeping, but no
+        # socket bind, OS child, SDK or host: deterministic barriers replace those boundaries.
+        from io import BytesIO
+        from unittest.mock import MagicMock, Mock
+        real_server = acceptance.OwnedControlServer
+        for operation in ('start', 'restart'):
+            with self.subTest(operation=operation):
+                directory = self.root / operation
+                directory.mkdir()
+                stores = directory / 'stores'
+                stores.mkdir()
+                readiness_entered = threading.Event()
+                child_stopped = threading.Event()
+                readiness_returned = threading.Event()
+                serve_stopped = threading.Event()
+                cleanup_complete = threading.Event()
+                spawned = []
+                stopped = []
+                handlers = []
+                servers = []
+                class Process:
+                    def __init__(self, number):
+                        self.pid = 100 + number
+                        self.stopped = False
+                    def poll(self):
+                        return 0 if self.stopped else None
+                def spawn(*args, **kwargs):
+                    self.assertFalse(cleanup_complete.is_set(), 'No owned child may start after cleanup')
+                    process = Process(len(spawned) + 1)
+                    spawned.append(process)
+                    kwargs['stdout'].write('Now listening on: http://localhost:1\n')
+                    kwargs['stdout'].flush()
+                    return process
+                def stop(process):
+                    self.assertTrue(stores.is_dir(), 'A child must stop before its owned store is removed')
+                    stopped.append(process)
+                    process.stopped = True
+                    if len(spawned) > 1 and process is spawned[1]:
+                        child_stopped.set()
+                def read_ready(*args, **kwargs):
+                    if len(spawned) == 2:
+                        readiness_entered.set()
+                        self.assertTrue(child_stopped.wait(2), 'Teardown must stop the published child before waiting for readiness')
+                        self.assertTrue(stores.is_dir(), 'Readiness must drain before store deletion')
+                        readiness_returned.set()
+                    response = MagicMock()
+                    response.__enter__.return_value = Mock(status=200)
+                    return response
+                def server_factory(_address, handler):
+                    server = real_server.__new__(real_server)
+                    server.requests_lock = threading.Lock()
+                    server.requests = {}
+                    server.threads = set()
+                    server.accepting = True
+                    server.server_port = 12345
+                    server.serve_forever = lambda: serve_stopped.wait(5)
+                    server.shutdown = serve_stopped.set
+                    server.server_close = Mock()
+                    server.shutdown_request = Mock()
+                    server.handler = handler
+                    servers.append(server)
+                    return server
+                def dispatch(_request, _address):
+                    _request.handler.do_POST()
+                with patch.object(acceptance.subprocess, 'Popen', side_effect=spawn), \
+                     patch.object(acceptance, 'stop_group', side_effect=stop), \
+                     patch.object(acceptance.urllib.request, 'urlopen', side_effect=read_ready), \
+                     patch.object(acceptance, 'OwnedControlServer', side_effect=server_factory), \
+                     patch.object(acceptance.ThreadingHTTPServer, 'process_request_thread', side_effect=dispatch):
+                    backend = acceptance.RestartableHost(directory, 'host.dll', 'http://localhost:1', '/', directory / 'host.log', {})
+                    with self.assertRaisesRegex(RuntimeError, 'Owned backend restart failed: InterruptedError'):
+                        with backend:
+                            if operation == 'start':
+                                backend.stop()
+                            with acceptance.restart_control(backend) as control:
+                                server = servers[0]
+                                def submit(path):
+                                    handler = server.handler.__new__(server.handler)
+                                    handler.path = path
+                                    handler.headers = {'Authorization': 'Bearer ' + control['UX_RESTART_TOKEN']}
+                                    handler.send_error = Mock()
+                                    handler.send_response = Mock()
+                                    handler.send_header = Mock()
+                                    handler.end_headers = Mock()
+                                    handler.wfile = BytesIO()
+                                    handlers.append(handler)
+                                    request = Mock(handler=handler)
+                                    server.process_request(request, ('127.0.0.1', 1))
+                                submit('/' + operation)
+                                self.assertTrue(readiness_entered.wait(2))
+                                self.assertIs(backend.child.process, spawned[1])
+                                # This accepted operation waits behind startup's lifecycle lock.
+                                # After cancellation it must drain without creating a third child.
+                                submit('/start')
+                    self.assertTrue(readiness_returned.is_set())
+                    self.assertTrue(serve_stopped.is_set())
+                    self.assertFalse(server.requests, 'All accepted handlers must drain before backend exit/store cleanup')
+                    self.assertFalse(server.threads, 'Every accepted handler thread must be joined, including a just-finished handler')
+                    self.assertIsNone(backend.context)
+                    self.assertIsNone(backend.child)
+                    self.assertEqual(2, len(spawned))
+                    self.assertEqual(spawned, stopped, 'Each owned process group stops exactly once')
+                    self.assertTrue(all(process.stopped for process in spawned))
+                    for handler in handlers:
+                        handler.send_response.assert_not_called()
+                        handler.send_error.assert_called_once_with(503, 'Owned restart failed')
+                    cleanup_complete.set()
+                    stores.rmdir()
+                    with self.assertRaises(InterruptedError):
+                        backend.start()
+                    self.assertEqual(2, len(spawned), 'A late control cannot restart a child after store removal')
 
 
 if __name__ == '__main__':

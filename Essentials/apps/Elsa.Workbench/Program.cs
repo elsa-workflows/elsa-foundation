@@ -388,6 +388,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
             typeof(WorkflowsDashboardFeature).Assembly,
+#if JOBS_UX_ACCEPTANCE
+            typeof(Elsa.Jobs.UxAcceptance.JobsUxAcceptanceFeature).Assembly,
+#endif
+            // Optional standalone Jobs and model adapters are selected by the shell configuration.
+            typeof(Elsa.Jobs.JobsFeature).Assembly,
+            typeof(Elsa.Jobs.Persistence.EntityFrameworkCore.JobsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Jobs.Api.JobsApiFeature).Assembly,
+            typeof(Elsa.Jobs.Workflows.Runtime.JobsWorkflowsRuntimeFeature).Assembly,
+            typeof(Elsa.Jobs.Workflows.Design.JobsWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Jobs.Bpmn.JobsBpmnFeature).Assembly,
             // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
             // dependency resolver fails shell activation with FeatureNotFoundException.
             typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,

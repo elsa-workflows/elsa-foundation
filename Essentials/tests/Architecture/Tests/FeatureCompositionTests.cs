@@ -425,6 +425,9 @@ public sealed class FeatureCompositionTests
                 ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
                 ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
+                // The composition host supplies no application job handlers. Compose the supported producer-only
+                // mode; Jobs' whole runtime suite and packaged worker witnesses exercise the handler/worker path.
+                ["Jobs"] = new() { ["EnableWorker"] = false },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.
                 ["DatabaseDistributedLocking"] = new() { ["Provider"] = "PostgreSql", ["ConnectionString"] = "Host=127.0.0.1;Database=elsa" },
                 // Activation clones the remote, so the remote is a local repository and the clone stays in the directory.

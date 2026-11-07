@@ -1,0 +1,63 @@
+#nullable enable
+Elsa.Jobs.JobsFeature
+Elsa.Jobs.JobsFeature.EnableWorker.get -> bool
+Elsa.Jobs.JobsFeature.EnableWorker.set -> void
+Elsa.Jobs.JobsFeature.MaterializeSchedules.get -> bool
+Elsa.Jobs.JobsFeature.MaterializeSchedules.set -> void
+Elsa.Jobs.JobsFeature.MaximumOccurrencesPerMaterialization.get -> int
+Elsa.Jobs.JobsFeature.MaximumOccurrencesPerMaterialization.set -> void
+Elsa.Jobs.JobsFeature.MaterializationIntervalMilliseconds.get -> int
+Elsa.Jobs.JobsFeature.MaterializationIntervalMilliseconds.set -> void
+Elsa.Jobs.JobsFeature.MaterializationTimeoutSeconds.get -> int
+Elsa.Jobs.JobsFeature.MaterializationTimeoutSeconds.set -> void
+Elsa.Jobs.JobsFeature.JobsFeature() -> void
+Elsa.Jobs.JobsFeature.LeaseDurationSeconds.get -> int
+Elsa.Jobs.JobsFeature.LeaseDurationSeconds.set -> void
+Elsa.Jobs.JobsFeature.MaximumConcurrentAttempts.get -> int
+Elsa.Jobs.JobsFeature.MaximumConcurrentAttempts.set -> void
+Elsa.Jobs.JobsFeature.PersistencePartition.get -> string!
+Elsa.Jobs.JobsFeature.PersistencePartition.set -> void
+Elsa.Jobs.JobsFeature.PollIntervalMilliseconds.get -> int
+Elsa.Jobs.JobsFeature.PollIntervalMilliseconds.set -> void
+Elsa.Jobs.JobsFeature.Queues.get -> string![]!
+Elsa.Jobs.JobsFeature.Queues.set -> void
+Elsa.Jobs.JobsFeature.RenewalIntervalMilliseconds.get -> int
+Elsa.Jobs.JobsFeature.RenewalIntervalMilliseconds.set -> void
+Elsa.Jobs.JobsFeature.ShutdownGracePeriodSeconds.get -> int
+Elsa.Jobs.JobsFeature.ShutdownGracePeriodSeconds.set -> void
+Elsa.Jobs.JobsFeature.TenantId.get -> string?
+Elsa.Jobs.JobsFeature.TenantId.set -> void
+Elsa.Jobs.JobsOptions
+Elsa.Jobs.JobsOptions.EnableWorker.get -> bool
+Elsa.Jobs.JobsOptions.EnableWorker.set -> void
+Elsa.Jobs.JobsOptions.MaterializeSchedules.get -> bool
+Elsa.Jobs.JobsOptions.MaterializeSchedules.set -> void
+Elsa.Jobs.JobsOptions.MaximumOccurrencesPerMaterialization.get -> int
+Elsa.Jobs.JobsOptions.MaximumOccurrencesPerMaterialization.set -> void
+Elsa.Jobs.JobsOptions.MaterializationInterval.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.MaterializationInterval.set -> void
+Elsa.Jobs.JobsOptions.MaterializationTimeout.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.MaterializationTimeout.set -> void
+Elsa.Jobs.JobsOptions.JobsOptions() -> void
+Elsa.Jobs.JobsOptions.JsonSerializerOptions.get -> System.Text.Json.JsonSerializerOptions!
+Elsa.Jobs.JobsOptions.JsonSerializerOptions.set -> void
+Elsa.Jobs.JobsOptions.LeaseDuration.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.LeaseDuration.set -> void
+Elsa.Jobs.JobsOptions.MaximumConcurrentAttempts.get -> int
+Elsa.Jobs.JobsOptions.MaximumConcurrentAttempts.set -> void
+Elsa.Jobs.JobsOptions.MaximumPayloadBytes.get -> int
+Elsa.Jobs.JobsOptions.MaximumPayloadBytes.set -> void
+Elsa.Jobs.JobsOptions.MaximumProgressBytes.get -> int
+Elsa.Jobs.JobsOptions.MaximumProgressBytes.set -> void
+Elsa.Jobs.JobsOptions.PollInterval.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.PollInterval.set -> void
+Elsa.Jobs.JobsOptions.Queues.get -> System.Collections.Generic.IList<string!>!
+Elsa.Jobs.JobsOptions.RenewalInterval.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.RenewalInterval.set -> void
+Elsa.Jobs.JobsOptions.ShutdownGracePeriod.get -> System.TimeSpan
+Elsa.Jobs.JobsOptions.ShutdownGracePeriod.set -> void
+Elsa.Jobs.JobsOptions.WorkerScopes.get -> System.Collections.Generic.IList<Elsa.Jobs.Core.JobScope!>!
+Elsa.Jobs.JobsServiceCollectionExtensions
+static Elsa.Jobs.JobsServiceCollectionExtensions.AddElsaJobs(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Jobs.JobsOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Jobs.JobsServiceCollectionExtensions.AddJobHandler<THandler, TInput, TResult>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Jobs.Core.JobHandlerSupport! support) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Jobs.JobsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

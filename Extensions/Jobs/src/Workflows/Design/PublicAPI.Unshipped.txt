@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Jobs.Workflows.Design.JobsWorkflowsDesignFeature
+Elsa.Jobs.Workflows.Design.JobsWorkflowsDesignFeature.JobsWorkflowsDesignFeature() -> void
+virtual Elsa.Jobs.Workflows.Design.JobsWorkflowsDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

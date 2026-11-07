@@ -11,8 +11,11 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>Transports existing model/native outbox responsibility through the shared native start and model queues.</summary>
 internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IWorkflowStartDispatcher starts,
     IWorkflowSchedulerWorkQueue queue, IWorkflowExecutionActorProvider actors,
-    TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
+    TimeProvider clock, IRuntimeModelExecutionReader? models = null,
+    IEnumerable<IBpmnNativeWorkResultDeliveryContributor>? resultDeliveryContributors = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
+    private readonly IBpmnNativeWorkResultDeliveryContributor[] _resultDeliveryContributors = resultDeliveryContributors?.ToArray() ?? [];
+
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         try { await HandleCoreAsync(source, cancellationToken); }
@@ -130,6 +133,8 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         if (await reader.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
         {
             if (accepted.ContentFingerprint != fingerprint) throw new RuntimeCheckpointReplayConflictException(inputId);
+            if (_resultDeliveryContributors.Length != 0)
+                await CompleteContributionsAsync(current, result, accepted, cancellationToken);
             return;
         }
         if (!queue.SupportsClaimTransitions || !queue.SupportsClaimValidation)
@@ -141,6 +146,35 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
             WorkflowExecutionCommandKind.ExecuteModel, envelope, envelope, source.Intent.RecordedAt, clock.GetUtcNow(),
             payload: JsonSerializer.SerializeToElement(command, BpmnNativeWorkBoundary.Web)), cancellationToken);
         throw Pending("bpmn.native-result.pending", "The native result is durably queued and remains owed until model consumption.");
+    }
+
+    private async ValueTask CompleteContributionsAsync(RuntimeModelExecutionState model, BpmnNativeWorkResult result,
+        RuntimeModelInputReceipt input, CancellationToken cancellationToken)
+    {
+        var origin = result.Origin;
+        if (input.Scope != model.Scope || input.ExecutionId != model.ExecutionId || input.InputId != origin.ResultInputId ||
+            input.InputKind != "native-result" || input.InvocationId != origin.InvocationId || input.AttemptId != origin.AttemptId ||
+            input.AcceptedRevision > model.Revision || input.Result.ValueKind != JsonValueKind.Object ||
+            !input.Result.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String)
+            throw new BpmnModelValidationException("The native result input receipt does not match its exact model owner.");
+        var disposition = status.GetString() switch
+        {
+            "Accepted" => BpmnNativeWorkInputDisposition.Accepted,
+            "Rejected" => BpmnNativeWorkInputDisposition.Rejected,
+            _ => throw new BpmnModelValidationException("The native result input receipt has no semantic classification.")
+        };
+        await boundary.ValidateRetainedResultAsync(model, result, cancellationToken);
+        if (disposition == BpmnNativeWorkInputDisposition.Accepted &&
+            BpmnDirectExecutionDriver.Read(model).NativeResults?.Any(item => item.Origin.IsEquivalentTo(origin) &&
+                JsonElement.DeepEquals(JsonSerializer.SerializeToElement(item, BpmnNativeWorkBoundary.Web),
+                    JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web))) != true)
+            throw new BpmnModelValidationException("The accepted native result is absent from its exact model owner.");
+        var worker = await boundary.FindWorkerAsync(origin, cancellationToken)
+            ?? throw BpmnNativeWorkBoundary.Unavailable("The native result owner is unavailable before contribution settlement.");
+        var context = new BpmnNativeWorkResultDelivery(origin, worker, BpmnNativeWorkConsumer.Project(result), input, disposition,
+            model.Revision, model.Lifecycle, BpmnNativeWorkConsumer.TerminalStatus(model), BpmnNativeWorkConsumer.TerminalReceiptId(model));
+        foreach (var contributor in _resultDeliveryContributors)
+            await contributor.CompleteAsync(context, cancellationToken);
     }
 
     private static RuntimePostCommitDeliveryException Pending(string code, string message) =>

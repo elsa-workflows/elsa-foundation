@@ -1,0 +1,936 @@
+{
+  "schemaVersion": 1,
+  "status": "ACCEPTED_SOURCE_BOUNDED_M2_CHECKPOINT",
+  "qualificationState": "PASSED_M2_REMAINDER_WITH_EXPLICIT_PRIOR_SOURCE_EVIDENCE",
+  "fullProductAcceptance": "INCOMPLETE",
+  "reviewerActivity": "Read-only source/artifact inspection; no reviewer product execution",
+  "sourceBoundary": {
+    "currentSourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+    "currentSourceTree": "41c18fba9f2e67511debe5827ea6e1f7d9bda55f",
+    "publishStateCommit": "7df2c9031a94086cbb8de8e50a4a26f76c154851",
+    "currentSourceExecutions": [
+      "provider118",
+      "PostgreSQL27-casePackageProfile",
+      "SQLite27-casePackageProfile",
+      "fourMarkerOnlyNegatives",
+      "architecture",
+      "generatedMaps",
+      "testTiers"
+    ],
+    "priorSourceCommit": "289fb179369f08f6fd7abcfc32b1152382e2e15e",
+    "priorSourceTree": "a47ab4235285c701dc3d29035eaaf0ec568a70ee",
+    "exactSourceDifference": {
+      "paths": [
+        "Extensions/Jobs/tests/Persistence/ProviderTests/JobsProviderFixture.cs",
+        "tools/jobs/verify-packaged-jobs.py"
+      ],
+      "patchFile": "source-carry-forward.patch",
+      "patchSha256": "b10a27de1c826898dad453c37dda90cfc2c887222104b434aa0875d39db31a25",
+      "blobs": {
+        "Extensions/Jobs/tests/Persistence/ProviderTests/JobsProviderFixture.cs": {
+          "prior": "3ced6dbd7808bc7b59ecc617de85e71a779a3003",
+          "current": "704da4b8f5525794a4a4aba8b5014dfbcb9e96f9"
+        },
+        "tools/jobs/verify-packaged-jobs.py": {
+          "prior": "000203175cf91db562afae0845784f8de400f189",
+          "current": "c69051fa64f00daaa2b658f47af4093d20b9a6d8"
+        }
+      }
+    },
+    "carriedResultsAreCurrentSourceExecution": false
+  },
+  "rawCustody": {
+    "phaseB": {
+      "name": "raw-complete-20261106b.tar.gz",
+      "bytes": 1692422427,
+      "sha256": "ab4bf0bdeefc9a57826c40d3d17dc3b75464a4fda4fc498aff1a2cbf74c76ba2"
+    },
+    "phaseA": {
+      "name": "raw-failed-20261106a.tar.gz",
+      "sha256": "50ad4059c38d98c8872ff6a3a75e26dc17a945dd2001322c1a99c50a64535e86",
+      "bytes": 644357408,
+      "copiedFilesVerifiedAgainstArchive": true
+    },
+    "independentDeploymentProofFile": "background-workflows-b/independent-deployment-verification.json",
+    "independentDeploymentProofSha256": "008421211ad04d0ce3ecbf1b86dafcaff04b1d17b34b8ea4dbb84fab030f8fab",
+    "deploymentFilesIndependentlyVerified": 146,
+    "rawCommandsMayContainEphemeralCredentials": "Kept in private raw archive; omitted here"
+  },
+  "phaseB": {
+    "state": "PASSED_M2_REMAINDER_WITH_EXPLICIT_PRIOR_SOURCE_EVIDENCE",
+    "receiptSha256": "012f2af4f85f77a9ef72eaddc04cfb5ef0ffe56990b45266bf632f4d4640231e",
+    "exitCode": 0,
+    "serviceResult": "success",
+    "owner": "elsa-jobs-3586-m2-20261106b.service",
+    "steps": {
+      "preflight": "PASSED",
+      "carry_forward": "PASSED",
+      "source_tasks": "CARRIED_FORWARD_PRIOR_SOURCE",
+      "source_workflow_scheduling": "CARRIED_FORWARD_PRIOR_SOURCE",
+      "source_jobs_runtime": "CARRIED_FORWARD_PRIOR_SOURCE",
+      "source_jobs_provider": "PASSED",
+      "provider_red_controls": "CARRIED_FORWARD_PRIOR_SOURCE",
+      "packages_postgresql": "PASSED",
+      "packages_sqlite": "PASSED",
+      "negative_admit": "PASSED",
+      "negative_claim": "PASSED",
+      "negative_renew": "PASSED",
+      "negative_complete": "PASSED",
+      "architecture_restore": "PASSED",
+      "architecture_tests": "PASSED",
+      "generated_maps": "PASSED",
+      "test_tiers": "PASSED"
+    }
+  },
+  "profiles": [
+    {
+      "provider": "sqlite",
+      "engine": {
+        "provider": "Sqlite",
+        "version": "3.50.4"
+      },
+      "state": "PASSED_EXACT_27_CASE_PACKAGE_PROFILE",
+      "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+      "publishStateCommit": "7df2c9031a94086cbb8de8e50a4a26f76c154851",
+      "run": "run-2149b3eccfe148478318bb70f85a8d04",
+      "receiptSha256": "9fbead350682ebb7f307ad8a4837477d66b84b541c164ba1c3dc7730dd011150",
+      "nestedWitnessSha256": "2af880e33e92dd842303ab2d7b6a3f20352f5effc3157d4df35b98ba6f88e2a3",
+      "witnessGroup": "all",
+      "plannedAndExecutedCaseNamesExact": true,
+      "cases": [
+        {
+          "name": "durable-admission-replay-conflict",
+          "state": "PASSED"
+        },
+        {
+          "name": "missing-handler-preserves-accepted-job",
+          "state": "PASSED"
+        },
+        {
+          "name": "useful-typed-result-and-restart-inspection",
+          "state": "PASSED"
+        },
+        {
+          "name": "durable-pause-cutoff-and-accept-while-held",
+          "state": "PASSED"
+        },
+        {
+          "name": "killed-worker-recovery-stale-fence-stable-effect-key",
+          "state": "PASSED"
+        },
+        {
+          "name": "delayed-provider-time-start",
+          "state": "PASSED"
+        },
+        {
+          "name": "default-interval-catch-up-and-restart",
+          "state": "PASSED"
+        },
+        {
+          "name": "default-cron-and-bounded-replay",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-admit-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-claim-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-renew-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-complete-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "pause-before-direct-claim-transaction",
+          "state": "PASSED"
+        },
+        {
+          "name": "committed-grant-before-pause-before-entry",
+          "state": "PASSED"
+        },
+        {
+          "name": "stale-physical-overlap-and-durable-downstream-dedup",
+          "state": "PASSED"
+        },
+        {
+          "name": "four-scope-overlap-version-coverage",
+          "state": "PASSED"
+        },
+        {
+          "name": "two-live-workers-physical-parallelism",
+          "state": "PASSED"
+        },
+        {
+          "name": "queue-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "jobtype-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "workflowinstance-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "workflowdefinition-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "1001-held-jobs-unrelated-shared-queue-progress",
+          "state": "PASSED"
+        },
+        {
+          "name": "automatic-retry-held-without-physical-rerun",
+          "state": "PASSED"
+        },
+        {
+          "name": "cooperative-cancel",
+          "state": "PASSED"
+        },
+        {
+          "name": "absolute-provider-deadline-no-timeout-retry",
+          "state": "PASSED"
+        },
+        {
+          "name": "graceful-drain-and-grace-expired-recovery",
+          "state": "PASSED"
+        },
+        {
+          "name": "idempotent-linked-retry-as-new-run",
+          "state": "PASSED"
+        }
+      ],
+      "independentProcessCount": 249,
+      "ownedResourcesCleaned": true,
+      "sourceCleanAfterVerification": true,
+      "harnessUnchanged": true,
+      "closure": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "path": "Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Tasks.Schedules",
+          "path": "Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
+          "version": "4.0.14-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "path": "Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
+          "version": "4.0.0-preview"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+          "version": "4.0.15-preview"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+          "version": "4.0.41-preview"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        }
+      ],
+      "archiveCount": 9,
+      "archives": [
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:b1ef74ec15e07d6f6f4496d74f6629bb9ea7c5a194729d0e48991b93cd958107",
+          "archiveSha256": "c09f0ce74cfa2fe6c987456d9dca643a694c1ed329f8636ea03f5b633519ddd2",
+          "archiveSha512": "PftTzZPmYoC0aOlWTpiAAZZbxBpLJ7UM/9GVELcBl9sQlEBgBDG5P1EcP4pSgT9b6Giz56keOlaN+Iwu4QK9Gw=="
+        },
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:64b45cd0f77fab82136de9dab878183d2778f8ae96910d4c2897942d9abd169d",
+          "archiveSha256": "532960b94fb44af1e9cf3b370fc09125241e90fac9f5bb5d57a1007a321382ae",
+          "archiveSha512": "/tsAjR0+t0ghST/DB93WnFlV7dlzedHVwTmbVirQWWsA/Z6eq+NlelDF+M2CwywqW6rRnxNVIoLiqpDyMzBlAQ=="
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:7543d682b10be91bd238e22019f22ca1ba2529e5806982c037ed9d66b129f7d4",
+          "archiveSha256": "e416eab5ac0f326751e003e97d0e47b1b4ec859db2cbfb5b0e4b70010bfef14e",
+          "archiveSha512": "wjNMNo94mQS40OLEz9RPhZFBG+6CJ6USWsTcNpF6LrHjaJ2ZTHNKfCnGzCXc/ev+GKKDqWLpm/UPIOcO8qA9sw=="
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "version": "4.0.0-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:acda870c841420da34c1e721785dfed47d5f68c141b96cdb2fede32793b85369",
+          "archiveSha256": "e4e4dc21b867e68e63df0deb9208c7dc7a824c62c32b976495879c9f9a5966b0",
+          "archiveSha512": "QXLD9jiOePkm9b9bXOtJIn81Ji6FmLGlzGDI4CFJViUtHqHQNy0I+m9J7vSeUbYmLEl//gvR7rCFCe4C307g9g=="
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "version": "4.0.41-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:665c0055c82af486b19d6f88b062fddcdae9c6da67ba78361d2760c725e0ca85",
+          "archiveSha256": "5a12618543b2da46741e1f3817b6efc7455a54d6099a0e623ea3c717baf3ce4a",
+          "archiveSha512": "nLEyfON2oDNoBbZGkaEZqPtpR6ljnoJ5EJiGn1WGKJ7+2nA78IqrAd0zQSNjiFlGKWktDAPaBSc2yS8WH3SDOg=="
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "version": "4.0.15-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:a4fb8cdcfdefda88543f81554440a3493e183d9b37bd5d26a7d8a376478376f7",
+          "archiveSha256": "96359bd9139fd69822a07ab5cac62704c4ce8bf8f89303ce8bb575799bbfeaad",
+          "archiveSha512": "KuhN28OXzpzvyRkudLCgaqB65vt815sPSRALF8Zmqni5VcQ/LZLUZYYUPZIIxwOnhRrijjGW26yGEsAuqMO1Ig=="
+        },
+        {
+          "id": "Elsa.Primitives",
+          "version": "4.0.17-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:9c658d22bca5342349bd5bfc06b8756a69ccaf5118257bb48e3cf7feda38daa6",
+          "archiveSha256": "ec46a627735bafc406daf3339ec14de978a66b871b22b8c5932363d848bd3743",
+          "archiveSha512": "3WRt2WGv5/FuHaEM6uwtnTqdMlODRvL66wRsxfd/KOBtq2+X6Z2E7N8TBBpVzSW6VdLIxzKnhX+ofU5m3TS43w=="
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "version": "4.0.17-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:cf712db08e007f6d4cd7dbb9d0aedb5455729a78da4eb7be351095f8aee1bbda",
+          "archiveSha256": "c352858f5bdf0349f9f5cb66ec061c7dd9162e85ac2ccbe3c96616860e1149d0",
+          "archiveSha512": "eOaNxf+rKNAZKClW0JxftV4cfYop7SzI8oepexX+WP9bXJv+ATpXsWFBQqq/VELZVFEcmXipahfVWv4IRAzgvg=="
+        },
+        {
+          "id": "Elsa.Tasks.Schedules",
+          "version": "4.0.14-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:1a2a25f7e548458a847f8ae14a50bdfa799d35a37298e76327d5ab8f68847808",
+          "archiveSha256": "25c838fcd59cd63ab58d21c1a64e6bcde8334086a0089fa034ae97bb767c032c",
+          "archiveSha512": "WcrinhYJTyGUT3KzueF0jmdIdfOp9VRvOFohrguQ5YoWmT8O6pu+heWOlbMGqS/ixUpJeBgtDg6QPQTaTiqFGg=="
+        }
+      ],
+      "restoredPackedPackageCount": 9,
+      "restoredSourceProjectLibraries": 0,
+      "deployedJobsAssetsComparedToNupkg": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.Core.dll",
+          "sha256": "348b52659e75bd2b57c022fbe43045f14d7e39ab7798bc98a5d55f001d566071"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.dll",
+          "sha256": "0baa1eb043e9664fa276468e6984d9c4537268f258cd603bf73dc9b40211d71b"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.Persistence.EntityFrameworkCore.dll",
+          "sha256": "53539c7bf0ba6ac2b72995ba104fef4ecfa112f13113e6835dff4dac957fea99"
+        }
+      ],
+      "allDeploymentFilesIndependentlyRehashedFromRawArchive": 90,
+      "packageSourceBuildDiagnostics": [
+        {
+          "logSha256": "6afa54f30a4d3537759e11f5537d4ea1c39f08f9c12a9f591b636063f98dbd1d",
+          "reportedBuildSummary": {
+            "warning": 1,
+            "error": 0
+          },
+          "uniqueDiagnosticLines": 1,
+          "codes": {
+            "IDE0031": 1
+          }
+        }
+      ],
+      "acceptanceBoundary": {
+        "fullAcceptanceState": "NOT RUN",
+        "standaloneAcceptanceState": "INCOMPLETE"
+      }
+    },
+    {
+      "provider": "postgresql",
+      "engine": {
+        "provider": "PostgreSql",
+        "version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit"
+      },
+      "state": "PASSED_EXACT_27_CASE_PACKAGE_PROFILE",
+      "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+      "publishStateCommit": "7df2c9031a94086cbb8de8e50a4a26f76c154851",
+      "run": "run-463577615ac742979e42c68511f20b5a",
+      "receiptSha256": "e3cb1580c8f0483a07ed65ebedbfd1b54d4b6172c9011132e67ae678d101a095",
+      "nestedWitnessSha256": "423b032e0cd185efdce5cfa272f32227f9c738d271e339f5ac2d0d0cfed5a0b9",
+      "witnessGroup": "all",
+      "plannedAndExecutedCaseNamesExact": true,
+      "cases": [
+        {
+          "name": "durable-admission-replay-conflict",
+          "state": "PASSED"
+        },
+        {
+          "name": "missing-handler-preserves-accepted-job",
+          "state": "PASSED"
+        },
+        {
+          "name": "useful-typed-result-and-restart-inspection",
+          "state": "PASSED"
+        },
+        {
+          "name": "durable-pause-cutoff-and-accept-while-held",
+          "state": "PASSED"
+        },
+        {
+          "name": "killed-worker-recovery-stale-fence-stable-effect-key",
+          "state": "PASSED"
+        },
+        {
+          "name": "delayed-provider-time-start",
+          "state": "PASSED"
+        },
+        {
+          "name": "default-interval-catch-up-and-restart",
+          "state": "PASSED"
+        },
+        {
+          "name": "default-cron-and-bounded-replay",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-admit-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-claim-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-renew-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "actual-post-commit-complete-reply-loss",
+          "state": "PASSED"
+        },
+        {
+          "name": "pause-before-selected-claim-save",
+          "state": "PASSED"
+        },
+        {
+          "name": "committed-grant-before-pause-before-entry",
+          "state": "PASSED"
+        },
+        {
+          "name": "stale-physical-overlap-and-durable-downstream-dedup",
+          "state": "PASSED"
+        },
+        {
+          "name": "four-scope-overlap-version-coverage",
+          "state": "PASSED"
+        },
+        {
+          "name": "two-live-workers-physical-parallelism",
+          "state": "PASSED"
+        },
+        {
+          "name": "queue-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "jobtype-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "workflowinstance-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "workflowdefinition-authorized-capacity",
+          "state": "PASSED"
+        },
+        {
+          "name": "1001-held-jobs-unrelated-shared-queue-progress",
+          "state": "PASSED"
+        },
+        {
+          "name": "automatic-retry-held-without-physical-rerun",
+          "state": "PASSED"
+        },
+        {
+          "name": "cooperative-cancel",
+          "state": "PASSED"
+        },
+        {
+          "name": "absolute-provider-deadline-no-timeout-retry",
+          "state": "PASSED"
+        },
+        {
+          "name": "graceful-drain-and-grace-expired-recovery",
+          "state": "PASSED"
+        },
+        {
+          "name": "idempotent-linked-retry-as-new-run",
+          "state": "PASSED"
+        }
+      ],
+      "independentProcessCount": 270,
+      "ownedResourcesCleaned": true,
+      "sourceCleanAfterVerification": true,
+      "harnessUnchanged": true,
+      "closure": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "path": "Extensions/Jobs/src/Core/Elsa.Jobs.Core.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+          "version": "4.0.17-preview"
+        },
+        {
+          "id": "Elsa.Tasks.Schedules",
+          "path": "Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
+          "version": "4.0.14-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "path": "Extensions/Jobs/src/Elsa.Jobs/Elsa.Jobs.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "path": "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
+          "version": "4.0.0-preview"
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+          "version": "4.0.15-preview"
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+          "version": "4.0.41-preview"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Jobs/src/Persistence/EntityFrameworkCore/Elsa.Jobs.Persistence.EntityFrameworkCore.csproj",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs"
+        }
+      ],
+      "archiveCount": 9,
+      "archives": [
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:b1ef74ec15e07d6f6f4496d74f6629bb9ea7c5a194729d0e48991b93cd958107",
+          "archiveSha256": "ffb47e60d8f2e59c056faa47833e8d26784791f124afc8550d241329ecf3b3f5",
+          "archiveSha512": "pJlNwTq1w/mT13JAEndOk/lRTKQvZJWiTeJMpDA7d/ac9tNT4DE5+qoovMPUwQZJVDno1AU/52+jzDAwI0CTZQ=="
+        },
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:64b45cd0f77fab82136de9dab878183d2778f8ae96910d4c2897942d9abd169d",
+          "archiveSha256": "a21328e221a12ff1ced807a455ffa96a18500bb72c7e8a153e38066d65fea2a3",
+          "archiveSha512": "YIgd4sLsjZdZm7UvoVwMrNqE/35vIw1EoJ5W0b6TCO6KgwQX4892vYWFGK+DhcrTb8y6zFi5jgjN5F7+4Qp/aA=="
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:7543d682b10be91bd238e22019f22ca1ba2529e5806982c037ed9d66b129f7d4",
+          "archiveSha256": "c86295e2bcd3c71fcd5635636fd859c0c27dfbebf0289a18ab60d082f915bee1",
+          "archiveSha512": "YGKJPmGqE9juNPZxE3luK/zbZ6KBr6XAPJNikXcwkR2VWCPZNLq3Zo23OX6H0AX3H+pW4Ltadf9PamPhs1/+rQ=="
+        },
+        {
+          "id": "Elsa.Persistence.Core",
+          "version": "4.0.0-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:acda870c841420da34c1e721785dfed47d5f68c141b96cdb2fede32793b85369",
+          "archiveSha256": "b735c1b8a4824788171591303261a83efdd38f72c7aed996b0e758283686c826",
+          "archiveSha512": "N/orAHb2Oqnfx6QHfPnpv2nBWny+klVIljC6+Rb0bx3ZExVOKtY2rBEKVN/UNhgEeHGJkuhT8chyV5l1NYZMXg=="
+        },
+        {
+          "id": "Elsa.Persistence.EntityFramework",
+          "version": "4.0.41-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:665c0055c82af486b19d6f88b062fddcdae9c6da67ba78361d2760c725e0ca85",
+          "archiveSha256": "a04e454b763f3249b3b010ac6ff18dec22a3b3329a97584b70d0f71f46e8fb79",
+          "archiveSha512": "vTH5oZZ5DVr0wfWMUcy3TF4TK8n/ViVSbKB9jA8BavqQ1Pvj7Rl5tAvcy38u1DuFyHCjXTZb8D2f/gSCRtOeuQ=="
+        },
+        {
+          "id": "Elsa.Persistence.Schema",
+          "version": "4.0.15-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:a4fb8cdcfdefda88543f81554440a3493e183d9b37bd5d26a7d8a376478376f7",
+          "archiveSha256": "20c8dbe60046b3fbff94be77fb9d6d558d2b4e1940d686064b45378f100f2b85",
+          "archiveSha512": "a7sz3BwXDNbjLKI9xrmJwKfRE0NGYnTi0HGcSeo3y7aDihJ8+H5cvugdXC0ZI7YHxVdwjEd/YdYxSpY3sDsmcQ=="
+        },
+        {
+          "id": "Elsa.Primitives",
+          "version": "4.0.17-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:9c658d22bca5342349bd5bfc06b8756a69ccaf5118257bb48e3cf7feda38daa6",
+          "archiveSha256": "4cbec401acc71d221950da2fa8b057a2554c5195f2a403e88b556a392289ca34",
+          "archiveSha512": "DEAkE/niV+rt02Upc6MMf7LYQs8QIRcqTWcjuJ5MU51Exrzd+pbpiCUXM0TH2bvNHoXDKzAOHk0i0sWiLCVRNw=="
+        },
+        {
+          "id": "Elsa.Tasks.Core",
+          "version": "4.0.17-preview",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:cf712db08e007f6d4cd7dbb9d0aedb5455729a78da4eb7be351095f8aee1bbda",
+          "archiveSha256": "a8d8655337ae759aba5ec078f7d3aa9a44c2601f158c2fb4e05f3adf4eeacc1d",
+          "archiveSha512": "M4MCv84dL0TL+o9LVu6fJffXEmMB1weBvEKzGVR/PzGNIfbvRtqNY1S/ODcSK0s5plV58brX/b3lwt/3VLg+MA=="
+        },
+        {
+          "id": "Elsa.Tasks.Schedules",
+          "version": "4.0.14-branch-agent-codex-3586-background-jobs",
+          "sourceCommit": "49a49d36b4d84bdd059eacdf3c8aac1b3ebfdb1c",
+          "fingerprint": "sha256:1a2a25f7e548458a847f8ae14a50bdfa799d35a37298e76327d5ab8f68847808",
+          "archiveSha256": "c88fa82d73ff5f3c4cf4aa5b365517c5b5f31626a93d20c977f671f7ec06696c",
+          "archiveSha512": "UVUE1eGZlujg6+HKWRR5tO9uTGcx3e6Qje5stEX2L88MCVl9XP2yM9izRHqUBXxGg3UoAmquhLu1oegH4fbMuA=="
+        }
+      ],
+      "restoredPackedPackageCount": 9,
+      "restoredSourceProjectLibraries": 0,
+      "deployedJobsAssetsComparedToNupkg": [
+        {
+          "id": "Elsa.Jobs.Core",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.Core.dll",
+          "sha256": "f550508f98cd0f51bfaa304067b50de58ed49396a0fca8d448ffd0344e9c78a7"
+        },
+        {
+          "id": "Elsa.Jobs",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.dll",
+          "sha256": "d9a55162c1b2e083b53deb70bf038fd5e0feea87665d59d4d6182115bffb6678"
+        },
+        {
+          "id": "Elsa.Jobs.Persistence.EntityFrameworkCore",
+          "version": "4.0.0-branch-agent-codex-3586-background-jobs",
+          "asset": "lib/net10.0/Elsa.Jobs.Persistence.EntityFrameworkCore.dll",
+          "sha256": "d8c47ea666a83d5cb678930843a273d7f4a0004ce3bdc7df5cf3cb93ae409d2d"
+        }
+      ],
+      "allDeploymentFilesIndependentlyRehashedFromRawArchive": 56,
+      "packageSourceBuildDiagnostics": [
+        {
+          "logSha256": "a27c019cca360ff87f321ec3c4888291e184373277256150d5d0f7c3e1769d44",
+          "reportedBuildSummary": {
+            "warning": 1,
+            "error": 0
+          },
+          "uniqueDiagnosticLines": 1,
+          "codes": {
+            "IDE0031": 1
+          }
+        }
+      ],
+      "acceptanceBoundary": {
+        "fullAcceptanceState": "NOT RUN",
+        "standaloneAcceptanceState": "INCOMPLETE"
+      }
+    }
+  ],
+  "negativeControls": [
+    {
+      "kind": "admit",
+      "qualificationState": "PASSED_EXPECTED_GUARD_FAILURE",
+      "actualRunState": "FAILED",
+      "case": "marker-only-admit-must-not-qualify",
+      "error": "Did not observe the exact controlled DbException at EF TransactionError",
+      "receiptSha256": "d9d0bd8a19d189a3b6d492316fc8f59b2ef0185899c0ff152dc8d44652c652f5",
+      "ownedResourcesCleaned": true,
+      "propagationMarkers": 0,
+      "timeoutMarkers": 0,
+      "entryAndControllerIdentityMatchPositiveDeployment": true
+    },
+    {
+      "kind": "claim",
+      "qualificationState": "PASSED_EXPECTED_GUARD_FAILURE",
+      "actualRunState": "FAILED",
+      "case": "marker-only-claim-must-not-qualify",
+      "error": "Did not observe the exact controlled DbException at EF TransactionError",
+      "receiptSha256": "ec43aeb7fc25a9398ea0e9ebc7e38312a8247c3dd268ceeb7b1207a925f6b589",
+      "ownedResourcesCleaned": true,
+      "propagationMarkers": 0,
+      "timeoutMarkers": 0,
+      "entryAndControllerIdentityMatchPositiveDeployment": true
+    },
+    {
+      "kind": "renew",
+      "qualificationState": "PASSED_EXPECTED_GUARD_FAILURE",
+      "actualRunState": "FAILED",
+      "case": "marker-only-renew-must-not-qualify",
+      "error": "Did not observe the exact controlled DbException at EF TransactionError",
+      "receiptSha256": "929f3da74423040a9eea4ae2c6f3241e64e1646b98cc594e4d063878da623d94",
+      "ownedResourcesCleaned": true,
+      "propagationMarkers": 0,
+      "timeoutMarkers": 0,
+      "entryAndControllerIdentityMatchPositiveDeployment": true
+    },
+    {
+      "kind": "complete",
+      "qualificationState": "PASSED_EXPECTED_GUARD_FAILURE",
+      "actualRunState": "FAILED",
+      "case": "marker-only-complete-must-not-qualify",
+      "error": "Did not observe the exact controlled DbException at EF TransactionError",
+      "receiptSha256": "8ac812b8cb3d2a348aae5a683d87e75bdd81e91d1566a21156f0075c91567e89",
+      "ownedResourcesCleaned": true,
+      "propagationMarkers": 0,
+      "timeoutMarkers": 0,
+      "entryAndControllerIdentityMatchPositiveDeployment": true
+    }
+  ],
+  "sourceChecks": {
+    "provider": {
+      "state": "PASSED",
+      "executed": 118,
+      "skipped": 0,
+      "trxSha256": "3f7d4ede84b7ef907aa14156119ef6f9bf3ba128d2d0593079bdecc11c76319e",
+      "discoverySha256": "61e64e2d6eb6303a6ecdf5565a5a8c42ccaaf68977d9a40d72a72de52a1220b6",
+      "build": {
+        "logSha256": "1d6b1640639983271210814f609c5ab34ae66e01469905e731f343b87710641f",
+        "reportedBuildSummary": {
+          "warning": 1,
+          "error": 0
+        },
+        "uniqueDiagnosticLines": 1,
+        "codes": {
+          "IDE0031": 1
+        }
+      },
+      "discovered": 118,
+      "exactDiscoveryExecutionNames": true
+    },
+    "architecture": {
+      "state": "PASSED",
+      "executed": 617,
+      "skipped": 0,
+      "trxSha256": "139e2d2f1ed667257424eb5b9f8e7893218e6cbbfd92a986d1d299c7688218ad",
+      "discoverySha256": "f7f72a628ff17f05506aa252089345fbce3327dfe6ffb67fbe21e15054f9ea60",
+      "build": {
+        "logSha256": "53964dd42fb25c70c2337cb91e232eb94e2f5dc53d32a950c848ad72d1b716d8",
+        "reportedBuildSummary": {
+          "warning": 491,
+          "error": 0
+        },
+        "uniqueDiagnosticLines": 491,
+        "codes": {
+          "CA2200": 1,
+          "CS0436": 143,
+          "CS0618": 1,
+          "CS1066": 4,
+          "CS8602": 1,
+          "CS8604": 4,
+          "CS8619": 1,
+          "CS9107": 1,
+          "IDE0019": 3,
+          "IDE0031": 4,
+          "IDE0161": 117,
+          "NU1510": 7,
+          "NU1902": 10,
+          "NU1903": 7,
+          "RS0026": 125,
+          "RS0027": 16,
+          "RS0041": 32,
+          "SYSLIB1030": 1,
+          "SYSLIB1034": 10,
+          "SYSLIB1220": 1,
+          "xUnit2029": 1,
+          "xUnit2031": 1
+        }
+      },
+      "discovered": 602,
+      "comparison": "Exact names except two separately verified runtime theory expansions",
+      "runtimeTheoryExpansionRows": [
+        11,
+        6
+      ],
+      "allOtherNamesExact": true
+    },
+    "architectureLockedGraphRestore": {
+      "state": "PASSED",
+      "diagnostics": {
+        "logSha256": "69ea7c7ddfe1761dbc63f3560f7e4c3b4ca27d59f479a99a69b02fcf85c15547",
+        "reportedBuildSummary": {},
+        "uniqueDiagnosticLines": 108,
+        "codes": {
+          "NU1510": 19,
+          "NU1902": 48,
+          "NU1903": 41
+        }
+      }
+    },
+    "generatedMaps": {
+      "state": "PASSED",
+      "logSha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "result": "Generated solution filters still describe the project graph."
+    },
+    "testTiers": {
+      "state": "PASSED",
+      "logSha256": "3edf8dfaa8376629e090aa54eac99d49bb9c58a23b6e193db400908871b822d0",
+      "result": "135 test projects, each in one tier and one shard."
+    }
+  },
+  "carriedPriorSourceEvidence": {
+    "carryVerdictSha256": "d4d491b67104cccc9c1076cf821ee7a7700b1649db15f1ecb61db345a53cca5b",
+    "state": "PASSED_CARRY_FORWARD_VERIFICATION",
+    "steps": {
+      "source_tasks": {
+        "state": "CARRIED_FORWARD_PRIOR_SOURCE",
+        "sourceCommit": "289fb179369f08f6fd7abcfc32b1152382e2e15e",
+        "sourceTree": "a47ab4235285c701dc3d29035eaaf0ec568a70ee",
+        "executed": 78,
+        "priorOutcome": "PASSED",
+        "exactNamesReverified": true,
+        "currentSourceExecution": false
+      },
+      "source_workflow_scheduling": {
+        "state": "CARRIED_FORWARD_PRIOR_SOURCE",
+        "sourceCommit": "289fb179369f08f6fd7abcfc32b1152382e2e15e",
+        "sourceTree": "a47ab4235285c701dc3d29035eaaf0ec568a70ee",
+        "executed": 108,
+        "priorOutcome": "PASSED",
+        "exactNamesReverified": true,
+        "currentSourceExecution": false
+      },
+      "source_jobs_runtime": {
+        "state": "CARRIED_FORWARD_PRIOR_SOURCE",
+        "sourceCommit": "289fb179369f08f6fd7abcfc32b1152382e2e15e",
+        "sourceTree": "a47ab4235285c701dc3d29035eaaf0ec568a70ee",
+        "executed": 70,
+        "priorOutcome": "PASSED",
+        "exactNamesReverified": true,
+        "currentSourceExecution": false
+      },
+      "provider_red_controls": {
+        "state": "CARRIED_FORWARD_PRIOR_SOURCE",
+        "sourceCommit": "289fb179369f08f6fd7abcfc32b1152382e2e15e",
+        "sourceTree": "a47ab4235285c701dc3d29035eaaf0ec568a70ee",
+        "priorOutcome": "PASSED_INTENDED_BITE_PROOFS",
+        "controls": 3,
+        "failedCases": 6,
+        "rawRunsRemainFailed": true,
+        "currentSourceExecution": false,
+        "actualTrxReverified": true,
+        "restoredSourceSha256": "971145973e227dde9a5b46483d58cb116cfa74b20977d37242f397f4de5536df",
+        "priorWholeProviderPassed": 118
+      }
+    },
+    "priorProvider118PassedBeforeThreeIntendedReds": true,
+    "actualRedCasesRemainFailed": true,
+    "all40CopiedRawFilesPreviouslyIndependentlyCompared": true,
+    "priorBuildWarnings": {
+      "Tasks": 0,
+      "WorkflowScheduling": 143,
+      "JobsRuntime": 0,
+      "providerWholeBaselineBeforeReds": 2
+    }
+  },
+  "originalPhaseA": {
+    "state": "FAILED",
+    "packageFailure": "Source NuGet.config exact-case portability failure after9archives packed; consumer publish/execution and later gates NOT RUN",
+    "cleanupState": "FAILED",
+    "originalFailureAndNotRunRetained": true,
+    "separateCleanupRemediation": {
+      "state": "PASSED",
+      "statusFileSha256": "b7949e1480ac75f067fa3b8a5598dc76f5f6ca38250e4c80922620273d8b4019",
+      "exitCode": 0,
+      "recordedContainerIdsProvenAlreadyAbsent": 4,
+      "doesNotRewriteOriginalPhaseA": true
+    }
+  },
+  "diagnosticBoundary": {
+    "zeroWarningsClaim": false,
+    "phaseBProviderBuildWarnings": 1,
+    "eachPackageSourceBuildWarnings": 1,
+    "phaseBArchitectureBuildWarnings": 491,
+    "phaseBArchitectureRestoreUniqueWarningLines": 108,
+    "reportedNugetAuditWarnings": [
+      {
+        "code": "NU1902",
+        "package": "MySqlConnector",
+        "version": "2.3.5",
+        "reportedSeverity": "moderate severity vulnerability",
+        "advisory": "https://github.com/advisories/GHSA-473q-m89c-ghf8"
+      },
+      {
+        "code": "NU1902",
+        "package": "System.Security.Cryptography.Pkcs",
+        "version": "9.0.13",
+        "reportedSeverity": "moderate severity vulnerability",
+        "advisory": "https://github.com/advisories/GHSA-2fmv-rv2c-59x7"
+      },
+      {
+        "code": "NU1903",
+        "package": "System.Security.Cryptography.Pkcs",
+        "version": "9.0.13",
+        "reportedSeverity": "high severity vulnerability",
+        "advisory": "https://github.com/advisories/GHSA-846f-f764-76mx"
+      }
+    ],
+    "warningBaselineOrWaiverApproval": "NOT ESTABLISHED BY THIS RECEIPT"
+  },
+  "cleanup": {
+    "phaseB": {
+      "state": "PASSED",
+      "owner": "elsa-jobs-3586-m2-20261106b.service",
+      "containers": [
+        {
+          "id": "321586b472498c8371376d6a61558ba3bcd33119ae30d98eddd1f71b09f51077",
+          "state": "ALREADY ABSENT"
+        },
+        {
+          "id": "64e0ee47d06dbc6920a8f4ae946fc0bad6b240b02a02e5a9bbc258b0b0197fe9",
+          "state": "ALREADY ABSENT"
+        }
+      ],
+      "errors": []
+    },
+    "receiptSha256": "cd0f708e07382602bd42a1e197bdd23d2dbbbd2ee57a6ff574bbd099fe768de9",
+    "execStopPostSha256": "1e2310f28891cca2f3ecb576dd4aac1578290983554a23d376d24d2bd44dcf50",
+    "sourceBeforeAndAfterClean": true
+  },
+  "remainingAcceptance": [
+    "Native/BPMN and persisted authored publication",
+    "API authorization/secret binding/audit retention",
+    "Composed Studio and UX",
+    "Current final source qualification, review, CI, merge and resulting-main gates"
+  ],
+  "rootReview": "Root inspected exact source boundaries, independent raw/deployment proof, all27case identities, diagnostics, failure/cleanup distinctions and full-product incompleteness."
+}

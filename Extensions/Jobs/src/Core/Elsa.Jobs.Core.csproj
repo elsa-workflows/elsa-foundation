@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Provider-neutral durable job handler, admission, attempt, result and operational contracts.</Description>
+  </PropertyGroup>
+</Project>

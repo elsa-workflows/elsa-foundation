@@ -9,6 +9,16 @@ public sealed class RecurringScheduleCalculatorTests
     private readonly RecurringScheduleCalculator _calculator = new();
 
     [Fact]
+    public void Public_interval_wrapper_preserves_the_callers_anchor_and_offset()
+    {
+        var cursor = new DateTimeOffset(2026, 11, 6, 3, 4, 5, TimeSpan.FromHours(-3));
+        Assert.Equal(TimeSpan.FromMinutes(5), RecurringScheduleCalculator.ParseInterval("PT5M"));
+        var next = _calculator.ComputeNext(RecurringScheduleKind.Interval, "PT5M", cursor);
+        Assert.Equal(cursor.AddMinutes(5), next);
+        Assert.Equal(cursor.Offset, next!.Value.Offset);
+    }
+
+    [Fact]
     public void Interval_Iso8601_ReturnsAfterPlusInterval()
     {
         var next = _calculator.ComputeNext(RecurringScheduleKind.Interval, "PT5M", Now);

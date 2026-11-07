@@ -18,7 +18,8 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter committer,
     TimeProvider clock, BpmnModelHostingOptions options, IRuntimeModelExecutionReader? reader = null,
     BpmnNativeWorkBoundary? nativeWork = null, BpmnEmbeddingBoundary? embedding = null,
-    BpmnDurationTimerDelivery? durationTimers = null) : IRuntimeExecutionProtocolDriver
+    BpmnDurationTimerDelivery? durationTimers = null,
+    IEnumerable<IBpmnNativeWorkResultValidator>? nativeWorkResultValidators = null) : IRuntimeExecutionProtocolDriver
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
@@ -304,6 +305,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 var snapshot = BpmnHostSnapshot.Root(executionId) with { LiveWork = live };
                 if (nativeResult is not null)
                 {
+                    var validators = (nativeWorkResultValidators ?? []).ToArray();
+                    if (validators.Length > 0)
+                    {
+                        var worker = await NativeWork.FindWorkerAsync(nativeResult.Origin, cancellationToken)
+                            ?? throw BpmnNativeWorkBoundary.Unavailable("The validated native result worker is unavailable.");
+                        var validation = new BpmnNativeWorkResultValidation(nativeResult.Origin, command.InputId, fingerprint,
+                            BpmnNativeWorkConsumer.Project(nativeResult), worker);
+                        foreach (var validator in validators) await validator.ValidateAsync(validation, cancellationToken);
+                    }
                     document = document with { NativeResults = [.. document.NativeResults ?? [], nativeResult] };
                     if (nativeResult.Status == WorkflowExecutionStatus.Cancelled)
                     {

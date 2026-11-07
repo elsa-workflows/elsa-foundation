@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Optional Jobs association and result-permission integration for genuine BPMN model roots.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <ProjectReference Include="../Workflows/Runtime/Elsa.Jobs.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Jobs.Bpmn.Tests" />
+  </ItemGroup>
+</Project>

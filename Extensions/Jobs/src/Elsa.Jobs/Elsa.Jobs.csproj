@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Standalone durable job client, registered typed handlers and independently hosted worker.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Jobs.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
+    <InternalsVisibleTo Include="Elsa.Jobs.Tests" />
+  </ItemGroup>
+</Project>
