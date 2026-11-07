@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -255,18 +255,19 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
         />
       ) : null}
       <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</button>
-        <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
+        <StudioButton type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</StudioButton>
+        <StudioButton type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>
         {data ? (
           <ExecutableRunButton
             target={publishedRunTarget}
             runningArtifactId={executableRun.runningArtifactId}
             iconSize={14}
+            variant="primary"
             onRequest={executableRun.request}
           />
         ) : null}
         {data && explainAction ? (
-          <button type="button" onClick={explain}><Sparkles size={13} /> Explain</button>
+          <StudioButton type="button" onClick={explain}><Sparkles size={13} /> Explain</StudioButton>
         ) : null}
         {data ? (
           <SourceDefinitionAction
@@ -717,7 +718,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
   const disabledReason = getSourceDefinitionDisabledReason(reference, sourceDefinition);
 
   return (
-    <button
+    <StudioButton
       type="button"
       disabled={!!disabledReason}
       title={disabledReason ?? undefined}
@@ -725,7 +726,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
       onClick={onOpen}
     >
       <WorkflowIcon size={14} /> Open source definition
-    </button>
+    </StudioButton>
   );
 }
 

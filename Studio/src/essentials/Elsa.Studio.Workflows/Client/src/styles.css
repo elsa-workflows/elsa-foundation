@@ -376,10 +376,10 @@
   outline-offset: 2px;
 }
 
-.wf-actions button,
-.wf-toolbar button,
-.wf-editor-actions button,
-.wf-link-button {
+.wf-actions button:where(:not(.studio-button)),
+.wf-toolbar button:where(:not(.studio-button)),
+.wf-editor-actions button:where(:not(.studio-button)),
+.wf-link-button:where(:not(.studio-button)) {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
@@ -392,6 +392,17 @@
   font: inherit;
   font-size: 13px;
   padding: 0 10px;
+}
+
+.wf-toolbar button:focus-visible,
+.wf-panel-action-button:focus-visible,
+.wf-panel-tab-list button:focus-visible,
+.wf-instance-meta button:focus-visible,
+.wf-instance-inspector .studio-copyable-identifier__button:focus-visible,
+.wf-instance-canvas .react-flow__controls button:focus-visible,
+.wf-instance-canvas .react-flow__controls-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 /* Shared buttons own their hover recipe, including the primary foreground/background pair. */
