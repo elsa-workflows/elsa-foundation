@@ -55,6 +55,25 @@ public sealed class PackageMaintenanceAssertionTests
     }
 
     [Fact]
+    public void Refusal_fingerprint_correlates_the_native_control_without_disclosing_its_message()
+    {
+        const string message = "A graph-use artifact has a noncanonical prefix or truncated identifier.";
+        var result = new JsonObject
+        {
+            ["status"] = "Refused", ["diagnostics"] = new JsonArray(new JsonObject
+            {
+                ["code"] = "UnknownAuthority", ["message"] = message
+            })
+        };
+        var before = result.ToJsonString();
+        var error = Assert.Throws<Xunit.Sdk.TrueException>(() =>
+            PackageMaintenanceAssertions.Completed(result, PackageMaintenancePhase.PreserveRetainedGeneration));
+        Assert.Contains("refusalFingerprints=[UnknownAuthority:67C861DBACE145A4BA6780B8E0C47C9668F059DE1B014B6C2CA4FC60A310663B]", error.Message);
+        Assert.DoesNotContain(message, error.Message);
+        Assert.Equal(before, result.ToJsonString());
+    }
+
+    [Fact]
     public void Private_fields_unknown_tokens_and_excess_diagnostics_are_bounded_and_omitted()
     {
         var privateValue = "private-sentinel\n" + new string('x', 10_000);
