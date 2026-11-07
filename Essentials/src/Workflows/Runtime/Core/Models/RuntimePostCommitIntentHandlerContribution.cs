@@ -25,6 +25,12 @@ public sealed class RuntimePostCommitIntentHandlerContribution
     /// <summary>Declares a producer's recipient protocol at commit time; no recipients are selected here.</summary>
     public RuntimePostCommitIntentHandlerContribution(string intentKind, Type handlerType,
         RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion)
+        : this(intentKind, handlerType, retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion, false) { }
+
+    /// <summary>Explicitly requires a returned typed plan, later settled by the existing atomic claim completion.</summary>
+    public RuntimePostCommitIntentHandlerContribution(string intentKind, Type handlerType,
+        RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion,
+        bool requiresSuccessfulFinalization)
     {
         RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
         if (stimulusDeliveryProtocolVersion is not null &&
@@ -42,7 +48,15 @@ public sealed class RuntimePostCommitIntentHandlerContribution
 
         if (requiresDurableSource && !typeof(IRuntimePostCommitDurableSourceIntentHandler).IsAssignableFrom(handlerType))
             throw new ArgumentException("A required-source contribution needs the explicit context handler contract.", nameof(handlerType));
+        var completionAware = typeof(IRuntimePostCommitCompletionAwareIntentHandler).IsAssignableFrom(handlerType);
+        if (requiresSuccessfulFinalization && (!requiresDurableSource || !completionAware))
+            throw new ArgumentException("Successful finalization requires durable source delivery and a completion-aware handler.", nameof(requiresSuccessfulFinalization));
+        if (completionAware && !requiresSuccessfulFinalization)
+            throw new ArgumentException("A completion-aware handler must explicitly require successful finalization.", nameof(requiresSuccessfulFinalization));
+        if (requiresSuccessfulFinalization && stimulusDeliveryProtocolVersion is not null)
+            throw new ArgumentException("Successful finalization cannot replace the existing Event recipient protocol.", nameof(stimulusDeliveryProtocolVersion));
         RequiresDurableSource = requiresDurableSource;
+        RequiresSuccessfulFinalization = requiresSuccessfulFinalization;
         StimulusDeliveryProtocolVersion = stimulusDeliveryProtocolVersion;
         IntentKind = intentKind;
         HandlerType = handlerType;
@@ -50,6 +64,7 @@ public sealed class RuntimePostCommitIntentHandlerContribution
     }
 
     public bool RequiresDurableSource { get; }
+    public bool RequiresSuccessfulFinalization { get; }
     public int? StimulusDeliveryProtocolVersion { get; }
     public string IntentKind { get; }
     public Type HandlerType { get; }

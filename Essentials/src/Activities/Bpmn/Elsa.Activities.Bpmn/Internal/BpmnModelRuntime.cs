@@ -18,7 +18,6 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     TimeProvider clock, IWorkflowSchedulerWorkQueue queue, ILogger<BpmnModelRuntime>? logger = null,
     IRuntimeModelExecutionReader? states = null) : IBpmnModelRuntime
 {
-    private const string SourceKind = "BpmnModel";
     private const string WorkPagePurpose = "bpmn-human-work-v1";
     private const string IncidentPagePurpose = "bpmn-service-incidents-v1";
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
@@ -46,6 +45,13 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             throw new BpmnModelValidationException($"BPMN publication '{requestId}', source version '{source.VersionId}' has invalid definition JSON.", exception);
         }
     }
+
+    // Explicit dormant profile entry; the public legacy publication/runtime paths remain unchanged.
+    internal ValueTask<BpmnMessageServingPublicationBridge.Publication> PublishMessageFromSourceAsync(RuntimeModelMaterial material,
+        BpmnModelPublicationProvenance source, string requestId, BpmnModelCaller caller, string slotName, long expectedRevision,
+        Elsa.Workflows.Runtime.Messaging.MessageModelPublicationCoordinator publications, CancellationToken ct = default) =>
+        new BpmnMessageServingPublicationBridge(materials, sources, access, clock, publications)
+            .PublishAsync(material, source, requestId, caller, slotName, expectedRevision, ct);
 
     private async ValueTask<BpmnPublishedModel> PublishCoreAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken, BpmnModelPublicationProvenance? source = null)
@@ -86,11 +92,12 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             ? BpmnModelIdentity.Create(caller.TenantId ?? "", caller.ActorId, requestId)
             : BpmnModelIdentity.Create("authored-v1", caller.TenantId ?? "", caller.ActorId, requestId));
         var at = clock.GetUtcNow();
-        var reference = new WorkflowExecutableSourceReference(sourceId, hash, SourceKind, source?.VersionId ?? sourceId, source?.Version ?? "1",
-            pin.DefinitionId, pin.DefinitionVersionId, pin.ArtifactVersion, at, at, WorkflowExecutableReferenceScope.Published,
+        var sourceKind = source?.DefinitionId is null ? BpmnModelSourceProvenance.LegacyKind : BpmnModelSourceProvenance.AuthoredKind;
+        var reference = new WorkflowExecutableSourceReference(sourceId, hash, sourceKind, source?.VersionId ?? sourceId, source?.Version ?? "1",
+            source?.DefinitionId ?? pin.DefinitionId, pin.DefinitionVersionId, pin.ArtifactVersion, at, at, WorkflowExecutableReferenceScope.Published,
             Layout: source?.Layout, TenantId: caller.TenantId, ActivityPresentation: source?.ActivityPresentation);
         if (await sources.FindAsync(sourceId, cancellationToken) is { } prior &&
-            (prior.ArtifactId != hash || prior.TenantId != caller.TenantId || prior.SourceKind != SourceKind || !prior.IsLive(clock.GetUtcNow()) ||
+            (prior.ArtifactId != hash || prior.TenantId != caller.TenantId || prior.SourceKind != sourceKind || !prior.IsLive(clock.GetUtcNow()) ||
              source is not null && !SameAuthoredSource(prior)))
             throw new RuntimeCheckpointReplayConflictException("publish:" + requestId);
         await materials.SaveModelAsync(material, cancellationToken);
@@ -137,11 +144,10 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             return await DispatchAsync(execution, Command(retained.Executable, retained.MaterialIncarnationId, retained.Authority), caller, cancellationToken);
         }
         var source = await sources.FindAsync(sourceReferenceId, cancellationToken);
-        if (source is null || source.SourceKind != SourceKind || source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow()))
+        if (source is null || !BpmnModelSourceProvenance.IsSupported(source) || source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow()))
             throw new BpmnModelResourceMissingException();
         var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
-        if (material?.Model is null || material.Identity.DefinitionId != source.DefinitionId ||
-            material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
+        if (material?.Model is null || !BpmnModelSourceProvenance.MatchesMaterial(source, material.Identity))
             throw new BpmnModelValidationException("The selected source does not name available pinned model material.");
         // Capture only a new start. Pending/consumed replay above retains its original authority,
         // including legacy starts without a subject; current HTTP context never rewrites accepted work.
@@ -179,9 +185,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             var document = BpmnDirectExecutionDriver.Read(state);
             BpmnInspectionProvenance? source = null;
             if (document.SourceReferenceId is { } referenceId && await sources.FindAsync(referenceId, cancellationToken) is { } reference &&
-                reference.TenantId == caller.TenantId && reference.SourceKind == SourceKind && reference.ArtifactId == state.Executable.ArtifactId &&
-                reference.DefinitionId == state.Executable.DefinitionId && reference.DefinitionVersionId == state.Executable.DefinitionVersionId &&
-                reference.ArtifactVersion == state.Executable.ArtifactVersion)
+                reference.TenantId == caller.TenantId && BpmnModelSourceProvenance.MatchesMaterial(reference, state.Executable))
                 source = new(reference); // Accepted work retains its frozen provenance even after source retirement.
             var work = document.Work.Select(item => new BpmnInspectionWork(item.Timer is not null ? "Timer" : item.NativeWork is not null ? "Native" : "Human",
                 item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId,

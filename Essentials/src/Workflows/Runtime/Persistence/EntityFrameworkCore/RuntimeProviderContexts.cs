@@ -84,6 +84,15 @@ file static class RuntimeProviderModel
     {
         modelBuilder.Entity<UserTaskEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<UserTaskFormEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        foreach (var entity in new[] { typeof(MessagePublicationInterestEntity), typeof(MessageInterestScopeControlEntity) })
+            foreach (var property in new[] { "ScopeKey", "TenantId", "ContentJson" }) modelBuilder.Entity(entity).Property(property).HasColumnType(type);
+        foreach (var property in new[] { "ActivationId", "SlotId", "DescriptorFingerprint" })
+            modelBuilder.Entity<MessagePublicationInterestEntity>().Property(property).HasColumnType(type);
+        modelBuilder.Entity<MessageInterestScopeControlEntity>().Property(row => row.FullIdentity).HasColumnType(type);
+        foreach (var property in new[] { "ScopeKey", "TenantId", "WorkflowExecutionId", "DescriptorFingerprint", "ContentJson" })
+            modelBuilder.Entity<MessageActiveInterestEntity>().Property(property).HasColumnType(type);
+        foreach (var property in new[] { "ScopeKey", "ContentJson" })
+            modelBuilder.Entity<MessageActiveInterestOwnerEntity>().Property(property).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.PayloadJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);
@@ -129,6 +138,15 @@ file static class RuntimeProviderModel
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("PendingPostCommitWorkIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ConsumedSchedulerWorkItemIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ContentJson").HasColumnType(type);
+        foreach (var entity in new[] { typeof(RuntimeIngressSourceEntity), typeof(RuntimeDeliveryWorkEntity) })
+        {
+            foreach (var property in new[] { "ScopeKey", "SourceFamily", "SourceId", "TenantId", "TestScopeId", "FullDiscoveryIdentity", "ContentJson", "OperationProofJson" })
+                modelBuilder.Entity(entity).Property(property).HasColumnType(type);
+        }
+        foreach (var property in new[] { "HeaderFingerprint", "AcceptanceOperationId", "AcceptanceOperationFingerprint" })
+            modelBuilder.Entity<RuntimeIngressSourceEntity>().Property(property).HasColumnType(type);
+        foreach (var property in new[] { "WorkId", "WorkKind", "OwnerId", "CompletionOperationId", "SourceHeaderFingerprint", "ContentFingerprint", "CompletionOperationFingerprint" })
+            modelBuilder.Entity<RuntimeDeliveryWorkEntity>().Property(property).HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ScopeKey").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("OutboxItemId").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("WorkflowExecutionId").HasColumnType(type);

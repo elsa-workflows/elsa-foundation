@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Messaging;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -30,6 +31,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
     private readonly IWorkflowExecutableSourceReferenceStore _references;
     private readonly TimeProvider _timeProvider;
     private readonly IInMemoryActivationProjection[] _projections;
+    private readonly InMemoryMessagePublicationInterestStore? _messageInterests;
 
     public InMemoryWorkflowActivationSwitch(
         IWorkflowActivationAuthority authority,
@@ -44,7 +46,25 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         _projections = [.. Projection(triggerBindingStore), .. Projection(recurringScheduleStore)];
     }
 
-    public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+    internal InMemoryWorkflowActivationSwitch(InMemoryMessagePublicationInterestStore interests,
+        IWorkflowActivationAuthority authority, IWorkflowExecutableSourceReferenceStore references, TimeProvider timeProvider,
+        IWorkflowTriggerBindingStore? triggerBindingStore = null, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, references, timeProvider, triggerBindingStore, recurringScheduleStore)
+    {
+        interests.RequireComposition(authority, references);
+        _messageInterests = interests;
+        _projections = [.. _projections, interests];
+    }
+
+    internal bool UsesMessageInterests(InMemoryMessagePublicationInterestStore interests) => ReferenceEquals(_messageInterests, interests);
+
+    private ValueTask<T> UnderMessageGateAsync<T>(Func<ValueTask<T>> write, CancellationToken ct) =>
+        _messageInterests is null ? write() : _messageInterests.UnderWriteGateAsync(write, ct);
+
+    public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+        UnderMessageGateAsync(() => TryActivateCoreAsync(request, cancellationToken), cancellationToken);
+
+    private async ValueTask<WorkflowActivationTransition> TryActivateCoreAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
@@ -70,7 +90,10 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         return transition;
     }
 
-    public async ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default) =>
+        UnderMessageGateAsync(() => TryRevertCoreAsync(revert, cancellationToken), cancellationToken);
+
+    private async ValueTask<bool> TryRevertCoreAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(revert);
         var transition = revert.Transition;
@@ -114,10 +137,13 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         return reverted;
     }
 
-    public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+    public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) =>
+        UnderMessageGateAsync(() => TryDeactivateCoreAsync(request, alsoServing, cancellationToken), cancellationToken);
+
+    private ValueTask<WorkflowActivationTransition> TryDeactivateCoreAsync(
         WorkflowDeactivationSlotRequest request,
         IReadOnlyCollection<string> alsoServing,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(alsoServing);
@@ -132,7 +158,10 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         }));
     }
 
-    public async ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) =>
+        UnderMessageGateAsync(() => TryDiscardCoreAsync(reference, cancellationToken), cancellationToken);
+
+    private async ValueTask<bool> TryDiscardCoreAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reference);
         var activationId = reference.ActivationId ?? throw new ArgumentException("Only an activation's source reference can be discarded.", nameof(reference));
@@ -149,10 +178,13 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         return discarded;
     }
 
-    public async ValueTask<bool> TryRepairAsync(
+    public ValueTask<bool> TryRepairAsync(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) =>
+        UnderMessageGateAsync(() => TryRepairCoreAsync(slot, alsoServing, cancellationToken), cancellationToken);
+
+    private async ValueTask<bool> TryRepairCoreAsync(
         WorkflowActivationSlot slot,
         IReadOnlyCollection<string> alsoServing,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var plan = RepairPlan(slot, alsoServing);
         cancellationToken.ThrowIfCancellationRequested();
@@ -163,6 +195,8 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
             {
                 if (!plan.AppliesTo(_authority.Current(slot.WorkflowDefinitionId, slot.SlotName), [.. _projections.Select(projection => projection.State(plan.ActivationId))]))
                     return false;
+                foreach (var projection in _projections)
+                    projection.CheckSwitch(plan.ActivationId, null);
                 foreach (var projection in _projections)
                     projection.Switch(plan.ActivationId, null);
                 DeleteProjections(plan.ServingInItsPlace);

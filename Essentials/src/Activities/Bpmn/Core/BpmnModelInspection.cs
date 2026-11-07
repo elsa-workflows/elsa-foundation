@@ -38,6 +38,7 @@ public sealed class BpmnInspectionProvenance
         ArgumentNullException.ThrowIfNull(reference);
         SourceReferenceId = reference.SourceReferenceId; SourceKind = reference.SourceKind;
         SourceId = reference.SourceId; SourceVersion = reference.SourceVersion;
+        DefinitionId = BpmnModelSourceProvenance.ReadDefinitionId(reference);
         CreatedAt = reference.CreatedAt; PublishedAt = reference.PublishedAt; RetiredAt = reference.DeletedAt;
         Layout = Array.AsReadOnly(reference.Layout.Select(record => record with { AdditionalProperties = record.AdditionalProperties?.Clone() }).ToArray());
         ActivityPresentation = Array.AsReadOnly(reference.ActivityPresentation.ToArray());
@@ -46,6 +47,9 @@ public sealed class BpmnInspectionProvenance
     public string SourceKind { get; }
     public string SourceId { get; }
     public string? SourceVersion { get; }
+    /// <summary>Trusted authored ID in WorkflowDefinition, never the synthetic model material definition ID.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DefinitionId { get; }
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? PublishedAt { get; }
     public DateTimeOffset? RetiredAt { get; }

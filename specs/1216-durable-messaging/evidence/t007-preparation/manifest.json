@@ -1,0 +1,202 @@
+{
+  "date": "2026-11-06",
+  "baseCommit": "edf5abe770d3e4d63533a50075dff5c97928aa5c",
+  "scope": "Component evidence only; no Message producer or physical source capability enabled",
+  "runs": {
+    "completion-refusal-red": {
+      "counters": {
+        "total": "23",
+        "executed": "23",
+        "passed": "20",
+        "failed": "3",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "2065ec172d547aa12781b20169dd08c8abefd84114802ba72ca8434b2d0960b6",
+      "gzipSha256": "d352000df221bc38864feb04507e7c6b80154953194eabef26576838aa205fb6"
+    },
+    "physical-refusal-red": {
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "d4de0c173ad102e27b3834200d79dcfcb4e0fdb1d3d4ccd4e312236913aa631b",
+      "gzipSha256": "0e40c6e86042374d51c1ad1c4762cd6239b1db3d4f714db80c90a81ca0772020"
+    },
+    "constructor-mutation-red": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "0c89e6a18e5be7014d22403f9f62915b7ead7dfe0f557f66e9ad17bdce65fedd",
+      "gzipSha256": "c05fe2b8ea8dd76b5b1b6ccbd08b9e84705bff66b7692d6815c2673e0fd1c0c1"
+    },
+    "preparation-green": {
+      "counters": {
+        "total": "24",
+        "executed": "24",
+        "passed": "24",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "0be8b419ac4e8e1168ebd1c693e1637957f3739666a05571e36bdb63d573b093",
+      "gzipSha256": "5bcda4dd66280d312dce14dd1fa51e54e0625caaee448354a872a92663d7334e"
+    },
+    "whole-runtime": {
+      "counters": {
+        "total": "3493",
+        "executed": "3493",
+        "passed": "3493",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "dfdafe7f84320e4e24a74aa9daba4caa273b174efb20f2c2d1769f415388c362",
+      "gzipSha256": "d1131daff9d1504ec5f43a6dc211edd4669687d944e244065fc04950c672fc17"
+    },
+    "whole-runtime-ef": {
+      "counters": {
+        "total": "1893",
+        "executed": "1893",
+        "passed": "1893",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "5e61b5bbd099e766d55bc1382028a729a8b35690ebb9bdf42ea1c2b8347b6f76",
+      "gzipSha256": "b50e57fefcde0d05203783ce791bbcc63a00695f672a2ddfdfee7164c033492d"
+    }
+  },
+  "completionRefusalRedSource": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "3a787acf160fcf7fcf9cc51e293c6baf24778f0489b89f774e61c8be80d9ac32",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxClaimCompletionStore.cs": "4771f4a33a813acc6759724fb0ced65efd2cc944f50262d3203163716a7e3c92",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationBoundaryTests.cs": "7882d89452a69de7002b975fb7530d9de113a2727d826ba5ac308e1250eefb60",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimePostCommitOutboxStoreTests.cs": "c2a02b873c3902cde37f31011355ac55a747a7fc9fe098ab0b702bb744337d39"
+  },
+  "constructorMutation": {
+    "originalSha256": "bb521f1201767d88787ead0b6b257006282dd949d49641b3ad837faa5ae1a020",
+    "mutationSha256": "192d91e299906b090f5d3343f36553aacb9b3c8bcd5a55c3491cec203f6e8643",
+    "exitCode": 1,
+    "restored": true
+  },
+  "nestedStrictOutboxAndGeneratedConverterPrototypeFailuresExcluded": true,
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxClaimCompletionStore.cs",
+      "sha256": "4771f4a33a813acc6759724fb0ced65efd2cc944f50262d3203163716a7e3c92"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs",
+      "sha256": "4a86803847cad4648b505245d3eefbdb78d2a2f30dbd225e8b0e8f118aefede4"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs",
+      "sha256": "94e8da971b28a9e48d25c5fbb6c420b26dd71b35b475ba432bd1ccebe9e8edd6"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs",
+      "sha256": "2d8dc31c2bdaf182f1c819d77a57fc32dcd66e70f619e1b9613ddbd0021838ef"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt",
+      "sha256": "e99018bd222ace83cdfadd428ec6654c38a82428058ca1817a3300d6dd210e17"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md",
+      "sha256": "5ac45c42d772419f0ff117902389de7423f056642d52578e048cf46196396d3e"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt",
+      "sha256": "5ba7d7c288733799a5dccd36f9ea7df81b9853c2a99b03cbae5ed86ba8273a7a"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs",
+      "sha256": "979730e7c309970ddef61f50d327224431cc5b75b080d1aa6737d177c772dc61"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs",
+      "sha256": "b793c2e60498e0ead515c61f162e3a47e61fbed3bd1f0e227d28cb249414f3aa"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimePostCommitOutboxStoreTests.cs",
+      "sha256": "226c3e5c6f464cc80f9b5e97f65465b6c9a4517eb43067c99ff74f99bd51a773"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationBoundaryTests.cs",
+      "sha256": "4d8b131e325fae1767bfd00e0c73c0a52925b2989e84faf34a486e2559ce5be9"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitFinalizationPreparationTests.cs",
+      "sha256": "7f8dab90946bad80a5703d4104a4bcb03a3ce13ce1b0adf517c05641a76f13ba"
+    }
+  ]
+}

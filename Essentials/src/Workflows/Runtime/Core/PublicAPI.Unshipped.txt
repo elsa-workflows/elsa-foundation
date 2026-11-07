@@ -10344,3 +10344,311 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.<Clone>$() -> Elsa.Workflows.Runtime.Core.Messaging.MessageScope!
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.Equals(Elsa.Workflows.Runtime.Core.Messaging.MessageScope? other) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.MessageScope(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! persistenceScope, string? tenantId = null, string? testScopeId = null) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.PersistenceScope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.Messaging.MessageScope.TestScopeId.get -> string?
+override Elsa.Workflows.Runtime.Core.Messaging.MessageScope.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageScope.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Messaging.MessageScope.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageScope.operator !=(Elsa.Workflows.Runtime.Core.Messaging.MessageScope? left, Elsa.Workflows.Runtime.Core.Messaging.MessageScope? right) -> bool
+static Elsa.Workflows.Runtime.Core.Messaging.MessageScope.operator ==(Elsa.Workflows.Runtime.Core.Messaging.MessageScope? left, Elsa.Workflows.Runtime.Core.Messaging.MessageScope? right) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity
+const Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.WorkflowDefinitionNamespace = "WorkflowDefinition" -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.<Clone>$() -> Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.Equals(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity? other) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.MessageDefinitionIdentity(Elsa.Workflows.Runtime.Core.Messaging.MessageScope! scope, string! definitionNamespace, string! definitionId) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.Scope.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageScope!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.DefinitionNamespace.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.DefinitionId.get -> string!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.ForWorkflowDefinition(Elsa.Workflows.Runtime.Core.Messaging.MessageScope! scope, string! definitionId) -> Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity!
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.operator !=(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity? right) -> bool
+static Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity.operator ==(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity? right) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.<Clone>$() -> Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.Equals(Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity? other) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.MessageStartAdmissionIdentity(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity! definition, string! businessKey) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.Definition.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.BusinessKey.get -> string!
+override Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.operator !=(Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity? right) -> bool
+static Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity.operator ==(Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageStartAdmissionIdentity? right) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.<Clone>$() -> Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.Equals(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity? other) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.MessageDefinitionDeliveryIdentity(string! acceptedMessageId, Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity! definition) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.AcceptedMessageId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.Definition.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionIdentity!
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.operator !=(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity? right) -> bool
+static Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity.operator ==(Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity? left, Elsa.Workflows.Runtime.Core.Messaging.MessageDefinitionDeliveryIdentity? right) -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.MessageSubmission(string! name, string! correlationKey, System.Text.Json.JsonElement payload, string? producerMessageId = null, int? lifetimeSeconds = null) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.CorrelationKey.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.Payload.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.ProducerMessageId.get -> string?
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.LifetimeSeconds.get -> int?
+override Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode
+Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode.Buffered = 0 -> Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode
+Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode.ImmediateOnly = 1 -> Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.MessageReceipt(string! receiptId, System.DateTimeOffset acceptedAt, Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode mode, System.DateTimeOffset? bufferUntil = null, System.DateTimeOffset? deduplicateUntil = null) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.ReceiptId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.Mode.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageDeliveryMode
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.BufferUntil.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.DeduplicateUntil.get -> System.DateTimeOffset?
+override Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult.MessageSubmissionResult(Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt! receipt, bool duplicate) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult.Receipt.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageReceipt!
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult.Duplicate.get -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessagePublisherReplacementContractAttribute
+Elsa.Workflows.Runtime.Core.Messaging.MessagePublisherReplacementContractAttribute.MessagePublisherReplacementContractAttribute() -> void
+Elsa.Workflows.Runtime.Core.Messaging.IMessagePublisher
+Elsa.Workflows.Runtime.Core.Messaging.IMessagePublisher.SubmitAsync(Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission! submission, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult!>
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Validation = 0 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Conflict = 1 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Quota = 2 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Forbidden = 3 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Unavailable = 4 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind.Uncertain = 5 -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionException
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionException.MessageSubmissionException(Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind kind) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionException.Kind.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind
+Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionException.ReasonCode.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeDeliverySourceStoreReplacementContractAttribute
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeDeliverySourceStoreReplacementContractAttribute.RuntimeDeliverySourceStoreReplacementContractAttribute() -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourcePlanner
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareIntentHandler
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareDispatcher
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.CanParticipate(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary! boundary) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.ReadAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.ClaimAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.RenewAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim! claim, System.TimeSpan visibility, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore.CommitAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourcePlanner.PrepareAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler.HandleAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliveryDispatchHandler.PrepareCompletionAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! child, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt! attempt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan.Family.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan.Version.get -> int
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareIntentHandler.PrepareCompletionAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitCompletionAwareDispatcher.PrepareDispatchAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.RuntimeDeliverySourceAddress(string! family, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! sourceId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.Family.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.SourceId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress? other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.GetHashCode() -> int
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.RuntimeDeliverySourceSnapshot(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress! address, int headerVersion, long revision, string! headerFingerprint, System.Text.Json.JsonElement header, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority, string? tenantId = null, Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind runKind = Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind.Unknown, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope? testScope = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.Address.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.HeaderVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.Revision.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.HeaderFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.Header.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.RunKind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.TestScope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope?
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole.Plan = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole.Dispatch = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.RuntimeDeliveryWorkClaim(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress! source, long sourceRevision, string! headerFingerprint, string! workId, string! workKind, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole role, System.Text.Json.JsonElement content, string! contentFingerprint, long revision, string! ownerId, long fencingToken, System.DateTimeOffset claimedAt, System.DateTimeOffset visibleAfter) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.Source.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceAddress!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.SourceRevision.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.HeaderFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.WorkId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.WorkKind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.Role.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkRole
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.Content.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.ContentFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.Revision.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.OwnerId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.FencingToken.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.ClaimedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.VisibleAfter.get -> System.DateTimeOffset
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext.RuntimeDeliveryContext(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot! source, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim! claim) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext.Source.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext.Claim.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryWorkClaim!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RuntimeDeliveryClaimRequest(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Collections.Generic.IReadOnlyCollection<string!>! families, System.Collections.Generic.IReadOnlyCollection<string!>! workKinds, string! ownerId, System.TimeSpan visibility, int limit = 100) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Families.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.WorkKinds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.OwnerId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Visibility.get -> System.TimeSpan
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Limit.get -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.RuntimeDeliveryBoundary(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore! sources, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore! checkpoints, Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! materials, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IDurableValueStateStore! values, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue! scheduler, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore! bookmarks, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionReader? modelReader = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Sources.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Checkpoints.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Outbox.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Materials.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.References.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Values.get -> Elsa.Workflows.Runtime.Core.Contracts.IDurableValueStateStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Scheduler.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Executions.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Activities.get -> Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.Bookmarks.get -> Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.ModelReader.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionReader?
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.RuntimeSourceCommit(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext! context, string! operationId, string! operationFingerprint, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan! plan) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.Context.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryContext!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.OperationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.OperationFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.Plan.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommit.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome.Committed = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome.Replayed = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome.Conflict = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome.Superseded = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.RuntimeSourceCommitResult(Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome outcome, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot! source, string! operationId, string! operationFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.Outcome.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitOutcome
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.Source.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceSnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.OperationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.OperationFingerprint.get -> string!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeSourceCommitResult.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt.RuntimeDeliveryAttempt(System.Collections.Generic.IReadOnlyCollection<string!>! candidateProofReferences) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt.CandidateProofReferences.get -> System.Collections.Generic.IReadOnlyList<string!>!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryAttempt.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.RuntimePostCommitSourceFinalization(int version, string! operationId, string! operationFingerprint, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan! plan) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.Version.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.OperationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.OperationFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.Plan.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSourcePlan!
+override Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation
+static Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation.LegacyHandled.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation!
+static Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation.FromFinalization(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization! finalization) -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation.Finalization.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization?
+override Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitDispatchPreparation.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.RuntimeDeliverySourceFamilyContribution(string! family, int headerVersion, int participantVersion, System.Type! plannerType, System.Type! dispatchHandlerType, System.Collections.Generic.IReadOnlyCollection<System.Type!>! planTypes) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.Family.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.HeaderVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.ParticipantVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.PlannerType.get -> System.Type!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.DispatchHandlerType.get -> System.Type!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.PlanTypes.get -> System.Collections.Generic.IReadOnlyList<System.Type!>!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceFamilyContribution.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RuntimePostCommitIntentHandlerContribution(string! intentKind, System.Type! handlerType, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion, bool requiresSuccessfulFinalization) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RequiresSuccessfulFinalization.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxClaimCompletionStore.CanFinalizeSource(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryBoundary! boundary, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization! finalization) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.PrepareSourceFinalization(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaim! claim, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxDeliveryResult! deliveryResult, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization! successfulFinalization) -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion!
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.SuccessfulFinalization.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitSourceFinalization?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimCompletion.SuccessfulFinalization.init -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration.MessageMaterialInterestDeclaration(string! receiverAddress, System.Collections.Generic.IReadOnlyCollection<string!>! messageNames, bool canStartWorkflow = false) -> void
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration.ReceiverAddress.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration.MessageNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration.CanStartWorkflow.get -> bool
+override Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult
+static Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult.NotRecognized.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult!
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult.IsRecognized.get -> bool
+Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult.Declarations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration!>!
+static Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult.Recognized(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestDeclaration!>! declarations) -> Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult!
+override Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider
+Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.ProviderId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.ModelProtocol.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol?
+Elsa.Workflows.Runtime.Core.Messaging.IMessageMaterialInterestProvider.Describe(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! material) -> Elsa.Workflows.Runtime.Core.Messaging.MessageMaterialInterestResult!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.RuntimeDeliveryDiscoveryPartition(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? tenantId, Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind runKind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition? executionPartition = null, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope? testScope = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.RunKind.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.ExecutionPartition.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionPartition?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.TestScope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.AuthorityPartitionKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.Matches(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! other) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RuntimeDeliveryClaimRequest(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Collections.Generic.IReadOnlyCollection<string!>! families, System.Collections.Generic.IReadOnlyCollection<string!>! workKinds, string! ownerId, System.TimeSpan visibility, int limit, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! partition) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition?
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.RequirePartition(Elsa.Workflows.Runtime.Core.Models.PersistenceAccessContext! access, Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition! currentPartition, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryDiscoveryPartition!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeliveryClaimRequest.Partition.init -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.NativeMessageSendRequest(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId, string! attemptId, string! executableNodeId, string! operationKey, string? targetOperationKey, System.DateTimeOffset originatedAt, Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission! submission) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.AttemptId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.OperationKey.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.TargetOperationKey.get -> string?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.OriginatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.Submission.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmission!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.NativeMessageSendWaitState(string! intentId, string! bookmarkId, string! stimulusHash) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.IntentId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.StimulusHash.get -> string!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.NativeMessageSendResult(Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult? acceptance, Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind? rejection) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.Acceptance.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionResult?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.Rejection.get -> Elsa.Workflows.Runtime.Core.Messaging.MessageSubmissionFailureKind?
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendResult.ToString() -> string!
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStager
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStager.Stage(Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest! request) -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendWaitState!
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor.Reset(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId) -> void
+Elsa.Workflows.Runtime.Core.Messaging.INativeMessageSendStagingAccessor.Take(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! workflowExecutionId, string! invocationId) -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest?
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.NativeMessageSendCheckpointPlan(int version, Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest! request, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent! intent, string! bookmarkId, string! stimulusHash, string! resumeTargetId, string! outboxItemId, string! authoredFingerprint, string! intentFingerprint) -> void
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Version.get -> int
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Request.get -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendRequest!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.PinnedExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.Intent.get -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.StimulusHash.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ResumeTargetId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.OutboxItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.AuthoredFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.IntentFingerprint.get -> string!
+override Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ToString() -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.CurrentVersion = 1 -> int
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ActivityType = "Elsa.SendMessage" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.IntentKind = "Elsa.Message.NativeSend.v1" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.ResumeTargetKey = "resume-target:message-send-receipt" -> string!
+const Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan.WaitStimulusType = "Elsa.Message.PrivateSendReceipt.v1" -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.NativeMessageSend.get -> Elsa.Workflows.Runtime.Core.Messaging.NativeMessageSendCheckpointPlan?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.NativeMessageSend.init -> void

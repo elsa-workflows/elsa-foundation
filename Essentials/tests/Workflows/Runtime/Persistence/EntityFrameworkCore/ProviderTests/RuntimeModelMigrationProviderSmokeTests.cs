@@ -69,12 +69,13 @@ internal static class RuntimeModelMigrationProviderSmoke
             {
                 Assert.False(context.Database.HasPendingModelChanges());
                 var migrations = context.Database.GetMigrations().ToArray();
-                Assert.Equal(5, migrations.Length);
+                Assert.Equal(6, migrations.Length);
                 Assert.EndsWith("_Initial", migrations[0]);
                 Assert.EndsWith("_ModelExecutionState", migrations[1]);
                 Assert.EndsWith("_ModelMaterialKind", migrations[2]);
                 Assert.EndsWith("_UserTasks", migrations[3]);
                 Assert.EndsWith("_OutboxClaimDeliveredAt", migrations[4]);
+                Assert.EndsWith("_RuntimeDeliverySources", migrations[5]);
                 string? before = null;
                 if (retained)
                 {
@@ -88,6 +89,8 @@ internal static class RuntimeModelMigrationProviderSmoke
                 Assert.Empty(await context.Database.GetPendingMigrationsAsync());
                 Assert.Empty(await context.Set<Entities.RuntimeModelExecutionEntity>().ToArrayAsync());
                 Assert.Empty(await context.Set<Entities.RuntimeModelInputEntity>().ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeIngressSourceEntity>().ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeDeliveryWorkEntity>().ToArrayAsync());
                 if (retained)
                 {
                     Assert.Equal(before, await RowsAsync(context));

@@ -1,0 +1,40 @@
+{
+  "schema": "elsa-durable-messaging-component-evidence-v1",
+  "sourceHead": "215227b46c6fa51c80c2246b056aa7ff2fc554eb",
+  "sourceTree": "b2e96656c40f004b44ad2f4cc7313e8823b8f814",
+  "primaryVerdict": "FAILED_OR_INCOMPLETE",
+  "runtimeFocusedPassed": 86,
+  "runtimeClasses": {
+    "BusinessMessageAcceptedHeaderTests": 29,
+    "MessagePublicationInterestIntegrationTests": 17,
+    "BusinessMessageSourceCodecTests": 40
+  },
+  "allRuntimeNonpassCounters": 0,
+  "efStage": "COMPILE_FAILED",
+  "efDiagnostic": "CS1061: missing System.Transactions namespace import for GetEnlistedTransaction",
+  "efCasesExecuted": 0,
+  "laterMutationAndWholeProjects": "NOT RUN",
+  "sourceCheck": "VERIFIED",
+  "cleanupCheck": "VERIFIED",
+  "archive": {
+    "file": "azure-originals.tar.gz",
+    "bytes": 2639067,
+    "sha256": "3d8ce53ec04682b08e087963ee70e6355c8d63b80cc1ca38fde69145fb6976bc",
+    "manifestSha256": "7f79217f108c1a0b7bb810be4d1f41cd4504273470a6e8e9afeb6b695cb83ceb",
+    "regularMembers": 91,
+    "verifiedManifestEntries": 90
+  },
+  "executionBudget": {
+    "status": "VERIFIED",
+    "priorActiveCeilingSeconds": 0,
+    "actualInvocationSeconds": 311.486405,
+    "reportedActiveSeconds": 312.04897,
+    "conservativeCumulativeSeconds": 312.04897,
+    "limitSeconds": 1800
+  },
+  "conservativeContinuationDebitSeconds": 313,
+  "newCohortCumulativeLimitSeconds": 1800,
+  "oldCohortConservativeSeconds": 1652.889368,
+  "hardExpiresAt": "2026-11-06T07:56:00Z",
+  "fullPrReviewRounds": 0
+}

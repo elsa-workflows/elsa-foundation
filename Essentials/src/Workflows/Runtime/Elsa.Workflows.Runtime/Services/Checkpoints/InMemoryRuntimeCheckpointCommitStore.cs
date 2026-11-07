@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Messaging;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -19,6 +21,9 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     private readonly AsyncLocal<int> _writeGateDepth = new();
 
     internal object SyncRoot { get; } = new();
+    internal InMemoryMessagePublicationInterestStore.SharedState? MessagePublicationInterests { get; set; }
+    internal InMemoryMessageActiveInterestStore? MessageActiveInterests { get; set; }
+    internal bool IsWriteGateHeld => _writeGateDepth.Value > 0;
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
@@ -154,6 +159,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        NativeMessageSendCheckpointPreparation.RefuseUnqualified(commit);
         cancellationToken.ThrowIfCancellationRequested();
         if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
             throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions or model-owned native worker admission.");
@@ -239,6 +245,19 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume && ReferenceEquals(bookmarks, _bookmarkStateStore) &&
         ReferenceEquals(physicalExecutions, ExactResumeExecutions) && ReferenceEquals(activities, _activityExecutionStateStore);
 
+    internal void RequireMessageActiveComposition(InMemoryWorkflowExecutionStateStore executions,
+        InMemoryExecutionLivenessStateStore liveness, InMemoryWorkflowExecutableSourceReferenceStore references,
+        InMemoryWorkflowExecutableStore material, IPersistenceAccessContextAccessor access, TimeProvider clock)
+    {
+        if (!ReferenceEquals(ExactResumeExecutions, executions) || !ReferenceEquals(executions.CheckpointState, _state) ||
+            !ReferenceEquals(executions.ExecutionLivenessStateStore, liveness) || !ReferenceEquals(_operationalStateStore, liveness) ||
+            !ReferenceEquals(_retentionMaterial, material) || !ReferenceEquals(_retentionReferences, references) ||
+            !ReferenceEquals(_persistenceAccessContextAccessor, access) || !ReferenceEquals(_timeProvider, clock) ||
+            _workflowExecutionStateStore is CoalescingWorkflowExecutionStateStore forwarded && !ReferenceEquals(forwarded.PhysicalStore, executions) ||
+            _rootWriteLeaseManager is not WorkflowExecutableRootWriteLeaseManager rootLease || !rootLease.UsesMessageInterestTuple(material, clock))
+            throw new NotSupportedException("Native active interests require the actual selected checkpoint/execution/liveness/material/source/access tuple.");
+    }
+
     private async ValueTask ValidateExactBookmarkResumeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         if (commit.ExpectedBookmarkResume is not { } expected) return;
@@ -294,56 +313,77 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
-        await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
+        var mutationStarted = false;
+        var schedulerConsumptionFinished = false;
+        try
         {
-            EnsureExactBookmarkDeadline(commit);
-            // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
-            // claimant's commit persists nothing.
-            await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
-            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
-            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
-            await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
-            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
-            await ApplyActivityExecutionHierarchyChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
-            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
-            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
-            await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
-            await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
-            await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
-            await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
-            await ApplyWorkflowDispatchCancellationsAsync(commit.StateChanges.WorkflowDispatchCancellations, ct);
-            await ApplyAlterationJobTerminalChangeAsync(commit, ct);
-
-            try
+            await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
             {
-                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItemsAgainstStore (and commits
-                // are serialized by the write gate), so an exception here is a genuine partial-persistence
-                // risk — the projections above have been applied but the commit record/outbox may not be
-                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
-                lock (_state.SyncRoot)
+                // Preflight the real selected upsert, including coalesced starts, before scheduler or state effects.
+                var activeWrite = _state.MessageActiveInterests is { } active
+                    ? await active.PrepareAsync(commit, ct) : null;
+                EnsureExactBookmarkDeadline(commit);
+                mutationStarted = true;
+                // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
+                // claimant's commit persists nothing.
+                await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
+                schedulerConsumptionFinished = true;
+                await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct, activeWrite);
+                await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
+                await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
+                await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+                await ApplyActivityExecutionHierarchyChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+                await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
+                await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
+                await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
+                await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+                await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
+                await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
+                await ApplyWorkflowDispatchCancellationsAsync(commit.StateChanges.WorkflowDispatchCancellations, ct);
+                await ApplyAlterationJobTerminalChangeAsync(commit, ct);
+
+                try
                 {
-                    foreach (var item in pendingOutboxItems)
-                        SavePendingOutboxItem(item);
-
-                    if (stagedBackgroundActivityWork is not null)
+                    // #386: all outbox validation is front-loaded in ValidatePendingOutboxItemsAgainstStore (and commits
+                    // are serialized by the write gate), so an exception here is a genuine partial-persistence
+                    // risk — the projections above have been applied but the commit record/outbox may not be
+                    // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
+                    lock (_state.SyncRoot)
                     {
-                        _state.BackgroundActivityWorkItems.Clear();
-                        foreach (var pair in stagedBackgroundActivityWork)
-                            _state.BackgroundActivityWorkItems.Add(pair.Key, pair.Value);
-                    }
+                        foreach (var item in pendingOutboxItems)
+                            SavePendingOutboxItem(item);
 
-                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
-                        commit,
-                        decision,
-                        pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
-                        consumedSchedulerWorkItemIds));
+                        if (stagedBackgroundActivityWork is not null)
+                        {
+                            _state.BackgroundActivityWorkItems.Clear();
+                            foreach (var pair in stagedBackgroundActivityWork)
+                                _state.BackgroundActivityWorkItems.Add(pair.Key, pair.Value);
+                        }
+
+                        _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
+                            commit,
+                            decision,
+                            pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
+                            consumedSchedulerWorkItemIds));
+                    }
                 }
-            }
-            catch (Exception exception) when (exception is not RuntimeSchedulerWorkConsumeConflictException)
-            {
-                throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
-            }
-        }, cancellationToken);
+                catch (Exception exception) when (exception is not RuntimeSchedulerWorkConsumeConflictException)
+                {
+                    throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // One exact volatile queue consume either succeeds or refuses its fence before effects. Do not poison
+            // a coherent projection for that proven no-write case. Multiple/custom consumes remain conservative.
+            var knownNoMutation = exception is RuntimeSchedulerWorkConsumeConflictException && !schedulerConsumptionFinished &&
+                commit.StateChanges.ConsumedSchedulerWorkItems.Count == 1 && _schedulerWorkQueue is InMemoryWorkflowSchedulerWorkQueue;
+            // Existing generic participants do not supply rollback. Cancellation/other failure after effects may
+            // begin permanently prevents this shared Message projection from certifying eligibility.
+            if (mutationStarted && !knownNoMutation) _state.MessageActiveInterests?.MarkUncertain();
+            throw;
+        }
 
         return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray())
         {
@@ -1056,11 +1096,16 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     private async ValueTask ApplyWorkflowExecutionStateChangeAsync(
         RuntimeStateChange<WorkflowExecutionState>? stateChange,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InMemoryMessageActiveInterestStore.PreparedWrite? activeWrite = null)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
             return;
-
+        if (activeWrite is not null)
+        {
+            activeWrite.Owner.Apply(activeWrite);
+            return;
+        }
         await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 

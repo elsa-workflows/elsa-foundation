@@ -1,0 +1,202 @@
+{
+  "date": "2026-11-06",
+  "baseCommit": "edf5abe770d3e4d63533a50075dff5c97928aa5c",
+  "scope": "Component evidence only; no Message producer or physical source capability enabled",
+  "runs": {
+    "strict-json-red": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "c23d9af8b7d9ce7bbda97164f191ac804b4538b03fc2ef057492c533d33d0d32",
+      "gzipSha256": "3ca21eb8880328cd97da948487ffb5675696f54a664b0f5f9ea5e3ad59b90cbe"
+    },
+    "generated-reader-red": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "0",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "abec0d986378c042274eb173f33196ca666ec22cedf65ded3c9119b162d090b7",
+      "gzipSha256": "c432ef956fb159b79ecdf2fc220311ead13ebdc853f5b664f33c2c544d57700a"
+    },
+    "canonical-mutation-red": {
+      "counters": {
+        "total": "3",
+        "executed": "3",
+        "passed": "1",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "5058c7a9fd88f3f4c290011b4a80c81ec3c01f54a5ba3bd89a9339f5f5374b55",
+      "gzipSha256": "a80b44e375e3650c647807bb6644d4083322855121bb31d913e8d71ec3e7794e"
+    },
+    "canonical-green": {
+      "counters": {
+        "total": "3",
+        "executed": "3",
+        "passed": "3",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "2d416d59006868b8d6a8d1376ca2e348c9bfbd9cda8b50a747583d3000e24e40",
+      "gzipSha256": "776bd4217e4d8aa654a7b4415be809e8928800c821ef2e680fdd5b79bd0d4f7c"
+    },
+    "whole-bpmn": {
+      "counters": {
+        "total": "591",
+        "executed": "591",
+        "passed": "591",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "c6179321a77a29488d053726e4d604d63e0e42c9482b0ea3a3fc3a0a3043035c",
+      "gzipSha256": "7cefecd7a608d582acd8cbe00483af8f7d68df00a0fac71bec403ff93f22d5c8"
+    },
+    "whole-interchange": {
+      "counters": {
+        "total": "229",
+        "executed": "229",
+        "passed": "229",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "c0d1382e25f2377e7db37004b376d3631f35ce13377bfed29c08d45ad7ac576c",
+      "gzipSha256": "abbbd112c808ab94126e55125fa5fd7661bb183686569e569bd129a3e4f7f989"
+    }
+  },
+  "canonicalMutation": {
+    "originalSha256": "c077a60a1474d984da64be6039ae15958a04abc6b95dbd11d0de6fb98d2833e2",
+    "mutation": "Replace authored logical DefinitionId with synthetic material DefinitionId",
+    "mutationSha256": "155dec3f0cb89850b8415e6e451a550da613327c61f4cc3233d75d3e5b068acb",
+    "exitCode": 1,
+    "restored": true
+  },
+  "strictJsonRedSourceSha256": "8737bffc7c5b43fc2205fd7651535b2b8e6ba78c20a0eeec92f62616b2353903",
+  "generatedReaderRedSourceSha256": "75a7e263b54f453349436a7b30621e73402f35a866a1a6dd0e6c1027b9277dac",
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Api/Endpoints/BpmnCatalog.cs",
+      "sha256": "dc01a255351407ffecafb32494e864c57ff31e729457b1028d0b081640b8ea1b"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/BpmnModelInspection.cs",
+      "sha256": "f6a25890074210c5b520401056dda47a515262f3951ec75f8f75e04412b1903e"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/BpmnModelPublicationProvenance.cs",
+      "sha256": "4f18fa6a89d8aa6b19e18cce427b90089e37d1aa12800966722f0d27b3f33f7d"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
+      "sha256": "d32bf2e14fd8eb104a19ce5e7f11222a6a9673811fd1a31ce08983c95dc73b40"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/PublicAPI.Unshipped.txt",
+      "sha256": "d16c25dce34763a4c5e60d9587c89c35a88d6bc86f5d69a3014253d00ebfb8b8"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/README.md",
+      "sha256": "a3a62d6c5889069251b7ef307d73e1809114c082d0d4dc3b4e38d4027c377e3a"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Design/Internal/BpmnEmbeddingPinSource.cs",
+      "sha256": "0a5343c4d94300a7cefa8f4f851bd8e2da747b9406e9a293613f71bd9640512b"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+      "sha256": "c077a60a1474d984da64be6039ae15958a04abc6b95dbd11d0de6fb98d2833e2"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectProjection.cs",
+      "sha256": "57a325f43e88bf0af8c7bcb8f3f32505fefab680b2172604d377fbf67d0a4aaa"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs",
+      "sha256": "d606e464eba12706f8c4ceb51527d9d927d7d19275d9f4dfaf8cd7a697f44f03"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnCatalogTests.cs",
+      "sha256": "10d505f10b040c31c881ca7d811a2162048de8ce35fccbbca33baa0bacd6680d"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectPublicationTests.cs",
+      "sha256": "9e2d6db5a8b6ea262075b9e9a2802da1302e2c345b452030d98a97e32e8da08a"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/BpmnPublicationProvenanceGeneratedJsonTests.cs",
+      "sha256": "1b001bcff8fffdb4c1c17093f7c6e43ee936cb730c1a219c78df6fe64e4df0fb"
+    }
+  ]
+}

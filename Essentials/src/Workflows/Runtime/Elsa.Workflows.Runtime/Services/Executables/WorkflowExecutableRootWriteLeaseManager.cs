@@ -17,6 +17,8 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
     ILogger<WorkflowExecutableRootWriteLeaseManager>? logger = null) : IWorkflowExecutableRootWriteLeaseManager
 {
     private readonly ILogger _logger = logger ?? NullLogger<WorkflowExecutableRootWriteLeaseManager>.Instance;
+    internal bool UsesMessageInterestTuple(IWorkflowExecutableStore selected, TimeProvider clock) =>
+        ReferenceEquals(executableStore.GetMaterialStore(), selected) && ReferenceEquals(timeProvider, clock);
 
     public async ValueTask ExecuteAsync(
         string artifactId,

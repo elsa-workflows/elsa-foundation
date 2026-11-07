@@ -1,0 +1,68 @@
+{
+  "regression-red": {
+    "counters": {
+      "total": "52",
+      "executed": "52",
+      "passed": "40",
+      "failed": "12",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "rawSha256": "feaf8d3da28e946371c723c0a4d176d7a2e7737036cf6c474cd242b58f5cba33",
+    "gzipSha256": "e9abbac00e1d6c619b32e48f43d5f0d14f26921808de9a7a167cb10b03e66538"
+  },
+  "regression-green": {
+    "counters": {
+      "total": "52",
+      "executed": "52",
+      "passed": "52",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "rawSha256": "5da649de7fbc84ea97ceedc8d5d1c36fe186bed9f31ab8950a39597c955c18ed",
+    "gzipSha256": "014d8aa041eccb0a2e89b8fb3163197f4c32e807ed1b2f23a367fa52416a484d"
+  },
+  "wholeRuntime": {
+    "total": "3403",
+    "executed": "3403",
+    "passed": "3403",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Messaging/MessageSubmissionRules.cs": "7dd4c011cde1eca671a754e17aa4b06ddc044ec4690fa84951de3abf2efa16fa",
+  "Essentials/tests/Workflows/Runtime/Tests/MessageSubmissionRulesTests.cs": "0d33a14cfd20192fd774e5d39fc373f0a9615be59d1a8cf98709aad83a4db4e5",
+  "redSourceSha256": "0af717dfe248967dad85c18a15f7486234a091b854b0f5679de9493b15cb2489",
+  "redTestsSha256": "31234fa4d4f6249d227b58f20b307d9c43da94aee520e76f6dc393c5ad0e2a02"
+}

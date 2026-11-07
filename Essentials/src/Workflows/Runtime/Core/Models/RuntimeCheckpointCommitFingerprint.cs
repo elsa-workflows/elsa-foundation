@@ -277,6 +277,8 @@ public static class RuntimeCheckpointCommitFingerprint
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
         if (commit.ModelState is not null)
             element = JsonSerializer.SerializeToElement(new { ModelStateVersion = 1, Payload = element, commit.ModelState }, ExactBookmarkOptions);
+        if (commit.NativeMessageSend is not null)
+            element = JsonSerializer.SerializeToElement(new { NativeMessageSendVersion = 1, Payload = element, commit.NativeMessageSend }, ExactBookmarkOptions);
         // ExpectedModelExecution, like ExpectedFence, is an attempt's concurrency condition. A retry can
         // validate a newer snapshot with the same live work. Its immutable semantic address is retained
         // in WorkflowExecutionState.ModelWorkOrigin, which already participates in the decision identity.

@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-06",
+  "sourceHead": "5ed3d1e7865c6752d89b48071c5c58fb40466c4f",
+  "sourceTree": "08068863a07c252f5a0182a92b26450b50e05d61",
+  "overallPhaseStatus": "FAILED_OR_INCOMPLETE; preserved, not rewritten by later continuation",
+  "failureStage": "mutation-oracle",
+  "cause": "Runner unconditionally rejected expected xUnit RunInfo Error for the sole intended Assert.Same failure. Raw counters/cause meet intended mutation oracle; later stages not run.",
+  "rawEvidence": {
+    "archive": "azure-originals.tar.gz",
+    "bytes": 3651388,
+    "sha256": "d38cf7562d4696efac49f5b85b42fe4e7b19d81b4762fb1b3ed3b50e38ee9efb",
+    "manifestSha256": "9399de1d0fe45950c877e48ce78829217502ff27fb5f9cdd52e8f5d31b3fe8ef",
+    "files": 84
+  },
+  "runs": {
+    "runtime-focused": {
+      "counters": {
+        "total": "55",
+        "executed": "55",
+        "passed": "55",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "7953104b282913ff88616c2729ec0c3df86914f88afa02484da9b29798d9175f"
+    },
+    "processor-mutation": {
+      "counters": {
+        "total": "8",
+        "executed": "8",
+        "passed": "7",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "ac1cf9785ac8338ae780c8d45f85a90382519778f7d745abe57b2c9b14098cd3"
+    }
+  },
+  "mutation": "Exactly one PrepareSourceFinalization(claim,result,finalization) call replaced with legacy new(claim,result); exact expected forwarding test Assert.Same failure, remaining7 pass.",
+  "restoration": "Source bytes, base head/tree,25filehashes and original captured fixture verified. Owned unit stopped/cgroup absent; no foreign cleanup.",
+  "independentAudit": "Confirmed original raw TRX, exact test/Assert/RunInfo and journal checker traceback; primary failure stays recorded separately from successful source restoration/cleanup.",
+  "laterStages": "Restored8,EF16,wholeRuntime,migrations,offline4modelparity,wholeEF NOT RUN in R1.",
+  "resume": "R2 uses corrected exact expected RunInfo classification +9 lightweight negative parser controls, retained R1 proof, same product source and remaining stages only. R1 activeceil206 charged against total3600; no product source fix or focused55/mutant8 repeat."
+}

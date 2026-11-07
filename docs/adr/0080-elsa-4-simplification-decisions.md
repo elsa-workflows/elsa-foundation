@@ -56,6 +56,17 @@ implementation leaf. This authorization reactivates no unrelated paused/parked w
 architecture. Production/shared-system deployment, production credentials, package release, mandatory CRM,
 wholesale mirroring, arbitrary database access and an unbounded application platform are outside scope.
 
+**Owner amendment, 5 November 2026:** [Durable Messaging #3583](../program-goals/durable-messaging.md)
+is authorized for end-to-end delivery, including necessary brainstorming and design, by the
+[owner instruction recorded on the canonical feature](https://github.com/elsa-workflows/elsa-foundation/issues/3583#issuecomment-6671359620).
+Sequencing: refresh implementation gaps and settle product/shared-runtime contracts first, then deliver
+durable acceptance, per-definition starts/waits and recovery, authored/native/genuine-model integration,
+Studio operations and adverse-path/provider qualification through resulting-main closeout. Run beside
+existing programs, preserve consolidation priority one and existing owners, coordinate shared Runtime
+contracts and keep one implementation leaf active. This named scope reactivates no unrelated program;
+standalone triggers #3582 and background jobs #3586 remain separate. Authorization is not design approval,
+shared ingress ABI adoption or product acceptance. Releases and deployments are not included.
+
 **Owner amendment, 5 November 2026:** [Activity Data Selection #3882](../program-goals/activity-data-selection.md)
 is authorized for scoped program establishment, a bounded real-Studio customer proof, reviewed production
 contracts/specification and delivery through the normal implementation and acceptance gates. After reviewing

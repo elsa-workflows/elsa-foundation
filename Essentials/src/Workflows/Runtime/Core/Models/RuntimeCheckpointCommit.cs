@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Messaging;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -15,6 +16,21 @@ public sealed record RuntimeCheckpointCommit(
     IReadOnlyDictionary<string, string> Metadata)
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
+
+    private NativeMessageSendCheckpointPlan? _nativeMessageSend;
+    /// <summary>Optional closed native-send proposal; construction is not physical source/control authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NativeMessageSendCheckpointPlan? NativeMessageSend
+    {
+        get => _nativeMessageSend;
+        init
+        {
+            if (value is not null && value.Request.WorkflowExecutionId != WorkflowExecutionId)
+                throw new ArgumentException("The native send proposal belongs to a different checkpoint execution.");
+            _nativeMessageSend = value;
+        }
+    }
+
 
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

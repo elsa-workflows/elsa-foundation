@@ -95,7 +95,7 @@ internal static class BpmnAuthoredDirectProjection
                 : claims.Count != 0
                     ? new BpmnModelDefinition(6, JsonSerializer.SerializeToElement(process, Strict), humans, null, null, null, claims)
                     : new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, Strict), humans);
-            return (material, new(version.Id, version.Version, records, presentation), services);
+            return (material, BpmnModelPublicationProvenance.ForAuthoredDefinition(version.DefinitionId, version.Id, version.Version, records, presentation), services);
         }
         catch (JsonException exception)
         {

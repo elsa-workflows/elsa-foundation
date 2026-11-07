@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Claims;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -20,6 +21,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly HashSet<string> _requiredSourceKinds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _requiredFinalizationKinds = new(StringComparer.Ordinal);
+    private readonly IServiceProvider? _sourceServices;
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
@@ -34,6 +37,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly FencedClaimLease<RuntimePostCommitOutboxClaim>? _claimLease;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout;
+
+    internal RuntimePostCommitOutboxProcessor(IServiceProvider services)
+        : this(services.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            services.GetRequiredService<IRuntimePostCommitIntentDispatcher>(), services.GetRequiredService<TimeProvider>(),
+            services.GetRequiredService<IRuntimeFaultCapturePolicy>(), services.GetService<IWorkflowDispatchStore>(),
+            services.GetServices<IPostCommitFailureProjector>(), services.GetService<ILogger<RuntimePostCommitOutboxProcessor>>(),
+            services.GetService<IRuntimeLiveDrainDeliveryAccessor>(), services.GetService<IRuntimeCoalescingSessionAccessor>(),
+            services.GetService<IPersistenceAccessContextAccessor>(), services.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+            services.GetService<IRuntimeAdmissionLoadSignal>()) => _sourceServices = services;
 
     public RuntimePostCommitOutboxProcessor(
         IRuntimePostCommitOutboxStore outboxStore,
@@ -139,9 +151,13 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, deliveryFailureProjectors,
             logger, liveDrainDeliveryAccessor, coalescingSessionAccessor)
     {
+        ArgumentNullException.ThrowIfNull(contributions);
         _loadSignal = loadSignal;
         _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
-        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+        var registrations = contributions.ToArray();
+        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(registrations);
+        _requiredFinalizationKinds = registrations.Where(item => item.RequiresSuccessfulFinalization)
+            .Select(item => item.IntentKind).ToHashSet(StringComparer.Ordinal);
     }
 
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
@@ -265,10 +281,28 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             {
                 using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
                 if (RequiresDurableSource(item))
-                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
+                {
+                    var source = await OpenDurableSourceAsync(claim, dispatchCancellationToken);
+                    if (_intentDispatcher is IRuntimePostCommitCompletionAwareDispatcher completionAware)
+                    {
+                        var preparation = await completionAware.PrepareDispatchAsync(source, dispatchCancellationToken);
+                        if (preparation is null || _requiredFinalizationKinds.Contains(item.Intent.Kind) && preparation.Finalization is null)
+                            throw SourceFinalizationUnavailable(item);
+                        if (preparation.Finalization is { } finalization)
+                        {
+                            if (!_requiredFinalizationKinds.Contains(item.Intent.Kind))
+                                throw SourceFinalizationUnavailable(item);
+                            RequireSourceFinalizationBoundary(source, finalization);
+                        }
+                        return preparation;
+                    }
+                    if (_requiredFinalizationKinds.Contains(item.Intent.Kind))
+                        throw SourceFinalizationUnavailable(item);
+                    await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
+                }
                 else
                     await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
-                return true;
+                return RuntimePostCommitDispatchPreparation.LegacyHandled;
             },
             cancellationToken);
 
@@ -300,7 +334,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         {
             return run.Exception is { } failure
                 ? await RecordFailureAsync(item, run.Claim, failure, cancellationToken)
-                : await RecordSuccessAsync(item, run.Claim, cancellationToken);
+                : await RecordSuccessAsync(item, run.Claim, cancellationToken, run.Result?.Finalization);
         }
         catch (RuntimePostCommitOutboxStaleClaimException stale)
         {
@@ -316,6 +350,37 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
         }
     }
+
+    private void RequireSourceFinalizationBoundary(PostCommitDeliveryContext source, RuntimePostCommitSourceFinalization finalization)
+    {
+        try
+        {
+            if (_sourceServices is null || _claimCompletionStore is null)
+                throw new NotSupportedException("Source finalization requires the selected scoped completion boundary.");
+            var sources = _sourceServices.GetService<IRuntimeDeliverySourceStore>() ??
+                throw new NotSupportedException("The selected Runtime backend has no source capability.");
+            var boundary = new RuntimeDeliveryBoundary(source.Scope, sources,
+                _sourceServices.GetRequiredService<IRuntimeCheckpointCommitStore>(), _outboxStore,
+                _sourceServices.GetRequiredService<IWorkflowExecutableStore>(),
+                _sourceServices.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+                _sourceServices.GetRequiredService<IDurableValueStateStore>(),
+                _sourceServices.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
+                _sourceServices.GetRequiredService<IWorkflowExecutionStateStore>(),
+                _sourceServices.GetRequiredService<IActivityExecutionStateStore>(),
+                _sourceServices.GetRequiredService<IBookmarkStateStore>(),
+                _sourceServices.GetService<IRuntimeModelExecutionReader>());
+            if (!sources.CanParticipate(boundary) || !_claimCompletionStore.CanFinalizeSource(boundary, finalization))
+                throw new NotSupportedException("The actual Runtime stores do not support this source participant.");
+        }
+        catch (Exception exception) when (exception is not RuntimePostCommitSourceBoundaryException)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, exception, false);
+        }
+    }
+
+    private static RuntimePostCommitSourceBoundaryException SourceFinalizationUnavailable(RuntimePostCommitOutboxItem item) =>
+        new(item.OutboxItemId, item.Intent.Kind,
+            new NotSupportedException("Required source work needs typed preparation and atomic finalization."), false);
 
     private async ValueTask<PostCommitDeliveryContext> OpenDurableSourceAsync(RuntimePostCommitOutboxClaim claim,
         CancellationToken cancellationToken)
@@ -404,9 +469,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private async ValueTask<RuntimePostCommitOutboxProcessedItem> RecordSuccessAsync(
         RuntimePostCommitOutboxItem item,
         RuntimePostCommitOutboxClaim? claim,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RuntimePostCommitSourceFinalization? finalization = null)
     {
-        var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
+        var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken, finalization);
         if (successOutcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
         {
             // The dispatch above still happened, and the continuation queue's enqueue is idempotent, so the work is done
@@ -465,13 +531,21 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         string? failureMessage,
         DateTimeOffset? recordedAt,
         Exception? deliveryFailure,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RuntimePostCommitSourceFinalization? finalization = null)
     {
         var result = new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: item.OutboxItemId,
             status: status,
             recordedAt: recordedAt ?? _timeProvider.GetUtcNow(),
             failureMessage: failureMessage);
+        if (finalization is not null)
+        {
+            if (claim is null || _claimCompletionStore is null || status != RuntimePostCommitOutboxStatus.Delivered || deliveryFailure is not null)
+                throw SourceFinalizationUnavailable(item);
+            return await _claimCompletionStore.CompleteClaimAsync(
+                RuntimePostCommitOutboxClaimCompletion.PrepareSourceFinalization(claim, result, finalization), cancellationToken);
+        }
         if (claim is not null)
         {
             var dispatchFailure = await CreateDeliveryFailureProjectionAsync(item, result, cancellationToken);

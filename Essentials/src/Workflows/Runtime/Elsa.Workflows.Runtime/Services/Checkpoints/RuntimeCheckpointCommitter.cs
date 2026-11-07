@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Messaging;
 using System.Diagnostics;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -92,6 +93,10 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
+
+        // No current backend qualifies native send source/outcome/control/Q4 participation. Even a late
+        // enricher/materialized outbox cannot fall through to legacy intent dispatch or persist a private wait.
+        NativeMessageSendCheckpointPreparation.RefuseUnqualified(commit);
 
         // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace

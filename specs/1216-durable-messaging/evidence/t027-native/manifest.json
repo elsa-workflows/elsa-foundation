@@ -1,0 +1,134 @@
+{
+  "date": "2026-11-06",
+  "scope": "Hidden native ReceiveMessage authoring/data contracts and unregistered all-node interest provider only. No Message production/delivery enabled.",
+  "sourceHead": "0246b4ecf4ea1df62db2c26437e7cc3cf7e6f40e",
+  "sourceTree": "bff00843dacfe12884b7c1bd3055c95d02f70766",
+  "worker": "elsa-dev-18",
+  "sourceFiles": [
+    {
+      "path": "Essentials/src/Activities/Primitives/Activities/ReceiveMessage.cs",
+      "sha256": "811f8b705cef4f1cd854d8fe52815eff49bdb63b4af536f8328d50f59c5c8d94"
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/Services/NativeMessageMaterialInterestProvider.cs",
+      "sha256": "2a499669cd2eb3fa47e38791d7b1948ad6ea508204d34406a30005c89de46ee5"
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/Properties/MessageAssemblyInfo.cs",
+      "sha256": "59b640096c787e5dc92699b04dbcac63992e2634985aa600a08fcf2d34544805"
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/PublicAPI.Unshipped.txt",
+      "sha256": "0951578fd52bf543e8dd84a097229e5bf407a0ce0b259f4266b40e583f3ee16e"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/ReceiveMessageContractTests.cs",
+      "sha256": "652af92f8a6f3dea91258c84f5a3230376cd744075aeb98b1e89c326f9dced16"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/NativeMessageMaterialInterestProviderTests.cs",
+      "sha256": "caba1b7c0de475ebb56fbc0d70239125091c0340bf7ab778a7f14b67f533f2e3"
+    }
+  ],
+  "originalArchive": {
+    "path": "azure-originals.tar.gz",
+    "bytes": 264721,
+    "sha256": "d6bc51f2fe6ac41d5c8ff5b0713e594e82215cbd38be83a2de38fd84340b8007",
+    "manifestSha256": "52c57271f39751744a3658c939861daba722b1b19a467339099ada847321f472",
+    "files": 64
+  },
+  "runs": {
+    "focused-first": {
+      "counters": {
+        "total": "31",
+        "executed": "31",
+        "passed": "31",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "28a488784833395aac0dffa365b7dac020cc5fb81937c9c6a8a481aad3c21607"
+    },
+    "provider-mutation": {
+      "counters": {
+        "total": "24",
+        "executed": "24",
+        "passed": "1",
+        "failed": "23",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "edc243b8392b935bd8bb2b604a7bf3eb4616fc15f84ce1ed63100ee13c8c463c"
+    },
+    "focused-restored": {
+      "counters": {
+        "total": "31",
+        "executed": "31",
+        "passed": "31",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "9415def666df7fe20f94e24aead6cb83688ff409635276319056adf1d51f1075"
+    },
+    "whole-activities-runtime": {
+      "counters": {
+        "total": "769",
+        "executed": "769",
+        "passed": "769",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawSha256": "6cfc6de3d1ec147712eb902f550761deb7f95550993822d690e3c63442ec0e64"
+    }
+  },
+  "rootInspection": "Archive size/hash, every manifest entry, four raw TRX counters, original primary result, cleanup and independent post-stop source proof verified.",
+  "primaryStatus": "PASSED",
+  "cleanupStatus": "VERIFIED",
+  "sourceAfterStop": "VERIFIED",
+  "cgroupAbsent": true,
+  "sourceJobRetained": true,
+  "setupFailurePreserved": "Initial clientside transfername validation refused before any product; corrected allowedname once. No product retry.",
+  "independentComponentAudit": "Clean: all raw TRX case IDs/mutation Assert causes, 6 exact public source blob hashes and all restoration/final snapshots, real SDK/admission/cgroup limits, original same-invocation terminal result, owned-unit stop/unload and post-stop source consistency. Scope is this component at0246, not later heads/full Message acceptance or full PR review."
+}

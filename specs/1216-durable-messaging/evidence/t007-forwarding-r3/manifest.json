@@ -1,0 +1,38 @@
+{
+  "schema": "elsa-durable-messaging-component-evidence-v1",
+  "component": "R3 unfinished Runtime EF continuation only",
+  "primaryVerdict": "PASSED",
+  "sourceHead": "5ed3d1e7865c6752d89b48071c5c58fb40466c4f",
+  "sourceTree": "08068863a07c252f5a0182a92b26450b50e05d61",
+  "generatedTree": "cd15cc7ad5f18f54c5647a4c9ef6b01d67f30685",
+  "archive": {
+    "file": "azure-originals.tar.gz",
+    "bytes": 1466253,
+    "sha256": "37d01975e2b3e63d678a7a51666478746c1c9ff75031bedd47788b64b4c792b1",
+    "manifestSha256": "cfdd84a3a62dd6631ade0cfceff77e08743d902daabb386a785d2947136136f7",
+    "regularFileCount": 96,
+    "verifiedManifestEntries": 95
+  },
+  "wholeRuntimeEfCases": 1909,
+  "allCasesPassed": true,
+  "failuresSkipsErrorsTimeoutsAbortsPending": 0,
+  "uniqueExecutionIds": 1909,
+  "originalSQLiteLegacyRowUpgrade": "PASSED",
+  "sourceCheck": "VERIFIED",
+  "unchangedCapturedAssemblyFiles": 6,
+  "cleanupCheck": "VERIFIED",
+  "priorR1Primary": "FAILED_OR_INCOMPLETE; retained unchanged",
+  "priorR2Primary": "FAILED_OR_INCOMPLETE; retained unchanged",
+  "executionBudget": {
+    "status": "VERIFIED",
+    "priorActiveCeilingSeconds": 1162,
+    "actualR3InvocationSeconds": 490.457639,
+    "reportedR3ActiveSeconds": 490.889368,
+    "conservativeCumulativeSeconds": 1652.889368,
+    "limitSeconds": 3600
+  },
+  "hardExpiresAt": "2026-11-06T07:56:00Z",
+  "physicalPostgreSqlSqlServerMySqlAcceptance": "NOT RUN",
+  "laterSourceQualified": false,
+  "fullPrReviewRounds": 0
+}

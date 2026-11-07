@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Foundation.Identity.Authorization;
 using MinimalEndpoints;
@@ -16,7 +17,8 @@ internal sealed record BpmnCatalogRequest(int Limit = 50, string? ContinuationTo
 internal sealed record BpmnCatalogResponse<T>(IReadOnlyList<T> Items, string? NextContinuationToken);
 internal sealed record BpmnPublicationView(string SourceReferenceId, string SourceId, string? SourceVersion,
     WorkflowExecutableIdentity Executable, string MaterialIncarnationId, string Profile, string? DisplayName,
-    DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DefinitionId = null);
 
 internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore sources, IWorkflowExecutableStore materials,
     IPersistenceAccessContextAccessor access, BpmnApiCaller caller,
@@ -35,16 +37,16 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         var items = new List<BpmnPublicationView>();
         foreach (var source in page.Items)
         {
-            if (source.SourceKind != "BpmnModel" || source.Scope != WorkflowExecutableReferenceScope.Published ||
+            if (!BpmnModelSourceProvenance.IsSupported(source) || source.Scope != WorkflowExecutableReferenceScope.Published ||
                 source.TenantId != context.Caller.TenantId || !source.IsLive(clock.GetUtcNow()) ||
                 request.ArtifactId is not null && source.ArtifactId != request.ArtifactId ||
                 !await caller.CanReadAsync(source, cancellationToken)) continue;
             var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
             if (material?.Model is not { } model || model.Protocol != Protocol ||
-                material.Identity.ArtifactId != source.ArtifactId || material.Identity.DefinitionId != source.DefinitionId ||
-                material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion) continue;
+                !BpmnModelSourceProvenance.MatchesMaterial(source, material.Identity)) continue;
             items.Add(new(source.SourceReferenceId, source.SourceId, source.SourceVersion, material.Identity, material.IncarnationId,
-                model.Profile, source.ActivityPresentation?.FirstOrDefault()?.DisplayName, source.CreatedAt, source.PublishedAt));
+                model.Profile, source.ActivityPresentation?.FirstOrDefault()?.DisplayName, source.CreatedAt, source.PublishedAt,
+                BpmnModelSourceProvenance.ReadDefinitionId(source)));
         }
         return new(items, Next(PublicationsPurpose, context.Cursor, page.NextContinuationToken));
     }

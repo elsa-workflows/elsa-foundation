@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Messaging;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -31,6 +32,22 @@ public sealed partial class WorkflowActivationCoordinator(
     private const int MaximumDiagnosticLength = 512;
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _triggerObservers = triggerObservers?.ToArray() ?? [];
     private readonly ActivationChannelOptions _activationChannelOptions = activationChannelOptions?.Value ?? new();
+
+    private readonly IMessagePublicationInterestProjection? _messageInterests;
+
+    internal WorkflowActivationCoordinator(IMessagePublicationInterestProjection interests,
+        IWorkflowActivationAuthority authority, IWorkflowActivationSwitch activationSwitch,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+        TimeProvider timeProvider, IWorkflowTriggerIndexer? triggerIndexer = null,
+        IWorkflowTriggerBindingStore? triggerBindingStore = null, IRecurringTriggerScheduleStore? recurringScheduleStore = null,
+        IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null, ILogger<WorkflowActivationCoordinator>? logger = null,
+        IOptions<ActivationChannelOptions>? activationChannelOptions = null)
+        : this(authority, activationSwitch, sourceReferenceStore, rootWriteLeaseManager, timeProvider, triggerIndexer,
+            triggerBindingStore, recurringScheduleStore, triggerObservers, logger, activationChannelOptions)
+    {
+        interests.RequireActualComposition(authority, activationSwitch, sourceReferenceStore);
+        _messageInterests = interests;
+    }
 
     public async ValueTask<WorkflowActivationResult> ActivateAsync(
         WorkflowActivationCommand command,
@@ -203,6 +220,7 @@ public sealed partial class WorkflowActivationCoordinator(
         var serving = new SortedSet<string>(await triggerBindingStore!.ListServingActivationIdsAsync(slotId, cancellationToken), StringComparer.Ordinal);
         if (recurringScheduleStore is not null)
             serving.UnionWith(await recurringScheduleStore.ListServingActivationIdsAsync(slotId, cancellationToken));
+        if (_messageInterests is not null) serving.UnionWith(await _messageInterests.ListServingActivationIdsAsync(slotId, cancellationToken));
         serving.Remove(activationId);
         return serving;
     }
@@ -280,10 +298,13 @@ public sealed partial class WorkflowActivationCoordinator(
     }
 
     /// <summary>The activation's projection state in each projection store.</summary>
-    private async ValueTask<WorkflowActivationProjectionState[]> ProjectionStatesAsync(string activationId, CancellationToken cancellationToken) =>
-        recurringScheduleStore is null
-            ? [await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken)]
-            : [await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken), await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken)];
+    private async ValueTask<WorkflowActivationProjectionState[]> ProjectionStatesAsync(string activationId, CancellationToken cancellationToken)
+    {
+        var states = new List<WorkflowActivationProjectionState> { await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken) };
+        if (recurringScheduleStore is not null) states.Add(await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken));
+        if (_messageInterests is not null) states.Add(await _messageInterests.FindStateAsync(activationId, cancellationToken));
+        return states.ToArray();
+    }
 
     /// <summary>
     /// Tells the trigger observers that an activation serves, as an activation does, but logs rather than fails when they
@@ -411,7 +432,7 @@ public sealed partial class WorkflowActivationCoordinator(
 
         try
         {
-            await PrepareProjectionsAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+            await PrepareProjectionsAsync(command.Executable, command.ActivationId, slotId, command.SlotName, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception exception)
@@ -547,8 +568,12 @@ public sealed partial class WorkflowActivationCoordinator(
         WorkflowExecutable executable,
         string activationId,
         string slotId,
-        CancellationToken cancellationToken) =>
+        string slotName,
+        CancellationToken cancellationToken)
+    {
         await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
+        if (_messageInterests is not null) await _messageInterests.PrepareAsync(executable, activationId, slotId, slotName, cancellationToken);
+    }
 
     private async ValueTask NotifyTriggerObserversAsync(
         string definitionId,
@@ -640,7 +665,7 @@ public sealed partial class WorkflowActivationCoordinator(
 
         var definitionId = command.Executable.Identity.DefinitionId;
         var failures = new List<string>();
-        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(command.Executable, activationId, transition.Slot.SlotId, CancellationToken.None));
+        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(command.Executable, activationId, transition.Slot.SlotId, command.SlotName, CancellationToken.None));
         await CaptureAsync(failures, "Authority compensation", async () =>
         {
             var restored = await activationSwitch.TryActivateAsync(

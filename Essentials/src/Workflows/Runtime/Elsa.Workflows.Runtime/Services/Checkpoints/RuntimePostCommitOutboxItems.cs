@@ -109,6 +109,7 @@ public static class RuntimePostCommitOutboxItems
                     contribution.HandlerType != first.HandlerType ||
                     !contribution.RetryPolicy.IsEquivalentTo(first.RetryPolicy) ||
                     contribution.RequiresDurableSource != first.RequiresDurableSource ||
+                    contribution.RequiresSuccessfulFinalization != first.RequiresSuccessfulFinalization ||
                     contribution.StimulusDeliveryProtocolVersion != first.StimulusDeliveryProtocolVersion))
             {
                 throw new InvalidOperationException(

@@ -1,0 +1,107 @@
+{
+  "schema": "elsa-durable-messaging-component-evidence-v1",
+  "component": "T007 forwarding / exact discovery / T009 additive model parity",
+  "primaryVerdict": "FAILED_OR_INCOMPLETE",
+  "sourceHead": "5ed3d1e7865c6752d89b48071c5c58fb40466c4f",
+  "sourceTree": "08068863a07c252f5a0182a92b26450b50e05d61",
+  "generatedTree": "cd15cc7ad5f18f54c5647a4c9ef6b01d67f30685",
+  "archive": {
+    "file": "azure-originals.tar.gz",
+    "bytes": 1923667,
+    "sha256": "3fb39e93924f5ce9a80a0bfe4ea22f420f2f17061205251ff6f3c8146dc6f4b9",
+    "manifestSha256": "367451a3fbc1906af3842ada87f5a852e7410daf56b1bbb5697d8ba53bbfe681",
+    "regularFileCount": 117,
+    "verifiedManifestEntries": 116
+  },
+  "completedCases": {
+    "priorFocused": 55,
+    "priorMutationPassed": 7,
+    "priorMutationExpectedAssertionFailures": 1,
+    "restoredForwarding": 8,
+    "sqliteDiscovery": 16,
+    "wholeRuntime": 3595
+  },
+  "greenCasesHaveZeroFailuresSkipsErrorsAbortsPending": true,
+  "offlinePendingModelProviders": [
+    "Sqlite",
+    "SqlServer",
+    "PostgreSql",
+    "MySql"
+  ],
+  "incompleteStage": {
+    "name": "whole-ef",
+    "exitCode": 124,
+    "ceilingSeconds": 480,
+    "trxProduced": false,
+    "executedCaseCount": "UNPROVEN"
+  },
+  "sourceCheck": "VERIFIED",
+  "cleanupCheck": "VERIFIED",
+  "conservativeCumulativeActiveSeconds": 1161.546373,
+  "cumulativeActiveLimitSeconds": 3600,
+  "hardExpiresAt": "2026-11-06T07:56:00Z",
+  "physicalProviderAcceptance": "NOT RUN",
+  "fullPrReviewRounds": 0,
+  "generatedFiles": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261106032716_RuntimeDeliverySources.Designer.cs",
+      "bytes": 143229,
+      "sha256": "88f66d4086c5bad2c6ffa9fa9427d426a7f64c8b6f34bc3427dde49db638efff"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261106032716_RuntimeDeliverySources.cs",
+      "bytes": 9471,
+      "sha256": "fbc9252987f5ac89f3c447d6826ae0f12392b153842ede73d7bfd6079a2b3310"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/RuntimeMySqlDbContextModelSnapshot.cs",
+      "bytes": 143119,
+      "sha256": "6fa1b2564e06974bacd07f256cf04ed22818de4f2ddb4c67be1f3291fd82fe19"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261106032720_RuntimeDeliverySources.Designer.cs",
+      "bytes": 147699,
+      "sha256": "55531de8ff1b51b158d9262bbfc54739fa67af3a93b311a891a72c1f9336e906"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261106032720_RuntimeDeliverySources.cs",
+      "bytes": 9485,
+      "sha256": "60a476eae6442ce78f7960d821d0266414401b03e11958bb9099e29fed9219ca"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/RuntimePostgreSqlDbContextModelSnapshot.cs",
+      "bytes": 147594,
+      "sha256": "ff2b8808cc1c5bb42b0394d72c0f906c9b44a4a7effdb80e210f20d22d80a25a"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261106032725_RuntimeDeliverySources.Designer.cs",
+      "bytes": 142785,
+      "sha256": "71c14361b9e5a3a902a23997eaa6fc5073a303188479e1891562ad734c27e1d6"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261106032725_RuntimeDeliverySources.cs",
+      "bytes": 9633,
+      "sha256": "e6209c31f3404d447b4c3552ac0d762d2fbdf8dcf60cc9796d9f03558cc2384a"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/RuntimeSqlServerDbContextModelSnapshot.cs",
+      "bytes": 142679,
+      "sha256": "d35e6ce41f4461e84eac4f140f654fb3db4c729ed4502622ad8dbab9ce718b18"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261106032727_RuntimeDeliverySources.Designer.cs",
+      "bytes": 137972,
+      "sha256": "f00abbc460610c0f8e438d088a97c18c64e7be271b15eb8b378edf826a922bdd"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261106032727_RuntimeDeliverySources.cs",
+      "bytes": 9284,
+      "sha256": "9b36c735ca0f1ba051869f97fd136d788c031c90ee78d857fc15174c40c9280b"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/RuntimeSqliteDbContextModelSnapshot.cs",
+      "bytes": 137863,
+      "sha256": "65fefcdbbc77e059de27f3348a76001783e8db3c0bef4e4de9f3382e2f698cf8"
+    }
+  ]
+}
