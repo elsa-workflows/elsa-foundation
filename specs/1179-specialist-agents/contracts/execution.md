@@ -3,6 +3,8 @@
 **Status**: Proposed. Owning requirements FR-003–FR-019/FR-022–FR-025; see [state model](../data-model.md).
 No C# signature or unqualified provider behavior is frozen by this document.
 
+**Ownership amendment**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](revision-management.md) and [Agent ownership](agent-ownership.md) propose Agent-owned source backed by shared mechanics. Runtime keeps exact artifact/journal guarantees within a supported deployment. Pre-GA breaking delivery may reset affected stores and rename Specialist descriptors without legacy readers. This draft performs no reset and adds no execution engine or direct model-call path.
+
 ## Immutable invocation and authority
 
 The native facade receives the published runtime contract/descriptor and committed input snapshot.

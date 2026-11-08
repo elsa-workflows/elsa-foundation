@@ -11,6 +11,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <ProjectReference Include="../../../src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
     <ProjectReference Include="../../../src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
+    <ProjectReference Include="../../../src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
@@ -34,6 +35,7 @@
     <ProjectReference Include="../../../src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
     <ProjectReference Include="../../../src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
     <ProjectReference Include="../../../src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
+    <ProjectReference Include="../../../src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />

@@ -52,7 +52,8 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 - `IConnectionTypeProvider` for a new connection type.
   Known cross-domain contributions: `SpecialistModelConnectionTypeProvider` configured by
-  [AnthropicSpecialists](../../../../Extensions/Agent/src/Specialists/Anthropic/README.md) and
+  [AnthropicSpecialists](../../../../Extensions/Agent/src/Specialists/Anthropic/README.md),
+  [OpenAISpecialists](../../../../Extensions/Agent/src/Specialists/OpenAI/README.md) and
   [AzureOpenAISpecialists](../../../../Extensions/Agent/src/Specialists/AzureOpenAI/README.md).
   They contribute immutable type metadata without capturing a scoped model client factory.
 - `IAuthenticationSchemeProvider` for a new auth scheme (OAuth2 plugs in here; see #2728).

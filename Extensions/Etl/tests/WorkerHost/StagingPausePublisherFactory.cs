@@ -42,6 +42,10 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
                 using var wrapper = new HeldWriteStream(destination, owner, format, outputRoot, effectIdentity);
                 await write(wrapper, token);
             }, cancellationToken);
+
+        public ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
+            CancellationToken cancellationToken = default) =>
+            inner.FindAsync(outputRoot, effectIdentity, maxBytes, cancellationToken);
     }
 
     private sealed class HeldWriteStream(Stream destination, StagingPausePublisherFactory owner,

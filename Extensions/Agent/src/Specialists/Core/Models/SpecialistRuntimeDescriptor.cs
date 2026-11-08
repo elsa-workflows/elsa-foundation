@@ -34,7 +34,15 @@ public sealed record SpecialistInvocationIdentity(
     string ArtifactId,
     string ArtifactHash,
     string DefinitionVersionId,
-    string TemplateHash);
+    string TemplateHash)
+{
+    /// <summary>
+    /// The exact draft candidate's conversation workspace when the runtime verified this invocation as the root of an
+    /// activity draft Test Run; null for every workflow-owned invocation. It is never read from business input.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConversationWorkspace { get; init; }
+}
 
 /// <summary>Current model metadata; its fingerprint changes whenever effective support changes.</summary>
 public sealed record SpecialistModelCapabilities(string Fingerprint, JsonElement SettingsSchema, bool SupportsJsonSchema, int MaximumOutputTokens);

@@ -50,7 +50,7 @@ their owning contracts remain in the respective Core packages.
 | Activities.Runtime.Core `IActivityActivationStrategy` | `SpecialistActivationStrategy` | Scoped enumerable contribution for the pinned specialist facade/model-turn consumer |
 | Activities.Runtime.Core `IRuntimeActivityConsumerCapability` | `SpecialistConsumerCapability` | Singleton enumerable contribution advertising supported pinned descriptor schemas |
 | Tasks.Core `IRecurringTask` | `SpecialistRetentionPumpTask` | Singleton bounded sweep through the existing persistence-scope runner and failure backoff; scoped native/source proof and conditional content purge |
-| Tasks.Core `IStartupTask` | `SpecialistTypesStartupTask`, `SpecialistJournalRegistrationStartupTask` | Registers native types and refuses missing/duplicate journal backends at activation |
+| Tasks.Core `IStartupTask` | `SpecialistTypesStartupTask`, `SpecialistRegistrationStartupTask` | Registers native types and refuses missing/duplicate journal backends and invocation inspectors at activation |
 | Workflows.Runtime.Core `IRuntimeCheckpointCommitEnricher` | `SpecialistCheckpointEnricher` | Scoped enumerable contribution in default phase0; contributes deterministic application/cancellation responsibility, then validates the final checkpoint envelope; no specialist-store writes during enrichment |
 | Workflows.Runtime.Core `IRuntimePostCommitDurableSourceIntentHandler` | `SpecialistSettlementHandler` | Scoped keyed contribution for `elsa.specialist.applied/1` and `elsa.specialist.cancel/1`, registered through `AddRuntimePostCommitIntentHandler` with a required physical source and retry-until-acknowledged policy; verifies native/receipt authority before idempotent journal metadata settlement |
 

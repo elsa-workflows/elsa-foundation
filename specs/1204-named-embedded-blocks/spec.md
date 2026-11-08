@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3748-embedded-blocks-plan`
 **Created**: 2026-11-03
-**Status**: Approved — owner-approved scope; prototype gates production completion
+**Status**: In progress — establishment merged; prototype gates production completion
 **Input**: Program [#3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610) and the owner's 3 November instruction to persist the durable breakdown and deliver the program end to end.
 
 ## User Scenarios & Testing

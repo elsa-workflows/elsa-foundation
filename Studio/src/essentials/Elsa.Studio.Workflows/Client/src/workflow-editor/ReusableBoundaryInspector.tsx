@@ -581,6 +581,11 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   selectedExecutableNodeId?: string;
   statusByNode?: ReadonlyMap<string, string>;
 }) {
+  const presentation = new Map((layout.activityPresentation ?? []).map(record => [record.executableNodeId, record]));
+  const nodeLabel = (node: ActivityExecutionLayout["nodes"][number]) =>
+    presentation.get(node.executableNodeId)?.displayName?.trim() || historicalNodeLabel(node);
+  const nodeDescription = (node: ActivityExecutionLayout["nodes"][number]) =>
+    presentation.get(node.executableNodeId)?.description?.trim() || undefined;
   const positioned = layout.nodes.filter(node => node.hasPinnedGeometry);
   if (positioned.length === 0) {
     return (
@@ -589,8 +594,8 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
           <strong>Activity structure</strong>
         </header>
         {layout.nodes.map(node => (
-          <div className="wf-boundary-layout-list-row" key={node.executableNodeId}>
-            {onSelectNode ? <button type="button" aria-pressed={selectedExecutableNodeId === node.executableNodeId} onClick={() => onSelectNode(node.executableNodeId)}>{historicalNodeLabel(node)}{statusByNode?.get(node.executableNodeId) ? ` · ${statusByNode.get(node.executableNodeId)}` : ""}</button> : <span>{historicalNodeLabel(node)}</span>}
+          <div className="wf-boundary-layout-list-row" key={node.executableNodeId} title={nodeDescription(node)}>
+            {onSelectNode ? <button type="button" aria-pressed={selectedExecutableNodeId === node.executableNodeId} onClick={() => onSelectNode(node.executableNodeId)}>{nodeLabel(node)}{statusByNode?.get(node.executableNodeId) ? ` · ${statusByNode.get(node.executableNodeId)}` : ""}</button> : <span>{nodeLabel(node)}</span>}
           </div>
         ))}
       </div>
@@ -648,16 +653,16 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
                 transform={`translate(${node.x} ${node.y})`}
                 role={onSelectNode ? "button" : undefined}
                 tabIndex={onSelectNode ? 0 : undefined}
-                aria-label={onSelectNode ? `${historicalNodeLabel(node)} · ${statusByNode?.get(node.executableNodeId) ?? "No recorded execution"}` : undefined}
+                aria-label={onSelectNode ? `${nodeLabel(node)} · ${statusByNode?.get(node.executableNodeId) ?? "No recorded execution"}` : undefined}
                 aria-pressed={onSelectNode ? selectedExecutableNodeId === node.executableNodeId : undefined}
                 onClick={() => onSelectNode?.(node.executableNodeId)}
                 onKeyDown={event => {
                   if (onSelectNode && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectNode(node.executableNodeId); }
                 }}
               >
-                <title>{historicalNodeLabel(node)}</title>
+                <title>{[nodeLabel(node), nodeDescription(node)].filter(Boolean).join("\n")}</title>
                 <rect className="wf-boundary-layout-node-shape" width={nodeWidth} height={nodeHeight} rx="8" />
-                <text className="wf-boundary-layout-node-label" x="12" y="25">{truncate(historicalNodeLabel(node), 24)}</text>
+                <text className="wf-boundary-layout-node-label" x="12" y="25">{truncate(nodeLabel(node), 24)}</text>
               </g>
             );
           })}

@@ -21,6 +21,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Agent.Specialists.Tests.Publication;
@@ -35,8 +36,11 @@ public sealed partial class SpecialistPublicationTests
     public async Task Generic_draft_Test_Run_service_uses_the_specialist_production_worker_and_exact_candidate(bool streaming)
     {
         var model = new DraftRuntimeModel();
+        var capture = new RecordingCapturePolicy();
         await using var fixture = await Fixture.CreateAsync(configureRuntime: services =>
         {
+            services.RemoveAll<IRuntimePayloadCapturePolicy>();
+            services.AddSingleton<IRuntimePayloadCapturePolicy>(capture);
             new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
             new Elsa.Activities.Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services);
             services.AddSingleton<ISpecialistModelClientFactory>(model);
@@ -95,6 +99,8 @@ public sealed partial class SpecialistPublicationTests
         var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(started.WorkflowExecutionId);
         var root = states.Single(x => x.ParentActivityExecutionId is null);
         Assert.Equal("draft about moss gardens", root.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString());
+        await AssertEvidenceAsync(provider.GetRequiredService<ISpecialistInvocationInspector>(), capture,
+            provider.GetRequiredService<IActivityExecutionStateStore>(), completed, candidate, root, states);
         var replay = await service.StartAsync(request);
         Assert.Equal(completed.TestRunId, replay.TestRunId);
         Assert.Equal("Completed", replay.Status);
@@ -104,6 +110,76 @@ public sealed partial class SpecialistPublicationTests
         Assert.Equal("activity.draft.stale-revision", stale.Failure!.Code);
         Assert.Equal(1, model.Calls);
         Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("no-stale-work", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+    }
+
+    // The evidence of the exact candidate's accepted turn, read through the same native identity, without protected material.
+    private static async Task AssertEvidenceAsync(ISpecialistInvocationInspector inspector, RecordingCapturePolicy capture, IActivityExecutionStateStore states,
+        ActivityDraftTestRunView run, WorkflowExecutable candidate, ActivityExecutionState root, IReadOnlyCollection<ActivityExecutionState> executed)
+    {
+        Assert.Equal(root.InvocationId, run.OuterActivityExecutionId);
+        capture.Requests.Clear();
+        var evidence = (await inspector.InspectAsync(run.WorkflowExecutionId, root.InvocationId))!;
+        Assert.Equal(root.InvocationId, evidence.ActivityExecutionId);
+        Assert.Equal(candidate.RootActivity.DescriptorPayload.GetProperty("definitionVersionId").GetString(), evidence.Specialist.DefinitionVersionId);
+        Assert.Equal("draft-1", evidence.Specialist.Version);
+        Assert.Equal(run.ArtifactId, evidence.Specialist.ArtifactId);
+        Assert.Equal("Completed", evidence.ActivityStatus);
+        Assert.Null(evidence.Fault);
+        Assert.Equal("Payload", evidence.Output!.CaptureMode);
+        Assert.Equal("draft about moss gardens", evidence.Output.Value!.Value.GetProperty("Article").GetString());
+        var asked = Assert.Single(capture.Requests);
+        Assert.Equal((RuntimePayloadCaptureSubject.ActivityOutput, run.WorkflowExecutionId, root.InvocationId, false),
+            (asked.Subject, asked.WorkflowExecutionId, asked.ActivityExecutionId, asked.IsSensitive));
+        var turn = evidence.Turn!;
+        Assert.Equal(SpecialistTurnStatus.Accepted, turn.Status);
+        Assert.Null(turn.FailureCode);
+        // The native completion is committed, but the settlement that records its application is a post-commit intent this
+        // test does not dispatch: accepted and applied stay separate facts.
+        Assert.Equal(SpecialistTurnApplicationStatus.SettlementPending, turn.Application);
+        Assert.Single(turn.ModelRequests);
+        Assert.Equal(5, turn.Usage!.InputTokens);
+        Assert.Equal(3, turn.Usage.OutputTokens);
+        Assert.Null(turn.Conversation);
+        var wire = System.Text.Json.JsonSerializer.Serialize(evidence);
+        Assert.DoesNotContain("Write the supplied brief.", wire, StringComparison.Ordinal);
+        Assert.DoesNotContain("protected", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("fence", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("fixture-incarnation", wire, StringComparison.Ordinal);
+
+        // The host's capture policy, not the inspector, decides whether the value leaves the runtime.
+        capture.Mode = RuntimePayloadCaptureMode.None;
+        var withheld = (await inspector.InspectAsync(run.WorkflowExecutionId, root.InvocationId))!.Output!;
+        Assert.Equal(("None", null), (withheld.CaptureMode, withheld.Value));
+
+        // A sensitive result stays withheld even under a policy that would capture it: the inspector's own rule holds.
+        var completion = root.Completion!;
+        var sensitive = ValueEnvelope.Inline(completion.Result.Type, completion.Result.InlineValue!.Value,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true));
+        await states.SaveAsync(root with { Completion = new(completion.InvocationId, completion.AttemptId, sensitive, completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint) });
+        capture.Mode = RuntimePayloadCaptureMode.Payload;
+        capture.IgnoreSensitivity = true;
+        capture.Requests.Clear();
+        var hidden = (await inspector.InspectAsync(run.WorkflowExecutionId, root.InvocationId))!.Output!;
+        Assert.Equal(("Payload", null), (hidden.CaptureMode, hidden.Value));
+        Assert.True(Assert.Single(capture.Requests).IsSensitive);
+
+        // Only the exact specialist boundary in its own workflow has evidence: not its model-turn child, nor a guessed identity.
+        var child = executed.Single(x => x.ParentActivityExecutionId == root.InvocationId);
+        Assert.Null(await inspector.InspectAsync(run.WorkflowExecutionId, child.InvocationId));
+        Assert.Null(await inspector.InspectAsync(run.WorkflowExecutionId, "not-an-activity"));
+        Assert.Null(await inspector.InspectAsync("not-a-workflow", root.InvocationId));
+    }
+
+    private sealed class RecordingCapturePolicy : IRuntimePayloadCapturePolicy
+    {
+        public RuntimePayloadCaptureMode Mode { get; set; } = RuntimePayloadCaptureMode.Payload;
+        public bool IgnoreSensitivity { get; set; }
+        public List<RuntimePayloadCaptureRequest> Requests { get; } = [];
+        public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request)
+        {
+            Requests.Add(request);
+            return new(request.IsSensitive && !IgnoreSensitivity ? RuntimePayloadCaptureMode.None : Mode, "test");
+        }
     }
 
     private sealed class ObservedStartDispatcher(IWorkflowStartDispatcher inner) : IWorkflowStartDispatcher

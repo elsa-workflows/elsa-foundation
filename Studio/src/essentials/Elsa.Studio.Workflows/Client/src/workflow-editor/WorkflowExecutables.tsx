@@ -203,7 +203,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <WfListSkeleton /> : null}
       {state === "ready" && visibleExecutables.length === 0 ? (
-        definitionNamesLoading ? (
+        <div className="studio-table-container">{definitionNamesLoading ? (
           <WfEmptyState headingLevel={3} icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
         ) : (
           <WfEmptyState headingLevel={3}
@@ -214,7 +214,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
               ? <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear filter</StudioButton>
               : canBrowseDefinitions ? <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton> : undefined}
           />
-        )
+        )}</div>
       ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
         <div className="studio-table-container wf-executable-table-scroll" role="region" aria-label="Workflow executables table" tabIndex={0}>

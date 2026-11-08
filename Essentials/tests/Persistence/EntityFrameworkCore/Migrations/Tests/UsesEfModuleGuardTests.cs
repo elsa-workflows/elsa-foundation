@@ -41,6 +41,7 @@ public sealed class UsesEfModuleGuardTests
     private static readonly (string Feature, string[] Modules, bool DeclaresProvider)[] Inventory =
     [
         ("ActivitiesDesignEntityFrameworkCore", ["Activities.Design"], true),
+        ("AgentSourcesEntityFrameworkCore", ["Specialists"], true),
         ("ConnectionsEntityFrameworkCore", ["Connections"], true),
         ("DiagnosticsOpenTelemetryEntityFrameworkCore", ["Diagnostics.OpenTelemetry"], true),
         ("DiagnosticsStructuredLogsEntityFrameworkCore", ["Diagnostics.StructuredLogs"], true),

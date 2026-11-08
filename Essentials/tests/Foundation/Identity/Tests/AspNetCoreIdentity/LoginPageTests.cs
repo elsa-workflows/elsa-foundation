@@ -32,7 +32,11 @@ public sealed class LoginPageTests
     [InlineData("field-guide", "tidal", "ember", "light dark", "field-guide-logo.png")]
     [InlineData("reverse", "field-guide", "canopy", "light", "elsa-logo.png")]
     [InlineData("split", "linen", "field-guide", "light dark", "elsa-logo.png")]
-    public void Field_guide_choices_remain_independent(string layout, string palette, string artwork, string colorScheme, string logo)
+    [InlineData("parcel-room", "tidal", "ember", "light dark", "elsa-logo.png")]
+    [InlineData("reverse", "parcel-room", "canopy", "light", "elsa-logo.png")]
+    [InlineData("split", "linen", "parcel-room", "light dark", "elsa-logo.png")]
+    [InlineData("parcel-room", "pocket-orchestra", "pocket-orchestra", "light", "elsa-logo.png")]
+    public void Illustrated_choices_remain_independent(string layout, string palette, string artwork, string colorScheme, string logo)
     {
         var html = LoginPage.Render("/", false, null, new LoginPageOptions { Layout = layout, Palette = palette, Artwork = artwork });
         Assert.Contains($"data-layout=\"{layout}\"", html);
@@ -48,10 +52,10 @@ public sealed class LoginPageTests
     [InlineData("unknown")]
     [InlineData("../unfolding-map")]
     [InlineData("unfolding-map.jpg")]
-    public void Unknown_artwork_falls_back_to_unfolding_map(string? artwork)
+    public void Unknown_artwork_falls_back_to_pocket_orchestra(string? artwork)
     {
         var html = LoginPage.Render("/studio", false, null, new LoginPageOptions { Artwork = artwork! });
-        Assert.Contains("src=\"/_elsa/identity/login-assets/unfolding-map.jpg\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/pocket-orchestra.jpg\"", html);
     }
 
     [Fact]

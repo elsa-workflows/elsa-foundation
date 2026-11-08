@@ -157,8 +157,18 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(SpecialistTurnStatus.Accepted, before.Status);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
         Assert.Equal(1, trace.ApplicationAttempts);
-        if (mode == "before-write") Assert.Null(before.Applications);
-        else Assert.Single(before.Applications!);
+        var inspector = provider.GetRequiredService<ISpecialistInvocationInspector>();
+        var inspectedBefore = (await inspector.InspectAsync("run", request.Identity.ActivityExecutionId))!.Turn!.Application;
+        if (mode == "before-write")
+        {
+            Assert.Null(before.Applications);
+            Assert.Equal(SpecialistTurnApplicationStatus.SettlementPending, inspectedBefore);
+        }
+        else
+        {
+            Assert.Single(before.Applications!);
+            Assert.Equal(SpecialistTurnApplicationStatus.Applied, inspectedBefore);
+        }
         trace.HoldApplication = false;
         if (mode != "normal")
         {
@@ -171,6 +181,9 @@ public sealed partial class SpecialistNativeTests
         var application = Assert.Single(after.Applications!);
         Assert.Equal(request.Identity, application.Identity);
         Assert.Equal(after.ChildInvocationId, application.ChildInvocationId);
+        var inspected = (await inspector.InspectAsync("run", request.Identity.ActivityExecutionId))!.Turn!;
+        Assert.Equal(SpecialistTurnApplicationStatus.Applied, inspected.Application);
+        Assert.Equal((after.Handle, 0L, (long?)1), (inspected.Conversation!.ConversationId, inspected.Conversation.BaseRevision, inspected.Conversation.CurrentRevision));
         var source = (await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(application.SourceId))!;
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, source.Status);
         Assert.Equal(application.SourceFingerprint, RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent));

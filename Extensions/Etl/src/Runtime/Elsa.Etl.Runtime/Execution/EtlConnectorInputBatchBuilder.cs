@@ -103,11 +103,14 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         var streamsTransferred = false;
         try
         {
-            var pipeline = ReadPipeline(admission);
+            var authored = ReadPipeline(admission);
+            // A SQL (spec 1198) or RabbitMQ (spec 1201) source is processed as the JSON Lines view of its retained snapshot.
+            var sqlSource = authored.Source is EtlSqlSource or EtlRabbitMqSource;
+            var pipeline = EtlSqlSnapshotReader.ProcessingView(authored);
             var root = Path.GetFullPath(hostApprovedSnapshotRoot);
             if (!Directory.Exists(root))
                 throw Invalid("etl.snapshot-read-failed");
-            ValidatePrepared(admission, prepared, pipeline, partitionOrdinal);
+            ValidatePrepared(admission, prepared, pipeline, partitionOrdinal, sqlSource);
 
             IReadOnlyDictionary<EtlTypedValue, EtlTypedRow> lookupRows = EmptyLookupRows;
             if (pipeline.Lookup is { } lookup)
@@ -144,9 +147,8 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             if (pipeline.Source is EtlJsonlSource jsonl)
             {
                 var file = prepared.File!;
-                var sourcePin = PreparedPin(admission, jsonl.Binding, EtlFileRole.Source, EtlConnectorKind.Jsonl);
                 source = EtlConnectorCsvSupport.OpenSnapshot(root, file.Source, ".jsonl",
-                    pipeline.Limits.MaxSnapshotBytes, sourcePin.ExpectedSha256!);
+                    pipeline.Limits.MaxSnapshotBytes, SourceAnchor(admission, jsonl.Binding, EtlConnectorKind.Jsonl, file, sqlSource));
                 index = OpenGeneratedChunk(root, file.Index, ".index",
                     checked((file.RecordCount + 1) * IndexEntrySize), exactLength: true);
                 await VerifyFileAsync(source, file.Source.ContentHash, cancellationToken);
@@ -737,7 +739,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     }
 
     private static void ValidatePrepared(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
-        EtlPipelineV2 pipeline, int partitionOrdinal)
+        EtlPipelineV2 pipeline, int partitionOrdinal, bool sqlSource)
     {
         if (pipeline.Limits is null || pipeline.Http is null || partitionOrdinal < 0)
             throw Invalid("etl.batch-descriptor-invalid");
@@ -756,9 +758,9 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                 EtlJsonlSource jsonl => (jsonl.Binding, EtlConnectorKind.Jsonl, ".jsonl"),
                 _ => (((EtlCsvSource)pipeline.Source).Binding, EtlConnectorKind.Csv, ".csv")
             };
-            var pin = PreparedPin(admission, binding, EtlFileRole.Source, kind);
+            var anchor = SourceAnchor(admission, binding, kind, file, sqlSource);
             if (file.RecordCount < 0 || file.Source.ByteLength < 0 || file.Source.ByteLength > pipeline.Limits.MaxSnapshotBytes ||
-                !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash) || !EtlConnectorCsvSupport.HashEquals(pin.ExpectedSha256!, file.Source.ContentHash) ||
+                !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash) || !EtlConnectorCsvSupport.HashEquals(anchor, file.Source.ContentHash) ||
                 !EtlConnectorCsvSupport.IsChunkKey(file.Source.Key, extension) ||
                 !EtlConnectorCsvSupport.IsChunkKey(file.Index.Key, ".index") || !EtlConnectorCsvSupport.IsHash(file.Index.ContentHash) ||
                 file.Index.ByteLength != checked((file.RecordCount + 1) * IndexEntrySize) || partitionOrdinal >= Math.Min(file.RecordCount, pipeline.Limits.FilePartitionCount))
@@ -787,6 +789,23 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                 descriptor.ByteLength < 0 || descriptor.ByteLength > Math.Min(pipeline.Limits.MaxLookupBytes, pipeline.Limits.MaxSnapshotBytes))
                 throw Invalid("etl.prepared-run-mismatch");
         }
+    }
+
+    /// <summary>
+    /// The digest the source snapshot must match: a file source's pinned admission digest, or, for a SQL source whose bytes
+    /// did not exist at admission, the snapshot hash recorded with the preparation (spec 1198).
+    /// </summary>
+    private static string SourceAnchor(EtlConnectorRunAdmission admission, string alias, EtlConnectorKind fileKind,
+        EtlPreparedCsvInput file, bool sqlSource)
+    {
+        if (!sqlSource)
+            return PreparedPin(admission, alias, EtlFileRole.Source, fileKind).ExpectedSha256!;
+        var revision = admission.Bindings.Source?.Revision;
+        if (admission.Bindings.Source?.Kind is not (EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq) || revision is null || revision.Alias != alias ||
+            revision.ExpectedSha256 is not null || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||
+            string.IsNullOrWhiteSpace(revision.Revision) || !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash))
+            throw Invalid("etl.binding-unavailable");
+        return file.Source.ContentHash;
     }
 
     private static PinnedFileBinding PreparedPin(EtlConnectorRunAdmission admission, string alias, EtlFileRole role,

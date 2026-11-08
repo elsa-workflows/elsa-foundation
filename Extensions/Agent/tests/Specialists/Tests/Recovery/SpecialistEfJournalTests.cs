@@ -494,8 +494,8 @@ public sealed partial class SpecialistEfJournalTests
         var services = new ServiceCollection();
         new SpecialistsRuntimeFeature().ConfigureServices(services);
         for (var index = 0; index < count; index++) services.AddSingleton<ISpecialistTurnStore>(new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new()));
-        var registration = Assert.Single(services, descriptor => descriptor.ImplementationInstance is SpecialistJournalRegistrationStartupTask);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ((SpecialistJournalRegistrationStartupTask)registration.ImplementationInstance!).ExecuteAsync(CancellationToken.None));
+        var registration = Assert.Single(services, descriptor => descriptor.ImplementationInstance is SpecialistRegistrationStartupTask);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ((SpecialistRegistrationStartupTask)registration.ImplementationInstance!).ExecuteAsync(CancellationToken.None));
     }
 
     [Theory]

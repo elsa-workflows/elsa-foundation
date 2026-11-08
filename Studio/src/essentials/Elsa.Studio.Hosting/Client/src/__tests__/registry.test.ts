@@ -355,6 +355,8 @@ describe("studio registry", () => {
     });
     const Definitions = () => null;
     const Instances = () => null;
+    const ParentIcon = () => null;
+    const ChildIcon = () => null;
 
     api.featureAreas.add({
       id: "workflows",
@@ -368,10 +370,11 @@ describe("studio registry", () => {
       nav: {
         title: "Workflows",
         path: "/workflows/definitions",
+        icon: ParentIcon,
         iconColor: "#0ea5e9",
         items: [
           { title: "Definitions", path: "/workflows/definitions" },
-          { title: "Instances", path: "/workflows/instances" }
+          { title: "Instances", path: "/workflows/instances", icon: ChildIcon }
         ]
       },
       routes: [
@@ -384,8 +387,8 @@ describe("studio registry", () => {
       expect.objectContaining({ id: "workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
     ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", icon: ParentIcon }),
+      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows", icon: ChildIcon })
     ]);
     expect(api.routes.list().map(route => route.id)).toEqual(["workflows-definitions", "workflows-instances"]);
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");

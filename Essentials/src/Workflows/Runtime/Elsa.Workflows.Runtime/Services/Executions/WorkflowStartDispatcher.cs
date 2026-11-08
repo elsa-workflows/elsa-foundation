@@ -26,6 +26,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly StimulusDeliveryRequestProjector _stimulusRequests;
+    private readonly IWorkflowExecutableInputValidator? _inputValidator;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -120,6 +121,24 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IRuntimePersistenceModeResolver? persistenceModeResolver,
         IStimulusDeliveryStore? stimulusDeliveryStore,
         IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore,
+            stimulusIntentAdapters, null) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
+        IWorkflowExecutableInputValidator? inputValidator)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -140,6 +159,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _persistenceModeResolver = persistenceModeResolver;
         _stimulusDeliveryStore = stimulusDeliveryStore;
         _stimulusRequests = new(stimulusIntentAdapters);
+        _inputValidator = inputValidator;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -189,10 +209,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
+        var inputs = ApplyInputContract(executable, request.Inputs);
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
+            inputs,
             resolved.Identity,
             resolved.Source,
             resolved.Dispatch,
@@ -437,8 +459,30 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         new(executable.Identity, await _startSourceResolver.ResolveAsync(request.ArtifactId, request.SourceSelection,
             request.ProvenanceRequirement, requiredScope, cancellationToken), null);
 
+    // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
+    // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
+    // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
+    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
+    {
+        var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
+        if (executable.InputContract is not { } contract || _inputValidator is null)
+            return supplied;
+
+        var validation = _inputValidator.Validate(contract, supplied);
+        if (!validation.IsValid)
+        {
+            throw new WorkflowExecutableStartRejectedException(
+                WorkflowExecutableStartRejectionCategory.Input,
+                validation.Findings.First().ReasonCode,
+                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+        }
+
+        return validation.NormalizedInputs;
+    }
+
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
+        IReadOnlyDictionary<string, JsonElement> inputs,
         WorkflowExecutableIdentity pinnedIdentity,
         WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowDispatchRecord? retainedDispatch,
@@ -457,7 +501,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
             variables: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables),
-            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs),
+            inputs: inputs,
             stimulusInput: request.StimulusInput,
             triggerNodeId: request.TriggerNodeId,
             runKind: request.RunKind,

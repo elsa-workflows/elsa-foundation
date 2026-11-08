@@ -1,25 +1,19 @@
 # Specialist authoring and publication contract
 
-**Status**: Proposed behavior; implementation/public signatures require their independent consumer proof.
+**Status**: Draft ownership amendment under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); design-only for human review. Proposed public signatures still require independent consumer proof.
 Owning requirements: FR-001–FR-009, FR-021, FR-023, FR-027 and Program A1–A5/A12–A13. Configuration-defined specialists ([plan D10](../plan.md#d10--configuration-defined-specialists)) are source-owned versions compiled through the same provider compiler and preflight.
 
 ## Resource and provider identity
 
-Use existing activity definitions, drafts, versions, templates, review receipts, content authority and
-lifecycle operations. Provider key `elsa.specialist`, initial manifest schema `1`, runtime consumer
-`elsa.specialist`/`1` are proposed frozen identities. Display name Copywriter is presentation; renaming
-it never changes type key, version or an existing binding. Teams receive a distinct provider/schema
-when their real composition contract is implemented, rather than overloading prompt fields.
+Agent owns typed content over the shared source/working-copy/snapshot capability. A candidate is an exact revision referenced by a shared publication operation. The [revision contract](revision-management.md) defines common mechanics, Workflow/Agent mapping and recovery; [Agent ownership](agent-ownership.md) defines permissions and projections. The provider derives source-owned, read-only activity publications using the existing catalog/template system. Agent-facing CRUD/permissions own source; generic activity writes cannot bypass that owner. No second activity catalog or publication engine is introduced.
 
-Definition/draft/version CRUD and publication use existing APIs/permissions. Specialist routes may
-adapt terminology but cannot maintain a second catalog, trust caller-supplied authority or bypass
-generic expected revision/head, review token, idempotency or recommendation checks.
+Pre-GA implementation may cleanly rename `elsa.specialist` and related provider/consumer/schema identities with coordinated store recreation; old-format aliases/readers are not required. Display-name changes never change identity or bindings. A new Agent version has one primary activity projection with the same user-facing version, while each representation retains its own content/provenance hash. Teams receive their own provider/schema only through their reviewed composition contract.
 
 ## One public interface, derived JSON
 
 - Public input/output member reference keys, types, nullability, defaults and required flags remain
-  owned by the generic contract editor and persisted draft contract.
-- Provider fields add instructions, model reference/settings, policy and optional JSON constraints
+  owned by the Agent contract editor and exact Agent source revision; generated activity members are read-only.
+- Agent source adds instructions, model reference/settings, policy and optional JSON constraints
   keyed by an existing public member. They cannot rename a member or silently contradict its type.
 - Compile a top-level JSON object schema from business inputs and one from result projections.
   Preserve stable keys, required/null/default semantics and array/dictionary shapes; default to no
@@ -37,47 +31,26 @@ generic expected revision/head, review token, idempotency or recommendation chec
 
 Optional invocation controls are separate from business JSON: explicit conversation reference/expected
 revision and caller-restrictable budgets. Their stable keys cannot collide with authored business
-members. The provider proposes any generated control members through the normal reviewed contract
-proposal path. A control cannot widen published resource permissions or host budgets. Absent conversation
+members. The provider derives any control members through the reviewed Agent-to-activity contract
+projection path; they are not a second editable business interface. A control cannot widen published resource permissions or host budgets. Absent conversation
 means fresh; a supplied conversation when continuity is disallowed is an actionable refusal.
 
 ## Mutable authoring
 
-Create chooses this exact provider/schema and a host-supported initial public contract. Save uses the
-exact revision and returns the accepted new revision. Invalid local text remains visible without
-pretending it was saved. A conflict preserves local working content and identifies the server winner;
-parallel recovery/fork follows the generic authoring protocol. Source-owned or historical content is
-read-only; copy/fork creates new Design-owned content with explicit provenance.
+Agent-facing source APIs create/edit/fork exact revisions under Agent authority and permissions. Save conflicts preserve local work. Source-owned configuration/historical content is read-only; permitted copy/fork creates a new Agent source with explicit provenance. Agent commands compose the shared CAS/snapshot/history primitives; generic activity editing cannot create another writer. No legacy route translation or ownership migration is required.
 
-Model selection references the operational connection, model ID and an identified capability snapshot.
-Supported option names/ranges/defaults come from the provider, not a universal temperature form.
-Stale/unknown support blocks test/publication with field diagnostics or an explicit revalidation action;
-it never silently strips a setting. Credentials and secret material cannot be authored into a descriptor.
-Durable publication requires a durable model-connection metadata path; disposable in-memory hosts are
-labelled/configured as such and do not qualify restart support.
+Model selection references the operational connection/model and capability snapshot; unknown settings or changed support require diagnostics/revalidation, never silent stripping. Secrets stay in Connections/Secrets. Durable publication still requires durable connection metadata and secret persistence. Candidate tests and publication operate on a frozen exact source revision; no execution path reads a changing draft.
 
 ## Provider-filtered collection
 
-At one resolved temporal snapshot S, include a definition if its matching head/recommendation belongs
-to the provider, or an active read-visible matching draft belongs to that exact definition owner scope.
-Both parent/draft validity intervals use S. The correlated query precedes integrity validation/count/page,
-and existing cursor binding/expiry rules remain. Reuse existing temporal draft projections; no new
-membership store. Two matching drafts still produce one definition row.
-
-Resolve the row's resource explicitly: matching active recommendation first, otherwise matching head
-with its actual lifecycle, otherwise exact matching active draft or an explicit choice among several.
-If another provider owns the recommendation/head, disclose that fact and do not display its model as
-specialist metadata. Existing all-provider counts are labelled as such or replaced by filtered totals.
-Historical-only matching versions remain available through exact history links; they do not broaden
-the initial collection membership rule. Snapshot retention expiration produces the existing expired
-outcome, never silently refreshed totals. Tenant/global same-ID definitions cannot cross-correlate.
+The Agent collection queries Agent source/draft state under one authorized temporal snapshot, before counting/paging. Include unpublished source drafts. Source-owned configuration and release associations carry explicit authority/version identity; unrelated activity provider metadata cannot impersonate Agent ownership. Exact recommendation/head/draft choices, cursor expiry and tenant/global same-ID separation remain explicit. The workflow/BPMN picker continues to read the existing activity catalog and only admitted published projections. Historical generic provider-filter receipts retain their original scope and do not prove the new source read model.
 
 ## Test and publication
 
 Playground test first commits/identifies the exact candidate snapshot and reuses the production
 specialist runtime with a nonpublished candidate artifact scope. Record draft ID/revision/hash and
 connection/model/capability identity. No path reads a changing draft while the model is running.
-The generic draft test-run idempotency/status/reconcile/cancel path remains the invocation authority;
+The Agent test adapter reuses the existing candidate/runtime dispatch, idempotency/status/reconcile/cancel boundary;
 the specialist module adds conversation/usage/evaluation evidence rather than another execution loop.
 
 Publish preflight validates public/schema/provider/model/resource/runtime/storage requirements, exact
@@ -86,15 +59,15 @@ The provider/compiler returns material and diagnostics; it never persists drafts
 Missing consumer/storage/model capability cannot create partial publication. Prompt/settings/schema
 changes affect behavioral hash; a prompt-only hash control holds identity/model/version fixed.
 
-Existing reviewed ordered publication commits retain their guarantees. Do not claim that all module
+The snapshot/reservation/receipt protocol in [revision-management.md](revision-management.md#publication-and-failed-publication-recovery) applies to both authoring sources and the Workflow adapter. No Agent-specific candidate store or coordinator is introduced. Existing reviewed ordered publication commits retain their guarantees. Do not claim that all module
 databases form one transaction. Replaying an accepted publish returns the same receipt. Changing
-draft/head/reviewed content invalidates an old review. Explicit upgrade/copy/retirement cannot mutate
+draft/head/reviewed content before the final source reservation invalidates an old review. After that reservation, later edits create another candidate and cannot change the admitted immutable operation. Explicit upgrade/copy/retirement cannot mutate
 an existing workflow artifact. JSON constraint changes strengthen the generic compatibility floor;
 an unclassifiable narrowing is conservatively breaking, not a silent patch.
 
 Initial archive behavior is the existing exact-version Retired lifecycle and explicit recommendation
 decision, labelled **Retire version**. Preserve the version/history and existing workflow bindings.
-Discarding a draft is a separate explicit action; no new definition-wide archive flag, bulk hidden
+Discarding an Agent draft is a separate explicit action; generated activity content cannot be independently archived or edited to contradict its Agent owner. No new definition-wide archive flag, bulk hidden
 retirement or deletion is implied. The collection shows actual lifecycle and exact history routes.
 
 ## Native/BPMN placement and runtime closure
@@ -116,7 +89,7 @@ and document source-package moves without pretending a runtime forwarder can saf
 
 ## Required proofs
 
-Concurrent save/publish, invalidated review, repeated publish, prompt/schema hash controls, old-artifact
+Concurrent save/publish, invalidated review, repeated publish, prompt/schema hash controls, within-deployment frozen-artifact
 isolation, source/read-only forks, unpublished/mixed-provider/same-ID cross-scope discovery, stable cursor
 counts/retention, public port/result mapping, picker refresh and exact native/BPMN persistence. Include
 all four EF providers and independent authoring/runtime/combined package consumers. M0's direct

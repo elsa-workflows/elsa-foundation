@@ -72,6 +72,8 @@ internal sealed partial class EfEtlRuntimeStore
         request.MetadataBytes = checked(request.MetadataBytes - metadataRelease);
         partition.MetadataBytes = checked(partition.MetadataBytes - metadataRelease);
         partition.SourceInputReservedBytes = checked(partition.SourceInputReservedBytes - inputRelease);
+        // The next poll publishes under a new page-cache key, so this poll's stalled attempts can never collide with it.
+        partition.PollGeneration = checked(partition.PollGeneration + 1);
         // Completion requested after this attempt started: poll again at once so later records are not missed.
         partition.NotBeforeUtcTicks = connector.CompletionRequestedAtUtcTicks is null
             ? checked(now + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)

@@ -7,7 +7,7 @@ Logical named secret referenced by workflows and modules.
 Fields:
 
 - `Id`: stable internal identifier.
-- `Name`: normalized immutable technical name; unique among non-deleted secrets.
+- `Name`: trimmed immutable technical name retaining entered casing; unique case-insensitively among non-deleted secrets in the same tenant. The persistence key is lowercase.
 - `DisplayName`: operator-facing label.
 - `Description`: optional operator-facing explanation.
 - `TypeName`: registered secret type name.
@@ -21,7 +21,7 @@ Fields:
 
 Validation rules:
 
-- `Name` is required, normalized, and immutable after creation.
+- `Name` is required, trimmed, case-preserving, and immutable after creation; lookup and uniqueness use its lowercase identity.
 - Active secrets must have exactly one latest active, non-expired version.
 - Deleted secrets are excluded from ordinary list and picker results.
 - Store/type compatibility must be valid before a version is written.

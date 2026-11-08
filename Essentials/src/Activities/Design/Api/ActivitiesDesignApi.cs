@@ -1,4 +1,4 @@
-using NativeEndpoints;
+using MinimalEndpoints;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Activities.Design.Api;

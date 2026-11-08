@@ -24,7 +24,10 @@ using Nuplane.Reconciliation.LockFile;
 using Nuplane.Sources.Directory.Builder;
 
 const string packageId = "Acme.StudioReuse";
-var root = Path.Combine(Path.GetTempPath(), "studio-store-probe-" + Guid.NewGuid().ToString("N"));
+var tempDirectory = Path.TrimEndingDirectorySeparator(Path.GetTempPath());
+var root = Path.Combine(tempDirectory, "studio-store-probe-" + Guid.NewGuid().ToString("N"));
+var preflight = args.Contains("--filesystem-preflight", StringComparer.Ordinal);
+string? filesystemType = null;
 var feed = Path.Combine(root, "feed");
 var installs = Path.Combine(root, "installs");
 var state = Path.Combine(root, "state.json");
@@ -35,6 +38,20 @@ using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
 var token = timeout.Token;
 try
 {
+    if (preflight)
+    {
+        filesystemType = new DriveInfo(root).DriveFormat;
+        Check(!string.IsNullOrWhiteSpace(filesystemType), "Filesystem type observation is absent.");
+        using var candidate = CreateBuilder().Build();
+        var observed = await candidate.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>()
+            .PreviewEnrollmentAsync(cancellationToken: token);
+        Check(observed.Membership == "Unenrolled" && observed.RootIdentity is not null,
+            "Native filesystem precondition refused: " + JsonSerializer.Serialize(observed));
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "passed", preflight, tempDirectory, root,
+            platform = Environment.OSVersion.Platform.ToString(), filesystemType, membership = observed.Membership,
+            rootIdentityPresent = observed.RootIdentity is not null }, new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
     var legacyRoot = Path.Combine(root, "legacy");
     Directory.CreateDirectory(legacyRoot);
     var sentinel = Path.Combine(legacyRoot, "preserved.txt");
@@ -203,7 +220,11 @@ try
 }
 catch (Exception exception)
 {
-    Console.WriteLine(JsonSerializer.Serialize(new { status = "failed", groups, error = exception.ToString(), root }, new JsonSerializerOptions { WriteIndented = true }));
+    if (preflight)
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "failed", preflight, tempDirectory, root,
+            platform = Environment.OSVersion.Platform.ToString(), filesystemType, error = exception.ToString() }, new JsonSerializerOptions { WriteIndented = true }));
+    else
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "failed", groups, error = exception.ToString(), root }, new JsonSerializerOptions { WriteIndented = true }));
     return 1;
 }
 finally { Directory.Delete(root, recursive: true); }

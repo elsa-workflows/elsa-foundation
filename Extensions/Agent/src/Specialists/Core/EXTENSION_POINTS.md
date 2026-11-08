@@ -10,7 +10,7 @@ client creation. Register scoped implementations through DI, keyed by their exac
 operation requires exactly one matching owner of its own port; duplicates and missing owners are refusals.
 A provider can implement both ports, while authoring-only and runtime-only hosts register only what they consume.
 This registry is independent of Weaver's selected assistant provider.
-Known intra-domain contributions are `AnthropicSpecialistModelProvider` and
+Known intra-domain contributions are `AnthropicSpecialistModelProvider`, `OpenAISpecialistModelProvider` and
 `AzureOpenAISpecialistModelProvider`, registered scoped by their respective optional specialist features.
 
 `GetCapabilitiesAsync` reads authorized current model metadata without inference. The capabilities
@@ -43,9 +43,36 @@ resume behavior. The runtime owns [bounded filtering and final acceptance](../El
 partial visible text is never an accepted business result or reusable history. Include changed effective
 support in the model profile fingerprint; never claim qualification from the presence of an SDK method.
 
-The [connection-backed contributors](../Connections/README.md) add separate Anthropic and Azure OpenAI
+The [connection-backed contributors](../Connections/README.md) add separate Anthropic, OpenAI and Azure OpenAI
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
+
+## Invocation evidence
+
+[`ISpecialistInvocationInspector`](Contracts/ISpecialistInvocationInspector.cs) is a replacement contract: one
+inspector per shell. `SpecialistsRuntime` registers its scoped default with `TryAdd`, so a host package replaces it by
+registering first; a registration after the runtime feature is a second one, which the runtime's startup check refuses.
+Callers authorize the read first. The [inspection API](../Inspection/Api/EXTENSION_POINTS.md) does this
+through the generic draft Test Run. The default resolves the exact invocation through the same native binding the turn
+was staged under, in the caller's ordinary persistence scope, and returns `null` for anything else.
+`SpecialistInvocationEvidence` carries:
+
+- the candidate or published version, the model reference, the limits and the native status;
+- the fault code, plus the message only for a `specialist.*` refusal;
+- the result as the host's `IRuntimePayloadCapturePolicy` admits it;
+- the journal turn's status, model requests, usage, conversation and application status.
+
+The result is returned only for a full payload capture, and never when the envelope, the contract result or a projected
+member is sensitive or encryption-required. A diagnostic snapshot stays with the runtime's own inspection.
+
+The application status counts only this invocation's own delivery. It separates a turn with no accepted result
+(`NotAccepted`), a recorded settlement (`Applied`), a native completion whose settlement is still pending
+(`SettlementPending`), a native fault, cancellation or supersession (`NotApplied`) and a boundary that has not settled
+(`Pending`).
+
+Protected request, result and session material, instructions, fences, leases, connection incarnations and capability
+fingerprints never enter it. The fingerprint and incarnation stay in the immutable artifact and turn record, which
+identify the exact admission. An implementation must not decrypt, infer or mutate.
 
 ## Turn journal replacement
 

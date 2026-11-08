@@ -1,32 +1,16 @@
 # Studio product journeys and working-state contract
 
-**Status**: Proposed interaction contract. [Interactive wireframes](../design/studio-wireframes.html)
+**Status**: Draft ownership amendment under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); design-only. Historical wireframes below retain their original activity-backed illustration until the future Studio task updates it. [Interactive wireframes](../design/studio-wireframes.html)
 use illustrative local data, not a real backend/model. FR-001–FR-008/FR-020–FR-022/FR-027 and Program
 A1–A5/A10/A12 own the production journeys.
 
 ## Navigation and composition
 
-Register a specialist feature area and `/agents` routes through the existing Studio SDK. Use a
-module-owned collection over generic activity APIs, not another picker/catalog or a universal
-resource-lens framework. Preserve Weaver's navigation, `api.agent` and single provider configuration.
-Agents are process participants; the assistant remains a separate experience.
+The Agent module owns `/agents` discovery, typed source/public-contract editing, draft revision/conflict/history and publication-intent APIs and permissions. It queries Agent source records, including unpublished drafts, with server-side authorization/filter/count/paging. It can reuse generic controls and shared publication preflight/receipt mechanics without keeping a second editable activity source. Weaver remains the assistant experience.
 
-The collection shows name/purpose, matching provider draft/publication identity, content authority,
-update state and permitted actions. Unpublished draft-only agents must appear. Server query/count/
-cursor semantics are those of the publication contract. Model/connection metadata appears only when
-an exact matching candidate and permitted summary are available; otherwise inspect the agent detail.
-Do not fetch every resource after paging or leak provider payload through an unauthorized summary.
-Mixed-provider recommendations/history are explicitly identified rather than silently retargeted.
+The native/BPMN picker remains the one activity catalog. Generated Agent activity pages show read-only content and the exact Agent owner/version link. Generic activity APIs cannot independently save Agent-owned content. Agent content authority controls edit, history, fork and configuration-source presentation; activity visibility alone grants no source rights.
 
-Keep generic activity editor/public-interface/save/conflict/publication/history ownership. The module
-contributes its implementation form through `api.activityEditors`, keyed by exact provider/schema.
-Props already include draft/revision/fingerprint, contract, payload/layout, readOnly and onChange;
-provider onChange updates implementation payload/layout, not a second public contract. Public-interface
-constraints use the existing provider public-interface contribution where needed.
-
-The current editor has fixed top-level tabs and a fixed Test Run dialog. Use module-owned companion
-playground/evaluation/inspection routes and normal API links initially. Add only a narrow exact-occurrence
-link contribution to shared runtime inspectors; no hardcoded specialist switch or speculative tab registry.
+Playground/evaluation/inspection identify exact Agent candidates/versions plus derived publication/native identities. Use the existing admitted candidate execution and journal path, with explicit pending/unknown publication recovery. The user-facing inspector leads with public inputs/results and meaningful state; internal model-turn handles remain technical drill-down. Reuse delivered inspection contributions where they fit; no new scheduler, speculative universal tab framework or direct UI-to-model call.
 
 ## Finite journeys
 
@@ -59,8 +43,8 @@ conversation identities are explicit, version/hash-bound and scoped to their adm
 | Unsupported/stale capability | Show only valid options/ranges. Saved unsupported values remain inspectable with diagnostics and an explicit repair action; no hidden option stripping |
 | Permission denied | Preserve permitted metadata/navigation; hide protected content/actions. Failed backend authorization remains authoritative despite UI state |
 
-Instructions and business data are distinct. Public member keys remain stable independently of labels.
-Schema preview derives from the generic contract plus compatible field constraints. Model credentials
+Instructions and business data are distinct. Public member keys remain stable independently of labels. The Agent contract is canonical; activity ports and model schema preview derive from it.
+Schema preview derives from the Agent contract plus compatible field constraints. Model credentials
 are managed in Connections; neither forms nor source/history views expose them. Unsupported sampling/
 effort controls are absent or explained, not rendered as universal temperature knobs.
 
@@ -114,8 +98,8 @@ and the human decision remain separate visible steps.
 
 ## Save, history and undo/redo
 
-The generic draft editor remains the revision/save authority. Provider-local fields report through its
-existing callbacks and respect readOnly/historyResetKey. Local undo affects working state at that
+The Agent editor/API own domain edit permission and commands while composing shared working-copy revision/save and snapshot history. Reused field controls report through its
+exact revision callbacks and respect readOnly/historyResetKey. Historical editor receipts remain evidence of their original implementation. Local undo affects working state at that
 resource/revision only; it cannot replay across a conflict, selected version or backend connection.
 Accepted server writes/publication are not silently undone. The module's input editor and evaluation
 case editor declare the same local/save boundary. Native and BPMN workflow edits keep their existing

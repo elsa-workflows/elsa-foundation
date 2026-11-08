@@ -22,6 +22,13 @@ public interface IActivityStateViewProjector
     /// <summary>An exact activity type whose retained structural references this projector can read without private state; null keeps the default StateCleared behavior.</summary>
     string? ActivityTypeWithoutState => null;
 
+    /// <summary>
+    /// An executable-node descriptor kind this projector reads for every activity type that carries it, with or without
+    /// private state: a provider-owned family of user-defined activities whose type keys are not known in advance, such as
+    /// <c>elsa.specialist</c>. It takes precedence over alias and cleared-type matching; null opts out.
+    /// </summary>
+    string? DescriptorKind => null;
+
     /// <summary>The kind of view it produces, such as <c>compensation.journal</c>.</summary>
     string ViewKind { get; }
 
