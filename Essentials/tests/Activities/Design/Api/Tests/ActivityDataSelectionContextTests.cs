@@ -24,6 +24,29 @@ namespace Elsa.Activities.Design.Api.Tests;
 
 public sealed class ActivityDataSelectionContextTests
 {
+    [Theory]
+    [InlineData("take")]
+    [InlineData("depth")]
+    [InlineData("members")]
+    [InlineData("path")]
+    public async Task Requests_beyond_shared_analysis_limits_are_refused_before_reading_the_draft(string limit)
+    {
+        using var fixture = new Fixture();
+        var query = new ActivityDataSelectionQuery();
+        query = limit switch
+        {
+            "take" => query with { Take = 101 },
+            "depth" => query with { ShapeLimits = new(17, 512) },
+            "members" => query with { ShapeLimits = new(16, 513) },
+            _ => query with { MemberPath = [.. Enumerable.Repeat("member", 65)] }
+        };
+        var result = await fixture.Service.ResolveAsync(fixture.Request() with { Query = query }, default);
+        Assert.Equal("invalid", result.State);
+        Assert.Equal("activity-data.request-invalid", result.Code);
+        Assert.Equal(0, fixture.Store.DraftReads);
+        Assert.Equal(0, fixture.Lookup.Reads);
+    }
+
     [Fact]
     public async Task An_untouched_unsaved_graph_is_analyzed_without_changing_the_saved_provider_state()
     {
