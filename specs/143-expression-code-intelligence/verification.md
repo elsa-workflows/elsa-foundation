@@ -16,7 +16,31 @@ Last reconciled: 2026-10-23 for the Program #2310 restart; the baseline evidence
 
 ## Program #2310 status
 
-The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026-T031 and the corresponding live Studio journey remain open.
+The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026 host evidence is recorded in this PR against current main; T027-T031 and the corresponding live Studio journey remain open.
+
+
+## Program #2310 M1 rebuild — T026 host evidence (PR 2) — 2026-11-08
+
+Cookie-authenticated Workbench host evidence for expression tooling, rebuilt from #2373 without the bearer-hash / rotateBearer cases (those stay for a later PR). Recorded against main `c1f35d2dc73201df0e3890e1f0c851d9ddd52a37`. The test source is unchanged from the prepared patch; assertions were not weakened.
+
+- New `Essentials/tests/Workbench/Tests/ExpressionToolingHostEvidenceTests.cs` starts a real Development Workbench via `WorkbenchProcess`/`WorkbenchShell`.
+- Stock case: JavaScript + Liquid composed, EF design persistence (`elsa.db`), capability discovery of all six `expressions.tooling.v1` links (descriptors, context, symbols, completions, hover, validate), anonymous denial, then context/symbols/completions/hover/validate against a freshly reopened persisted draft for both languages.
+- Missing-Liquid negative control: removes only `Liquid` from a copy of `shells.json` for that run; stock Workbench still composes Liquid on main (#3277). Descriptors advertise JavaScript and omit Liquid.
+- Workflow create asserts HTTP 200 to match current main (not 201).
+- No changes to `ExpressionToolingApiHandlers.cs`, bearer revision hashing, #3204 / ADR 0089, or Studio.
+
+Local commands on this PR (SDK 10.0.300, locked restore):
+
+| Command | Result |
+|---|---|
+| `dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj --filter "FullyQualifiedName~ExpressionToolingHostEvidenceTests" --list-tests -p:RestoreLockedMode=true --nologo` | 2 tests listed |
+| same filter, without `--list-tests` | 2 passed, 0 failed, 23.3s |
+| Workbench `workbench-rest` shard (excludes `WorkbenchBackgroundActivityRecoveryTests`, `NativeHostingConformanceTests`, `NativeHostingGracefulHandoffTests`, `WorkbenchProcessTests`): `--list-tests --no-build` then `--no-restore` | 55 listed, 55 passed, 0 failed, 7m 57s |
+| `bash tools/architecture/restore-ci-project-graph.sh` then `dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --list-tests` | restore succeeded; `--list-tests` enumerated 602 |
+| same architecture project without `--list-tests` | 617 passed, 0 failed, 1m 13s. The VSTest `--list-tests` count (602) did not match the executed count (617); nothing was skipped. |
+| `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | `Generated solution filters still describe the project graph.` |
+
+Not run here: the Workbench native-hosting split, whole-solution tests, Studio, bearer/rotateBearer coverage, RS0016 PublicAPI (no public API change), hosted CI. Bearer / rotateBearer coverage remains out of scope. T027-T031 remain open.
 
 ## Passing evidence
 
