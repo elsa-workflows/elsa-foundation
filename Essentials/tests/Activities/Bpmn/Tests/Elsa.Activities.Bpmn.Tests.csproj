@@ -8,14 +8,8 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/correctness/legacy-pending-fault-model.json" Link="Fixtures/ActualLegacyPendingParentFaultModel.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz" Link="Fixtures/ActualPriorScopeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/delayed-retry-original/queued-result.sqlite.gz" Link="Fixtures/ActualDelayedCompensation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-start-retirement/pending-elsa.sqlite.gz" Link="Fixtures/ActualNativeStartRetirement.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-cancellation/native-terminal/native-cancel/pending-elsa.sqlite.gz" Link="Fixtures/ActualIndependentNativeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/technical-fault-native-recovery/legacy-model-v2.json" Link="Fixtures/ActualNativeModelV2.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-admitted-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentAdmittedFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
