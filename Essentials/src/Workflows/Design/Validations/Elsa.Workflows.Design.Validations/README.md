@@ -35,6 +35,11 @@ rule. Null contributions add nothing; failures propagate. Metadata discovery wri
 not evaluate a producer or expression. See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for signatures,
 replacement/cardinality rules and source/shape ownership.
 
+The composed `DraftValidating` handler keeps one credential/connection refusal per input and retains
+the existing whole-variable validator's rule ID when the shared analyzer reports the same unresolved
+reference. Direct analysis/publication still receives its complete admission findings; independent
+portable-parameter failures are not collapsed by a blanket path/type deduplication.
+
 ## Settings
 
 `WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` property; default `100`).

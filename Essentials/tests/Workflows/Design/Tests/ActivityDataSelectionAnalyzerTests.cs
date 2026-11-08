@@ -541,11 +541,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
         return Input(form switch {
             "direct" => Result(producer, projection, optional),
             "typed" => new(definition, "JavaScript"),
-            "json-pascal" => new(JsonDocument.Parse(JsonSerializer.Serialize(definition, Web)
+            "json-pascal" => new(JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(definition, Web)
                 .Replace("\"parameters\":", "\"Parameters\":", StringComparison.Ordinal)
                 .Replace("\"producerNodeId\":", "\"ProducerNodeId\":", StringComparison.Ordinal)
                 .Replace("\"projectionKey\":", "\"ProjectionKey\":", StringComparison.Ordinal)
-                .Replace("\"isOptional\":", "\"IsOptional\":", StringComparison.Ordinal)).RootElement.Clone(), "JavaScript"),
+                .Replace("\"isOptional\":", "\"IsOptional\":", StringComparison.Ordinal)), "JavaScript"),
             _ => new(JsonSerializer.SerializeToElement(definition, Web), "JavaScript")
         });
     }

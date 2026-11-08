@@ -33,6 +33,30 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class ActivityDataContextEndpointTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Configured_host_metadata_filters_refuse_neutral_discovery_before_private_reads(bool symbolFilter)
+    {
+        var calls = 0;
+        var filter = new RestrictedMetadata();
+        using var host = new Host(services =>
+        {
+            if (symbolFilter) services.AddSingleton<IExpressionAuthoringSymbolFilter>(filter);
+            else services.AddSingleton<IExpressionAuthoringContextFilter>(filter);
+            services.AddSingleton<IActivitySerializedShapeSource>(new CallbackShape(() => calls++));
+        });
+        var before = host.Drafts.Draft.State;
+        var result = await host.Invoke(host.Request());
+        Assert.Equal("unavailable", result.Body.State);
+        Assert.Equal("activity-data.metadata-policy-unavailable", result.Body.Code);
+        Assert.Null(result.Body.Analysis);
+        Assert.Equal(0, host.Drafts.Reads);
+        Assert.Equal(0, calls);
+        Assert.Equal(0, filter.Calls);
+        Assert.Same(before, host.Drafts.Draft.State);
+    }
+
     [Fact]
     public async Task Untouched_input_uses_the_real_analyzer_without_language_modules_and_the_mapped_route_is_no_store()
     {
@@ -311,6 +335,15 @@ public sealed class ActivityDataContextEndpointTests
         new("sub", "author"), new(IdentityClaimTypes.Normalized, "v1"), new(IdentityClaimTypes.TenantId, "tenant"),
         new("permission", grant), new("exp", token), new("jti", token)
     ], "test"));
+
+    private sealed class RestrictedMetadata : IExpressionAuthoringContextFilter, IExpressionAuthoringSymbolFilter
+    {
+        internal int Calls { get; private set; }
+        public ValueTask<ExpressionAuthoringContext?> FilterAsync(ExpressionAuthoringContext context, ExpressionAuthoringAuthorization authorization, CancellationToken cancellationToken)
+        { Calls++; throw new InvalidOperationException("Neutral acquisition must not fabricate an expression context."); }
+        public ValueTask<ExpressionSymbol?> FilterAsync(ExpressionSymbol symbol, ExpressionAuthoringContext context, ExpressionAuthoringAuthorization authorization, CancellationToken cancellationToken)
+        { Calls++; throw new InvalidOperationException("Neutral acquisition must not fabricate an expression symbol."); }
+    }
 
     private sealed class Host : IDisposable
     {

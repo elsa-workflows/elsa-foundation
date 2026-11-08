@@ -36,9 +36,11 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 
 ---
 
-## Replaceable services (per §2.6.2)
+## Serialized-shape contribution
 
 ### Serialized read shapes
+
+- **Kind:** Enumerable contributor (`IActivitySerializedShapeSource`); multiple matching owners are refused.
 
 `IActivitySerializedShapeSource` (`Elsa.Activities.Design.Core`) contributes immutable outgoing shape
 facts for an already admitted source contract. The CLR feature registers one scoped contribution.

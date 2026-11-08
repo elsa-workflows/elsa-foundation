@@ -14,6 +14,7 @@ using Elsa.Api.Capabilities.Services;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -24,6 +25,27 @@ namespace Elsa.Activities.Design.Api.Tests;
 
 public sealed class ActivityDataSelectionContextTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Configured_host_metadata_filters_refuse_neutral_discovery_before_private_reads(bool symbolFilter)
+    {
+        var filter = new RestrictedMetadata();
+        using var fixture = new Fixture(configure: services =>
+        {
+            if (symbolFilter) services.AddSingleton<IExpressionAuthoringSymbolFilter>(filter);
+            else services.AddSingleton<IExpressionAuthoringContextFilter>(filter);
+        });
+        var result = await fixture.Service.ResolveAsync(fixture.Request(), default);
+        Assert.Equal("unavailable", result.State);
+        Assert.Equal("activity-data.metadata-policy-unavailable", result.Code);
+        Assert.Null(result.Analysis);
+        Assert.Equal(0, fixture.Store.DraftReads);
+        Assert.Equal(0, fixture.Lookup.Reads);
+        Assert.Equal(0, filter.Calls);
+        Assert.Equal(5, fixture.Store.Draft.Revision);
+    }
+
     [Theory]
     [InlineData("take")]
     [InlineData("depth")]
@@ -336,13 +358,14 @@ public sealed class ActivityDataSelectionContextTests
         internal ActivityDataSelectionContextService Service { get; }
         internal IActivityDataSelectionAnalyzer Analyzer { get; }
         internal IActivityDataSelectionDocumentProjector Projector { get; }
-        internal Fixture(Action<Store>? afterAnalysis = null)
+        internal Fixture(Action<Store>? afterAnalysis = null, Action<IServiceCollection>? configure = null)
         {
             var services = new ServiceCollection();
             services.AddOptions();
             new Elsa.Events.EventsFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature().ConfigureServices(services);
             services.AddSingleton<IActivityDefinitionLookup>(Lookup);
+            configure?.Invoke(services);
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
@@ -350,10 +373,21 @@ public sealed class ActivityDataSelectionContextTests
             Projector = projector;
             Analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
             var contextAnalyzer = afterAnalysis is null ? Analyzer : new CompletingAnalyzer(Analyzer, () => afterAnalysis(Store));
-            Service = new(Store, Store, Actor, [Catalog], [projector], [contextAnalyzer], structures);
+            Service = new(Store, Store, Actor, [Catalog], [projector], [contextAnalyzer], structures,
+                _scope.ServiceProvider.GetServices<IExpressionAuthoringContextFilter>(),
+                _scope.ServiceProvider.GetServices<IExpressionAuthoringSymbolFilter>());
         }
         internal ActivityDataSelectionContextRequest Request(string node = "saved-node") => new("draft", "1", 5, "edit-7", new(node, "value"));
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }
+    }
+
+    private sealed class RestrictedMetadata : IExpressionAuthoringContextFilter, IExpressionAuthoringSymbolFilter
+    {
+        internal int Calls { get; private set; }
+        public ValueTask<ExpressionAuthoringContext?> FilterAsync(ExpressionAuthoringContext context, ExpressionAuthoringAuthorization authorization, CancellationToken cancellationToken)
+        { Calls++; throw new InvalidOperationException("Neutral acquisition must not fabricate an expression context."); }
+        public ValueTask<ExpressionSymbol?> FilterAsync(ExpressionSymbol symbol, ExpressionAuthoringContext context, ExpressionAuthoringAuthorization authorization, CancellationToken cancellationToken)
+        { Calls++; throw new InvalidOperationException("Neutral acquisition must not fabricate an expression symbol."); }
     }
 
     private sealed class Actor : IActivityAuthoringContextAsync

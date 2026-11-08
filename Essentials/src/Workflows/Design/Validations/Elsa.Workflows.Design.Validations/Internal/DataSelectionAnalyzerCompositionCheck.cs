@@ -4,10 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
 
-internal sealed record ActivityDataSelectionAnalyzerComposition(IServiceCollection Services);
+internal sealed record DataSelectionComposition(IServiceCollection Services);
 
 /// <summary>Rejects a missing, duplicate or non-scoped authority after every feature has registered.</summary>
-internal sealed class DataSelectionAnalyzerCompositionCheck(ActivityDataSelectionAnalyzerComposition composition) : IShellInitializer
+internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposition composition) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -20,12 +20,12 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(ActivityDataSelectio
 
     internal static void Register(IServiceCollection services)
     {
-        var existing = services.Where(descriptor => descriptor.ServiceType == typeof(ActivityDataSelectionAnalyzerComposition)).ToArray();
-        if (existing.Length == 1 && existing[0].ImplementationInstance is ActivityDataSelectionAnalyzerComposition current &&
+        var existing = services.Where(descriptor => descriptor.ServiceType == typeof(DataSelectionComposition)).ToArray();
+        if (existing.Length == 1 && existing[0].ImplementationInstance is DataSelectionComposition current &&
             ReferenceEquals(current.Services, services)) return;
         // A copied shell retains initializer descriptors, but must inspect its own final registrations.
         foreach (var descriptor in existing) services.Remove(descriptor);
-        services.AddSingleton(new ActivityDataSelectionAnalyzerComposition(services));
+        services.AddSingleton(new DataSelectionComposition(services));
         if (existing.Length == 0)
             services.AddShellInitializer<DataSelectionAnalyzerCompositionCheck>(LifecyclePhase.Prepare, 0);
     }

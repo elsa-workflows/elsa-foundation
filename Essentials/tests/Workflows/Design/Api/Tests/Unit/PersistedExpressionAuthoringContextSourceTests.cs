@@ -166,6 +166,8 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         Assert.DoesNotContain(context.RootSymbols, symbol => symbol.SymbolId == "activity-result:target:result");
         Assert.Equal("String", context.Document.ExpectedResultType);
         Assert.Equal("String", context.ExpectedResultType);
+        // The consuming type is authoritative, but no target serialization profile has been bound.
+        // Do not infer a CLR scalar/member contract from its alias; source shapes use their own owner.
         Assert.Equal(ExpressionValueKind.Unknown, context.ExpectedResultShape!.Kind);
         Assert.Equal("policy-2", context.PolicyFingerprint);
         Assert.NotEqual("authenticated", context.PermissionRevision);

@@ -21,7 +21,9 @@ internal sealed class ActivityDataSelectionContextService(
     IEnumerable<IActivityAuthoringCatalog> catalogs,
     IEnumerable<IActivityDataSelectionDocumentProjector> projectors,
     IEnumerable<IActivityDataSelectionAnalyzer> analyzers,
-    IActivityStructureService structures)
+    IActivityStructureService structures,
+    IEnumerable<IExpressionAuthoringContextFilter>? contextFilters = null,
+    IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters = null)
 {
     internal async Task<ActivityDataSelectionContextResponse> ResolveAsync(ActivityDataSelectionContextRequest request, CancellationToken cancellationToken)
     {
@@ -41,6 +43,9 @@ internal sealed class ActivityDataSelectionContextService(
             if (catalogOwners.Length != 1) return Reply("unavailable", "activity-data.catalog-unavailable");
             var catalog = catalogOwners[0];
             if (!await catalog.CanReadAsync(cancellationToken)) return Reply("denied", "activity-data.denied");
+            // Do not invent a workflow/expression location to invoke host metadata filters.
+            if (contextFilters?.Any() == true || symbolFilters?.Any() == true)
+                return Reply("unavailable", "activity-data.metadata-policy-unavailable");
             var draft = await drafts.FindAsync(request.DraftId, cancellationToken);
             if (draft is null || draft.Id != request.DraftId || !Visible(draft.TenantId)) return Reply("unavailable", "activity-data.resource-unavailable");
             // Stores may return the same tracked object on both reads; retain lifecycle values before awaiting.

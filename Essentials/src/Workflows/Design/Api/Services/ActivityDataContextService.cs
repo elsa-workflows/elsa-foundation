@@ -44,6 +44,11 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             if (!visibleCatalog.Allowed) return Failure("denied", "denied");
             var authorization = await ExpressionToolingApiHandlers.AuthorizationAsync(principal, policy, ct);
             if (!authorization.IsAuthorized) return Failure("denied", "denied");
+            // Expression-shaped host filters cannot be applied honestly to both neutral resource kinds.
+            // Refuse this composition rather than disclose metadata while bypassing its restrictions.
+            if (services.GetServices<IExpressionAuthoringContextFilter>().Any() ||
+                services.GetServices<IExpressionAuthoringSymbolFilter>().Any())
+                return Failure("unavailable", "metadata-policy-unavailable");
             var drafts = Single<IWorkflowDefinitionDraftStore>();
             var analyzer = Single<IActivityDataSelectionAnalyzer>();
             var structures = Single<IActivityStructureService>();
