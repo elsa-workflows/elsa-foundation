@@ -116,24 +116,35 @@ public sealed class RunBpmnPendingParentResultCrashTests
         var secondProcess = host.ProcessId; Assert.NotEqual(firstProcess, secondProcess);
         JsonNode settled = null!; JsonNode nativeFinal = null!; JsonNode final = null!;
         var restartedAt = DateTimeOffset.UtcNow;
+        Assert.True(restartedAt < visibleAfter, "The restarted host must observe the still-fenced recovery window.");
         Assert.True(visibleAfter <= restartedAt + RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout);
         var recoveryEligibleAt = visibleAfter > restartedAt ? visibleAfter : restartedAt;
         // A dead deliverer's real claim is fenced for one minute. Keep the original thirty-
         // second recovery bound, measured from actual eligibility rather than process startup.
         deadline = recoveryEligibleAt.AddSeconds(30);
+        var observedFencedParent = false;
+        DateTimeOffset settledAt = default;
         while (true)
         {
             settled = await host.ReadEmbeddingAsync(modelId, execution);
             nativeFinal = await host.GetAsync(nativePath);
             final = await host.GetAsync(modelPath);
-            if (DateTimeOffset.UtcNow < visibleAfter)
+            var observedAt = DateTimeOffset.UtcNow;
+            Assert.True(observedAt < deadline, $"The restarted host did not deliver exactly one native parent continuation after claim eligibility {recoveryEligibleAt:o}. Physical: {settled.ToJsonString()}. Native: {nativeFinal.ToJsonString()}. Model: {final.ToJsonString()}.");
+            if (observedAt < visibleAfter)
+            {
                 Assert.Equal("Running", nativeFinal["instance"]!["status"]!.GetValue<string>());
+                observedFencedParent = true;
+            }
             if (final["status"]!.GetValue<string>() == "TerminalSettled" && nativeFinal["instance"]!["status"]!.GetValue<string>() == "Completed" &&
                 settled["sources"]!.AsArray().Count >= 2 && settled["sources"]!.AsArray().All(item => item!["status"]!.GetValue<int>() == 2))
+            {
+                settledAt = observedAt;
                 break;
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"The restarted host did not deliver exactly one native parent continuation after claim eligibility {recoveryEligibleAt:o}. Physical: {settled.ToJsonString()}. Native: {nativeFinal.ToJsonString()}. Model: {final.ToJsonString()}.");
+            }
             await Task.Delay(100);
         }
+        Assert.True(observedFencedParent, "The witness must observe the live parent refusing early settlement while the old claim is valid.");
         Assert.Empty(nativeFinal["incidents"]!.AsArray());
         var completedActivities = nativeFinal["activities"]!.AsArray()
             .Where(item => item!["authoredActivityId"]!.GetValue<string>() == "run-bpmn").ToArray();
@@ -166,7 +177,11 @@ public sealed class RunBpmnPendingParentResultCrashTests
             var sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION") ?? throw new InvalidOperationException("Embedding evidence requires its exact executing source.");
             var receipt = new { formatVersion = 1, kind = "actual-native-runbpmn-pending-parent-result-crash", sourceRevision, parent = "Root",
                 nativeExecutionId = execution, modelExecutionId = modelId, published, publication,
-                firstProcess, secondProcess, thirdProcess, predecessorExit, visibleAfter, restartedAt, recoveryEligibleAt, termination = ".NET Process.Kill(entireProcessTree: true)",
+                firstProcess, secondProcess, thirdProcess, predecessorExit, visibleAfter, restartedAt, recoveryEligibleAt, settledAt,
+                coordinationObservation = new { claimWaitMilliseconds = (recoveryEligibleAt - restartedAt).TotalMilliseconds,
+                    settlementAfterEligibilityMilliseconds = (settledAt - recoveryEligibleAt).TotalMilliseconds,
+                    embeddingSourceRows = finishedPhysical["sources"]!.AsArray().Count,
+                    modelInputReceipts = finishedPhysical["inputs"]!.AsArray().Count }, termination = ".NET Process.Kill(entireProcessTree: true)",
                 binaries = host.DescribeBinaries(sourceRevision, includePublishing: true), pendingModel, pendingNative, final, nativeFinal,
                 actualHumanWait = waiting, snapshots = new[] { pendingRuntime, pendingDesign, completedRuntime, completedDesign },
                 limits = new[] { "SQLite Owned Workbench only; no PostgreSQL/SQL Server/MySQL cell.",

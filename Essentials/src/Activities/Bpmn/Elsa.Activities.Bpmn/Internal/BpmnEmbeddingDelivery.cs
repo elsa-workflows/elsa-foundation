@@ -105,7 +105,14 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
         // This mode lets the owned hosting test kill a real in-flight delivery claim, rather
         // than depending on a race between claiming and recording the ordinary deferral.
-        if (File.ReadAllText(path) == "hold-claim")
+        string mode;
+        try { mode = File.ReadAllText(path); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Transient,
+                "bpmn.embedded.test-hold-unavailable", "The configured test hold could not be read.", error);
+        }
+        if (mode == "hold-claim")
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         throw Pending();
     }
