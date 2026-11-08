@@ -46,7 +46,7 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 
 ## Program #2310 continuation: User Story 4 — Real composed APIs
 
-- [ ] T026 [US4] Add a real-host persisted-draft authoring integration test covering capability discovery, context, completion, hover and validation for JavaScript and Liquid under `Essentials/tests/Workflows/Design/Api/Tests/` and the matching host fixture.
+- [x] T026 [US4] Add a real-host persisted-draft authoring integration test covering capability discovery, context, completion, hover and validation for JavaScript and Liquid under `Essentials/tests/Workbench/Tests/` (`ExpressionToolingHostEvidenceTests`) using the WorkbenchProcess/WorkbenchShell host fixture.
 - [ ] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `Essentials/tests/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
 
 ## Program #2310 continuation: User Story 2 — Runtime-owned language assistance
