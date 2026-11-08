@@ -230,6 +230,7 @@ describe("workflow library query boundaries", () => {
     await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("25"));
     await click(button(container, "Next")); await waitForText(container, "Tagged page 2");
     await click(button(container, "Next")); await waitForText(container, "Tagged page 3");
+    await waitForCondition(() => expect(button(container, "Favorites")).not.toBeNull());
     await click(button(container, "Favorites")); await waitForText(container, "Favorite page 1");
     if (!invalidate) {
       await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
