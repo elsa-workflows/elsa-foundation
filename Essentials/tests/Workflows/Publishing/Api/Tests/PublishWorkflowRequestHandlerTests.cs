@@ -224,8 +224,11 @@ public sealed class PublishWorkflowRequestHandlerTests
         var parameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = producer, projectionKey = "$result" });
         var decoyParameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = decoy, projectionKey = "$result" });
         var nestedCasing = JsonSerializer.Serialize(new { ProducerNodeId = producer, ProjectionKey = "$result", IsOptional = false, kind = "ActivityResult" });
-        var nestedAlias = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = decoy, ProducerNodeId = producer,
-            projectionKey = "$result", isOptional = true, IsOptional = false });
+        var nestedAlias = JsonSerializer.Serialize(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["kind"] = "ActivityResult", ["producerNodeId"] = decoy, ["ProducerNodeId"] = producer,
+            ["projectionKey"] = "$result", ["isOptional"] = true, ["IsOptional"] = false
+        });
         static string Parameters(string name, string binding) => "\"" + name + "\":{\"customer\":" + binding + "}";
         var properties = form switch
         {
