@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type SetStateAction } from "react";
-import { notifySuccess, useNotificationGuard } from "./notifications";
+import { getNotifications, notifySuccess, useNotificationGuard } from "./notifications";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
@@ -541,6 +541,7 @@ export function useWorkflowOperations({
     onStarted?: (view: WorkflowTestRunView) => Promise<void>,
     acknowledgeUnavailableExpressionValidation = false
   ): Promise<WorkflowTestRunView | null> => {
+    const canNotify = captureExportFeedback();
     draftSnapshot = structuredClone(draftSnapshot);
     const draftSignature = getDraftSignature(draftSnapshot);
     setStatus("Preparing test run...");
@@ -569,7 +570,17 @@ export function useWorkflowOperations({
       startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
-      setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
+      const rejected = isRejectedTestRun(nextTestRun);
+      const runtimeIssue = nextTestRun.commandDispatchStatus === "AcceptedButFaulted" || (nextTestRun.incidentCount ?? 0) > 0;
+      const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
+      const deferred = nextTestRun.status === "DispatchDeferred";
+      const duplicate = nextTestRun.status === "DispatchDuplicate";
+      setStatus(rejected ? "Test run rejected" : "");
+      // Runtime and the attached-run status retain progress and problems after this confirmation fades.
+      if (canNotify() && !rejected && !runtimeIssue) getNotifications().notify({
+        level: deferred || duplicate ? "info" : "success",
+        title: prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started"
+      });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;
     } catch (e) {
@@ -579,7 +590,7 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
+  }, [captureExportFeedback, context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
   const run = useCallback(() => {
     if (!draft?.state.rootActivity || busy) return;

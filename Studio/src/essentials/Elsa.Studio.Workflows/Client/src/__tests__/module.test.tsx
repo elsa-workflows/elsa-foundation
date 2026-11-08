@@ -3216,6 +3216,8 @@ describe("workflows module", () => {
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
     await waitForText(container, "Test Run dispatched");
+    expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Test run started" }));
+    expect(container.textContent).not.toContain("Test run dispatched");
 
     const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
     const testRunCall = calls.find(call => call.method === "POST" && urlPath(call.url) === "/publishing/workflows/drafts/test-runs");
