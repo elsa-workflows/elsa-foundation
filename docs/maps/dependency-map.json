@@ -755,41 +755,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Decisions.Api",
-          "path": "Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Design",
-          "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Api",
-          "path": "Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Design",
-          "path": "Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Runtime",
-          "path": "Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Etl.Design.Api",
           "path": "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj"
         },
@@ -989,8 +954,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -1305,8 +1270,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -1547,8 +1512,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -2460,8 +2425,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -2913,8 +2878,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -2991,8 +2956,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -3050,8 +3015,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -3574,8 +3539,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -3984,8 +3949,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -4096,8 +4061,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -4245,8 +4210,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -4402,8 +4367,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -4536,8 +4501,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -4722,8 +4687,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -5080,8 +5045,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -5287,8 +5252,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5341,8 +5306,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5400,8 +5365,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5457,8 +5422,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5546,8 +5511,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5595,8 +5560,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5639,6 +5604,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "OpenIddict.Abstractions",
           "version": "7.5.0"
         },
@@ -5646,11 +5616,6 @@
           "type": "pinned-transitive",
           "id": "OpenIddict.AspNetCore",
           "version": "7.5.0"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
         }
       ]
     },
@@ -5783,8 +5748,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -5889,8 +5854,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -6286,8 +6251,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -6856,8 +6821,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -7482,8 +7447,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -7850,8 +7815,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -7989,8 +7954,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -8098,8 +8063,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -8807,8 +8772,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -8916,8 +8881,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -9357,8 +9322,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -9886,8 +9851,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -14079,56 +14044,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Decisions.Api",
-          "path": "Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Design",
-          "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.Core",
-          "path": "Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Tooling",
-          "path": "Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Api",
-          "path": "Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Design",
-          "path": "Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Runtime",
-          "path": "Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa3.Activities.Design.Import",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj"
         },
@@ -14629,11 +14544,6 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
           "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -22691,8 +22601,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -23165,8 +23075,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -23619,8 +23529,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -23945,8 +23855,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -24842,820 +24752,6 @@
       ]
     },
     {
-      "path": "Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj",
-      "name": "Elsa.Decisions.Api",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Api",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Api",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Api.AspNetCore",
-          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity",
-          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Design",
-          "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj",
-      "name": "Elsa.Decisions.Core",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Core",
-      "role": "contract",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Core",
-      "line": "B",
-      "edges": []
-    },
-    {
-      "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj",
-      "name": "Elsa.Decisions.Design",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Design",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Design",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.Core",
-          "path": "Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj",
-      "name": "Elsa.Decisions",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "(root)",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj",
-      "name": "Elsa.Decisions.Persistence.Core",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Persistence.Core",
-      "role": "contract",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Persistence.Core",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj",
-      "name": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Persistence.EntityFrameworkCore",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.Core",
-          "path": "Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells",
-          "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Memory",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Json",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Hosting.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj",
-      "name": "Elsa.Decisions.Tooling",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Tooling",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Design",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.SqlServer",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "MySql.EntityFrameworkCore",
-          "version": "10.0.9"
-        },
-        {
-          "type": "external",
-          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
-          "version": "10.0.0"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj",
-      "name": "Elsa.Decisions.Workflows.Api",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Workflows.Api",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Workflows.Api",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Persistence.Core",
-          "path": "Essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Publishing.Core",
-          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Runtime",
-          "path": "Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj",
-      "name": "Elsa.Decisions.Workflows.Design",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Workflows.Design",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Workflows.Design",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Publishing.Core",
-          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.Core",
-          "path": "Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Runtime",
-          "path": "Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj",
-      "name": "Elsa.Decisions.Workflows.Runtime",
-      "kind": "source",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Workflows.Runtime",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Decisions.Workflows.Runtime",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Runtime.Core",
-          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Core",
-          "path": "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
-      "name": "Elsa.Decisions.Api.Tests",
-      "kind": "test",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Api.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Api",
-          "path": "Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Design",
-          "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.AspNetCore.TestHost",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj",
-      "name": "Elsa.Decisions.Design.Tests",
-      "kind": "test",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Design.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Design",
-          "path": "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
-      "name": "Elsa.Decisions.Evaluation.Tests",
-      "kind": "test",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Evaluation.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj",
-      "name": "Elsa.Decisions.Workflows.Api.Tests",
-      "kind": "test",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Workflows.Api.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity",
-          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Api",
-          "path": "Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj",
-      "name": "Elsa.Decisions.Workflows.Tests",
-      "kind": "test",
-      "domain": "Elsa.Decisions",
-      "sub_domain": "Workflows.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions",
-          "path": "Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Decisions.Workflows.Design",
-          "path": "Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj",
       "name": "Elsa3.Activities.Design.Import",
       "kind": "source",
@@ -25744,8 +24840,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -25898,8 +24994,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -25982,8 +25078,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -26091,8 +25187,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -26689,8 +25785,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         },
         {
           "type": "pinned-transitive",
@@ -26786,8 +25882,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -27092,8 +26188,8 @@
         },
         {
           "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -27552,11 +26648,6 @@
           "type": "internal",
           "id": "Elsa.Etl.Persistence.EntityFrameworkCore",
           "path": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Etl.Runtime",
-          "path": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj"
         },
         {
           "type": "external",
@@ -28040,6 +27131,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Newtonsoft.Json",
           "version": "13.0.4"
         },
@@ -28052,11 +27148,6 @@
           "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
           "version": "0.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
         }
       ]
     },
@@ -28198,8 +27289,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -28302,8 +27393,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -28391,8 +27482,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
@@ -28485,8 +27576,8 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },
