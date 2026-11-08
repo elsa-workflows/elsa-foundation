@@ -175,7 +175,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ? Visible(context, location).FirstOrDefault(item => item.Variable.ReferenceKey == variable.ReferenceKey &&
                     item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
                 : valueType;
-            definition = new("value", "Value", type, null, "Value", null, true);
+            definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
+                IsNullable: false, IsRequired: true);
         }
         if (definition is null) return null;
         var constraints = new List<ActivityDataInputConstraint>();

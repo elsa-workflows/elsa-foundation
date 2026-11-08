@@ -191,6 +191,8 @@ public sealed class ActivityDataSelectionAnalyzerTests
         var document = Document(Sequence(intrinsic)) with { Variables = [Variable("customer", "Customer")] };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("set", "value"));
         Assert.Equal(new TypeReference("String"), result.Target!.Type);
+        Assert.False(result.Target.IsNullable);
+        Assert.True(result.Target.IsRequired);
         Assert.Empty(result.Findings);
     }
 
@@ -225,7 +227,7 @@ public sealed class ActivityDataSelectionAnalyzerTests
     }
 
     [Fact]
-    public async Task Portable_expression_envelope_keys_match_payload_serializer_casing_without_folding_member_paths()
+    public async Task A_business_payload_without_the_compiler_portable_headers_does_not_acquire_parameter_roles()
     {
         using var provider = Provider();
         var envelope = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
@@ -244,18 +246,8 @@ public sealed class ActivityDataSelectionAnalyzerTests
             }
         });
         var missing = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(new(envelope, "JavaScript"))))));
-        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(missing.Findings, finding => finding.Type == "ValueFlow/UnavailableProducer").Path);
-
-        var memberPath = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
-        {
-            ["Kind"] = "ActivityResult",
-            ["ProducerNodeId"] = "producer",
-            ["ProjectionKey"] = "$result",
-            ["ProducerScopeId"] = "root",
-            ["MemberPath"] = new[] { "CustomerId" }
-        });
-        var refused = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(new(memberPath, "ActivityResult"))))));
-        Assert.Contains(refused.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
+        // Runtime recognizes portable JSON only through lowercase language/source/capabilityProfile headers.
+        Assert.Empty(missing.Findings);
     }
 
     [Theory]
@@ -549,21 +541,11 @@ public sealed class ActivityDataSelectionAnalyzerTests
         return Input(form switch {
             "direct" => Result(producer, projection, optional),
             "typed" => new(definition, "JavaScript"),
-            "json-pascal" => new(JsonSerializer.SerializeToElement(new Dictionary<string, object?>
-            {
-                ["Language"] = "JavaScript",
-                ["Parameters"] = new Dictionary<string, object?>
-                {
-                    ["p"] = new Dictionary<string, object?>
-                    {
-                        ["Kind"] = "ActivityResult",
-                        ["ProducerNodeId"] = producer,
-                        ["ProjectionKey"] = projection,
-                        ["ProducerScopeId"] = "root",
-                        ["IsOptional"] = optional
-                    }
-                }
-            }), "JavaScript"),
+            "json-pascal" => new(JsonDocument.Parse(JsonSerializer.Serialize(definition, Web)
+                .Replace("\"parameters\":", "\"Parameters\":", StringComparison.Ordinal)
+                .Replace("\"producerNodeId\":", "\"ProducerNodeId\":", StringComparison.Ordinal)
+                .Replace("\"projectionKey\":", "\"ProjectionKey\":", StringComparison.Ordinal)
+                .Replace("\"isOptional\":", "\"IsOptional\":", StringComparison.Ordinal)).RootElement.Clone(), "JavaScript"),
             _ => new(JsonSerializer.SerializeToElement(definition, Web), "JavaScript")
         });
     }

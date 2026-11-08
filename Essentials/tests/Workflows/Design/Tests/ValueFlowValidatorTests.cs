@@ -14,6 +14,20 @@ namespace Elsa.Workflows.Design.Tests;
 
 public sealed class ValueFlowValidatorTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_omitted_flowchart_start_accepts_ordered_writes_but_rejects_a_real_fork(bool fork)
+    {
+        var flow = Flowchart("flow", [Activity("start"), Set("write-left", "counter", "workflow"), Set("write-right", "counter", "workflow")],
+            fork ? [("left", "start", "write-left"), ("right", "start", "write-right")]
+                : [("left", "start", "write-left"), ("right", "write-left", "write-right")], start: null);
+        var errors = await Validate(Sequence("root", flow));
+        Assert.Equal(fork, errors.Any(error => error.Type == "ValueFlow/ConcurrentWrite"));
+        if (fork)
+            Assert.Equal("$workflow/variables/counter", Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite").Path);
+    }
+
     [Fact]
     public async Task Concurrent_ordinary_writes_to_the_same_variable_are_rejected()
     {

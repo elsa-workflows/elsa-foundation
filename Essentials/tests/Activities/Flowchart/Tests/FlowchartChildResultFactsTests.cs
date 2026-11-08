@@ -115,16 +115,49 @@ public sealed class FlowchartChildResultFactsTests : IDisposable
         Assert.True(facts.IsCyclicBackEdge);
     }
 
-    [Fact]
-    public void Undeclared_start_facts_are_unknown_and_can_be_refined_by_the_next_draft()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_omitted_start_uses_the_runtime_entry_without_requiring_child_order(bool reverseChildren)
     {
-        var unknown = _structures.AssessChildResult(Flowchart(["producer", "consumer"], [("producer", "consumer")], null), "producer", "consumer");
+        var fallback = _structures.AssessChildResult(Flowchart(reverseChildren ? ["consumer", "producer"] : ["producer", "consumer"], [("producer", "consumer")], null), "producer", "consumer");
         var declared = _structures.AssessChildResult(Flowchart(["producer", "consumer"], [("producer", "consumer")], "producer"), "producer", "consumer");
 
-        Assert.Equal(ActivityChildResultAvailability.Unknown, unknown.Availability);
-        Assert.Null(unknown.MayRunConcurrently);
-        Assert.Null(unknown.IsCyclicBackEdge);
-        Assert.Equal(ActivityChildResultAvailability.Definite, declared.Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, fallback.Availability);
+        Assert.Equal(declared, fallback);
+    }
+
+    [Fact]
+    public void A_cycle_without_a_declared_start_uses_the_first_child_and_keeps_back_edge_refusal()
+    {
+        var flow = Flowchart(["first", "second"], [("first", "second"), ("second", "first")], null);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "first", "second").Availability);
+        var backward = _structures.AssessChildResult(flow, "second", "first");
+        Assert.True(backward.IsCyclicBackEdge);
+        Assert.Equal(ActivityChildResultAvailability.Conditional, backward.Availability);
+    }
+
+    [Fact]
+    public void Omitted_connections_use_the_owned_empty_default_and_keep_independent_entries_exclusive()
+    {
+        var children = new[] { new ActivityNode("left", "test@1", [], []), new ActivityNode("right", "test@1", [], []) };
+        var flow = new ActivityNode("flow", "flow@1", [], [], new(FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { Activities = children })));
+        var facts = _structures.AssessChildResult(flow, "left", "right");
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, facts.Availability);
+        Assert.True(facts.AreMutuallyExclusive);
+        Assert.False(facts.MayRunConcurrently);
+    }
+
+    [Fact]
+    public void Authored_property_casing_and_connection_defaults_are_read_by_the_structure_owner()
+    {
+        var flow = new ActivityNode("flow", "flow@1", [], [], new(FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new {
+                Activities = new[] { new ActivityNode("producer", "test@1", [], []), new ActivityNode("consumer", "test@1", [], []) },
+                Connections = new[] { new FlowchartConnection(new("producer"), new("consumer")) }
+            })));
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "producer", "consumer").Availability);
     }
 
     [Fact]

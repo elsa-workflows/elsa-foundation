@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Activities.Flowchart.Internal;
@@ -106,36 +106,34 @@ internal sealed class FlowchartChildResultAnalysis(
     private HashSet<string> EntriesReaching(string node) =>
         entryNodeIds.Where(entry => IsReachable(entry, node)).ToHashSet(StringComparer.Ordinal);
 
-    public static FlowchartChildResultAnalysis? TryCreate(JsonElement? payload, IReadOnlyCollection<string> childNodeIds)
+    public static FlowchartChildResultAnalysis? TryCreate(FlowchartAuthoredStructure structure)
     {
-        if (payload is not { ValueKind: JsonValueKind.Object } value ||
-            !TryGetArray(value, "connections", out var connections))
-            return null;
-
-        var startNodeId = TryGetString(value, "startNodeId");
-        if (string.IsNullOrWhiteSpace(startNodeId))
+        var children = structure.Activities.Select(child => child.NodeId).ToArray();
+        var childNodeIds = children.ToHashSet(StringComparer.Ordinal);
+        if (children.Length == 0 || children.Any(string.IsNullOrWhiteSpace) || childNodeIds.Count != children.Length)
             return null;
 
         var edges = new List<(string Source, string Target)>();
-        foreach (var connection in connections.EnumerateArray())
+        foreach (var connection in structure.Connections)
         {
-            if (!connection.TryGetProperty("source", out var source) ||
-                !connection.TryGetProperty("target", out var target))
-                continue;
-            var sourceId = TryGetString(source, "nodeId");
-            var targetId = TryGetString(target, "nodeId");
-            if (!string.IsNullOrWhiteSpace(sourceId) && !string.IsNullOrWhiteSpace(targetId))
-                edges.Add((sourceId, targetId));
+            if (connection?.Source is null || connection.Target is null ||
+                !childNodeIds.Contains(connection.Source.NodeId) || !childNodeIds.Contains(connection.Target.NodeId))
+                return null;
+            edges.Add((connection.Source.NodeId, connection.Target.NodeId));
         }
 
         var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
-        var entryNodeIds = childNodeIds
+        // Match FlowchartGraph.SelectStartNode, including the first-child fallback for a cycle.
+        // Every child without inbound connections remains a legal trigger entry as well.
+        var startNodeId = structure.StartNodeId ?? children.FirstOrDefault(id => !targetIds.Contains(id)) ?? children[0];
+        if (!childNodeIds.Contains(startNodeId))
+            return null;
+        var entryNodeIds = children
             .Where(id => !targetIds.Contains(id))
-            .Order(StringComparer.Ordinal)
             .Prepend(startNodeId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var nodeIds = edges.SelectMany(edge => new[] { edge.Source, edge.Target }).Concat(entryNodeIds).ToHashSet(StringComparer.Ordinal);
+        var nodeIds = childNodeIds;
         var successors = nodeIds.ToDictionary(
             id => id,
             id => (IReadOnlyCollection<string>)edges.Where(edge => StringComparer.Ordinal.Equals(edge.Source, id)).Select(edge => edge.Target).Distinct(StringComparer.Ordinal).ToArray(),
@@ -147,18 +145,4 @@ internal sealed class FlowchartChildResultAnalysis(
         return new FlowchartChildResultAnalysis(entryNodeIds, nodeIds, successors, predecessors);
     }
 
-    private static bool TryGetArray(JsonElement value, string propertyName, out JsonElement array)
-    {
-        if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty(propertyName, out array) && array.ValueKind == JsonValueKind.Array)
-            return true;
-        array = default;
-        return false;
-    }
-
-    private static string? TryGetString(JsonElement value, string propertyName) =>
-        value.ValueKind == JsonValueKind.Object &&
-        value.TryGetProperty(propertyName, out var property) &&
-        property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
 }

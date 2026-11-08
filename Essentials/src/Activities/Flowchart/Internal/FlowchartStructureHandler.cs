@@ -33,7 +33,8 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
 
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
     {
-        var children = ReadAuthoredStructure(activity).Activities
+        var structure = ReadAuthoredStructure(activity);
+        var children = structure.Activities
             .Select(child => child.NodeId)
             .Where(nodeId => !string.IsNullOrWhiteSpace(nodeId))
             .ToArray();
@@ -41,7 +42,7 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
             !children.Contains(consumerChildNodeId, StringComparer.Ordinal))
             return new(ActivityChildResultAvailability.Unavailable);
 
-        return FlowchartChildResultAnalysis.TryCreate(activity.Structure?.Payload, children)
+        return FlowchartChildResultAnalysis.TryCreate(structure)
                    ?.Assess(producerChildNodeId, consumerChildNodeId)
                ?? new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
     }

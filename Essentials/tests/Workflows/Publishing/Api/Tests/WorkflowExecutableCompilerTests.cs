@@ -2734,6 +2734,29 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Intrinsic_value_metadata_matches_actual_null_and_missing_input_admission()
+    {
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new("String"), null, null);
+        var set = SetIntrinsicNode("set", "message");
+        var version = WorkflowVersion(set, variables: [variable]);
+        var authority = TestCompiler.SourceAuthority(new FakeActivityVersionStore([]), _activityStructureService);
+        var analysis = await authority.AnalyzeAsync(new("WorkflowDefinition", "draft", "revision", set, [], [variable], []), new("set", "value"));
+        Assert.NotNull(analysis.Target);
+        Assert.True(analysis.Target.IsRequired);
+        Assert.False(analysis.Target.IsNullable);
+        Assert.Equal("String", analysis.Target.Type.Alias);
+        Assert.Equal(WorkflowIntrinsicKind.Set, (await Compiler(version).CompileAsync(NewRequest(DateTimeOffset.UtcNow))).RootActivity.IntrinsicKind);
+
+        var nullValue = set with { Inputs = [new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null)] };
+        var nullFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Compiler(WorkflowVersion(nullValue, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains("does not accept null", nullFailure.Message, StringComparison.Ordinal);
+        var missingFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Compiler(WorkflowVersion(set with { Inputs = [] }, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains("requires exactly these inputs", missingFailure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Set_intrinsic_targeting_an_invisible_variable_fails_publication()
     {
         // #972 publish backstop (PR #971 two-guard pattern): a Set whose target is declared in no
