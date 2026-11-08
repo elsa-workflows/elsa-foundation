@@ -139,10 +139,13 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return session;
     }
 
-    /// <summary>Holds ResumeNativeParent delivery after the model is terminal so a crash can land before parent consumption.</summary>
+    /// <summary>
+    /// Holds parent-resume delivery so a crash can land before consumption. The same file freezes
+    /// <c>BpmnEmbeddingDelivery</c> (RunBpmn) and <c>ParentResumeExecutor</c> (DispatchWorkflow / callActivity).
+    /// </summary>
     internal void HoldNativeParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold");
 
-    /// <summary>Clears the test-only native-parent resume hold; a missing file is already released.</summary>
+    /// <summary>Clears the test-only parent-resume hold; a missing file is already released.</summary>
     internal void ReleaseNativeParentResumeHold() => File.Delete(NativeParentResumeHoldPath);
 
     /// <summary>Changes new-execution admission at the next launch; accepted work stays operable.</summary>
