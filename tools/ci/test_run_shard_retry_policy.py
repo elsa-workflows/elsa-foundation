@@ -57,6 +57,22 @@ class RetryPolicyTests(unittest.TestCase):
         self.assertEqual(result["failedTwice"], ["Fake.Native.Leg"])
         self.assertEqual(result["passedOnRetry"], [])
 
+    def test_single_attempt_refuses_prior_results_before_any_child(self):
+        for attempt in ("try1", "try2"):
+            with self.subTest(attempt=attempt), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                out = root / "out"
+                test_results._trx(str(out / attempt / "0"),
+                                  [("Fake.Native", "Leg", "Passed", "00:00:01")])
+                entry = {"shard": "fake", "suites": [{"suite": "cli-acceptance",
+                         "project": "fake.csproj", "retryOnFailure": False}]}
+                argv = ["run_shard.py", "--entry", json.dumps(entry), "--out", str(out), "--head", "current"]
+                with patch.object(sys, "argv", argv), patch.object(run_shard.subprocess, "run") as child:
+                    with self.assertRaises(SystemExit) as refused:
+                        run_shard.main()
+                    self.assertEqual(refused.exception.code, 2)
+                    child.assert_not_called()
+
     def test_native_pass_one_child(self):
         code, calls, _ = self.run_case(outcome="Passed")
         self.assertEqual((code, len(calls)), (0, 1))

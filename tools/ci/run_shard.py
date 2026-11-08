@@ -86,6 +86,11 @@ def main() -> int:
 
     entry = json.loads(args.entry)
     runs = runs_of(entry)
+    for index, run in enumerate(runs):
+        if run.get("retryOnFailure", True) is False:
+            for attempt in ("try1", "try2"):
+                if os.path.lexists(os.path.join(args.out, attempt, str(index))):
+                    parser.error("single-attempt suite requires fresh results directories")
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "runs.json"), "w", encoding="utf-8") as handle:
         # The Secrets connection string stays out of the recorded runs.
