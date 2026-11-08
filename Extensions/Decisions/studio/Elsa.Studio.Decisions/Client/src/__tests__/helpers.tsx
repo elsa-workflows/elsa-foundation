@@ -28,3 +28,4 @@ export function type(element: HTMLInputElement | HTMLTextAreaElement, value: str
   flushSync(() => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 export function select(element: HTMLSelectElement, value: string) { flushSync(() => { element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); }); }
+export function blur(element: HTMLElement) { flushSync(() => element.blur()); }

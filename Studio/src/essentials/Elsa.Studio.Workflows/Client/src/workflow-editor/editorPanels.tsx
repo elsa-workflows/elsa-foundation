@@ -30,7 +30,8 @@ export function ValidationPanel({
   onRepair,
   onSelectNode,
   onSetAsStartNode,
-  unavailable
+  unavailable,
+  pending
 }: {
   draft: WorkflowDraft;
   errors?: ValidationError[];
@@ -42,9 +43,17 @@ export function ValidationPanel({
    */
   onSetAsStartNode?(nodeId: string): void;
   unavailable?: boolean;
+  pending?: boolean;
 }) {
   const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
   if (!errors.length) {
+    if (pending) {
+      return (
+        <div className="wf-validation" role="status">
+          Checking validation…
+        </div>
+      );
+    }
     return (
       <div className="wf-validation ok">
         <Check size={14} /> No validation errors

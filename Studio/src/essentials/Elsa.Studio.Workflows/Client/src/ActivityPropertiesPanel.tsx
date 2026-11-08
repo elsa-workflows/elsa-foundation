@@ -947,6 +947,7 @@ function PropertyRow({
         setExpandRequested(true);
       }}
       onChange={setRaw}
+      onValidationChange={hasError => reportEditorValidation("expression", hasError)}
     />
   ) : null;
   // A secret-only input never falls back to a text or literal editor: without a secret picker it shows the
@@ -1396,6 +1397,7 @@ function ExpandedPropertyEditor({
               initialFocus
               context={expressionContext}
               onChange={onChange}
+              onValidationChange={hasError => onValidationChange("expression", hasError)}
             />
           ) : useTextFallback || editingMode === "literal" ? (
             <>

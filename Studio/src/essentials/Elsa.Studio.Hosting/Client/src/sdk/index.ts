@@ -724,11 +724,24 @@ export interface StudioActivityPropertyEditorProps {
   onValidationChange?: (hasError: boolean) => void;
 }
 
+/** Designer-side issue a property or expression editor can contribute to the draft validation surface. */
+export interface StudioDraftValidationIssue {
+  type: string;
+  message: string;
+  path?: string | null;
+  severity?: "Error" | "Warning" | string | null;
+}
+
 export interface StudioActivityPropertyEditorContribution extends StudioBackendAwareContribution {
   id: string;
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
   supportsValidationReporting?: true;
+  /**
+   * Optional designer-side checks for the whole activity, used by the workflow canvas footer and
+   * Review & publish. Omission means this contribution does not add draft-validation issues.
+   */
+  collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
@@ -1109,6 +1122,8 @@ export interface StudioExpressionEditorProps {
   onChange(value: unknown): void;
   /** Requests the host to reveal the same document in its expanded editor surface. */
   onExpand?(): void;
+  /** Reports only whether this mounted editor currently has a local blocking error. */
+  onValidationChange?: (hasError: boolean) => void;
 }
 
 export type StudioExpressionEditorDiagnosticSeverity = "info" | "warning" | "error";
@@ -1160,6 +1175,11 @@ export interface StudioExpressionEditorContribution extends StudioBackendAwareCo
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
   /** Creates a valid empty value when authoring switches to this expression syntax. */
   createDefaultValue?(context: StudioExpressionEditorContext): unknown;
+  /**
+   * Optional designer-side checks for the whole activity, used by the workflow canvas footer and
+   * Review & publish. Omission means this contribution does not add draft-validation issues.
+   */
+  collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
   metadata?: StudioExpressionEditorMetadata;
   /** Optional semantic rendering for authorized authored source, selected through this contribution's supports policy. */

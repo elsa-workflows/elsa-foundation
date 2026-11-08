@@ -97,11 +97,19 @@ declare module "@elsa-workflows/studio-sdk" {
     onValidationChange?: (hasError: boolean) => void;
   }
 
+  export interface StudioDraftValidationIssue {
+    type: string;
+    message: string;
+    path?: string | null;
+    severity?: "Error" | "Warning" | string | null;
+  }
+
   export interface StudioActivityPropertyEditorContribution {
     id: string;
     order?: number;
     /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
     supportsValidationReporting?: true;
+    collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
     supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
     component: ComponentType<StudioActivityPropertyEditorProps>;
   }
@@ -175,6 +183,7 @@ declare module "@elsa-workflows/studio-sdk" {
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
     createDefaultValue?(context: StudioExpressionEditorContext): unknown;
+    collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   }
 
   export interface StudioConfirmOptions {

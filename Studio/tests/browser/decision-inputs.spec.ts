@@ -55,5 +55,81 @@ test("an unpublished @latest pin explains that Review & publish cannot freeze th
   await expect(inspector.getByRole("alert").first()).toContainText("no published version");
   await expect(inspector.getByText("Review & publish cannot pin a draft with @latest.")).toBeVisible();
   await expect(inspector.getByLabel("amount", { exact: true })).toBeVisible();
+  await expect(page.locator(".wf-validation")).toContainText("Review & publish cannot pin a draft with @latest.");
+  await expect(page.getByText("No validation errors")).toHaveCount(0);
   await capture(page, testInfo, "3979-unpublished-warning");
+});
+
+test("switching tables keeps extras until they are removed", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
+  await inspector.getByLabel("customerCategory", { exact: true }).fill("Standard");
+  await inspector.getByLabel("Business decision", { exact: true }).selectOption({ label: "Scoring" });
+  await expect(inspector.getByText("InputMembership")).toBeVisible();
+  await expect(page.locator(".wf-validation")).toContainText("InputMembership");
+  await expect(page.getByText("No validation errors")).toHaveCount(0);
+  await expect(inspector.getByLabel("score", { exact: true })).toBeVisible();
+  await expect(inspector.getByLabel("amount (not in this table)", { exact: true })).toBeVisible();
+  const state = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(state.Inputs.expression.value).toEqual({
+    amount: { kind: "number", value: "950" },
+    customerCategory: { kind: "string", value: "Standard" },
+    score: { kind: "number", value: "0" }
+  });
+  await capture(page, testInfo, "3979-table-switch-extras");
+  await inspector.getByRole("button", { name: "Remove inputs not in this table", exact: true }).click();
+  const cleaned = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(cleaned.Inputs.expression.value).toEqual({ score: { kind: "number", value: "0" } });
+  await expect(inspector.getByLabel("amount", { exact: true })).toHaveCount(0);
+});
+
+test("a type switch keeps the stored kind until an edit writes the displayed type", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
+  await inspector.getByLabel("Business decision version", { exact: true }).selectOption({ label: "Version 2" });
+  await expect(inspector.getByText("InputTypeMismatch")).toBeVisible();
+  await expect(page.locator(".wf-validation")).toContainText("InputTypeMismatch");
+  await expect(page.getByText("No validation errors")).toHaveCount(0);
+  const mismatched = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(mismatched.Inputs.expression.value.amount).toEqual({ kind: "number", value: "950" });
+  await capture(page, testInfo, "3979-type-switch-mismatch");
+  await inspector.getByLabel("amount", { exact: true }).fill("951");
+  const written = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(written.Inputs.expression.value.amount).toEqual({ kind: "string", value: "951" });
+});
+
+test("cleared JSON reseeds and invalid JSON blur restores stored text", async ({ page }) => {
+  const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
+  await inspector.getByText("Advanced JSON").click();
+  const json = inspector.getByRole("textbox", { name: "Decision inputs JSON" });
+  await json.fill("{}");
+  await expect(inspector.getByLabel("amount", { exact: true })).toHaveValue("0");
+  const reseeded = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(reseeded.Inputs.expression.value.amount).toEqual({ kind: "number", value: "0" });
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
+  if (!await json.isVisible()) await inspector.getByText("Advanced JSON").click();
+  await json.fill("{");
+  await expect(inspector.getByText("JSON is not valid.")).toBeVisible();
+  await expect(json).toHaveAttribute("aria-invalid", "true");
+  await json.blur();
+  await expect(inspector.getByText("JSON is not valid.")).toHaveCount(0);
+  await expect(json).not.toHaveAttribute("aria-invalid", "true");
+  await expect(json).toContainText('"950"');
+});
+
+test("an empty required number is not Ready on the validation surface", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("");
+  await expect(inspector.getByText("InvalidValue")).toBeVisible();
+  await expect(page.locator(".wf-validation")).toContainText("InvalidValue");
+  await expect(page.getByText("No validation errors")).toHaveCount(0);
+  await capture(page, testInfo, "3979-empty-amount-invalid");
+});
+
+test("a version-fetch failure is not labeled unpublished", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page, "&fetchError=1");
+  await expect(inspector.getByRole("alert").filter({ hasText: "versions unavailable" }).first()).toBeVisible();
+  await expect(inspector.getByText("no published version")).toHaveCount(0);
+  await capture(page, testInfo, "3979-version-fetch-error");
 });
