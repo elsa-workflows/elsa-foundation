@@ -16,7 +16,7 @@ Last reconciled: 2026-10-23 for the Program #2310 restart; the baseline evidence
 
 ## Program #2310 status
 
-The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026 host evidence is recorded in this PR against current main; T027-T031 and the corresponding live Studio journey remain open.
+The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026 cookie host evidence landed in #3989. RotateBearer host evidence is recorded in this PR against current main; T027-T031 and the corresponding live Studio journey remain open.
 
 
 ## Program #2310 M1 rebuild — T026 host evidence (PR 2) — 2026-11-08
@@ -41,6 +41,24 @@ Local commands on this PR (SDK 10.0.300, locked restore):
 | `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | `Generated solution filters still describe the project graph.` |
 
 Not run here: the Workbench native-hosting split, whole-solution tests, Studio, bearer/rotateBearer coverage, RS0016 PublicAPI (no public API change), hosted CI. Bearer / rotateBearer coverage remains out of scope. T027-T031 remain open.
+
+## Program #2310 M1 rebuild — rotateBearer host evidence (PR 3) — 2026-11-08
+
+Workbench host evidence that Studio's per-request cookie-to-bearer exchange does not stale expression authoring context. Recorded against main `2e16d108d2f278154d4b9b92d70243edfb45ccb1` (#3989 merge). Production bearer-hash exclusion already shipped in #3274 (`ExpressionToolingApiHandlers` omits `jti`/`iat`/`nbf`/`exp`/`oi_tkn_id`/`oi_crt_dt`/`oi_exp_dt`; `ExpressionToolingEndpointTests` covers rotating-token stability). This PR is test-only host evidence on top of those; the handler is unchanged.
+
+- Stock persisted-draft JavaScript/Liquid case is a theory: `rotateBearer: false` keeps the cookie path from T026; `rotateBearer: true` mints a fresh bearer from `GET /_elsa/identity/token` for every tooling POST on a cookie-less client, hashes the token (never persists or logs it), and requires a different fingerprint per operation.
+- Context, symbols, completions, hover, and validate all go through that path when `rotateBearer` is true. `contextRevision` stays unchanged and outcome state remains Success (not Stale).
+- Missing-Liquid negative control is unchanged.
+- Assertions were not weakened. T026 stays checked; T027-T031 remain open.
+
+Local commands on this PR (SDK 10.0.300, locked restore):
+
+| Command | Result |
+|---|---|
+| `dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj --filter "FullyQualifiedName~ExpressionToolingHostEvidenceTests" --list-tests -p:RestoreLockedMode=true --nologo` | 3 tests listed: cookie (`rotateBearer: False`), fresh-bearer (`rotateBearer: True`), missing-Liquid |
+| same filter, without `--list-tests` | 3 passed, 0 failed, 36 s |
+
+Not run here: the Workbench native-hosting split, whole-solution tests, architecture, maps, Studio, RS0016 PublicAPI (no public API change), hosted CI. T027-T031 remain open.
 
 ## Passing evidence
 
