@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "cdfc79a0c3c181b0782719437cab5466d961690f",
+  "last_publish_commit": "eb4c6a6162130123621ee9a2d326256fd6d8c97e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
-      "version": "4.0.25-preview",
-      "commit": "3ba0383f81095c41dcf8254253711fa053900ca2"
+      "version": "4.0.26-preview",
+      "commit": "eb4c6a6162130123621ee9a2d326256fd6d8c97e"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Api",
