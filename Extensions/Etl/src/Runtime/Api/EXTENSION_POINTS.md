@@ -3,7 +3,7 @@
 Owner project: `Elsa.Etl.Runtime.Api`
 Domain: `Elsa.Etl`
 
-`IEtlRuntimeOperations` is the scoped operation seam dispatched by the six MinimalEndpoints endpoints. The default
+`IEtlRuntimeOperations` is the scoped operation seam dispatched by the six NativeEndpoints endpoints. The default
 implementation derives scope from a validated normalized principal and the host's ordinary persistence scope. Route
 and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection,
 `etl/runs:cancel` for cancellation and `etl/runs:complete` to request completion of a continuous run; it returns

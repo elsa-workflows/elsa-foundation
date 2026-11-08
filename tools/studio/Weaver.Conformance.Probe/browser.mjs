@@ -57,7 +57,7 @@ function safeFailureFrames(error) {
 function retainFailureDiagnostic(error) {
   const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
   try {
-    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600, flag: "wx" });
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
   } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
   return diagnostic;
 }
@@ -2078,7 +2078,7 @@ async function workflowVersionHistory() {
   const definitionBefore = await owner("definition-before", wf.definitionPath);
   await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   await expect(dock()).toBeVisible();
-  await nativeEnter("versions-tab", page.getByRole("tab", { name: "Versions", exact: true }), "Versions");
+  await nativeEnter("properties-tab", page.getByRole("tab", { name: "Properties", exact: true }), "Properties");
   const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
   await expect(select).toBeVisible();
   await nativeEnter("select-version", select, "Select version");

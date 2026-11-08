@@ -34,7 +34,7 @@ internal sealed partial class EfEtlRuntimeStore
             var status = run.InvocationFingerprint == fingerprint && prior.BindingsJson == bindingsJson ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
             return new(status, await ConnectorViewAsync(run, prior, cancellationToken));
         }
-        run = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, null, NowTicks());
+        run = EtlRuntimeRecordCodec.RunRecord(invocation, fingerprint, null, NowTicks());
         var connector = new EtlConnectorRunRecord
         {
             ScopeKey = key.ScopeKey, RunKey = key.RunKey, BindingsJson = bindingsJson,
@@ -179,7 +179,7 @@ internal sealed partial class EfEtlRuntimeStore
         db.ChangeTracker.Clear();
         EtlRuntimeRecordCodec.ValidateIdentity(workerId, "worker id");
         var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
-        var runKey = runId is null ? null : db.RunKeyOf(runId);
+        var runKey = runId is null ? null : EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var now = NowTicks();
         var candidate = await (from partition in db.ConnectorPartitions

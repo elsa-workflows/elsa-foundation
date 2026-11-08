@@ -6,7 +6,7 @@ using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.Stop;
 

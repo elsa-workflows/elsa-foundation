@@ -15,13 +15,10 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Review & publish|Test Run/ })).toHaveCount(0);
     await expect(page.getByRole("tab", { name: "Test Run", exact: true })).toHaveCount(0);
-    const views = page.getByRole("tablist", { name: "Editor view tabs" });
-    await views.getByRole("tab", { name: "Variables", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Variables", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await expect(page.getByText("Variables", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Add variable", exact: true }).click();
-    await views.getByRole("tab", { name: "Inputs", exact: true }).click();
     await page.getByRole("button", { name: "Add input", exact: true }).click();
-    await views.getByRole("tab", { name: "Outputs", exact: true }).click();
     await page.getByRole("button", { name: "Add output", exact: true }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
@@ -63,11 +60,27 @@ for (const theme of ["light", "dark"]) {
     const dialog = page.getByRole("dialog", { name: "Save as template", exact: true });
     await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Saved live workflow");
     await dialog.getByRole("button", { name: "Save template", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    const toast = page.getByRole("group", { name: "Template saved", exact: true });
-    await expect(toast).toBeVisible();
-    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeFocused();
-    await expect(toast.getByRole("button", { name: "View templates", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("status")).toContainText("Template saved");
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    const actionLayout = await done.evaluate(button => {
+      const actions = button.closest(".wf-dialog-actions");
+      if (!actions) return null;
+      const actionRect = actions.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const style = getComputedStyle(actions);
+      return {
+        display: style.display,
+        justifyContent: style.justifyContent,
+        actionWidth: actionRect.width,
+        buttonWidth: buttonRect.width,
+        rightGap: actionRect.right - buttonRect.right
+      };
+    });
+    expect(actionLayout).not.toBeNull();
+    expect(actionLayout?.display).toBe("flex");
+    expect(actionLayout?.justifyContent).toBe("flex-end");
+    expect(actionLayout?.buttonWidth).toBeLessThan(actionLayout?.actionWidth ?? 0);
+    expect(actionLayout?.rightGap).toBeLessThan(1);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("workflow-template-fixture")!));
     expect(saved[0].content.state.rootActivity.structure.kind).toBe("elsa.sequence.structure");
     expect(saved[0].content.activityPresentation[0].displayName).toBe("Notify buyer");
@@ -83,12 +96,10 @@ test("keeps a renamed template open when leaving would lose a failed metadata sa
   await create.getByRole("radio", { name: "Sequence", exact: true }).focus();
   await page.keyboard.press("Space");
   await create.getByRole("button", { name: "Create template", exact: true }).click();
-  const views = page.getByRole("tablist", { name: "Editor view tabs" });
-  await views.getByRole("tab", { name: "Variables", exact: true }).click();
+  await page.getByRole("tab", { name: "Properties", exact: true }).click();
   await page.getByRole("button", { name: "Add variable", exact: true }).click();
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.evaluate(() => { localStorage.setItem("template-fixture-fail-saves", "1"); localStorage.setItem("template-fixture-save-delay", "800"); });
-  await views.getByRole("tab", { name: "Properties", exact: true }).click();
   await page.getByRole("textbox", { name: "Workflow name", exact: true }).fill("Keep my renamed template");
   await page.getByRole("tab", { name: "Designer", exact: true }).click();
   await page.getByRole("button", { name: "Templates", exact: true }).click();
@@ -98,9 +109,8 @@ test("keeps a renamed template open when leaving would lose a failed metadata sa
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true })));
   await expect(page.getByRole("status", { name: "Couldn't save name/description.", exact: true })).toBeVisible();
   await expect(editor).not.toHaveAttribute("inert", "");
-  await views.getByRole("tab", { name: "Variables", exact: true }).click();
+  await page.getByRole("tab", { name: "Properties", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
-  await views.getByRole("tab", { name: "Properties", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Workflow name", exact: true })).toHaveValue("Keep my renamed template");
   await page.evaluate(() => localStorage.removeItem("template-fixture-fail-saves"));
   await page.getByRole("button", { name: "Templates", exact: true }).click();

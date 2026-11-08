@@ -80,19 +80,11 @@ contract is **Minor**, additive.
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
 | `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
-| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
 | `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
 | `IBuiltInAuthoringDescriptorProvider` | Enumerable. Contributes code-owned authoring-catalog descriptors that have no persisted CLR/JSON catalog row. The catalog handler always appends them and never gates them by availability policy. | `ListActivityAuthoringCatalog` merges the contributed descriptors into the available-activity list. | `IntrinsicAuthoringDescriptorProvider` — surfaces the Set Variable and Set Output engine intrinsics (ADR 0045) so the palette can author variable and output assignment. |
 
 Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
 documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
-
-Public diagnostic declarations must never derive from authored content, credentials, exceptions or runtime
-diagnostic text. The sanitizer uses only the registered explanation/location/action for a recognized code;
-runtime subjects, paths, remediation and metadata are discarded. Invalid, ambiguous or undeclared entries
-use a plain safe fallback with the technical code retained separately. Messages and remediation are bounded
-to 512 characters, pointers to 256 and action labels to 80. The contribution does not grant authorization,
-change validation severity or make an invalid draft publishable.
 
 Each authorable manifest schema declares its supported migration sources. The legacy schema-version list applies only
 to that same provider; cross-provider migrations must declare exact provider-key and schema-version pairs. Capability

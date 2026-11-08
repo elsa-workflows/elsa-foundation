@@ -1,9 +1,0 @@
-{
-  "name": "fr2-1145-host-11",
-  "id": "fb3a4ec7854c8025ba32a87460ba10969903afeb707abff22c55f777b66bf049",
-  "image": "elsaworkflows/elsa-foundation-host@sha256:f418270b598253020291c14eed175807440cc46049b5f945d5df3ddd668a8d43",
-  "url": "https://localhost:32923",
-  "state": "/Users/sipke/.codex/visualizations/2026/11/02/01a19dd6-a3d3-7cc1-a085-73d8ca7c31ae/fr2-1145-merge-reviewed/state-11",
-  "data": "/Users/sipke/.codex/visualizations/2026/11/02/01a19dd6-a3d3-7cc1-a085-73d8ca7c31ae/fr2-1145-merge-reviewed/data-11",
-  "emptyStateBeforeLaunch": true
-}

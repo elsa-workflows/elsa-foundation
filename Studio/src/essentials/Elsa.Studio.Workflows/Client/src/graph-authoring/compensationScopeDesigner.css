@@ -257,11 +257,23 @@ button.wf-compensation-state {
   gap: .5rem;
 }
 
+.wf-compensation-columns,
 .wf-compensation-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 2rem minmax(12rem, 1fr) minmax(12rem, 1fr) auto;
   align-items: start;
-  gap: .75rem;
+  gap: .5rem .75rem;
+}
+
+.wf-compensation-columns {
+  padding: 0 .75rem;
+  color: var(--studio-text-muted);
+  font-size: .6875rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.wf-compensation-row {
   padding: .625rem .75rem;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius, .5rem);
@@ -269,41 +281,12 @@ button.wf-compensation-state {
   box-shadow: var(--studio-shadow-sm);
 }
 
-.wf-compensation-row-heading {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: .5rem;
-  min-width: 0;
-  padding-bottom: .5rem;
-  border-bottom: 1px solid var(--studio-border);
-}
-
-.wf-compensation-row-heading .wf-compensation-name,
-.wf-compensation-row-heading .wf-compensation-name-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.wf-compensation-column-label {
-  color: var(--studio-text-muted);
-  font-size: .6875rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.wf-compensation-received-row {
-  grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr);
-}
-
-
 .wf-compensation-row.has-problem {
   border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
 }
 
 .wf-compensation-ordinal {
   display: inline-flex;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 1.5rem;
@@ -418,7 +401,7 @@ button.wf-compensation-state {
 
 .wf-compensation-problem {
   display: flex;
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   align-items: center;
   gap: .3rem;
   margin: 0;
@@ -451,15 +434,16 @@ button.wf-compensation-state {
 }
 
 @media (width <= 48rem) {
-  .wf-compensation-row {
-    grid-template-columns: minmax(0, 1fr);
+  .wf-compensation-columns {
+    display: none;
   }
 
-  .wf-compensation-received-row {
+  .wf-compensation-row {
     grid-template-columns: 2rem minmax(0, 1fr);
   }
 
-  .wf-compensation-received-row .wf-compensation-handler {
+  .wf-compensation-handler,
+  .wf-compensation-actions {
     grid-column: 2;
   }
 }

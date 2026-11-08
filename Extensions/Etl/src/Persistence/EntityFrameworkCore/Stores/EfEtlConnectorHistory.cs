@@ -183,9 +183,6 @@ internal sealed partial class EfEtlRuntimeStore
         if (requestCount != http.PageSequence + 1) throw new InvalidDataException("The HTTP request history is incomplete.");
         var expectedRequest = basePage == 0 ? new EtlHttpRequest(http.Request.ShardId, null) : baseRequest!;
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        // Each page's accepted offset is checked against its settled batch ranges after this stream ends: a server engine
-        // runs one command per connection at a time, so no query may run while this reader is open.
-        var acceptedItemCounts = new Dictionary<long, int>();
         var pagesWithRequests =
             from page in Pages(row)
             join request in Requests(row)
@@ -208,7 +205,9 @@ internal sealed partial class EfEtlRuntimeStore
             ValidateRetainedPage(retained, page, expectedRequest, pipeline);
             if (page.NextContinuation is not null && visited.Contains(retained.NextRequestHash))
                 throw new InvalidDataException("The retained continuation repeats a visited request.");
-            acceptedItemCounts[retained.PageSequence] = retained.AcceptedItemCount;
+            var acceptedItemCount = await ReadAcceptedItemCountAsync(row, retained.PageSequence, cancellationToken);
+            if (acceptedItemCount != retained.AcceptedItemCount)
+                throw new InvalidDataException("The HTTP page accepted offset differs from its settled batch ranges.");
             if (sequence == http.PageSequence)
             {
                 if (expectedRequest != http.Request || http.Page is not null && page != http.Page ||
@@ -226,38 +225,28 @@ internal sealed partial class EfEtlRuntimeStore
             metadataBytes = checked(metadataBytes + retained.MetadataBytes);
             sequence++;
         }
-        await VerifyAcceptedItemCountsAsync(row, acceptedItemCounts, cancellationToken);
         if (sequence != row.PageCount || pageBytes != row.PageBytes || metadataBytes != row.MetadataBytes ||
             requestInputReservedBytes != row.SourceInputReservedBytes ||
             http.Page is null && !http.Exhausted && expectedRequest != http.Request)
             throw new InvalidDataException("The HTTP request history or retained accounting is inconsistent.");
     }
 
-    /// <summary>
-    /// Checks each retained page's accepted offset against its settled batches, whose ranges must be contiguous from the
-    /// page's first item. One stream over the partition's settled HTTP batches, in page and batch order.
-    /// </summary>
-    private async ValueTask VerifyAcceptedItemCountsAsync(EtlConnectorPartitionRecord partition, IReadOnlyDictionary<long, int> expected,
+    private async ValueTask<int> ReadAcceptedItemCountAsync(EtlConnectorPartitionRecord partition, long pageSequence,
         CancellationToken cancellationToken)
     {
-        var accepted = expected.Keys.ToDictionary(page => page, _ => 0);
+        var acceptedItemCount = 0;
         await foreach (var retained in db.ConnectorBatches.AsNoTracking().Where(batch => batch.ScopeKey == partition.ScopeKey &&
                 batch.RunKey == partition.RunKey && batch.PartitionOrdinal == partition.PartitionOrdinal &&
-                batch.HttpPageSequence != null && batch.Settled)
-            .OrderBy(batch => batch.HttpPageSequence).ThenBy(batch => batch.BatchOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
+                batch.HttpPageSequence == pageSequence && batch.Settled)
+            .OrderBy(batch => batch.BatchOrdinal).AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
-            var pageSequence = retained.HttpPageSequence!.Value;
-            if (!accepted.TryGetValue(pageSequence, out var acceptedItemCount))
-                continue;
             var descriptor = ReadConnectorBatch(retained);
             if (descriptor.Range is not EtlConnectorHttpBatchRange range || range.PageSequence != pageSequence ||
                 range.StartItem != acceptedItemCount || range.EndItemExclusive <= range.StartItem)
                 throw new InvalidDataException("The settled HTTP batch ranges are not contiguous within their page.");
-            accepted[pageSequence] = range.EndItemExclusive;
+            acceptedItemCount = range.EndItemExclusive;
         }
-        foreach (var (pageSequence, acceptedItemCount) in expected)
-            if (accepted[pageSequence] != acceptedItemCount)
-                throw new InvalidDataException("The HTTP page accepted offset differs from its settled batch ranges.");
+        return acceptedItemCount;
     }
 
     private static void ValidateRetainedPage(EtlConnectorHttpPageRecord row, EtlRetainedHttpPage page, EtlHttpRequest request, EtlPipelineV2 pipeline)

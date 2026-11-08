@@ -2,7 +2,7 @@ using System.Buffers;
 using Elsa.Etl.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Etl.Api;
 

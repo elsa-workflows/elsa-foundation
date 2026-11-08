@@ -10,7 +10,7 @@ using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Preflight;
 

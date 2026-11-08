@@ -125,7 +125,7 @@
 }
 
 .ad-publication-dialog .ad-publication-review { display: grid; gap: 1rem; padding: 1.15rem; }
-.ad-publication-dialog .ad-publication-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: .75rem; }
+.ad-publication-dialog .ad-publication-header { align-items: flex-start; }
 .ad-publication-dialog .ad-publication-header h2 { margin: .2rem 0 .35rem; }
 .ad-publication-dialog .ad-publication-header p { max-width: 52rem; }
 .ad-publication-dialog-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 2.4rem; min-height: 2.4rem; padding: 0; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }

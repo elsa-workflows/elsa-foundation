@@ -73,11 +73,9 @@ test("associates a concrete catalog availability reason with a disabled root cho
   const startingPoint = dialog.getByRole("combobox", { name: "Starting point" });
   const cancel = dialog.getByRole("button", { name: "Cancel" });
   const create = dialog.getByRole("button", { name: "Create" });
-  await startingPoint.focus();
+  await description.focus();
   await page.keyboard.press("Tab");
-  await expect(dialog.getByRole("textbox", { name: "Display name" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(description).toBeFocused();
+  await expect(startingPoint).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(cancel).toBeFocused();
   await page.keyboard.press("Tab");

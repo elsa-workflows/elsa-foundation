@@ -107,7 +107,7 @@ library intended to ship as an external MIT-licensed project that Elsa consumes 
 carried zero Elsa domain dependencies and zero NuGet package references, holding only
 `FrameworkReference Microsoft.AspNetCore.App`.
 
-**This has happened.** The library ships as [ValenceWorks.MinimalEndpoints](https://www.nuget.org/packages/ValenceWorks.MinimalEndpoints)
+**This has happened.** The library ships as [NativeEndpoints](https://www.nuget.org/packages/NativeEndpoints)
 under MIT. `Elsa.Api.Endpoints` is deleted; `Elsa.Api.AspNetCore` keeps its name and every inbound
 reference, sheds the framework, and holds only what the section below says stays Elsa-owned. As
 stated when this ADR was written, that swap was a packaging change rather than an architectural one

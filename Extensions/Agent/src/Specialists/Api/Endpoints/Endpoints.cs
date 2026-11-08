@@ -4,7 +4,7 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Foundation.Identity.Authorization;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Agent.Specialists.Api.Endpoints;
 

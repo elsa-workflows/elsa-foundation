@@ -909,7 +909,7 @@
           "Elsa.Api.Capabilities.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.activities.bpmn.core": {
@@ -943,7 +943,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.activities.compensation": {
@@ -983,7 +983,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.activities.design.core": {
@@ -1198,7 +1198,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.agent.core": {
@@ -1265,7 +1265,7 @@
           "Elsa.Connections.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Persistence.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.agent.specialists.azureopenai": {
@@ -1315,7 +1315,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Api": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.agent.specialists.jsonschema": {
@@ -1372,7 +1372,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.agent.workflows": {
@@ -1398,7 +1398,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.api.capabilities": {
@@ -1411,7 +1411,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.api.capabilities.core": {
@@ -1438,7 +1438,7 @@
           "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.attention.core": {
@@ -1507,7 +1507,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.connections.core": {
@@ -1549,84 +1549,6 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.decisions": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Decisions.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.decisions.api": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
-          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
-          "Elsa.Decisions.Design": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
-        }
-      },
-      "elsa.decisions.core": {
-        "type": "Project"
-      },
-      "elsa.decisions.design": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Decisions.Core": "[4.0.0-dev, )",
-          "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.decisions.persistence.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Decisions.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.decisions.persistence.entityframeworkcore": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )",
-          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
-          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
-        }
-      },
-      "elsa.decisions.workflows.api": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Decisions.Workflows.Runtime": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.decisions.workflows.design": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Decisions.Core": "[4.0.0-dev, )",
-          "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )",
-          "Elsa.Decisions.Workflows.Runtime": "[4.0.0-dev, )",
-          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.decisions.workflows.runtime": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Decisions.Core": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.diagnostics.consolelogstreaming": {
         "type": "Project",
         "dependencies": {
@@ -1644,7 +1566,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.diagnostics.opentelemetry.core": {
@@ -1680,7 +1602,7 @@
           "Elsa.Diagnostics.StructuredLogs.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.diagnostics.structuredlogs.core": {
@@ -1706,7 +1628,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.etl.core": {
@@ -1732,7 +1654,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.etl.persistence.entityframeworkcore": {
@@ -1774,7 +1696,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.etl.sql.postgresql": {
@@ -1857,7 +1779,7 @@
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.expressions.core": {
@@ -1901,7 +1823,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.expressions.javascript.rendering.core": {
@@ -1959,7 +1881,7 @@
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.foundation.identity.aspnetcoreidentity": {
@@ -1971,7 +1893,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.foundation.identity.aspnetcoreidentity.entityframeworkcore": {
@@ -2146,7 +2068,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Modularity.Nuplane": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.modularity.core": {
@@ -2280,7 +2202,7 @@
           "Elsa.Secrets": "[4.0.0-dev, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.secrets.core": {
@@ -2351,7 +2273,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Studio.Preferences.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.studio.preferences.core": {
@@ -2402,7 +2324,7 @@
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.dashboard.persistence.entityframeworkcore": {
@@ -2436,7 +2358,7 @@
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.design.core": {
@@ -2545,7 +2467,7 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.publishing": {
@@ -2586,7 +2508,7 @@
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.publishing.core": {
@@ -2638,7 +2560,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.runtime.core": {
@@ -2696,7 +2618,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.workflows.runtime.persistence.entityframeworkcore": {
@@ -2780,7 +2702,7 @@
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa3.Models": "[4.0.0-dev, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa3.activities.design.import.persistence.entityframeworkcore": {
@@ -3104,6 +3026,12 @@
         "resolved": "2.7.5",
         "contentHash": "0FA67RSnRM4tcBKqiqVu/HPdZ9+QOKbmeRjxRUGTCjPU4C0bmUhd97Dso7Yild5P7nOV6GxJ2xrK0Kv/O9xp0w=="
       },
+      "NativeEndpoints": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0-preview.6, )",
+        "resolved": "1.0.0-preview.6",
+        "contentHash": "3TeUmdG8kjVZYj2NJeYc53kmP0M9Qj6sTBfhJjQMqrLGXgIBGdme9ivE7vlshRAqM79mRLmjICQJPAIBcdEQQw=="
+      },
       "Newtonsoft.Json": {
         "type": "CentralTransitive",
         "requested": "[13.0.4, )",
@@ -3203,12 +3131,6 @@
         "requested": "[10.0.8, )",
         "resolved": "10.0.8",
         "contentHash": "w9sjhVDe4AKkyswUctVK3oCmZHaA7g+ZUG/xDmzgbsOGxmeRQA6lCQeAh6r75K0lcsLlfBzZXmsNblndyNJhxw=="
-      },
-      "ValenceWorks.MinimalEndpoints": {
-        "type": "CentralTransitive",
-        "requested": "[1.0.0, )",
-        "resolved": "1.0.0",
-        "contentHash": "Nxn9P89DUkiXNrEjvYtJ5iu9EteQOrfNA/lyfsrsCcZeWu1hUwQDkGpVXFep7KuSA87vdMKfvng5obFDxHqZyQ=="
       }
     }
   }

@@ -1,9 +1,0 @@
-# Decisions in workflow execution
-
-Enable `DecisionsWorkflowsRuntime` with the existing workflow runtime and `Decisions` evaluator. The ordinary `EvaluateDecision` activity accepts a publication-fixed `assetId@versionId` or `assetId@latest` selection, tagged scalar inputs and an operation budget. Publication requires the [design adapter](../Design/README.md). Runtime consumes only the frozen pin, never a mutable draft or a Design store.
-
-The activity returns the evaluator result and real rule trace through the ordinary activity result, with Done, NoMatch and Refused outcomes. It reuses the host execution authority, tenant partition, retry/checkpoint and result lifecycle. It owns no coordinator, execution ledger or durable test job. See the [execution boundary](../../../../../specs/1195-business-decisions/contracts/execution-integration.md).
-
-`IDecisionWorkflowAuthorizer` is a single scoped replacement. The default checks current Decisions Evaluate grants through Foundation Identity's persisted-user authorizer. Authenticated start boundaries capture the canonical persisted user identity in trusted execution authority; captured identity is not a grant snapshot. Unsupported service/legacy identities fail unavailable. A background host with a different identity scheme must provide its explicit policy. Never use the current HTTP principal when recovering work.
-
-Protected decision versions and hidden input bindings currently refuse publication/invocation because this adapter cannot prove their full source/value protection through arbitrary workflow consumers. The activity also checks the materialized invocation snapshot, because dynamic input protection may be stronger than the publication binding. Direct decision APIs retain their independent source and sensitive-value gates.

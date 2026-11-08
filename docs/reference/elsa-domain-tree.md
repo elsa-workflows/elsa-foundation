@@ -16,7 +16,6 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | `Elsa.Api` | Exposes application APIs through the endpoint framework and publishes the client capability document. |
 | `Elsa.Attention` | Aggregates permission-scoped attention items from domain contributors behind one query endpoint. |
 | `Elsa.Caching` | Provides caching contracts and providers. |
-| `Elsa.Decisions` | Evaluates versioned business decisions and explains their results. |
 | `Elsa.Diagnostics` | Streams and persists diagnostics: console logs, structured logs, and OpenTelemetry ingestion. |
 | `Elsa.Etl` | Executes data transformations over independently recoverable partitions. |
 | `Elsa.Events` | Publishes and delivers in-process events (framework §2.6 unified event model). |

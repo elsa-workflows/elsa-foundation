@@ -6,7 +6,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Agent.Specialists.Review.Api;
 

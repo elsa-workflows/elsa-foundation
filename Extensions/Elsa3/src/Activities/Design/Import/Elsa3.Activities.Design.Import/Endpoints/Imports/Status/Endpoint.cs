@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa3.Activities.Design.Import.Endpoints.Imports.Status;
 

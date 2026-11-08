@@ -27,7 +27,7 @@ public class SpecialistsReviewApiFeature : IWebShellFeature
         services.AddElsaEndpoints();
         services.AddHttpContextAccessor();
         services.TryAddScoped<ReviewRequestCaller>();
-        services.TryAddKeyedSingleton<MinimalEndpoints.IEndpointFaultRenderer, HumanReviewFaultRenderer>(HumanReviewApi.OwnerId);
+        services.TryAddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, HumanReviewFaultRenderer>(HumanReviewApi.OwnerId);
         services.AddPermissionContributor<HumanReviewPermissionContributor>();
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-reviews", 1,
         [
