@@ -25,13 +25,15 @@ existing all-feature composition test. No tests assert these documents' text.
 
 **Checkpoint:** M1 and M2 merge/resulting-main receipts exist; workers have concrete claims and boundaries.
 
-Current #3922 ownership: the integrating worktree owns API transport, workflow/source-owned publication,
-Decisions constraints and the task/program records. Separate metadata worktree owns T004–T005 and its
-Core/CLR/profile files; structure/analysis worktree owns T006–T007, the shared validator and owning tests;
-Graph worktree owns provider projection, ActivityTemplateCompiler and Graph/template controls. Shared
-Core contracts are committed before dependent code. All heavy qualification uses owned Azure after
-candidate freeze. The finite evidence ledger is initialized with zero production passes; T003 remains
-open until its owned proof-host/store allocation obligations are met.
+Current #3922 ownership: one implementation worker owns the integrating Foundation leaf; the coordinator
+sequences qualification and review. Shared Core contracts precede dependent code. The bounded owned
+Azure development run is closed; see its [build and retained-failure receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728243018).
+Approved local qualification runs owning whole projects sequentially after fresh capacity checks, using
+two processors, preserving the build-slot wrapper when present and unchanged stock retry/hang guards;
+see the [source-bound qualification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728799519).
+T003 remains open until its owned proof-host/store allocation obligations are met. T004–T010, M1 journey
+failures and downstream acceptance remain open; protected CI, formal review and resulting-main
+qualification remain required.
 
 ## Phase 2: Shared analysis and static admission
 
