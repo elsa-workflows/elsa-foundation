@@ -15,6 +15,8 @@ export interface CreateWorkflowDraft {
   starter?: "http";
   templateId?: string;
   templateContent?: WorkflowTemplateContent;
+  /** Local form intent; retained by Weaver prefill/revert and never sent in creation requests. */
+  metadataEdited?: { name: boolean; description: boolean };
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [

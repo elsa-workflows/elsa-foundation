@@ -4074,6 +4074,12 @@
   font-size: 13px;
 }
 
+@media (max-width: 700px) {
+  .wf-properties-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .wf-properties-info dt {
   color: var(--wf-muted-text);
   font-weight: 700;
