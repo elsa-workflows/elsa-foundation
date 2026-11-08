@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "eb4c6a6162130123621ee9a2d326256fd6d8c97e",
+  "last_publish_commit": "9e52948dd5239e4715e137c14e2546a56c2ab92a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -79,8 +79,8 @@
     },
     {
       "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
-      "version": "4.0.17-preview",
-      "commit": "3bb0123b1838402166e88bf514f411e2c87329e4"
+      "version": "4.0.18-preview",
+      "commit": "9e52948dd5239e4715e137c14e2546a56c2ab92a"
     },
     {
       "package_id": "Elsa.Activities.Flowchart",
