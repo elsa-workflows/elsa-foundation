@@ -325,6 +325,7 @@ public sealed class ActivityDataContextEndpointTests
             services.AddLogging().AddRouting().AddElsaEndpoints();
             services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
             new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature().ConfigureServices(services);
             new WorkflowsDesignApiFeature().ConfigureServices(services);
             services.RemoveAll<IWorkflowDefinitionAuthorizer>();

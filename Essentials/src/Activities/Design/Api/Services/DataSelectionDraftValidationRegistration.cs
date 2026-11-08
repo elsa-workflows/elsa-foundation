@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Design.Api.Services;
 
 /// <summary>Preserves the host's inner validator lifetime while the analysis wrapper remains request-scoped.</summary>
-internal sealed class ActivityDataSelectionDraftValidationRegistration(IServiceCollection services, object key) : IStartupTask
+internal sealed class DataSelectionDraftValidationRegistration(IServiceCollection services, object key) : IStartupTask
 {
     private readonly IServiceCollection _services = services;
     private readonly object _key = key;
@@ -17,10 +17,10 @@ internal sealed class ActivityDataSelectionDraftValidationRegistration(IServiceC
         var entries = services.Where(x => x.ServiceType == typeof(IActivityDraftValidator) && !x.IsKeyedService).ToArray();
         if (entries.Length != 1) throw new InvalidOperationException("Activity draft validation requires exactly one configured validator.");
         var original = entries[0];
-        if (original.ImplementationFactory?.Target is ActivityDataSelectionDraftValidationRegistration current && ReferenceEquals(current._services, services))
+        if (original.ImplementationFactory?.Target is DataSelectionDraftValidationRegistration current && ReferenceEquals(current._services, services))
             return;
         object key;
-        if (original.ImplementationFactory?.Target is ActivityDataSelectionDraftValidationRegistration parent)
+        if (original.ImplementationFactory?.Target is DataSelectionDraftValidationRegistration parent)
             key = parent._key; // Shell copies retain the keyed inner descriptor, not an inner request scope.
         else
         {
@@ -31,7 +31,7 @@ internal sealed class ActivityDataSelectionDraftValidationRegistration(IServiceC
                 ServiceDescriptor.DescribeKeyed(type, key, original.ImplementationType!, original.Lifetime);
             services.Add(inner);
         }
-        var registration = new ActivityDataSelectionDraftValidationRegistration(services, key);
+        var registration = new DataSelectionDraftValidationRegistration(services, key);
         var wrapper = ServiceDescriptor.Describe(typeof(IActivityDraftValidator), registration.Create,
             original.Lifetime == ServiceLifetime.Transient ? ServiceLifetime.Transient : ServiceLifetime.Scoped);
         registration._wrapper = wrapper;
@@ -39,7 +39,7 @@ internal sealed class ActivityDataSelectionDraftValidationRegistration(IServiceC
         services.Add(wrapper);
         // Replace a copied shell's checker with the configuring shell's descriptor inventory.
         foreach (var old in services.Where(x => x.ServiceType == typeof(IStartupTask) && !x.IsKeyedService &&
-                     x.ImplementationInstance is ActivityDataSelectionDraftValidationRegistration).ToArray()) services.Remove(old);
+                     x.ImplementationInstance is DataSelectionDraftValidationRegistration).ToArray()) services.Remove(old);
         services.AddSingleton<IStartupTask>(registration);
         registration.Validate();
     }

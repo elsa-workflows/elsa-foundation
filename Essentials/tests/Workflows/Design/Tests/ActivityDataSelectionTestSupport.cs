@@ -16,6 +16,7 @@ internal static class ActivityDataSelectionTestSupport
         new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
         new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
         new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         services.AddSingleton<IActivityDefinitionLookup>(catalog);
         if (structures is not null) services.AddSingleton(structures);

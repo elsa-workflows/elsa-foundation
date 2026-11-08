@@ -449,6 +449,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         var outputs = versions is null ? Array.Empty<OutputDefinition>()
             : versions.GetAsync("activity").GetAwaiter().GetResult().Outputs.ToArray();
         var services = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         services.AddSingleton(structures);
         services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("container").Add("activity", [input], outputs));

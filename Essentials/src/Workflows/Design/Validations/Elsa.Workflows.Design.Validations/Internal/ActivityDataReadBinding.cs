@@ -13,6 +13,13 @@ internal sealed record ActivityDataReadBinding(
     string? Path = null,
     string? Error = null)
 {
+    // Match the publication compiler's descriptor payload profile, including case-insensitive
+    // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
+    // Only existing expression contract types are deserialized; arbitrary authored CLR values
+    // must never be serialized or inspected through their getters here.
+    private static readonly JsonSerializerOptions PortableExpressionOptions = new(JsonSerializerDefaults.Web)
+        { AllowOutOfOrderMetadataProperties = true };
+
     public static IEnumerable<ActivityDataReadBinding> Read(ArgumentValue? argument)
     {
         if (argument is null)
@@ -40,16 +47,44 @@ internal sealed record ActivityDataReadBinding(
         }
 
         if (argument.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
-            !TryProperty(payload, "language", out var language) || language.ValueKind != JsonValueKind.String ||
-            !TryProperty(payload, "parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object)
+            !payload.TryGetProperty("language", out _) ||
+            !payload.TryGetProperty("source", out _) ||
+            !payload.TryGetProperty("capabilityProfile", out _))
             yield break;
 
-        foreach (var parameter in parameters.EnumerateObject())
+        var portable = ReadPortable(payload);
+        if (portable is null)
         {
-            if (parameter.Value.ValueKind != JsonValueKind.Object) continue;
-            var kind = String(parameter.Value, "kind");
-            if (IsRole(kind) || IsMemberRole(kind))
-                yield return Direct(kind!, parameter.Value, portable: true);
+            yield return new("", Error: "InvalidSource");
+            yield break;
+        }
+        // Preserve the existing whole-role selection refusal on the effective parameters object.
+        // The serializer chooses the last case-insensitive property alias; dictionary keys remain exact.
+        var parameters = payload.EnumerateObject().Last(property =>
+            property.Name.Equals("parameters", StringComparison.OrdinalIgnoreCase)).Value;
+        foreach (var parameter in portable.Parameters)
+        {
+            var binding = Parameter(parameter.Value);
+            if (binding is null) continue;
+            if (parameters.TryGetProperty(parameter.Key, out var raw) && raw.ValueKind == JsonValueKind.Object &&
+                (raw.TryGetProperty("memberPath", out _) ||
+                 binding.Role != "WorkflowRequest" && raw.TryGetProperty("path", out _)))
+                binding = binding with { Error = "UnsupportedMemberSelection" };
+            yield return binding;
+        }
+    }
+
+    private static ExpressionDefinition? ReadPortable(JsonElement payload)
+    {
+        try
+        {
+            return payload.Deserialize<ExpressionDefinition>(PortableExpressionOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            // A payload admitted as portable by the compiler cannot silently become an opaque
+            // expression here when its owned contract or discriminator is malformed.
+            return null;
         }
     }
 
@@ -59,8 +94,8 @@ internal sealed record ActivityDataReadBinding(
         if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         var json = value is JsonElement element ? element : default;
         if (json.ValueKind == JsonValueKind.Object &&
-            (HasProperty(json, "memberPath") ||
-             (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && HasProperty(json, "path"))))
+            (json.TryGetProperty("memberPath", out _) ||
+             (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && json.TryGetProperty("path", out _))))
             return new(role, Error: "UnsupportedMemberSelection");
 
         if (role.Equals("Variable", StringComparison.OrdinalIgnoreCase))
@@ -82,7 +117,7 @@ internal sealed record ActivityDataReadBinding(
             var binding = Required("ActivityResult", String(json, "producerNodeId"), String(json, "producerScopeId"), String(json, "projectionKey"));
             return binding.Error is null && (string.IsNullOrWhiteSpace(binding.Projection) || (!portable && string.IsNullOrWhiteSpace(binding.Scope)))
                 ? binding with { Error = "InvalidSource" }
-                : binding with { IsOptional = json.ValueKind == JsonValueKind.Object && TryProperty(json, "isOptional", out var optional)
+                : binding with { IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
                     && optional.ValueKind == JsonValueKind.True };
         }
         return new(role, Error: "InvalidSource");
@@ -100,33 +135,8 @@ internal sealed record ActivityDataReadBinding(
         string.IsNullOrWhiteSpace(key) ? new(role, Error: "InvalidSource") : new(role, key, scope, projection, Path: path);
 
     internal static string? String(JsonElement value, string key) =>
-        TryProperty(value, key, out var property) && property.ValueKind == JsonValueKind.String
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty(key, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString() : null;
-
-    // Portable expression JSON is admitted with the payload serializer's case-insensitive envelope
-    // keys (kind, producerNodeId, memberKey, …). Literal memberPath segments stay ordinal.
-    private static bool HasProperty(JsonElement value, string key) => TryProperty(value, key, out _);
-
-    private static bool TryProperty(JsonElement value, string key, out JsonElement property)
-    {
-        if (value.ValueKind != JsonValueKind.Object)
-        {
-            property = default;
-            return false;
-        }
-        if (value.TryGetProperty(key, out property))
-            return true;
-        foreach (var candidate in value.EnumerateObject())
-        {
-            if (string.Equals(candidate.Name, key, StringComparison.OrdinalIgnoreCase))
-            {
-                property = candidate.Value;
-                return true;
-            }
-        }
-        property = default;
-        return false;
-    }
 
     private static bool IsRole(string? role) => role is not null &&
         new[] { "Input", "WorkflowRequest", "Variable", "ActivityResult" }.Contains(role, StringComparer.OrdinalIgnoreCase);

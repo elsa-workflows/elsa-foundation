@@ -226,8 +226,7 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
         if (name is "System.Object" or "System.Text.Json.JsonElement" or "System.Text.Json.JsonDocument" ||
             name?.StartsWith("System.Text.Json.Nodes.", StringComparison.Ordinal) == true)
             return "activity.shape.dynamic-json";
-        // Nullable<T> does not inherit type-level converters from T; STJ still consults T.
-        for (var current = UnwrapNullable(type); current is not null; current = current.BaseType)
+        for (var current = type; current is not null; current = current.BaseType)
         {
             var attributes = current.GetCustomAttributesData();
             TrackAttributes(attributes);
@@ -237,6 +236,15 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
                 return "activity.shape.number-handling-opaque";
             if (attributes.Any(a => a.AttributeType.FullName is JsonPrefix + "JsonPolymorphicAttribute" or JsonPrefix + "JsonDerivedTypeAttribute"))
                 return "activity.shape.polymorphic-opaque";
+        }
+        // Nullable<T>'s codec delegates present values to T. Its scalar classification cannot
+        // bypass an underlying enum/type converter that changes the serialized JSON shape.
+        if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "System.Nullable`1")
+        {
+            var underlying = type.GetGenericArguments()[0];
+            Track(underlying);
+            if (OpaqueReason(underlying) is { } underlyingReason)
+                return underlyingReason;
         }
         if (type.IsPointer || type.IsByRef || type.IsByRefLike || type.ContainsGenericParameters)
             return "activity.shape.type-unsupported";
@@ -410,10 +418,6 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
         return false;
     }
     private static bool HasAttribute(MemberInfo member, string name) => member.GetCustomAttributesData().Any(a => a.AttributeType.FullName == JsonPrefix + name);
-    private static Type UnwrapNullable(Type type) =>
-        type.IsGenericType && type.GetGenericTypeDefinition().FullName == "System.Nullable`1"
-            ? type.GetGenericArguments()[0]
-            : type;
     private static bool IsScalar(Type type) => type.IsPrimitive || type.IsEnum ||
         type.IsArray && type.GetArrayRank() == 1 && type.GetElementType()?.FullName == "System.Byte" ||
         type.FullName is "System.String" or "System.Decimal" or

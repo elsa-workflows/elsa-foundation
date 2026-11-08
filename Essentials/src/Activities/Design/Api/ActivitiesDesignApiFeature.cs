@@ -76,7 +76,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddSingleton<ActivityContractAuthoringValidator>();
         services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
-        ActivityDataSelectionDraftValidationRegistration.Register(services);
+        DataSelectionDraftValidationRegistration.Register(services);
         services.TryAddScoped<ActivityDataSelectionContextService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IApiCapabilitySource, ActivityDataSelectionApiCapabilitySource>());
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();

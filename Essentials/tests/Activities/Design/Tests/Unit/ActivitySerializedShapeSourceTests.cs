@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
@@ -24,6 +25,65 @@ namespace Elsa.Activities.Design.Tests.Unit;
 
 public sealed class ActivitySerializedShapeSourceTests
 {
+    [Fact]
+    public async Task Nullable_enum_converter_is_opaque_for_whole_and_property_metadata_without_constructing_the_converter()
+    {
+        ObjectEnumConverter.ResetConstructionCount();
+        using var whole = ResultHost(typeof(NullableConvertedEnumResultActivity));
+        var root = (await whole.Source.DescribeResultAsync(whole.Version<NullableConvertedEnumResultActivity>(), "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, root.State);
+        Assert.Equal(ActivitySerializedValueKind.Unknown, root.Kind);
+        Assert.Equal("activity.shape.converter-opaque", root.ReasonCode);
+        Assert.Empty(root.Members);
+
+        using var properties = ResultHost(typeof(NullableEnumPropertiesResultActivity));
+        var version = properties.Version<NullableEnumPropertiesResultActivity>();
+        var payload = (await properties.Source.DescribeResultAsync(version, "$result", [], new()))!;
+        var property = Member(payload, "converted");
+        Assert.Equal(ActivitySerializedShapeState.Unknown, property.State);
+        Assert.Equal(ActivitySerializedValueKind.Unknown, property.Kind);
+        Assert.Equal("activity.shape.converter-opaque", property.ReasonCode);
+        Assert.True(property.IsNullable);
+        var selected = (await properties.Source.DescribeResultAsync(version, "$result", ["converted"], new()))!;
+        Assert.Equal("activity.shape.converter-opaque", selected.ReasonCode);
+        Assert.Equal(ActivitySerializedShapeState.Unknown, selected.State);
+        var nested = (await properties.Source.DescribeResultAsync(version, "$result", ["converted", "state"], new()))!;
+        Assert.Equal("activity.shape.converter-opaque", nested.ReasonCode);
+        Assert.Null(nested.Type);
+        Assert.Equal(0, ObjectEnumConverter.ConstructionCount);
+    }
+
+    [Fact]
+    public async Task Plain_nullable_enum_remains_a_known_scalar_for_whole_and_property_metadata()
+    {
+        using var whole = ResultHost(typeof(NullablePlainEnumResultActivity));
+        var root = (await whole.Source.DescribeResultAsync(whole.Version<NullablePlainEnumResultActivity>(), "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Known, root.State);
+        Assert.Equal(ActivitySerializedValueKind.Scalar, root.Kind);
+        using var properties = ResultHost(typeof(NullableEnumPropertiesResultActivity));
+        var selected = (await properties.Source.DescribeResultAsync(properties.Version<NullableEnumPropertiesResultActivity>(), "$result", ["plain"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Known, selected.State);
+        Assert.Equal(ActivitySerializedValueKind.Scalar, selected.Kind);
+        Assert.True(selected.IsNullable);
+    }
+
+    [Fact]
+    public void Actual_activity_profile_uses_the_underlying_enum_converter_for_nullable_whole_and_property_values()
+    {
+        ObjectEnumConverter.ResetConstructionCount();
+        var options = ActivityValueJsonProfile.CreateOptions();
+        var whole = JsonSerializer.SerializeToElement<ConvertedEnum?>(ConvertedEnum.Ready, options);
+        Assert.Equal(JsonValueKind.Object, whole.ValueKind);
+        Assert.Equal("ready", whole.GetProperty("state").GetString());
+        var payload = JsonSerializer.SerializeToElement(new NullableEnumProperties { Converted = ConvertedEnum.Ready, Plain = PlainEnum.Ready }, options);
+        Assert.Equal(JsonValueKind.Object, payload.GetProperty("converted").ValueKind);
+        Assert.Equal("ready", payload.GetProperty("converted").GetProperty("state").GetString());
+        Assert.Equal(7, payload.GetProperty("plain").GetInt32());
+        Assert.Equal(7, JsonSerializer.SerializeToElement<PlainEnum?>(PlainEnum.Ready, options).GetInt32());
+        Assert.Equal(JsonValueKind.Null, JsonSerializer.SerializeToElement<ConvertedEnum?>(null, options).ValueKind);
+        Assert.True(ObjectEnumConverter.ConstructionCount > 0);
+    }
+
     [Fact]
     public async Task Typed_whole_result_without_output_rows_has_literal_serialized_members_and_unchanged_catalog_hash()
     {
@@ -377,6 +437,31 @@ public sealed class ActivitySerializedShapeSourceTests
     public sealed class RenamedOverrideResultActivity : MetadataResultActivity<SerializedRenamedOverride>;
     public sealed class RenamedShadowResultActivity : MetadataResultActivity<SerializedRenamedShadow>;
     public sealed class IgnoredShadowResultActivity : MetadataResultActivity<SerializedIgnoredShadow>;
+    public sealed class NullableConvertedEnumResultActivity : MetadataResultActivity<ConvertedEnum?>;
+    public sealed class NullablePlainEnumResultActivity : MetadataResultActivity<PlainEnum?>;
+    public sealed class NullableEnumPropertiesResultActivity : MetadataResultActivity<NullableEnumProperties>;
+    [JsonConverter(typeof(ObjectEnumConverter))]
+    public enum ConvertedEnum { Ready = 7 }
+    public enum PlainEnum { Ready = 7 }
+    public sealed class NullableEnumProperties
+    {
+        public ConvertedEnum? Converted { get; set; }
+        public PlainEnum? Plain { get; set; }
+    }
+    public sealed class ObjectEnumConverter : JsonConverter<ConvertedEnum>
+    {
+        private static int _constructionCount;
+        public ObjectEnumConverter() => Interlocked.Increment(ref _constructionCount);
+        public static int ConstructionCount => Volatile.Read(ref _constructionCount);
+        public static void ResetConstructionCount() => Interlocked.Exchange(ref _constructionCount, 0);
+        public override ConvertedEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
+        public override void Write(Utf8JsonWriter writer, ConvertedEnum value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("state", "ready");
+            writer.WriteEndObject();
+        }
+    }
     public sealed class UntypedActivity : IActivity
     {
         public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) =>

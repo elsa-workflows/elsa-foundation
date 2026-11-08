@@ -6,9 +6,7 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations;
-using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Validators;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Tests.Support;
@@ -83,15 +81,15 @@ public sealed class Elsa3FlowchartValidationTests
         var services = new ServiceCollection();
         services.AddOptions();
         services.AddLogging();
-        services.AddSingleton<IActivityDefinitionLookup>(RealActivityCatalog.Create());
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesControlFlowFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityDefinitionLookup>(RealActivityCatalog.Create());
         await using var provider = services.BuildServiceProvider();
-        var validator = new ValueFlowValidator(
-            new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>()),
-            provider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+        await using var scope = provider.CreateAsyncScope();
+        var validator = ActivatorUtilities.CreateInstance<ValueFlowValidator>(scope.ServiceProvider);
         return [.. await validator.Validate(new Draft(state), CancellationToken.None)];
     }
 

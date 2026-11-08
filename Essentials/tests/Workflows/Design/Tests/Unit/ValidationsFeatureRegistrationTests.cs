@@ -48,7 +48,7 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         using var provider = BuildProvider(_ => { });
 
-        var handler = Assert.Single(provider.GetServices<IEventHandler>());
+        var handler = Assert.Single(provider.GetServices<IEventHandler<DraftValidating>>());
         Assert.IsType<ExecuteValidations>(handler);
         Assert.IsAssignableFrom<IEventHandler<DraftValidating>>(handler);
     }
@@ -183,6 +183,7 @@ public sealed class ValidationsFeatureRegistrationTests
     public async Task A_copied_child_shell_checks_its_own_source_authority_and_preserves_the_parent(string invalid)
     {
         IServiceCollection parent = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(parent);
         new WorkflowDesignValidationsFeature().ConfigureServices(parent);
         IServiceCollection child = new ServiceCollection();
         foreach (var descriptor in parent) child.Add(descriptor);
@@ -203,6 +204,7 @@ public sealed class ValidationsFeatureRegistrationTests
     public async Task A_copied_child_shell_can_keep_one_scoped_source_authority()
     {
         IServiceCollection parent = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(parent);
         new WorkflowDesignValidationsFeature().ConfigureServices(parent);
         IServiceCollection child = new ServiceCollection();
         foreach (var descriptor in parent) child.Add(descriptor);
@@ -216,7 +218,7 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
-        provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "ActivityDataSelectionAnalyzerCompositionCheck");
+        provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "DataSelectionAnalyzerCompositionCheck");
 
     private static ServiceProvider BuildProvider(
         Action<WorkflowDesignValidationsFeature> configureFeature,
@@ -231,6 +233,7 @@ public sealed class ValidationsFeatureRegistrationTests
         services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
         if (hostRegistersFirst)
             hostRegistrations?.Invoke(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         feature.ConfigureServices(services);
         if (!hostRegistersFirst)
             hostRegistrations?.Invoke(services);

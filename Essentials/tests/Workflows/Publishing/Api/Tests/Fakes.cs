@@ -195,6 +195,7 @@ internal static class TestCompiler
         {
             var services = new ServiceCollection();
             services.AddOptions();
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature().ConfigureServices(services);
             services.AddSingleton(structures);
             services.AddSingleton<IActivityDefinitionLookup>(new TestSourceCatalog(versions));

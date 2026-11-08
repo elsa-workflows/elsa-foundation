@@ -112,6 +112,67 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
     }
 
+    [Theory]
+    [InlineData("canonical", false)]
+    [InlineData("capital-parameters", false)]
+    [InlineData("nested-casing", false)]
+    [InlineData("parameter-alias", false)]
+    [InlineData("nested-alias", false)]
+    [InlineData("duplicate-parameters", false)]
+    [InlineData("canonical", true)]
+    [InlineData("capital-parameters", true)]
+    [InlineData("nested-casing", true)]
+    [InlineData("parameter-alias", true)]
+    [InlineData("nested-alias", true)]
+    [InlineData("duplicate-parameters", true)]
+    public async Task Portable_json_aliases_use_the_compiled_parameter_for_causal_admission_before_publication_writes(string form, bool earlierProducer)
+    {
+        var producer = earlierProducer ? "earlier" : "later";
+        var decoy = earlierProducer ? "later" : "earlier";
+        var parameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = producer, projectionKey = "$result" });
+        var decoyParameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = decoy, projectionKey = "$result" });
+        var nestedCasing = JsonSerializer.Serialize(new { ProducerNodeId = producer, ProjectionKey = "$result", IsOptional = false, kind = "ActivityResult" });
+        var nestedAlias = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = decoy, ProducerNodeId = producer,
+            projectionKey = "$result", isOptional = true, IsOptional = false });
+        static string Parameters(string name, string binding) => "\"" + name + "\":{\"customer\":" + binding + "}";
+        var properties = form switch
+        {
+            "capital-parameters" => Parameters("Parameters", parameter),
+            "nested-casing" => Parameters("parameters", nestedCasing),
+            "parameter-alias" => Parameters("parameters", decoyParameter) + "," + Parameters("Parameters", parameter),
+            "nested-alias" => Parameters("parameters", nestedAlias),
+            "duplicate-parameters" => Parameters("parameters", decoyParameter) + "," + Parameters("parameters", parameter),
+            _ => Parameters("parameters", parameter)
+        };
+        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"customer","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-pure-v1",""" + properties + "}");
+        var value = new ArgumentValue(json.RootElement.Clone(), "JavaScript");
+        var version = WorkflowVersion(SequenceNode("sequence", [Node("earlier", Text("one")),
+            Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)), Node("later", Text("two"))]));
+        var before = await CountPublishWritesAsync();
+        var handler = Handler(version, _writeLineActivity, _sequenceActivity);
+
+        if (!earlierProducer)
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/UnavailableProducer");
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
+        var compiled = Assert.IsType<Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding>(consumer.InputBindings["Text"].Expression!.Parameters["customer"]);
+        Assert.Equal(producer, compiled.ProducerNodeId);
+        Assert.False(compiled.IsOptional);
+        Assert.NotEqual(before, await CountPublishWritesAsync());
+        Assert.NotNull(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
     [Fact]
     public async Task Republishing_with_a_retained_pre_fix_Set_artifact_stores_and_executes_the_corrected_contract()
     {
