@@ -192,6 +192,7 @@ public sealed class DecisionDataSelectionTests
             services.AddSingleton<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();
             services.AddSingleton<IActivityDefinitionLookup>(new Catalog(Version, consumer));
             new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature().ConfigureServices(services);
             new DecisionsWorkflowsDesignFeature().ConfigureServices(services);
             new ClrActivityReconciliationFeature { Options = { FolderPath = _folder, SourceId = "decision-tests" } }.ConfigureServices(services);
