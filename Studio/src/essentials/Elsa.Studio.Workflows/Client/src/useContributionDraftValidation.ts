@@ -5,12 +5,13 @@ import {
   contributionDraftValidationCollectors,
   contributionDraftValidationSignature
 } from "./contributionDraftValidation";
-import type { ActivityNode, ValidationError } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ValidationError } from "./workflowTypes";
 
 export function useContributionDraftValidation(
   root: ActivityNode | null | undefined,
   propertyEditors: StudioActivityPropertyEditorContribution[],
-  expressionEditors: StudioExpressionEditorContribution[]
+  expressionEditors: StudioExpressionEditorContribution[],
+  catalogByVersion?: Map<string, ActivityCatalogItem>
 ): { errors: ValidationError[]; pending: boolean } {
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [pending, setPending] = useState(false);
@@ -20,7 +21,23 @@ export function useContributionDraftValidation(
   );
   const collectorsRef = useRef(collectors);
   collectorsRef.current = collectors;
+  const catalogRef = useRef(catalogByVersion);
+  catalogRef.current = catalogByVersion;
   const signature = useMemo(() => contributionDraftValidationSignature(root), [root]);
+  const [foregroundGeneration, setForegroundGeneration] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setForegroundGeneration(value => value + 1);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") bump();
+    };
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     const current = collectorsRef.current;
@@ -31,7 +48,7 @@ export function useContributionDraftValidation(
     }
     let active = true;
     setPending(true);
-    void collectContributionDraftValidation(root, current).then(result => {
+    void collectContributionDraftValidation(root, current, catalogRef.current).then(result => {
       if (!active) return;
       setErrors(result);
       setPending(false);
@@ -40,7 +57,7 @@ export function useContributionDraftValidation(
       setPending(false);
     });
     return () => { active = false; };
-  }, [root, signature]);
+  }, [root, signature, catalogByVersion, foregroundGeneration]);
 
   return { errors, pending };
 }

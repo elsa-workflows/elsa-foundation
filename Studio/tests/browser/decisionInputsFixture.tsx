@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityPropertiesPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { createObjectExpressionEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/objectExpressionEditor";
@@ -8,7 +8,10 @@ import { createDecisionInputsEditorContribution } from "../../../Extensions/Deci
 import { DecisionVersionEditor } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionVersionEditor";
 import { decisionsCapability } from "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import type { ActivityNode, ValidationError, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import { collectContributionDraftValidation, contributionDraftValidationCollectors } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/contributionDraftValidation";
+import { useContributionDraftValidation } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/useContributionDraftValidation";
+import { withLocalValidationErrors } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
 import { ValidationPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
 
@@ -16,6 +19,15 @@ const approvalXml = `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="h
 
 const scoreXml = `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="score_definitions" name="Score" namespace="urn:elsa:decisions"><decision id="score" name="Score"><decisionTable id="score_table" hitPolicy="UNIQUE"><input id="score_input"><inputExpression id="score_expression" typeRef="number"><text>score</text></inputExpression></input><output id="score_output" label="result" typeRef="string"/><rule id="score_rule"><inputEntry id="score_c1"><text>-</text></inputEntry><outputEntry id="score_o1"><text>"Ok"</text></outputEntry></rule></decisionTable></decision></definitions>`;
 const amountTextXml = approvalXml.replace('typeRef="number"', 'typeRef="string"');
+const regionXml = approvalXml
+  .replace(
+    '<output id="approval_result"',
+    '<input id="approval_region"><inputExpression id="approval_region_expression" typeRef="string"><text>region</text></inputExpression></input><output id="approval_result"'
+  )
+  .replace(
+    '<outputEntry id="approval_o1"',
+    '<inputEntry id="approval_c3"><text>-</text></inputEntry><outputEntry id="approval_o1"'
+  );
 
 const published = {
   id: "v1",
@@ -116,16 +128,45 @@ const expressionDescriptors = [
   { type: "Variable", displayName: "Variable", editingMode: "reference" as const }
 ];
 
-function createApi(unpublished: boolean, fetchError: boolean): ElsaStudioModuleApi {
-  const publishedAsset = unpublished ? asset : { ...asset, publishedVersionId: "v1" };
+type BackendState = {
+  unpublished: boolean;
+  fetchError: boolean;
+  latestAddsRegion: boolean;
+  failOnce: boolean;
+};
+
+function createApi(state: BackendState): ElsaStudioModuleApi {
   const getJson = async (path: string): Promise<unknown> => {
-    if (fetchError && (path.endsWith("/versions") || path.includes("/versions/"))) throw new Error("versions unavailable");
+    if (state.failOnce && /\/versions\/[^/]+$/.test(path)) {
+      throw new Error("temporary lookup failed");
+    }
+    const regionPublished = {
+      id: "v3",
+      assetId: "approval",
+      number: 3,
+      name: "Approval",
+      xml: regionXml,
+      sourceHash: "hash-region",
+      publishedAt: "2026-11-05T10:00:00Z"
+    };
+    const publishedVersions = state.unpublished
+      ? []
+      : [published, textPublished, ...(state.latestAddsRegion ? [regionPublished] : [])];
+    const publishedAsset = state.unpublished
+      ? asset
+      : {
+        ...asset,
+        publishedVersionId: state.latestAddsRegion ? "v3" : "v1",
+        xml: state.latestAddsRegion ? regionXml : asset.xml
+      };
+    if (state.fetchError && (path.endsWith("/versions") || path.includes("/versions/"))) throw new Error("versions unavailable");
     if (path.endsWith("/decisions")) return { items: [publishedAsset, scoring] };
+    if (path.endsWith("/versions/v3")) return regionPublished;
     if (path.endsWith("/versions/v2")) return textPublished;
     if (path.includes("/scoring/versions/v1") || (path.endsWith("/versions/v1") && path.includes("/scoring/"))) return scorePublished;
     if (path.endsWith("/versions/v1")) return published;
     if (path.endsWith("/versions") && path.includes("/scoring/")) return { items: [scorePublished] };
-    if (path.endsWith("/versions")) return { items: unpublished ? [] : [published, textPublished] };
+    if (path.endsWith("/versions")) return { items: publishedVersions };
     if (path.endsWith("/scoring")) return scoring;
     if (path.endsWith("/approval")) return publishedAsset;
     return publishedAsset;
@@ -155,58 +196,133 @@ function createApi(unpublished: boolean, fetchError: boolean): ElsaStudioModuleA
   } as unknown as ElsaStudioModuleApi;
 }
 
+const notifyDescriptor: StudioActivityDescriptor = {
+  typeName: "Contoso.Notify",
+  displayName: "Notify",
+  inputs: [
+    {
+      name: "Decision",
+      referenceKey: "Decision",
+      displayName: "Decision",
+      typeName: "System.String",
+      isWrapped: true,
+      defaultSyntax: "Literal",
+      tier: "essential"
+    }
+  ],
+  outputs: [],
+  ports: []
+};
+
+function catalogItem(activity: ActivityNode, activityDescriptor: StudioActivityDescriptor): ActivityCatalogItem {
+  return {
+    activityVersionId: activity.activityVersionId,
+    activityTypeKey: activityDescriptor.typeName,
+    version: "1.0.0",
+    category: "Test",
+    displayName: activityDescriptor.displayName ?? activityDescriptor.typeName,
+    executionType: "Action",
+    inputs: activityDescriptor.inputs,
+    outputs: []
+  };
+}
+
 export function DecisionInputsFixture() {
   const search = new URLSearchParams(window.location.search);
   const before = search.get("before") === "1";
-  const unpublished = search.get("unpublished") === "1";
-  const fetchError = search.get("fetchError") === "1";
-  const api = useMemo(() => createApi(unpublished, fetchError), [unpublished, fetchError]);
-  const [activity, setActivity] = useState<ActivityNode>({
-    nodeId: "evaluatedecision-browser-node",
-    activityVersionId: "evaluatedecision-browser-v1",
-    inputs: [],
-    outputs: [],
-    Decision: {
-      typeName: "System.String",
-      expression: { type: "Literal", value: unpublished ? "approval@latest" : "approval@v1" }
-    },
-    Inputs: {
-      typeName: "Elsa.Decisions.Core.DecisionValue",
-      expression: { type: "Object", value: {} }
-    },
-    OperationBudget: {
-      typeName: "System.Int32",
-      expression: { type: "Literal", value: "1000000" }
+  const unrelated = search.get("unrelated") === "1";
+  const backend = useRef<BackendState>({
+    unpublished: search.get("unpublished") === "1",
+    fetchError: search.get("fetchError") === "1",
+    latestAddsRegion: search.get("latestRegion") === "1",
+    failOnce: search.get("failOnce") === "1"
+  }).current;
+  const [, setBackendEpoch] = useState(0);
+  const bumpBackend = () => setBackendEpoch(value => value + 1);
+  const api = useMemo(() => createApi(backend), [backend]);
+  const activityDescriptor = unrelated ? notifyDescriptor : descriptor;
+  const [activity, setActivity] = useState<ActivityNode>(() => unrelated
+    ? {
+      nodeId: "notify-browser-node",
+      activityVersionId: "notify-browser-v1",
+      inputs: [],
+      outputs: [],
+      Decision: {
+        typeName: "System.String",
+        expression: { type: "Literal", value: "ops@example.com" }
+      }
     }
-  });
-  const [localErrors, setLocalErrors] = useState<ValidationError[]>([]);
-  const versionEditor: StudioActivityPropertyEditorContribution = {
+    : {
+      nodeId: "evaluatedecision-browser-node",
+      activityVersionId: "evaluatedecision-browser-v1",
+      inputs: [],
+      outputs: [],
+      Decision: {
+        typeName: "System.String",
+        expression: { type: "Literal", value: backend.unpublished || backend.latestAddsRegion ? "approval@latest" : "approval@v1" }
+      },
+      Inputs: {
+        typeName: "Elsa.Decisions.Core.DecisionValue",
+        expression: {
+          type: "Object",
+          value: backend.failOnce
+            ? { amount: { kind: "number", value: "950" }, customerCategory: { kind: "string", value: "Standard" } }
+            : {}
+        }
+      },
+      OperationBudget: {
+        typeName: "System.Int32",
+        expression: { type: "Literal", value: "1000000" }
+      }
+    });
+  const [review, setReview] = useState<{ phase: string; executableStatus: string; validationErrors: string[] } | null>(null);
+  const versionEditor: StudioActivityPropertyEditorContribution = useMemo(() => ({
     id: "decisions.version",
     requiresBackend: decisionsCapability,
     order: 50,
     supportsValidationReporting: true,
-    collectDraftValidation: next => collectEvaluateDecisionValidation(api, next),
-    supports: descriptor => descriptor.uiHint === "decision-version",
+    collectDraftValidation: (next, context) => collectEvaluateDecisionValidation(api, next, context),
+    supports: next => next.uiHint === "decision-version",
     component: props => <DecisionVersionEditor {...props} api={api} />
-  };
-  const editors = [...builtInPropertyEditors, versionEditor];
-  const expressionEditors: StudioExpressionEditorContribution[] = [
+  }), [api]);
+  const editors = useMemo(() => [...builtInPropertyEditors, versionEditor], [versionEditor]);
+  const expressionEditors: StudioExpressionEditorContribution[] = useMemo(() => [
     ...(before ? [] : [createDecisionInputsEditorContribution(api)]),
     createObjectExpressionEditorContribution(() => editors)
-  ];
+  ], [api, before, editors]);
+  const collectors = useMemo(
+    () => contributionDraftValidationCollectors([versionEditor], []),
+    [versionEditor]
+  );
+  const catalogByVersion = useMemo(
+    () => new Map([[activity.activityVersionId, catalogItem(activity, activityDescriptor)]]),
+    [activity.activityVersionId, activityDescriptor]
+  );
 
-  useEffect(() => {
-    let active = true;
-    void collectEvaluateDecisionValidation(api, activity).then(issues => {
-      if (active) setLocalErrors(issues.map(issue => ({ type: issue.type, message: issue.message, path: issue.path })));
+  const collectIssues = useCallback(async (next: ActivityNode) => {
+    return collectContributionDraftValidation(next, collectors, catalogByVersion);
+  }, [catalogByVersion, collectors]);
+  const { errors: localErrors } = useContributionDraftValidation(activity, [versionEditor], [], catalogByVersion);
+
+  const openReview = async () => {
+    const errors = await collectIssues(activity);
+    const next = withLocalValidationErrors({
+      phase: "review",
+      executableStatus: "ready",
+      validationErrors: [],
+      validationWarnings: []
+    } as never, errors);
+    setReview({
+      phase: next.phase,
+      executableStatus: next.executableStatus,
+      validationErrors: next.validationErrors
     });
-    return () => { active = false; };
-  }, [activity, api]);
+  };
 
   const draft = { validationErrors: [] } as unknown as WorkflowDraft;
 
   return (
-    <main style={{ minHeight: "100vh", padding: 16, background: "var(--studio-app-bg)", color: "var(--studio-text)" }}>
+    <main className="wf-tokens" style={{ minHeight: "100vh", padding: 16, background: "var(--studio-app-bg)", color: "var(--studio-text)" }}>
       <aside
         className="wf-inspector"
         aria-label="Activity inspector"
@@ -224,10 +340,10 @@ export function DecisionInputsFixture() {
           padding: 16
         }}
       >
-        <h1 style={{ marginTop: 0, fontSize: 18 }}>Evaluate Decision</h1>
+        <h1 style={{ marginTop: 0, fontSize: 18 }}>{activityDescriptor.displayName}</h1>
         <ActivityPropertiesPanel
           activity={activity}
-          descriptor={descriptor}
+          descriptor={activityDescriptor}
           editors={editors}
           expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
@@ -237,9 +353,30 @@ export function DecisionInputsFixture() {
           scopeStatus="ready"
           onChange={setActivity}
         />
+        <div className="wf-fixture-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+          <button type="button" onClick={() => { backend.unpublished = false; bumpBackend(); }}>Publish decision</button>
+          <button type="button" onClick={() => { backend.latestAddsRegion = true; backend.unpublished = false; bumpBackend(); }}>Publish table with region</button>
+          <button type="button" onClick={() => { backend.fetchError = false; backend.failOnce = false; bumpBackend(); }}>Recover lookup</button>
+          <button type="button" onClick={() => void openReview()}>Review & publish</button>
+        </div>
         <output data-testid="authored-state" style={{ display: "none" }}>{JSON.stringify(activity)}</output>
+        <output data-testid="backend-state" style={{ display: "none" }}>{JSON.stringify({
+          unpublished: backend.unpublished,
+          latestAddsRegion: backend.latestAddsRegion,
+          failOnce: backend.failOnce
+        })}</output>
       </aside>
       <ValidationPanel draft={draft} errors={localErrors} onRepair={() => undefined} />
+      {review ? (
+        <div role="dialog" aria-label="Review and publish">
+          <h2>Review and publish</h2>
+          <p data-testid="review-phase">{review.phase}</p>
+          <p data-testid="review-status">{review.executableStatus}</p>
+          {review.validationErrors.map(message => <p key={message}>{message}</p>)}
+          <button type="button" disabled={review.phase === "validationBlocked" || review.executableStatus === "blocked"}>Publish</button>
+          <button type="button" onClick={() => setReview(null)}>Cancel</button>
+        </div>
+      ) : null}
     </main>
   );
 }

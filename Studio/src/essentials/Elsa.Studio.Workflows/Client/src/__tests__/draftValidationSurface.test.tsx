@@ -86,7 +86,7 @@ describe("combineValidationErrors", () => {
   it("appends designer-side local contribution errors after structural checks", () => {
     const combined = combineValidationErrors({
       structuralErrors: [{ type: STRUCTURAL_DANGLING_TYPE, message: "dangling", path: "n3" }],
-      localErrors: [{ type: "Decision/InputMembership", message: "notes is not in this table.", path: "eval-1/Inputs" }]
+      localErrors: [{ type: "Decision/InputMembership", message: "notes is not in this table.", path: "eval-1/inputs/Inputs" }]
     });
     expect(combined.map(e => e.message)).toEqual(["dangling", "notes is not in this table."]);
   });

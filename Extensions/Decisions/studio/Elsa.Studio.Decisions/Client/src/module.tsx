@@ -16,7 +16,7 @@ export function register(api: ElsaStudioModuleApi) {
     routes: [{ id: "decisions", path: "/decisions", label: "Decisions", requiresBackend: decisionsCapability, workspace: { resourceKey: location => { const id = location.searchParams.get("decision"); return id ? `decision:${id}:${location.searchParams.get("version") ?? "draft"}` : null; } }, component: ({ navigate }) => <DecisionsRoute api={api} navigate={navigate} /> }]
   });
   api.propertyEditors.add({ id: "decisions.version", requiresBackend: decisionsCapability, order: 50, supportsValidationReporting: true,
-    collectDraftValidation: activity => collectEvaluateDecisionValidation(api, activity),
+    collectDraftValidation: (activity, context) => collectEvaluateDecisionValidation(api, activity, context),
     supports: descriptor => descriptor.uiHint === "decision-version", component: props => <DecisionVersionEditor {...props} api={api} /> });
   api.expressionEditors.add(createDecisionInputsEditorContribution(api));
 }

@@ -309,7 +309,7 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
     clickButton(container, "Open expanded Condition editor");
-    const dialog = container.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
+    const dialog = document.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
     const editor = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
     expect(editor.disabled).toBe(false);
     flushSync(() => replaceReadOnly(true));
@@ -987,13 +987,109 @@ describe("activity property organization", () => {
 
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
     await nextFrame();
-    expect(container.querySelector("button[aria-label='Close Headers editor']")).not.toBeNull();
+    expect(document.querySelector("button[aria-label='Close Headers editor']")).not.toBeNull();
 
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Headers editor']")!.click());
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Headers editor']")!.click());
     await nextFrame();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
     expect(container.querySelector<HTMLInputElement>(".wf-dictionary-cell.key input")?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("keeps an inline expression validation error after the expanded editor closes", async () => {
+    const ReportingExpression: StudioExpressionEditorContribution["surfaces"]["inline"] = ({
+      onValidationChange,
+      context,
+      onExpand
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return (
+        <div>
+          <textarea aria-label={`${context.surface} script`} defaultValue="not a number" />
+          {onExpand ? <button type="button" aria-label="Expand from editor" onClick={onExpand}>Expand</button> : null}
+        </div>
+      );
+    };
+    const reporting: StudioExpressionEditorContribution = {
+      id: "test.blocking-expression",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { inline: ReportingExpression, expanded: ReportingExpression }
+    };
+    const container = renderPanel([input("Template", { isWrapped: true, tier: "optional" })], {
+      expressionEditors: [reporting],
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "JavaScript", value: "not a number" } }
+      })
+    });
+    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    await nextFrame();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+    expect(container.querySelector("textarea[aria-label='inline script']")).not.toBeNull();
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Expand from editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("button[aria-label='Close Template editor']")).not.toBeNull();
+    expect(document.querySelector("textarea[aria-label='expanded script']")).not.toBeNull();
+
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Template editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("button[aria-label='Close Template editor']")).toBeNull();
+    expect(container.querySelector("textarea[aria-label='inline script']")).not.toBeNull();
+    expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+  });
+
+  it("opens a module-owned structured Inputs editor with a labeled expand control, not overlay chrome", async () => {
+    const reporting: StudioExpressionEditorContribution = {
+      id: "decisions.inputs",
+      supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+      createDefaultValue: () => ({}),
+      surfaces: {
+        inline: ({ onValidationChange }) => {
+          React.useEffect(() => {
+            onValidationChange?.(true);
+            return () => onValidationChange?.(false);
+          }, [onValidationChange]);
+          return <input aria-label="amount" defaultValue="" />;
+        },
+        expanded: ({ onValidationChange }) => {
+          React.useEffect(() => {
+            onValidationChange?.(true);
+            return () => onValidationChange?.(false);
+          }, [onValidationChange]);
+          return <input aria-label="amount expanded" defaultValue="" />;
+        }
+      }
+    };
+    const container = renderPanel([input("Inputs", {
+      referenceKey: "Inputs",
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      collectionKind: "Dictionary",
+      isWrapped: true,
+      defaultSyntax: "Object",
+      uiHint: "decision-inputs"
+    })], {
+      expressionEditors: [reporting],
+      activity: activity({
+        Inputs: { typeName: "Elsa.Decisions.Core.DecisionValue", expression: { type: "Object", value: { amount: { kind: "number", value: "" } } } }
+      })
+    });
+    await nextFrame();
+    expect(container.querySelector(".wf-expression-expand-button")).toBeNull();
+    const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Inputs editor']");
+    expect(expand?.textContent).toContain("Open expanded editor");
+    flushSync(() => expand!.click());
+    await nextFrame();
+    const dialog = document.querySelector<HTMLElement>("[role='dialog']");
+    expect(dialog).not.toBeNull();
+    expect(dialog?.querySelector("[aria-label='amount expanded']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Inputs editor']")!.click());
+    await nextFrame();
+    expect(document.querySelector("[role='dialog']")).toBeNull();
+    expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
   });
 
   it("does not let a valid simultaneous dictionary editor instance clear its sibling error", async () => {
@@ -1032,7 +1128,7 @@ describe("activity property organization", () => {
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-dictionary-open-expanded")!.click());
     await nextFrame();
     expect(callbacks.size).toBe(2);
-    expect(container.querySelectorAll(".wf-dictionary-editor input[data-validation-instance]")).toHaveLength(2);
+    expect(document.querySelectorAll(".wf-dictionary-editor input[data-validation-instance]")).toHaveLength(2);
 
     const [first, second] = [...callbacks.values()];
     first!(true);
@@ -1207,7 +1303,7 @@ describe("activity property organization", () => {
     expect(container.querySelector("input[type='checkbox']")).toBeNull();
 
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Condition editor']")?.click());
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
     expect(expanded?.value).toBe("value and");
     expect(document.activeElement).toBe(expanded);
   });
@@ -1251,7 +1347,7 @@ describe("activity property organization", () => {
 
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Expand from editor']")!.click());
 
-    expect(container.querySelector("[aria-label='Expanded rich editor']")).not.toBeNull();
+    expect(document.querySelector("[aria-label='Expanded rich editor']")).not.toBeNull();
     expect(container.querySelector("[aria-label='Expand from editor']")).toBeNull();
     const expandedContext = contexts.at(-1)!;
     expect(expandedContext.surface).toBe("expanded");
@@ -1291,7 +1387,7 @@ describe("activity property organization", () => {
       .toEqual({ ...definition, source: "args.response.message" });
 
     clickButton(container, "Open expanded Template editor");
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
     expect(expanded.value).toBe("args.response.message");
     changeTextArea(expanded, "args.response.code");
     expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
@@ -1756,18 +1852,18 @@ describe("activity property organization", () => {
     expect(container.querySelector(".wf-object-expression-summary")?.textContent).toContain("2 properties");
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
 
-    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']");
+    const expanded = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']");
     expect(expanded?.value).toContain('"first": 1');
-    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(document.querySelector("[role='dialog']")).not.toBeNull();
 
     changeTextArea(expanded!, '{"first":');
-    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+    expect(document.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
     expect(changes).toHaveLength(0);
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")?.click());
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")?.click());
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
 
-    expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
-    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+    expect(document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
+    expect(document.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
   });
 });
 
@@ -2033,7 +2129,7 @@ describe("masked inputs", () => {
     expectNowhere(storedValue);
 
     openExpandedEditor(container);
-    expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='ApiToken expanded value']")!.value).toBe("");
+    expect(document.querySelector<HTMLTextAreaElement>("textarea[aria-label='ApiToken expanded value']")!.value).toBe("");
     expectNowhere(storedValue);
   });
 

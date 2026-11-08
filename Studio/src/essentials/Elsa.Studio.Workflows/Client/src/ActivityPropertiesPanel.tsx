@@ -665,7 +665,8 @@ function PropertyRow({
   const inlineExpressionEditor = inlineExpressionContext
     ? currentRequiresAdmission ? admittedExpressionEditor : resolveExpressionEditor(expressionEditors, inlineExpressionContext)
     : null;
-  const dictionaryType = replacesGenericDictionaryEditor(inlineExpressionEditor, syntax) ? null : genericDictionaryType;
+  const moduleOwnedStructured = replacesGenericDictionaryEditor(inlineExpressionEditor, syntax);
+  const dictionaryType = moduleOwnedStructured ? null : genericDictionaryType;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
   const inlineDiagnosticProvider = inlineExpressionContext
     ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
@@ -704,13 +705,13 @@ function PropertyRow({
   // block picker above the list, while dictionaries use a separate toolbar that keeps the picker clear
   // of their table. `uiHint: "singleline"` is common on list inputs, so gating on the collection itself
   // (not the hint) is what keeps the two features from colliding.
-  const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
+  const structuredCollectionType = !moduleOwnedStructured && editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
     ? describeCollectionForInput(effectiveInput)
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   // Reference contributions own their picker, labels and feedback. A literal's single-line hint
   // must not put overlaid text-field chrome across that whole reference editor.
-  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && (
+  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && !moduleOwnedStructured && (
     editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
@@ -718,6 +719,7 @@ function PropertyRow({
   const canExpandEditor = Boolean(wrapped && !secretOnly && !valueMasked && (
     dictionaryType != null ||
     editingMode === "text" ||
+    (moduleOwnedStructured && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
   ));
@@ -1180,31 +1182,33 @@ function PropertyRow({
       ) : null}
       {/* User interaction opens this after rowRef mounts. Embedders scope theme tokens with
           .wf-tokens; without a resource scope the dialog inherits the document theme. */}
-      {expanded && rowRef.current ? createPortal(
-        <ExpandedPropertyEditor
-          input={input}
-          dictionarySessionScope={dictionarySessionScope}
-          value={editorValue}
-          syntax={syntax}
-          editingMode={editingMode}
-          descriptors={expressionDescriptors}
-          getUnavailableReason={getUnavailableReason}
-          activity={activity}
-          propertyEditors={editors}
-          expressionEditors={expressionEditors}
-          validationScopeKey={disclosureSignalKey}
-          onValidationChange={reportEditorValidation}
-          onDisclosureFallbackChange={reportEditorFallback}
-          expressionContext={makeExpressionContext(syntax, "expanded")}
-          disabled={readOnly}
-          wrapped={wrapped}
-          conversionProfiles={conversionProfiles}
-          onChange={setRaw}
-          onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
-          onSyntaxChange={setSyntax}
-          onClose={closeExpanded}
-        />,
-        rowRef.current.closest(".wf-tokens, .wf-editor, .wf-page") ?? rowRef.current.ownerDocument.body
+      {expanded ? createPortal(
+        <div className="wf-tokens">
+          <ExpandedPropertyEditor
+            input={input}
+            dictionarySessionScope={dictionarySessionScope}
+            value={editorValue}
+            syntax={syntax}
+            editingMode={editingMode}
+            descriptors={expressionDescriptors}
+            getUnavailableReason={getUnavailableReason}
+            activity={activity}
+            propertyEditors={editors}
+            expressionEditors={expressionEditors}
+            validationScopeKey={disclosureSignalKey}
+            onValidationChange={reportEditorValidation}
+            onDisclosureFallbackChange={reportEditorFallback}
+            expressionContext={makeExpressionContext(syntax, "expanded")}
+            disabled={readOnly}
+            wrapped={wrapped}
+            conversionProfiles={conversionProfiles}
+            onChange={setRaw}
+            onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
+            onSyntaxChange={setSyntax}
+            onClose={closeExpanded}
+          />
+        </div>,
+        (rowRef.current?.ownerDocument ?? document).body
       ) : null}
     </div>
   );
@@ -1254,8 +1258,21 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
 
   if (previous.activity === next.activity) return true;
   const propertyName = getInputPropertyName(previous.input);
-  return Object.is(previous.activity[propertyName], next.activity[propertyName]) &&
-    hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs);
+  if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
+  if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
+  // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
+  return !expressionEditorReadsActivity(previous);
+}
+
+function expressionEditorReadsActivity(props: PropertyRowProps) {
+  const syntaxes = ["Literal", "Object", "JavaScript"];
+  return props.expressionEditors.some(editor => syntaxes.some(syntax => editor.supports({
+    syntax,
+    surface: "inline",
+    descriptor: props.input,
+    activity: props.activity,
+    expressionDescriptors: props.expressionDescriptors
+  })));
 }
 
 function hasSameActivityMetadata(
@@ -1397,7 +1414,7 @@ function ExpandedPropertyEditor({
               initialFocus
               context={expressionContext}
               onChange={onChange}
-              onValidationChange={hasError => onValidationChange("expression", hasError)}
+              onValidationChange={hasError => onValidationChange("expression-expanded", hasError)}
             />
           ) : useTextFallback || editingMode === "literal" ? (
             <>

@@ -16,7 +16,10 @@ export function ValueInput({ clause, value, onChange, label }: { clause: Clause;
   return <label className="decision-value-field">{label}<span className="decision-value-controls">
     <select aria-label={`${label} value kind`} value={value.kind === "null" ? "null" : clause.type} onChange={event => onChange(event.target.value === "null" ? { kind: "null", value: null } : initial(clause.type))}><option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option><option value="null">Null</option></select>
     {value.kind === "boolean" ? <select aria-label={label} value={value.value ?? "false"} onChange={event => onChange({ kind: "boolean", value: event.target.value })}><option value="true">True</option><option value="false">False</option></select>
-      : <input aria-label={label} disabled={value.kind === "null"} inputMode={value.kind === "number" ? "decimal" : "text"} value={value.value ?? ""} onChange={event => onChange({ ...value, value: event.target.value })} />}
+      : <input aria-label={label} disabled={value.kind === "null"} inputMode={clause.type === "number" ? "decimal" : "text"} value={value.value ?? ""} onChange={event => onChange({
+        kind: clause.type === "number" ? "number" : "string",
+        value: event.target.value
+      })} />}
   </span></label>;
 }
 export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void }) {

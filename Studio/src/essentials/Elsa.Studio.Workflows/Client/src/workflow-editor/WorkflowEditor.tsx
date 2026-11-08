@@ -395,7 +395,8 @@ export function WorkflowEditor({
   const localDraftValidation = useContributionDraftValidation(
     draft?.state.rootActivity,
     propertyEditors,
-    expressionEditors
+    expressionEditors,
+    catalogByVersion
   );
   const combinedValidationErrors = useMemo(
     () => humanizeValidationErrors(combineValidationErrors({
@@ -408,9 +409,10 @@ export function WorkflowEditor({
   const collectLocalValidation = useCallback(async (snapshot: WorkflowDraft) => {
     return collectContributionDraftValidation(
       snapshot.state.rootActivity,
-      contributionDraftValidationCollectors(propertyEditors, expressionEditors)
+      contributionDraftValidationCollectors(propertyEditors, expressionEditors),
+      catalogByVersion
     );
-  }, [expressionEditors, propertyEditors]);
+  }, [catalogByVersion, expressionEditors, propertyEditors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");

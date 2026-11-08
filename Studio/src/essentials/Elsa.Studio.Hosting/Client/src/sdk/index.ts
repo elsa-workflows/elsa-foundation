@@ -732,6 +732,12 @@ export interface StudioDraftValidationIssue {
   severity?: "Error" | "Warning" | string | null;
 }
 
+/** Host context so a collector can match the same activity its editor `supports`, not a coincidental property name. */
+export interface StudioDraftValidationContext {
+  typeName?: string | null;
+  inputs?: StudioActivityInputDescriptor[];
+}
+
 export interface StudioActivityPropertyEditorContribution extends StudioBackendAwareContribution {
   id: string;
   order?: number;
@@ -741,7 +747,7 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
    * Optional designer-side checks for the whole activity, used by the workflow canvas footer and
    * Review & publish. Omission means this contribution does not add draft-validation issues.
    */
-  collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+  collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
@@ -1179,7 +1185,7 @@ export interface StudioExpressionEditorContribution extends StudioBackendAwareCo
    * Optional designer-side checks for the whole activity, used by the workflow canvas footer and
    * Review & publish. Omission means this contribution does not add draft-validation issues.
    */
-  collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+  collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
   metadata?: StudioExpressionEditorMetadata;
   /** Optional semantic rendering for authorized authored source, selected through this contribution's supports policy. */

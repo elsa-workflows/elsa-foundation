@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioExpressionEditorContext } from "@elsa-workflows/studio-sdk";
 import { DecisionInputsEditor } from "../DecisionInputsEditor";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
-import { collectEvaluateDecisionValidation } from "../decisionDraftValidation";
+import { DecisionVersionEditor } from "../DecisionVersionEditor";
+import {
+  collectEvaluateDecisionValidation,
+  evaluateDecisionActivityType,
+  loadDecisionTable
+} from "../decisionDraftValidation";
 import {
   asDecisionValueMap,
   extraDecisionInputs,
@@ -41,6 +46,27 @@ function expressionContext(activity: unknown): StudioExpressionEditorContext {
 
 function pin(value: string) {
   return { Decision: { expression: { type: "Literal", value } } };
+}
+
+const evaluateContext = {
+  typeName: evaluateDecisionActivityType,
+  inputs: [
+    { name: "Decision", referenceKey: "Decision", typeName: "System.String", uiHint: "decision-version" },
+    { name: "Inputs", referenceKey: "Inputs", typeName: "Elsa.Decisions.Core.DecisionValue" }
+  ]
+};
+
+function evaluateActivity(extra: Record<string, unknown> = {}) {
+  return {
+    nodeId: "eval-1",
+    activityTypeKey: evaluateDecisionActivityType,
+    Decision: { expression: { type: "Literal", value: "approval@v1" } },
+    ...extra
+  };
+}
+
+function collect(api: ReturnType<typeof stubApi>, activity: unknown) {
+  return collectEvaluateDecisionValidation(api, activity, evaluateContext);
 }
 
 describe("decision input seeding helpers", () => {
@@ -206,6 +232,8 @@ describe("Evaluate Decision Inputs editor", () => {
     expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("string");
     type(host.querySelector<HTMLInputElement>('[aria-label="amount"]')!, "951");
     expect(onChange.mock.calls.at(-1)?.[0]).toEqual({ amount: { kind: "string", value: "951" } });
+    const amount = host.querySelector<HTMLInputElement>('[aria-label="amount"]')!;
+    expect(amount.getAttribute("inputmode")).toBe("text");
   });
 
   it("flags an empty required number as InvalidValue until a valid value is entered", async () => {
@@ -268,37 +296,196 @@ describe("Evaluate Decision draft validation collection", () => {
       if (path.endsWith("/versions")) return { items: [] };
       return { ...asset, publishedVersionId: null, xml: asset.xml };
     });
-    const extras = await collectEvaluateDecisionValidation(api, {
-      nodeId: "eval-1",
-      Decision: { expression: { type: "Literal", value: "approval@v1" } },
+    const extras = await collect(api, evaluateActivity({
       Inputs: { expression: { type: "Object", value: {
         amount: { kind: "number", value: "950" },
         notes: { kind: "string", value: "extra" }
       } } }
-    });
+    }));
     expect(extras.map(item => item.type)).toContain("Decision/InputMembership");
     expect(extras.some(item => item.message.includes("notes"))).toBe(true);
+    expect(extras.every(item => item.path === "eval-1/inputs/Inputs" || item.path === "eval-1/inputs/Decision")).toBe(true);
 
-    const mismatch = await collectEvaluateDecisionValidation(api, {
-      nodeId: "eval-1",
+    const mismatch = await collect(api, evaluateActivity({
       Decision: { expression: { type: "Literal", value: "approval@v2" } },
       Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } } }
-    });
+    }));
     expect(mismatch.map(item => item.type)).toContain("Decision/InputTypeMismatch");
 
-    const empty = await collectEvaluateDecisionValidation(api, {
-      nodeId: "eval-1",
-      Decision: { expression: { type: "Literal", value: "approval@v1" } },
+    const empty = await collect(api, evaluateActivity({
       Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "" } } } }
-    });
+    }));
     expect(empty.map(item => item.type)).toContain("Decision/InvalidValue");
 
-    const unpublished = await collectEvaluateDecisionValidation(api, {
-      nodeId: "eval-1",
+    const unpublished = await collect(api, evaluateActivity({
+      Decision: { expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } } }
+    }));
+    expect(unpublished.map(item => item.type)).toContain("Decision/UnpublishedLatest");
+    expect(unpublished.some(item => item.message.includes("Review & publish cannot pin"))).toBe(true);
+    expect(unpublished[0]?.path).toBe("eval-1/inputs/Decision");
+  });
+
+  it("does not treat a custom activity Decision mailbox as a table pin", async () => {
+    const api = stubApi();
+    const issues = await collectEvaluateDecisionValidation(api, {
+      nodeId: "notify-1",
+      activityTypeKey: "Contoso.Notify",
+      Decision: { expression: { type: "Literal", value: "ops@example.com" } }
+    }, {
+      typeName: "Contoso.Notify",
+      inputs: [{ name: "Decision", referenceKey: "Decision", typeName: "System.String" }]
+    });
+    expect(issues).toEqual([]);
+    expect(api.backend.http.getJson).not.toHaveBeenCalled();
+  });
+
+  it("re-resolves @latest after an unpublished table is published in the same session", async () => {
+    const api = stubApi();
+    let publishedVersionId: string | null = null;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions/v1")) return published;
+      if (path.endsWith("/approval") || path.endsWith("/decisions/approval")) return { ...asset, publishedVersionId, xml: asset.xml };
+      return { ...asset, publishedVersionId, xml: asset.xml };
+    });
+    const activity = evaluateActivity({
       Decision: { expression: { type: "Literal", value: "approval@latest" } },
       Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } } }
     });
+    const unpublished = await collect(api, activity);
     expect(unpublished.map(item => item.type)).toContain("Decision/UnpublishedLatest");
-    expect(unpublished.some(item => item.message.includes("Review & publish cannot pin"))).toBe(true);
+    publishedVersionId = "v1";
+    const publishedLatest = await collect(api, activity);
+    expect(publishedLatest.map(item => item.type)).not.toContain("Decision/UnpublishedLatest");
+    expect(publishedLatest.filter(item => item.type.startsWith("Decision/"))).toEqual([]);
+  });
+
+  it("re-resolves a new @latest published table that added a required input", async () => {
+    const api = stubApi();
+    const regionXml = editTable(asset.xml ?? "", { kind: "add-clause", output: false });
+    const added = parseTable(regionXml).inputs.find(clause => clause.name !== "amount")!;
+    let latest = published;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions/v1") || path.endsWith("/versions/v2")) return latest;
+      return { ...asset, publishedVersionId: latest.id, xml: latest.xml };
+    });
+    const activity = evaluateActivity({
+      Decision: { expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } } }
+    });
+    const first = await collect(api, activity);
+    expect(first.map(item => item.type)).not.toContain("Decision/MissingInput");
+    latest = { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: regionXml, sourceHash: "hash-region", publishedAt: asset.createdAt };
+    const second = await collect(api, activity);
+    expect(second.map(item => item.type)).toContain("Decision/MissingInput");
+    expect(second.some(item => item.message.includes(added.name))).toBe(true);
+  });
+
+  it("retries a transient table load instead of caching the failure", async () => {
+    const api = stubApi();
+    let fail = true;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (fail) throw new Error("temporary lookup failed");
+      if (path.endsWith("/versions/v1")) return published;
+      return { ...asset, publishedVersionId: "v1", xml: asset.xml };
+    });
+    const activity = evaluateActivity({
+      Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "950" } } } }
+    });
+    const failed = await collect(api, activity);
+    expect(failed.map(item => item.type)).toContain("Decision/Unavailable");
+    expect(failed.some(item => item.message.includes("temporary lookup failed"))).toBe(true);
+    fail = false;
+    const recovered = await collect(api, activity);
+    expect(recovered.map(item => item.type)).not.toContain("Decision/Unavailable");
+  });
+
+  it("shares one in-flight table load and does not reuse it after it settles", async () => {
+    const api = stubApi();
+    let inflight = 0;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions/v1")) {
+        inflight += 1;
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return published;
+      }
+      return { ...asset, publishedVersionId: "v1" };
+    });
+    const [first, second] = await Promise.all([
+      loadDecisionTable(api, "approval", "v1"),
+      loadDecisionTable(api, "approval", "v1")
+    ]);
+    expect(first.table).not.toBeNull();
+    expect(second.table).toBe(first.table);
+    expect(inflight).toBe(1);
+    await loadDecisionTable(api, "approval", "v1");
+    expect(inflight).toBe(2);
+  });
+
+  it("reloads @latest when the Studio tab is shown again after a same-session publish", async () => {
+    const api = stubApi();
+    let publishedVersionId: string | null = null;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions/v1")) return published;
+      return { ...asset, publishedVersionId, xml: asset.xml };
+    });
+    const { host } = mount(<DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={{ amount: { kind: "number", value: "950" } }} context={expressionContext(pin("approval@latest"))} onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("no published version"));
+    publishedVersionId = "v1";
+    window.dispatchEvent(new Event("focus"));
+    await vi.waitFor(() => expect(host.textContent).not.toContain("no published version"));
+  });
+
+  it("does not silently seed a new @latest clause after a foreground table refresh", async () => {
+    const api = stubApi();
+    const onChange = vi.fn();
+    const regionXml = editTable(asset.xml ?? "", { kind: "add-clause", output: false });
+    let latest = published;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.includes("/versions/")) return latest;
+      return { ...asset, publishedVersionId: latest.id, xml: latest.xml };
+    });
+    function Harness() {
+      const [value, setValue] = useState<unknown>({ amount: { kind: "number", value: "950" } });
+      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Object" value={value} context={expressionContext(pin("approval@latest"))} onChange={next => { onChange(next); setValue(next); }} />;
+    }
+    const { host } = mount(<Harness />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
+    const added = parseTable(regionXml).inputs.find(clause => clause.name !== "amount")!;
+    latest = { ...published, id: "v2", number: 2, xml: regionXml, sourceHash: "hash-region" };
+    onChange.mockClear();
+    window.dispatchEvent(new Event("focus"));
+    await vi.waitFor(() => expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull());
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+  });
+});
+
+describe("decision version picker freshness", () => {
+  it("lists a newly published version after the tab is shown again", async () => {
+    const api = stubApi();
+    let items = [{ id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt }];
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions")) return { items };
+      if (path.endsWith("/decisions")) return { items: [{ ...asset, publishedVersionId: items.at(-1)?.id }] };
+      return { ...asset, publishedVersionId: items.at(-1)?.id };
+    });
+    const { host } = mount(<DecisionVersionEditor
+      api={api}
+      value="approval@latest"
+      disabled={false}
+      descriptor={{ name: "Decision", referenceKey: "Decision", typeName: "System.String", uiHint: "decision-version" }}
+      context={{
+        activity: { nodeId: "eval-1", activityVersionId: "eval-1-v", inputs: [], outputs: [] },
+        activityId: "eval-1",
+        expressionDescriptors: [],
+        readOnly: false
+      }}
+      onChange={vi.fn()}
+    />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 1"));
+    expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).not.toContain("Version 2");
+    items = [...items, { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: amountTextXml, sourceHash: "hash2", publishedAt: asset.createdAt }];
+    window.dispatchEvent(new Event("focus"));
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 2"));
   });
 });

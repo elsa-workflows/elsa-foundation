@@ -111,7 +111,7 @@ declare module "@elsa-workflows/studio-sdk" {
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
     createDefaultValue?(context: StudioExpressionEditorContext): unknown;
-    collectDraftValidation?(activity: unknown): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+    collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
     metadata?: StudioExpressionEditorMetadata;
     sourceRenderer?: StudioExpressionSourceRenderer;
   }
@@ -121,6 +121,11 @@ declare module "@elsa-workflows/studio-sdk" {
     message: string;
     path?: string | null;
     severity?: "Error" | "Warning" | string | null;
+  }
+
+  export interface StudioDraftValidationContext {
+    typeName?: string | null;
+    inputs?: StudioActivityInputDescriptor[];
   }
 
   export interface StudioExpressionSourceRendererContext {

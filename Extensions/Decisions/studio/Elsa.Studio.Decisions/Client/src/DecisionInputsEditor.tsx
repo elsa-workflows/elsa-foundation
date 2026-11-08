@@ -21,6 +21,7 @@ import {
   writtenDecisionInput
 } from "./decisionInputs";
 import { loadDecisionTable } from "./decisionDraftValidation";
+import { useForegroundGeneration } from "./decisionFreshness";
 import type { Table } from "./decisionXml";
 
 export function createDecisionInputsEditorContribution(api: ElsaStudioModuleApi): StudioExpressionEditorContribution {
@@ -47,8 +48,10 @@ export function DecisionInputsEditor({
 }: StudioExpressionEditorProps & { api: ElsaStudioModuleApi }) {
   const pin = readDecisionPin(context.activity);
   const parsed = parseDecisionPin(pin);
+  const freshness = useForegroundGeneration();
   const jsonErrorId = useId();
   const [table, setTable] = useState<Table | null>(null);
+  const [tablePin, setTablePin] = useState("");
   const [loading, setLoading] = useState(!!parsed);
   const [error, setError] = useState("");
   const [unpublished, setUnpublished] = useState(false);
@@ -60,6 +63,8 @@ export function DecisionInputsEditor({
   const [jsonDraft, setJsonDraft] = useState(jsonExternal);
   const [jsonError, setJsonError] = useState("");
   const jsonFocused = useRef(false);
+  const seededPin = useRef("");
+  const seededTableKey = useRef("");
   const blocking = extras.length > 0 || mismatches.length > 0 || invalids.length > 0 || !!jsonError || !!error;
 
   useEffect(() => {
@@ -77,6 +82,7 @@ export function DecisionInputsEditor({
     const selection = parseDecisionPin(pin);
     if (!selection) {
       setTable(null);
+      setTablePin("");
       setLoading(false);
       setError("");
       setUnpublished(false);
@@ -89,25 +95,37 @@ export function DecisionInputsEditor({
     void loadDecisionTable(api, selection.assetId, selection.selection).then(result => {
       if (!active) return;
       setTable(result.table);
+      setTablePin(`${selection.assetId}@${selection.selection}`);
       setUnpublished(result.unpublished);
       setError(result.error);
     }, failure => {
       if (!active) return;
       setTable(null);
+      setTablePin("");
       setUnpublished(false);
       setError(failureMessage(failure));
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [api, pin]);
+  }, [api, pin, freshness]);
 
   useEffect(() => {
     if (!table || disabled || loading) return;
+    const pinKey = parsed ? `${parsed.assetId}@${parsed.selection}` : "";
+    if (!pinKey || tablePin !== pinKey) return;
+    const tableKey = table.inputs.map(clause => `${clause.name}:${clause.type}`).join("\0");
+    const tableGrewOnSamePin = seededPin.current === pinKey
+      && seededTableKey.current !== "" && seededTableKey.current !== tableKey;
+    seededPin.current = pinKey;
+    seededTableKey.current = tableKey;
+    // Same-pin table growth is a foreground @latest refresh: show new fields, do not write them.
+    // Empty `{}` still reseeds defaults. Pin changes and extra-key removal still fill missing keys.
+    if (tableGrewOnSamePin && Object.keys(asDecisionValueMap(value)).length > 0) return;
     const seeded = seedDecisionInputs(value, table.inputs);
     if (!seeded) return;
     onChange(seeded);
-  }, [disabled, loading, onChange, table, value]);
+  }, [disabled, loading, onChange, pin, table, tablePin, value]);
 
   const commit = (next: Record<string, Scalar>) => onChange(next);
   const updateClause = (name: string, clause: Table["inputs"][number], next: Scalar) =>
