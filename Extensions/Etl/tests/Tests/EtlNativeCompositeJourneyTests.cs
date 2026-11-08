@@ -509,6 +509,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     .WithFeature(services => new ExpressionsFeature().ConfigureServices(services))
                     .WithFeature(services => new EventsFeature().ConfigureServices(services))
                     .WithFeature(services => new WorkflowsPublishingFeature().ConfigureServices(services))
+                    .WithFeature(services => new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services))
                     .WithFeature(services => new ActivitiesDesignApiFeature().ConfigureServices(services))
                     .WithFeature(services => new WorkflowsPublishingApiFeature().ConfigureServices(services))
                     .WithFeature(services => new GraphActivitiesDesignFeature().ConfigureServices(services))
