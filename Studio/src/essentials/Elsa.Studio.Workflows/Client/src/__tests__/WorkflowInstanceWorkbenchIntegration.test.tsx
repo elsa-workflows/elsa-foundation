@@ -41,6 +41,12 @@ const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("../api/runtime", () => ({
   ...api,
+  // Native fetch rejects an already-aborted read. Keep a retired workbench's delayed
+  // import continuation from entering the next test's replacement inspection mock.
+  getActivityExecutionInspection: async (...args: Parameters<typeof import("../api/runtime").getActivityExecutionInspection>) => {
+    args[3]?.throwIfAborted();
+    return api.getActivityExecutionInspection(...args);
+  },
   WorkflowInstanceHealthFilterUnavailableError: class extends Error {}
 }));
 vi.mock("../api/activityDesign", () => ({ listActivities: api.listActivities }));
