@@ -15,6 +15,9 @@ public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
     IActivityDataSelectionAnalyzer sourceAnalyzer) : IDraftValidator
 {
+    /// <summary>Preserves the legacy call shape; validation fails closed until shared authority is supplied.</summary>
+    public ValueFlowValidator(IActivityStructureService activityStructureService) : this(activityStructureService, null!) { }
+
     private const string ParallelStructureKind = "elsa.parallel.structure";
     private const string FlowchartStructureKind = "elsa.flowchart.structure";
 
@@ -22,6 +25,8 @@ public sealed class ValueFlowValidator(
     {
         ArgumentNullException.ThrowIfNull(draft);
         cancellationToken.ThrowIfCancellationRequested();
+        if (sourceAnalyzer is null)
+            throw new InvalidOperationException("Value-flow validation requires the shared activity data selection analyzer.");
 
         if (draft.State.RootActivity is null)
             return [];

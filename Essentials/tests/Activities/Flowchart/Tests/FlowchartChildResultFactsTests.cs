@@ -86,10 +86,14 @@ public sealed class FlowchartChildResultFactsTests : IDisposable
         Assert.False(facts.AreMutuallyExclusive);
     }
 
-    [Fact]
-    public void Cycle_direction_and_self_reads_do_not_admit_a_previous_iteration_result()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    [InlineData(" first ")]
+    public void Cycle_direction_and_self_reads_do_not_admit_a_previous_iteration_result(string? start)
     {
-        var flow = Flowchart(["first", "second"], [("first", "second"), ("second", "first")], "first");
+        var flow = Flowchart(["first", "second"], [("first", "second"), ("second", "first")], start);
 
         var backward = _structures.AssessChildResult(flow, "second", "first");
         Assert.True(backward.IsCyclicBackEdge);
@@ -100,6 +104,18 @@ public sealed class FlowchartChildResultFactsTests : IDisposable
         var self = _structures.AssessChildResult(flow, "first", "first");
         Assert.True(self.IsCyclicBackEdge);
         Assert.Equal(ActivityChildResultAvailability.Unavailable, self.Availability);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    [InlineData(" producer ")]
+    public void Runtime_normalized_start_strings_preserve_required_result_availability(string start)
+    {
+        var facts = _structures.AssessChildResult(Flowchart(["producer", "consumer"], [("producer", "consumer")], start), "producer", "consumer");
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.MayRunConcurrently);
+        Assert.False(facts.IsCyclicBackEdge);
     }
 
     [Fact]

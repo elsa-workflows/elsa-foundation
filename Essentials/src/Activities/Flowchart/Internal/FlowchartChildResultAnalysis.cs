@@ -125,7 +125,8 @@ internal sealed class FlowchartChildResultAnalysis(
         var targetIds = edges.Select(edge => edge.Target).ToHashSet(StringComparer.Ordinal);
         // Match FlowchartGraph.SelectStartNode, including the first-child fallback for a cycle.
         // Every child without inbound connections remains a legal trigger entry as well.
-        var startNodeId = structure.StartNodeId ?? children.FirstOrDefault(id => !targetIds.Contains(id)) ?? children[0];
+        var startNodeId = FlowchartGraph.NormalizeStartNodeId(structure.StartNodeId)
+            ?? children.FirstOrDefault(id => !targetIds.Contains(id)) ?? children[0];
         if (!childNodeIds.Contains(startNodeId))
             return null;
         var entryNodeIds = children

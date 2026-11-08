@@ -56,6 +56,7 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(DateTime), "DateTime");
         registry.RegisterType(typeof(Guid), "Guid");
         registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
+        registry.RegisterType(typeof(Elsa.Activities.If.Activities.If), TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.If.Activities.If)));
         registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
         registry.RegisterType(typeof(DeclaredInputsActivity), TypeAliasConvention.CanonicalAlias(typeof(DeclaredInputsActivity)));
         registry.RegisterType(
@@ -81,6 +82,7 @@ internal static class TestActivityAliases
         "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
         "activity-sequence" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)),
         "activity-flowchart" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)),
+        "activity-if" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.If.Activities.If)),
         _ => "Object"
     };
 }

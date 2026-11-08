@@ -33,7 +33,7 @@ internal sealed record ActivityDataReadBinding(
             yield break;
         }
 
-        if (new[] { "Literal", "Object", "Default" }.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase))
+        if (new[] { "Literal", "Object", "Default", "Secret", "Connection" }.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase))
             yield break;
 
         if (argument.Value is ExpressionDefinition definition)
@@ -43,6 +43,12 @@ internal sealed record ActivityDataReadBinding(
                 var binding = Parameter(parameter);
                 if (binding is not null) yield return binding;
             }
+            yield break;
+        }
+
+        if (argument.Value is not null and not string and not JsonElement)
+        {
+            yield return new("", Error: "UnsupportedClrExpressionPayload");
             yield break;
         }
 

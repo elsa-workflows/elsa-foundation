@@ -15,17 +15,44 @@ namespace Elsa.Workflows.Design.Tests;
 public sealed class ValueFlowValidatorTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task An_omitted_flowchart_start_accepts_ordered_writes_but_rejects_a_real_fork(bool fork)
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(" \t ", false)]
+    [InlineData(" start ", false)]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData(" \t ", true)]
+    [InlineData(" start ", true)]
+    public async Task An_omitted_flowchart_start_accepts_ordered_writes_but_rejects_a_real_fork(string? start, bool fork)
     {
         var flow = Flowchart("flow", [Activity("start"), Set("write-left", "counter", "workflow"), Set("write-right", "counter", "workflow")],
             fork ? [("left", "start", "write-left"), ("right", "start", "write-right")]
-                : [("left", "start", "write-left"), ("right", "write-left", "write-right")], start: null);
+                : [("left", "start", "write-left"), ("right", "write-left", "write-right")], start);
         var errors = await Validate(Sequence("root", flow));
         Assert.Equal(fork, errors.Any(error => error.Type == "ValueFlow/ConcurrentWrite"));
         if (fork)
             Assert.Equal("$workflow/variables/counter", Assert.Single(errors, error => error.Type == "ValueFlow/ConcurrentWrite").Path);
+    }
+
+    [Fact]
+    public async Task The_preserved_single_argument_constructor_refuses_validation_without_shared_authority()
+    {
+        using var provider = StructureProvider();
+        var validator = new ValueFlowValidator(provider.GetRequiredService<IActivityStructureService>());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            validator.Validate(new StubDraft(new([], Activity("consumer"), [], [], null)), CancellationToken.None).AsTask());
+        Assert.Contains("shared activity data selection analyzer", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    [InlineData(" start ")]
+    public async Task Required_result_reads_accept_the_same_normalized_flowchart_entry_as_runtime(string start)
+    {
+        var flow = Flowchart("flow", [Activity("start"), Activity("producer"), Activity("consumer", ResultInput("value", "producer", "flow"))],
+            [("produce", "start", "producer"), ("consume", "producer", "consumer")], start);
+        Assert.DoesNotContain(await Validate(Sequence("root", flow)), error => error.Type == "ValueFlow/UnavailableProducer");
     }
 
     [Fact]

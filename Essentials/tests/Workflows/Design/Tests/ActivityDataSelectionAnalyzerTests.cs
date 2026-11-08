@@ -467,7 +467,6 @@ public sealed class ActivityDataSelectionAnalyzerTests
     [InlineData("literal")]
     [InlineData("Object")]
     [InlineData("Default")]
-    [InlineData("CustomProvider")]
     public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions(string syntax)
     {
         using var provider = Provider();
@@ -475,6 +474,21 @@ public sealed class ActivityDataSelectionAnalyzerTests
         var document = Document(Node("consumer", Input(new(business, syntax))));
         var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Empty(result.Findings);
+        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
+        Assert.Equal(0, business.Reads);
+    }
+
+    [Theory]
+    [InlineData("JavaScript")]
+    [InlineData("CustomProvider")]
+    public async Task Uninspectable_CLR_expression_values_are_refused_without_reading_business_getters(string syntax)
+    {
+        using var provider = Provider();
+        var business = new ThrowingBusinessValue();
+        var document = Document(Node("consumer", Input(new(business, syntax))));
+        var result = await Analyzer(provider).AnalyzeAsync(document);
+        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings,
+            finding => finding.Type == "ActivityData/UnsupportedClrExpressionPayload").Path);
         await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         Assert.Equal(0, business.Reads);
     }

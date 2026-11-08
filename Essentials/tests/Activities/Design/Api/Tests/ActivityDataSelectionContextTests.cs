@@ -211,6 +211,52 @@ public sealed class ActivityDataSelectionContextTests
         Assert.True(fixture.Lookup.Reads > 0);
     }
 
+    [Theory]
+    [InlineData("provider", true, "denied")]
+    [InlineData("manage", true, "denied")]
+    [InlineData("profile", true, "stale")]
+    [InlineData("owner-kind", true, "denied")]
+    [InlineData("owner-key", true, "stale")]
+    [InlineData("owner-tenant", true, "denied")]
+    [InlineData("provider", false, "empty")]
+    [InlineData("manage", false, "empty")]
+    [InlineData("profile", false, "stale")]
+    public async Task Inflight_authority_changes_do_not_disclose_a_now_inadmissible_snapshot(string change, bool changedSnapshot, string expected)
+    {
+        Fixture? fixture = null;
+        using (fixture = new Fixture(store =>
+        {
+            if (change == "provider") fixture!.Actor.Author = false;
+            else if (change == "manage") fixture!.Actor.Manage = false;
+            else if (change == "profile") fixture!.Actor.Profile = "profile-2";
+            else
+                store.Owner = new ActivityDefinitionAuthoringState {
+                    Id = store.Owner.Id, DefinitionId = store.Owner.DefinitionId,
+                    TenantId = change == "owner-tenant" ? "other-tenant" : store.Owner.TenantId,
+                    ContentAuthority = change == "owner-kind" ? new(ActivityContentAuthorityKind.ProviderSource, "provider", "source")
+                        : store.Owner.ContentAuthority with { AuthorityKey = "changed-owner" }
+                };
+        }))
+        {
+            var saved = fixture.Store.Draft.State;
+            var request = fixture.Request();
+            if (changedSnapshot) request = fixture.Request("changed") with { CurrentSnapshot = Element(State("changed")) };
+            var result = await fixture.Service.ResolveAsync(request, default);
+            Assert.Equal(expected, result.State);
+            Assert.True(fixture.Actor.Payload);
+            Assert.True(fixture.Catalog.Allowed);
+            Assert.True(fixture.Lookup.Reads > 0);
+            Assert.Equal(5, fixture.Store.Draft.Revision);
+            Assert.Same(saved, fixture.Store.Draft.State);
+            if (expected == "empty") Assert.NotNull(result.Analysis);
+            else Assert.Null(result.Analysis);
+            // Losing authoring privileges never makes an unchanged saved definition unreadable.
+            // A profile change invalidates the inflight response; a fresh read uses its current identity.
+            if (!changedSnapshot)
+                Assert.Equal("empty", (await fixture.Service.ResolveAsync(fixture.Request(), default)).State);
+        }
+    }
+
     [Fact]
     public async Task An_unchanged_published_draft_remains_browsable_with_a_distinct_context_identity()
     {
@@ -393,13 +439,15 @@ public sealed class ActivityDataSelectionContextTests
     private sealed class Actor : IActivityAuthoringContextAsync
     {
         internal bool Payload { get; set; } = true;
+        internal bool Author { get; set; } = true;
+        internal bool Manage { get; set; } = true;
         internal string Profile { get; set; } = "profile-1";
         public string? TenantId => "tenant";
         public string ActorId => "actor";
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Profile);
         public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(Payload);
-        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
-        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(Author);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Manage);
     }
 
     private sealed class Store : IActivityDefinitionDraftStore, IActivityDefinitionAuthoringStore
