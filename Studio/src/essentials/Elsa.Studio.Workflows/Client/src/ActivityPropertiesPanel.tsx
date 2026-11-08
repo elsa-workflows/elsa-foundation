@@ -1265,14 +1265,17 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
 }
 
 function expressionEditorReadsActivity(props: PropertyRowProps) {
-  const syntaxes = ["Literal", "Object", "JavaScript"];
-  return props.expressionEditors.some(editor => syntaxes.some(syntax => editor.supports({
+  const syntax = props.input.isWrapped === false
+    ? undefined
+    : readWrappedInput(props.activity, props.input).expression.type;
+  if (!syntax) return false;
+  return props.expressionEditors.some(editor => editor.readsActivityContext === true && editor.supports({
     syntax,
     surface: "inline",
     descriptor: props.input,
     activity: props.activity,
     expressionDescriptors: props.expressionDescriptors
-  })));
+  }));
 }
 
 function hasSameActivityMetadata(

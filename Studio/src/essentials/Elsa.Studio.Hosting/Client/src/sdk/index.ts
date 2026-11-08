@@ -1179,6 +1179,11 @@ export interface StudioExpressionEditorContribution extends StudioBackendAwareCo
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+  /**
+   * When true, this contribution reads sibling activity values (for example a Decision pin).
+   * The properties panel then invalidates this row when other activity inputs change.
+   */
+  readsActivityContext?: true;
   /** Creates a valid empty value when authoring switches to this expression syntax. */
   createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   /**

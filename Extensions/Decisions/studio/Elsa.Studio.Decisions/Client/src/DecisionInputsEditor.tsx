@@ -11,6 +11,7 @@ import {
   formatDecisionInputsJson,
   invalidDecisionInputs,
   isDecisionInputsContext,
+  isScalar,
   matchDecisionInputTypes,
   mismatchedDecisionInputs,
   parseDecisionInputsJson,
@@ -30,6 +31,7 @@ export function createDecisionInputsEditorContribution(api: ElsaStudioModuleApi)
     requiresBackend: decisionsCapability,
     order: 40,
     supports: isDecisionInputsContext,
+    readsActivityContext: true,
     surfaces: {
       inline: props => <DecisionInputsEditor {...props} api={api} />,
       expanded: props => <DecisionInputsEditor {...props} api={api} />
@@ -64,7 +66,9 @@ export function DecisionInputsEditor({
   const [jsonError, setJsonError] = useState("");
   const jsonFocused = useRef(false);
   const seededPin = useRef("");
-  const seededTableKey = useRef("");
+  const withheldByPin = useRef(new Map<string, Set<string>>());
+  const shownTable = useRef({ pin: tablePin, table });
+  shownTable.current = { pin: tablePin, table };
   const blocking = extras.length > 0 || mismatches.length > 0 || invalids.length > 0 || !!jsonError || !!error;
 
   useEffect(() => {
@@ -88,24 +92,30 @@ export function DecisionInputsEditor({
       setUnpublished(false);
       return;
     }
+    const nextPin = `${selection.assetId}@${selection.selection}`;
+    const background = shownTable.current.pin === nextPin && shownTable.current.table !== null;
     let active = true;
-    setLoading(true);
-    setError("");
-    setUnpublished(false);
+    if (!background) {
+      setLoading(true);
+      setError("");
+      setUnpublished(false);
+    }
     void loadDecisionTable(api, selection.assetId, selection.selection).then(result => {
       if (!active) return;
       setTable(result.table);
-      setTablePin(`${selection.assetId}@${selection.selection}`);
+      setTablePin(nextPin);
       setUnpublished(result.unpublished);
       setError(result.error);
     }, failure => {
       if (!active) return;
-      setTable(null);
-      setTablePin("");
-      setUnpublished(false);
+      if (!background) {
+        setTable(null);
+        setTablePin("");
+        setUnpublished(false);
+      }
       setError(failureMessage(failure));
     }).finally(() => {
-      if (active) setLoading(false);
+      if (active && !background) setLoading(false);
     });
     return () => { active = false; };
   }, [api, pin, freshness]);
@@ -114,18 +124,29 @@ export function DecisionInputsEditor({
     if (!table || disabled || loading) return;
     const pinKey = parsed ? `${parsed.assetId}@${parsed.selection}` : "";
     if (!pinKey || tablePin !== pinKey) return;
-    const tableKey = table.inputs.map(clause => `${clause.name}:${clause.type}`).join("\0");
-    const tableGrewOnSamePin = seededPin.current === pinKey
-      && seededTableKey.current !== "" && seededTableKey.current !== tableKey;
+    const current = asDecisionValueMap(value);
+    const missing = table.inputs.filter(clause => !isScalar(current[clause.name])).map(clause => clause.name);
+    if (Object.keys(current).length === 0) {
+      withheldByPin.current.delete(pinKey);
+      seededPin.current = pinKey;
+      const seeded = seedDecisionInputs(value, table.inputs);
+      if (seeded) onChange(seeded);
+      return;
+    }
+    const withheld = withheldByPin.current.get(pinKey) ?? new Set<string>();
+    const firstMount = seededPin.current === "";
+    const pinChanged = !firstMount && seededPin.current !== pinKey;
     seededPin.current = pinKey;
-    seededTableKey.current = tableKey;
-    // Same-pin table growth is a foreground @latest refresh: show new fields, do not write them.
-    // Empty `{}` still reseeds defaults. Pin changes and extra-key removal still fill missing keys.
-    if (tableGrewOnSamePin && Object.keys(asDecisionValueMap(value)).length > 0) return;
-    const seeded = seedDecisionInputs(value, table.inputs);
-    if (!seeded) return;
-    onChange(seeded);
-  }, [disabled, loading, onChange, pin, table, tablePin, value]);
+    if (firstMount || !pinChanged) {
+      for (const name of missing) withheld.add(name);
+      withheldByPin.current.set(pinKey, withheld);
+      return;
+    }
+    const seeded = seedDecisionInputs(value, table.inputs.filter(clause => !withheld.has(clause.name)));
+    for (const name of missing) withheld.add(name);
+    withheldByPin.current.set(pinKey, withheld);
+    if (seeded) onChange(seeded);
+  }, [disabled, loading, onChange, parsed, pin, table, tablePin, value]);
 
   const commit = (next: Record<string, Scalar>) => onChange(next);
   const updateClause = (name: string, clause: Table["inputs"][number], next: Scalar) =>

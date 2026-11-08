@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioExpressionEditorContext } from "@elsa-workflows/studio-sdk";
 import { DecisionInputsEditor } from "../DecisionInputsEditor";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
-import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import {
   collectEvaluateDecisionValidation,
   evaluateDecisionActivityType,
@@ -37,6 +36,16 @@ const descriptor = { name: "Inputs", referenceKey: "Inputs", typeName: "Elsa.Dec
 const published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
 const scoreXml = `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="score_definitions" name="Score" namespace="urn:elsa:decisions"><decision id="score" name="Score"><decisionTable id="score_table" hitPolicy="UNIQUE"><input id="score_input"><inputExpression id="score_expression" typeRef="number"><text>score</text></inputExpression></input><output id="score_output" label="result" typeRef="string"/><rule id="score_rule"><inputEntry id="score_c1"><text>-</text></inputEntry><outputEntry id="score_o1"><text>"Ok"</text></outputEntry></rule></decisionTable></decision></definitions>`;
 const scorePublished = { id: "v1", assetId: "scoring", number: 1, name: "Scoring", xml: scoreXml, sourceHash: "hash-score", publishedAt: asset.createdAt };
+const approvalTwoXml = `<?xml version="1.0" encoding="utf-8"?><definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="approval_definitions" name="Approval" namespace="urn:elsa:decisions"><decision id="approval" name="Approval"><decisionTable id="approval_table" hitPolicy="UNIQUE"><input id="approval_amount"><inputExpression id="approval_amount_expression" typeRef="number"><text>amount</text></inputExpression></input><input id="approval_category"><inputExpression id="approval_category_expression" typeRef="string"><text>customerCategory</text></inputExpression></input><output id="approval_result" label="result" typeRef="string"/><rule id="approval_rule"><inputEntry id="approval_c1"><text>-</text></inputEntry><inputEntry id="approval_c2"><text>-</text></inputEntry><outputEntry id="approval_o1"><text>"Automatic"</text></outputEntry></rule></decisionTable></decision></definitions>`;
+const regionXml = approvalTwoXml
+  .replace('<output id="approval_result"', '<input id="approval_region"><inputExpression id="approval_region_expression" typeRef="string"><text>region</text></inputExpression></input><output id="approval_result"')
+  .replace('<outputEntry id="approval_o1"', '<inputEntry id="approval_c3"><text>-</text></inputEntry><outputEntry id="approval_o1"');
+const twoPublished = { ...published, xml: approvalTwoXml };
+const regionPublished = { ...published, id: "v2", number: 2, xml: regionXml, sourceHash: "hash-region" };
+const authoredTwo = {
+  amount: { kind: "number", value: "950" },
+  customerCategory: { kind: "string", value: "Standard" }
+};
 const amountTextXml = (asset.xml ?? "").replace('typeRef="number"', 'typeRef="string"');
 const textPublished = { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: amountTextXml, sourceHash: "hash2", publishedAt: asset.createdAt };
 
@@ -437,28 +446,117 @@ describe("Evaluate Decision draft validation collection", () => {
   });
 
   it("does not silently seed a new @latest clause after a foreground table refresh", async () => {
+    const { host, onChange, added } = await mountLatestThenGrow();
+    expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull();
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+  });
+
+  it("does not seed a new @latest clause after an edit following a foreground refresh", async () => {
+    const { host, onChange, added } = await mountLatestThenGrow();
+    onChange.mockClear();
+    type(host.querySelector<HTMLInputElement>('[aria-label="customerCategory"]')!, "VIP");
+    expect(onChange.mock.calls.at(-1)?.[0]).toEqual({
+      amount: { kind: "number", value: "950" },
+      customerCategory: { kind: "string", value: "VIP" }
+    });
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+    expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull();
+  });
+
+  it("does not seed a new @latest clause after reselecting the same pin", async () => {
+    const { host, update, onChange, added, Harness } = await mountLatestThenGrow();
+    onChange.mockClear();
+    update(<Harness decision="approval@v1" />);
+    await vi.waitFor(() => expect(host.querySelector(`[aria-label="${added.name}"]`)).toBeNull());
+    update(<Harness decision="approval@latest" />);
+    await vi.waitFor(() => expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull());
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+  });
+
+  it("does not seed a new @latest clause after remounting the same pin", async () => {
+    const { host, onChange, added, authored, Harness } = await mountLatestThenGrow();
+    type(host.querySelector<HTMLInputElement>('[aria-label="customerCategory"]')!, "VIP");
+    expect(authored.current).toEqual({
+      amount: { kind: "number", value: "950" },
+      customerCategory: { kind: "string", value: "VIP" }
+    });
+    onChange.mockClear();
+    disposals.splice(0).forEach(dispose => dispose());
+    const remounted = mount(<Harness decision="approval@latest" />);
+    await vi.waitFor(() => expect(remounted.host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull());
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+    expect(remounted.host.querySelector<HTMLInputElement>('[aria-label="customerCategory"]')?.value).toBe("VIP");
+  });
+
+  it("still reseeds a new @latest clause when Advanced JSON is cleared after table growth", async () => {
+    const { host, onChange, added } = await mountLatestThenGrow();
+    click(host.querySelector("summary")!);
+    type(host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!, "{}");
+    await vi.waitFor(() => expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(true));
+  });
+
+  it("keeps InvalidValue and field focus while a same-pin table refresh is in flight", async () => {
     const api = stubApi();
-    const onChange = vi.fn();
     const regionXml = editTable(asset.xml ?? "", { kind: "add-clause", output: false });
     let latest = published;
+    let release: (() => void) | undefined;
     api.backend.http.getJson.mockImplementation(async path => {
-      if (path.includes("/versions/")) return latest;
+      if (path.includes("/versions/")) {
+        if (latest.id === "v2") await new Promise<void>(resolve => { release = resolve; });
+        return latest;
+      }
       return { ...asset, publishedVersionId: latest.id, xml: latest.xml };
     });
     function Harness() {
       const [value, setValue] = useState<unknown>({ amount: { kind: "number", value: "950" } });
-      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Object" value={value} context={expressionContext(pin("approval@latest"))} onChange={next => { onChange(next); setValue(next); }} />;
+      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Object" value={value} context={expressionContext(pin("approval@latest"))} onChange={next => setValue(next)} />;
     }
     const { host } = mount(<Harness />);
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
-    const added = parseTable(regionXml).inputs.find(clause => clause.name !== "amount")!;
+    const amount = host.querySelector<HTMLInputElement>('[aria-label="amount"]')!;
+    type(amount, "");
+    amount.focus();
+    expect(host.textContent).toContain("InvalidValue");
     latest = { ...published, id: "v2", number: 2, xml: regionXml, sourceHash: "hash-region" };
-    onChange.mockClear();
     window.dispatchEvent(new Event("focus"));
-    await vi.waitFor(() => expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull());
-    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+    await vi.waitFor(() => expect(release).toEqual(expect.any(Function)));
+    expect(host.textContent).toContain("InvalidValue");
+    expect(host.textContent).not.toContain("Loading input fields");
+    expect(host.querySelector("fieldset")?.disabled).toBe(false);
+    expect(document.activeElement).toBe(amount);
+    release!();
+    await vi.waitFor(() => expect(host.querySelector(`[aria-label="${parseTable(regionXml).inputs.find(clause => clause.name !== "amount")!.name}"]`)).not.toBeNull());
+    expect(host.textContent).toContain("InvalidValue");
+    expect(host.querySelector("fieldset")?.disabled).toBe(false);
+    expect(document.activeElement).toBe(host.querySelector('[aria-label="amount"]'));
   });
 });
+
+async function mountLatestThenGrow() {
+  const api = stubApi();
+  const onChange = vi.fn();
+  const authored = { current: { ...authoredTwo } as unknown };
+  let latest = twoPublished;
+  api.backend.http.getJson.mockImplementation(async path => {
+    if (path.endsWith("/versions/v1")) return twoPublished;
+    if (path.includes("/versions/")) return latest;
+    return { ...asset, publishedVersionId: latest.id, xml: latest.xml };
+  });
+  function Harness({ decision }: { decision: string }) {
+    const [value, setValue] = useState(authored.current);
+    return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Object" value={value} context={expressionContext(pin(decision))} onChange={next => { onChange(next); authored.current = next; setValue(next); }} />;
+  }
+  const { host, update } = mount(<Harness decision="approval@latest" />);
+  await vi.waitFor(() => expect(host.querySelector('[aria-label="customerCategory"]')).not.toBeNull());
+  const added = parseTable(regionXml).inputs.find(clause => clause.name === "region")!;
+  latest = regionPublished;
+  onChange.mockClear();
+  window.dispatchEvent(new Event("focus"));
+  await vi.waitFor(() => expect(host.querySelector(`[aria-label="${added.name}"]`)).not.toBeNull());
+  expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+  expect(asDecisionValueMap(authored.current).region).toBeUndefined();
+  return { host, update, onChange, added, authored, Harness };
+}
 
 describe("decision version picker freshness", () => {
   it("lists a newly published version after the tab is shown again", async () => {
@@ -487,5 +585,116 @@ describe("decision version picker freshness", () => {
     items = [...items, { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: amountTextXml, sourceHash: "hash2", publishedAt: asset.createdAt }];
     window.dispatchEvent(new Event("focus"));
     await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 2"));
+  });
+
+  it("ignores a stale focused versions response after the selected decision changes", async () => {
+    const api = stubApi(), onChange = vi.fn();
+    const scoringAsset = { ...asset, id: "scoring", name: "Scoring", publishedVersionId: "v-s1" };
+    const approvalVersion = { id: "v-a1", assetId: asset.id, number: 3, name: asset.name, xml: asset.xml, sourceHash: "hash-a", publishedAt: asset.createdAt };
+    const scoringVersion = { id: "v-s1", assetId: "scoring", number: 7, name: "Scoring", xml: scoreXml, sourceHash: "hash-s", publishedAt: asset.createdAt };
+    let resolveApproval: ((items: typeof approvalVersion[]) => void) | undefined;
+    let hangApproval = false;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/decisions")) return { items: [asset, scoringAsset] };
+      if (path.endsWith("/approval/versions")) {
+        if (hangApproval) return await new Promise<typeof approvalVersion[]>(resolve => { resolveApproval = resolve; }).then(items => ({ items }));
+        return { items: [approvalVersion] };
+      }
+      if (path.endsWith("/scoring/versions")) return { items: [scoringVersion] };
+      return path.includes("scoring") ? scoringAsset : { ...asset, publishedVersionId: "v-a1" };
+    });
+    function Harness() {
+      const [value, setValue] = useState("approval@latest");
+      return <DecisionVersionEditor
+        api={api}
+        value={value}
+        disabled={false}
+        descriptor={{ name: "Decision", referenceKey: "Decision", typeName: "System.String", uiHint: "decision-version" }}
+        context={{ activity: { nodeId: "eval-1", activityVersionId: "eval-1-v", inputs: [], outputs: [] }, activityId: "eval-1", expressionDescriptors: [], readOnly: false }}
+        onChange={next => { onChange(next); setValue(String(next)); }}
+      />;
+    }
+    const { host } = mount(<Harness />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 3"));
+    hangApproval = true;
+    host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!.focus();
+    await vi.waitFor(() => expect(resolveApproval).toEqual(expect.any(Function)));
+    select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision"]')!, "scoring");
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 7"));
+    resolveApproval!([approvalVersion]);
+    await Promise.resolve();
+    await Promise.resolve();
+    const versionSelect = host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!;
+    expect([...versionSelect.options].map(option => option.value)).toEqual(["latest", "v-s1"]);
+    expect(versionSelect.textContent).not.toContain("Version 3");
+    select(versionSelect, "v-s1");
+    expect(onChange).toHaveBeenCalledWith("scoring@v-s1");
+    expect(onChange).not.toHaveBeenCalledWith("scoring@v-a1");
+    expect(onChange).not.toHaveBeenCalledWith("approval@v-a1");
+  });
+
+  it("ignores a stale focused versions response after unmount", async () => {
+    const api = stubApi();
+    const approvalVersion = { id: "v-a1", assetId: asset.id, number: 3, name: asset.name, xml: asset.xml, sourceHash: "hash-a", publishedAt: asset.createdAt };
+    let resolveApproval: ((items: typeof approvalVersion[]) => void) | undefined;
+    let hangApproval = false;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions")) {
+        if (hangApproval) return await new Promise<typeof approvalVersion[]>(resolve => { resolveApproval = resolve; }).then(items => ({ items }));
+        return { items: [approvalVersion] };
+      }
+      if (path.endsWith("/decisions")) return { items: [asset] };
+      return { ...asset, publishedVersionId: "v-a1" };
+    });
+    const errors: unknown[] = [];
+    const consoleError = vi.spyOn(console, "error").mockImplementation(message => { errors.push(message); });
+    const { host, dispose } = mount(<DecisionVersionEditor
+      api={api}
+      value="approval@latest"
+      disabled={false}
+      descriptor={{ name: "Decision", referenceKey: "Decision", typeName: "System.String", uiHint: "decision-version" }}
+      context={{ activity: { nodeId: "eval-1", activityVersionId: "eval-1-v", inputs: [], outputs: [] }, activityId: "eval-1", expressionDescriptors: [], readOnly: false }}
+      onChange={vi.fn()}
+    />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Business decision version"]')?.textContent).toContain("Version 3"));
+    hangApproval = true;
+    host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!.focus();
+    await vi.waitFor(() => expect(resolveApproval).toEqual(expect.any(Function)));
+    disposals.splice(disposals.lastIndexOf(dispose), 1);
+    dispose();
+    resolveApproval!([approvalVersion]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(errors.join(" ")).not.toMatch(/unmounted|not mounted/i);
+    consoleError.mockRestore();
+  });
+
+  it("keeps the unpublished warning visible while a focused versions refresh is in flight", async () => {
+    const api = stubApi();
+    let resolveVersions: ((items: unknown[]) => void) | undefined;
+    let hang = false;
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions")) {
+        if (hang) return await new Promise<unknown[]>(resolve => { resolveVersions = resolve; }).then(items => ({ items }));
+        return { items: [] };
+      }
+      if (path.endsWith("/decisions")) return { items: [{ ...asset, publishedVersionId: null }] };
+      return { ...asset, publishedVersionId: null };
+    });
+    const { host } = mount(<DecisionVersionEditor
+      api={api}
+      value="approval@latest"
+      disabled={false}
+      descriptor={{ name: "Decision", typeName: "String" }}
+      context={{} as never}
+      onChange={vi.fn()}
+    />);
+    await vi.waitFor(() => expect(host.textContent).toContain("no published version"));
+    hang = true;
+    host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!.focus();
+    await vi.waitFor(() => expect(resolveVersions).toEqual(expect.any(Function)));
+    expect(host.textContent).toContain("no published version");
+    resolveVersions!([]);
+    await vi.waitFor(() => expect(host.textContent).toContain("no published version"));
   });
 });

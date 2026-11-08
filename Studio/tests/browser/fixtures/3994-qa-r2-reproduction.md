@@ -14,6 +14,8 @@ From `Studio/` with the decision-inputs Playwright project:
 | 11 | same | `{}` reseeds `0`; invalid `[` is `aria-invalid`; blur restores last valid JSON. |
 | 14 | `/?mode=decision-inputs&theme=light&unpublished=1` then Publish decision | After **window focus**, picker drops “no published version” and lists Version 1. |
 | 14 | same, then pin `@latest` and **Publish table with region** | After **window focus**, picker lists **Version 3**, `region` is visible, authored JSON has no `region`, amount stays `kind:number`, footer + Review **MissingInput**. |
+| 18 | same as 14, then edit **customerCategory** to `VIP` | JSON still has no `region`. MissingInput remains. Save / reselect `@latest` / remount / reload must not write `region:{kind:string,value:""}`. `{}` still reseeds `0` (product question). |
+| 19 | Version picker: start versions GET for table A, immediately select table B | Late A must not replace B's list or write `B@A-version`. |
 | 15 | `/?mode=decision-inputs&theme=light&failOnce=1` | Review blocked on lookup; Recover lookup; Review Ready. |
 | 16 | `/?mode=decision-inputs&theme=light&unrelated=1` | Notify activity, `ops@example.com`, Review Ready, no `/ops` lookup. |
 | 17 | `/?mode=decision-inputs&theme=light` | Empty amount → **Open expanded Inputs editor** (visible labeled row button) opens `role=dialog` named **Inputs**. Close. Inline + footer + Review stay InvalidValue. |
@@ -65,3 +67,13 @@ Supported control (visible text, not the 13px overlay icon that previously cover
 - Under the Inputs field on Evaluate Decision (`button.wf-property-expand-row`)
 
 Click it. A modal **dialog** named **Inputs** must appear (`role="dialog"`, heading Inputs). InvalidValue / InputTypeMismatch inside the dialog counts. **Close Inputs editor**. The inline row and canvas footer must still show the same blocking error. Review must stay blocked. Escape on a control that never opened a dialog is not this test.
+
+## 18 — `@latest` growth persistence (R3 FAIL on `1190eeeaa`)
+
+After item 14's refresh, `region` is visible and **absent** from JSON. Edit a **different** authored field (`customerCategory` → `VIP`). JSON must still omit `region`. MissingInput must remain. The empty default `region:{kind:string,value:""}` must not appear after save, reselect of `@latest`, remount, or reload.
+
+Isolated: Playwright item 14 test continues into customerCategory VIP, reselect, and **Remount inspector**.
+
+## 19 — rapid A/B deferred versions
+
+Select table A, immediately select table B while A's versions GET is delayed. After A's late response the pin and version list must stay B's. Isolated vitest covers deferred focus/unmount; composed host should still recheck live.

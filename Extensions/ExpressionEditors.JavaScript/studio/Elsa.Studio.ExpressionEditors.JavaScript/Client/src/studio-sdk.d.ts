@@ -110,6 +110,7 @@ declare module "@elsa-workflows/studio-sdk" {
     order?: number;
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+    readsActivityContext?: true;
     createDefaultValue?(context: StudioExpressionEditorContext): unknown;
     collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
     metadata?: StudioExpressionEditorMetadata;

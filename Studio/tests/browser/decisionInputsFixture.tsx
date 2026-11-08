@@ -238,6 +238,7 @@ export function DecisionInputsFixture() {
     failOnce: search.get("failOnce") === "1"
   }).current;
   const [, setBackendEpoch] = useState(0);
+  const [editorKey, setEditorKey] = useState(0);
   const bumpBackend = () => setBackendEpoch(value => value + 1);
   const api = useMemo(() => createApi(backend), [backend]);
   const activityDescriptor = unrelated ? notifyDescriptor : descriptor;
@@ -342,6 +343,7 @@ export function DecisionInputsFixture() {
       >
         <h1 style={{ marginTop: 0, fontSize: 18 }}>{activityDescriptor.displayName}</h1>
         <ActivityPropertiesPanel
+          key={editorKey}
           activity={activity}
           descriptor={activityDescriptor}
           editors={editors}
@@ -358,6 +360,7 @@ export function DecisionInputsFixture() {
           <button type="button" onClick={() => { backend.latestAddsRegion = true; backend.unpublished = false; bumpBackend(); }}>Publish table with region</button>
           <button type="button" onClick={() => { backend.fetchError = false; backend.failOnce = false; bumpBackend(); }}>Recover lookup</button>
           <button type="button" onClick={() => void openReview()}>Review & publish</button>
+          <button type="button" onClick={() => setEditorKey(key => key + 1)}>Remount inspector</button>
         </div>
         <output data-testid="authored-state" style={{ display: "none" }}>{JSON.stringify(activity)}</output>
         <output data-testid="backend-state" style={{ display: "none" }}>{JSON.stringify({

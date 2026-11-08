@@ -92,14 +92,16 @@ function renderPanel(
     const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
     const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
     const [readOnly, setReadOnly] = React.useState(options.readOnly ?? false);
+    const optionsRef = React.useRef(options);
+    optionsRef.current = options;
     replaceActivity = setCurrentActivity;
     replaceDraftId = setCurrentDraftId;
     replaceEditors = setCurrentEditors;
     replaceReadOnly = setReadOnly;
-    const handleChange = (nextActivity: ActivityNode) => {
-      options.onChange?.(nextActivity);
-      if (options.updateActivity !== false) setCurrentActivity(nextActivity);
-    };
+    const handleChange = React.useCallback((nextActivity: ActivityNode) => {
+      optionsRef.current.onChange?.(nextActivity);
+      if (optionsRef.current.updateActivity !== false) setCurrentActivity(nextActivity);
+    }, []);
     const panel = (
       <ActivityPropertiesPanel
         readOnly={readOnly}
@@ -1042,26 +1044,29 @@ describe("activity property organization", () => {
   });
 
   it("opens a module-owned structured Inputs editor with a labeled expand control, not overlay chrome", async () => {
+    const ReportingInputsInline: StudioExpressionEditorContribution["surfaces"]["inline"] = ({
+      onValidationChange
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return <input aria-label="amount" defaultValue="" />;
+    };
+    const ReportingInputsExpanded: StudioExpressionEditorContribution["surfaces"]["expanded"] = ({
+      onValidationChange
+    }) => {
+      React.useEffect(() => {
+        onValidationChange?.(true);
+        return () => onValidationChange?.(false);
+      }, [onValidationChange]);
+      return <input aria-label="amount expanded" defaultValue="" />;
+    };
     const reporting: StudioExpressionEditorContribution = {
       id: "decisions.inputs",
       supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
       createDefaultValue: () => ({}),
-      surfaces: {
-        inline: ({ onValidationChange }) => {
-          React.useEffect(() => {
-            onValidationChange?.(true);
-            return () => onValidationChange?.(false);
-          }, [onValidationChange]);
-          return <input aria-label="amount" defaultValue="" />;
-        },
-        expanded: ({ onValidationChange }) => {
-          React.useEffect(() => {
-            onValidationChange?.(true);
-            return () => onValidationChange?.(false);
-          }, [onValidationChange]);
-          return <input aria-label="amount expanded" defaultValue="" />;
-        }
-      }
+      surfaces: { inline: ReportingInputsInline, expanded: ReportingInputsExpanded }
     };
     const container = renderPanel([input("Inputs", {
       referenceKey: "Inputs",
@@ -1090,6 +1095,66 @@ describe("activity property organization", () => {
     await nextFrame();
     expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+  });
+
+  it("does not rebuild an unrelated JavaScript row when a sibling input that opted into activity context changes", async () => {
+    let scriptRenders = 0;
+    const ScriptEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      scriptRenders += 1;
+      return <textarea aria-label="script" data-renders={String(scriptRenders)} defaultValue={String(value ?? "")} />;
+    };
+    const InputsEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      const record = value && typeof value === "object" ? value as Record<string, { value?: string }> : {};
+      return <output aria-label="amount">{record.amount?.value ?? ""}</output>;
+    };
+    const inputsValue = (amount: string) => ({
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      expression: { type: "Object", value: { amount: { kind: "number", value: amount } } }
+    });
+    const templateValue = { typeName: "System.String", expression: { type: "JavaScript", value: "return 1;" } };
+    const current = activity({
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: inputsValue("950"),
+      template: templateValue
+    });
+    renderPanel([
+      input("Decision", { referenceKey: "Decision", isWrapped: true, defaultSyntax: "Literal", uiHint: "decision-version" }),
+      input("Inputs", {
+        referenceKey: "Inputs",
+        typeName: "Elsa.Decisions.Core.DecisionValue",
+        isWrapped: true,
+        defaultSyntax: "Object"
+      }),
+      input("Template", { isWrapped: true, defaultSyntax: "JavaScript" })
+    ], {
+      expressionEditors: [
+        {
+          id: "decisions.inputs",
+          readsActivityContext: true,
+          supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+          surfaces: { inline: InputsEditor }
+        },
+        {
+          id: "test.javascript",
+          supports: context => context.syntax === "JavaScript",
+          surfaces: { inline: ScriptEditor }
+        }
+      ],
+      activity: current
+    });
+    await nextFrame();
+    const scriptRendersAfterMount = scriptRenders;
+    flushSync(() => replaceActivity({ ...current, Inputs: inputsValue("951") }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+
+    flushSync(() => replaceActivity({
+      ...current,
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "scoring@v1" } },
+      Inputs: inputsValue("951")
+    }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
   });
 
   it("does not let a valid simultaneous dictionary editor instance clear its sibling error", async () => {
