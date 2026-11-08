@@ -145,6 +145,9 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     /// </summary>
     internal void HoldNativeParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold");
 
+    /// <summary>Holds an active RunBpmn result claim until the owning process is killed.</summary>
+    internal void HoldClaimedBpmnParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold-claim");
+
     /// <summary>Clears the test-only parent-resume hold; a missing file is already released.</summary>
     internal void ReleaseNativeParentResumeHold() => File.Delete(NativeParentResumeHoldPath);
 
