@@ -7,7 +7,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Primitives.Exceptions;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Templates.Create;
 

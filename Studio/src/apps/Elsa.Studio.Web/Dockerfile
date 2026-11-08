@@ -44,7 +44,6 @@ COPY Extensions/Agent/studio/ ./Extensions/Agent/studio/
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
 COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
-COPY Extensions/Decisions/studio/ ./Extensions/Decisions/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
 COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/

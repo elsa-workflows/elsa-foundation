@@ -42,9 +42,6 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             var proof = await boundary.ParentProofAsync(invocation, cancellationToken);
             if (!proof)
             {
-                // Hosting tests may pin this exact cut (model terminal, parent not yet resumed) by creating
-                // the file named in ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME. Production hosts never set it.
-                if (NativeParentResumeHeld()) throw Pending();
                 await resumes.DispatchAsync(new(invocation.NativeExecutionId, BpmnEmbeddingBoundary.StimulusType, invocation.ExecutionId,
                     source.Intent.Payload, source.SourceOutboxItemId, BpmnEmbeddingBoundary.ProviderId, null,
                     BpmnEmbeddingBoundary.CompletionType, BpmnEmbeddingBoundary.ProviderId, invocation.RegistrationId, null), cancellationToken: cancellationToken);
@@ -96,12 +93,4 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
     }
 
     private static RuntimePostCommitDeliveryException Pending() => new(PostCommitFailureKind.Transient, "bpmn.embedded.pending", "The exact model/native recipient consumption remains owed.");
-
-    internal const string NativeParentResumeHoldVariable = "ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME";
-
-    private static bool NativeParentResumeHeld()
-    {
-        var path = Environment.GetEnvironmentVariable(NativeParentResumeHoldVariable);
-        return !string.IsNullOrEmpty(path) && File.Exists(path);
-    }
 }

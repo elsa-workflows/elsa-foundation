@@ -140,7 +140,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
     const message = fieldMessage(field, problem);
     return (
       <StudioField label={label} description={description}>
-        <input {...attributes} data-specialist-field={field} type="text" inputMode={field === "temperature" || field === "timeout" ? "decimal" : "numeric"} value={numbers[field]} disabled={readOnly}
+        <input {...attributes} type="text" inputMode={field === "temperature" || field === "timeout" ? "decimal" : "numeric"} value={numbers[field]} disabled={readOnly}
           aria-invalid={message ? true : undefined} aria-describedby={message ? `${id}-${field}-problem` : undefined}
           onChange={event => setNumber(field, event.target.value)} />
         {message ? <small id={`${id}-${field}-problem`} className="agent-field-problem">{message}</small> : null}
@@ -168,7 +168,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
       <div className="agent-specialist-main">
       <div className="agent-specialist-instructions">
       <StudioField label="Instructions" description="Describe the task, tone and constraints. Workflow inputs supply the data for each run.">
-        <textarea data-specialist-field="instructions" value={manifest.instructions} disabled={readOnly} rows={8} maxLength={specialistBounds.instructionsLength}
+        <textarea value={manifest.instructions} disabled={readOnly} rows={8} maxLength={specialistBounds.instructionsLength}
           aria-invalid={problems.instructions ? true : undefined} aria-describedby={problems.instructions ? `${id}-instructions-problem` : undefined}
           onChange={event => patch({ instructions: event.target.value })} />
         {problems.instructions ? <small id={`${id}-instructions-problem`} className="agent-field-problem">{problems.instructions}</small> : null}
@@ -176,7 +176,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
 
       </div>
       {/* Not disabled as a whole: Retry and search must work in read-only mode, and every editing control is disabled on its own. */}
-      <fieldset className="agent-specialist-model" data-specialist-field="model-group" tabIndex={-1}>
+      <fieldset className="agent-specialist-model">
         <legend>Model</legend>
         {providers.kind === "denied" ? <StudioAlert tone="info">You can see the saved model, but choosing a model needs permission to author agents.</StudioAlert> : null}
         {providers.kind === "unavailable" ? <StudioAlert tone="warning">Model providers could not be loaded. The saved model is kept. {retry}</StudioAlert> : null}
@@ -187,7 +187,7 @@ export function SpecialistEditor({ context, value, readOnly, onChange, providerS
           </StudioField>
         ) : null}
         <StudioField label="Model connection" description="Credentials and the model or deployment are managed in Connections.">
-          <select data-specialist-field="model" value={connectionName ? optionValue(providerKey, connectionName) : ""} disabled={readOnly || connections.kind !== "ready"}
+          <select value={connectionName ? optionValue(providerKey, connectionName) : ""} disabled={readOnly || connections.kind !== "ready"}
             aria-invalid={problems.model ? true : undefined} aria-describedby={problems.model ? `${id}-model-problem` : undefined}
             onChange={event => {
               const choice = groups.flatMap(group => group.items.map(item => ({ group, item }))).find(({ group, item }) => optionValue(group.provider.providerKey, item.name) === event.target.value);

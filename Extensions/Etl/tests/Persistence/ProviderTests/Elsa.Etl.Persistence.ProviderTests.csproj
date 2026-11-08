@@ -22,18 +22,12 @@
     <ProjectReference Include="../../../src/Core/Elsa.Etl.Core.csproj" />
     <ProjectReference Include="../../../src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
     <ProjectReference Include="../../../src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The design-store contracts the SQLite suite in Elsa.Etl.Tests runs as well. -->
     <Compile Include="../../Shared/DesignStore/*.cs" Link="Contracts/%(Filename)%(Extension)" />
     <Compile Include="../../Shared/EtlV2TestPipelines.cs" Link="Support/EtlV2TestPipelines.cs" />
     <Compile Include="../../Tests/EtlTestPipelines.cs" Link="Support/EtlTestPipelines.cs" />
-    <Compile Include="../../Shared/RuntimeStore/*.cs" Link="Contracts/RuntimeStore/%(Filename)%(Extension)" />
-    <Compile Include="../../Tests/EtlRuntimeFixtures.cs" Link="Support/EtlRuntimeFixtures.cs" />
-    <Compile Include="../../Tests/Support/EtlHttpLoopbackServer.cs" Link="Support/EtlHttpLoopbackServer.cs" />
-    <Compile Include="../../Tests/EtlTestHttpPageAttachmentExtensions.cs" Link="Support/EtlTestHttpPageAttachmentExtensions.cs" />
-    <Compile Include="../../Shared/TestRabbitMqPublisher.cs" Link="Support/TestRabbitMqPublisher.cs" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

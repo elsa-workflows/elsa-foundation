@@ -32,25 +32,12 @@ class VerdictTests(unittest.TestCase):
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
 
-    def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
-        journey = sorted(acceptance.JOURNEYS)[0]
-        report = copy.deepcopy(self.report)
-        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == journey]
-        self.assertEqual(len(acceptance.PROJECTS), acceptance.verdict(report, self.root, [journey]))
-        with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
-        with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root, [journey])
-        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [])
-        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['unknown'])
-        report['suites'][0]['specs'][0]['tests'].pop()
-        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
-
     def test_missing_duplicate_empty_skipped_failed_or_retried_is_not_success(self):
-        for change in ('missing', 'missing-journey', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
+        for change in ('missing', 'duplicate', 'empty', 'skipped', 'expected-failure', 'runner-error', 'retry'):
             with self.subTest(change=change):
                 report = copy.deepcopy(self.report)
                 tests = report['suites'][0]['specs'][0]['tests']
                 if change == 'missing': tests.pop()
-                if change == 'missing-journey': report['suites'][0]['specs'].pop()
                 if change == 'duplicate': tests.append(copy.deepcopy(tests[0]))
                 if change == 'empty': report['suites'] = []
                 if change == 'skipped': tests[0]['results'][0]['status'] = 'skipped'

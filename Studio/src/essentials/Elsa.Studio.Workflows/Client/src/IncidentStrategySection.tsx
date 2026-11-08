@@ -48,13 +48,8 @@ function sameStrategy(left: IncidentStrategyReference, right: IncidentStrategyRe
   return left.alias.toUpperCase() === right.alias.toUpperCase() && left.version === right.version;
 }
 
-function strategyLabel(descriptor: IncidentStrategyDescriptor, items: IncidentStrategyDescriptor[]): string {
-  const matchingNames = items.filter(item => item.displayName.toUpperCase() === descriptor.displayName.toUpperCase());
-  if (matchingNames.length <= 1) return descriptor.displayName;
-  const differentAliases = matchingNames.some(item => item.alias.toUpperCase() !== descriptor.alias.toUpperCase());
-  return differentAliases
-    ? `${descriptor.displayName} (${descriptor.alias}, version ${descriptor.version})`
-    : `${descriptor.displayName} (version ${descriptor.version})`;
+function strategyLabel(descriptor: IncidentStrategyDescriptor): string {
+  return `${descriptor.displayName} — ${descriptor.alias} / ${descriptor.version}`;
 }
 
 export function IncidentStrategySection({ strategyOptions, context, onChange }: {
@@ -98,8 +93,8 @@ export function IncidentStrategySection({ strategyOptions, context, onChange }: 
   const defaultDescriptor = items.find(item => sameStrategy(item, defaultStrategy));
   const selectedDescriptor = stored ? resolvedStored : defaultDescriptor;
   const defaultLabel = defaultDescriptor
-    ? `Use host default (${defaultDescriptor.displayName})`
-    : "Use host default";
+    ? `Use host default — ${strategyLabel(defaultDescriptor)}`
+    : `Use host default — ${defaultStrategy.alias} / ${defaultStrategy.version}`;
 
   return (
     <section className="wf-properties-section">
@@ -126,7 +121,7 @@ export function IncidentStrategySection({ strategyOptions, context, onChange }: 
           ) : null}
           {items.map(item => (
             <option key={strategyKey(item)} value={strategyKey(item)}>
-              {strategyLabel(item, items)}
+              {strategyLabel(item)}
             </option>
           ))}
         </select>
@@ -141,8 +136,8 @@ export function IncidentStrategySection({ strategyOptions, context, onChange }: 
               ? "This exact stored strategy is no longer advertised. It will be preserved until you choose another option."
               : selectedDescriptor?.description
                 ?? (stored
-                  ? "Uses the selected strategy when an activity fails."
-                  : "Uses the host's default incident strategy when this workflow is published.")}
+                  ? `Pins ${stored.alias} / ${stored.version} when this workflow is published.`
+                  : `Publishing currently resolves the host default to ${defaultStrategy.alias} / ${defaultStrategy.version}.`)}
         </p>
       </div>
     </section>

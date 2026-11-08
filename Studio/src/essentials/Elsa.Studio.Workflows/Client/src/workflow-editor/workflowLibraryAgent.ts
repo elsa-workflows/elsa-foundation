@@ -2,7 +2,6 @@ import type { StudioAgentClientExecutionResult, StudioAgentContextAttachment, St
 import { sha256Hex } from "../sha256";
 import type { WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
 import type { CreateWorkflowDraft } from "./editorTypes";
-import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
 /**
  * The workflow library's client contexts and page working-state changes (spec 1193 FR-020, FR-023, FR-024): the visible
@@ -210,10 +209,7 @@ export function applyCreateDialogPrefill(draft: CreateWorkflowDraft, change: unk
   if (Object.keys(value).some(key => !["name", "description", "rootActivityVersionId", "templateId"].includes(key)) || typeof value.name !== "string" || !value.name.trim()) return null;
   if (value.description !== undefined && typeof value.description !== "string") return null;
   if (value.rootActivityVersionId !== undefined && value.templateId !== undefined) return null;
-  const metadataEdited = getCreateMetadataEdits(draft);
-  metadataEdited.name = true;
-  if (typeof value.description === "string") metadataEdited.description = true;
-  const next: CreateWorkflowDraft = { ...draft, metadataEdited, name: value.name, ...(typeof value.description === "string" ? { description: value.description } : {}) };
+  const next: CreateWorkflowDraft = { ...draft, name: value.name, ...(typeof value.description === "string" ? { description: value.description } : {}) };
   if (typeof value.rootActivityVersionId === "string") { next.rootActivityVersionId = value.rootActivityVersionId; delete next.templateId; delete next.templateContent; delete next.starter; }
   if (typeof value.templateId === "string") {
     const template = templates.find(item => item.id === value.templateId);

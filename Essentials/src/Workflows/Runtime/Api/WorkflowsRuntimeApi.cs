@@ -1,4 +1,4 @@
-using MinimalEndpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Workflows.Runtime.Api;

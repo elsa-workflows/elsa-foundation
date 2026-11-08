@@ -1070,8 +1070,6 @@ jobs:
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
-      - name: Qualify shared decision execution and runtime-only restart
-        run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
       - name: Retain reviewable success and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -1398,15 +1396,6 @@ jobs:
           --output "$RUNNER_TEMP/weaver-conformance"
           --version "$WEAVER_VERSION"
 
-      - name: Select safe primary failure diagnostics independently of full evidence
-        if: failure()
-        run: |
-          if test -f "$RUNNER_TEMP/weaver-conformance/report.json"; then
-            python3 tools/studio/Weaver.Conformance.Probe/export_failure_diagnostic.py \
-              --source "$RUNNER_TEMP/weaver-conformance" \
-              --destination "$RUNNER_TEMP/weaver-failure-diagnostic"
-          fi
-
       - name: Select evidence without private authentication or runtime state
         if: always()
         run: |
@@ -1424,15 +1413,6 @@ jobs:
           path: ${{ runner.temp }}/weaver-evidence/
           # The exporter already selects safe references, including hidden package metadata.
           include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Retain safe failed diagnostics without claiming qualification
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: weaver-failure-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/weaver-failure-diagnostic/
           if-no-files-found: warn
           retention-days: 14
 

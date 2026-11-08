@@ -57,7 +57,7 @@ Shell 'default' requested 1 feature(s) that are not available: WorkflowsRuntimeE
 Rule 2 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
 but it is loaded in the host's default context. A feed package only sees it if it is also listed in
 `Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists,
-and Nuplane does not keep them in step. `ValenceWorks.MinimalEndpoints` behaves this way, and a feature depending on it
+and Nuplane does not keep them in step. `NativeEndpoints` behaves this way, and a feature depending on it
 fails with `FeatureNotFoundException` rather than a missing-file error.
 
 The reverse direction is kept in step by this repository instead. A shared assembly always resolves to
@@ -223,13 +223,6 @@ both with eager activation and without it.
 
 ### Generating the closure
 
-NuGet's dependency closure does not infer CShells feature IDs named by `DependsOn`. Include the packages
-that provide those features among the roots too. For example, `Primitives` is in
-`Elsa.Primitives.Hosting`, while `Elsa.Primitives` supplies contracts; the aggregate workflow Runtime EF
-feature also needs `Elsa.Workflows.Runtime.Resumption`. The [FR-2 acceptance fixture](../reports/feature-delivery-1145/README.md)
-records a complete file-reconciliation, publishing and durable-runtime composition, including the recurring
-schedule projection feature needed by that publishing/persistence combination.
-
 Maintain the **roots** by hand — they map one-to-one onto the shell features in `shells.json`. Generate
 the closure, and regenerate it on every pin bump rather than hand-editing it; a real composition runs to
 tens of entries.
@@ -268,25 +261,6 @@ tens of entries.
    missing package. `Elsa.Persistence.EntityFramework` is the opposite case: the host carries it for its cluster
    membership and shares it, and naming it as a root gives every EF module a copy of its own (see
    [Cluster membership and EF module packages](#cluster-membership-and-ef-module-packages)).
-
-### Loading NativeEndpoints API packages
-
-The [FR-2 acceptance fixture](../reports/feature-delivery-1145/README.md) explicitly selects
-`Nuplane:Loading:DefaultLoadMode=HostIntegrated`. NativeEndpoints rejects response metadata containing
-types from a collectible load context, so the default collectible package load mode cannot activate that
-fixture's API composition with endpoint metadata validation enabled. Select the existing host-integrated
-mode while retaining the host's shared-assembly and host-provided-package declarations:
-
-```json
-"Nuplane": {
-  "Loading": {
-    "DefaultLoadMode": "HostIntegrated"
-  }
-}
-```
-
-This permits package delivery and additions to the running host; it does not establish assembly unloading.
-The fixture leaves endpoint metadata validation enabled.
 
 ### Selecting the EF provider engine
 

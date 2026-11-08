@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Api.AspNetCore;
 
@@ -8,7 +8,7 @@ namespace Elsa.Api.AspNetCore;
 public static class ElsaEndpointsServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the MinimalEndpoints pipeline configured the way Elsa's published documents expect.
+    /// Adds the NativeEndpoints pipeline configured the way Elsa's published documents expect.
     /// </summary>
     /// <remarks>
     /// Every host that maps an Elsa endpoint group must call this: mapping a group without it throws.
@@ -30,11 +30,11 @@ public static class ElsaEndpointsServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Registered before AddMinimalEndpoints, which uses TryAdd: first registration wins, so this
+        // Registered before AddNativeEndpoints, which uses TryAdd: first registration wins, so this
         // is what displaces the package's ProblemDetails default rather than racing it.
         services.TryAddSingleton<IEndpointProblemWriter, ElsaFallbackEndpointProblemWriter>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IEndpointExceptionTranslator, SchemaWriteRefusalTranslator>());
-        services.AddMinimalEndpoints(options => options.OperationConvention = ElsaEndpointConventions.ElsaModuleOperation);
+        services.AddNativeEndpoints(options => options.OperationConvention = ElsaEndpointConventions.ElsaModuleOperation);
         return services;
     }
 }

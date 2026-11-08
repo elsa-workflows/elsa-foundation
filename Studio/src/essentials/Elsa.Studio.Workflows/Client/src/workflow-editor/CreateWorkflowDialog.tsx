@@ -11,7 +11,6 @@ import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editor
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
-import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
 export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
   context?: StudioEndpointContext;
@@ -92,28 +91,10 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const changeStartingPoint = (id: string) => {
-    const selected = templates.find(item => item.template.id === id)?.template;
-    const starter = builtInWorkflowTemplates.find(template => template.id === id);
-    const defaults = {
-      name: selected?.name ?? (starter?.id === "http" ? starter.name : ""),
-      description: selected?.description ?? (starter?.id === "http" ? starter.description : "")
-    };
-    const edited = getCreateMetadataEdits(draft);
-    onChange({ ...draft,
-      name: edited.name ? draft.name : defaults.name,
-      description: edited.description ? draft.description : defaults.description,
-      metadataEdited: edited,
-      starter: id === "http" ? "http" : undefined,
-      templateId: selected?.id,
-      templateContent: selected ? structuredClone(selected.content) : undefined
-    });
-  };
-
   const applySuggestion = useCallback((value: WorkflowMetadataSuggestion) => {
-    const next = { ...draftRef.current, metadataEdited: getCreateMetadataEdits(draftRef.current) };
-    if (value.name) { next.name = value.name; next.metadataEdited.name = true; }
-    if (value.description) { next.description = value.description; next.metadataEdited.description = true; }
+    const next = { ...draftRef.current };
+    if (value.name) next.name = value.name;
+    if (value.description) next.description = value.description;
     onChangeRef.current(next);
     setSuggestion(null);
     setSuggestError(null);
@@ -216,28 +197,12 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             </div>
           ) : null}
           <label className="wf-form-field">
-            <span>Starting point</span>
-            <select
-              data-dialog-initial-focus
-              aria-label="Starting point"
-              aria-busy={!templatesSettled}
-              aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
-              value={draft.templateId ?? draft.starter ?? "blank"}
-              disabled={creating}
-              onChange={event => changeStartingPoint(event.target.value)}
-            >
-              {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
-              {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
-            </select>
-            {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
-            {catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}
-          </label>
-          <label className="wf-form-field">
             <span>Display name</span>
             <input
+              autoFocus
               aria-label="Display name"
               value={draft.name}
-              onChange={event => onChange({ ...draft, name: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), name: true } })}
+              onChange={event => onChange({ ...draft, name: event.target.value })}
             />
           </label>
           <label className="wf-form-field">
@@ -246,8 +211,27 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
               aria-label="Description"
               rows={3}
               value={draft.description}
-              onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
+              onChange={event => onChange({ ...draft, description: event.target.value })}
             />
+          </label>
+          <label className="wf-form-field">
+            <span>Starting point</span>
+            <select
+              aria-label="Starting point"
+              aria-busy={!templatesSettled}
+              aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
+              value={draft.templateId ?? draft.starter ?? "blank"}
+              disabled={creating}
+              onChange={event => {
+                const selected = templates.find(item => item.template.id === event.target.value)?.template;
+                onChange({ ...draft, starter: event.target.value === "http" ? "http" : undefined, templateId: selected?.id, templateContent: selected ? structuredClone(selected.content) : undefined });
+              }}
+            >
+              {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
+              {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
+            </select>
+            {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
+            {catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}
           </label>
           {catalogState === "failed" ? (
             <div className="wf-alert" id="wf-activity-catalog-error" role="alert">

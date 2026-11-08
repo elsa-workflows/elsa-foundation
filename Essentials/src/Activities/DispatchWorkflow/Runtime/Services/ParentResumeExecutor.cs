@@ -37,13 +37,6 @@ public sealed class ParentResumeExecutor(
             payload.ParentActivityExecutionId);
         ValidateIntent(intent, payload, identity);
 
-        // Hosting tests may pin the exact cut (child terminal, parent not yet resumed) by creating
-        // the file named in ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME — the same OwnedWorkbench hold
-        // BpmnEmbeddingDelivery uses. Production hosts never set it. This is a test freeze, not a
-        // shared native/BPMN resume kernel.
-        if (ParentResumeHeld())
-            throw new ParentResumeDeferredException(payload.DispatchId, payload.ParentWorkflowExecutionId);
-
         var result = await bookmarkResumeDispatcher.DispatchAsync(
             new BookmarkResumeDispatchRequest(
                 workflowExecutionId: payload.ParentWorkflowExecutionId,
@@ -143,11 +136,5 @@ public sealed class ParentResumeExecutor(
         {
             throw new InvalidOperationException($"DispatchWorkflow bookmark '{bookmark.BookmarkId}' conflicts with dispatch '{payload.DispatchId}'.");
         }
-    }
-
-    private static bool ParentResumeHeld()
-    {
-        var path = Environment.GetEnvironmentVariable("ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME");
-        return !string.IsNullOrEmpty(path) && File.Exists(path);
     }
 }

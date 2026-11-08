@@ -26,7 +26,7 @@ public class SpecialistsInspectionApiFeature : IWebShellFeature
         services.AddElsaEndpoints();
         services.AddHttpContextAccessor();
         services.TryAddScoped<SpecialistEvidenceAccess>();
-        services.TryAddKeyedSingleton<MinimalEndpoints.IEndpointFaultRenderer, SpecialistInspectionFaultRenderer>(SpecialistInspectionApi.OwnerId);
+        services.TryAddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, SpecialistInspectionFaultRenderer>(SpecialistInspectionApi.OwnerId);
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-specialist-inspection", 1,
         [
             new("agent-specialist-test-run-evidence", SpecialistInspectionApi.TestRunEvidenceRoute, true),

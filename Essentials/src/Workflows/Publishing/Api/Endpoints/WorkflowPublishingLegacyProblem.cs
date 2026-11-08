@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;

@@ -48,8 +48,7 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
     {
         // Resolve authority before looking up the requested artifact. A malformed HTTP principal
         // must not be interpreted as a global-tenant request or learn whether an artifact exists.
-        var identity = ResolveIdentity();
-        var tenantId = identity.TenantId;
+        var tenantId = ResolveTenantId();
 
         // Seed authored workflow variable defaults so `variables.*` input expressions resolve to their
         // declared values in production (Seam C, #254). The defaults are read from the compiled executable's
@@ -85,18 +84,18 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
                 correlationId: null,
                 tenantId: tenantId,
                 partition: null,
-                authority: identity.Authority),
+                authority: null),
             cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }
 
-    private (string? TenantId, WorkflowExecutionAuthoritySnapshot? Authority) ResolveIdentity()
+    private string? ResolveTenantId()
     {
         // A service composed without an HTTP context is an embedded/runtime use, not an HTTP
         // request with missing identity data. Preserve the old tenant-unspecified behavior there.
         var httpContext = _httpContextAccessor?.HttpContext;
         if (httpContext is null)
-            return (null, null);
+            return null;
 
         if (_principalValidator is null || !_principalValidator.TryGetNormalizedPrincipal(httpContext.User, out var principal))
             throw new RuntimeResourceMissingSignal();
@@ -107,21 +106,7 @@ public sealed class WorkflowExecutionStartService : IWorkflowExecutionStartServi
 
         // Absence is the explicit global-tenant identity. Do not fall back to alternate claim names
         // or infer tenancy from the independently selected persistence partition.
-        var subjects = principal.FindAll(IdentityClaimTypes.UserId).ToArray();
-        if (subjects.Length > 1 || subjects.Any(claim => string.IsNullOrWhiteSpace(claim.Value)))
-            throw new RuntimeResourceMissingSignal();
-
-        // Subject identity is captured only from the one trusted normalized identity. It is not a
-        // grant snapshot; deferred consumers reauthorize the current persisted subject. Preserve
-        // existing system/root attribution and keep old subject-less starts explicitly unmarked.
-        var authority = subjects.Length == 1
-            ? new WorkflowExecutionAuthoritySnapshot(RequestedBy, RequestedBy, new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["elsa.identity.subject-kind"] = "persisted-user",
-                ["elsa.identity.subject-id"] = subjects[0].Value
-            })
-            : null;
-        return (tenantClaims.SingleOrDefault()?.Value, authority);
+        return tenantClaims.SingleOrDefault()?.Value;
     }
 
     private static IReadOnlyDictionary<string, object?> ToInputValues(IReadOnlyDictionary<string, JsonElement>? inputs) =>

@@ -9,7 +9,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication;
 

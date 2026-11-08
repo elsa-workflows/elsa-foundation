@@ -6,7 +6,7 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
   <ItemGroup>

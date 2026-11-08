@@ -4,8 +4,7 @@ import { shouldShowGraphMinimap } from "./graphMinimap";
 
 /**
  * React Flow minimap that stays off until the graph is larger than the canvas pane.
- * Newcomer graphs (a start node and a couple of activities) keep the corner free, and
- * phone-width panes never give up a corner to it.
+ * Newcomer graphs (a start node and a couple of activities) keep the corner free.
  */
 export function GraphOverflowMiniMap() {
   const shown = useRef(false);

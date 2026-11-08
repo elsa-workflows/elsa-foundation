@@ -3,7 +3,7 @@
 Owner project: `Elsa.Agent.Specialists.Api`
 Domain: `Elsa.Agent`
 
-Two MinimalEndpoints endpoints for the Studio specialist editor, with capability `elsa.api.agent-specialists` v1.
+Two NativeEndpoints endpoints for the Studio specialist editor, with capability `elsa.api.agent-specialists` v1.
 Both need `activities/design:author` or `activities/design:manage`; reading activity designs alone does not grant them.
 
 | Route | Answer |

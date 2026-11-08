@@ -53,8 +53,6 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(GetActivityExecutionStateView))]
 [JsonSerializable(typeof(GetActivityExecutionValuePayload))]
 [JsonSerializable(typeof(ListIncidents))]
-[JsonSerializable(typeof(GetRuntimePersistenceMode))]
-[JsonSerializable(typeof(Coalescing.RuntimePersistenceModeProjection))]
 [JsonSerializable(typeof(GetRuntimeDiagnosticsSettings))]
 [JsonSerializable(typeof(SaveRuntimeDiagnosticsSettings))]
 [JsonSerializable(typeof(SubmitWorkflowAlterationPlan))]

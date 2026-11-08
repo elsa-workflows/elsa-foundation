@@ -5,7 +5,7 @@ Domain: `Elsa.Etl`
 
 ## Authoring operation boundary
 
-`IEtlDesignOperations` is the scoped operation seam dispatched by the version 1 MinimalEndpoints endpoint classes.
+`IEtlDesignOperations` is the scoped operation seam dispatched by the version 1 NativeEndpoints endpoint classes.
 The default `EtlDesignOperations` resolves tenant identity from a validated normalized principal and partition
 from the host's ordinary persistence scope. Replacements must preserve permission, scope, bounded pagination,
 optimistic revision and exact publication retry semantics in the [finite ETL contract](../../../../../specs/255-finite-file-etl/contracts/journey.md).

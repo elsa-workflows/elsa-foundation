@@ -11,7 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Api.Endpoints;
 
@@ -25,7 +25,7 @@ internal static class BpmnHostingApi
     public const string Cancel = "bpmn:cancel";
     public const string RetryService = "bpmn:retry-service";
     public static void Map(IEndpointRouteBuilder endpoints) =>
-        MinimalEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
+        NativeEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
             endpoints.MapEndpointGroup(Owner, BpmnHostingJsonContext.Default, jsonContentType: "application/json; charset=utf-8", tag: "BPMN"));
     public static string Route(HttpContext context, string key) =>
         context.Request.RouteValues[key]?.ToString() ?? throw new ArgumentException("A required route identity is missing.");
@@ -59,12 +59,7 @@ internal sealed class BpmnApiCaller(IHttpContextAccessor contexts, NormalizedPri
         var tenants = principal.FindAll(IdentityClaimTypes.TenantId).ToArray();
         if (subjects is not [{ Length: > 0 }] || tenants.Length > 1 || tenants.Any(claim => string.IsNullOrWhiteSpace(claim.Value)))
             throw new BpmnModelResourceMissingException();
-        var executionSubjects = principal.FindAll(IdentityClaimTypes.UserId).ToArray();
-        return new(subjects[0], tenants.SingleOrDefault()?.Value)
-        {
-            ExecutionSubjectId = executionSubjects.Length == 1 && !string.IsNullOrWhiteSpace(executionSubjects[0].Value)
-                ? executionSubjects[0].Value : null
-        };
+        return new(subjects[0], tenants.SingleOrDefault()?.Value);
     }
     public async ValueTask<bool> CanReadAsync(object resource, CancellationToken cancellationToken)
     {

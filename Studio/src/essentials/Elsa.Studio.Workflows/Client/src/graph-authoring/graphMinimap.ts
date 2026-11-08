@@ -51,26 +51,7 @@ export function graphNodeBounds(nodes: readonly GraphMinimapNode[]): GraphBox | 
 /** Hide the minimap only after the graph shrinks below this fraction of the pane. */
 export const graphMinimapHideThreshold = 0.95;
 
-/** React Flow's default MiniMap footprint, which the designer minimap uses. */
-export const graphMinimapSize: GraphViewportBox = { width: 200, height: 150 };
-
-/**
- * Narrowest pane that can spare a corner for the minimap: 2.5× its width. On narrower,
- * phone-width panes the 200×150 overview covers nodes the author needs to click, so the
- * pane keeps its full width for the graph instead. Height is not gated: docked layouts
- * legitimately run short, wide canvases where the overview still leaves the graph usable.
- */
-export const graphMinimapMinimumPaneWidth = graphMinimapSize.width * 2.5;
-
-/** True when the pane is wide enough that the minimap leaves the graph usable. */
-export function paneFitsGraphMinimap(viewport: GraphViewportBox): boolean {
-  return viewport.width >= graphMinimapMinimumPaneWidth;
-}
-
-/**
- * Designer minimap is for graphs that do not fit the pane at their natural size, on panes
- * wide enough to give up a corner for it.
- */
+/** Designer minimap is for graphs that do not fit the pane at their natural size. */
 export function shouldShowGraphMinimap(
   nodes: readonly GraphMinimapNode[],
   viewport: GraphViewportBox,
@@ -79,7 +60,6 @@ export function shouldShowGraphMinimap(
   const bounds = graphNodeBounds(nodes);
   if (bounds === null) return false;
   if (!(viewport.width > 0 && viewport.height > 0)) return false;
-  if (!paneFitsGraphMinimap(viewport)) return false;
   if (currentlyShown) {
     return bounds.width >= viewport.width * graphMinimapHideThreshold
       || bounds.height >= viewport.height * graphMinimapHideThreshold;

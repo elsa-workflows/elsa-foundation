@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Connections.Api;
 

@@ -59,7 +59,6 @@
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
     { "id": "Elsa.Studio.Attention", "project": "Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },
     { "id": "Elsa.Studio.ConsoleStream", "project": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj", "verify_dependency_metadata": true },
-    { "id": "Elsa.Studio.Decisions", "project": "Extensions/Decisions/studio/Elsa.Studio.Decisions/Elsa.Studio.Decisions.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.Diagnostics.OpenTelemetry", "project": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" },
     { "id": "Elsa.Studio.Diagnostics.StructuredLogs", "project": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" },
     { "id": "Elsa.Studio.ExpressionEditors.JavaScript", "project": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" },

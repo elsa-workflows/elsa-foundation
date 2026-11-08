@@ -11,18 +11,11 @@ specialist definition/version/draft catalog or CRUD store.
 | `IActivityProvider` | Scoped owner of `elsa.specialist` manifests1/2; validation, outcome/control proposals, capabilities and explicit forward migration. |
 | `IActivityTemplateProviderCompiler` | Scoped compiler of immutable business schemas, typed native facade and background model-turn child. |
 | `IActivityTemplateDependencyDiscoverer` | Scoped owner reporting no authored activity dependencies for the initial specialist manifest. |
-| `IActivityProviderDiagnosticCatalog` | Static public explanations and fixed editor targets for specialist configuration and model-readiness codes; the three guarded registries snapshot them for validation, discovery and compilation. |
 
 The generic provider/compiler/discovery registries are scoped, so selected persistence access and
 scoped model contributors remain inside the publication operation. Stateless existing contributors
 may retain singleton lifetimes. Register contributions through DI in every operation; a mutation of
 one scoped registry does not configure other operations.
-
-The public diagnostic contribution follows the [Activities catalog](../../../../../Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md):
-it never forwards authored instructions, connection credentials, exception text or runtime metadata.
-Specialist-specific copy and validation stay in this package; generic Design/Publishing/Studio code does not
-know the specialist diagnostic codes. The Studio Specialist contribution owns focus for its model,
-instructions and advanced limits.
 
 The provider reads the existing published-head baseline and contributes conservative major-version
 changes for changed or unclassifiable business constraints. The generic publisher owns authorization,

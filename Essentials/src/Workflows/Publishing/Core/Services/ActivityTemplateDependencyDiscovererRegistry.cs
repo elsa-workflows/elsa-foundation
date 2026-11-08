@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -47,9 +46,6 @@ public sealed class ActivityTemplateDependencyDiscovererRegistry : IActivityTemp
 
     private sealed class GuardedDiscoverer(IActivityTemplateDependencyDiscoverer inner) : IActivityTemplateDependencyDiscoverer
     {
-        private readonly IReadOnlyList<ActivityProviderDiagnosticDescriptor> _diagnosticDescriptors =
-            (inner as IActivityProviderDiagnosticCatalog)?.DiagnosticDescriptors.Take(128).ToArray() ?? [];
-
         public string ProviderKey => inner.ProviderKey;
         public IReadOnlySet<string> SupportedManifestSchemas => inner.SupportedManifestSchemas;
 
@@ -60,7 +56,7 @@ public sealed class ActivityTemplateDependencyDiscovererRegistry : IActivityTemp
             try
             {
                 var result = await inner.DiscoverDependenciesAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {

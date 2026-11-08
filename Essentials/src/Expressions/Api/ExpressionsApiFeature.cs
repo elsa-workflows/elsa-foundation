@@ -10,7 +10,7 @@ using Elsa.Expressions.Api.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Expressions.Api;
 

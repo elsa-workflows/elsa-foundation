@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Architecture.Tests.Support;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

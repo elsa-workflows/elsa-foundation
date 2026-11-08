@@ -11,7 +11,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
 using Microsoft.OpenApi;
-using MinimalEndpoints;
+using NativeEndpoints;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;

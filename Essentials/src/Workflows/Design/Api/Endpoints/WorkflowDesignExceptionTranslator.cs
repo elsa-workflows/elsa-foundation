@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints;
 

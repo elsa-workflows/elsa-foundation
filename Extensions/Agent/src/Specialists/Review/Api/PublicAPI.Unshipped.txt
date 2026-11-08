@@ -28,7 +28,7 @@ Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest.WorkflowExecutionId.get 
 Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest.WorkflowExecutionId.init -> void
 Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature
 Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature.SpecialistsReviewApiFeature() -> void
-MinimalEndpoints.Generated.ElsaAgentSpecialistsReviewApiEndpoints
+NativeEndpoints.Generated.ElsaAgentSpecialistsReviewApiEndpoints
 override Elsa.Agent.Specialists.Review.Api.HumanReviewRequest.Equals(object? obj) -> bool
 override Elsa.Agent.Specialists.Review.Api.HumanReviewRequest.GetHashCode() -> int
 override Elsa.Agent.Specialists.Review.Api.HumanReviewRequest.ToString() -> string!
@@ -40,6 +40,6 @@ static Elsa.Agent.Specialists.Review.Api.HumanReviewRequest.operator !=(Elsa.Age
 static Elsa.Agent.Specialists.Review.Api.HumanReviewRequest.operator ==(Elsa.Agent.Specialists.Review.Api.HumanReviewRequest? left, Elsa.Agent.Specialists.Review.Api.HumanReviewRequest? right) -> bool
 static Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest.operator !=(Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest? left, Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest? right) -> bool
 static Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest.operator ==(Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest? left, Elsa.Agent.Specialists.Review.Api.ReviewDecisionRequest? right) -> bool
-static MinimalEndpoints.Generated.ElsaAgentSpecialistsReviewApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
+static NativeEndpoints.Generated.ElsaAgentSpecialistsReviewApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
 virtual Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 virtual Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

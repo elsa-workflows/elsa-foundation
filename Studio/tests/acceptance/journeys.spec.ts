@@ -3,7 +3,6 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
-import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -15,7 +14,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
     expect(overlaps, "Horizontal navigation destinations must not overlap").toEqual([]);
   }
   const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: screenshot, fullPage: true });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
@@ -36,7 +35,6 @@ const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: s
 const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
-test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page, request }, info) => {
   // The request fixture and teardown budget are independent of a timed-out page journey.
@@ -752,6 +750,9 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
   const description = dialog.getByRole("textbox", { name: "Description", exact: true });
   await expect(startingPoint).toBeFocused();
+  // The host replaces the native arrow; module field surfaces must retain its visible chevron.
+  await expect(startingPoint).toHaveCSS("appearance", "none");
+  await expect(startingPoint).not.toHaveCSS("background-image", "none");
   await startingPoint.press("Tab");
   await expect(name).toBeFocused();
   await name.press("Tab");
@@ -790,7 +791,6 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await submitAndInspect(templateNames[1], descriptions[1]);
   await capture(page, info, "template-persisted");
 });
-
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });

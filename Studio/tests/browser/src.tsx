@@ -20,7 +20,7 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
-import { WorkflowRuntimePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
+import { TestRunStatus } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
@@ -163,6 +163,7 @@ function WorkflowToolbarFixture() {
         onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
         onRun={selectAction("Test Run")}
         canRun
+        runStatus={runStatus ? <TestRunStatus testRun={toolbarTestRun(runStatus)} stale={runStatus === "stale"} onOpenDetails={selectAction("Runtime details")} /> : null}
         runTitle="Run a transient test of the current design"
         moreActions={[
           { label: "Weaver", actions: [
@@ -177,10 +178,9 @@ function WorkflowToolbarFixture() {
           ] }
         ]}
       />
-      {runStatus ? <WorkflowRuntimePanel testRun={toolbarTestRun(runStatus)} onOpenRun={selectAction("Open run")} /> : null}
       <section className="browser-toolbar-controls" aria-label="Toolbar test controls">
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
-          {["", "Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+          {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
         </select></label>
         <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
           {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}

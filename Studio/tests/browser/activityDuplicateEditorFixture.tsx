@@ -9,9 +9,6 @@ import type {
   StudioEndpointContext,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import { createNotificationController } from "@elsa-workflows/studio-sdk";
-import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
-import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDiagnosticFocus";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
@@ -269,12 +266,6 @@ export function ActivityDuplicateEditorFixture() {
 }
 
 function ActivityDuplicateEditorFixtureContent() {
-  const [notifications] = useState(() => {
-    const controller = createNotificationController();
-    controller.setScope("editor-fixture");
-    setNotifications(controller.api);
-    return controller;
-  });
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
   const executableHost = new URLSearchParams(window.location.search).get("host") === "executable";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
@@ -306,7 +297,6 @@ function ActivityDuplicateEditorFixtureContent() {
               onBack={() => undefined}
             />}
       </QueryClientProvider>
-      <ToastHost controller={notifications} navigate={path => window.history.pushState({}, "", path)} />
     </div>
   );
 }
@@ -341,7 +331,6 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   let draft = persistFixture && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
-  const hostPersistenceMode = new URLSearchParams(window.location.search).get("host-persistence-mode");
   const iterationFixture = new URLSearchParams(window.location.search).has("iteration-provenance");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
@@ -398,7 +387,6 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     baseUrl: "browser-activity-duplicate-editor",
     http: {
       getJson: async (url: string) => {
-        if (hostPersistenceMode && url === "/runtime/workflows/persistence-mode") return { persistenceMode: hostPersistenceMode };
         if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
         if (url === "/capabilities") {
           return {
@@ -411,7 +399,6 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                   { rel: "workflow-test-run-waits", href: "publishing/test-runs/{testRunId}/waits", templated: true }
                 ] },
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
-                  ...(hostPersistenceMode ? [{ rel: "runtime-persistence-mode", href: "runtime/workflows/persistence-mode" }] : []),
                   { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
                   { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
                   { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activities/{activityExecutionId}", templated: true },
