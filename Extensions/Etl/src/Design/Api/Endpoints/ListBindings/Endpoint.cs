@@ -1,7 +1,7 @@
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design.Api.Models;
 using Elsa.Foundation.Identity.Authorization;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Etl.Design.Api.Endpoints.ListBindings;
 

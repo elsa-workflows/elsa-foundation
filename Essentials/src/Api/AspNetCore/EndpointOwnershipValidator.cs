@@ -25,7 +25,7 @@ public sealed class UnownedEndpointException(EndpointOwnershipViolationCategory 
 /// one module or host.
 /// </summary>
 /// <remarks>
-/// This used to live inside the unload-safety validator, which now ships in MinimalEndpoints and has
+/// This used to live inside the unload-safety validator, which now ships in NativeEndpoints and has
 /// no reason to know what an Elsa owner is. Ownership is Elsa's vocabulary, so its invariant is
 /// Elsa's to enforce, and enforcing it at mapping time is what stops an unowned endpoint reaching
 /// the manifest — where the failure is a test report rather than a startup error, long after the

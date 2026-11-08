@@ -29,7 +29,7 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
 </Project>

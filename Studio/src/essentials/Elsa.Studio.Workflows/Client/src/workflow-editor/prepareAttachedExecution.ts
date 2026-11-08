@@ -9,8 +9,6 @@ import { readVisibleActivityExecutions } from "./scopedExecutionEvidence";
 import { canAutomaticallyResolveValue, runtimeValueContextId, runtimeValuePayloadKey, type PreparedRuntimeValue } from "./RuntimeValueEvidence";
 
 export interface PreparedAttachedExecution {
-  /** Observation revision captured while preparing this selection. */
-  observationRevision?: number;
   contextIdentity: number | string;
   workflowExecutionId: string;
   execution: ActivityExecutionStateSummary | null;

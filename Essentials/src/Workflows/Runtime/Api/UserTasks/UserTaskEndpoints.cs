@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Core.UserTasks;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Elsa.Workflows.Runtime.Api.Endpoints;
 
 namespace Elsa.Workflows.Runtime.Api.UserTasks;

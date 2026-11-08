@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense } from "react";
 import { AlertCircle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
 import { CopyableIdentifier, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -100,7 +100,32 @@ function isStartNodeError(error: ValidationError) {
   return error.type === STRUCTURAL_START_TRIGGER_TYPE || error.type === STRUCTURAL_NO_START_TYPE;
 }
 
-export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, stimulusEditors, publishedEquivalent, onOpenRun, activityLabels, onRunViewUpdated, onWaitDraftUpdated, observation, executionControls }: {
+export function TestRunStatus({
+  testRun,
+  stale = false,
+  onOpenDetails
+}: {
+  testRun: WorkflowTestRunView;
+  stale?: boolean;
+  onOpenDetails(): void;
+}) {
+  const rejected = isRejectedTestRun(testRun);
+  const acceptedWithIncidents = !rejected && hasAcceptedRuntimeIssue(testRun);
+  return (
+    <div className="wf-test-run-status" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
+      <button
+        type="button"
+        className="wf-test-run-trigger"
+        onClick={onOpenDetails}
+      >
+        {rejected || acceptedWithIncidents ? <AlertCircle size={16} /> : <Check size={16} />}
+        {stale ? "Earlier draft · " : ""}{rejected ? "Test Run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test Run dispatched"}
+      </button>
+    </div>
+  );
+}
+
+export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, stimulusEditors, publishedEquivalent, onOpenRun, activityLabels, onRunViewUpdated, onWaitDraftUpdated, observation }: {
   testRun: WorkflowTestRunState | WorkflowTestRunView | null;
   context?: StudioEndpointContext;
   currentDraftSignature?: string;
@@ -111,7 +136,6 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   onRunViewUpdated?(view: WorkflowTestRunView): void;
   onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
   observation?: TestRunObservation;
-  executionControls?: ReactNode;
 }) {
   if (!testRun) {
     return (
@@ -171,7 +195,6 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
             {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
           </div>
         ) : null}
-        {executionControls}
         {equivalent ? (
           <div className="wf-runtime-equivalence">
             <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.
@@ -220,6 +243,12 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
 
 function hasAcceptedRuntimeIssue(testRun: WorkflowTestRunView) {
   return testRun.commandDispatchStatus === "AcceptedButFaulted" || (typeof testRun.incidentCount === "number" && testRun.incidentCount > 0);
+}
+
+function acceptedRuntimeIssueLabel(testRun: WorkflowTestRunView) {
+  return typeof testRun.incidentCount === "number" && testRun.incidentCount > 0
+    ? "Test Run accepted with incidents"
+    : "Test Run accepted with a runtime issue";
 }
 
 function formatEvidenceCount(count: number, label: string) {

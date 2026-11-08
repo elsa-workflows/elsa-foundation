@@ -4,7 +4,7 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Agent.Specialists.Inspection.Api;
 

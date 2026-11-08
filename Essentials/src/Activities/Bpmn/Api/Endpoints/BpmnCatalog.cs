@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Foundation.Identity.Authorization;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Api.Endpoints;
 

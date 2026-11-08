@@ -4,7 +4,7 @@ using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
 using Microsoft.Extensions.Options;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Analyze;
 

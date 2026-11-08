@@ -10,7 +10,7 @@ Extend the existing Runtime domain with a durable human-task journal and form sn
 ## Technical Context
 
 **Language/Version**: existing .NET 10/C#, TypeScript/React and pnpm toolchain.
-**Dependencies**: Runtime Core/wait/queue/external-payload contracts; existing Runtime EF family and provider registrations; Identity Core current subject/user/role/membership contracts; MinimalEndpoints; Studio SDK/UI.
+**Dependencies**: Runtime Core/wait/queue/external-payload contracts; existing Runtime EF family and provider registrations; Identity Core current subject/user/role/membership contracts; NativeEndpoints; Studio SDK/UI.
 **Storage**: existing Runtime relational provider/context, task aggregate CAS and immutable form-version records; memory adapter is explicit development/testing only. No quiet mixed durable/runtime-memory composition.
 **Testing**: risk-based xUnit lifecycle/validation/recovery/concurrency/persistence/HTTP tests, Vitest module/adapter tests, mounted/browser journeys and owned real hosts. Each changed behavioral claim has a causal negative control. Compare whole-project test/list counts; required gates and resulting main.
 **Target**: existing server/worker/custom hosts and Studio browser; no release/deployment.

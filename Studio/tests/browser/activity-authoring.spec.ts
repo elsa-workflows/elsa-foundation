@@ -190,9 +190,9 @@ for (const theme of ["light", "dark", "material"]) for (const width of [390, 144
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`workflow Variables tab uses the same add-variable button (${theme})`, async ({ page }) => {
+  test(`workflow Properties uses the same add-variable button (${theme})`, async ({ page }) => {
     await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
-    await page.getByRole("tablist", { name: "Editor view tabs" }).getByRole("tab", { name: "Variables", exact: true }).click();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
     const variables = page.locator(".wf-properties-section").filter({ has: page.getByRole("heading", { name: "Variables", exact: true }) });
     const add = variables.getByRole("button", { name: "Add variable", exact: true });
     await expect(add).toBeVisible();

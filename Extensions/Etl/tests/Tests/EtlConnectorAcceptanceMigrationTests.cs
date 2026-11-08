@@ -15,7 +15,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        await using var database = new EtlRuntimeTestDatabase(directory);
+        await using var database = new TestDatabase(directory);
         await using var context = database.CreateContext();
         await context.Database.OpenConnectionAsync();
 
@@ -114,7 +114,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        await using var database = new EtlRuntimeTestDatabase(directory);
+        await using var database = new TestDatabase(directory);
         await using var context = database.CreateContext();
         await context.Database.OpenConnectionAsync();
 
@@ -137,7 +137,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        await using var database = new EtlRuntimeTestDatabase(directory);
+        await using var database = new TestDatabase(directory);
         await using var context = database.CreateContext();
         await context.Database.OpenConnectionAsync();
 
@@ -216,7 +216,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task Connector_acceptance_migration_model_matches_the_runtime_snapshot()
     {
-        await using var database = await CreateSqliteDatabaseAsync();
+        await using var database = await TestDatabase.CreateAsync();
         await using var context = database.CreateContext();
 
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());

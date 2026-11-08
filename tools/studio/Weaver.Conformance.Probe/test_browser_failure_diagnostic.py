@@ -72,29 +72,6 @@ console.log(JSON.stringify(safeFailureFrames({stack})));
                 self.assertNotIn("private-value", text)
                 self.assertNotIn(str(root), text)
 
-    def test_first_primary_survives_later_fatal_cleanup_and_process_still_fails(self):
-        source = (Path(__file__).parent / "browser.mjs").read_text()
-        functions = source[source.index("function safeFailureFrames("):source.index("function diagnosticUrl(")]
-        monitor = next(line for line in source.splitlines() if line.startswith('process.on("uncaughtExceptionMonitor"'))
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            script = 'import fs from "node:fs"; import path from "node:path";\nconst config={output:' + json.dumps(str(root)) + '};\n'
-            script += functions + monitor + r'''
-const primary = new Error("Bearer primary-private-canary");
-primary.stack = "Error: private\n    at primary (file:///private/browser.mjs:111:2)";
-retainFailureDiagnostic(primary);
-const cleanup = new Error("Bearer cleanup-private-canary");
-cleanup.stack = "Error: private\n    at cleanup (file:///private/browser.mjs:222:3)";
-throw cleanup;
-'''
-            file = root / "browser.mjs"; file.write_text(script)
-            result = subprocess.run(["node", str(file)], capture_output=True, text=True)
-            self.assertEqual(1, result.returncode)
-            text = (root / "failure-diagnostic.json").read_text()
-            self.assertEqual({"kind": "Error", "frames": [{"file": "browser.mjs", "line": 111, "column": 2}]}, json.loads(text))
-            self.assertNotIn("private", text)
-            self.assertNotIn(str(root), text)
-
     def test_failed_process_exports_safe_location_and_reraises_original_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -49,18 +49,16 @@ try
     if (args.Length == 3 && args[0] == "--read-post-commit-source")
     {
         var livePath = Path.GetFullPath(args[1]);
-        var liveConnectionString = new SqliteConnectionStringBuilder
-            { DataSource = livePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
         var liveServices = new ServiceCollection();
         liveServices.AddWorkflowRuntime();
         liveServices.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess(new("default")));
         liveServices.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
         {
-            Provider = "Sqlite", ConnectionString = liveConnectionString,
+            Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder
+                { DataSource = livePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString(),
             Pooling = false, CacheWorkflowExecutables = false,
             RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
         });
-        await ReadOnlyRuntimeSnapshot.ConfigureServicesAsync(liveServices, liveConnectionString);
         await using var liveProvider = liveServices.BuildServiceProvider();
         await using var liveScope = liveProvider.CreateAsyncScope();
         var liveSource = await liveScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(args[2])
@@ -83,7 +81,6 @@ try
             Provider = "Sqlite", ConnectionString = boundConnectionString, Pooling = false, CacheWorkflowExecutables = false,
             RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
         });
-        await ReadOnlyRuntimeSnapshot.ConfigureServicesAsync(boundServices, boundConnectionString);
         await using var boundProvider = boundServices.BuildServiceProvider();
         await using var boundScope = boundProvider.CreateAsyncScope();
         var boundModels = boundScope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
@@ -439,7 +436,7 @@ try
     var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(path).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
     await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
     await using (var command = connection.CreateCommand()) { command.CommandText = "PRAGMA query_only=ON"; await command.ExecuteNonQueryAsync(); }
-    await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
+    await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
     var scope = new PersistenceScope(args[2]); var access = new ScopedAccess(scope);
     var scopeKey = EfRelationalIdentity.Encode(scope.Value); var scopeHash = EfRelationalIdentity.Hash(scope.Value);
     var outbox = new EfRuntimePostCommitOutboxStore(context, access);

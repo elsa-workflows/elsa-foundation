@@ -1,6 +1,6 @@
 using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 using System.Buffers;
 using System.Text.Json;
 

@@ -22,7 +22,7 @@ public sealed partial class EtlRuntimeStoreTests
         await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
             ValueTask.FromResult(new EtlHttpLoopbackResponse(200, Volatile.Read(ref gained) ? NextPollBody : CaughtUpBody)));
         var clock = new MutableTimeProvider();
-        await using var fixture = await HttpAcquisitionFixture.CreateAsync(this, server, clock: clock,
+        await using var fixture = await HttpAcquisitionFixture.CreateAsync(server, clock: clock,
             pipeline: EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(1) });
 
         // A worker starts a poll and stalls past its lease.
@@ -95,7 +95,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task A_finite_http_shard_keeps_its_whole_history_and_no_compacted_summary_across_claims()
     {
-        await using var database = await EtlRuntimeTestDatabase.CreateAsync();
+        await using var database = await TestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = database.CreateStore(context);
         var admission = ConnectorAdmission("finite-history", new("tenant", "finite-history"), httpShardIds: ["shard"]);

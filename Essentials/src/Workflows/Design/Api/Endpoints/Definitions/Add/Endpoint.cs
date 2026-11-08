@@ -11,7 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Exceptions;

@@ -5,7 +5,7 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 

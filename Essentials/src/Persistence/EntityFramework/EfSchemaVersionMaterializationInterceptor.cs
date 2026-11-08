@@ -28,10 +28,6 @@ namespace Elsa.Persistence.EntityFramework;
 /// in a context that declares one, so the interceptor neither checks nor stamps them; their store does both.
 /// </para>
 /// <para>
-/// Shared revision rows use <see cref="EfSourceModel"/>'s family even inside a module context: their
-/// schema advances independently of the consumer module's own rows.
-/// </para>
-/// <para>
 /// It accepts the family's current version alone (<see cref="EfSchemaVersion.EnsureCurrent"/>): a value converter has
 /// deserialized the content before any upcaster could run, so a predecessor's row would be read as if this build had
 /// written it. Such a family declares no upcasters (see <see cref="IEfSchemaVersionedContext"/>).
@@ -56,8 +52,7 @@ public sealed class EfSchemaVersionMaterializationInterceptor : IMaterialization
     public InterceptionResult<object> CreatingInstance(MaterializationInterceptionData data, InterceptionResult<object> result)
     {
         if (data.Context is IEfSchemaVersionedContext context && !EfSchemaFinalization.Maps(data.EntityType.ClrType))
-            EfSchemaVersion.EnsureCurrent(EfSourceModel.Maps(data.EntityType.ClrType) ? EfSourceModel.Chain : context.SchemaChain,
-                data.GetPropertyValue<string?>(PropertyName));
+            EfSchemaVersion.EnsureCurrent(context.SchemaChain, data.GetPropertyValue<string?>(PropertyName));
         return result;
     }
 
@@ -76,7 +71,7 @@ public sealed class EfSchemaVersionMaterializationInterceptor : IMaterialization
         foreach (var entry in context.ChangeTracker.Entries()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified)
                      .Where(entry => !EfSchemaFinalization.Maps(entry.Metadata.ClrType)))
-            entry.Property(PropertyName).CurrentValue = EfSourceModel.Maps(entry.Metadata.ClrType) ? EfSourceModel.Chain.CurrentVersion : version;
+            entry.Property(PropertyName).CurrentValue = version;
     }
 
     /// <summary>

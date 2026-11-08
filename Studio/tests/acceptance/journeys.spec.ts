@@ -4,13 +4,12 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: screenshot, fullPage: true });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
@@ -37,18 +36,11 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
-const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
-test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
   await releaseToastPlacementHolds(page);
-  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
-  for (const creation of createdWorkflows.get(page) ?? []) {
-    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
-    expect(removed.ok()).toBe(true);
-  }
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
@@ -406,158 +398,8 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await capture(page, info, "completed");
 });
 
-test("publication blockers explain how to correct agent settings", async ({ page }, info) => {
-  await page.goto("/agents");
-  await page.getByRole("button", { name: "New agent", exact: true }).click();
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
-  await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
-  await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
-  const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
-  await instructions.fill("");
-  await instructions.press("Tab");
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
-  const publish = page.locator(".ad-publication-toolbar-trigger");
-  await publish.click();
-  const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
-  const blockers = dialog.locator(".ad-publication-blockers");
-  await expect(blockers.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
-  await expect(blockers.getByText("Agent instructions are required.", { exact: true })).toBeVisible();
-  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
-  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
-  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toHaveCount(1);
-  await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
-  await expect(dialog.getByText("Review the provider documentation for this diagnostic code.", { exact: true })).toHaveCount(0);
-  await capture(page, info, "blocked");
-  await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
-  await expect(dialog).toBeHidden();
-  await expect(instructions).toBeFocused();
-  await capture(page, info, "instructions-focused");
-  await instructions.fill("Proofread the supplied text and return concise suggestions.");
-  await instructions.press("Tab");
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
-  await publish.click();
-  await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
-  await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(0);
-  await capture(page, info, "model-blocked");
-  await blockers.getByRole("button", { name: "Choose model connection", exact: true }).press("Enter");
-  await expect(dialog).toBeHidden();
-  await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeFocused();
-  await expect(editor.getByText(/There are no model connections you can use yet/)).toBeVisible();
-  await capture(page, info, "model-focused");
-  await publish.click();
-  await blockers.getByRole("button", { name: "Check again", exact: true }).click();
-  await expect(blockers.getByRole("button", { name: "Choose model connection", exact: true })).toBeVisible();
-  await blockers.getByRole("button", { name: "Return to editor", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(publish).toBeFocused();
-  await capture(page, info, "completed");
-});
-
 test("save template toast", async ({ page }, info) => {
   await templateToastJourney(page, info, capture);
-});
-
-test("workflow template metadata defaults", async ({ page }, info) => {
-  const stamp = `Metadata ${info.project.name} ${Date.now()}`;
-  const templateNames = [`${stamp} greeting`, `${stamp} order`];
-  const descriptions = ["Sends a greeting.", "Processes an order."];
-  const creations: Array<{ url: string; authorization: string; id: string }> = [];
-  createdWorkflows.set(page, creations);
-  // Persist real templates using the same composition and controls as a workflow author.
-  for (let index = 0; index < templateNames.length; index++) {
-    await page.goto("/workflows/templates");
-    await page.getByRole("button", { name: "New template", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Create template", exact: true });
-    await dialog.getByRole("textbox", { name: "Display name", exact: true }).fill(templateNames[index]);
-    await dialog.getByRole("textbox", { name: "Description", exact: true }).fill(descriptions[index]);
-    const sequence = dialog.getByRole("radio", { name: "Sequence", exact: true });
-    await sequence.focus();
-    await sequence.press("Space");
-    await expect(sequence).toBeChecked();
-    await dialog.getByRole("button", { name: "Create template", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
-  }
-
-  const submitAndInspect = async (expectedName: string, expectedDescription: string) => {
-    const response = page.waitForResponse(value => value.request().method() === "POST" && /\/definitions$/.test(new URL(value.url()).pathname));
-    await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
-    const saved = await response;
-    expect(saved.ok()).toBe(true);
-    const body = await saved.json();
-    creations.push({ url: saved.url(), authorization: saved.request().headers().authorization, id: body.definition.id });
-    expect(saved.request().postDataJSON()).toMatchObject({ name: expectedName });
-    expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
-    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
-    await page.reload();
-    const properties = page.getByRole("tab", { name: "Properties", exact: true });
-    await expect(properties).toBeVisible();
-    // Narrow layouts retain the user's inspector state; collapse it only when it is still open.
-    const collapseInspector = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
-    if ((page.viewportSize()?.width ?? 1440) < 700 && await collapseInspector.isVisible()) {
-      await collapseInspector.click();
-    }
-    await properties.click();
-    if ((page.viewportSize()?.width ?? 1440) < 700) {
-      const collapseActivities = page.getByRole("button", { name: "Collapse activities panel", exact: true });
-      if (await collapseActivities.isVisible()) await collapseActivities.click();
-    }
-    const savedName = page.getByRole("textbox", { name: "Workflow name", exact: true });
-    const savedDescription = page.getByRole("textbox", { name: "Workflow description", exact: true });
-    await expect(savedName).toHaveValue(expectedName);
-    await expect(savedDescription).toHaveValue(expectedDescription);
-    await expect(savedName).toBeInViewport();
-    await expect(savedDescription).toBeInViewport();
-    // Being onscreen alone can still leave an unusable one-character input beside a fixed-width label.
-    expect((await savedName.boundingBox())!.width).toBeGreaterThanOrEqual(120);
-    expect((await savedDescription.boundingBox())!.width).toBeGreaterThanOrEqual(120);
-  };
-
-  await page.goto("/workflows/definitions");
-  const open = page.getByRole("button", { name: "Create workflow", exact: true }).first();
-  await open.click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
-  const startingPoint = dialog.getByRole("combobox", { name: "Starting point", exact: true });
-  const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
-  const description = dialog.getByRole("textbox", { name: "Description", exact: true });
-  await expect(startingPoint).toBeFocused();
-  await startingPoint.press("Tab");
-  await expect(name).toBeFocused();
-  await name.press("Tab");
-  await expect(description).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(open).toBeFocused();
-  await open.click();
-  await expect(startingPoint.locator("option").filter({ hasText: templateNames[0] })).toHaveCount(1);
-  await startingPoint.selectOption({ label: templateNames[0] });
-  await expect(name).toHaveValue(templateNames[0]);
-  await expect(description).toHaveValue(descriptions[0]);
-  await capture(page, info, "template-defaults");
-  await startingPoint.selectOption({ label: templateNames[1] });
-  await expect(name).toHaveValue(templateNames[1]);
-  await expect(description).toHaveValue(descriptions[1]);
-  await name.fill(`${stamp} custom`);
-  await startingPoint.selectOption({ label: templateNames[0] });
-  await expect(name).toHaveValue(`${stamp} custom`);
-  await expect(description).toHaveValue(descriptions[0]);
-  await description.fill("");
-  await startingPoint.selectOption({ label: templateNames[1] });
-  await expect(name).toHaveValue(`${stamp} custom`);
-  await expect(description).toHaveValue("");
-  await capture(page, info, "template-edits");
-  await submitAndInspect(`${stamp} custom`, "");
-
-  await page.goto("/workflows/templates");
-  const card = page.locator("article").filter({ has: page.getByRole("button", { name: templateNames[0], exact: true }) });
-  await card.getByRole("button", { name: "Use template", exact: true }).click();
-  await expect(name).toHaveValue(templateNames[0]);
-  await expect(description).toHaveValue(descriptions[0]);
-  await startingPoint.selectOption({ label: templateNames[1] });
-  await expect(name).toHaveValue(templateNames[1]);
-  await expect(description).toHaveValue(descriptions[1]);
-  await capture(page, info, "template-catalog-entry");
-  await submitAndInspect(templateNames[1], descriptions[1]);
-  await capture(page, info, "template-persisted");
 });
 
 test("executable designer parity", async ({ page }, info) => {

@@ -223,7 +223,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
         // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
-        // contracts because MinimalEndpoints otherwise binds an omitted optional array as an empty query value.
+        // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
         // It moved for PaletteHints as an additive body init property. The existing 17-parameter

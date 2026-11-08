@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

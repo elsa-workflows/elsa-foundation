@@ -4,7 +4,7 @@ using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Mediator.Core.Contracts;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Expressions.Api.Endpoints.Descriptors.List;
 

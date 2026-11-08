@@ -3,7 +3,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Services;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Agent.Specialists.Inspection.Api.Endpoints;
 

@@ -24,11 +24,10 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     }
     await expect(source).toHaveAccessibleName(/Selected/);
 
-    if (host === "editor") await page.getByRole("tab", { name: "Runtime", exact: true }).press("Enter");
     await page.getByRole("button", { name: "Pause following", exact: true }).press("Enter");
     const follow = page.getByRole("button", { name: "Follow execution", exact: true });
     await expect(follow).toBeFocused();
-    await expect(page.getByText(/^Observation paused/).first()).toBeVisible();
+    await expect(page.getByText(/^Observation paused/)).toBeVisible();
     await expect(source).toHaveAccessibleName(/Selected/);
     await follow.press("Enter");
     await expect(page.getByRole("button", { name: "Pause following", exact: true })).toBeFocused();

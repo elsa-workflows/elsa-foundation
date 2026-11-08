@@ -67,5 +67,4 @@
     <ProjectReference Include="..\..\..\..\Extensions\Workflows.Dashboard\studio\Elsa.Studio.Workflows.Dashboard\Elsa.Studio.Workflows.Dashboard.csproj"/>
   </ItemGroup>
 
-  <ItemGroup><ProjectReference Include="../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Elsa.Studio.Decisions.csproj" /></ItemGroup>
 </Project>

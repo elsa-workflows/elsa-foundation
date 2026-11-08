@@ -8,7 +8,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Slots.Unpublish;
 

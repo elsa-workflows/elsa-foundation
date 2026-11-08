@@ -4,7 +4,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityTestRuns.Get;
 

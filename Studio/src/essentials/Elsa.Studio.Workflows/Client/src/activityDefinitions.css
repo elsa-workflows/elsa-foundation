@@ -266,16 +266,6 @@
 .ad-publication-diagnostics li { display: grid; justify-items: start; gap: .35rem; padding: .7rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
 .ad-publication-diagnostics li > div { display: flex; justify-content: space-between; gap: .75rem; width: 100%; }
 .ad-publication-diagnostics li span, .ad-publication-diagnostics li code { color: var(--studio-text-muted); }
-.ad-publication-blockers { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--studio-danger); border-radius: var(--studio-radius); background: var(--studio-surface); }
-.ad-publication-blockers > h3, .ad-publication-blockers > p, .ad-publication-diagnostics li > p { margin: 0; }
-.ad-publication-blockers > h3 { font-size: var(--studio-section-title-size); }
-.ad-publication-blockers .ad-publication-diagnostics { padding: 0; border: 0; }
-.ad-publication-blockers .ad-publication-diagnostics > h3 { font-size: var(--studio-label-size); color: var(--studio-text-muted); }
-.ad-publication-blocker-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.ad-publication-blocker-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; padding: .4rem .65rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
-.ad-publication-diagnostic-details { width: 100%; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
-.ad-publication-diagnostic-details > summary { cursor: pointer; }
-.ad-publication-diagnostic-details code { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
 .ad-publication-version { display: grid; grid-template-columns: minmax(12rem, .6fr) 1fr; align-items: start; gap: .75rem; padding: .85rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-accent-soft); }
 .ad-publication-version label, .ad-publication-version > div { display: grid; gap: .3rem; }
 .ad-publication-version label span { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; }

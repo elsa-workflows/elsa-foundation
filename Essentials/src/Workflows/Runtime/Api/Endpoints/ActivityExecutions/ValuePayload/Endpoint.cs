@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Microsoft.AspNetCore.Http;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.ActivityExecutions.ValuePayload;
 

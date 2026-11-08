@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Api;
 
