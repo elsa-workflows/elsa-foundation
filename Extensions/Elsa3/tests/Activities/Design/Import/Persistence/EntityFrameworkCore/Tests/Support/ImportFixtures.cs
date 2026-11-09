@@ -6,6 +6,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Mapping;
@@ -22,6 +23,12 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.S
 internal static class ImportFixtures
 {
     public static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-07-17T10:00:00Z");
+
+    /// <summary>A converter revision a test chooses, in place of the converter's own (#3921).</summary>
+    public sealed class FixedConverterRevision(int current) : IElsa3ConverterRevision
+    {
+        public int Current => current;
+    }
 
     public static Elsa3WorkflowDefinition Workflow(
         string definitionId,

@@ -83,7 +83,9 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. End is allowed only in the workflow's root flowchart.
 5. **Version numbers.** If the workflow changed, it has a new version number in Elsa 3. An Elsa 4 version that is
    already imported cannot be replaced; a changed workflow under the same number is refused at publish with
-   `ELS3-REUSABLE-IDENTITY-COLLISION`.
+   `ELS3-REUSABLE-IDENTITY-COLLISION`. Elsa 3 version n imports as Elsa 4 version `{n}.{R}.0`, R the converter
+   revision: when the converter itself changes, the same export imports again as `{n}.{R+1}.0` beside the earlier
+   version, without a store rebuild (#3921).
 
 ## When a reusable workflow cannot meet the checklist yet
 
