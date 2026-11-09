@@ -31,10 +31,17 @@ public sealed class RulesNativeDeliveryHoldTests
         {
             var path = Path.Combine(directory.FullName, "hold");
             await File.WriteAllTextAsync(path, RulesNativeDeliveryExecution.HoldClaimMode);
-            using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-                await RulesNativeDeliveryExecution.HoldNativeDeliveryForTestAsync(path, cancellation.Token));
+            using var cancellation = new CancellationTokenSource();
+            var hold = RulesNativeDeliveryExecution.HoldNativeDeliveryForTestAsync(path, cancellation.Token).AsTask();
+            // The marker is written before the wait begins, so it appears without any cancellation; the hold itself stays
+            // pending until the token is cancelled.
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!File.Exists(path + ".engaged") && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
             Assert.True(File.Exists(path + ".engaged"));
+            Assert.False(hold.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hold);
         }
         finally
         {
