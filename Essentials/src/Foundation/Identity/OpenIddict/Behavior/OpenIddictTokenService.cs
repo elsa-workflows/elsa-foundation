@@ -21,8 +21,9 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// token. Both are backed by OpenIddict token-store entries so they can be revoked and rotated.</item>
 /// <item><b>Validate</b> runs OpenIddict's full local validation pipeline (signature, issuer, lifetime, and
 /// token-entry status — so revocation takes effect immediately).</item>
-/// <item><b>Refresh</b> redeems the stored refresh entry (single use; reuse after redemption or revocation
-/// fails) and issues a fresh access/refresh pair.</item>
+/// <item><b>Refresh</b> re-checks the user through <see cref="IUserTokenEligibility"/> (a disabled or deleted user
+/// gets nothing and loses every outstanding token), then redeems the stored refresh entry (single use; reuse after
+/// redemption or revocation fails) and issues a fresh access/refresh pair.</item>
 /// <item><b>Revoke</b> revokes the matching token entry, for access JWTs (via their embedded entry id) and
 /// opaque refresh tokens alike. <b>RevokeSubject</b> revokes every entry issued to a subject, which sign-out uses.</item>
 /// </list>
@@ -34,7 +35,8 @@ public sealed class OpenIddictTokenService(
     IOpenIddictTokenManager tokenManager,
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
-    IOptions<OpenIddictIdentityOptions> options) : ITokenService
+    IOptions<OpenIddictIdentityOptions> options,
+    IUserTokenEligibility userEligibility) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
@@ -62,13 +64,23 @@ public sealed class OpenIddictTokenService(
         if (expiresAt is null || expiresAt <= DateTimeOffset.UtcNow)
             throw InvalidRefreshToken();
 
-        // Rotation: a refresh token is single-use. Redeeming marks the entry, so replaying it fails above.
-        if (!await tokenManager.TryRedeemAsync(entry, cancellationToken))
-            throw InvalidRefreshToken();
-
         var subject = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
         var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
         var payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+
+        // The user is re-read before anything is issued: a refresh token outlives a sign-in by days, so a user disabled
+        // or deleted since then must get no new access token. The refusal also revokes every token the subject still
+        // holds, so that user's other refresh tokens stop working now rather than at their own next use. A subject
+        // that names no Elsa user (an external bearer's own subject) has no account to re-check and is left as issued.
+        if (payload.CanonicalUserId is { } userId && !await userEligibility.IsEligibleAsync(payload.TenantId, userId, cancellationToken))
+        {
+            await RevokeSubjectAsync(subject, cancellationToken);
+            throw InvalidRefreshToken();
+        }
+
+        // Rotation: a refresh token is single-use. Redeeming marks the entry, so replaying it fails above.
+        if (!await tokenManager.TryRedeemAsync(entry, cancellationToken))
+            throw InvalidRefreshToken();
 
         var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes) { CanonicalUserId = payload.CanonicalUserId }, cancellationToken);
         return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);

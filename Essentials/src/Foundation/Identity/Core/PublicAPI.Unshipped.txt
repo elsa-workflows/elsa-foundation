@@ -83,6 +83,8 @@ Elsa.Foundation.Identity.Core.Authentication.ITokenService.RefreshAsync(Elsa.Fou
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeAsync(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeSubjectAsync(string! subjectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.ValidateAsync(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult!>
+Elsa.Foundation.Identity.Core.Authentication.IUserTokenEligibility
+Elsa.Foundation.Identity.Core.Authentication.IUserTokenEligibility.IsEligibleAsync(string! tenantId, string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext!
 Elsa.Foundation.Identity.Core.Authentication.PrincipalFactoryContext.CatalogPermissions.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Foundation.Identity.Core.Authorization.Permission!>!
