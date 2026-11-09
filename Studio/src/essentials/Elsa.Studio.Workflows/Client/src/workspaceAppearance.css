@@ -56,7 +56,12 @@ html[data-workspace-style] .wf-segmented button.active {
   color: var(--studio-accent);
 }
 
-html[data-workspace-style] :is(.wf-property-row, .wf-form-field) :is(input, textarea, select) {
+html[data-workspace-style] :is(.wf-property-row, .wf-form-field) :is(input, textarea) {
+  border-color: var(--studio-edge-control);
+  background-color: var(--studio-surface-muted);
+}
+
+html[data-workspace-style] :is(.wf-property-row, .wf-form-field) select {
   border-color: var(--studio-edge-control);
   background-color: var(--studio-surface-muted);
 }

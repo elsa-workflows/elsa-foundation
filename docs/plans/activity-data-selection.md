@@ -1,13 +1,13 @@
 # Activity Data Selection: program and delivery plan
 
-**Status:** Owner-authorized delivery plan, 5 November 2026; production contracts/specification follow the bounded proof.
+**Status:** Owner-authorized delivery plan, 5 November 2026; reviewed production artifacts are in [spec 1215](../../specs/1215-activity-data-selection/spec.md).
 **Date:** 2026-11-05
 **Planning baseline:** `origin/main` at `8e2acfd4d85a937e888ad378fdb7c6a742a80bda`.
 **Establishment refresh:** `697e9a342998282a08a598ad7137b2e90c9435c2`; source gaps and existing issue ownership rechecked.
 **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882) · [current goal](../program-goals/activity-data-selection.md).
 **Existing feature:** [#3094 — Author activity-output references in Studio](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
 **Program-goal state:** **Activity Data Selection**, authorized by the owner's "Proceed as proposed" instruction.
-**Product owner:** Sipke. Codex coordinates establishment and the first proof; executable ownership is claimed per issue.
+**Product owner:** Sipke. Codex coordinates delivery through M5 under the 5 November all-milestones continuation; executable ownership is claimed per issue.
 
 ## Recommendation
 
@@ -84,12 +84,23 @@ covering PR was found. Establishment links it to #3882 while preserving its orig
 23 October restart in [ADR 0080](../adr/0080-elsa-4-simplification-decisions.md); its bookkeeping is separate
 work. This program must not silently enlarge or repair that program.
 
+The M2 handoff refresh confirms that #3094 has no native blockers. Its original "before compensation M3"
+sequencing note is historical: [#3046 completed](https://github.com/elsa-workflows/elsa-foundation/issues/3046#issuecomment-6297263367)
+with #3126/#3127 and Implemented spec 258. Preserve compensation-handler own/prior forward-result visibility
+through its structure hook and existing causal/restart controls; do not wait for closure of the broader
+compensation program or absorb its later qualification work. M1/M2 and shared-authority gates still apply.
+
 The [ADR 0089 amendment PR #3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420) was draft and
 unmerged when inspected. The picker must not settle proposed ambient activity-name/occurrence syntax.
 Broader ADR 0046 coercion also remains proposed outside its accepted output-capture slice. Link existing
 decisions; route any needed semantic amendment through its normal agreement process.
 
 ## Milestones and handoff gates
+
+The owner's 5 November instruction, **"Set a goal to deliver all milestones"**, continues this plan
+through M1–M5, normal review/merge and resulting-main qualification. The
+[program receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6667218844)
+records that authorization without expanding scope or waiving milestone gates.
 
 ### M0 — Establish the scoped program ([#3883](https://github.com/elsa-workflows/elsa-foundation/issues/3883))
 
@@ -147,6 +158,10 @@ adopted only through the reviewed production spec and normal delivery process.
 Follow [specification → plan → tasks](../contributing/task-paths.md#feature-development), reviewing each
 artifact before the next. Allocate the next [spec number](../reference/spec-lifecycle.md) against the tree,
 archives and open PR allocations when this phase starts.
+
+The reviewed [spec 1215 package](../../specs/1215-activity-data-selection/plan.md) records the qualified
+M1 research exit, contract choices, 51 tasks and remaining exact-head review/merge/resulting-main gates.
+Approval takes effect on M2 merge; product acceptance remains M3–M5 work.
 
 Specify the source tree, target eligibility, member/path identity, source labels, types, nullability,
 cardinality, host capability, canonical binding and compatibility diagnostics. Define current-revision

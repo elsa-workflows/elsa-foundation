@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Text.Json.Schema;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.AddDraft;

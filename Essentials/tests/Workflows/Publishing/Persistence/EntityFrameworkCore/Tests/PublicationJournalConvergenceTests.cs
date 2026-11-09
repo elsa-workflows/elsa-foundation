@@ -490,7 +490,7 @@ internal static class PublicationJournalConvergence
         IncidentStrategyBuiltIns.FaultReference);
 
     /// <summary>One process over the shared databases: its own contexts, EF stores, coordinator, activator, publish handler and shell-start pass.</summary>
-    private sealed class PublishingNode : IAsyncDisposable
+    internal sealed class PublishingNode : IAsyncDisposable
     {
         private readonly PublishingSnapshotReviewDbContext _publishing;
         private readonly RuntimeDbContext _runtime;
@@ -501,13 +501,17 @@ internal static class PublicationJournalConvergence
             JournalDatabases databases,
             Func<IWorkflowActivationSwitch, IWorkflowActivationAuthority, IWorkflowActivationSwitch>? wrapSwitch = null,
             Func<IPublicationRecordStore, IPublicationRecordStore>? wrapRecords = null,
+            Func<IWorkflowExecutableStore, IWorkflowExecutableStore>? wrapExecutables = null,
             bool preflightSlotsBeforeTheyMoved = false)
         {
             _publishing = databases.Provider.Publishing(databases.Publishing, []);
             _runtime = databases.Provider.Runtime(databases.Runtime, []);
             var access = TestAccess.Scoped("tenant-journal");
+            Access = access;
             var time = TimeProvider.System;
-            var executables = new EfWorkflowExecutableStore(_runtime, access);
+            var innerExecutables = new EfWorkflowExecutableStore(_runtime, access);
+            var executables = wrapExecutables?.Invoke(innerExecutables) ?? innerExecutables;
+            Executables = executables;
             var extractor = new OneTriggerExtractor();
             Records = new EfPublicationRecordStore(_publishing, access);
             Authority = new EfWorkflowActivationAuthority(_runtime, access);
@@ -551,6 +555,9 @@ internal static class PublicationJournalConvergence
         public EfWorkflowActivationAuthority Authority { get; }
         public EfWorkflowTriggerBindingStore Bindings { get; }
         public EfWorkflowExecutableSourceReferenceStore References { get; }
+        public IWorkflowExecutableStore Executables { get; }
+        public TestAccess Access { get; }
+        public RuntimeDbContext Runtime => _runtime;
 
         public Task<PublishedWorkflowView> PublishAsync(string versionId) =>
             _handler.Handle(new PublishWorkflow(versionId), CancellationToken.None);

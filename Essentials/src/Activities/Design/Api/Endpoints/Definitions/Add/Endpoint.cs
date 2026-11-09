@@ -8,7 +8,7 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Add;
 
