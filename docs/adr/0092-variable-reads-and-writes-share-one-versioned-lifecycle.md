@@ -227,8 +227,9 @@ that is based on a stale read is a lost update, even when the other write was bl
   history and shown in inspection. It is never silent.
 - No other policies in this baseline; decision 14 plans an opt-in merge policy separately. A "warn and continue"
   policy is not offered: with the write history, `LastWins` is already visible, so a third option would add choice
-  without adding information. Whether even `LastWins` should exist, or the engine should allow one strict behaviour
-  only, is open question 3.
+  without adding information.
+
+  **Decided (reviewer Q3).** `Fault` default with the `LastWins` override (per activity type and per node) — @sfmskywalker's position ("detect and fault, with an override"), agreed by @j03y-nxxbz. Strict-only is reconsidered only if real `Merge`/`Reduce` operation semantics land.
 
 *Why.* A lost update is almost never what the author meant, so stopping before the wrong value spreads is the safer
 default (Sipke's position, agreed by Joey). Some designs genuinely accept last-wins; they say so explicitly.
@@ -338,8 +339,9 @@ refresh inputs or discard dependencies because time passed.
 On resume, decision 5 applies to explicit writes: a write whose base is stale and whose current value differs from
 that base is a lost update. A read alone produces no write and no lost-update fault. A value that changed and returned
 to its base still follows decision 5, and the invocation's own writes still follow decision 4. Long waits may make
-conflicts frequent; they do not introduce a different commit rule. Open question 8 asks whether this is the right
-contract for long-running workflows.
+conflicts frequent; they do not introduce a different commit rule.
+
+**Decided (reviewer Q8).** Resume keeps the base — fresh session, no auto-refresh; a resume-side opt-in refresh is a possible future, not part of this baseline.
 
 ### 12. Operator alterations use per-variable versions
 
@@ -492,7 +494,7 @@ you would change.
    (decision 3). A newer session read cannot erase an older input dependency still in use. And: is "read and write
    the same variable in one step" always a read-modify-write, even when the engine cannot see a dependency (decision 4)?
 3. **Strict or options?** Default `Fault`, with `LastWins` per activity type and per node, and nothing else in this
-   baseline (decision 6). Or should there be one strict behaviour only, which is simpler to learn, test and support?
+   baseline (decision 6). *Resolved:* agreed — `Fault` default with `LastWins` per activity type and per node (@sfmskywalker's position, agreed by @j03y-nxxbz).
 4. **Version plus digest** instead of value comparison alone, with 0 → 1 → 0 applying without a fault (decision 5).
 5. **Retry, re-execute, accept** (decision 8, changed 30 October after Sipke's 29 October positions). Recovery and
    retry keep the snapshot; re-execution, including a reschedule, gets fresh inputs; accepting a recorded completion
@@ -504,8 +506,7 @@ you would change.
    from input materialization through body execution and transition commit for `External` and `ReplaySafe` activities,
    preserving claim, fencing and durability checkpoints without holding a database transaction around user code?
 8. **Suspended steps** keep their inputs and dependencies, with a fresh session and no automatic refresh. Only an
-   explicit write against a stale, changed base is a lost update under decision 5 (decision 11). Is that the right
-   contract for long-running workflows?
+   explicit write against a stale, changed base is a lost update under decision 5 (decision 11). *Resolved:* agreed as the contract; a resume-side opt-in refresh is a possible future, not this baseline.
 9. **Granularity.** The whole variable now; your conservative JSON-object merge as a planned opt-in policy, designed
    in a follow-up ADR (decision 14, changed 30 October). Agreed?
 10. **Scope with A-3.** The companion amendment (#3425) proposes general transactional script/C# writes for native
