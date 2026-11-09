@@ -1,6 +1,6 @@
 # Elsa Agents
 
-- **Status:** Active; establishment and end-to-end M0–M7 delivery authorized, 31 October 2026. Product acceptance remains open.
+- **Status:** Paused by owner decision on 6 November 2026, confirmed in the 9 November triage review. Program #3519 and its open epics #3524–#3527 are parked; the 31 October end-to-end authorization resumes only on a new owner instruction. Product acceptance remains open.
 - **Area:** User-defined specialists, immutable publication, model execution, native/BPMN composition, Studio and bounded teams.
 - **Steward:** Sipke Schoorstra; one active implementation leaf with independent review support.
 - **Charter, complete plan and acceptance:** [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
