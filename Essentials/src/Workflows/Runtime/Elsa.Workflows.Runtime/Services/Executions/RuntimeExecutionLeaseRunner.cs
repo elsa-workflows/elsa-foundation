@@ -14,9 +14,13 @@ internal sealed class RuntimeExecutionLeaseRunner(
     TimeProvider timeProvider)
 {
     public async ValueTask<T> RunAsync<T>(string executionId, WorkflowExecutionPartition partition,
+        Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class =>
+        await RunAsync(await ownershipService.AcquireAsync(executionId, cancellationToken), partition, run, cancellationToken);
+
+    /// <summary>Runs under a lease the caller already acquired, with the same heartbeat, release and failure precedence.</summary>
+    public async ValueTask<T> RunAsync<T>(RuntimeExecutionLease lease, WorkflowExecutionPartition partition,
         Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class
     {
-        var lease = await ownershipService.AcquireAsync(executionId, cancellationToken);
         using (ownershipContext.Push(lease))
         using (var renewalStop = new CancellationTokenSource())
         using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))

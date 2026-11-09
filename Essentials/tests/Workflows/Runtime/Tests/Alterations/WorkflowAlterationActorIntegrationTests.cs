@@ -2,10 +2,8 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -17,7 +15,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
-public sealed class WorkflowAlterationActorIntegrationTests
+public sealed partial class WorkflowAlterationActorIntegrationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 26, 12, 0, 0, TimeSpan.Zero);
     private static readonly WorkflowAlterationEphemeralKeyRing TestKeyRing = new();
@@ -233,148 +231,6 @@ public sealed class WorkflowAlterationActorIntegrationTests
         Assert.Single(checkpointStore.ListCommits());
         Assert.Equal(1, handler.CallCount);
     }
-
-    // #2667: an alteration takes the run's ownership lease as a drain does, so its checkpoint is fenced.
-    [Fact]
-    public async Task ActorCommand_CommitsUnderTheRunsOwnershipLease_AndReleasesIt()
-    {
-        var harness = await LeasedHarness.CreateAsync();
-
-        await harness.Leased.ExecuteAsync(NewEnvelope(harness.Claim));
-
-        var commit = Assert.Single(harness.Checkpoints.ListCommits()).Commit;
-        Assert.NotNull(commit.ExpectedFence);
-        Assert.Equal(1, commit.ExpectedFence!.FencingToken);
-        Assert.Equal("node-alteration", commit.ExpectedFence.OwnerId);
-        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await harness.Alterations.FindJobAsync(harness.Claim.JobId))!.Status);
-        // Released: no lease is left for a later drain to mistake for a live owner.
-        Assert.Null(Assert.Single(await harness.Liveness.ListAsync("workflow-1")).ExecutionLease);
-        Assert.Null(harness.OwnershipContext.Current);
-    }
-
-    [Fact]
-    public async Task ActorCommand_TakesTheRunOver_AndTheDrainThatHeldItIsRefusedAtItsNextCommit()
-    {
-        var harness = await LeasedHarness.CreateAsync();
-        var drainLease = await harness.OwnershipOf("node-drain").AcquireAsync("workflow-1");
-
-        await harness.Leased.ExecuteAsync(NewEnvelope(harness.Claim));
-
-        Assert.Equal(2, Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence!.FencingToken);
-        using (harness.OwnershipContext.Push(drainLease))
-        {
-            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(async () =>
-                await harness.Committer.CommitAsync(NewDrainCommit("drain-commit")));
-        }
-
-        Assert.Single(harness.Checkpoints.ListCommits());
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await harness.Workflows.FindAsync("workflow-1"))!.Status);
-    }
-
-    [Fact]
-    public async Task ActorCommand_ThatLosesTheRunBeforeItCommits_IsRefused_AndItsJobStaysClaimed()
-    {
-        LeasedHarness? harness = null;
-        harness = await LeasedHarness.CreateAsync(new CompletingHandler(async () =>
-            await harness!.OwnershipOf("node-drain").AcquireAsync("workflow-1")));
-
-        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(async () =>
-            await harness.Leased.ExecuteAsync(NewEnvelope(harness.Claim)));
-
-        Assert.Empty(harness.Checkpoints.ListCommits());
-        Assert.Equal(WorkflowExecutionStatus.Running, (await harness.Workflows.FindAsync("workflow-1"))!.Status);
-        var job = (await harness.Alterations.FindJobAsync(harness.Claim.JobId))!;
-        Assert.Equal(WorkflowAlterationJobStatus.Running, job.Status);
-        Assert.Equal(harness.Claim.Claim!.Token, job.Claim!.Token);
-        // The new owner's lease is untouched by the loser's release.
-        Assert.Equal("node-drain", Assert.Single(await harness.Liveness.ListAsync("workflow-1")).ExecutionLease!.OwnerId);
-    }
-
-    [Fact]
-    public async Task ActorCommand_InsideAFlowThatHoldsTheRun_RunsUnderThatLease()
-    {
-        var harness = await LeasedHarness.CreateAsync();
-        var held = await harness.OwnershipOf("node-alteration").AcquireAsync("workflow-1");
-
-        using (harness.OwnershipContext.Push(held))
-            await harness.Leased.ExecuteAsync(NewEnvelope(harness.Claim));
-
-        var fence = Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence!;
-        Assert.Equal(held.LeaseId, fence.LeaseId);
-        Assert.Equal(1, fence.FencingToken);
-        // Still held: the caller that acquired it releases it.
-        Assert.Equal(held.LeaseId, Assert.Single(await harness.Liveness.ListAsync("workflow-1")).ExecutionLease!.LeaseId);
-    }
-
-    [Fact]
-    public void RuntimeCore_ComposesTheLeasedAlterationExecutor()
-    {
-        var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-
-        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IWorkflowAlterationActorCommandExecutor));
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        Assert.IsType<LeasedWorkflowAlterationActorCommandExecutor>(descriptor.ImplementationFactory!(scope.ServiceProvider));
-    }
-
-    private sealed class LeasedHarness
-    {
-        private LeasedHarness(CompletingHandler handler)
-        {
-            Checkpoints = new InMemoryRuntimeCheckpointCommitStore(
-                workflowExecutionStateStore: Workflows,
-                operationalStateStore: Liveness,
-                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
-                alterationStore: Alterations);
-            Committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), Checkpoints, OwnershipContext, [], []);
-            var writer = new RuntimeWorkflowAlterationCheckpointWriter(Committer, Alterations, TimeProvider.System);
-            var inner = new WorkflowAlterationActorCommandExecutor(
-                Alterations,
-                NewProtector(),
-                Workflows,
-                new WorkflowAlterationJobExecutor(new SingleHandlerResolver(handler), writer, TimeProvider.System));
-            Leased = new LeasedWorkflowAlterationActorCommandExecutor(
-                inner, OwnershipOf("node-alteration"), OwnershipContext, heartbeatScopes: null, TimeProvider.System);
-        }
-
-        public InMemoryWorkflowAlterationStore Alterations { get; } = new();
-        public InMemoryWorkflowExecutionStateStore Workflows { get; } = new();
-        public InMemoryExecutionLivenessStateStore Liveness { get; } = new();
-        public AsyncLocalRuntimeExecutionOwnershipContextAccessor OwnershipContext { get; } = new();
-        public InMemoryRuntimeCheckpointCommitStore Checkpoints { get; }
-        public RuntimeCheckpointCommitter Committer { get; }
-        public LeasedWorkflowAlterationActorCommandExecutor Leased { get; }
-        public WorkflowAlterationJobState Claim { get; private set; } = null!;
-
-        public RuntimeExecutionOwnershipService OwnershipOf(string ownerId) =>
-            new(Liveness, TimeProvider.System, new RuntimeExecutionOwnershipOptions { OwnerId = ownerId });
-
-        public static async Task<LeasedHarness> CreateAsync(CompletingHandler? handler = null)
-        {
-            var harness = new LeasedHarness(handler ?? new CompletingHandler());
-            await harness.Workflows.SaveAsync(NewWorkflow());
-            harness.Claim = await AdmitSealAndClaimAsync(harness.Alterations);
-            return harness;
-        }
-    }
-
-    // What a drain would commit next: any checkpoint of the run, carrying the drain's ambient lease as its fence.
-    private static RuntimeCheckpointCommit NewDrainCommit(string commitId) =>
-        new(
-            commitId,
-            new RuntimeCheckpoint($"checkpoint:{commitId}", RuntimeCheckpointNames.ActivityCompleted, "workflow-1", Now, [], new Dictionary<string, string>()),
-            new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
-                scheduler: null,
-                activityExecutions: [],
-                bookmarks: [],
-                durableValues: [],
-                incidents: [],
-                operational: []),
-            [],
-            new Dictionary<string, string>());
 
     private static async Task<WorkflowAlterationJobState> AdmitSealAndClaimAsync(InMemoryWorkflowAlterationStore store)
     {
