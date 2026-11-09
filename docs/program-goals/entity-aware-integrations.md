@@ -35,9 +35,14 @@ authoring; M4 delivers shared-ingress events and explicit projections; M5 qualif
 The [plan](../plans/entity-aware-integrations.md#staged-critical-path) owns exit criteria. One implementation
 leaf and one integration lane remain active at a time. Concrete leaves are refined from evidence and
 enter needs-triage, not automatically Ready. #3608 owns state transitions and remaining design choices.
-Narrow prerequisite [#3917](https://github.com/elsa-workflows/elsa-foundation/issues/3917) repairs the reproduced
-source-publication tenant-ownership defect; it is the sole active implementation leaf. Broader source-aware
-catalog disclosure and private operation provisioning remain #3908 design obligations.
+Narrow prerequisite [#3917](https://github.com/elsa-workflows/elsa-foundation/issues/3917) merged through
+[#3919](https://github.com/elsa-workflows/elsa-foundation/pull/3919). Focused resulting-main SQLite
+ownership/isolation and ordinary global HTTP restart checks passed; hosted main CI and broader privacy
+qualification remain distinct. The owner-approved catalog unit has reviewed [plan/tasks](../../specs/1219-entity-aware-integrations/plan.md)
+in [#3923](https://github.com/elsa-workflows/elsa-foundation/pull/3923). Its foundation is the sole coding
+unit, tracked on existing #3608 while the Ready backlog exceeds the cap; create no new leaf or Ready
+promotion. Retained requirements, every disclosure path and production private-source qualification remain
+incomplete. Runtime ingress and workload source-use authority keep their separate agreement gates.
 
 ## Completion
 

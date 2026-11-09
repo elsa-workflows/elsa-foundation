@@ -1,0 +1,7 @@
+#nullable enable
+Elsa.Activities.Design.Disclosure.ActivityCatalogDisclosureFeature
+Elsa.Activities.Design.Disclosure.ActivityCatalogDisclosureFeature.ActivityCatalogDisclosureFeature() -> void
+virtual Elsa.Activities.Design.Disclosure.ActivityCatalogDisclosureFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Activities.Design.Disclosure.Extensions.CatalogProducerServiceCollectionExtensions
+static Elsa.Activities.Design.Disclosure.Extensions.CatalogProducerServiceCollectionExtensions.AddActivityCatalogDisclosurePolicy<TPolicy>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! policyKey, string! bindingSchema) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Activities.Design.Disclosure.Extensions.CatalogProducerServiceCollectionExtensions.AddActivityCatalogProducer<TProducer, TAdmissionOwner>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! registrationId, Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope ownerScope, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? minimumPolicy = null, params System.Type![]! aliases) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

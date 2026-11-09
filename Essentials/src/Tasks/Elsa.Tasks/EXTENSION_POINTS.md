@@ -75,7 +75,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 
 ### `IStartupTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor — run once at application startup in topological order (respecting `[TaskDependency]` + `[Order]`).
-- **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
+- **Signature:** `Task ExecuteAsync(CancellationToken cancellationToken);`
 - **Register:** `services.AddScoped<IStartupTask, MyTask>()`.
 - **Attributes:** `[TaskDependency(typeof(OtherTask))]` — runs after `OtherTask`; `[Order(float)]` — relative priority; `[SingleNodeTask]` — runs one node at a time, every node in turn ([the guarantee](#singlenodetask-one-at-a-time-at-shell-start)); `[RequiresSchemaVersion(family, version)]` — skipped while this node is dormant for the family.
 
@@ -83,6 +83,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Serialization` — `JsonPayloadConvertersInitializingStartupTask` *(cross-domain — initialises JSON converters)*
 - `Elsa.Activities.Runtime` — `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity and I/O aliases)*
 - `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain; runs on every node at once, no lock, because its inputs are node-local and concurrent passes converge, #2189)*
+- `Elsa.Activities.Design.Disclosure` — `InitializeCatalogDisclosure` *(cross-domain; once per composed host startup, validates scoped registrations, awaits the Sequential registration fan-in and freezes only validated static metadata; no recurring/background cadence)* — [catalog](../../Activities/Design/Disclosure/EXTENSION_POINTS.md).
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
@@ -90,7 +91,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
-- **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
+- **Signature:** `Task ExecuteAsync(CancellationToken cancellationToken);`
 - **Register:** `services.AddScoped<IRecurringTask, MyTask>()`.
 - **Schedule:** return one from `TaskSchedule` (`Elsa.Tasks.Schedules`), derive from `BackoffSweepWorkerTask`, whose interval widens on failure, or implement `ITaskSchedule`. The schedule classes behind `TaskSchedule` are internal.
   - `TaskSchedule.Every(interval, logger)`: the first run one interval after the schedule starts, each next run one interval after the previous run ends. An interval shorter than one millisecond throws `ArgumentOutOfRangeException`.

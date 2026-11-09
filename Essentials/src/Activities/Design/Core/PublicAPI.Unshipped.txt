@@ -1,0 +1,256 @@
+#nullable enable
+abstract Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration!
+const Elsa.Activities.Design.Core.Contracts.CatalogAdmissionException.Code = "activities.catalog.admission-refused" -> string!
+const Elsa.Activities.Design.Core.Contracts.CatalogAdmissionException.FixedMessage = "The activity catalog material could not be admitted." -> string!
+const Elsa.Activities.Design.Core.Contracts.CatalogDisclosureUnavailableException.Code = "activities.catalog.disclosure-unavailable" -> string!
+const Elsa.Activities.Design.Core.Contracts.CatalogDisclosureUnavailableException.FixedMessage = "The activity catalog disclosure decision is unavailable." -> string!
+Elsa.Activities.Design.Core.Contracts.CatalogAdmissionException
+Elsa.Activities.Design.Core.Contracts.CatalogAdmissionException.CatalogAdmissionException(System.Exception? innerException = null) -> void
+Elsa.Activities.Design.Core.Contracts.CatalogDisclosureUnavailableException
+Elsa.Activities.Design.Core.Contracts.CatalogDisclosureUnavailableException.CatalogDisclosureUnavailableException(System.Exception? innerException = null) -> void
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogAdmission
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogAdmission.AdmitAsync(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin! origin, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement!>
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogAdmission.ValidateAsync(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin! origin, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate! candidate, Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement! expected, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogAdmissionOwner
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogAdmissionOwner.ClassifyAsync(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement!>
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureAuthority
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureAuthority.IsPresent.get -> bool
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureEvaluator
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureEvaluator.EvaluateAsync(System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosureResource!>! resources, Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose purpose, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision!>!>
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosurePolicy
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosurePolicy.EvaluateAsync(Elsa.Activities.Design.Core.Models.CatalogDisclosureResource! resource, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement! requirement, Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose purpose, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision!>
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureRegistrationSource
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogDisclosureRegistrationSource.Read() -> System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration!>!
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogOwnerScopeAccessor
+Elsa.Activities.Design.Core.Contracts.IActivityCatalogOwnerScopeAccessor.Current.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Contracts.ICatalogProducerScope
+Elsa.Activities.Design.Core.Contracts.ICatalogProducerScope.GetBinding(string! registrationId) -> object!
+Elsa.Activities.Design.Core.Contracts.ICatalogProducerScope.GetOrigin(string! registrationId) -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin!
+Elsa.Activities.Design.Core.Events.ActivityCatalogDisclosureInitializing
+Elsa.Activities.Design.Core.Events.ActivityCatalogDisclosureInitializing.ActivityCatalogDisclosureInitializing() -> void
+Elsa.Activities.Design.Core.Events.ActivityCatalogDisclosureInitializing.Registrations.get -> System.Collections.Generic.ICollection<Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration!>!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.AuthorizationRevision.get -> string?
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.AuthorizationRevision.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.CatalogDisclosureDecision(Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus Status, string? AuthorizationRevision = null) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.Deconstruct(out Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus Status, out string? AuthorizationRevision) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.Status.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus
+Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.Status.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.CatalogDisclosureIdentity(string! Kind, string? DefinitionId, string! VersionId, Elsa.Activities.Design.Core.Models.CatalogOwnerScope! OwnerScope) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.Deconstruct(out string! Kind, out string? DefinitionId, out string! VersionId, out Elsa.Activities.Design.Core.Models.CatalogOwnerScope! OwnerScope) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.DefinitionId.get -> string?
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.DefinitionId.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.Kind.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.Kind.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.OwnerScope.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.OwnerScope.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.VersionId.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.VersionId.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureKind
+Elsa.Activities.Design.Core.Models.CatalogDisclosureKind.Protected = 2 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureKind
+Elsa.Activities.Design.Core.Models.CatalogDisclosureKind.Public = 1 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureKind
+Elsa.Activities.Design.Core.Models.CatalogDisclosureKind.Unspecified = 0 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureKind
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.BindingSchema.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.BindingSchema.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.CatalogDisclosurePolicyKey(string! PolicyKey, string! BindingSchema) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.Deconstruct(out string! PolicyKey, out string! BindingSchema) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.PolicyKey.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.PolicyKey.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.CatalogDisclosurePolicyRegistration(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey! Key, System.Type! PolicyType) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Deconstruct(out Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey! Key, out System.Type! PolicyType) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Key.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Key.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.PolicyType.get -> System.Type!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.PolicyType.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.BindingSchema.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.CatalogDisclosurePolicyRequirement(string! policyKey, string! bindingSchema, System.Text.Json.JsonElement resource) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.PolicyKey.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.Resource.get -> System.Text.Json.JsonElement
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose.Authoring = 3 -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose.Construct = 1 -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose.Historical = 4 -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose.Metadata = 0 -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose.Options = 2 -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePurpose
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.CatalogDisclosureRegistration() -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.CatalogDisclosureRegistration(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration! original) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.CatalogDisclosureRequirement(int schemaVersion, Elsa.Activities.Design.Core.Models.CatalogDisclosureKind kind, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement!>! policies) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.Kind.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosureKind
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.Policies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement!>!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.SchemaVersion.get -> int
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureResource!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.CatalogDisclosureResource(string! Kind, string! Id, Elsa.Activities.Design.Core.Models.CatalogOwnerScope! OwnerScope, Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement! Requirement) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Deconstruct(out string! Kind, out string! Id, out Elsa.Activities.Design.Core.Models.CatalogOwnerScope! OwnerScope, out Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement! Requirement) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureResource? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Id.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Id.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Kind.get -> string!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Kind.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.OwnerScope.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.OwnerScope.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Requirement.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Requirement.init -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.CatalogDisclosureSnapshot(int schemaVersion, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity!>! identities) -> void
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.Identities.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity!>!
+Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.SchemaVersion.get -> int
+Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus
+Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus.Allowed = 1 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus
+Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus.Denied = 2 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus
+Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus.Unavailable = 0 -> Elsa.Activities.Design.Core.Models.CatalogDisclosureStatus
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.CatalogOwnerScope(Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind Kind, string? TenantId) -> void
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.Deconstruct(out Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind Kind, out string? TenantId) -> void
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.Equals(Elsa.Activities.Design.Core.Models.CatalogOwnerScope? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.Kind.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.Kind.init -> void
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.TenantId.get -> string?
+Elsa.Activities.Design.Core.Models.CatalogOwnerScope.TenantId.init -> void
+Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind
+Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind.Global = 1 -> Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind
+Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind.Tenant = 2 -> Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind
+Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind.Unspecified = 0 -> Elsa.Activities.Design.Core.Models.CatalogOwnerScopeKind
+Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope.CurrentTenant = 2 -> Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope.Global = 1 -> Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope.Unspecified = 0 -> Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.AdmissionOwnerType.get -> System.Type!
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.Aliases.get -> System.Collections.Generic.IReadOnlyList<System.Type!>!
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.CatalogProducerRegistration(string! registrationId, System.Type! producerType, System.Type! admissionOwnerType, Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope ownerScope, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? minimumPolicy, System.Collections.Generic.IReadOnlyList<System.Type!>! aliases) -> void
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.Equals(Elsa.Activities.Design.Core.Models.CatalogProducerRegistration? other) -> bool
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.MinimumPolicy.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey?
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.OwnerScope.get -> Elsa.Activities.Design.Core.Models.CatalogProducerOwnerScope
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.ProducerType.get -> System.Type!
+Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.RegistrationId.get -> string!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.<Clone>$() -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.CatalogAdmissionCandidate(Elsa.Activities.Design.Core.Contracts.IActivityDefinition! Definition, Elsa.Activities.Design.Core.Contracts.IActivityDefinitionVersion! Version, Elsa.Activities.Design.Core.Models.CatalogOwnerScope! DefinitionOwner, Elsa.Activities.Design.Core.Models.CatalogOwnerScope! VersionOwner, Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement! Inherited) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Deconstruct(out Elsa.Activities.Design.Core.Contracts.IActivityDefinition! Definition, out Elsa.Activities.Design.Core.Contracts.IActivityDefinitionVersion! Version, out Elsa.Activities.Design.Core.Models.CatalogOwnerScope! DefinitionOwner, out Elsa.Activities.Design.Core.Models.CatalogOwnerScope! VersionOwner, out Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement! Inherited) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Definition.get -> Elsa.Activities.Design.Core.Contracts.IActivityDefinition!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Definition.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.DefinitionOwner.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.DefinitionOwner.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Equals(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate? other) -> bool
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Inherited.get -> Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Inherited.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Version.get -> Elsa.Activities.Design.Core.Contracts.IActivityDefinitionVersion!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Version.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.VersionOwner.get -> Elsa.Activities.Design.Core.Models.CatalogOwnerScope!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.VersionOwner.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.<Clone>$() -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Candidate.get -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Candidate.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.CatalogAdmissionContribution(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate! Candidate, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin! Origin) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Deconstruct(out Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate! Candidate, out Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin! Origin) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Equals(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution? other) -> bool
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Origin.get -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Origin.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.<Clone>$() -> Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.CatalogAdmissionOrigin(string! RegistrationId, object! ScopeBinding) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.Deconstruct(out string! RegistrationId, out object! ScopeBinding) -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.Equals(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin? other) -> bool
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.RegistrationId.get -> string!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.RegistrationId.init -> void
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.ScopeBinding.get -> object!
+Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.ScopeBinding.init -> void
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogOwnerScope.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogOwnerScope.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogOwnerScope.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.<Clone>$() -> Elsa.Activities.Design.Core.Models.CatalogProducerRegistration!
+override Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.ToString() -> string!
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.ToString() -> string!
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.ToString() -> string!
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.ToString() -> string!
+override sealed Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? other) -> bool
+override sealed Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? other) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureDecision? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureIdentity? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyKey? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement? left, Elsa.Activities.Design.Core.Models.CatalogDisclosurePolicyRequirement? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureRequirement? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureResource? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureResource? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureResource.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureResource? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureResource? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.operator !=(Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot.operator ==(Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot? left, Elsa.Activities.Design.Core.Models.CatalogDisclosureSnapshot? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogOwnerScope.operator !=(Elsa.Activities.Design.Core.Models.CatalogOwnerScope? left, Elsa.Activities.Design.Core.Models.CatalogOwnerScope? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogOwnerScope.operator ==(Elsa.Activities.Design.Core.Models.CatalogOwnerScope? left, Elsa.Activities.Design.Core.Models.CatalogOwnerScope? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.operator !=(Elsa.Activities.Design.Core.Models.CatalogProducerRegistration? left, Elsa.Activities.Design.Core.Models.CatalogProducerRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Models.CatalogProducerRegistration.operator ==(Elsa.Activities.Design.Core.Models.CatalogProducerRegistration? left, Elsa.Activities.Design.Core.Models.CatalogProducerRegistration? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.operator !=(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate.operator ==(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionCandidate? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.operator !=(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution.operator ==(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionContribution? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.operator !=(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin? right) -> bool
+static Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin.operator ==(Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin? left, Elsa.Activities.Design.Core.Reconciliation.CatalogAdmissionOrigin? right) -> bool
+virtual Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.EqualityContract.get -> System.Type!
+virtual Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.Equals(Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration? other) -> bool
+virtual Elsa.Activities.Design.Core.Models.CatalogDisclosureRegistration.PrintMembers(System.Text.StringBuilder! builder) -> bool
