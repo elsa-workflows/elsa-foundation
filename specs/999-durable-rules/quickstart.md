@@ -127,3 +127,11 @@ selected assembly hashes differ. No destructive schema rollback or automatic rep
 ## 5. Integration gate
 
 Run the affected build/tests, architecture guard, public-surface/solution-filter validation and current generated-map check. Follow the current generated-maps policy instead of committing obsolete snapshots. Review the integrated diff with a bounded self-review loop. Attach evidence to the PR, verify exact-head CI and resulting-main CI/Studio/CodeQL/maps, and record skipped jobs separately from passes. Keep #3181 open until all acceptance in the specification is satisfied.
+
+## 6. Native parent restart witnesses
+
+In-process host-rebuild witnesses for a native parent waiting on `RunRules` ([evidence](evidence/native-parent-restart.md)):
+
+```bash
+dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --filter FullyQualifiedName~RulesPersistedNativeRestartTests
+```
