@@ -8,6 +8,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Testing;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -82,6 +83,53 @@ public sealed class VersionReadAuthorizationTests
         Assert.DoesNotContain(VersionId, body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task An_actor_without_Read_on_the_version_s_definition_is_refused_before_the_owner_is_asked()
+    {
+        using var host = new Host(allow: true);
+
+        var (status, _, body) = await host.GetAsync(Principal("tenant"));
+
+        Assert.Equal(StatusCodes.Status403Forbidden, status);
+        // The definition GET's resource-scoped permission refusal, even though the replacement owner would allow.
+        Assert.Equal("""{"errors":{"generalErrors":["The requested workflow library operation is not permitted."]},"message":"One or more errors occurred!","statusCode":403}""", body);
+        Assert.Empty(host.Authorizer.ReadDecisions);
+    }
+
+    [Fact]
+    public async Task An_owner_that_cannot_decide_answers_503_with_the_unavailable_code_and_no_version_details()
+    {
+        using var host = new Host(allow: true, configure: services => services.Replace(
+            ServiceDescriptor.Scoped<IWorkflowDefinitionAuthorizer>(_ => new ThrowingAuthorizer())));
+
+        var (status, _, body) = await host.GetAsync();
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, status);
+        Assert.Equal(WorkflowDefinitionAuthorizationException.UnavailableCode, JsonDocument.Parse(body).RootElement.GetProperty("errorCode").GetString());
+        Assert.DoesNotContain(VersionId, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(Cause, body, StringComparison.Ordinal);
+    }
+
+    // The built-in owner takes its complete decision here: the version reader records no read evidence, so the owner
+    // checks the Read permission, the tenant-scoped definition store and the reader preflight itself.
+    [Theory]
+    [InlineData("tenant", StatusCodes.Status200OK)]
+    [InlineData("another-tenant", StatusCodes.Status403Forbidden)]
+    public async Task The_built_in_owner_reads_its_own_tenant_s_version_and_refuses_one_stored_under_another_tenant(string storedTenant, int expected)
+    {
+        using var host = new Host(allow: true, builtInOwner: true);
+        host.Definitions.Tenant = storedTenant;
+
+        var (status, _, body) = await host.GetAsync();
+
+        Assert.Equal(expected, status);
+        Assert.Equal(1, host.Definitions.Finds);
+        if (expected == StatusCodes.Status403Forbidden)
+            Assert.DoesNotContain(VersionId, body, StringComparison.Ordinal);
+    }
+
+    private const string Cause = "Private infrastructure detail 3723";
+
     private static ClaimsPrincipal Principal(string tenant, params string[] permissions) => new(new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, "actor"), new Claim(IdentityClaimTypes.Normalized, "v1"),
@@ -94,8 +142,11 @@ public sealed class VersionReadAuthorizationTests
         private readonly RouteEndpoint get;
         internal RecordingAuthorizer Authorizer { get; }
         internal StubVersions Versions { get; } = new();
+        internal DefinitionReadAuthorizationTests.CountingDefinitions Definitions { get; } = new();
 
-        internal Host(bool allow, Action<IServiceCollection>? configure = null)
+        /// <param name="builtInOwner">Keep the built-in <c>HttpWorkflowDefinitionAuthorizer</c>, without a library store,
+        /// instead of the recording replacement.</param>
+        internal Host(bool allow, Action<IServiceCollection>? configure = null, bool builtInOwner = false)
         {
             Authorizer = new RecordingAuthorizer(allow);
             var services = new ServiceCollection();
@@ -105,7 +156,11 @@ public sealed class VersionReadAuthorizationTests
             new WorkflowsDesignApiFeature().ConfigureServices(services);
             services.AddSingleton<IWorkflowDefinitionVersionStore>(Versions);
             services.AddSingleton<IWorkflowDefinitionVersionLayoutStore>(new NoLayouts());
-            services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionAuthorizer>(_ => Authorizer));
+            // The built-in owner's reader preflight composes the definition and draft stores; the version read uses neither.
+            services.AddSingleton<IWorkflowDefinitionStore>(Definitions);
+            services.AddSingleton(DefinitionReadAuthorizationTests.Store<IWorkflowDefinitionDraftStore>.Create(new DefinitionReadAuthorizationTests.Counters()));
+            if (!builtInOwner)
+                services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionAuthorizer>(_ => Authorizer));
             configure?.Invoke(services);
             root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var routes = new TestEndpointRouteBuilder(root);
@@ -115,14 +170,14 @@ public sealed class VersionReadAuthorizationTests
                 && endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("GET") == true);
         }
 
-        internal async Task<(int Status, string? ContentType, string Body)> GetAsync()
+        internal async Task<(int Status, string? ContentType, string Body)> GetAsync(ClaimsPrincipal? user = null)
         {
             using var scope = root.CreateScope();
             var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
             var context = new DefaultHttpContext
             {
                 RequestServices = scope.ServiceProvider,
-                User = Principal("tenant", WorkflowDesignPermissions.Read)
+                User = user ?? Principal("tenant", WorkflowDesignPermissions.Read)
             };
             accessor.HttpContext = context;
             try
@@ -159,6 +214,14 @@ public sealed class VersionReadAuthorizationTests
 
         public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException("A version read never asks for management authority.");
+    }
+
+    private sealed class ThrowingAuthorizer : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default)
+            => throw new WorkflowDefinitionAuthorizationException(definitionId, "read", new IOException(Cause));
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default)
+            => throw new WorkflowDefinitionAuthorizationException(definitionId, "manage", new IOException(Cause));
     }
 
     internal sealed class StubVersions : IWorkflowDefinitionVersionStore

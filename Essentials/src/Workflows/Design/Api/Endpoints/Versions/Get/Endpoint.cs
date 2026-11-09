@@ -23,9 +23,12 @@ public sealed class Endpoint(IWorkflowVersionDetailsReader reader, IEnumerable<I
         if (request.VersionId.StartsWith("draft:", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Synthetic draft identifiers are not persisted workflow definition versions.", nameof(request));
 
-        // Same order as the definition GET (#3723): the reader's not-found response comes first, then the owning
-        // definition authorizer decides on the version's definition. No details leave until that decision succeeds.
+        // Same checks as the definition GET (#3723), once the version names its definition: the reader's not-found
+        // response comes first, then the actor's Read permission on that definition, then the owning definition
+        // authorizer's decision. No details leave until both succeed.
         var details = await reader.ReadAsync(request.VersionId, cancellationToken);
+        await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read,
+            new WorkflowLibraryResource(DefinitionId: details.Definition.Id), cancellationToken);
         var current = authorizers.ToArray();
         if (current.Length != 1 || !await current[0].CanReadAsync(details.Definition.Id, cancellationToken))
             throw new WorkflowLibraryAuthorizationException("The requested workflow definition is not readable in the current application context.");
