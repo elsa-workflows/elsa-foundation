@@ -8,7 +8,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Api.Capabilities;
 

@@ -22,7 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api;
 

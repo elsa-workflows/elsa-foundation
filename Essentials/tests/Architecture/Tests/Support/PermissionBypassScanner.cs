@@ -292,7 +292,7 @@ internal static class PermissionBypassScanner
     private static bool IsEndpointType(Type type) =>
         !IsCompilerGenerated(type) &&
         (type.Namespace?.Split('.').Contains("Endpoints", StringComparer.Ordinal) == true ||
-         BaseTypes(type).Any(baseType => baseType.Namespace is "MinimalEndpoints" || IsFastEndpointsType(baseType)));
+         BaseTypes(type).Any(baseType => baseType.Namespace is "NativeEndpoints" || IsFastEndpointsType(baseType)));
 
     private static IEnumerable<Type> BaseTypes(Type type)
     {

@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ScopedVariablesEditor, VariablesEditor, WorkflowDataView, WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { ScopedVariablesEditor, VariablesEditor, WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
@@ -243,16 +243,14 @@ describe("properties view", () => {
     versions: []
   });
 
-  it.each(["inputs", "outputs"] as const)("shows collection kinds in the %s tab", section => {
-    const container = render(<WorkflowDataView section={section} draft={draft()} context={rejectingContext} onStateChange={vi.fn()} />);
-    expect(container.querySelector(`select[aria-label='${section === "inputs" ? "Input" : "Output"} collection kind']`)).not.toBeNull();
+  it("shows a collection-kind dropdown on inputs and outputs too", () => {
+    const container = render(
+      <WorkflowPropertiesView details={details()} draft={draft()} context={rejectingContext} onStateChange={vi.fn()} onDefinitionMetaChange={vi.fn()} />
+    );
+    expect(container.querySelector("select[aria-label='Input collection kind']")).not.toBeNull();
+    expect(container.querySelector("select[aria-label='Output collection kind']")).not.toBeNull();
+    // Outputs are minimal — no storage picker.
     expect(container.querySelector("select[aria-label='Output storage driver']")).toBeNull();
-  });
-
-  it("keeps workflow declarations and version history out of general Properties", () => {
-    const container = render(<WorkflowPropertiesView details={details()} draft={draft()} context={rejectingContext} onStateChange={vi.fn()} />);
-    const headings = [...container.querySelectorAll("h3")].map(item => item.textContent);
-    expect(headings).toEqual(["Information", "Failure handling", "Persistence"]);
   });
 
   it("requests variable types only through the Expressions capability", async () => {
@@ -266,7 +264,7 @@ describe("properties view", () => {
     const context = { baseUrl: "test://properties", http: { getJson } } as never;
 
     render(
-      <WorkflowDataView section="variables" draft={draft()} context={context} onStateChange={vi.fn()} />
+      <WorkflowPropertiesView details={details()} draft={draft()} context={context} onStateChange={vi.fn()} onDefinitionMetaChange={vi.fn()} />
     );
 
     await vi.waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
@@ -427,46 +425,6 @@ describe("properties view", () => {
     expect(onStateChange).not.toHaveBeenCalled();
   });
 
-  it("uses concise strategy names and identifies the effective host default", async () => {
-    const { context } = incidentStrategyContext("friendly-strategies", () => ({
-      items: [
-        { alias: "ContinueWithIncidents", version: "1", displayName: "Continue with incidents", description: "Continues the workflow and records the incident." },
-        { alias: "Fault", version: "1", displayName: "Fault", description: "Faults the workflow." }
-      ],
-      defaultStrategy: { alias: "Fault", version: "1" }
-    }));
-    const container = render(<WorkflowPropertiesView details={details()} draft={draft()} context={context} onStateChange={vi.fn()} />);
-    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
-    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
-    expect([...select.options].map(option => option.textContent?.trim())).toEqual([
-      "Use host default (Fault)", "Continue with incidents", "Fault"
-    ]);
-    expect(container.querySelector("#wf-incident-strategy-help")?.textContent).toBe("Faults the workflow.");
-  });
-
-  it.each([false, true])("disambiguates identical display names with different aliases: %s", async differentAliases => {
-    const workflow = draft();
-    const { context } = incidentStrategyContext(`ambiguous-strategies-${differentAliases}`, () => ({
-      items: [
-        { alias: "Acme.Review", version: "1", displayName: "Review" },
-        { alias: differentAliases ? "Contoso.Review" : "Acme.Review", version: "2", displayName: "Review" }
-      ],
-      defaultStrategy: { alias: "Acme.Review", version: "1" }
-    }));
-    const onStateChange = vi.fn();
-    const container = render(<WorkflowPropertiesView details={details()} draft={workflow} context={context} onStateChange={onStateChange} />);
-    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
-    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
-    expect([...select.options].slice(1).map(option => option.textContent?.trim())).toEqual(differentAliases
-      ? ["Review (Acme.Review, version 1)", "Review (Contoso.Review, version 2)"]
-      : ["Review (version 1)", "Review (version 2)"]);
-    setSelectValue(select, select.options[2].value);
-    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
-    expect(producer(workflow.state).strategyOptions).toMatchObject({
-      incidentStrategy: { alias: differentAliases ? "Contoso.Review" : "Acme.Review", version: "2" }
-    });
-  });
-
   it("resolves aliases case-insensitively without rewriting the stored reference", async () => {
     const workflow = draft();
     workflow.state.strategyOptions = {
@@ -488,7 +446,7 @@ describe("properties view", () => {
 
     await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
     const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
-    expect(select.selectedOptions[0]?.textContent).toBe("Fault");
+    expect(select.selectedOptions[0]?.textContent).toBe("Fault — Fault / 1");
     expect([...select.options].some(option => option.textContent?.includes("(unresolved)"))).toBe(false);
     expect(select.labels[0]?.textContent).toBe("Incident strategy");
     expect(container.querySelector(`#${select.getAttribute("aria-describedby")}`)?.textContent)
@@ -619,7 +577,7 @@ describe("properties view", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("No incident strategies are advertised"));
     const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
     expect([...select.options].map(option => option.textContent)).toEqual([
-      "Use host default"
+      "Use host default — Fault / 1"
     ]);
   });
 

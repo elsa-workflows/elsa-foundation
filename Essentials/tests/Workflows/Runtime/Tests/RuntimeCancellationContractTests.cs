@@ -133,35 +133,6 @@ public sealed class RuntimeCancellationContractTests
         Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-running"))!.Status);
     }
 
-    [Fact]
-    public async Task Cancel_PreservesSupersededSourceLineageAndScopes_WhileCancellingItsLiveSuccessor()
-    {
-        var harness = new Harness(_now);
-        await harness.SeedWorkflow(WorkflowExecutionStatus.Running);
-        await harness.SeedActivity(ActivityExecutionStatus.Superseded, "actexec-source", "scope-source", "actexec-successor");
-        await harness.SeedActivity(ActivityExecutionStatus.Suspended, "actexec-successor", "scope-successor");
-        await harness.SeedBookmark("bookmark-source", "actexec-source");
-        await harness.SeedBookmark("bookmark-successor", "actexec-successor");
-        var sourceBefore = (await harness.FindActivity("actexec-source"))!;
-
-        await harness.Handler().HandleAsync(harness.CancelWorkItem());
-
-        Assert.Equal(WorkflowExecutionStatus.Cancelled, (await harness.FindWorkflow())!.Status);
-        var sourceAfter = (await harness.FindActivity("actexec-source"))!;
-        Assert.Equal(ActivityExecutionStatus.Superseded, sourceAfter.Status);
-        Assert.Equal(sourceBefore.SupersededByActivityExecutionId, sourceAfter.SupersededByActivityExecutionId);
-        Assert.Equal(sourceBefore.SupersededAt, sourceAfter.SupersededAt);
-        Assert.Equal(sourceBefore.CompletedAt, sourceAfter.CompletedAt);
-        Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-successor"))!.Status);
-        Assert.NotNull(await harness.FindBookmark("bookmark-source"));
-        Assert.Null(await harness.FindBookmark("bookmark-successor"));
-        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
-        Assert.Equal(["actexec-successor"], commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
-        Assert.Equal(["actexec-successor"], commit.StateChanges.ActivityExecutionInspections.Select(change => change.StateId));
-        Assert.Equal(["actexec-successor", "scope-successor", WorkflowExecutionId],
-            Assert.Single(commit.StateChanges.ActivityScopeCleanups).ActivityExecutionIds.Order(StringComparer.Ordinal));
-    }
-
     // ── the emitted checkpoint is a terminal cancel checkpoint with the expected shape ──────────────
 
     [Fact]
@@ -516,7 +487,7 @@ public sealed class RuntimeCancellationContractTests
                 TenantId: null,
                 SystemMetadata: new Dictionary<string, string>()));
 
-        public async Task SeedActivity(ActivityExecutionStatus status, string activityExecutionId, string? executionScopeId = null, string? supersededBy = null) =>
+        public async Task SeedActivity(ActivityExecutionStatus status, string activityExecutionId, string? executionScopeId = null) =>
             await _activityStore.SaveAsync(new ActivityExecutionState(
                 Execution: new ActivityExecution(
                     ActivityExecutionId: activityExecutionId,
@@ -550,9 +521,7 @@ public sealed class RuntimeCancellationContractTests
                 FaultCount: 0,
                 AggregateFaultCount: 0,
                 Metadata: new Dictionary<string, string>(),
-                ExecutionScopeId: executionScopeId,
-                SupersededByActivityExecutionId: supersededBy,
-                SupersededAt: supersededBy is null ? null : DateTimeOffset.UnixEpoch));
+                ExecutionScopeId: executionScopeId));
 
         public async Task SeedBookmark(string bookmarkId, string activityExecutionId) =>
             await _bookmarkStore.SaveAsync(new BookmarkState(

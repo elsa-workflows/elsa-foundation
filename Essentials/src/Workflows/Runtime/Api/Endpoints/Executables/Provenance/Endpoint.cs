@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Executables.Provenance;
 

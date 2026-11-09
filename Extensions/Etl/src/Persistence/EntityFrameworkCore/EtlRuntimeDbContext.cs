@@ -47,16 +47,16 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_RetainedByteCounts",
-                Constraint("{RetainedInputBytes} >= 0 AND {RetainedMetadataBytes} >= 0"));
+                "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_RetainedOutputBytes",
-                Constraint("{RetainedOutputBytes} >= 0"));
+                "RetainedOutputBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_SourceInputReservedBytes",
-                Constraint("{SourceInputReservedBytes} >= 0"));
+                "SourceInputReservedBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_CompletionRequestedAtUtcTicks",
-                Constraint("{CompletionRequestedAtUtcTicks} IS NULL OR {CompletionRequestedAtUtcTicks} > 0"));
+                "CompletionRequestedAtUtcTicks IS NULL OR CompletionRequestedAtUtcTicks > 0");
         });
         connectorRuns.HasKey(row => new { row.ScopeKey, row.RunKey });
         connectorRuns.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -77,30 +77,30 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_NonNegativeCounters",
-                Constraint("{PageCount} >= 0 AND {PageBytes} >= 0 AND {MetadataBytes} >= 0 AND {BatchMetadataBytes} >= 0"));
+                "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_SourceInputReservedBytes",
-                Constraint("{SourceInputReservedBytes} >= 0"));
+                "SourceInputReservedBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_NonNegativeAcceptanceCounts",
-                Constraint("{AcceptedBatchCount} >= 0 AND {AcceptedRecords} >= 0 AND {RejectedRecords} >= 0 AND {FilteredRecords} >= 0"));
+                "AcceptedBatchCount >= 0 AND AcceptedRecords >= 0 AND RejectedRecords >= 0 AND FilteredRecords >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_RetainedOutputBytes",
-                Constraint("{RetainedOutputBytes} >= 0"));
+                "RetainedOutputBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_NotBeforeUtcTicks",
-                Constraint("{NotBeforeUtcTicks} IS NULL OR {NotBeforeUtcTicks} > 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_PollGeneration", Constraint("{PollGeneration} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedPageCount", Constraint("{CompactedPageCount} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedBatchCount", Constraint("{CompactedBatchCount} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedAcceptedRecords", Constraint("{CompactedAcceptedRecords} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedRejectedRecords", Constraint("{CompactedRejectedRecords} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedFilteredRecords", Constraint("{CompactedFilteredRecords} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedMainEffects", Constraint("{CompactedMainEffects} >= 0"));
-            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedErrorEffects", Constraint("{CompactedErrorEffects} >= 0"));
+                "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_PollGeneration", "PollGeneration >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedPageCount", "CompactedPageCount >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedBatchCount", "CompactedBatchCount >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedAcceptedRecords", "CompactedAcceptedRecords >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedRejectedRecords", "CompactedRejectedRecords >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedFilteredRecords", "CompactedFilteredRecords >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedMainEffects", "CompactedMainEffects >= 0");
+            table.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedErrorEffects", "CompactedErrorEffects >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_CurrentRequestPointer",
-                Constraint("({CurrentRequestSequence} IS NULL AND {CurrentRequestHash} IS NULL) OR ({CurrentRequestSequence} IS NOT NULL AND {CurrentRequestHash} IS NOT NULL)"));
+                "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
         });
         connectorPartitions.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal });
         connectorPartitions.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -150,35 +150,35 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_OutputPlan",
-                Constraint("({OutputJson} IS NULL AND {OutputDigest} IS NULL) OR ({OutputJson} IS NOT NULL AND {OutputDigest} IS NOT NULL AND {length}({OutputDigest}) = 64)"));
+                "(OutputJson IS NULL AND OutputDigest IS NULL) OR (OutputJson IS NOT NULL AND OutputDigest IS NOT NULL AND length(OutputDigest) = 64)");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_HttpDeliveryPlan",
-                Constraint("({HttpDeliveryJson} IS NULL AND {HttpDeliveryDigest} IS NULL) OR ({HttpDeliveryJson} IS NOT NULL AND {HttpDeliveryDigest} IS NOT NULL AND {length}({HttpDeliveryDigest}) = 64 AND {OutputJson} IS NOT NULL)"));
+                "(HttpDeliveryJson IS NULL AND HttpDeliveryDigest IS NULL) OR (HttpDeliveryJson IS NOT NULL AND HttpDeliveryDigest IS NOT NULL AND length(HttpDeliveryDigest) = 64 AND OutputJson IS NOT NULL)");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_OutputBytes",
-                Constraint("{OutputBytes} >= 0 AND ({OutputJson} IS NOT NULL OR {OutputBytes} = 0)"));
+                "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_MainFilePublishedRequiresOutput",
-                Constraint("{MainFilePublished} = {false} OR {OutputJson} IS NOT NULL"));
+                "MainFilePublished = 0 OR OutputJson IS NOT NULL");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_ErrorFilePublishedRequiresOutput",
-                Constraint("{ErrorFilePublished} = {false} OR {OutputJson} IS NOT NULL"));
+                "ErrorFilePublished = 0 OR OutputJson IS NOT NULL");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_BatchOrdinal",
-                Constraint("{BatchOrdinal} >= 0"));
+                "BatchOrdinal >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_HttpPageSequence",
-                Constraint("{HttpPageSequence} IS NULL OR {HttpPageSequence} >= 0"));
+                "HttpPageSequence IS NULL OR HttpPageSequence >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_AcceptanceMetadataBytes",
-                Constraint("{AcceptanceMetadataBytes} >= 0"));
+                "AcceptanceMetadataBytes >= 0");
             // The effect columns record the delivery mechanism (1 HTTP delivery, 2 file publication), not the route format.
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_MainEffectKind",
-                Constraint("{MainEffectKind} IS NULL OR {MainEffectKind} IN (1, 2)"));
+                "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_ErrorEffectKind",
-                Constraint("{ErrorEffectKind} IS NULL OR {ErrorEffectKind} IN (1, 2)"));
+                "ErrorEffectKind IS NULL OR ErrorEffectKind IN (1, 2)");
         });
         connectorBatches.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.BatchId });
         connectorBatches.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -189,6 +189,8 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorBatches.Property(row => row.DescriptorDigest).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorBatches.Property(row => row.OutputDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
         connectorBatches.Property(row => row.HttpDeliveryDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
+        connectorBatches.Property(row => row.MainEffectKind).HasColumnType("INTEGER");
+        connectorBatches.Property(row => row.ErrorEffectKind).HasColumnType("INTEGER");
         connectorBatches.Property(row => row.BatchOrdinal).HasDefaultValue(0L);
         connectorBatches.Property(row => row.AcceptanceMetadataBytes).HasDefaultValue(0L);
         connectorBatches.Property(row => row.MainFilePublished).HasDefaultValue(false);
@@ -212,15 +214,15 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes",
-                Constraint("{MetadataBytes} >= 0"));
+                "MetadataBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_requests_SourceFetchMetadata",
-                Constraint("{FetchMetadataBytes} >= 0 AND {SourceMetadataReserveBytes} >= 0 AND {InputReservationBytes} >= 0 AND " +
-                "(({FetchJson} IS NULL AND {FetchDigest} IS NULL AND {FetchMetadataBytes} = 0 AND {SourceMetadataReserveBytes} = 0 AND {InputReservationBytes} = 0) OR " +
-                "({FetchJson} IS NOT NULL AND {FetchDigest} IS NOT NULL AND {length}({FetchDigest}) = 64))"));
+                "FetchMetadataBytes >= 0 AND SourceMetadataReserveBytes >= 0 AND InputReservationBytes >= 0 AND " +
+                "((FetchJson IS NULL AND FetchDigest IS NULL AND FetchMetadataBytes = 0 AND SourceMetadataReserveBytes = 0 AND InputReservationBytes = 0) OR " +
+                "(FetchJson IS NOT NULL AND FetchDigest IS NOT NULL AND length(FetchDigest) = 64))");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_requests_SequencePredecessor",
-                Constraint("({PreviousPageSequence} IS NULL AND {PreviousHasContinuation} IS NULL) OR ({PageSequence} > 0 AND {PreviousPageSequence} IS NOT NULL AND {PreviousHasContinuation} IS NOT NULL AND {PreviousPageSequence} = {PageSequence} - 1 AND {PreviousHasContinuation} = {true})"));
+                "(PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
         });
         connectorHttpRequests.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
         connectorHttpRequests.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -252,10 +254,10 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         {
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_pages_NonNegativeByteCounts",
-                Constraint("{ByteLength} >= 0 AND {MetadataBytes} >= 0"));
+                "ByteLength >= 0 AND MetadataBytes >= 0");
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_http_pages_AcceptedItemCount",
-                Constraint("{AcceptedItemCount} >= 0"));
+                "AcceptedItemCount >= 0");
         });
         connectorHttpPages.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
         connectorHttpPages.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -365,84 +367,11 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         property.HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
-
-    /// <summary>
-    /// The key a run id is stored under. SQLite keeps the run id's encoding; the server engines store a 64-character hash,
-    /// because the encoding (up to 1,200 characters) is wider than their index limits. <c>RunId</c> always keeps the encoding.
-    /// </summary>
-    internal abstract string RunKeyOf(string runId);
-
-    /// <summary>How this context's engine spells a check constraint's identifiers, length function and booleans.</summary>
-    private protected abstract EtlRuntimeConstraintDialect ConstraintDialect { get; }
-
-    /// <summary>Renders a check constraint written with <c>{Column}</c>, <c>{length}</c>, <c>{true}</c> and <c>{false}</c> tokens.</summary>
-    private string Constraint(string template) => ConstraintDialect.Render(template);
 }
 
 internal sealed class EtlRuntimeSqliteDbContext(DbContextOptions<EtlRuntimeSqliteDbContext> options)
     : EtlRuntimeDbContext(options)
 {
     internal const string ExpectedProviderName = EfProviderNames.Sqlite;
-    private protected override EtlRuntimeConstraintDialect ConstraintDialect => EtlRuntimeConstraintDialect.Sqlite;
-    internal override string RunKeyOf(string runId) => Stores.EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
-    // Keys compare ordinally: SQLite's TEXT already does, so its model only gains the comparers.
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);
-}
-
-/// <summary>The server engines' runtime model: hashed run keys that fit their index limits, short key names, binary collation.</summary>
-internal abstract class EtlRuntimeServerDbContext(DbContextOptions options) : EtlRuntimeDbContext(options)
-{
-    private const string RunKeyDomain = "etl-run-key-v1";
-
-    internal override string RunKeyOf(string runId)
-    {
-        Stores.EtlRuntimeRecordCodec.ValidateIdentity(runId, "run id");
-        return EfRelationalIdentity.HashLengthFramed(RunKeyDomain, runId);
-    }
-
-    private protected abstract string ProviderName { get; }
-
-    protected override void ConfigureProvider(ModelBuilder modelBuilder)
-    {
-        foreach (var entity in modelBuilder.Model.GetEntityTypes())
-            entity.FindProperty(nameof(Entities.EtlRuntimeRunRecord.RunKey))?.SetMaxLength(EtlRuntimeEfModule.HashLength);
-        // MySQL allows 64 characters in a constraint name and PostgreSQL 63.
-        modelBuilder.Entity<Entities.EtlConnectorHttpRequestRecord>()
-            .HasAlternateKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.RequestHash })
-            .HasName("AK_elsa_etl_connector_http_requests_page_request");
-        modelBuilder.Entity<Entities.EtlConnectorHttpPageRecord>()
-            .HasAlternateKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence, row.NextRequestHash, row.HasContinuation })
-            .HasName("AK_elsa_etl_connector_http_pages_page_next_request");
-        EfOrdinalCollation.Apply(modelBuilder, ProviderName);
-    }
-}
-
-internal sealed class EtlRuntimeSqlServerDbContext(DbContextOptions<EtlRuntimeSqlServerDbContext> options)
-    : EtlRuntimeServerDbContext(options)
-{
-    internal const string ExpectedProviderName = EfProviderNames.SqlServer;
-    private protected override string ProviderName => ExpectedProviderName;
-    private protected override EtlRuntimeConstraintDialect ConstraintDialect => EtlRuntimeConstraintDialect.SqlServer;
-}
-
-internal sealed class EtlRuntimePostgreSqlDbContext(DbContextOptions<EtlRuntimePostgreSqlDbContext> options)
-    : EtlRuntimeServerDbContext(options)
-{
-    internal const string ExpectedProviderName = EfProviderNames.PostgreSql;
-    private protected override string ProviderName => ExpectedProviderName;
-    private protected override EtlRuntimeConstraintDialect ConstraintDialect => EtlRuntimeConstraintDialect.PostgreSql;
-}
-
-internal sealed class EtlRuntimeMySqlDbContext(DbContextOptions<EtlRuntimeMySqlDbContext> options)
-    : EtlRuntimeServerDbContext(options)
-{
-    internal const string ExpectedProviderName = EfProviderNames.MySql;
-    private protected override string ProviderName => ExpectedProviderName;
-    private protected override EtlRuntimeConstraintDialect ConstraintDialect => EtlRuntimeConstraintDialect.MySql;
-
-    protected override void ConfigureProvider(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Model.SetAnnotation("MySQL:Charset", "utf8mb4");
-        base.ConfigureProvider(modelBuilder);
-    }
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { }
 }

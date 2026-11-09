@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Api.Models;

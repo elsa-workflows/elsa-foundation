@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using System.Globalization;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Http;

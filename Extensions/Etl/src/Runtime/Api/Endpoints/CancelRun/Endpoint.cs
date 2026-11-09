@@ -1,7 +1,7 @@
 using Elsa.Etl.Api;
 using Elsa.Etl.Runtime.Api.Models;
 using Elsa.Foundation.Identity.Authorization;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Etl.Runtime.Api.Endpoints.CancelRun;
 

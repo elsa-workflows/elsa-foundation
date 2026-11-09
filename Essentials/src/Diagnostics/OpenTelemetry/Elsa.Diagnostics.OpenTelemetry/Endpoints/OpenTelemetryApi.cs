@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using MinimalEndpoints;
+using NativeEndpoints;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;

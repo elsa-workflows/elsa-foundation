@@ -1,9 +1,8 @@
 .wf-editor-toolbar.wf-editor-top {
   position: relative;
-  display: grid;
-  grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content;
+  flex-wrap: wrap;
   gap: 8px 16px;
-  align-items: center;
+  align-items: flex-start;
   padding: 6px 12px;
 }
 
@@ -46,7 +45,6 @@
 
 .wf-editor-metadata {
   display: flex;
-  min-width: 0;
   min-height: 16px;
   align-items: center;
   gap: 8px;
@@ -60,18 +58,16 @@
   line-height: 16px;
 }
 
-/* A flexible column uses the space between the title and the fixed action group.
-   Its zero minimum keeps feedback text from resizing either neighbour. */
+/* Always mounted, including before the first save. Status never participates in action sizing. */
 .wf-editor-save-status {
   display: inline-flex;
-  flex: 1 1 auto;
-  width: 100%;
+  flex: 0 0 16ch;
+  width: 16ch;
   max-width: 100%;
   min-height: 16px;
   min-width: 0;
   align-items: center;
   gap: 4px;
-  justify-content: flex-end;
   color: var(--studio-success-fg);
   font-size: 11px;
 }
@@ -102,10 +98,25 @@
 
 /* Result details occupy their own row without resizing or recentering primary commands. */
 .wf-editor-toolbar .wf-editor-actions.wf-editor-run-status {
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
   min-width: 0;
   margin-left: 0;
   justify-content: flex-start;
+}
+
+.wf-editor-run-status .wf-test-run-status {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wf-editor-run-status .wf-test-run-trigger {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.wf-editor-run-status .wf-test-run-trigger > svg {
+  flex-shrink: 0;
 }
 
 .wf-editor-toolbar .wf-publish-actions > button {
@@ -195,6 +206,20 @@
   font-size: 12px;
 }
 
+@media (max-width: 600px) {
+  .wf-editor-toolbar .wf-editor-actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .wf-editor-toolbar .wf-canvas-tools {
+    flex: 1 1 100%;
+    margin-right: 0;
+    padding-right: 0;
+    border-right: 0;
+  }
+}
+
 /* Quiet chrome leaves the canvas and primary publish command in focus. */
 .wf-editor-toolbar .wf-editor-identity > .wf-link-button {
   padding: 0 4px;
@@ -233,28 +258,23 @@
   border: 0;
 }
 
-/* Give feedback its own share of the action row before fallback fonts crowd it. */
-@media (max-width: 1100px) {
-  .wf-editor-toolbar.wf-editor-top {
-    grid-template-columns: minmax(0, 1fr) max-content;
+@media (max-width: 600px) {
+  .wf-editor-toolbar .wf-editor-metadata {
+    flex-basis: 100%;
   }
 
-  .wf-editor-toolbar .wf-editor-identity {
-    grid-column: 1 / -1;
+  .wf-editor-toolbar .wf-canvas-tools {
+    flex: 0 0 auto;
   }
 }
 
-@media (max-width: 600px) {
-  .wf-editor-toolbar.wf-editor-top {
-    grid-template-columns: minmax(0, 1fr);
+@media (min-width: 601px) and (max-width: 900px) {
+  .wf-editor-toolbar .wf-editor-identity,
+  .wf-editor-toolbar .wf-editor-actions {
+    flex-basis: 100%;
   }
 
   .wf-editor-toolbar .wf-editor-actions {
-    min-width: 0;
-    margin-left: 0;
-  }
-
-  .wf-editor-toolbar .wf-editor-save-status {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 }

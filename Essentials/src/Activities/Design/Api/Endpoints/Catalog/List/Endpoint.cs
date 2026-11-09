@@ -4,7 +4,7 @@ using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Catalog.List;
 

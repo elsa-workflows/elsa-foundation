@@ -245,7 +245,7 @@ public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatt
     }
 }
 
-public sealed class RequirePermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
+public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
 {
     public RequirePermissionAttribute(string permission)
     {
@@ -269,7 +269,7 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute, MinimalEndp
 /// permission that individually satisfies the requirement, and the applied convention carries the
 /// full any-mode policy plus the security-disposition metadata the endpoint inventory asserts on.
 /// </summary>
-public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
+public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
 {
     public RequireAnyPermissionAttribute(params string[] permissions)
     {
@@ -288,7 +288,7 @@ public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, MinimalE
 /// the applied convention carries the full all-mode policy plus the security-disposition metadata the endpoint inventory
 /// asserts on.
 /// </summary>
-public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
+public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
 {
     public RequireAllPermissionsAttribute(params string[] permissions)
     {

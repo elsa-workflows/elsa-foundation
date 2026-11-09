@@ -41,7 +41,7 @@ function initialDraft(): ActivityDefinitionDraftView {
     contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
       outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
       outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },
-    provider: agent ? { providerKey: "elsa.specialist", schemaVersion: "2", manifestFingerprint: "sha256:specialist-fixture", payload: { ...initialSpecialistManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
+    provider: agent ? { providerKey: "elsa.specialist", schemaVersion: "2", manifestFingerprint: "sha256:specialist-fixture", payload: { ...initialSpecialistManifest(), ...(scenario.has("invalid") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
       payload: { rootActivity: { nodeId: "root", activityVersionId: "sequence-v1", inputs: [], outputs: [], structure: { kind: "Sequence", schemaVersion: "1", payload: { activities: [] } } }, variables: [], outputMappings: outcomeOnly ? [] : [{ outputReferenceKey: "amount", source: { syntax: "Input", value: { referenceKey: "subtotal" } } }], outcomeMappings: [{ sourceOutcomeReferenceKey: "done", boundaryOutcomeReferenceKey: outcomeOnly ? "done" : "quoted" }] } }, layout: []
   };
 }
@@ -62,11 +62,6 @@ export function ActivityAuthoringFixture() {
             ["activity-authoring-capabilities", "authoring-capabilities"], ["activity-catalog", "catalog"],
             ["activity-draft-validation", "drafts/{draftId}/validate"], ["activity-draft-contract-proposals", "drafts/{draftId}/proposals"]
           ].map(([rel, path]) => ({ rel, href: `fixture/${path}`, templated: path.includes("{") })) },
-          { id: "elsa.api.publishing", contractVersion: "1", links: [
-            { rel: "activity-publication-preflight", href: "fixture/drafts/{draftId}/publication-preflight", templated: true },
-            { rel: "activity-publication", href: "fixture/drafts/{draftId}/publication", templated: true },
-            { rel: "activity-publication-receipt", href: "fixture/publications/{idempotencyKey}", templated: true }
-          ] },
           ...(agent ? [{ id: "elsa.api.agent-specialists", contractVersion: "1", links: [] }] : []),
           { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "fixture/expressions" }] }
         ] };
@@ -94,29 +89,10 @@ export function ActivityAuthoringFixture() {
         localStorage.setItem(storageKey, JSON.stringify(draft.current));
         return structuredClone(draft.current);
       },
-      postJson: async (url: string, body?: unknown) => {
+      postJson: async (url: string) => {
         const current = draft.current;
         if (url === "/connections/picker") return { items: [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
         if (url === "/agent/specialists/model-capabilities") return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
-        if (url.endsWith("/publication")) {
-          const request = body as { idempotencyKey: string; expectedDraftRevision: number; reviewToken: string; version: string };
-          return { idempotencyKey: request.idempotencyKey, status: "Rejected", draftId: current.draftId,
-            expectedDraftRevision: request.expectedDraftRevision, expectedDefinitionHeadVersionId: null,
-            reviewToken: request.reviewToken, requestedVersion: request.version, outcome: null, updatedAt: timestamp,
-            diagnostics: [{ code: "specialist.model.unavailable", severity: "Info", message: "The selected model connection cannot be used right now.",
-              remediation: "Choose another authorized model connection, or check its endpoint, credentials and access policy in Connections, then check again.",
-              subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/model" }, metadata: { actionLabel: "Review model connection" } }] };
-        }
-        if (url.endsWith("/publication-preflight")) {
-          const payload = current.provider.payload as { instructions?: string; model?: { connectionName?: string } };
-          const diagnostics = [];
-          if (!payload.instructions?.trim()) diagnostics.push({ code: "specialist.manifest.instructions", severity: "Error", message: "Agent instructions are required.", remediation: "Enter instructions of 1 to 32,768 characters in Designer.", subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/instructions" }, metadata: { actionLabel: "Edit instructions" } });
-          if (!payload.model?.connectionName) diagnostics.push({ code: "specialist.manifest.model", severity: "Error", message: "A complete model connection has not been selected.", remediation: "In Designer, choose a model connection with a configured model or deployment. Create or update it in Connections if none is available.", subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, location: { providerKey: "elsa.specialist", jsonPointer: "/model" }, metadata: { actionLabel: "Choose model connection" } });
-          return { draftId: current.draftId, draftRevision: current.revision, definitionId: current.definitionId, definitionHeadVersionId: null,
-            hasBaseline: false, reviewToken: `fixture-review-${current.revision}`, isPublishable: diagnostics.length === 0,
-            minimumVersion: "1.0.0", validVersions: ["1.0.0"], impactFirstChanges: [], dependencies: [],
-            provider: { kind: "Provider", key: "elsa.specialist", schemaVersion: "2", status: diagnostics.length ? "Unavailable" : "Ready", supportedSchemaVersions: ["2"] }, storage: [], runtime: [], diagnostics: [...diagnostics, ...diagnostics] };
-        }
         if (url.endsWith("/proposals")) return { draftId: current.draftId, revision: current.revision, providerKey: current.provider.providerKey, providerSchemaVersion: current.provider.schemaVersion, manifestFingerprint: current.provider.manifestFingerprint, proposalFingerprint: "sha256:fixture-proposal", changes: [], diagnostics: [] };
         if (url.endsWith("/validate")) return { draftId: current.draftId, revision: current.revision, isValid: true, validatedAt: timestamp, diagnostics: [] };
         throw new Error(`Unexpected fixture mutation: ${url}`);

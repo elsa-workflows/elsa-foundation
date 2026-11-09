@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -66,9 +65,6 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
 
     private sealed class GuardedCompiler(IActivityTemplateProviderCompiler inner) : IActivityTemplateProviderCompiler
     {
-        private readonly IReadOnlyList<ActivityProviderDiagnosticDescriptor> _diagnosticDescriptors =
-            (inner as IActivityProviderDiagnosticCatalog)?.DiagnosticDescriptors.Take(128).ToArray() ?? [];
-
         public string ProviderKey => inner.ProviderKey;
         public string CompilerFingerprint => inner.CompilerFingerprint;
         public IReadOnlySet<string> SupportedManifestSchemas => inner.SupportedManifestSchemas;
@@ -80,7 +76,7 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
             try
             {
                 var result = await inner.CompileAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {

@@ -1,7 +1,0 @@
-# Plan
-
-The optional public `IActivityProviderDiagnosticCatalog` is a genuine package extension point: a third-party activity provider/compiler/discoverer needs to declare safe user-facing text and fixed focus paths for its own codes. Its immutable descriptor model belongs to Activities Design Core, which already owns the diagnostic model and sanitizer. Registries snapshot declarations when registering providers; they never trust runtime diagnostic text. Publishing consumes the same sanitizer rather than acquiring Specialist knowledge. Specialist descriptors and validation stay in Agent ownership; Studio's generic publication review uses only the neutral diagnostic shape.
-
-Constitution review: preserve domain ownership, non-disclosure, exact saved-revision publication and internal implementation types. Only the provider contribution contract/model are public; there is no runtime dependency on Design, new persistence, permission or deployment change. ADR 0080 risk-based tests apply. Plan review: no unresolved owner decision; the safe declared-message option is explicitly within #3775 and the screenshot request.
-
-Validate focused Activities/Publishing/Specialist tests, targeted Studio tests/typechecks/browser checks, and an owned composed host. Inspect rendered blocker/correction screenshots independently. Preserve prior failures and use low-worker checks/build slots under shared-machine load. Hosted exact-head proof supplies downloadable artifacts; no duplicate broad local build while equivalent jobs are in flight.

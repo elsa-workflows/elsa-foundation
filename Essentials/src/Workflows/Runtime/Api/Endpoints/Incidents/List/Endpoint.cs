@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Requests;
-using MinimalEndpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Incidents.List;
 

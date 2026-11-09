@@ -17,7 +17,7 @@ public sealed class SpecialistsInspectionApiFeatureRegistrationTests
             x => x.CapabilityId == "elsa.api.agent-specialist-inspection");
         Assert.Equal([("agent-specialist-invocation-evidence", SpecialistInspectionApi.InvocationEvidenceRoute), ("agent-specialist-test-run-evidence", SpecialistInspectionApi.TestRunEvidenceRoute)],
             capability.Links.Select(x => (x.Rel, x.Href)).Order());
-        Assert.Single(services, x => x.ServiceType == typeof(MinimalEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistInspectionApi.OwnerId)
+        Assert.Single(services, x => x.ServiceType == typeof(NativeEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistInspectionApi.OwnerId)
             && x.KeyedImplementationType == typeof(SpecialistInspectionFaultRenderer));
     }
 }

@@ -1547,9 +1547,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
-                    b.Property<long?>("ClaimDeliveredAtUtcTicks")
-                        .HasColumnType("bigint");
-
                     b.Property<long>("ClaimableAtUtcTicks")
                         .HasColumnType("bigint");
 

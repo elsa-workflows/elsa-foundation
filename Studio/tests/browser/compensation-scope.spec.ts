@@ -32,37 +32,6 @@ test("authors steps by keyboard and keeps each row's pairing readable", async ({
   await expect(page.getByTestId("fixture-requested")).toHaveText("compensation:0");
 });
 
-for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
-  test(`groups the step header, aligns paired activities and removes a step activity (${theme}, ${width}px)`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?mode=compensation-scope&theme=${theme}`);
-    const first = page.getByRole("listitem").first();
-    const header = first.locator(".wf-compensation-row-heading");
-    await expect(header.getByRole("textbox", { name: "Name of step 1" })).toHaveValue("Reserve inventory");
-    await expect(header.getByRole("button", { name: "Delete step Reserve inventory", exact: true })).toBeVisible();
-    const forward = first.getByRole("button", { name: "Step 1, Reserve inventory: Reserve inventory", exact: true });
-    const compensation = first.getByRole("button", { name: "Compensation for Reserve inventory: Release inventory", exact: true });
-    const [headerBox, forwardBox, compensationBox] = await Promise.all([header.boundingBox(), forward.boundingBox(), compensation.boundingBox()]);
-    expect(headerBox!.y + headerBox!.height).toBeLessThanOrEqual(forwardBox!.y);
-    expect(headerBox!.x + headerBox!.width).toBeGreaterThanOrEqual(compensationBox!.x + compensationBox!.width);
-    if (width > 768) expect(Math.abs(forwardBox!.y - compensationBox!.y)).toBeLessThanOrEqual(1);
-    else expect(Math.abs(forwardBox!.x - compensationBox!.x)).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: testInfo.outputPath("paired-compensation-steps.png") });
-    await forward.click();
-    const remove = first.getByRole("button", { name: "Remove activity from Reserve inventory", exact: true });
-    await remove.focus();
-    await remove.press("Enter");
-    const choose = first.getByRole("button", { name: "Choose the activity for Reserve inventory", exact: true });
-    await expect(choose).toBeFocused();
-    await expect(compensation).toBeVisible();
-    await expect(page.getByRole("listitem")).toHaveCount(3);
-    await expect(first.getByRole("textbox", { name: "Name of step 1" })).toHaveValue("Reserve inventory");
-    await expect(first.getByText('Step "Reserve inventory" has no activity.', { exact: true })).toBeVisible();
-    await choose.press("Enter");
-    await expect(page.getByTestId("fixture-requested")).toHaveText("step-activity:0");
-  });
-}
-
 test("a duplicate step name is reported on its row", async ({ page }) => {
   await page.goto("/?mode=compensation-scope&theme=light");
 

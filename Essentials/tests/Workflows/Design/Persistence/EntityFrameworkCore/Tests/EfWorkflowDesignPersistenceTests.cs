@@ -198,11 +198,9 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         };
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedTableAsync(db, entityType, content);
 
-        var family = entityType == typeof(SourceWorkingCopy) || entityType == typeof(SourceSnapshot)
-            ? EfSourceModel.Chain : WorkflowsDesignEfModule.Chain;
         foreach (var read in reads)
             EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
-                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), family.Family, family.CurrentVersion);
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), "WorkflowsDesign", WorkflowsDesignEfModule.SchemaVersion);
     }
 
     /// <summary>

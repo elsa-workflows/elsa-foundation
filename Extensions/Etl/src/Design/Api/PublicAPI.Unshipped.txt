@@ -205,28 +205,28 @@ Elsa.Etl.Design.Api.Models.IEtlDesignOperations.ListVersionsAsync(Elsa.Etl.Desig
 Elsa.Etl.Design.Api.Models.IEtlDesignOperations.PublishAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
 Elsa.Etl.Design.Api.Models.IEtlDesignOperations.UpdateAsync(Elsa.Etl.Design.Api.Models.EtlUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlDraftView!>!
 Elsa.Etl.Design.Api.Models.IEtlDesignOperations.ValidateAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
-MinimalEndpoints.Generated.ElsaEtlDesignApiEndpoints
+NativeEndpoints.Generated.ElsaEtlDesignApiEndpoints
 const Elsa.Etl.Design.Api.EtlDesignPermissions.ManageDefinitions = "etl/definitions:manage" -> string!
 const Elsa.Etl.Design.Api.EtlDesignPermissions.PublishDefinitions = "etl/definitions:publish" -> string!
 const Elsa.Etl.Design.Api.EtlDesignPermissions.ReadBindings = "etl/bindings:read" -> string!
 const Elsa.Etl.Design.Api.EtlDesignPermissions.ReadDefinitions = "etl/definitions:read" -> string!
-override Elsa.Etl.Design.Api.Endpoints.CreateDefinition.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.CreateDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.CreateDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlCreateDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.GetDefinition.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.GetDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.GetDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.GetVersion.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.GetVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.GetVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublishedArtifactView!>!
-override Elsa.Etl.Design.Api.Endpoints.ListBindings.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ListBindings.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ListBindings.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Core.Runtime.EtlBindingSummary!>!>!
-override Elsa.Etl.Design.Api.Endpoints.ListDefinitions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ListDefinitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ListDefinitions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlDefinitionSummaryView!>!>!
-override Elsa.Etl.Design.Api.Endpoints.ListVersions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ListVersions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ListVersions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlPublishedVersionView!>!>!
-override Elsa.Etl.Design.Api.Endpoints.PublishVersion.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.PublishVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.PublishVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
-override Elsa.Etl.Design.Api.Endpoints.UpdateDraft.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.UpdateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.UpdateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.ValidateDraft.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ValidateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ValidateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
 override Elsa.Etl.Design.Api.Models.EtlApiProblem.Equals(object? obj) -> bool
 override Elsa.Etl.Design.Api.Models.EtlApiProblem.GetHashCode() -> int
@@ -309,7 +309,7 @@ static Elsa.Etl.Design.Api.Models.EtlVersionRequest.operator !=(Elsa.Etl.Design.
 static Elsa.Etl.Design.Api.Models.EtlVersionRequest.operator ==(Elsa.Etl.Design.Api.Models.EtlVersionRequest? left, Elsa.Etl.Design.Api.Models.EtlVersionRequest? right) -> bool
 static Elsa.Etl.Design.Api.Models.EtlVersionsRequest.operator !=(Elsa.Etl.Design.Api.Models.EtlVersionsRequest? left, Elsa.Etl.Design.Api.Models.EtlVersionsRequest? right) -> bool
 static Elsa.Etl.Design.Api.Models.EtlVersionsRequest.operator ==(Elsa.Etl.Design.Api.Models.EtlVersionsRequest? left, Elsa.Etl.Design.Api.Models.EtlVersionsRequest? right) -> bool
-static MinimalEndpoints.Generated.ElsaEtlDesignApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
+static NativeEndpoints.Generated.ElsaEtlDesignApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
 Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint
 Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
 Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint
@@ -382,23 +382,23 @@ Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ListVersionsAsync(Elsa.
 Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.PublishAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
 Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.UpdateAsync(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
 Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ValidateAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!>!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlDefinitionSummaryView!>!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlPublishedVersionView!>!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
-override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
 override Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Equals(object? obj) -> bool
 override Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.GetHashCode() -> int

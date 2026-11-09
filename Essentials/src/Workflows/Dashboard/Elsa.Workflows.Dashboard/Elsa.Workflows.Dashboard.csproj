@@ -19,7 +19,7 @@
     <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
 </Project>

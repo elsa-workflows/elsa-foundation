@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MinimalEndpoints;
+using NativeEndpoints;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;

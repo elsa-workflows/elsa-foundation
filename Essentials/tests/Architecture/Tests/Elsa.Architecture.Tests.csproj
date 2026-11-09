@@ -49,16 +49,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
-    <ProjectReference Include="../../../../Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />

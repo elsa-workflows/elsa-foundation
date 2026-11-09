@@ -1,12 +1,10 @@
 import { useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createNotificationController, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowTemplatesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTemplatesPage";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
-import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
-import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { createEditorContext } from "./activityDuplicateEditorFixture";
 import type { WorkflowTemplate } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTemplates";
 
@@ -62,10 +60,6 @@ function context(): StudioEndpointContext {
 
 export function WorkflowTemplatesFixture() {
   const backend = useMemo(context, []), [created, setCreated] = useState(false);
-  const [notifications] = useState(() => {
-    const controller = createNotificationController(); controller.setScope("template-fixture");
-    setNotifications(controller.api); return controller;
-  });
   const ai = useMemo(() => ({ promptActions: { list: () => [] }, providerAvailability: { get: () => false, subscribe: () => () => undefined }, dispatchPrompt: () => undefined } as unknown as StudioAgentRegistry), []);
   setDialogs({ confirm: async () => true, alert: async () => undefined, prompt: async () => null });
   const props = { context: backend, ai, propertyEditors: builtInPropertyEditors, expressionEditors: [], runInputEditors: [], testStimulusEditors: [], workflowDesignerPanels: [] };
@@ -79,5 +73,5 @@ export function WorkflowTemplatesFixture() {
     {created ? <><h1>Workflow created</h1><output data-testid="created-document">{localStorage.getItem("created-template-workflow")}</output></> :
       new URLSearchParams(window.location.search).has("source-workflow") ? <WorkflowEditor {...props} definitionId="definition-1" autosaveEnabledByDefault={false} onBack={() => navigate("/workflows/templates")} /> :
         <WorkflowTemplatesPage {...props} navigate={navigate} />}
-  </QueryClientProvider><ToastHost controller={notifications} navigate={navigate} /></div>;
+  </QueryClientProvider></div>;
 }
