@@ -1110,6 +1110,7 @@ and the [benchmark results](../../../../../docs/reports/elsa-4-architecture-revi
 | `IWorkflowAlterationStagingWorkspace` | Per-job collector for deterministic checkpoint-bound changes. Duplicate change keys fail preflight. |
 | `IWorkflowAlterationRuntimeCheckpointStagedChange` | Handler-owned change that applies through the Runtime alteration checkpoint builder after all preflights pass. |
 | `IWorkflowAlterationCheckpointWriter` | Single-owner atomic checkpoint collaborator. It persists terminal job evidence with workflow/activity/bookmark/value/scheduler/outbox changes and supports acknowledgement reconciliation. |
+| `IWorkflowAlterationActorCommandExecutor` | Actor-side execution of one claimed job. The default acquires the target run's ownership lease, as a drain does, and reads and commits under it, so the alteration checkpoint carries the lease's fence (#2667). A host that replaces it must hold the lease the same way. |
 | `IWorkflowAlterationHandlerResolver` | Scoped exact `(kind, schemaVersion)` resolver. Hosts do not replace it to choose a handler dynamically or infer a latest version. |
 | `WorkflowAlterationRuntimeCheckpointStateBuilder` | Builder the staged changes apply to: activity executions and inspections, post-commit intents, scope cleanups, dispatch cancellations and (`AddIncident`, spec 251) incident changes, all committed in the one alteration checkpoint. |
 

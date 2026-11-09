@@ -152,7 +152,7 @@ Both follow one shared rule: **renew a claim just before acting on it, and never
 - **One lost claim never ends a sweep.** A row whose claim was lost before, during or at the fenced completion of its side effect is logged and skipped. The sweep moves to the next row, then to backlog discovery and re-drive. Whoever holds the row records its outcome.
 - **Test-scope clean-up runs separately.** It runs first on every resumption tick, in its own scope. A failure there (a clean-up race, an unreadable scope row) is logged and retried next tick; it does not stop outbox delivery or re-drive.
 
-Other loops use the same claim, renew and fenced-complete shape without the shared helper. Scheduler work claims one item at a time and runs it at once, and its renewal has drain-specific rules (a dispatch deadline, and a claim its own checkpoint consumes). Alteration jobs and transport items are fenced inside the checkpoint commit itself.
+Other loops use the same claim, renew and fenced-complete shape without the shared helper. Scheduler work claims one item at a time and runs it at once, and its renewal has drain-specific rules (a dispatch deadline, and a claim its own checkpoint consumes). Alteration jobs and transport items are fenced inside the checkpoint commit itself. An alteration also takes the target run's ownership lease, as a drain does, and reads and commits under it: a drain it took the run from is refused at its next commit, and an alteration that loses the run before it commits is refused and stays claimed for its next attempt.
 
 <a id="a-live-drains-continuation-in-the-sweeps-hands-2225"></a>
 ## When the sweep takes a live drain's continuation

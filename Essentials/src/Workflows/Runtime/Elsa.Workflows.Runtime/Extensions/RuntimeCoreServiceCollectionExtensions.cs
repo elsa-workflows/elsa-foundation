@@ -114,7 +114,15 @@ public static class RuntimeCoreServiceCollectionExtensions
             typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
-        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
+        // An alteration runs under the target run's ownership lease, like a drain, so its checkpoint is fenced (#2667).
+        services.TryAddScoped<WorkflowAlterationActorCommandExecutor>();
+        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor>(serviceProvider =>
+            new LeasedWorkflowAlterationActorCommandExecutor(
+                serviceProvider.GetRequiredService<WorkflowAlterationActorCommandExecutor>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetService<IPersistenceOperationScopeFactory>(),
+                serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddScoped<WorkflowAlterationPlanService>();
         services.TryAddScoped<IWorkflowAlterationJobDispatcher, WorkflowAlterationJobDispatcher>();
         services.TryAddScoped<WorkflowAlterationTargetCaptureTask>();
