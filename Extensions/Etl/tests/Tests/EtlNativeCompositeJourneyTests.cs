@@ -422,11 +422,16 @@ public sealed partial class EtlNativeCompositeJourneyTests
         private const string WorkflowRecoverySigningKey = "etl-native-composite-recovery-key-32";
         private const string WorkflowHierarchySigningKey = "etl-native-composite-hierarchy-key-32";
 
+        private const int ActivityIdsPerGeneration = 32;
         private readonly string _directory;
         private readonly IHost _lifetimeHost;
         private readonly IBackgroundTask _worker;
+        private readonly bool _includeBindings;
+        private readonly int _generation;
         private bool _workerStarted;
         private bool _retainFailureEvidence;
+        private bool _directoryHandedOff;
+        private bool _disposed;
 
         private NativeEtlJourney(
             string directory,
@@ -436,9 +441,11 @@ public sealed partial class EtlNativeCompositeJourneyTests
             CompositeKind compositeKind,
             NativeOutcome outcome,
             string workflowExecutionId,
-            EtlScope scope, NativeHttpConfiguration? http)
+            EtlScope scope, NativeHttpConfiguration? http, bool includeBindings, int generation)
         {
             _http = http;
+            _includeBindings = includeBindings;
+            _generation = generation;
             _directory = directory;
             _lifetimeHost = lifetimeHost;
             Harness = harness;
@@ -469,16 +476,20 @@ public sealed partial class EtlNativeCompositeJourneyTests
 
         public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind,
             NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null, bool includeBindings = true,
-            NativeHttpConfiguration? http = null)
+            NativeHttpConfiguration? http = null, EtlDeliveryHold? deliveryHold = null, int deliveryLeaseSeconds = 30,
+            string? existingDirectory = null, string? retainedWorkflowExecutionId = null, int generation = 0, TimeProvider? clock = null)
         {
-            var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.NativeCompositeJourney", Guid.NewGuid().ToString("N"));
+            // A rebuild (generation > 0) reopens an existing directory and execution id: the files, databases and
+            // identities of the previous host generation are the durable state the new host must recover from.
+            var directory = existingDirectory ?? Path.Combine(Path.GetTempPath(), "Elsa.Etl.NativeCompositeJourney", Guid.NewGuid().ToString("N"));
             IHost? lifetimeHost = null;
             WorkflowExecutionHarness? harness = null;
             try
             {
-                Directory.CreateDirectory(directory);
+                if (generation == 0)
+                    Directory.CreateDirectory(directory);
 
-                var workflowExecutionId = "etl-native-composite-" + Guid.NewGuid().ToString("N");
+                var workflowExecutionId = retainedWorkflowExecutionId ?? "etl-native-composite-" + Guid.NewGuid().ToString("N");
                 var scope = new EtlScope(null, WorkflowExecutionHarness.Partition.Value);
                 var sourcePath = Path.Combine(directory, "source.csv");
                 var lookupPath = Path.Combine(directory, "lookup.csv");
@@ -487,11 +498,14 @@ public sealed partial class EtlNativeCompositeJourneyTests
                 var etlDesignDatabase = Path.Combine(directory, "etl-design.db");
                 var snapshotRoot = Path.Combine(directory, "snapshots");
 
-                await File.WriteAllTextAsync(sourcePath,
-                    outcome == NativeOutcome.BusinessError ? "id,name\nnot-an-int,Ada\n" : "id,name\n1,Ada\n", new UTF8Encoding(false));
-                if (outcome == NativeOutcome.Faulted)
-                    await File.WriteAllTextAsync(snapshotRoot, "Host snapshot directory is unavailable.");
-                await File.WriteAllTextAsync(lookupPath, "id,category\n1,one\n", new UTF8Encoding(false));
+                if (generation == 0)
+                {
+                    await File.WriteAllTextAsync(sourcePath,
+                        outcome == NativeOutcome.BusinessError ? "id,name\nnot-an-int,Ada\n" : "id,name\n1,Ada\n", new UTF8Encoding(false));
+                    if (outcome == NativeOutcome.Faulted)
+                        await File.WriteAllTextAsync(snapshotRoot, "Host snapshot directory is unavailable.");
+                    await File.WriteAllTextAsync(lookupPath, "id,category\n1,one\n", new UTF8Encoding(false));
+                }
 
                 var bindings = EtlNativeTestFileBindings.Create(scope, directory);
 
@@ -540,7 +554,8 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     })
                     .WithFeature(services => new EtlRuntimeEntityFrameworkCoreFeature
                     {
-                        ConnectionString = $"Data Source={etlRuntimeDatabase};Pooling=False"
+                        ConnectionString = $"Data Source={etlRuntimeDatabase};Pooling=False",
+                        DeliveryLeaseSeconds = deliveryLeaseSeconds
                     }.ConfigureServices(services))
                     .WithFeature(services => new EtlWorkflowsRuntimeFeature().ConfigureServices(services))
                     .WithFeature(services => new EtlWorkflowsDesignFeature().ConfigureServices(services))
@@ -548,6 +563,14 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     {
                         services.AddLogging();
                         http?.ConfigureServices(services);
+                        // The feature registers the real delivery with TryAdd; a later registration is the one the worker
+                        // resolves, so the hold wraps nothing and simply refuses to dispatch or acknowledge.
+                        if (deliveryHold is not null)
+                            services.AddScoped<IEtlResultDelivery>(_ => new HeldEtlResultDelivery(deliveryHold));
+                        // The ETL store and worker read time from the registered TimeProvider; a test clock lets a witness
+                        // expire a lease by advancing time instead of sleeping through the five-second minimum.
+                        if (clock is not null)
+                            services.AddSingleton(clock);
                         if (gate is not null)
                             services.AddScoped<IEtlRunAdmissionService>(provider => new GatedAdmission(
                                 provider.GetRequiredService<EtlExecution>(), gate));
@@ -567,13 +590,16 @@ public sealed partial class EtlNativeCompositeJourneyTests
                 harness = builder.Build(
                     WorkflowExecutionHarness.Identity,
                     workflowExecutionId,
-                    Enumerable.Range(1, 32).Select(index => $"{workflowExecutionId}-activity-{index}"));
+                    // A rebuilt host must not reuse activity ids its predecessor may already have persisted.
+                    Enumerable.Range(1 + generation * ActivityIdsPerGeneration, ActivityIdsPerGeneration)
+                        .Select(index => $"{workflowExecutionId}-activity-{index}"));
 
                 foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
                     await initializer.InitializeAsync();
                 harness.InitializeActivityTypes();
                 var worker = Assert.Single(harness.Services.GetServices<IBackgroundTask>().OfType<EtlRuntimeWorker>());
-                return new NativeEtlJourney(directory, lifetimeHost, harness, worker, compositeKind, outcome, workflowExecutionId, scope, http);
+                return new NativeEtlJourney(directory, lifetimeHost, harness, worker, compositeKind, outcome, workflowExecutionId, scope, http,
+                    includeBindings, generation);
             }
             catch
             {
@@ -584,7 +610,8 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     await lifetimeHost.StopAsync();
                     lifetimeHost.Dispose();
                 }
-                if (Directory.Exists(directory))
+                // A failed rebuild keeps the previous generation's files as evidence; only a failed first build cleans up.
+                if (generation == 0 && Directory.Exists(directory))
                     Directory.Delete(directory, recursive: true);
                 throw;
             }
@@ -993,6 +1020,9 @@ public sealed partial class EtlNativeCompositeJourneyTests
 
         public async ValueTask DisposeAsync()
         {
+            if (_disposed)
+                return;
+            _disposed = true;
             try
             {
                 if (_workerStarted)
@@ -1013,7 +1043,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     finally
                     {
                         _lifetimeHost.Dispose();
-                        if (!_retainFailureEvidence && Directory.Exists(_directory))
+                        if (!_retainFailureEvidence && !_directoryHandedOff && Directory.Exists(_directory))
                             Directory.Delete(_directory, recursive: true);
                     }
                 }
