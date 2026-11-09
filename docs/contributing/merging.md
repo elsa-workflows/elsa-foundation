@@ -104,7 +104,29 @@ These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org
 - After 6 rounds with blocking findings left, comment `blocked: review loop exhausted` and add `needs:decision`; that escalates to Sipke.
 - Owner exception: an explicit instruction from Sipke in an agent session counts for that one action only. Record it in the PR, for example `merged on Sipke's instruction`.
 - Fallback: while Code Review is unavailable, Sipke may approve and merge manually; agents wait, and no author merges its own PR.
-- An ADR or spec approval/amendment PR in an initiative's scope follows the [initiative boundary and scope rules](initiatives.md#two-planning-systems-and-one-way-of-working), including PRs linked through descendant issues or issues they close; a missing link does not exempt a topic on the board. It stays a draft until the [agreement rule](initiatives.md#how-work-flows) is met on its final text and approval plan: every designated human non-author approver has approved the current head, or an earlier commit whose changed files are identical to it, and any designated human author has recorded agreement without self-approving. Code Review does not approve or merge it before then. Bot review never counts as architectural agreement, and a manual merge follows the same rule. A substantive change (any change to the files the PR changes) or a changed approval plan requires fresh agreement; a merge of `main` that leaves those files identical does not. A delivery PR that only advances an already agreed spec's lifecycle status follows the normal merge path without reopening its architectural agreement.
+- An ADR or spec approval/amendment PR in an initiative's scope follows the
+  [initiative boundary and scope rules](initiatives.md#two-planning-systems-and-one-way-of-working), including PRs
+  linked through descendant issues or issues they close; a missing link does not exempt a topic on the board. It
+  stays a draft until the [agreement rule](initiatives.md#how-work-flows) is met on its final text and approval plan:
+  every designated human non-author approver has approved the current head, or an earlier commit whose approval
+  remains valid under that rule's materiality threshold, and any designated human author has recorded agreement
+  without self-approving. Bot review never counts as architectural agreement, and a manual merge follows the same
+  rule. Material changes and changed approval plans require fresh agreement; non-semantic edits retain it. The
+  coordinator records the compared commits and explains exactly what changed and how it affects each reviewer's prior
+  answers when requesting renewed agreement. Such a PR normally targets the initiative branch and is merged as the
+  next bullet says. Whenever it targets `main` instead (its initiative has landed, it has not been retargeted yet, or
+  its author works outside the board), Code Review does not approve or merge it before agreement, and this rule does
+  not relax the normal Code Review approval and CI requirements on the exact head. A delivery PR that only advances an already agreed spec's lifecycle status follows
+  the normal merge path without reopening its architectural agreement.
+- **Initiative branches.** A PR whose base is an `initiative/*` branch, or the branch of a proposal PR stacked on one,
+  is an initiative proposal. It carries no required CI checks, Code Review does not merge it, and the initiative's
+  coordinator merges it after the agreement rule and the [pre-merge gate](initiatives.md#the-pre-merge-gate) (a
+  stacked child is merged into its parent by the parent's author), per the
+  [org review and merge rules][org-agents-review]. Its author runs the review loop on the draft as usual, posts the
+  evidence and requests the approvers instead of Code Review; it stays a draft until agreement. The landing PR from an
+  initiative branch to `main` follows the normal path on this page, and Code Review approves and merges it. Its
+  decisions are already agreed, so one approver's attestation comment stands in for the per-PR agreement rule
+  ([Landing](initiatives.md#landing)).
 - When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself. Red checks on the base branch count only when they are required checks.
 
 ## Post-merge gates
