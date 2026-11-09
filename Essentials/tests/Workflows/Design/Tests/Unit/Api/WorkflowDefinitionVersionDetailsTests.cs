@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -73,7 +74,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         var store = new StubVersionStore(_version);
         var layout = new StubLayoutStore(layout: null);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionEndpoint(new WorkflowVersionDetailsReader(store, layout)).HandleAsync(
+        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionEndpoint(new WorkflowVersionDetailsReader(store, layout), [new AllowingAuthorizer()]).HandleAsync(
             new GetVersion("draft:synthetic"),
             CancellationToken.None));
 
@@ -82,7 +83,14 @@ public sealed class WorkflowDefinitionVersionDetailsTests
     }
 
     private GetVersionEndpoint NewHandler(WorkflowDefinitionVersionLayout? layout) =>
-        new(new WorkflowVersionDetailsReader(new StubVersionStore(_version), new StubLayoutStore(layout)));
+        new(new WorkflowVersionDetailsReader(new StubVersionStore(_version), new StubLayoutStore(layout)), [new AllowingAuthorizer()]);
+
+    /// <summary>The owning definition authorizer allows the read; its decisions are covered by VersionReadAuthorizationTests.</summary>
+    private sealed class AllowingAuthorizer : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+    }
 
     private sealed class StubVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
     {
