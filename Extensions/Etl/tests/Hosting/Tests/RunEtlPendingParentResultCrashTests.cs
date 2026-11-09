@@ -55,7 +55,8 @@ public sealed class RunEtlPendingParentResultCrashTests
         Assert.NotEqual(0, exitCode);
         Assert.NotEqual(killedProcessId, fixture.Host.ProcessId);
 
-        // The restarted process recovers the claimed delivery once its lease lapses and resumes the parent exactly once.
+        // The dead owner's lease has lapsed by the time the restarted worker first polls; it reclaims the delivery and
+        // resumes the parent exactly once.
         await WaitForAsync(async () => WorkflowStatus(await fixture.GetAsync(nativePath)) == "Completed",
             "The restarted host did not complete the native parent.");
         var completed = await fixture.GetAsync(nativePath);
