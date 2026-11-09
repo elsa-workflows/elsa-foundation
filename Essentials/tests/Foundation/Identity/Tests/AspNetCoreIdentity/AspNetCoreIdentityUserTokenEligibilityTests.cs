@@ -3,6 +3,8 @@ using Elsa.Foundation.Identity.Authentication;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
@@ -41,6 +43,19 @@ public sealed class AspNetCoreIdentityUserTokenEligibilityTests
         Assert.False(await IsEligibleAsync(provider, "ada"));
         Assert.False(await IsEligibleAsync(provider, "missing"));
         Assert.False(await IsEligibleAsync(provider, "bob"), "a user of another tenant is not this tenant's user");
+    }
+
+    [Fact]
+    public async Task A_request_bound_to_another_tenant_gets_no_verdict_but_a_failure()
+    {
+        await using var provider = Provider();
+        await provider.GetRequiredService<IUserStore>().SaveAsync(User("ada"));
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b")));
+
+        // Crossing into the user's tenant is refused by the binder; that is an environmental failure, not "disabled".
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await scope.ServiceProvider.GetRequiredService<IUserTokenEligibility>().IsEligibleAsync(Tenant, "ada"));
     }
 
     [Fact]

@@ -189,6 +189,24 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Refresh_Whose_User_Check_Fails_Is_Refused_Without_Revoking_Anything()
+    {
+        var first = await IssueUserAsync("user-unknown");
+        var second = await IssueUserAsync("user-unknown");
+        _users.Unavailable.Add(("tenant-a", "user-unknown"));
+
+        // No verdict on the user: the refresh fails (401 at the endpoint) but nothing is revoked, so a retry can succeed.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(first.RefreshToken!)));
+        Assert.True((await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(first.AccessToken))).Succeeded);
+        Assert.True((await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(second.AccessToken))).Succeeded);
+
+        _users.Unavailable.Clear();
+        Assert.NotNull((await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(first.RefreshToken!))).AccessToken);
+        Assert.NotNull((await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(second.RefreshToken!))).AccessToken);
+    }
+
+    [Fact]
     public async Task Refresh_For_An_Enabled_User_Re_Checks_The_User_And_Rotates()
     {
         var issued = await IssueUserAsync("user-active", "tenant-b");
@@ -273,6 +291,9 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     {
         public HashSet<(string Tenant, string User)> Ineligible { get; } = [];
 
+        /// <summary>Users whose record cannot be read: the check fails instead of answering.</summary>
+        public HashSet<(string Tenant, string User)> Unavailable { get; } = [];
+
         public List<(string Tenant, string User)> Asked { get; } = [];
     }
 
@@ -282,6 +303,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         public ValueTask<bool> IsEligibleAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
         {
             ledger.Asked.Add((tenantId, userId));
+            if (ledger.Unavailable.Contains((tenantId, userId)))
+                throw new InvalidOperationException("The user store is unavailable.");
             return ValueTask.FromResult(!ledger.Ineligible.Contains((tenantId, userId)));
         }
     }

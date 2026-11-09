@@ -48,8 +48,9 @@ public interface ITokenService
 /// tokens. Token refresh asks it before re-issuing, so a user who was disabled or deleted after signing in gets no
 /// new access token from a refresh token, and that user's outstanding refresh tokens are revoked. It is the same
 /// check password sign-in and cookie validation apply. The default knows no users and refuses every one, so a
-/// host that issues user tokens fails closed until the provider that owns the users replaces it. A store read
-/// failure propagates so the refresh fails rather than passes.
+/// host that issues user tokens fails closed until the provider that owns the users replaces it. Only a verdict on
+/// the user is an answer: a store read failure, or a request whose persistence scope is bound to another tenant,
+/// propagates as an exception, so the refresh fails without passing and without revoking anything.
 /// </summary>
 [ReplacementContract]
 public interface IUserTokenEligibility
