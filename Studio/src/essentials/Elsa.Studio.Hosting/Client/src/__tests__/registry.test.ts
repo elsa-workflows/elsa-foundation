@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
+import { notificationController } from "../app/notifications";
 import {
   createContributionRegistry,
   createEndpointContext,
@@ -38,6 +39,20 @@ describe("studio registry", () => {
     expect(api.panels.list().map(panel => panel.id)).toEqual(["first", "second"]);
   });
 
+  it("registry exposes the shared notification api", () => {
+    const options = {
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    };
+
+    const first = createStudioRegistry(options);
+    const second = createStudioRegistry(options);
+
+    expect(first.notifications).toBe(notificationController.api);
+    expect(second.notifications).toBe(first.notifications);
+  });
+
   it("uses stable fallback ordering instead of module load order", () => {
     const first = createContributionRegistry<{ id: string }>();
     const second = createContributionRegistry<{ id: string }>();
@@ -66,11 +81,12 @@ describe("studio registry", () => {
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
+    expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
     expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
-    expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
+    expect(api.agent.promptActions.slot.id).toBe(studioSlotIds.agentPromptActions);
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
@@ -251,7 +267,7 @@ describe("studio registry", () => {
     // Collection scope: an option set is owned by the multi-select; without options nothing claims it, so
     // the property panel falls back to its repeater. Element scope is unaffected by either rule.
     const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
-    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: ["a", "b"] } });
+    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: [{ label: "a", value: "a" }, { label: "b", value: "b" }] } });
     expect(resolveEditor(api.propertyEditors.list(), optionInput, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), { ...optionInput, uiHint: "checklist" }, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1", uiHint: "checklist" }), collectionContext)?.id).toBe("studio.property.multiselect");
@@ -339,6 +355,8 @@ describe("studio registry", () => {
     });
     const Definitions = () => null;
     const Instances = () => null;
+    const ParentIcon = () => null;
+    const ChildIcon = () => null;
 
     api.featureAreas.add({
       id: "workflows",
@@ -352,10 +370,11 @@ describe("studio registry", () => {
       nav: {
         title: "Workflows",
         path: "/workflows/definitions",
+        icon: ParentIcon,
         iconColor: "#0ea5e9",
         items: [
           { title: "Definitions", path: "/workflows/definitions" },
-          { title: "Instances", path: "/workflows/instances" }
+          { title: "Instances", path: "/workflows/instances", icon: ChildIcon }
         ]
       },
       routes: [
@@ -368,8 +387,8 @@ describe("studio registry", () => {
       expect.objectContaining({ id: "workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
     ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", icon: ParentIcon }),
+      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows", icon: ChildIcon })
     ]);
     expect(api.routes.list().map(route => route.id)).toEqual(["workflows-definitions", "workflows-instances"]);
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");
@@ -416,7 +435,7 @@ describe("studio registry", () => {
     });
     const listener = vi.fn();
 
-    api.ai.promptActions.add({
+    api.agent.promptActions.add({
       id: "explain-resource",
       label: "Explain",
       placement: "selection",
@@ -428,7 +447,7 @@ describe("studio registry", () => {
     unsubscribe();
     api.ai.dispatchPrompt({ message: "This should not be observed." });
 
-    expect(api.ai.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(api.agent.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
   });
@@ -441,7 +460,7 @@ describe("studio registry", () => {
   });
 
   it("creates a backend client that can target a separate base url", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -471,7 +490,7 @@ describe("studio registry", () => {
   });
 
   it("posts json through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -490,7 +509,7 @@ describe("studio registry", () => {
   });
 
   it("supports put, delete, and form requests through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response("", { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createEndpointContext("https://foundation.example/").http;
     const form = new FormData();
@@ -538,6 +557,32 @@ describe("studio registry", () => {
       message: payload.reason,
       payload
     } satisfies Partial<StudioHttpError>);
+  });
+
+  it.each([
+    [{ error: "Use a name without spaces." }, "Use a name without spaces."],
+    [{ error: { message: "Unrecognized shape" } }, "Request failed with 400."],
+    [{ error: "  " }, "Request failed with 400."],
+    [{ detail: "Problem detail", error: "Legacy error" }, "Problem detail"],
+    [{ errors: { name: ["Invalid name."] } }, "Invalid name."]
+  ])("reads a useful message from an API rejection %j", async (payload, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), {
+      status: 400, headers: { "content-type": "application/json" }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message });
+  });
+
+  it.each([
+    ["", "application/json"],
+    ["{broken", "application/json"],
+    ["{}", "application/problem+json"]
+  ])("keeps a useful fallback for an unreadable or empty API error %j", async (body, contentType) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      status: 400, headers: { "content-type": contentType }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message: "Request failed with 400." });
   });
 
   it("extracts validation errors from http failures", async () => {

@@ -12,6 +12,61 @@ async function expectInsideViewport(locator: Locator, page: Page) {
   }).toBe(true);
 }
 
+for (const host of ["workflow", "activity"]) for (const style of ["legacy", "quiet", "focus", "open"]) {
+  test(`${host} ${style} expanded property editor covers panel handles`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.addInitScript(({ host, style }) => {
+      const prefix = host === "workflow" ? "elsa-studio-workflow" : "elsa-studio-activity-graph";
+      localStorage.setItem(`${prefix}-palette-width`, "460");
+      localStorage.setItem(`${prefix}-inspector-width`, "560");
+      if (style !== "legacy") localStorage.setItem("elsa-studio-workspace-style", style);
+    }, { host, style });
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=sequence&palette-theme=classic&appearance=dark`);
+    await page.locator('.wf-sequence-step[data-id="write-one"]').press("Enter");
+    const panelColor = await page.locator(".wf-inspector").evaluate(element => getComputedStyle(element).backgroundColor);
+    await page.getByRole("button", { name: "Open expanded Text editor", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Text", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS("background-color", panelColor);
+    await expect(dialog.locator(".cm-content")).toContainText("buyer.email");
+    const hits = await dialog.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return [...document.querySelectorAll<HTMLElement>(".wf-side-resize-handle")]
+        .filter(handle => handle.getClientRects().length > 0)
+        .map(handle => {
+          const rect = handle.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = Math.max(rect.top + 1, Math.min(bounds.top + bounds.height / 2, rect.bottom - 1));
+          const hit = document.elementFromPoint(x, y);
+          const insideDialog = x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+          return { insideDialog, covered: insideDialog ? element.contains(hit) : !!hit?.closest(".wf-property-editor-backdrop") };
+        });
+    });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some(hit => hit.insideDialog)).toBe(true);
+    expect(hits.every(hit => hit.covered)).toBe(true);
+    await dialog.getByRole("button", { name: "Text expression syntax", exact: true }).click();
+    const syntaxOption = page.getByRole("option", { name: "JavaScript", exact: true });
+    await expect(syntaxOption).toBeVisible();
+    expect(await syntaxOption.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    })).toBe(true);
+    await syntaxOption.click();
+    await page.screenshot({ path: testInfo.outputPath("expanded-property-layering.png") });
+    const editor = dialog.locator('.cm-content[contenteditable="true"]');
+    await editor.press("End");
+    await editor.pressSequentially(" + '.updated'");
+    await dialog.getByRole("button", { name: "Close", exact: true }).focus();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await page.getByRole("button", { name: "Open expanded Text editor", exact: true }).click();
+    await expect(dialog.locator(".cm-content")).toContainText(".updated");
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+}
+
 for (const host of ["workflow", "activity"] as const) {
   for (const theme of ["light", "dark"] as const) {
     for (const saved of [false, true]) {

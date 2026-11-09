@@ -8,6 +8,7 @@ export type WorkflowPublishMode = "publish" | "review";
 interface PublishActionButtonProps {
   busy: boolean;
   saving: boolean;
+  unavailableReason?: string;
   onPublish(mode: WorkflowPublishMode): void;
 }
 
@@ -31,7 +32,8 @@ function rememberMode(mode: WorkflowPublishMode) {
   }
 }
 
-export function PublishActionButton({ busy, saving, onPublish }: PublishActionButtonProps) {
+export function PublishActionButton({ busy: pending, saving, unavailableReason, onPublish }: PublishActionButtonProps) {
+  const busy = pending || !!unavailableReason;
   const [mode, setMode] = useState<WorkflowPublishMode>(readRememberedMode);
   const [open, setOpen] = useState(false);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -125,7 +127,7 @@ export function PublishActionButton({ busy, saving, onPublish }: PublishActionBu
   };
 
   const isReview = mode === "review";
-  const queuedTitle = saving ? "Finishing the current save; this action will start once it settles." : undefined;
+  const queuedTitle = unavailableReason ?? (saving ? "Finishing the current save; this action will start once it settles." : undefined);
 
   return (
     <div className="wf-publish-actions" role="group" aria-label="Workflow publication actions">
@@ -145,7 +147,7 @@ export function PublishActionButton({ busy, saving, onPublish }: PublishActionBu
         type="button"
         className="wf-publish-menu-trigger"
         aria-label="Publish options"
-        title="Publish options"
+        title={unavailableReason ?? "Publish options"}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

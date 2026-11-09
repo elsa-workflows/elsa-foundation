@@ -1,0 +1,21 @@
+{
+  "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "discovery": 3079,
+  "trxDefinitions": 3079,
+  "executed": 3090,
+  "unmatchedDefinitions": 0,
+  "dynamicTheories": [
+    {
+      "name": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+      "cases": 8
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+      "cases": 4
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+      "cases": 2
+    }
+  ]
+}

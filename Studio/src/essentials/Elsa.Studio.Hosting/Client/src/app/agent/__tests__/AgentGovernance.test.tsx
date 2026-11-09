@@ -45,7 +45,7 @@ describe("agent governance UI", () => {
 
 function disabledClient(): AgentClient {
   return {
-    bootstrap: vi.fn(async () => ({
+    bootstrap: vi.fn<AgentClient["bootstrap"]>(async () => ({
       enabled: false,
       providerStatus: "disabled",
       modes: [],
@@ -54,11 +54,18 @@ function disabledClient(): AgentClient {
       policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "auto-read-only", allowedAutonomyModes: ["manual", "auto-read-only"] }
     })),
     createSession: vi.fn(),
+    getSession: vi.fn(),
+    updateAutonomy: vi.fn(),
     sendMessage: vi.fn(),
     approveProposal: vi.fn(),
     denyProposal: vi.fn(),
     executeProposal: vi.fn(),
+    acknowledgeClient: vi.fn(),
     submitFeedback: vi.fn(),
+    listSessions: vi.fn(),
+    listProposals: vi.fn(),
+    withdrawMessage: vi.fn(),
+    resolveClientInvocation: vi.fn(),
     cancelTurn: vi.fn()
   };
 }

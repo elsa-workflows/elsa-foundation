@@ -72,6 +72,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var permissions = principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value).ToList();
         // The seeded admin is granted every catalog permission; a representative one must round-trip.
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersManage, permissions);
+        Assert.Equal(principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
     }
 
     [Fact]

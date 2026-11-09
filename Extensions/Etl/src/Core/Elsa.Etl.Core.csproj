@@ -8,6 +8,7 @@
     <InternalsVisibleTo Include="Elsa.Etl.Persistence.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Elsa.Etl.Workflows.Runtime" />
     <InternalsVisibleTo Include="Elsa.Etl.Tests" />
+    <InternalsVisibleTo Include="Elsa.Etl.Persistence.ProviderTests" />
   </ItemGroup>
 
 </Project>

@@ -18,7 +18,7 @@ describe("secrets page", () => {
     const { container } = render();
     await waitForText(container, "Payments API");
 
-    const header = container.querySelector<HTMLElement>(".secrets-header")!;
+    const header = container.querySelector<HTMLElement>(".studio-page-header")!;
     const create = header.querySelector<HTMLButtonElement>("button[aria-label='Create secret']");
     expect(create).not.toBeNull();
     expect(create?.textContent).toContain("Create secret");
@@ -269,7 +269,7 @@ describe("secrets page", () => {
     };
     const { container } = render({ getDescriptors: descriptors });
     await waitForText(container, "Payments API");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".studio-page-actions button[aria-label='Create secret']")?.disabled);
     clickButton(container, "Create secret");
     await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret']"));
     const dialog = container.querySelector<HTMLElement>("[role='dialog'][aria-label='Create secret']")!;
@@ -315,7 +315,7 @@ describe("secrets page", () => {
 
     endpoint = "new";
     changeEndpoint("/new-endpoint");
-    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-header-actions button[aria-label='Create secret']")?.disabled);
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".studio-page-actions button[aria-label='Create secret']")?.disabled);
     clickButton(container, "Create secret");
     await waitFor(() => !!container.querySelector("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']"));
     const scopeSelect = container.querySelector<HTMLSelectElement>("[role='dialog'][aria-label='Create secret'] select[id^='scope-select-']")!;
@@ -545,7 +545,7 @@ describe("secrets page", () => {
     clickButton(container, "Search");
     await waitForText(container, "No results for “missing-secret”");
 
-    expect(container.querySelector(".secrets-empty-state button")?.textContent).toContain("Clear filters");
+    expect(container.querySelector(".studio-result-state button")?.textContent).toContain("Clear filters");
     expect(container.querySelector(".secrets-coverage")).toBeNull();
   });
 
@@ -565,7 +565,7 @@ describe("secrets page", () => {
     clickButton(container, "Search");
 
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "0 shown · 0 loaded · 0 results for “missing-secret”");
-    expect(container.querySelector(".secrets-empty-state strong")?.textContent).toBe("No results for “missing-secret”");
+    expect(container.querySelector(".studio-result-state h3")?.textContent).toBe("No results for “missing-secret”");
     expect(status.value).toBe("Revoked");
   });
 

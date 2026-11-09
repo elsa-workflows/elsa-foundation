@@ -1,4 +1,5 @@
 import React, { useId, useRef, useState } from "react";
+import "../graph-authoring/workbenchPanelStyles.css";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";

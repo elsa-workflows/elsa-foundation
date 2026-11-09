@@ -1,23 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioAgentSurface } from "../../sdk";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
+import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
 import { AgentPromptStarters } from "../agent/AgentPromptStarters";
+import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
-import { AgentWorkflowBatchReview } from "../agent/AgentWorkflowBatchReview";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
+import type { AgentRecoveryMode, AgentSessionSummary } from "../agent/agentTypes";
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
-import { useWeaverSession, type UseWeaverSession, type WeaverAutoApplyMode } from "./useWeaverSession";
+import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState, type WeaverRecoveryNotice } from "./useWeaverSession";
 
-const AUTO_APPLY_LABELS: Record<WeaverAutoApplyMode, string> = {
-  "manual": "Manual review",
-  "auto-read-only": "Auto-apply low-risk",
-  "full-auto": "Autopilot"
-};
+const AUTO_APPLY_LABELS = WEAVER_AUTO_APPLY_LABELS;
 
 // Tooltip copy for the autonomy menu.
 const AUTO_APPLY_HINTS: Record<WeaverAutoApplyMode, string> = {
@@ -34,7 +31,8 @@ export function WeaverSurface({
   client,
   subscribeStream,
   onSessionIndicatorChange,
-  incomingPrompt
+  incomingPrompt,
+  onPromptConsumed
 }: {
   api: ElsaStudioModuleApi;
   surface: StudioAgentSurface;
@@ -43,20 +41,25 @@ export function WeaverSurface({
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
   onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
-  incomingPrompt?: { id: string; message: string; requestId?: string } | null;
+  incomingPrompt?: (StudioAgentPromptRequest & { id: string }) | null;
+  onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
+  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
   const lastPromptIdRef = useRef<string | null>(null);
+  const autoApplyStatusId = useId();
+  const autoApplyStatus = describeAutoApplyStatus(session.autoApplyState, session.pendingAutoApplyMode, session.autoApplyUnsupported, session.autoApplyNotice);
+  const recoveryScope = describeRecoveryScope(session.bootstrap?.recovery);
 
   // Memoize on the underlying state (not the per-render session object) to avoid an update loop.
   const indicatorSessions = useMemo(
     () => toIndicatorSessions(session),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.sessionId, session.proposals, session.workflowBatches, session.error, session.busy]
+    [session.sessionId, session.proposals, session.error, session.busy]
   );
 
   useEffect(() => {
@@ -66,26 +69,31 @@ export function WeaverSurface({
   useEffect(() => () => onSessionIndicatorChange?.([]), [onSessionIndicatorChange]);
 
   useEffect(() => {
-    if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.ready) {
+    if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.bootstrap !== null) {
       lastPromptIdRef.current = incomingPrompt.id;
-      sendRef.current(incomingPrompt.message, { requestId: incomingPrompt.requestId });
+      onPromptConsumed?.(incomingPrompt.id);
+      sendRef.current(incomingPrompt);
     }
-  }, [incomingPrompt, session.ready]);
+  }, [incomingPrompt, onPromptConsumed, session.bootstrap, session.ready]);
 
-  const composerDisabled = !session.ready;
+  // An unacknowledged mode change blocks dependent prompts, including module actions routed through send().
+  const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation" || session.autoApplyBlocked;
 
   return (
     <section className="weaver-surface" data-variant={variant} aria-label="Weaver assistant" aria-busy={session.busy}>
       <header className="weaver-surface-header">
         <div className="weaver-surface-title">
           <span>Weaver</span>
-          <strong>Workflow assistant</strong>
+          <strong>Studio assistant</strong>
         </div>
         <div className="weaver-surface-actions">
           <WeaverAutoApplyMenu
             value={session.autoApplyMode}
             modes={session.allowedAutoApplyModes}
-            disabled={!session.ready}
+            state={session.autoApplyState}
+            pendingMode={session.pendingAutoApplyMode}
+            disabled={!session.ready || session.autoApplyUnsupported !== null}
+            statusId={autoApplyStatus ? autoApplyStatusId : undefined}
             onChange={session.setAutoApplyMode}
           />
           {onClose ? (
@@ -102,29 +110,54 @@ export function WeaverSurface({
         {session.activeProvider ? <small>{session.activeProvider.providerId} · {session.activeProvider.riskProfile}</small> : null}
       </div>
 
+      {autoApplyStatus ? (
+        <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>
+          <span>{autoApplyStatus}</span>
+          {session.autoApplyState === "unresolved" ? (
+            <button type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry mode change</button>
+          ) : null}
+        </div>
+      ) : null}
+
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
+      <WeaverRecovery session={session} />
+      {recoveryScope ? <p className="weaver-recovery-scope" role="note" data-recovery={session.bootstrap?.recovery}>{recoveryScope}</p> : null}
+
       <AgentContextChips attachments={session.attachments} />
+      {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
       <AgentPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
 
       <div className="weaver-scroll">
-        <WeaverMessageList messages={session.messages} streaming={session.busy} onFeedback={session.submitFeedback} />
+        <WeaverMessageList
+          messages={session.messages}
+          streaming={session.busy}
+          onFeedback={session.submitFeedback}
+          canStart={session.sessionId !== null && session.chatState === "idle" && !session.autoApplyBlocked && !session.reopening}
+          pendingActionIds={session.pendingProposalIds}
+          onStart={session.startRecordedTurn}
+          onWithdraw={session.withdrawMessage}
+        />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
-        <AgentWorkflowBatchReview batches={session.workflowBatches} disabled={session.busy} onApply={session.applyWorkflowBatch} onUndo={session.undoWorkflowBatch} />
+        <AgentToolResults results={session.toolResults} renderers={resultRenderers} controls={resultControls} />
         <AgentProposalReview
           proposals={session.proposals}
           disabled={session.busy}
           pendingProposalIds={session.pendingProposalIds}
           resultRenderers={resultRenderers}
+          resultControls={resultControls}
           onApprove={session.approveProposal}
           onDeny={session.denyProposal}
           onExecute={session.executeProposal}
+          onRetryConfirmation={session.retryConfirmation}
+          onResolve={session.resolveProposal}
+          resolveDisabled={session.autoApplyBlocked}
         />
       </div>
 
       <WeaverComposer
         disabled={composerDisabled}
-        busy={session.busy}
+        busy={session.busy || (session.chatState !== "idle" && session.pendingProposalIds.size > 0)}
         followups={session.followups}
         onSubmit={session.send}
         onStop={session.stop}
@@ -134,15 +167,106 @@ export function WeaverSurface({
   );
 }
 
+/**
+ * Preview (#3441): the owner's recent sessions and what reopening one found. Reopening reads the recorded state
+ * only; a prompt, decision or resolution always needs its own explicit action.
+ */
+function WeaverRecovery({ session }: { session: UseWeaverSession }) {
+  const notice = session.recoveryNotice;
+  const offered = session.sessionId === null && session.chatState === "idle" ? session.recentSessions : [];
+  if (!notice && offered.length === 0 && !session.reopening && (session.sessionId === null || session.chatState === "streaming")) return null;
+  return (
+    <section className="weaver-recovery" aria-label="Conversation recovery" data-reopening={session.reopening || undefined}>
+      {session.reopening ? <p role="status">Reading the conversation's recorded state…</p> : null}
+      {notice ? (
+        <div className="weaver-recovery-notice" role="status" data-kind={notice.kind} data-limit={notice.kind === "limit" ? notice.limit : undefined}>
+          <span>{describeRecoveryNotice(notice)}</span>
+          {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
+            // A reread waits while a mode change is unconfirmed, as prompts and recorded actions do.
+            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+          ) : null}
+          {notice.kind === "limit" ? (
+            <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>
+          ) : null}
+        </div>
+      ) : null}
+      {offered.length > 0 ? (
+        <div className="weaver-recent-sessions">
+          <strong><History size={13} aria-hidden="true" /> Recent conversations</strong>
+          <ul aria-label="Recent conversations">
+            {offered.map(item => (
+              <li key={item.id}>
+                <button type="button" disabled={session.reopening} data-session-id={item.id} onClick={() => session.reopenSession(item.id)}>
+                  {describeSessionSummary(item)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {session.sessionId !== null && session.chatState !== "streaming" ? (
+        <button type="button" className="weaver-new-conversation" onClick={session.startNewConversation}><Plus size={13} aria-hidden="true" /> New conversation</button>
+      ) : null}
+    </section>
+  );
+}
+
+/** Preview (#3441): a short note when this backend does not recover conversations across a server restart. */
+function describeRecoveryScope(recovery: AgentRecoveryMode | undefined): string | null {
+  switch (recovery) {
+    case "processLifetime":
+      return "Conversations survive a reload while this server runs; a server restart ends them.";
+    case "unsupported":
+      return "This server cannot recover conversations: a server restart ends them.";
+    default:
+      return null;
+  }
+}
+
+function describeSessionSummary(summary: AgentSessionSummary) {
+  const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
+  const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
+  const status = summary.status === "active" ? "" : ` · ${summary.status}`;
+  // Preview (#3441): a session at its documented limit is offered with that outcome, so reopening it is not a surprise.
+  const limited = summary.recoveryState?.startsWith("limit-reached:") ? " · session limit reached" : "";
+  return `${summary.title ?? "Conversation"} · ${updated}${reviews}${status}${limited}`;
+}
+
+function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
+  switch (notice.kind) {
+    case "owned-elsewhere":
+      return `Another Studio server process is working on this conversation, so it cannot be opened here yet.${notice.retryAfterSeconds !== undefined ? ` Try again in about ${notice.retryAfterSeconds} seconds.` : " Try again shortly."}`;
+    case "unavailable":
+      return `This conversation's recorded state is unavailable, so nothing was opened or changed. ${notice.message}`;
+    case "not-found":
+      return "This conversation is not available.";
+    case "closed":
+      return `This conversation has ended (${notice.status}). Its recorded history is shown; your next prompt starts a new conversation.`;
+    case "lost":
+      return `The conversation could not be read. Nothing was changed. ${notice.message}`;
+    case "action-refused":
+      return notice.message;
+    case "limit":
+      // The server's message names the bound it reached; Studio does not restate the limits.
+      return `${notice.message?.trim() || "Session limit reached: this conversation has no room left for more context."} It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
+  }
+}
+
 function WeaverAutoApplyMenu({
   value,
   modes,
+  state,
+  pendingMode,
   disabled,
+  statusId,
   onChange
 }: {
   value: WeaverAutoApplyMode;
   modes: readonly WeaverAutoApplyMode[];
+  state: WeaverAutoApplyState;
+  pendingMode: WeaverAutoApplyMode | null;
   disabled: boolean;
+  statusId?: string;
   onChange(mode: WeaverAutoApplyMode): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -176,13 +300,16 @@ function WeaverAutoApplyMenu({
   };
 
   return (
-    <div className="weaver-auto-apply" ref={wrapperRef}>
+    <div className="weaver-auto-apply" ref={wrapperRef} data-autonomy-state={state} data-pending-mode={pendingMode ?? undefined}>
+      {/* The button always names the mode in effect (acknowledged); a pending request is only described. */}
       <button
         type="button"
         className="weaver-mode-button"
         aria-label="Auto-apply mode"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={pendingMode !== null}
+        aria-describedby={statusId}
         disabled={disabled}
         title={AUTO_APPLY_HINTS[value]}
         onClick={() => setOpen(current => !current)}
@@ -199,6 +326,8 @@ function WeaverAutoApplyMenu({
               aria-checked={mode === value}
               className="weaver-mode-option"
               key={mode}
+              // One change per conversation at a time: other modes are unavailable until it resolves.
+              disabled={pendingMode !== null && mode !== pendingMode}
               title={AUTO_APPLY_HINTS[mode]}
               onClick={() => selectMode(mode)}
             >
@@ -213,6 +342,40 @@ function WeaverAutoApplyMenu({
       ) : null}
     </div>
   );
+}
+
+/** Accessible copy for the selector's pending, unresolved, unavailable and settled outcomes. */
+function describeAutoApplyStatus(
+  state: WeaverAutoApplyState,
+  pendingMode: WeaverAutoApplyMode | null,
+  unsupported: "unsupported" | "unreadable" | null,
+  notice: WeaverAutoApplyNotice | null
+): string | null {
+  if (state === "pending" && pendingMode) {
+    return `Changing to ${AUTO_APPLY_LABELS[pendingMode]}. It is not in effect until the server confirms it; new prompts wait until then.`;
+  }
+  if (state === "unresolved" && pendingMode) {
+    return `The change to ${AUTO_APPLY_LABELS[pendingMode]} was sent but not confirmed, so it is not in effect and new prompts are blocked. Retry checks the same request without applying it twice.`;
+  }
+  if (unsupported === "unsupported") return "This conversation cannot change its auto-apply mode. Stop and start a new conversation to use a different mode.";
+  if (unsupported === "unreadable") return "This conversation cannot confirm its auto-apply mode, so the mode cannot be changed here.";
+  if (!notice) return null;
+  switch (notice.kind) {
+    case "clamped":
+      return `The server applied ${AUTO_APPLY_LABELS[notice.acknowledgedMode]} instead of ${AUTO_APPLY_LABELS[notice.requestedMode]}, within this conversation's limits.`;
+    case "reconciled":
+      return `The mode changed while your request was being confirmed. The server's current mode is ${AUTO_APPLY_LABELS[notice.acknowledgedMode]}.`;
+    case "busy":
+      return `Weaver is still working in this conversation, so the mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}. Try again when it is idle.`;
+    case "closed":
+      return `This conversation has ended, so the mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}.`;
+    case "starting":
+      return `The conversation is starting, so ${AUTO_APPLY_LABELS[notice.requestedMode]} was not applied. Choose it again once the conversation has started.`;
+    case "conflict":
+      return `The change to ${AUTO_APPLY_LABELS[notice.pendingMode]} is still being confirmed, so ${AUTO_APPLY_LABELS[notice.requestedMode]} was not sent.`;
+    case "refused":
+      return `The mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}: ${notice.message}`;
+  }
 }
 
 function describeProviderStatus(session: UseWeaverSession): { label: string; tone: "success" | "neutral" | "warning" } {
@@ -233,7 +396,7 @@ function describeProviderStatus(session: UseWeaverSession): { label: string; ton
 function toIndicatorSessions(session: UseWeaverSession): AgentSessionIndicatorSession[] {
   if (!session.sessionId) return [];
   const pendingProposals = session.proposals.filter(proposal => proposal.status === "awaiting-approval" || proposal.status === "approved").length;
-  const pendingArtifacts = session.workflowBatches.filter(batch => batch.status === "ready" || batch.status === "applying").length;
+  const pendingArtifacts = 0;
   const status: AgentSessionIndicatorSession["status"] = session.error
     ? "failed"
     : pendingProposals > 0

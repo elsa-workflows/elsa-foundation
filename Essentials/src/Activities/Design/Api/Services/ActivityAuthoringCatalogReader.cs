@@ -97,6 +97,7 @@ public sealed class ActivityAuthoringCatalogReader(
             Provenance: new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, featureId),
             IconName: ActivityIconName.ReadFromFacets(version.DesignFacets))
         {
+            DesignFacets = version.DesignFacets.Select(facet => new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, facet.Payload.Clone())).ToArray(),
             PaletteHints = version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone()
         };
     }

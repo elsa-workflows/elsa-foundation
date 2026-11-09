@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <ProjectReference Include="../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <Compile Include="../../../../Essentials/tests/Activities/Http/IntegrationTests/SequenceShape.cs" Link="SequenceShape.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
+    <Compile Include="../../../../Essentials/tests/Activities/Http/IntegrationTests/CommandBudgets/ReferenceWorkflows.cs" Link="ReferenceWorkflows.cs" />
+  </ItemGroup>
+</Project>

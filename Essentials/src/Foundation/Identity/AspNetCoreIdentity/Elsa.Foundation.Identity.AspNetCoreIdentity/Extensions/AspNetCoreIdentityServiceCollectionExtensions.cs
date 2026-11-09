@@ -1,4 +1,6 @@
 using CShells.Lifecycle;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
+using Microsoft.Extensions.Configuration;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -37,6 +39,8 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
             services.Configure(configure);
 
         services.AddOptions<AspNetCoreIdentityOptions>();
+        services.AddOptions<LoginPageOptions>().Configure<IConfiguration>((options, configuration) =>
+            configuration.GetSection("Identity:Login").Bind(options));
         services.AddHttpContextAccessor();
 
         // CSRF protection for the HTML login form: the GET page embeds an antiforgery token which the POST
@@ -51,6 +55,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
         services.TryAddScoped<IUserManager, AspNetCoreIdentityUserManager>();
         services.TryAddScoped<IRoleManager, AspNetCoreIdentityRoleManager>();
         services.TryAddScoped<IPrincipalFactory, AspNetCoreIdentityPrincipalFactory>();
+        services.UseCurrentSubjectPermissionAuthorizerProvider<AspNetCoreIdentitySubjectAuthorizer>();
         services.TryAddScoped<IAuthSessionService, DefaultAuthSessionService>();
         services.TryAddScoped<IIdentitySignInService, AspNetCoreIdentitySignInService>();
         services.TryAddScoped<IdentitySeedCoordinator>();

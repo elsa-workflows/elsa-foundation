@@ -66,6 +66,7 @@ public sealed class RuntimeResumptionPumpTask : BackoffSweepWorkerTask
 
         _options = options;
         _timeProvider = timeProvider;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.Value.MaxConcurrentDispatches);
     }
 
     protected override TimeSpan SweepInterval => _options.Value.SweepInterval;
@@ -166,7 +167,10 @@ public sealed class RuntimeResumptionPumpTask : BackoffSweepWorkerTask
             leaseTimeout: options.LeaseTimeout,
             heartbeatTimeout: options.HeartbeatTimeout,
             maxExecutionsPerSweep: options.MaxExecutionsPerSweep,
-            excludedWorkflowExecutionIds: SnapshotExcluded(persistenceScope, options, now));
+            excludedWorkflowExecutionIds: SnapshotExcluded(persistenceScope, options, now))
+        {
+            MaxConcurrentDispatches = options.MaxConcurrentDispatches
+        };
         var result = await resumptionService.SweepAsync(request, cancellationToken);
 
         ApplyPerExecutionBackoff(persistenceScope, result, options, now);

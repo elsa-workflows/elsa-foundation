@@ -44,6 +44,20 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Explicit_canonical_user_survives_issue_validation_and_refresh_without_inference_from_subject()
+    {
+        var issued = await _fixture.TokenService.IssueAsync(new("external-subject", "tenant-a", ["user-tasks:read"]) { CanonicalUserId = "canonical-elsa-user" });
+        foreach (var accessToken in new[] { issued.AccessToken, (await _fixture.TokenService.RefreshAsync(new(issued.RefreshToken!))).AccessToken })
+        {
+            var principal = (await _fixture.TokenService.ValidateAsync(new(accessToken))).Principal!;
+            Assert.Equal("canonical-elsa-user", Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
+            Assert.Equal("external-subject", principal.FindFirst("sub")!.Value);
+        }
+        var nonUser = await _fixture.IssueAsync("external-subject", "tenant-a", "user-tasks:read");
+        Assert.Empty((await _fixture.TokenService.ValidateAsync(new(nonUser.AccessToken))).Principal!.FindAll(IdentityClaimTypes.UserId));
+    }
+
+    [Fact]
     public async Task Issued_Token_Validates_To_An_Authenticated_Principal_With_Claims()
     {
         var issued = await _fixture.IssueAsync("user-8", "tenant-y", "identity/users:manage");

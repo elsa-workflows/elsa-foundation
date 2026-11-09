@@ -136,6 +136,7 @@ public sealed class WorkflowExecutableCompiler(
             var placedNodeIds = new HashSet<string>(StringComparer.Ordinal);
             var placedStorageDriverRequirements = new HashSet<RuntimeStorageDriverRequirement>();
             var placedLayoutSegments = new List<ExecutableLayoutBoundarySegment>();
+            var placedPresentation = new List<WorkflowExecutableActivityPresentationRecord>();
             foreach (var activity in projection.Nodes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -186,6 +187,7 @@ public sealed class WorkflowExecutableCompiler(
                     BindBoundaryRootToAuthoredNode: !isWorkflowRoot), cancellationToken);
                 placedActivities.Add(activity.NodeId, placement.Root);
                 placedLayoutSegments.AddRange(placement.LayoutSidecar.BoundarySegments);
+                placedPresentation.AddRange(placement.ActivityPresentation);
                 foreach (var nodeId in placement.Root.DescendantsAndSelf().Select(x => x.ExecutableNodeId))
                     placedNodeIds.Add(nodeId);
                 foreach (var target in placement.ResumeTargets)
@@ -268,6 +270,7 @@ public sealed class WorkflowExecutableCompiler(
                 workflowVariables: workflowVariables,
                 incidentStrategy: incidentStrategy);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
+            placementSidecars?.SetPresentation(source.DefinitionVersionId, placedPresentation);
             return executable;
         }
         catch (Exception exception) when (
@@ -367,6 +370,28 @@ public sealed class WorkflowExecutableCompiler(
     {
         if (dependencies.Count == 0 || _executableStore is null)
             return;
+
+        if (_executableStore.SupportsModelMaterial)
+        {
+            var materials = new List<RuntimeExecutionMaterial>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            string? continuation = null;
+            do
+            {
+                var page = await _executableStore.ListMaterialPageAsync(new(RuntimeStorePageRequest.MaximumLimit, continuation), cancellationToken);
+                materials.AddRange(page.Items); continuation = page.NextContinuationToken;
+                if (continuation is not null && !seen.Add(continuation)) throw new InvalidDataException("The runtime material provider repeated its dependency page.");
+            } while (continuation is not null);
+            var materialRoots = dependencies.Select(dependency => materials.FirstOrDefault(material => material.Identity.ArtifactId == dependency.ArtifactId)?.Identity
+                ?? new WorkflowExecutableIdentity(dependency.ArtifactId, string.Empty, string.Empty, string.Empty, dependency.ArtifactHash)).ToArray();
+            foreach (var dependency in dependencies)
+                if (materialRoots.First(root => root.ArtifactId == dependency.ArtifactId).ArtifactHash != dependency.ArtifactHash)
+                    throw new ArgumentException($"Dependency '{dependency.ArtifactId}' differs from its compiled hash.");
+            var materialClosure = WorkflowExecutableDependencyGraph.ResolveMaterialClosure(materialRoots, materials);
+            if (materialClosure.Any(material => material.Identity.ArtifactId == candidateArtifactId && material.Identity.ArtifactHash == candidateArtifactHash))
+                throw new ArgumentException($"Candidate executable recurs in its dependency closure: {candidateArtifactId}@{candidateArtifactHash}.", nameof(dependencies));
+            return;
+        }
 
         var storedExecutables = await _executableStore.ListAllAsync(cancellationToken);
         var roots = dependencies

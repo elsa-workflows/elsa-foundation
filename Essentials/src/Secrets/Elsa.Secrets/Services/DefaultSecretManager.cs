@@ -40,7 +40,7 @@ public sealed class DefaultSecretManager(
             var secret = new Secret
             {
                 TenantId = tenantId,
-                Name = normalizedName,
+                Name = request.Name.Trim(),
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? request.Name.Trim() : request.DisplayName.Trim(),
                 Description = request.Description,
                 TypeName = request.TypeName,

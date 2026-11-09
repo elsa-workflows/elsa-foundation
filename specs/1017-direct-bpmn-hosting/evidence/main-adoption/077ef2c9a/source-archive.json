@@ -1,0 +1,17 @@
+{
+  "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+  "base": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee",
+  "bundleRef": "refs/codex/verification/2898-main-077-1842ae257",
+  "name": "elsa-bpmn-hosting-source-1842ae257.bundle",
+  "bytes": 2277319,
+  "sha256": "c29c75837979d72b6d2e255cee6d8d9e9c9a2fea8986b5f4d2cf6a2a6a112459",
+  "assetId": 697554262,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-1842ae257.bundle",
+  "uploader": "elsa-workflows-codex[bot]",
+  "reDownloadedAndHashVerified": true,
+  "checksumAssetVerified": true,
+  "coldRestoreCandidateInitiallyAbsent": true,
+  "coldRestoreMatchesSource": true,
+  "releasePublishedAtUnchanged": true,
+  "scope": "Exact adopted-main077 product source1842ae257. Current affected qualification is recorded separately; no clean review, remote publication, required CI or merge verdict is implied. Owner approved the existing history route; no force action has been used. No new release/tag."
+}

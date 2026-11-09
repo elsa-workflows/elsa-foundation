@@ -8,10 +8,12 @@ import { WorkflowNodeActionsContext } from "./contexts";
 import "./workflowNodePresentation.css";
 
 /** Floating, keyboard-accessible actions for one selected authoring node. */
-export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
+export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = Position.Top, offset = 10 }: {
   nodeId: string;
   data: WorkflowNodeData;
   selected: boolean;
+  position?: Position;
+  offset?: number;
 }) {
   const actions = React.useContext(WorkflowNodeActionsContext);
   const [outcomesOpen, setOutcomesOpen] = React.useState(false);
@@ -101,7 +103,7 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
   };
 
   return (
-    <NodeToolbar nodeId={nodeId} isVisible position={Position.Top} offset={10}>
+    <NodeToolbar nodeId={nodeId} isVisible position={position} offset={offset}>
       <div ref={toolbarRef} className="wf-node-context-toolbar" role="toolbar" aria-label={`Actions for ${data.label}`} aria-orientation="horizontal" onKeyDown={handleToolbarKeyDown}>
         {outcomes.length === 1 ? (
           <button

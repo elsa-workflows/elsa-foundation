@@ -296,7 +296,18 @@ public sealed class EfActivityDesignStores(
         rows = ApplyVisibility(rows, query.TenantId);
         if (!string.IsNullOrWhiteSpace(query.Search)) rows = rows.Where(x => x.SearchText.Contains(query.Search.Trim().ToUpperInvariant()));
         if (query.Authority is { } authority) rows = rows.Where(x => x.ContentAuthorityKind == authority);
-        if (!string.IsNullOrWhiteSpace(query.ProviderKey)) rows = rows.Where(x => x.HeadProviderKey == query.ProviderKey.Trim() || x.RecommendationProviderKey == query.ProviderKey.Trim());
+        if (!string.IsNullOrWhiteSpace(query.ProviderKey))
+        {
+            var providerKey = query.ProviderKey.Trim();
+            var drafts = Access(db.ActivityDraftManagementProjections.AsNoTracking()).Where(x =>
+                x.ValidFromSequence <= snapshot.Sequence && x.ValidToSequenceExclusive > snapshot.Sequence &&
+                x.Status == ActivityDefinitionDraftStatus.Active && x.ProviderKey == providerKey);
+            rows = rows.Where(x => x.HeadProviderKey == providerKey || x.RecommendationProviderKey == providerKey ||
+                drafts.Any(draft => draft.TenantId == x.TenantId &&
+                    EF.Property<string>(draft, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                    EF.Property<string>(draft, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash") &&
+                    draft.DefinitionId == x.ResourceId));
+        }
         // The marker rejects malformed and structurally inconsistent rows in SQL. The digest
         // itself is intentionally provider-neutral (it is defined over UTF-16 material), so
         // validate full material in bounded, stable-order batches before applying page bounds.
@@ -541,7 +552,7 @@ public sealed class EfActivityDesignStores(
             ?? throw new InvalidOperationException($"Activity version publication '{request.RootVersionId}' was not found.");
         var owner = new ActivityDefinitionReference("ActivityVersion", root.DefinitionId, root.DefinitionVersionId, root.Version, TenantId: root.TenantId, Lifecycle: root.Lifecycle);
         var projection = await ById(db.ActivityDependencyProjections.AsNoTracking(), ActivityDependencyProjectionState.CurrentId).SingleOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException("Activity dependency projection has not been initialized.");
+            ?? throw new ActivityDependencyProjectionUnavailableException();
         var watermark = Fingerprint(projection);
         if (request.Watermark is not null && !StringComparer.Ordinal.Equals(request.Watermark, watermark))
             throw new ActivityDependencyWatermarkExpiredException(request.Watermark);
@@ -572,7 +583,8 @@ public sealed class EfActivityDesignStores(
                 Definition = new { request.Definition.ActivityTypeKey, request.Definition.Category, request.Definition.DisplayName, request.Definition.Description },
                 Authoring = new { request.AuthoringState.ContentAuthority, request.AuthoringState.ForkedFrom, request.AuthoringState.HeadVersionId, request.AuthoringState.RecommendedVersionId },
                 Draft = new { request.InitialDraft.DefinitionId, request.InitialDraft.Revision, request.InitialDraft.SourceVersionId, request.InitialDraft.PresentationLabel, request.InitialDraft.Status, request.InitialDraft.State },
-                Layout = request.InitialLayout.Records
+                Layout = request.InitialLayout.Records,
+                request.InitialLayout.ActivityPresentation
             };
             await EfDesignAtomicCommand.ExecuteAsync(atomic, new DesignOperationKey($"create:{request.Definition.Id}"), "activity.authoring.create.v1", material,
                 ["activityDefinition", "activityDefinitionAuthoring", "activityDefinitionDraft", "activityDefinitionDraftLayout"], async (context, token) =>
@@ -1250,6 +1262,8 @@ public sealed class EfActivityDesignStores(
         draft.LastModifiedAt = DateTimeOffset.UtcNow;
         layout.Revision = draft.Revision;
         layout.Records = request.Layout.ToList();
+        if (request.ActivityPresentation is not null)
+            layout.ActivityPresentation = ActivityNodePresentationRecord.NormalizeCollection(request.ActivityPresentation).ToList();
         layout.LastModifiedAt = draft.LastModifiedAt;
         if (projections is not null) await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(draft.LastModifiedAt, [], [draft], []), cancellationToken);
         else await SaveAsync(cancellationToken);

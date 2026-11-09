@@ -1,7 +1,7 @@
 import { type AnchorHTMLAttributes } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
+import { studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isStudioInAppHref, StudioLink, studioBasePath } from "../StudioLink";
 
@@ -84,6 +84,38 @@ describe("StudioLink", () => {
     const link = renderLink(navigateToStudioPath, "#stay");
     const event = dispatchClick(link, init);
     expect(event.defaultPrevented).toBe(false);
+    expect(navigateToStudioPath).not.toHaveBeenCalled();
+  });
+
+  it("opens an in-app link in a workspace tab on alt-click when the host handles it", () => {
+    const navigateToStudioPath = vi.fn();
+    const requests: string[] = [];
+    const host = (event: Event) => { requests.push((event as CustomEvent<{ path: string }>).detail.path); event.preventDefault(); };
+    window.addEventListener(studioWorkspaceTabRequestedEvent, host);
+    try {
+      const link = renderLink(navigateToStudioPath);
+      const event = dispatchClick(link, { altKey: true });
+      expect(event.defaultPrevented).toBe(true);
+      expect(requests).toEqual(["/workflows/activity-definitions?definition=invoice"]);
+      expect(navigateToStudioPath).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(studioWorkspaceTabRequestedEvent, host);
+    }
+  });
+
+  it("leaves alt-click to the browser when no workspace host answers, or the link targets another window", () => {
+    const navigateToStudioPath = vi.fn();
+    expect(dispatchClick(renderLink(navigateToStudioPath), { altKey: true }).defaultPrevented).toBe(false);
+    flushSync(() => active!.root.unmount());
+    active!.container.remove();
+    const host = (event: Event) => event.preventDefault();
+    window.addEventListener(studioWorkspaceTabRequestedEvent, host);
+    try {
+      const link = renderLink(navigateToStudioPath, "/workflows/activity-definitions", { target: "_blank" });
+      expect(dispatchClick(link, { altKey: true }).defaultPrevented).toBe(false);
+    } finally {
+      window.removeEventListener(studioWorkspaceTabRequestedEvent, host);
+    }
     expect(navigateToStudioPath).not.toHaveBeenCalled();
   });
 

@@ -26,6 +26,8 @@ export interface PublicationReviewState {
   phase: PublicationReviewPhase;
   progressStep?: PublicationProgressStep;
   draftSnapshot: WorkflowDraft;
+  /** The history line captured with `draftSnapshot`; its save passes it so batch autosave holds stay exact. */
+  draftLineage?: string[];
   currentVersion: string;
   proposedVersion: string;
   unsavedChangesIncluded: true;

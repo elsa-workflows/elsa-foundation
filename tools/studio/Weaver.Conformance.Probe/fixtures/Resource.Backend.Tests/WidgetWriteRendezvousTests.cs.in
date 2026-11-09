@@ -1,0 +1,300 @@
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Exceptions;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetWriteRendezvousTests
+{
+    private static readonly StudioPreferenceKey Key = new("actor-a", "tenant-a", WidgetTestEnvironment.HostId, "home-layout");
+    private static readonly StudioPreferenceWrite Write = new(1, JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson));
+    private static readonly StudioPreferenceWriteCondition Condition = StudioPreferenceWriteCondition.Matches("rev-1");
+
+    [Fact]
+    public void Gate_is_off_by_default_and_partial_configuration_refuses()
+    {
+        Assert.Null(WidgetWriteRendezvous.Configure("", "", WidgetTestEnvironment.HostId));
+        using var files = new GateFiles();
+        Assert.Throws<InvalidOperationException>(() => WidgetWriteRendezvous.Configure(files.Control, "", WidgetTestEnvironment.HostId));
+    }
+
+    [Theory]
+    [InlineData("relative")]
+    [InlineData("shared-directory")]
+    [InlineData("shared-control")]
+    [InlineData("control-link")]
+    [InlineData("receipt-link")]
+    [InlineData("same-path")]
+    public void Opt_in_paths_must_be_explicit_private_and_unlinked(string scenario)
+    {
+        using var files = new GateFiles();
+        files.Arm();
+        var control = files.Control;
+        var receipt = files.Receipt;
+        switch (scenario)
+        {
+            case "relative": control = "control.json"; break;
+            case "shared-directory": SetPosixMode(files.Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead); break;
+            case "shared-control": SetPosixMode(control, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.OtherRead); break;
+            case "control-link": File.Move(control, control + ".original"); File.CreateSymbolicLink(control, control + ".original"); break;
+            case "receipt-link": File.CreateSymbolicLink(receipt, control); break;
+            case "same-path": receipt = control; break;
+        }
+        Assert.Throws<InvalidOperationException>(() => WidgetWriteRendezvous.Configure(control, receipt, WidgetTestEnvironment.HostId));
+    }
+
+    [Fact]
+    public async Task Absent_control_is_inert_and_Find_Delete_and_Write_forward_original_arguments()
+    {
+        using var files = new GateFiles();
+        using var gate = files.Gate();
+        var native = new ForwardingProbe();
+        var wrapper = Wrapper(native, gate, "request-a");
+        using var cancellation = new CancellationTokenSource();
+        Assert.Same(native.Document, await wrapper.FindAsync(Key, cancellation.Token));
+        Assert.True(await wrapper.DeleteAsync(Key, cancellation.Token));
+        Assert.Same(native.Document, await wrapper.WriteAsync(Key, Write, Condition, cancellation.Token));
+        Assert.Equal(new[] { "find", "delete", "write" }, native.Calls.Select(item => item.Kind));
+        Assert.All(native.Calls, item => { Assert.Same(Key, item.Key); Assert.Equal(cancellation.Token, item.Token); });
+        Assert.Same(Write, native.LastWrite); Assert.Same(Condition, native.LastCondition);
+        Assert.False(File.Exists(files.Receipt));
+    }
+
+    [Theory]
+    [InlineData("key")]
+    [InlineData("revision")]
+    [InlineData("condition")]
+    public async Task Unrelated_writes_do_not_arrive_or_change_the_native_condition(string scenario)
+    {
+        using var files = new GateFiles(); files.Arm();
+        using var gate = files.Gate();
+        var native = new ForwardingProbe();
+        var key = scenario == "key" ? Key with { SubjectId = "actor-other" } : Key;
+        var condition = scenario == "revision" ? StudioPreferenceWriteCondition.Matches("rev-other") :
+            scenario == "condition" ? StudioPreferenceWriteCondition.MustNotExist : Condition;
+        await Wrapper(native, gate, "request-a").WriteAsync(key, Write, condition);
+        var call = Assert.Single(native.Calls);
+        Assert.Same(key, call.Key); Assert.Same(condition, native.LastCondition);
+        Assert.False(File.Exists(files.Receipt)); Assert.False(File.Exists(files.Control + ".claimed"));
+    }
+
+    [Fact]
+    public async Task Late_control_releases_two_unchanged_real_native_CAS_writes_and_records_actual_HTTP_identity()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        using var files = new GateFiles();
+        using var gate = files.Gate(); // The control does not exist at initial module composition.
+        files.Arm(env.Key);
+        var first = Wrapper(env.Preferences, gate, "actual-http-a").WriteAsync(env.Key, Write, Condition).AsTask();
+        Assert.Equal("waiting", files.ReadReceipt().GetProperty("status").GetString());
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.False(first.IsCompleted); // The retained first-arrival receipt is the causal fence.
+        var second = Wrapper(env.Preferences, gate, "actual-http-b").WriteAsync(env.Key, Write, Condition).AsTask();
+        var results = await Task.WhenAll(Capture(first), Capture(second));
+        Assert.Single(results, item => item.Error is null);
+        Assert.IsType<StudioPreferenceConflictException>(Assert.Single(results, item => item.Error is not null).Error);
+        Assert.Equal(2, env.Preferences.WriteAttempts); Assert.Equal(1, env.Preferences.Committed);
+        Assert.Same(Condition, env.Preferences.LastCondition); Assert.Same(env.Key, env.Preferences.LastKey);
+        var receipt = files.ReadReceipt();
+        Assert.Equal("released", receipt.GetProperty("status").GetString());
+        Assert.Equal(2, receipt.GetProperty("releasedCount").GetInt32());
+        var arrivals = receipt.GetProperty("arrivals").EnumerateArray().ToArray();
+        Assert.Equal(new[] { "actual-http-a", "actual-http-b" }, arrivals.Select(item => item.GetProperty("httpTraceIdentifier").GetString()));
+        Assert.All(arrivals, item => { Assert.Equal("rev-1", item.GetProperty("condition").GetProperty("revision").GetString());
+            Assert.Equal("actor-a", item.GetProperty("key").GetProperty("subjectId").GetString()); });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Wrapper(env.Preferences, gate, "actual-http-c").WriteAsync(env.Key, Write, Condition).AsTask());
+        Assert.Equal(2, env.Preferences.WriteAttempts);
+        Assert.Equal(receipt.GetRawText(), files.ReadReceipt().GetRawText());
+    }
+
+    [Fact]
+    public async Task Both_resource_calls_validate_the_same_reviewed_owner_before_the_actual_native_CAS_race()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync(); using var files = new GateFiles();
+        using var gate = files.Gate(); files.Arm(env.Key);
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        SetWidgetVisibilityTool Tool(string trace)
+        {
+            var http = new FakeHttpContextAccessor { HttpContext = new DefaultHttpContext { User = env.Http.HttpContext!.User, TraceIdentifier = trace } };
+            return new(new WidgetResource(http, env.Auth, env.Permissions,
+                new WidgetRendezvousPreferences(env.Preferences, gate, http), new(WidgetTestEnvironment.HostId)));
+        }
+        var first = Tool("execute-http-a").ExecuteAsync(prepared);
+        Assert.Equal("waiting", files.ReadReceipt().GetProperty("status").GetString());
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        var second = Tool("execute-http-b").ExecuteAsync(prepared with { InvocationId = "invocation-b", ToolCallId = "call-b" });
+        var results = await Task.WhenAll(first, second);
+        Assert.Single(results, item => item.Succeeded && item.Value!.Succeeded && item.Value.Receipt is not null);
+        Assert.Equal("acme.home.conflict", Assert.Single(results, item => !item.Succeeded).Error!.Code);
+        Assert.Equal(2, env.Preferences.WriteAttempts); Assert.Equal(1, env.Preferences.Committed);
+        Assert.False((await env.Resource.ObserveAsync(null, null, false, default)).Visible);
+        Assert.Equal(2, files.ReadReceipt().GetProperty("arrivals").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Cancellation_fails_the_selected_epoch_without_a_native_write()
+    {
+        using var files = new GateFiles(); files.Arm();
+        using var gate = files.Gate(); var native = new ForwardingProbe();
+        using var cancellation = new CancellationTokenSource();
+        var first = Wrapper(native, gate, "request-a").WriteAsync(Key, Write, Condition, cancellation.Token).AsTask();
+        Assert.Equal("waiting", files.ReadReceipt().GetProperty("status").GetString());
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Wrapper(native, gate, "request-b").WriteAsync(Key, Write, Condition).AsTask());
+        Assert.Empty(native.Calls); AssertFailed(files, "OperationCanceledException");
+    }
+
+    [Fact]
+    public async Task Controlled_timeout_fails_the_selected_epoch_without_a_native_write()
+    {
+        using var files = new GateFiles(); files.Arm();
+        var time = new ControlledTime(); using var gate = files.Gate(time); var native = new ForwardingProbe();
+        var first = Wrapper(native, gate, "request-a").WriteAsync(Key, Write, Condition).AsTask();
+        Assert.Equal("waiting", files.ReadReceipt().GetProperty("status").GetString());
+        Assert.Equal(TimeSpan.FromSeconds(10), time.DueTime);
+        time.Fire();
+        await Assert.ThrowsAsync<TimeoutException>(() => first);
+        Assert.Empty(native.Calls); AssertFailed(files, "TimeoutException");
+    }
+
+    [Theory]
+    [InlineData("changed")]
+    [InlineData("removed")]
+    [InlineData("malformed")]
+    public async Task Selected_control_cannot_be_removed_malformed_or_retargeted_to_disable_the_gate(string scenario)
+    {
+        using var files = new GateFiles(); files.Arm();
+        using var gate = files.Gate(); var native = new ForwardingProbe();
+        var first = Wrapper(native, gate, "request-a").WriteAsync(Key, Write, Condition).AsTask();
+        var epoch = files.ReadReceipt().GetProperty("epoch").GetString();
+        if (scenario == "removed") File.Delete(files.Control);
+        else if (scenario == "malformed") files.WriteRaw("{");
+        else files.Arm();
+        var second = Wrapper(native, gate, "request-b").WriteAsync(Key, Write, Condition).AsTask();
+        Assert.All(await Task.WhenAll(Capture(first), Capture(second)), item => Assert.NotNull(item.Error));
+        Assert.Empty(native.Calls);
+        Assert.Equal("failed", files.ReadReceipt().GetProperty("status").GetString());
+        Assert.Equal(epoch, files.ReadReceipt().GetProperty("epoch").GetString());
+        Assert.Equal(0, files.ReadReceipt().GetProperty("releasedCount").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("schema")]
+    [InlineData("duplicate")]
+    [InlineData("foreign-host")]
+    public async Task Malformed_present_control_never_becomes_gate_off(string scenario)
+    {
+        using var files = new GateFiles(); files.Arm();
+        var raw = File.ReadAllText(files.Control);
+        files.WriteRaw(scenario switch {
+            "schema" => raw.Replace("\"schemaVersion\":1", "\"schemaVersion\":2"),
+            "duplicate" => raw.Replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"schemaVersion\":1"),
+            _ => raw.Replace(WidgetTestEnvironment.HostId, "foreign-host")
+        });
+        using var gate = files.Gate(); var native = new ForwardingProbe();
+        Assert.NotNull((await Capture(Wrapper(native, gate, "request-a").WriteAsync(Key, Write, Condition).AsTask())).Error);
+        Assert.Empty(native.Calls); Assert.False(File.Exists(files.Receipt));
+    }
+
+    [Fact]
+    public async Task A_retained_receipt_is_not_overwritten_or_rearmed()
+    {
+        using var files = new GateFiles(); files.Arm(); files.WritePrivate(files.Receipt, "{\"retained\":true}");
+        using var gate = files.Gate(); var native = new ForwardingProbe();
+        Assert.NotNull((await Capture(Wrapper(native, gate, "request-a").WriteAsync(Key, Write, Condition).AsTask())).Error);
+        Assert.Equal("{\"retained\":true}", File.ReadAllText(files.Receipt)); Assert.Empty(native.Calls);
+    }
+
+    [Fact]
+    public async Task Duplicate_HTTP_trace_cannot_supply_the_second_arrival()
+    {
+        using var files = new GateFiles(); files.Arm();
+        using var gate = files.Gate(); var native = new ForwardingProbe();
+        var first = Wrapper(native, gate, "same-http-request").WriteAsync(Key, Write, Condition).AsTask();
+        var second = Wrapper(native, gate, "same-http-request").WriteAsync(Key, Write, Condition).AsTask();
+        Assert.All(await Task.WhenAll(Capture(first), Capture(second)), item => Assert.IsType<InvalidOperationException>(item.Error));
+        Assert.Empty(native.Calls); AssertFailed(files, "InvalidOperationException");
+        Assert.Single(files.ReadReceipt().GetProperty("arrivals").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Opt_in_registration_preserves_the_global_native_service_and_only_wraps_WidgetResource()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync(); using var files = new GateFiles();
+        var services = new ServiceCollection();
+        services.AddSingleton<IHttpContextAccessor>(env.Http); services.AddSingleton<IAuthSessionService>(env.Auth);
+        services.AddSingleton<IPermissionAuthorizationService>(env.Permissions); services.AddSingleton<IStudioPreferenceService>(env.Preferences);
+        services.AddSingleton<IAgentSessionService>(env.Sessions);
+        new AcmeHomeWidgetFeature { StudioHostId = WidgetTestEnvironment.HostId, WriteRendezvousControlFile = files.Control,
+            WriteRendezvousReceiptFile = files.Receipt }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var scope = provider.CreateScope();
+        Assert.Same(env.Preferences, scope.ServiceProvider.GetRequiredService<IStudioPreferenceService>());
+        Assert.Single(services, item => item.ServiceType == typeof(IStudioPreferenceService));
+        Assert.NotNull(provider.GetRequiredService<WidgetWriteRendezvous>());
+        Assert.Equal("rev-1", (await scope.ServiceProvider.GetRequiredService<WidgetResource>().ObserveAsync(null, null, false, default)).Document.Revision);
+        Assert.False(File.Exists(files.Receipt));
+    }
+
+    private static WidgetRendezvousPreferences Wrapper(IStudioPreferenceService native, WidgetWriteRendezvous gate, string trace) =>
+        new(native, gate, new HttpContextAccessor { HttpContext = new DefaultHttpContext { TraceIdentifier = trace } });
+    private static async Task<(StudioPreferenceDocument? Document, Exception? Error)> Capture(Task<StudioPreferenceDocument> task)
+    { try { return (await task, null); } catch (Exception error) { return (null, error); } }
+    private static void AssertFailed(GateFiles files, string failure)
+    { var receipt = files.ReadReceipt(); Assert.Equal("failed", receipt.GetProperty("status").GetString());
+        Assert.Equal(failure, receipt.GetProperty("failure").GetString()); Assert.Equal(0, receipt.GetProperty("releasedCount").GetInt32()); }
+    private static void SetPosixMode(string path, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("These rendezvous tests require the qualified POSIX private-file profile.");
+        File.SetUnixFileMode(path, mode);
+    }
+
+    private sealed class GateFiles : IDisposable
+    {
+        internal string Root { get; } = Directory.CreateTempSubdirectory("acme-write-rendezvous-").FullName;
+        internal string Control => Path.Combine(Root, "control.json");
+        internal string Receipt => Path.Combine(Root, "receipt.json");
+        internal GateFiles() => SetPosixMode(Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        internal void Arm(StudioPreferenceKey? key = null) => WriteRaw(JsonSerializer.Serialize(new { schemaVersion = 1, epoch = Guid.NewGuid().ToString("D"),
+            key = key ?? Key, revision = "rev-1", timeoutMilliseconds = 10_000 }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        internal void WriteRaw(string value) => WritePrivate(Control, value);
+        internal void WritePrivate(string path, string value) { File.WriteAllText(path, value); SetPosixMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
+        internal WidgetWriteRendezvous Gate(TimeProvider? time = null) => WidgetWriteRendezvous.Configure(Control, Receipt, WidgetTestEnvironment.HostId, time ?? new ControlledTime())!;
+        internal JsonElement ReadReceipt() => JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Receipt));
+        public void Dispose() { SetPosixMode(Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute); Directory.Delete(Root, true); }
+    }
+
+    private sealed class ForwardingProbe : IStudioPreferenceService
+    {
+        internal readonly StudioPreferenceDocument Document = new("home-layout", 1, "native-result", Write.Value, DateTimeOffset.UnixEpoch);
+        internal readonly List<(string Kind, StudioPreferenceKey Key, CancellationToken Token)> Calls = [];
+        internal StudioPreferenceWrite? LastWrite; internal StudioPreferenceWriteCondition? LastCondition;
+        public ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+        { Calls.Add(("find", key, cancellationToken)); return ValueTask.FromResult<StudioPreferenceDocument?>(Document); }
+        public ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+        { Calls.Add(("delete", key, cancellationToken)); return ValueTask.FromResult(true); }
+        public ValueTask<StudioPreferenceDocument> WriteAsync(StudioPreferenceKey key, StudioPreferenceWrite write, StudioPreferenceWriteCondition condition, CancellationToken cancellationToken = default)
+        { Calls.Add(("write", key, cancellationToken)); LastWrite = write; LastCondition = condition; return ValueTask.FromResult(Document); }
+    }
+
+    private sealed class ControlledTime : TimeProvider
+    {
+        private TimerCallback? callback; private object? state;
+        internal TimeSpan DueTime { get; private set; }
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        { this.callback = callback; this.state = state; DueTime = dueTime; return new ControlledTimer(); }
+        internal void Fire() => (callback ?? throw new InvalidOperationException("No bounded timer was registered."))(state);
+        private sealed class ControlledTimer : ITimer
+        { public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException(); public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+    }
+}

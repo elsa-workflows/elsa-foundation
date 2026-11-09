@@ -61,6 +61,7 @@
             "IsDefault": false
           },
           "FoundationWorkflowsAgent": {},
+          "FoundationWorkflowsRuntimeAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",

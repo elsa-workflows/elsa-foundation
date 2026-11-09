@@ -19,7 +19,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
         catch (InvalidOperationException) { return false; }
     }
 
-    /// <summary>Commits one immutable live source root with native full-closure lease fencing.</summary>
+    /// <summary>Commits one immutable live source root with native/model full-closure lease fencing.</summary>
     /// <exception cref="InvalidOperationException">Caller writes/transactions are pending, or full root/source identity conflicts.</exception>
     /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">Provider/IO failure or unrequested cancellation; preserves source identity and original cause.</exception>
     public async ValueTask<WorkflowExecutableSourceReference> SaveWithRootWriteLeasesAsync(WorkflowExecutableSourceReference reference,
@@ -54,11 +54,11 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
         {
             // Discover every source/material fact before physical coordination/lease writes acquire locks.
             // Checked paging cannot filter a contradictory current-scope row into false absence.
-            var material = await artifacts.ReadMaintenanceArtifactsAsync(scope, cancellationToken);
+            var material = await artifacts.ReadMaintenanceMaterialAsync(scope, cancellationToken);
             var actual = material.SingleOrDefault(value => value.Identity.ArtifactId == root.ArtifactId);
             if (actual is null || actual.Identity != root)
                 throw new InvalidOperationException("The source root's complete executable pin no longer matches.");
-            var closure = WorkflowExecutableDependencyGraph.ResolveClosure([root], material);
+            var closure = WorkflowExecutableDependencyGraph.ResolveMaterialClosure([root], material);
             if (!closure.Select(value => value.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal)
                     .SetEquals(grants.Select(grant => grant.ArtifactId)))
                 throw new ArgumentException("The source publication requires exactly its complete closure grants.", nameof(leases));

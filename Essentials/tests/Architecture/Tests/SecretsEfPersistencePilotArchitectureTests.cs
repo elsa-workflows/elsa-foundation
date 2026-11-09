@@ -60,6 +60,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Persistence/EntityFramework/EfHostStoreOptions.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigrateOptions.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigratePolicy.cs",
+        "Essentials/src/Persistence/EntityFramework/EfMigrationHistoryRepository.cs",
+        "Essentials/src/Persistence/EntityFramework/EfMigrationIncludesAttribute.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigrationsHistory.cs",
         "Essentials/src/Persistence/EntityFramework/EfModuleAttribute.cs",
         "Essentials/src/Persistence/EntityFramework/EfModuleBinding.cs",
@@ -101,6 +103,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Persistence/EntityFramework/EfSchemaWriteRefusedException.cs",
         "Essentials/src/Persistence/EntityFramework/EfSettingsSection.cs",
         "Essentials/src/Persistence/EntityFramework/EfSharedTransaction.cs",
+        "Essentials/src/Persistence/EntityFramework/EfSourceModel.cs",
+        "Essentials/src/Persistence/EntityFramework/EfSourceRevisions.cs",
         "Essentials/src/Persistence/EntityFramework/EfSqliteMigrationLock.cs",
         "Essentials/src/Persistence/EntityFramework/EfSqliteSerialOpenInterceptor.cs",
         "Essentials/src/Persistence/EntityFramework/EfWriteConflict.cs",
@@ -232,6 +236,9 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionReindex.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsV1Upcaster.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsWriteVersion.cs",
+        "Essentials/tests/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.Reuse.cs",
         "Essentials/tests/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/BackfillScenario.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/BackfillWithdrawalRace.cs",
@@ -291,6 +298,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Persistence/EntityFramework/Tests/SchemaChains.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SchemaGateSupport.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs",
+        "Essentials/tests/Persistence/EntityFramework/Tests/SourceRevisionSchemaFamilyTests.cs",
+        "Essentials/tests/Persistence/EntityFramework/Tests/SourceRevisionTests.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SqliteMigrationLockRow.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/StartupInsertRace.cs",
         "Essentials/tests/Persistence/EntityFramework/Tests/SyntheticOrders.cs",
@@ -314,6 +323,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsFeatureKeySettingsShellTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsNameSchemaTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsProjectionContractTests.cs",
@@ -323,7 +333,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreReuseSecretsModel.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
-        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs"
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs",
     ];
 
     [Fact]

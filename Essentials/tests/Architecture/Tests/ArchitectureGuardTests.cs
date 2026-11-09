@@ -97,11 +97,11 @@ public sealed partial class ArchitectureGuardTests
     {
         var policy = Path.Combine(RepoRoot, "Essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
-        // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
+        // Its three project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
         // holds the write refusal's persistence-agnostic base that the domain APIs answer, and
-        // Elsa.Persistence.Schema is the EF-free half of the schema-family surface every host shares (#2143).
+        // Elsa.Persistence.Schema is the EF-free schema-family surface; Persistence.Core adds shared source contracts.
         Assert.Equal(
-            new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj" },
+            new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj", "../Core/Elsa.Persistence.Core.csproj" },
             project.Descendants("ProjectReference").Select(reference => reference.Attribute("Include")?.Value ?? string.Empty));
         Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
             (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
@@ -557,6 +557,7 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Agent.", "Agent"),
         ("Elsa.Etl.", "Etl"),
         ("Elsa.Rules.", "Rules"),
+        ("Elsa.Decisions.", "Decisions"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
         ("Elsa.Integrations.", "Integrations"),
     ];
@@ -613,9 +614,13 @@ public sealed partial class ArchitectureGuardTests
         // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
         // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
         // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
-        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
+        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name == bucket.Prefix.TrimEnd('.')
+                || project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
         {
-            var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
+            // A module's root implementation uses its full assembly name as the folder,
+            // just as the root implementation does when a domain folder has child projects.
+            var subPath = project.Name == owner.Prefix.TrimEnd('.')
+                ? project.Name : string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
             var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
             return NameDerivedPath(project, $"Extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
         }

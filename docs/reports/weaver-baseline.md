@@ -149,7 +149,7 @@ Relevant implementation: [Studio registry](../../Studio/src/essentials/Elsa.Stud
 [services](../../Extensions/Agent/src/Core/Services/DefaultAgentServices.cs),
 [turn lifecycle](../../Extensions/Agent/src/Core/Services/AgentTurnServices.cs),
 [registrations](../../Extensions/Agent/src/Core/Extensions/AgentServiceCollectionExtensions.cs) and
-[workflow defaults](../../Extensions/Agent/src/Workflows/Services/WorkflowAgentServices.cs).
+[workflow defaults](../../Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/Services/WorkflowAgentServices.cs).
 
 ## Validation and limits
 
@@ -166,6 +166,10 @@ Relevant implementation: [Studio registry](../../Studio/src/essentials/Elsa.Stud
   was made in this worktree and does not change the running developer binaries.
 
 ## Inputs to M1 and later qualification
+
+### Source inventory refresh, 30 October 2026
+
+Main `931123c7e` adds reusable workflow templates under the Workflows module: `/workflows/templates`, its selected template editor, and the existing `elsa.api.workflow-design` capability's template links for native list/read/create/replace/delete. Appearance now separates workspace style from color scheme. These are source-confirmed additions merged into the implementation branch; they were not part of the 29 October live observation above. [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) must include exact template identity/revision, unsaved editor state and explicit native persistence in its workflow coverage. M4 must use the updated appearance context. Neither source presence nor existing prompt dispatch establishes an accepted Weaver journey for these additions.
 
 M1 should retain one active provider and the existing shared tool currency, reconcile contribution
 discovery, replace workflow route inference with module-owned target/context selection, and define

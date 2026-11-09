@@ -1,3 +1,4 @@
+import { reconcileSwitchOutcomeConnections, switchOutcomePorts, normalizeSwitchOutcome } from "./switchOutcomePorts";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
 import {
@@ -12,7 +13,9 @@ import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicAct
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
 import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
+import { persistedNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
+import type { CollectionSlot } from "./collectionSlots";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
@@ -45,6 +48,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   icon?: WorkflowNodeIcon;
   iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
+  collectionSlots?: CollectionSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
@@ -118,6 +122,8 @@ export interface ChildSlot {
   slotNameTemplate?: string;
   collectionIndex?: number;
   collectionItemLabel?: string;
+  collectionItemId?: string;
+  itemIdProperty?: string;
 }
 
 export interface StructureDesignFacet {
@@ -142,6 +148,8 @@ export interface StructureDesignSlotDescriptor {
   childProperty?: string;
   labelProperty?: string;
   slotNameTemplate?: string;
+  itemIdProperty?: string;
+  conditionProperty?: string;
 }
 
 export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
@@ -151,13 +159,12 @@ export interface CanvasScope {
   slot: ChildSlot;
 }
 
-// A ScopeFrame {ownerNodeId, slotId, label} means: descend into the container activity `ownerNodeId`
-// (which must live in *some* slot of the CURRENT owner), then view THAT container's slot with id
-// `slotId`. Intermediate frames only descend; the *last* frame's `slotId` names the slot the canvas
-// renders. This makes non-primary slots (e.g. a ForEach body or a Switch case) addressable, and
-// matches what workflowDocument.enterSlot / InspectorPanel emit: enterSlot(owner, slotId) records
-// {ownerNodeId: owner.nodeId, slotId: <owner's own slot id>}.
+// Legacy frames descend into a child, then select that owner's slot. A leading root frame selects
+// a declared slot on the root without descending. Empty paths still select the primary root slot.
+// Frames are in-memory navigation state and do not change persisted activity graphs.
 export interface ScopeFrame {
+  /** A leading selector for a declared root slot; absent on legacy child-descent frames. */
+  kind?: "root";
   ownerNodeId: string;
   slotId: string;
   label: string;
@@ -172,7 +179,11 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   if (!root) return null;
 
   let owner = root;
-  for (const frame of frames) {
+  for (const [index, frame] of frames.entries()) {
+    if (frame.kind === "root") {
+      if (index !== 0 || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return null;
+      continue;
+    }
     const nextOwner = findChildInAnySlot(owner, frame.ownerNodeId, catalog);
     if (!nextOwner) return null;
     owner = nextOwner;
@@ -276,13 +287,10 @@ export function findNodeScopePath(
   if (!located) return null;
   const { hops, targetSlot } = located;
 
-  // A direct child of the root: every frame descends INTO a child (the root is the implicit starting
-  // owner and never appears as a frame's ownerNodeId), so only the root's primary slot is reachable —
-  // the empty path lands it via resolveScope's slots[0] fallback. A node in the root's non-primary
-  // slot has no navigable path; treat it as not found.
-  if (hops.length === 0) {
-    return targetSlot.id === getChildSlots(root, catalog)[0]?.id ? [] : null;
-  }
+  const rootSlot = hops[0]?.slot ?? targetSlot;
+  const secondaryRootSlot = rootSlot.id !== getChildSlots(root, catalog)[0]?.id;
+  const rootFrame: ScopeFrame = { kind: "root", ownerNodeId: root.nodeId, slotId: rootSlot.id, label: slotCrumbLabel(labelFor(root), rootSlot) };
+  if (hops.length === 0) return secondaryRootSlot ? [rootFrame] : [];
 
   // Replay the slot entries a user would perform along the chain, consuming hops greedily: an entry
   // that descends THROUGH its single container child consumes TWO hops and emits the hidden owner
@@ -290,8 +298,22 @@ export function findNodeScopePath(
   // and emits one visible frame. planSlotNavigation descends one level per entry, so a frame is hidden
   // only as the first half of its own pair — a chained descend-through further down must not blank the
   // previous pair's visible crumb.
-  const frames: ScopeFrame[] = [];
-  for (let index = 0; index < hops.length;) {
+  const frames: ScopeFrame[] = secondaryRootSlot ? [rootFrame] : [];
+  // Match manual entry when a single root slot descends through its container child.
+  let startIndex = 0;
+  if (resolveDescendThroughChild(rootSlot, catalog)) {
+    const viewedSlot = hops[1]?.slot ?? targetSlot;
+    if (secondaryRootSlot) rootFrame.label = "";
+    frames.push({
+      ownerNodeId: hops[0].child.nodeId,
+      slotId: viewedSlot.id,
+      label: viewedSlot.id === getChildSlots(hops[0].child, catalog)[0]?.id
+        ? slotCrumbLabel(labelFor(root), rootSlot)
+        : slotCrumbLabel(labelFor(hops[0].child), viewedSlot)
+    });
+    startIndex = 1;
+  }
+  for (let index = startIndex; index < hops.length;) {
     const hop = hops[index];
     const nextHop = hops[index + 1];
     // Each visible frame views the slot the chain continues through; the last frame views the slot
@@ -329,10 +351,8 @@ export interface SlotNavigationPlan {
   selectedNodeId: string | null;
 }
 
-// Computes the frame path for entering `slot` on the activity `ownerNodeId`, given the live `frames`
-// (whose resolved owner is `scopeOwner`). Returns null when the slot has no addressable path (a
-// non-primary slot of the root scope owner — every frame descends INTO a child, so the root's own
-// non-primary slots are unreachable; see findNodeScopePath).
+// Computes the frame path for entering a slot on an activity in the current scope. Root slots are
+// checked against declared metadata; secondary root slots use a leading root selector.
 //
 // Policy:
 // - A single-cardinality slot whose only child is itself a canvas container (primary slot in
@@ -355,14 +375,19 @@ export function planSlotNavigation(
   const descend = resolveDescendThroughChild(slot, catalog);
   const ownerIsScopeOwner = scopeOwner?.nodeId === ownerNodeId;
 
-  if (ownerIsScopeOwner && frames.length === 0) {
-    // The root scope owner. Its primary slot IS the root canvas (frames=[]); other slots are not
-    // addressable as frames.
-    if (scopeOwner && getChildSlots(scopeOwner, catalog)[0]?.id !== slot.id) return null;
+  const ownerIsRoot = ownerIsScopeOwner && (frames.length === 0 || frames.length === 1 && frames[0].kind === "root");
+  if (ownerIsRoot) {
+    const slots = getChildSlots(scopeOwner, catalog);
+    if (!slots.some(candidate => candidate.id === slot.id)) return null;
+    const facet = readStructureDesignFacet(resolveCatalogItem(scopeOwner, catalog));
+    // A v2 collection can insert a new primary slot before Default. Explicit navigation must pin
+    // fixed slots as well as cases, including while the collection is still empty.
+    const mutablePrimary = facet?.payload.slots.some(descriptor => descriptor.itemIdProperty) === true;
+    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id && slot.collectionItemId === undefined && !mutablePrimary ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
     if (descend) {
-      return { frames: [{ ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
+      return { frames: [...rootFrames, { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
-    return { frames: [], selectedNodeId: child?.nodeId ?? null };
+    return { frames: rootFrames, selectedNodeId: child?.nodeId ?? null };
   }
 
   const base = ownerIsScopeOwner ? frames.slice(0, -1) : frames;
@@ -406,6 +431,30 @@ export function resolveScope(root: ActivityNode | null | undefined, frames: Scop
   if (!slot) return null;
 
   return { owner, slot };
+}
+
+// History may remove the container currently being viewed. Keep its nearest surviving slot active
+// instead of redirecting an edit to the primary root slot. The original path may be retained for redo.
+export function resolveScopeFrames(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ScopeFrame[] {
+  for (let length = frames.length; length > 0; length--) {
+    const path = frames.slice(0, length);
+    const scope = resolveScope(root, path, catalog);
+    if (!scope) continue;
+    if (scope.slot.collectionItemId !== undefined || !path.at(-1)!.label) {
+      const item = resolveCatalogItem(scope.owner, catalog);
+      path[length - 1] = { ...path[length - 1], label: slotCrumbLabel(item ? getActivityDisplay(item) : scope.owner.nodeId, scope.slot) };
+    }
+    for (let index = 0; index < path.length; index++) {
+      const current = resolveScope(root, path.slice(0, index + 1), catalog);
+      if (!current || current.slot.collectionItemId === undefined) continue;
+      const item = resolveCatalogItem(current.owner, catalog);
+      const label = slotCrumbLabel(item ? getActivityDisplay(item) : current.owner.nodeId, current.slot);
+      if (path[index].label === "" && path[index + 1]) path[index + 1] = { ...path[index + 1], label };
+      else path[index] = { ...path[index], label };
+    }
+    return path;
+  }
+  return [];
 }
 
 // Finds the child node `nodeId` in whichever of `owner`'s slots contains it, along with that slot (so a
@@ -514,11 +563,14 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
     collectionProperty: readOptionalString(value.collectionProperty),
     childProperty: readOptionalString(value.childProperty),
     labelProperty: readOptionalString(value.labelProperty),
+    itemIdProperty: readOptionalString(value.itemIdProperty),
+    conditionProperty: readOptionalString(value.conditionProperty),
     slotNameTemplate: readOptionalString(value.slotNameTemplate)
   };
 }
 
 function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+  const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
       // Capture the narrowed values into locals so the `string` narrowing survives into the
@@ -530,7 +582,7 @@ function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDe
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
         const labelValue = descriptor.labelProperty ? item[descriptor.labelProperty] : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined)];
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined, fixedLabels, descriptor.itemIdProperty && typeof item[descriptor.itemIdProperty] === "string" ? item[descriptor.itemIdProperty] as string : undefined)];
       });
     }
 
@@ -544,15 +596,17 @@ function createChildSlot(
   value: unknown,
   mode: ChildSlot["mode"],
   collectionIndex?: number,
-  collectionItemLabel?: string
+  collectionItemLabel?: string,
+  fixedLabels?: ReadonlySet<string>,
+  collectionItemId?: string
 ): ChildSlot {
   const collectionSuffix = collectionIndex === undefined
     ? ""
-    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionIndex}`;
+    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionItemId !== undefined ? `id:${encodeURIComponent(collectionItemId)}` : collectionIndex}`;
 
   return {
     id: `${structureKind}:${descriptor.property}${collectionSuffix}`,
-    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel),
+    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel, fixedLabels),
     property: descriptor.property,
     cardinality: descriptor.cardinality,
     mode,
@@ -562,6 +616,8 @@ function createChildSlot(
     labelProperty: descriptor.labelProperty,
     slotNameTemplate: descriptor.slotNameTemplate,
     collectionIndex,
+    itemIdProperty: descriptor.itemIdProperty,
+    collectionItemId,
     collectionItemLabel
   };
 }
@@ -571,20 +627,12 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
   return isActivityNode(value) ? [value] : [];
 }
 
-function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
-  const ordinal = String(index + 1);
-  if (descriptor.slotNameTemplate) {
-    // One pass keeps authored braces and dollar replacement tokens literal.
-    return descriptor.slotNameTemplate.replace(/\{([^{}]+)\}/g, (token, key: string) => {
-      if (key === descriptor.labelProperty || key === "label") return labelValue ?? ordinal;
-      if (key === "name") return descriptor.name;
-      if (key === "displayName") return descriptor.displayName;
-      if (key === "index") return ordinal;
-      return token;
-    });
-  }
-
-  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${ordinal}`;
+function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string, fixedLabels?: ReadonlySet<string>) {
+  // The slot-name template identifies the runtime contract; authoring surfaces show the authored name.
+  // Quote special values and fixed-slot collisions; escape literal quotes so the display stays unambiguous.
+  if (labelValue !== undefined) return labelValue === labelValue.trim() && labelValue.length > 0
+    && !labelValue.startsWith('"') && !fixedLabels?.has(labelValue) ? labelValue : JSON.stringify(labelValue);
+  return `${descriptor.displayName} ${index + 1}`;
 }
 
 function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
@@ -595,6 +643,10 @@ function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLook
 }
 
 function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
+  if (slot.itemIdProperty && slot.collectionItemId !== undefined) {
+    const matches = collection.flatMap((item, index) => isRecord(item) && item[slot.itemIdProperty!] === slot.collectionItemId ? [index] : []);
+    return matches.length === 1 ? matches[0] : -1;
+  }
   if (slot.labelProperty && slot.collectionItemLabel !== undefined) {
     const matches = collection
       .map((item, index) => isRecord(item) && item[slot.labelProperty!] === slot.collectionItemLabel ? index : -1)
@@ -621,12 +673,13 @@ export function buildCanvas(
   const startNodeId = scope.slot.mode === "flowchart" ? readFlowchartStartNodeId(scope.owner) : null;
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
-    const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
+    const record = layoutByNodeId.get(activity.nodeId);
+    const position = record ?? defaultPosition(scope.slot.mode, index);
     return createWorkflowNode(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
-      { isStartNode: activity.nodeId === startNodeId },
+      { isStartNode: activity.nodeId === startNodeId, width: readSavedNodeWidth(record?.width) },
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
@@ -646,14 +699,16 @@ export function buildUnsupportedActivityCanvas(
   activityPresentation?: ActivityPresentationRecord[]
 ) {
   const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
-  const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
+  const record = layout.find(candidate => candidate.nodeId === activity.nodeId);
+  const position = record ?? { x: 0, y: 0 };
 
   return {
     nodes: [createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {
       connectable: false,
       deletable: false,
       draggable: false,
-      suppressFlowPorts: true
+      suppressFlowPorts: true,
+      width: readSavedNodeWidth(record?.width)
     }, formatSummary, indexActivityPresentation(activityPresentation).get(activity.nodeId))],
     edges: [] satisfies Edge[]
   };
@@ -698,15 +753,20 @@ function updateScopeAtFrames(
   root: ActivityNode,
   frames: ScopeFrame[],
   catalog: ActivityCatalogLookup,
-  apply: (owner: ActivityNode) => ActivityNode
+  apply: (owner: ActivityNode) => ActivityNode,
+  atRoot = true
 ): ActivityNode {
   if (frames.length === 0) return apply(root);
 
   const [frame, ...rest] = frames;
+  if (frame.kind === "root") {
+    if (!atRoot || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return root;
+    return updateScopeAtFrames(root, rest, catalog, apply, false);
+  }
   const located = locateChildSlot(root, frame.ownerNodeId, catalog);
   if (!located) return root;
 
-  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply);
+  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false);
   if (updatedChild === located.child) return root;
 
   const updatedActivities = located.slot.activities.map(activity =>
@@ -730,10 +790,31 @@ export function updateActivity(root: ActivityNode, nodeId: string, update: (acti
       return updated;
     });
 
-    if (changed) next = replaceSlotActivities(next, slot, updatedActivities);
+    if (changed) next = reconcileSwitchOutcomeConnections(replaceSlotActivities(next, slot, updatedActivities), slot.activities, updatedActivities);
   }
 
   return changed ? next : root;
+}
+
+/** Only warn when removing this case actually removes an emitted outcome with authored wires. */
+export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: ActivityNode, index: number, catalog?: ActivityCatalogLookup): boolean {
+  const entries = activity.structure?.payload.cases;
+  if (!Array.isArray(entries) || !isRecord(entries[index]) || typeof entries[index].match !== "string" || !switchOutcomePorts(activity)) return false;
+  const outcome = normalizeSwitchOutcome(entries[index].match);
+  const remaining = { ...activity, structure: { ...activity.structure!, payload: { ...activity.structure!.payload, cases: entries.filter((_, i) => i !== index) } } };
+  if (switchOutcomePorts(remaining)?.some(port => port.name === outcome)) return false;
+  const payload = root.structure?.payload;
+  if (root.structure?.kind === flowchartStructureKind && Array.isArray(payload?.connections)
+    && payload.connections.some(value => isRecord(value) && isRecord(value.source)
+      && value.source.nodeId === activity.nodeId && typeof value.source.port === "string" && normalizeSwitchOutcome(value.source.port) === outcome)) return true;
+  if (root.structure?.kind === bpmnStructureKind && Array.isArray(payload?.elements) && Array.isArray(payload?.sequenceFlows)) {
+    const ids = new Set(payload.elements.filter(value => isRecord(value) && value.childNodeId === activity.nodeId).map(value => (value as Record<string, unknown>).elementId));
+    const defaults = new Set<unknown>(payload.elements.filter(isRecord).map(value => value.defaultFlowId).filter(id => typeof id === "string"));
+    if (payload.sequenceFlows.some(value => isRecord(value) && ids.has(value.sourceRef)
+      && value.isDefault !== true && !defaults.has(value.flowId)
+      && typeof value.conditionOutcome === "string" && normalizeSwitchOutcome(value.conditionOutcome) === outcome)) return true;
+  }
+  return getChildSlots(root, catalog).some(slot => slot.activities.some(child => hasSwitchCaseOutgoingConnections(child, activity, index, catalog)));
 }
 
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
@@ -804,11 +885,14 @@ export function withFlowchartConnections(owner: ActivityNode, edges: Edge[]) {
 export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
   const byNodeId = new Map(layout.map(record => [record.nodeId, record]));
   for (const node of nodes) {
+    const previous = byNodeId.get(node.id);
+    const width = persistedNodeWidth(node, previous?.width);
     byNodeId.set(node.id, {
-      ...(byNodeId.get(node.id) ?? { nodeId: node.id }),
+      ...(previous ?? { nodeId: node.id }),
       nodeId: node.id,
       x: Math.round(node.position.x),
-      y: Math.round(node.position.y)
+      y: Math.round(node.position.y),
+      ...(width !== undefined ? { width } : {})
     });
   }
   return [...byNodeId.values()];
@@ -862,7 +946,7 @@ function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
-  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean } = {},
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean; width?: number } = {},
   formatSummary?: WorkflowNodeSummaryFormatter,
   presentation?: ActivityPresentationRecord
 ): Node<WorkflowNodeData> {
@@ -870,6 +954,7 @@ function createWorkflowNode(
     id: activity.nodeId,
     type: "workflowActivity",
     position,
+    ...(options.width !== undefined ? { width: options.width } : {}),
     connectable: options.connectable,
     deletable: options.deletable,
     draggable: options.draggable,
@@ -1031,7 +1116,9 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
         id: typeof (connection as { id?: unknown }).id === "string" ? String((connection as { id?: unknown }).id) : `flow-${index}-${source.nodeId}-${target.nodeId}`,
         source: source.nodeId,
         target: target.nodeId,
-        sourceHandle: source.port,
+        sourceHandle: Array.isArray(owner.structure?.payload.activities)
+          && owner.structure.payload.activities.some(item => isActivityNode(item) && item.nodeId === source.nodeId && switchOutcomePorts(item))
+          ? normalizeSwitchOutcome(source.port ?? "Done") : source.port,
         targetHandle: target.port && target.port !== "Done" ? target.port : undefined,
         type: "workflow",
         label: source.port && source.port !== "Done" ? source.port : undefined,
@@ -1042,10 +1129,15 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  const structured = switchOutcomePorts(activity);
+  if (structured) return structured;
   const cases = readStringList((activity as { cases?: unknown }).cases);
   if (isFlowSwitch(activity, catalogItem) && cases.length > 0) {
     return [...cases.map(name => ({ name, displayName: name })), { name: "Default", displayName: "Default" }];
   }
+
+  const dynamic = readValueOutcomePorts(activity, catalogItem);
+  if (dynamic) return dynamic;
 
   const descriptorPorts = [
     ...readFlowPorts(catalogItem?.designFacets),
@@ -1092,6 +1184,36 @@ function isFlowSwitch(activity: ActivityNode, catalogItem?: ActivityCatalogItem)
   const key = catalogItem?.activityTypeKey ?? activity.activityVersionId;
   const name = catalogItem?.displayName ?? "";
   return key.endsWith(".FlowSwitch") || key === "FlowSwitch" || name === "FlowSwitch";
+}
+
+/** Mirrors the compiler's literal collection outcome rule, preserving opaque keys and outcome casing. */
+function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalogItem): WorkflowPortDescriptor[] | null {
+  const facet = catalog?.designFacets?.find(item => isRecord(item) && item.kind === "elsa.outcomes");
+  if (!isRecord(facet) || !isRecord(facet.payload) || !isRecord(facet.payload.dynamicOutcomes)) return null;
+  const rule = facet.payload.dynamicOutcomes;
+  if (rule.kind !== "valuePerItem" || typeof rule.source !== "string") return null;
+  const descriptor = catalog?.inputs.find(item => isRecord(item) && (item.referenceKey === rule.source || item.name === rule.source));
+  const referenceKey = isRecord(descriptor) && typeof descriptor.referenceKey === "string" ? descriptor.referenceKey : rule.source;
+  const wrapped = activity[referenceKey];
+  let value: unknown;
+  if (isRecord(wrapped) && isRecord(wrapped.expression)) {
+    if (!["Literal", "Object"].includes(String(wrapped.expression.type))) return null;
+    value = wrapped.expression.value;
+  } else if (wrapped !== undefined) value = wrapped;
+  else {
+    const wire = activity.inputs.find(item => isRecord(item) && item.referenceKey === referenceKey);
+    if (isRecord(wire) && isRecord(wire.value)) {
+      if (!["Literal", "Object"].includes(String(wire.value.expressionType))) return null;
+      value = wire.value.value;
+    } else if (isRecord(descriptor) && (!descriptor.defaultSyntax || ["Literal", "Object"].includes(String(descriptor.defaultSyntax)))) value = descriptor.defaultValue;
+  }
+  if (typeof value === "string") { try { value = JSON.parse(value); } catch { return null; } }
+  if (!Array.isArray(value)) return null;
+  const ports = value.filter(item => typeof item === "string" || typeof item === "number").map(String).filter(name => name.trim().length > 0);
+  if (!ports.length) return null;
+  const fixed = readFlowPorts([facet.payload]);
+  return uniquePorts([...fixed, ...ports.map(name => ({ name, displayName: name })),
+    ...(typeof rule.unmatched === "string" && rule.unmatched ? [{ name: rule.unmatched, displayName: rule.unmatched }] : [])]);
 }
 
 function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {

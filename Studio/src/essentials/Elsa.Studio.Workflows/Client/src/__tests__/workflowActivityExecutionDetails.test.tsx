@@ -15,7 +15,7 @@ import {
   getIncidentStackTrace,
   loadActiveIncidentActivitySummaries
 } from "../workflow-editor/WorkflowInstances";
-import type { ScopeFrame } from "../workflowAdapter";
+import { findNodeScopePath, type ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -28,8 +28,10 @@ import type {
   WorkflowExecutableNode
 } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { runtimeValueContextId, runtimeValuePayloadKey } from "../workflow-editor/RuntimeValueEvidence";
+import type { PreparedAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
 import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
+import { ifActivity, ifNode, bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
@@ -1398,6 +1400,52 @@ it.each([false, true])("keeps other evidence available when a partial response o
   expect(container.textContent).not.toContain("No incidents recorded for this execution.");
 });
 
+it("uses the next occurrence's prepared value immediately after retrying a previous value", async () => {
+  const snapshot = valueEvidence({ inputKey: "Value" });
+  const prepared: PreparedAttachedExecution = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: activity.workflowExecutionId,
+    execution: activity, inspection: inspection([snapshot]), values: new Map([[runtimeValuePayloadKey(snapshot), { status: "failed", error: "Unavailable" }]]) };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepared} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "Retried previous value" } });
+  const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Retry")!;
+  flushSync(() => retry.click());
+  await waitFor(() => expect(container.textContent).toContain("Retried previous value"));
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const nextPrepared: PreparedAttachedExecution = { ...prepared, execution: next,
+    inspection: { ...inspection([snapshot]), activityExecutionId: next.activityExecutionId },
+    values: new Map([[runtimeValuePayloadKey(snapshot), { status: "ready", payload: { kind: "string", preview: "Prepared next value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={nextPrepared} />);
+  expect(container.textContent).toContain("Prepared next value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+  const returningPrepared: PreparedAttachedExecution = { ...prepared, values: new Map([[runtimeValuePayloadKey(snapshot),
+    { status: "ready", payload: { kind: "string", preview: "Prepared returning value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={returningPrepared} />);
+  expect(container.textContent).toContain("Prepared returning value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+});
+
+it("requires a fresh sensitive reveal after navigating away and back with prepared evidence", async () => {
+  const snapshot = valueEvidence({ inputKey: "Secret", name: "Secret", isSensitive: true });
+  const prepare = (value: ActivityExecutionStateSummary): PreparedAttachedExecution => ({ contextIdentity: runtimeValueContextId(context),
+    workflowExecutionId: value.workflowExecutionId, execution: value,
+    inspection: { ...inspection([snapshot]), activityExecutionId: value.activityExecutionId }, values: new Map() });
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "TOP_SECRET_RAW_VALUE" } });
+  const show = [...container.querySelectorAll("button")].find(button => button.textContent === "Show captured value")!;
+  flushSync(() => show.click());
+  await waitFor(() => expect(container.textContent).toContain("TOP_SECRET_RAW_VALUE"));
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={prepare(next)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  expect(container.textContent).toContain("Show captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+});
+
 describe("WorkflowIncidentList", () => {
   it("renders a full stack trace disclosure when incident metadata includes one", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";
@@ -1471,6 +1519,19 @@ describe("buildInstanceCanvas", () => {
     expect(navigated).toHaveLength(1);
     return navigated[0];
   }
+
+  it("locates secondary root-slot evidence and renders its owning nested graph read-only", () => {
+    const root = ifNode("if-root", leafNode("sibling"), innerFlowchart);
+    const catalog = [...instanceCatalog, ifActivity];
+    const path = findNodeScopePath(root, "wl-2", node => node.nodeId, catalog)!;
+    expect(path).not.toBeNull();
+    const version = { ...definitionVersion, state: { rootActivity: root } };
+    const before = structuredClone(version);
+    const canvas = buildInstanceCanvas(version, catalog, instanceDetails([]), null, path, () => {});
+    expect(canvas.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
+    expect(canvas.nodes.every(node => node.draggable === false && node.deletable === false)).toBe(true);
+    expect(version).toEqual(before);
+  });
 
   it("descends through a single flowchart Body child on slot entry", () => {
     const frames = enterForEachBody();

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <Version>__VERSION__</Version><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Elsa.Activities.Design.Core" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Workflows.Publishing.Core" Version="__VERSION__" />
+    <PackageReference Include="Acme.Specialists.Runtime" Version="__VERSION__" />
+  </ItemGroup>
+</Project>

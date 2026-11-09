@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useDialogFocus, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { useDialogFocus, describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import { createConnection } from "./connectionsApi";
 import type {
@@ -34,6 +34,9 @@ export function ConnectionCreateDialog({
   const [boundContext, setBoundContext] = useState(context);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [revealedSettings, setRevealedSettings] = useState<string[]>([]);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const currentContextRef = useRef(context);
@@ -79,8 +82,8 @@ export function ConnectionCreateDialog({
   });
   const visibleAdvancedApiKeyNames = apiKeyFields
     ? [
-      apiKeyFields.headerName.required ? null : effectivePlacement === "header" ? apiKeyFields.headerName : null,
-      apiKeyFields.queryName.required ? null : effectivePlacement === "query" ? apiKeyFields.queryName : null
+      apiKeyFields.headerName.required ? null : (effectivePlacement === "header" || revealedSettings.includes(apiKeyFields.headerName.name)) ? apiKeyFields.headerName : null,
+      apiKeyFields.queryName.required ? null : (effectivePlacement === "query" || revealedSettings.includes(apiKeyFields.queryName.name)) ? apiKeyFields.queryName : null
     ].filter((field): field is AuthSchemeDescriptor["fields"][number] => field !== null)
     : [];
   const advancedSettingNames = new Set([
@@ -106,10 +109,14 @@ export function ConnectionCreateDialog({
     return input.selectedSecret?.name === input.existingSecretName
       && isEligibleSecret(input.selectedSecret);
   });
+  const nameError = validateName(contextIsCurrent ? name : "");
+  const visibleNameError = fieldErrors.name || (touched.name || name.trim() ? nameError : null);
+  const advancedHasError = invalidPlacement || [...advancedSettingNames].some(key => !!fieldErrors[`settings.${key}`]);
   const canSubmit = contextIsCurrent
     && !!selectedType
     && !!selectedScheme
-    && name.trim().length > 0
+    && !nameError
+    && Object.keys(fieldErrors).length === 0
     && validRequiredSettings
     && validRequiredSchemeSettings
     && hasHttpAddress
@@ -119,8 +126,10 @@ export function ConnectionCreateDialog({
   useDialogFocus(dialogRef, contextIsCurrent && !submitting ? onCancel : null);
 
   useEffect(() => {
-    if (error) errorRef.current?.focus();
-  }, [error]);
+    if (!error || submitting) return;
+    const invalid = dialogRef.current?.querySelector<HTMLElement>("[aria-invalid='true']");
+    (invalid ?? errorRef.current)?.focus();
+  }, [error, submitting]);
 
   useEffect(() => {
     if (boundContext === context) return;
@@ -131,14 +140,33 @@ export function ConnectionCreateDialog({
     setAuthScheme(initialSchemeName(descriptors, nextTypeName));
     setSettings({});
     setCredentialInputs({});
-    setError(null);
+    setTouched({});
+    setRevealedSettings([]);
+    clearErrors();
     submittingRef.current = false;
     setSubmitting(false);
   }, [boundContext, context, descriptors]);
 
+  function clearErrors(field?: string) {
+    setError(null);
+    setFieldErrors(current => field
+      ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== field))
+      : {});
+  }
+
+  function fieldError(key: string, requiredMessage?: string) {
+    return fieldErrors[key] || (touched[key] ? requiredMessage : undefined);
+  }
+
+  function touch(key: string) {
+    setTouched(current => ({ ...current, [key]: true }));
+  }
+
   function resetCredentials() {
     setCredentialInputs({});
-    setError(null);
+    setTouched({});
+    setRevealedSettings([]);
+    clearErrors();
   }
 
   function changeType(nextTypeName: string) {
@@ -158,7 +186,7 @@ export function ConnectionCreateDialog({
 
   function setCredentialInput(fieldName: string, input: ConnectionCredentialInput) {
     setCredentialInputs(current => ({ ...current, [fieldName]: input }));
-    setError(null);
+    clearErrors(`secretFields.${fieldName}`);
   }
 
   async function submit(event: React.FormEvent) {
@@ -167,7 +195,7 @@ export function ConnectionCreateDialog({
 
     submittingRef.current = true;
     setSubmitting(true);
-    setError(null);
+    clearErrors();
     const operationContext = context;
     let closed = false;
     try {
@@ -198,8 +226,21 @@ export function ConnectionCreateDialog({
       onCreated(created);
       onCancel();
     } catch (cause) {
+      const message = await describeApiError(cause);
+      const validation = await tryExtractValidationErrors(cause);
       if (currentContextRef.current === operationContext) {
-        setError(errorMessage(cause));
+        const knownKeys = ["name", ...typeSettings.map(field => `settings.${field.name}`),
+          ...nonSensitiveSchemeFields.map(field => `settings.${field.name}`),
+          ...sensitiveFields.map(field => `secretFields.${field.name}`)];
+        const mapped: Record<string, string> = {};
+        for (const [key, messages] of Object.entries(validation ?? {})) {
+          const known = knownKeys.find(candidate => candidate.toLowerCase() === key.toLowerCase());
+          if (known && messages.length) mapped[known] = messages.join(" ");
+        }
+        setRevealedSettings(current => [...new Set([...current,
+          ...Object.keys(mapped).filter(key => key.startsWith("settings.")).map(key => key.slice("settings.".length))])]);
+        setFieldErrors(mapped);
+        setError(message || "The connection could not be created.");
       }
     } finally {
       if (!closed && currentContextRef.current === operationContext) {
@@ -219,10 +260,12 @@ export function ConnectionCreateDialog({
       && !field.required
       && isKnownHttpSetting(field, "allowInsecureHttp", "checkbox");
     const isAllowedHosts = httpAddressFields?.allowedHosts.name === field.name;
+    const key = `settings.${field.name}`;
+    const message = fieldError(key, field.required && !isSettingPresent(field, visibleSettings[field.name]) ? `${field.displayName} is required.` : undefined);
 
     return (
-      <label className="connection-setting-field" key={field.name} htmlFor={id}>
-        {field.displayName}{field.required ? " (required)" : ""}
+      <div className="connection-setting-field" key={field.name}>
+        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
         <input
           id={id}
           type={isCheckbox ? "checkbox" : "text"}
@@ -230,7 +273,9 @@ export function ConnectionCreateDialog({
           checked={isCheckbox ? checked : undefined}
           value={isCheckbox ? undefined : visibleSettings[field.name] ?? ""}
           placeholder={isAllowedHosts ? "api.example, *.googleapis.com" : undefined}
-          aria-describedby={isBaseUrl && showAddressGuidance ? addressGuidanceId : undefined}
+          aria-invalid={!!message || undefined}
+          aria-describedby={[isBaseUrl && showAddressGuidance ? addressGuidanceId : "", message ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined}
+          onBlur={() => touch(key)}
           disabled={!contextIsCurrent || submitting}
           onChange={event => {
             setSettings(current => {
@@ -242,10 +287,11 @@ export function ConnectionCreateDialog({
                 [field.name]: isCheckbox ? String(event.target.checked) : event.target.value
               };
             });
-            setError(null);
+            clearErrors(key);
           }}
         />
-      </label>
+        {message ? <span id={`${id}-error`} className="connections-create-field-error">{message}</span> : null}
+      </div>
     );
   }
 
@@ -253,31 +299,39 @@ export function ConnectionCreateDialog({
     if (apiKeyFields?.placement.name === field.name) return renderApiKeyPlacement(field);
 
     const id = `${nameId}-scheme-${safeId(field.name)}`;
+    const key = `settings.${field.name}`;
+    const message = fieldError(key, field.required && !isSettingPresent(field, visibleSettings[field.name]) ? `${field.displayName} is required.` : undefined);
     const placeholder = field.name === apiKeyFields?.headerName.name
       ? "Authorization"
       : field.name === apiKeyFields?.queryName.name ? "api_key" : undefined;
     return (
-      <label className="connection-setting-field" key={field.name} htmlFor={id}>
-        {field.displayName}{field.required ? " (required)" : ""}
+      <div className="connection-setting-field" key={field.name}>
+        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
         <input
           id={id}
           value={visibleSettings[field.name] ?? ""}
           placeholder={placeholder}
           required={field.required}
           autoComplete="off"
+          aria-invalid={!!message || undefined}
+          aria-describedby={message ? `${id}-error` : undefined}
+          onBlur={() => touch(key)}
           disabled={!contextIsCurrent || submitting}
           onChange={event => {
             setSettings(current => ({ ...current, [field.name]: event.target.value }));
-            setError(null);
+            clearErrors(key);
           }}
         />
-      </label>
+        {message ? <span id={`${id}-error`} className="connections-create-field-error">{message}</span> : null}
+      </div>
     );
   }
 
   function renderApiKeyPlacement(field: AuthSchemeField) {
     const id = `${nameId}-scheme-${safeId(field.name)}`;
     const rawPlacement = visibleSettings[field.name];
+    const key = `settings.${field.name}`;
+    const message = fieldError(key) || (invalidPlacement ? "Choose Header or Query for this connection." : undefined);
     return (
       <div className="connection-setting-field" key={field.name}>
         <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
@@ -285,19 +339,19 @@ export function ConnectionCreateDialog({
           id={id}
           required={field.required}
           value={effectivePlacement ?? rawPlacement ?? "header"}
-          aria-invalid={invalidPlacement || undefined}
-          aria-describedby={invalidPlacement ? placementErrorId : undefined}
+          aria-invalid={!!message || undefined}
+          aria-describedby={message ? placementErrorId : undefined}
           disabled={!contextIsCurrent || submitting}
           onChange={event => {
             setSettings(current => ({ ...current, [field.name]: event.target.value }));
-            setError(null);
+            clearErrors(key);
           }}
         >
           {invalidPlacement ? <option value={rawPlacement}>Unsupported placement: {rawPlacement}</option> : null}
           <option value="header">Header</option>
           <option value="query">Query</option>
         </select>
-        {invalidPlacement ? <span className="connections-create-field-error" id={placementErrorId}>Choose Header or Query for this connection.</span> : null}
+        {message ? <span className="connections-create-field-error" id={placementErrorId}>{message}</span> : null}
       </div>
     );
   }
@@ -314,6 +368,7 @@ export function ConnectionCreateDialog({
           field={field}
           value={visibleCredentials[field.name] ?? defaultCredentialInput()}
           disabled={!contextIsCurrent || submitting}
+          error={fieldErrors[`secretFields.${field.name}`]}
           onChange={input => setCredentialInput(field.name, input)}
         />
       ))}
@@ -392,13 +447,18 @@ export function ConnectionCreateDialog({
                   data-dialog-initial-focus
                   required
                   autoComplete="off"
+                  aria-invalid={!!visibleNameError || undefined}
+                  aria-describedby={`${nameId}-help${visibleNameError ? ` ${nameId}-error` : ""}`}
+                  onBlur={() => touch("name")}
                   disabled={!contextIsCurrent || submitting}
                   value={contextIsCurrent ? name : ""}
                   onChange={event => {
                     setName(event.target.value);
-                    setError(null);
+                    clearErrors("name");
                   }}
                 />
+                <small id={`${nameId}-help`}>Use letters, numbers, dots, dashes or underscores. Maximum 128 characters.</small>
+                {visibleNameError ? <span id={`${nameId}-error`} className="connections-create-field-error">{visibleNameError}</span> : null}
               </div>
               <div className="connections-create-field">
                 <label htmlFor={typeId}>Type</label>
@@ -432,7 +492,7 @@ export function ConnectionCreateDialog({
               <AdvancedSection
                 label="More options"
                 setCount={advancedSetCount}
-                hasError={!!error || invalidPlacement}
+                hasError={advancedHasError}
                 allowCollapseWhenSet
               >
                 <div className="connections-create-advanced-fields">
@@ -515,9 +575,12 @@ function isSettingPresent(field: { editorHint: string }, value?: string) {
   return field.editorHint === "checkbox" ? value === "true" : !!value?.trim();
 }
 
-function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  return "The connection could not be created.";
+function validateName(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "Name is required.";
+  if (normalized.length > 128) return "Use at most 128 characters for Name.";
+  if (!/^[a-z0-9._-]+$/.test(normalized)) return "Use letters, numbers, dots, dashes or underscores. Spaces are not allowed.";
+  return null;
 }
 
 function safeId(value: string) {

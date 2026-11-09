@@ -11,12 +11,15 @@
           },
           "DashboardStudio": {},
           "AttentionStudio": {},
+          "UserTasksStudio": {},
           "FeatureManagement": {},
           "JavaScriptExpressionEditorStudio": {},
           "LiquidExpressionEditorStudio": {},
           "OpenTelemetryStudio": {},
           "SecretsStudio": {},
+          "AgentSpecialistsStudio": {},
           "ConnectionsStudio": {},
+          "DecisionsStudio": {},
           "EtlStudio": {},
           "StructuredLogsStudio": {},
           "StudioApi": {},
@@ -26,7 +29,8 @@
           "WeatherForecastSample": {},
           "WeaverWorkflowsStudio": {},
           "WorkflowsStudio": {},
-          "WorkflowsDashboardStudio": {}
+          "WorkflowsDashboardStudio": {},
+          "BackendsStudio": {}
         },
         "Configuration": {
           "WebRouting": {

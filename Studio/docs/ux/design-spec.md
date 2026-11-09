@@ -49,7 +49,7 @@ code.
    and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
    four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
-   Uppercase mono is reserved for page eyebrows and table headers.
+   Table headers use sentence case and the shared label size. Eyebrows are optional context; technical identifiers may use mono.
 
 ## Layout
 
@@ -63,13 +63,39 @@ code.
 | Bottom dock default | `exists` | Collapsed by default when no stored value, including on desktop. Reset restores the default and keeps the cleared chrome keys absent. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
-| Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
-| Lists | `target, phase 2` | Keep the page heading/actions, primary search or filters, results, and pager in a stable order. Use an accessible table or grid with a clear empty/error state. Lists may retain domain-specific filter layouts; advanced Runs criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. See [Definition list consistency](#definition-list-consistency-3070). |
+| Page header | `exists` | Shared `StudioPageHeader`: compact title, optional description/context, wrapping actions. One `primary` button (see Principles). |
+| Lists | `exists` | Keep the page heading/actions, primary search or filters, results, and pager in a stable order. Use an accessible table or grid with a clear empty/error state. Lists may retain domain-specific filter layouts; advanced Runs criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. See [Definition list consistency](#definition-list-consistency-3070). |
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
 | Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
+
+## Shared module composition (#3511)
+
+**Status: `exists`**; exact-revision qualification is recorded on [PR #3512](https://github.com/elsa-workflows/elsa-foundation/pull/3512). The
+[coverage inventory](../../../docs/reports/studio-design-language-audit.md) records
+all discovered module surfaces, including modules absent from the default host.
+The [module UI guide](../module-ui.md) owns public imports and composition examples.
+
+Collections share a flat page, a 20px page title, 13px description/body, 12px
+sentence-case table headers, search before filters, 32px default controls, and a
+48px minimum row height. Longer content may grow a row. Use the shared footer for
+counts and pagination. The host owns the outer gutter; a module does not add a
+second whole-page border or another page inset. Small row actions may use the
+shared small button size.
+
+Reuse `StudioPage`, `StudioPageHeader`, `StudioCollectionToolbar`,
+`StudioTableContainer`, `StudioResultState` and `StudioCollectionFooter` from
+`@elsa-workflows/studio-ui`. Native tables use `studio-table`; existing ARIA tables
+use `studio-collection-table` without replacing their domain interactions.
+The public `styles.css` ships the actual component rules and token defaults.
+Module authors must not copy a snapshot of host component CSS.
+
+Purposeful differences remain: template catalogs and dashboard widgets may use
+cards; authoring canvases, staged review workflows and diagnostic streams retain
+their task layout. Embedded headers can use the compact variant. These exceptions
+still use the shared theme tokens, control recipes, typography and feedback.
 
 ## Live workflow execution (#3392)
 
@@ -89,6 +115,13 @@ explains the user journey.
 - Pause following pauses observation, with last-confirmed wording. Disconnection is explicit and
   commands require current evidence. Automatic retries are bounded and never redispatch a workflow.
   Stop remains pending until Runtime confirms a terminal execution state.
+- Attached-editor occurrence navigation keeps the confirmed inspector, scope and applicable canvas
+  evidence visible while preparing the requested destination. A reserved status line identifies the
+  previous evidence during loading or a retryable failure. Scope, core inspection, navigation and
+  automatically displayed non-sensitive captured values commit together; sensitive values still
+  require explicit reveal. Keep existing focus and applicable disclosures. Superseded reads cannot
+  replace a newer choice, and denied/missing access or changed backend, run or attachment identity
+  clears retained evidence immediately. Initial loading remains explicit.
 - Returning to editing restores the separate draft. In-page historical snapshot inspection is read
   only. Explicit reload restoration rechecks access, identity, expiry and the freshly loaded design;
   a changed design offers the existing run viewer instead of attaching incompatible evidence.
@@ -127,7 +160,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
   expired snapshot recovery remain distinct from a generic request failure.
 - **Workflow Definitions exception:** Preserve lifecycle tabs, folder and Unfiled scope,
   selection, move, delete, restore, permanent-delete confirmations, and the current browse-session
-  behavior. Folder navigation and Move require the host's advertised relations; the normal Workbench does not currently provide them. Bookmarked unsupported folder scopes show a truthful fallback rather than guessed requests. Secondary IDs remain unavailable while stale previous-query rows are displayed. Keep Name cells to the workflow name, show Definition ID in a separate copyable column, and use a compact icon column for an anchored identity popover. Descriptions and result-folder breadcrumbs remain available inside that popover; deleted state stays visible with the version status. Escape closes the popover and restores its trigger focus; outside clicks dismiss without stealing focus. At narrow widths retain horizontal table scrolling and clamp the popover and complete copy-button hitboxes to the viewport, including the shell content inset.
+  behavior. Folder navigation and Move require the host's advertised relations; the EF-backed reference Workbench advertises them when its workflow-library store is composed. Bookmarked unsupported folder or organization filters remain explicit and never silently widen the requested results. Secondary IDs remain unavailable while stale previous-query rows are displayed. Keep Name cells to the workflow name, show Definition ID in a separate copyable column, and use a compact icon column for an anchored identity popover. Tags and Location are optional columns. Organization editing is independently permission-gated and saved outside authored-state autosave; saved views and favorites retain their personal/shared ownership. Every folder/subtree/tag/publication/favorite/sort change participates in the browse identity and resets cursor/selection scope. Descriptions and result-folder breadcrumbs remain available inside the identity popover; deleted state stays visible with the version status. Escape closes the popover and restores its trigger focus; outside clicks dismiss without stealing focus. At narrow widths retain horizontal table scrolling and clamp popovers and complete copy-button hitboxes to the viewport, including the shell content inset.
 - **Runs exception:** Keep workflow name as the first scan target and the exact execution ID
   visible and copyable. Reveal artifact, definition, and version IDs on demand. Keep applied and
   advanced filters, cursor navigation, row selection, and capability-gated deletion unchanged.
@@ -177,6 +210,24 @@ and token contract while keeping each resource's domain columns and operations:
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
 | Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. Activity catalog tiers are lowercase `essential`, `optional` and `setting`; tier controls presentation independently of `isRequired` and runtime validation. Only an exact optional tier that is not required goes under one “More options” section. Missing, null, unfamiliar and setting tiers, plus required optional inputs, stay directly visible. Configured HTTP values start open and may be collapsed with a set-count badge through `allowCollapseWhenSet`; Runs opts in only because applied criteria stay visible as chips outside the disclosure. Other callers retain the existing default. Host-reported errors, option-source failures and editors without complete local-error reporting keep the section open; explicit force-open remains authoritative, and a forced reveal does not overwrite the saved collapsed preference. Only reported blocking errors receive an Error badge. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Settings and other surfaces do not use the kit yet. |
 
+### Read-only details composition
+
+The workflow editor's Runtime panel leads with a title and the latest confirmed execution
+status, followed by a short outcome and the available resource actions. Dispatch acceptance
+alone stays neutral while execution status is unknown. Keep actionable errors, incident links,
+stale-snapshot warnings and observation failures visible outside disclosure. Known counts may
+be shown compactly; missing counts must not imply zero. Hide empty waiting-trigger controls
+only after a confirmed terminal execution, retaining loading, failure and delivery feedback.
+
+Use this hierarchy for comparable information panels: header/status, outcome, notices,
+resource actions, domain sections, then optional technical details. Compose the existing
+`StudioButton`, `StudioLink`, status treatment, `TechnicalDetails` and `CopyableIdentifier`
+primitives. Keep exact IDs copyable and use resource links to inspect their precise entities.
+Technical metadata belongs in the keyboard-accessible disclosure; important next steps do not.
+Use the theme surface and spacing to group content without nesting decorative cards. Callers
+own domain status, permissions, observations and navigation. This is a composition pattern,
+not a requirement to migrate every details view or introduce a generic data-view framework.
+
 ## Appearance
 
 The appearance model is `app/themes/appearance.ts` (`exists`, landed in #2710). ThemeProvider
@@ -185,17 +236,21 @@ owns the live state; this module owns the shape, defaults, persistence and resol
 | Preference | Status | Values | Default | Stored as |
 |---|---|---|---|---|
 | Theme | `exists` | any selectable theme id | configured `Themes:DefaultThemeId`, else the first theme | `elsa-studio-theme` |
+| Workspace style | `exists` | `quiet`, `focus`, `open`, or unset to inherit the preset | unset | `elsa-studio-workspace-style` |
+| Color scheme | `exists` | any selectable theme id, or unset to inherit preset colors | unset | `elsa-studio-color-scheme` |
 | Mode | `exists` | `system`, `light`, `dark`, `dim`, `high-contrast` | `system` (follows OS colour scheme and contrast, live) | `elsa-studio-theme-mode` |
 | Navigation | `exists` | `theme`, `left`, `top` | `theme` | `elsa-studio-nav-mode` |
 
-- The topbar `ThemeSwitcher` edits theme, the four concrete modes and nav today (`exists`).
-  Settings › Appearance (`exists`) edits the same model: theme (Classic default, plus the other
-  built-in and custom themes), mode (System, Light, Dark, and the theme's optional modes),
-  navigation, and a link to the Theme Builder. Density is not in the model. Neither surface
-  keeps its own state.
+- The topbar `ThemeSwitcher` edits workspace style, color scheme, mode and navigation.
+  Settings › Appearance edits the same model and offers original complete presets under
+  Theme presets. Applying a preset intentionally clears both overrides. Normal style/color
+  changes preserve the other choices and mounted authoring state. Theme Builder preview is
+  transient. See [ADR 0023](../adr/0023-separate-workspace-style-and-color-scheme.md).
 - `resetAppearancePreferences()` / `resetAppearance` exist (`exists`) and **Reset appearance**
-  on Settings › Appearance exposes them. Reset clears these eight keys (`exists`):
+  on Settings › Appearance exposes them. Reset clears these ten keys (`exists`):
   - `elsa-studio-theme`
+  - `elsa-studio-workspace-style`
+  - `elsa-studio-color-scheme`
   - `elsa-studio-theme-mode`
   - `elsa-studio-nav-mode`
   - `elsa-studio-sidebar-collapsed`

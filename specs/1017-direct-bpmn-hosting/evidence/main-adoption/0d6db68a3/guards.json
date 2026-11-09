@@ -1,0 +1,62 @@
+[
+  {
+    "name": "maps-build",
+    "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "arguments": [
+      "dotnet",
+      "build",
+      "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
+      "--nologo"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "maps-check",
+    "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--",
+      "check"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "test-tiers-check",
+    "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--",
+      "test-tiers-check"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "evidence-size-check",
+    "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+    "arguments": [
+      "python3.14",
+      "tools/ci/check_evidence_sizes.py"
+    ],
+    "exitCode": 0
+  }
+]

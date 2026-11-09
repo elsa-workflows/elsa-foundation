@@ -31,7 +31,7 @@ internal static class PackageAssetEndpoints
         if (lease is null) return Busy(context);
         try
         {
-            await using var scope = await reader.OpenAsync(packageId, context.RequestAborted);
+            await using var scope = await reader.OpenAssetAsync(packageId, context.RequestAborted);
             var content = scope?.Read("staticwebassets/" + path, PackageContentReader.MaximumAssetBytes, context.RequestAborted);
             if (content is null)
             {

@@ -23,17 +23,71 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class ActivityTemplatePlacementTests
 {
     [Fact]
-    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement()
+    public async Task Graph_authored_occurrence_names_override_child_template_names_at_each_placed_identity()
+    {
+        var leaf = Template("leaf-template", "leaf-hash", Node("native-root"));
+        var graph = Template("graph-template", "graph-hash", Node("graph-root"),
+            [new("leaf-definition", "leaf-version", "1.0.0", leaf.TemplateId, leaf.TemplateHash, "authored-step", ActivityInvocationOrigin.Empty)]);
+        var leafPublication = Publication("leaf-definition", "leaf-version", "type.leaf", leaf);
+        var graphPublication = Publication("graph-definition", "graph-version", "type.graph", graph);
+        var leafReference = Reference(leafPublication, ExecutableLayoutSidecar.Empty) with { ActivityPresentation = [new("native-root", "Template default", null)] };
+        var graphReference = Reference(graphPublication, ExecutableLayoutSidecar.Empty) with { ActivityPresentation = [new("authored-step", "Review order", "Authored occurrence"), new("unknown", "Must not leak", null)] };
+        var placer = CreatePlacer(new PublicationStore([graphPublication, leafPublication]), new TemplateReader([graph, leaf]), new SourceReader([graphReference, leafReference]), new Sha256ActivityPlacementHasher());
+        var placed = await placer.PlaceAsync(new(graphPublication, graph, graphReference,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow")]), graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+        var child = Assert.Single(Assert.Single(placed.Root.ChildSlots).Activities);
+        var label = Assert.Single(placed.ActivityPresentation);
+        Assert.Equal(child.ExecutableNodeId, label.ExecutableNodeId);
+        Assert.Equal("Review order", label.DisplayName);
+        Assert.Equal("Authored occurrence", label.Description);
+        Assert.Equal("Template default", Assert.Single(leafReference.ActivityPresentation).DisplayName);
+    }
+
+    [Fact]
+    public async Task Presentation_is_frozen_per_exact_template_and_remapped_for_each_call_without_unknown_identity_fallback()
+    {
+        var template = Template("template", "same-behavior-hash", Node("root", Node("child")));
+        var publication = Publication("definition", "version", "type.reusable", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty) with
+        {
+            ActivityPresentation = [new("child", "Original name", "Original description"), new("unrelated-outer-node", "Must not leak", null)]
+        };
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]), new Sha256ActivityPlacementHasher());
+        async Task<ActivityTemplatePlacement> Place(string call) => await placer.PlaceAsync(new(publication, template, reference,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow"), new(ActivityInvocationOriginSegmentKind.AuthoredNode, call)]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+        var first = await Place("call-a");
+        var second = await Place("call-b");
+        var firstLabel = Assert.Single(first.ActivityPresentation);
+        var secondLabel = Assert.Single(second.ActivityPresentation);
+        Assert.Equal("Original name", firstLabel.DisplayName);
+        Assert.Equal("Original description", secondLabel.Description);
+        Assert.NotEqual(firstLabel.ExecutableNodeId, secondLabel.ExecutableNodeId);
+        Assert.Contains(first.Root.DescendantsAndSelf(), node => node.ExecutableNodeId == firstLabel.ExecutableNodeId && node.AuthoredActivityId == "child");
+        Assert.Contains(second.Root.DescendantsAndSelf(), node => node.ExecutableNodeId == secondLabel.ExecutableNodeId && node.AuthoredActivityId == "child");
+        Assert.Equal("same-behavior-hash", template.TemplateHash);
+        Assert.Equal("Original name", Assert.Single(reference.ActivityPresentation, record => record.ExecutableNodeId == "child").DisplayName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement(bool structureInputs)
     {
         // #1051: source-owned templates have bare roots. The occurrence overlay must restore the graph-authored
         // input and reconcile the compiled structure after placement gives child nodes their final identities.
+        var key = structureInputs ? "Case:a:Condition" : "condition";
         var sequenceOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
-            Json("""[{"referenceKey":"condition","value":{"value":true,"expressionType":"Literal"}}]"""),
+            JsonSerializer.SerializeToElement(new[] { new { referenceKey = key, value = new { value = true, expressionType = "Literal" } } }),
             new ExecutableActivityStructure(
                 "elsa.sequence.structure",
                 "1.0.0",
-                Json("""{"activities":["write"]}""")));
+                Json("""{"activities":["write"]}""")))
+        {
+            InputContracts = structureInputs ? [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(key, "Condition", new("Boolean"), false, false, false, null, ActivityValuePolicy.Default) { IsStructureInput = true }] : null
+        };
         var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
         var graphTemplate = Template(
             "template-graph",
@@ -80,7 +134,9 @@ public sealed class ActivityTemplatePlacementTests
 
         var sequence = Assert.Single(Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities);
         var condition = Assert.Single(sequence.InputBindings);
-        Assert.Equal("condition", condition.Key);
+        Assert.Equal(key, condition.Key);
+        Assert.Equal(structureInputs, sequence.ActivityContract!.Inputs[key].IsStructureInput);
+        Assert.Equal([key], sequence.ActivityContract.Inputs.Keys);
         Assert.Equal(RuntimeInputBindingSource.Literal, condition.Value.Source);
         Assert.True(condition.Value.LiteralValue!.Value.GetBoolean());
 
@@ -187,7 +243,17 @@ public sealed class ActivityTemplatePlacementTests
             DateTimeOffset.UnixEpoch,
             new Dictionary<string, string>(),
             IncidentStrategyBuiltIns.FaultReference));
-        await references.SaveAsync(fixture.Request.SourceReference with { LayoutSidecar = placement.LayoutSidecar });
+        await references.SaveAsync(fixture.Request.SourceReference with
+        {
+            LayoutSidecar = placement.LayoutSidecar,
+            ActivityPresentation = [new(immediateBoundary.ExecutableNodeId, "Original published name", null), new(deeperInternal.ExecutableNodeId, "Nested private label", null)]
+        });
+        await references.SaveAsync(fixture.Request.SourceReference with
+        {
+            SourceReferenceId = "later-draft-reference",
+            LayoutSidecar = placement.LayoutSidecar,
+            ActivityPresentation = [new(immediateBoundary.ExecutableNodeId, "Later draft name", null)]
+        });
         var hierarchy = new BoundaryHierarchyStore(new(
             "ActivityGraph",
             fixture.Request.Publication.DefinitionId,
@@ -218,6 +284,8 @@ public sealed class ActivityTemplatePlacementTests
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == thenBoundary.ExecutableNodeId);
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == elseBoundary.ExecutableNodeId);
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == deeperInternal.ExecutableNodeId);
+        Assert.Equal("Original published name", Assert.Single(view.ActivityPresentation).DisplayName);
+        Assert.Equal(immediateBoundary.ExecutableNodeId, Assert.Single(view.ActivityPresentation).ExecutableNodeId);
     }
 
     [Fact]

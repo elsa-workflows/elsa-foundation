@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -70,7 +71,9 @@ public sealed class RuntimeResumptionService(
     IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
     IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
     IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources = null,
-    ILogger<RuntimeResumptionService>? logger = null) : IRuntimeResumptionService
+    ILogger<RuntimeResumptionService>? logger = null,
+    IPersistenceOperationScopeFactory? operationScopeFactory = null,
+    IRuntimeAdmissionLoadSignal? loadSignal = null) : IRuntimeResumptionService
 {
     private const string DispatchSource = "runtime-resumption";
     private readonly IRuntimeRecoverySweepCursorStore sweepCursorStore = recoveryCursorStore ?? new InMemoryRuntimeRecoverySweepCursorStore();
@@ -85,6 +88,7 @@ public sealed class RuntimeResumptionService(
     public async ValueTask<RuntimeResumptionSweepResult> SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.MaxConcurrentDispatches);
         cancellationToken.ThrowIfCancellationRequested();
 
         var outboxResult = await outboxProcessor.ProcessAsync(
@@ -95,31 +99,48 @@ public sealed class RuntimeResumptionService(
             cancellationToken);
 
         var discovery = await DiscoverExecutionIdsAsync(request, cancellationToken);
-        var executionIds = discovery.ExecutionIds;
+        var executionIds = discovery.ExecutionIds.ToArray();
 
-        var dispatches = new List<RuntimeResumptionDispatch>(executionIds.Count);
+        var dispatches = new List<RuntimeResumptionDispatch>(executionIds.Length);
         var terminalExecutionsPurged = 0;
         var purgedWorkItemCount = 0;
-        foreach (var workflowExecutionId in executionIds)
+        // Discovery and cursor settlement share the sweep context and stay ordered. Concurrent candidate work
+        // owns a fresh context per execution; indexed outcomes preserve discovery order for fairness bookkeeping.
+        var outcomes = new (TerminalPurge Terminal, RuntimeResumptionDispatch? Dispatch)[executionIds.Length];
+        async ValueTask ProcessAsync(int index, RuntimeResumptionService service, CancellationToken ct)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Never re-drive a terminal execution: it can only accumulate stranded RunSchedulerWork items the drainer
-            // refuses to dispatch. Purge its residue so backlog discovery stops resurfacing it and the perpetual
-            // per-tick drain span ends.
-            var terminal = await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken);
-            if (terminal.IsTerminal)
-            {
-                if (terminal.PurgedCount is { } purged)
+            var id = executionIds[index];
+            var terminal = await service.PurgeIfTerminalAsync(request, id, ct);
+            outcomes[index] = (terminal, terminal.IsTerminal ? null : await service.RedriveAsync(id, ct));
+        }
+        if (operationScopeFactory is not null && request.MaxConcurrentDispatches > 1)
+        {
+            await Parallel.ForEachAsync(Enumerable.Range(0, executionIds.Length),
+                new ParallelOptions { MaxDegreeOfParallelism = request.MaxConcurrentDispatches, CancellationToken = cancellationToken },
+                async (index, ct) =>
                 {
-                    purgedWorkItemCount += purged;
-                    terminalExecutionsPurged++;
-                }
-
-                continue;
+                    await using var scope = await operationScopeFactory.CreateAsync(
+                        persistenceAccessContextAccessor?.Current.RequireScope() ?? new PersistenceScope(discovery.Scope), ct);
+                    await ProcessAsync(index, scope.ServiceProvider.GetRequiredService<RuntimeResumptionService>(), ct);
+                });
+        }
+        else
+        {
+            for (var index = 0; index < executionIds.Length; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await ProcessAsync(index, this, cancellationToken);
             }
-
-            dispatches.Add(await RedriveAsync(workflowExecutionId, cancellationToken));
+        }
+        foreach (var (terminal, dispatch) in outcomes)
+        {
+            if (terminal.PurgedCount is { } purged)
+            {
+                purgedWorkItemCount += purged;
+                terminalExecutionsPurged++;
+            }
+            if (dispatch is not null)
+                dispatches.Add(dispatch);
         }
 
         // A held execution is not re-driven, but a terminal one is still purged: terminal status is monotonic and the
@@ -553,6 +574,7 @@ public sealed class RuntimeResumptionService(
 
     private async ValueTask<RuntimeResumptionDispatch> RedriveAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
+        using var charge = loadSignal is { HasAmbientCharge: false } ? loadSignal.OpenCharge() : null;
         try
         {
             var now = timeProvider.GetUtcNow();

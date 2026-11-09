@@ -404,7 +404,8 @@ describe("workflow Test Run setup", () => {
       workflowInputNames: update[3],
       driverActionError: update[5]
     }} onOpenRun={vi.fn()} />));
-    expect(container.querySelector(".wf-runtime-card h3")?.textContent).toBe("Trigger prepared");
+    expect(container.querySelector(".wf-runtime-card h3")?.textContent).toBe("Latest test run");
+    expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("Trigger prepared");
     expect(container.textContent).toContain("The trigger action could not be sent.");
   });
 

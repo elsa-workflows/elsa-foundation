@@ -7,6 +7,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -17,6 +18,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -95,6 +97,7 @@ public static class PublishingEntityFrameworkCoreRegistration
             provider.GetRequiredService<IActivityDependencyProjectionRebuilder>(),
             provider.GetRequiredService<IIdentityGenerator>(),
             provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, RebuildActivityUsageStartupTask>());
     }
 
     private static TContext RequiredContext<TContext>(IServiceProvider provider, string lane) where TContext : DbContext =>

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "frozenAuthoringFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "completeArchive": {
+    "sourceCommit": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+    "assetId": 696667174,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-evidence-f1546a7f8.zip",
+    "bytes": 849225990,
+    "sha256": "29a41e5e8e1c13cb8fda64e85dd4a99937900b973ad9d52cc9aeb27a57ba0d48",
+    "files": 9410
+  },
+  "testFixtures": {
+    "sourceCommit": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+    "assetId": 696680127,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-test-fixtures-f1546a7f8.zip",
+    "bytes": 20183516,
+    "sha256": "5776d10c6f10a994bf2fcff66e2e80843b491f2297f8e4f3570a9afd268e331f",
+    "files": 94
+  },
+  "sourceIndex": {
+    "assetId": 696667178,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-evidence-f1546a7f8.index.json",
+    "bytes": 2886063,
+    "sha256": "b59ddededa003a67aac9b569ae784ca976233e921b9b61873348e1f63a34e033"
+  },
+  "sourceHistory": {
+    "sourceCommit": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+    "bundleRef": "refs/codex/verification/bpmn-source-f154",
+    "assetId": 696716810,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-hosting-source-f1546a7f8.bundle",
+    "bytes": 771054195,
+    "sha256": "399dec2026f0e314bcf7e63ad01d18422d3d344524e1e6046b241a2db2a9b4d2"
+  }
+}

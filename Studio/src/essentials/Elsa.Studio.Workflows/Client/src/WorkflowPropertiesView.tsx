@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { getActivityAuthoringCapabilities } from "./api/activityDesign";
 import type { ActivityAuthoringCapabilities } from "./activityDefinitionTypes";
-import { formatDate } from "./workflowFormatting";
 import { IncidentStrategySection } from "./IncidentStrategySection";
 import { PersistenceModeSection } from "./PersistenceModeSection";
 import {
@@ -245,6 +245,17 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   ariaLabel: string;
   onChange(value: string): void;
 }) {
+  if (editor === "json") {
+    let error: string | null = null;
+    if (value.trim()) {
+      try { JSON.parse(value); } catch { error = "Enter a valid JSON value."; }
+    }
+    return <div>
+      <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
+        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+      {error ? <span role="alert">{error}</span> : null}
+    </div>;
+  }
   const specialized = fitsEditor(editor, value);
   if (specialized && editor === "checkbox") {
     return (
@@ -292,7 +303,7 @@ function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, c
     <section className="wf-properties-section">
       <div className="wf-properties-section-head">
         <h3>{title}</h3>
-        <button type="button" className="wf-properties-add" onClick={onAdd}><Plus size={14} /> {addLabel}</button>
+        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
       </div>
       {isEmpty ? (
         <p className="wf-muted">{emptyLabel}</p>
@@ -387,9 +398,9 @@ function ArgumentsEditor({
         const rowStorageOptions = storageChoices(storageOptions, argType.alias);
         const referenceKey = readStringField(item, referenceKeyKeys);
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
-        // A collection's default is a single scalar editor only for a `Single` type; collection defaults
-        // fall back to free text (editing a list/array default inline is out of scope).
-        const editor = argType.collectionKind === "Single" ? editorForAlias(argType.alias) : "text";
+        const typeEditor = editorForAlias(argType.alias);
+        // JSON defaults keep their raw syntax for scalar values and collections alike.
+        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
           <tr key={index}>
             <td>
@@ -419,7 +430,9 @@ function ArgumentsEditor({
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
                   editor={editor}
-                  onChange={value => update(index, { default: literalDefault(value) })}
+                  onChange={value => update(index, { default: editor === "json" && value !== ""
+                    ? { value, expressionType: "Object" }
+                    : literalDefault(value) })}
                 />
               </td>
             ) : null}
@@ -549,7 +562,7 @@ export function toRecords(value: unknown[] | undefined): Record<string, unknown>
 }
 
 // Self-contained variable editor (loads its own type/storage descriptors) for use outside the
-// Properties tab — e.g. the container-scoped variables section in the activity inspector. Workflow-
+// workflow data tabs — e.g. the container-scoped variables section in the activity inspector. Workflow-
 // and container-scoped declarations share this one editor, differing only by where they are stored.
 export function ScopedVariablesEditor({ context, variables, title, addLabel, emptyLabel, warnings, onChange }: {
   context: StudioEndpointContext;
@@ -645,12 +658,6 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
   onStateChange(producer: StateProducer): void;
   onDefinitionMetaChange?(patch: { name?: string; description?: string }): void;
 }) {
-  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
-  const variables = toRecords(draft.state.variables);
-  const inputs = toRecords(draft.state.inputs);
-  const outputs = toRecords(draft.state.outputs);
-  const versions = details?.versions ?? [];
-
   return (
     <div className="wf-properties-view">
       <InformationSection
@@ -669,6 +676,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
       />
 
       <PersistenceModeSection
+        context={context}
         strategyOptions={draft.state.strategyOptions}
         onChange={persistenceMode => onStateChange(state => ({
           ...state,
@@ -676,45 +684,43 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         }))}
       />
 
-      <VariablesEditor
-        items={variables}
+    </div>
+  );
+}
+
+export type WorkflowDataSection = "variables" | "inputs" | "outputs";
+
+/** Workflow declarations share the scoped editors and the draft's existing save and undo path. */
+export function WorkflowDataView({ section, draft, context, onStateChange }: {
+  section: WorkflowDataSection;
+  draft: WorkflowDraft;
+  context: StudioEndpointContext;
+  onStateChange(producer: StateProducer): void;
+}) {
+  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
+  return (
+    <div className="wf-properties-view">
+      {section === "variables" ? <VariablesEditor
+        items={toRecords(draft.state.variables)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
-      />
-      <InputsEditor
-        items={inputs}
+      /> : section === "inputs" ? <InputsEditor
+        items={toRecords(draft.state.inputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, inputs: next }))}
-      />
-      <OutputsEditor
-        items={outputs}
+      /> : <OutputsEditor
+        items={toRecords(draft.state.outputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, outputs: next }))}
-      />
-
-      <section className="wf-properties-section">
-        <h3>Versions</h3>
-        {versions.length === 0 ? (
-          <p className="wf-muted">No published versions yet.</p>
-        ) : (
-          <ul className="wf-properties-versions">
-            {versions.map(version => (
-              <li key={version.id}>
-                <span className="wf-properties-version-tag">v{version.version}</span>
-                <time>{formatDate(version.createdAt)}</time>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      />}
     </div>
   );
 }

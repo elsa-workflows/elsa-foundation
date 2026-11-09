@@ -38,9 +38,9 @@ The reference distribution's [module assembly list](../src/apps/Elsa.Studio.Web/
 
 These commands use a .NET 10 SDK and a Bash-compatible shell. The producer currently pins SDK 10.0.300 with `latestFeature` roll-forward in [global.json](../../global.json). No Node, npm, pnpm or frontend source is needed by the consumer.
 
-This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in Studio CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** Studio CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
+This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
 
-1. In [Studio CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/studio-ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and `toolSourceRevision` (the producer commit). [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
+1. In [CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and `toolSourceRevision` (the producer commit). [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
 2. Keep the extracted artifact **outside the application directory**. It includes retained test programs and private mutated control packages. Those are evidence, not consumer source or feed contents.
 3. Copy only the original archives from `studio-nuget/` and `studio-modularity-nuget/` into the application's `packages/` folder. Do not recursively collect every `.nupkg` from the artifact.
 
@@ -51,7 +51,7 @@ mkdir studio-host-work
 cd studio-host-work
 
 # Supply a current verified main run that includes PackageHost.Sample.
-: "${RUN_ID:?Set RUN_ID to the verified main Studio CI run}"
+: "${RUN_ID:?Set RUN_ID to the verified main CI run}"
 ATTEMPT=${ATTEMPT:-1}
 STUDIO_VERSION="4.0.0-studio-ci.$RUN_ID.$ATTEMPT"
 SAMPLE_REF=$(gh run view "$RUN_ID" --repo elsa-workflows/elsa-foundation --json headSha --jq .headSha)
@@ -138,7 +138,7 @@ Keep the capture hook, host service registration and hub/HTTP mapping in the app
 
 ## Custom frontend and custom modules
 
-The standard payload reserves root-mounted `/studio`; module assets retain `/_content/<package-id>/...`. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
+The standard payload reserves root-mounted `/studio`; RCL module assets use `/_content/<assembly-name>/...`. The assembly name may differ from its NuGet package ID. Use the accepted module manifest's asset URLs: installed assets resolve through the currently loaded assembly's package owner and active version. Ambiguous or stale owners are refused. Direct package-ID asset URLs remain supported when unambiguous. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
 
 For a fully custom frontend, put `ExcludeAssets="build;buildTransitive"` on the final application's **direct** Hosting PackageReference. Hosting's .NET APIs remain available, its bundled assets are omitted, and independently selected module assets remain. Supply your own document and compatible SDK/vendor/import-map integration. Same-path overlays collide with the SDK. Transitive re-export/PrivateAssets shapes need their own qualification; do not generalize the tested direct-reference opt-out.
 

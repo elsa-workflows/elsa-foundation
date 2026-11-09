@@ -23,6 +23,10 @@ internal static class IdentityClaimsProjector
         foreach (var marker in identity.FindAll(IdentityClaimTypes.Normalized).ToArray())
             identity.RemoveClaim(marker);
 
+        // The canonical Elsa user ID replaces anything an incoming principal claimed under the same type.
+        foreach (var userId in identity.FindAll(IdentityClaimTypes.UserId).ToArray())
+            identity.RemoveClaim(userId);
+        identity.AddClaim(new Claim(IdentityClaimTypes.UserId, user.Id));
         AddIfMissing(identity, ClaimTypes.NameIdentifier, user.Id);
         AddIfMissing(identity, "sub", user.Id);
         AddIfMissing(identity, IdentityClaimTypes.TenantId, user.TenantId);

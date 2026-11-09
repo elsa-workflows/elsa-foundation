@@ -29,6 +29,9 @@ public sealed record ActivityAuthoringDescriptorView(
     /// </summary>
     string? IconName = null)
 {
+    /// <summary>Portable authoring facets, including collection-derived outcome rules; never runtime admission rules.</summary>
+    public IReadOnlyCollection<ActivityDesignFacet> DesignFacets { get; init; } = [];
+
     /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
     public JsonElement? PaletteHints { get; init; }
 }
