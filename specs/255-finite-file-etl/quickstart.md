@@ -28,3 +28,11 @@ They must show that the typed private state survives in the same bookmark-create
 Run focused ETL/native tests, the real two-process recovery fixture, relevant rebuilt-server e2e and browser checks. Add a meaningful safeguard removal/restoration for cursor/effect acceptance or cancellation-before-admission. Use the existing architecture guard and migration/provider checks for the admitted scope. Refresh lock files before generated maps after dependency changes; run the maps and solution-filter checks. Follow spec257: stage the actual committed dependency-map/filter changes; documentation maps, manifest and findings remain ignored local/CI-published output.
 
 Record exact commits, commands, fixtures, pass/fail/skip counts and limits in the PR receipt. Independently review exact-head changes, verify CI and resulting-main gates, then update issue/project status. Passing one slice does not complete parent #2908 or Program #2892.
+
+## Native parent restart witnesses
+
+In-process host-rebuild witnesses for a native parent waiting on `RunEtl` ([evidence](evidence/native-parent-restart.md)):
+
+```bash
+dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --filter "FullyQualifiedName~EtlNativeCompositeJourneyTests&FullyQualifiedName~host_rebuild"
+```
