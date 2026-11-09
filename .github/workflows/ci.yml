@@ -304,9 +304,9 @@ jobs:
       || github.event_name != 'pull_request' && needs.plan-tiers.result == 'success'
       && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.integration_count != '0') }}
     runs-on: ubuntu-latest
-    # The serial native-host cases in integration-other can take almost 40 minutes.
+    # The serial BPMN host cases are split across two shards of about 25 minutes each (#3784).
     # Leave room for setup and artifact upload; run_shard.py still bounds each test.
-    timeout-minutes: ${{ matrix.shard == 'integration-other' && 60 || 45 }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(github.event_name == 'pull_request' && needs.plan-full.outputs.integration_matrix || needs.plan-tiers.outputs.integration_matrix) }}
