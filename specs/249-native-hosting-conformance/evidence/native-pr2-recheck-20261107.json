@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "pr2-recheck",
+  "recordedAtUtc": "2026-11-08T02:16:25Z",
+  "sourceCommit": "9812e60f54f1178498e82c3d092268b859d4a36b",
+  "productionBaseCommit": "c1f35d2dc73201df0e3890e1f0c851d9ddd52a37",
+  "firstRunSourceCommit": "fed90b85ee0c310a6f4fe4d0623eeecd37010905",
+  "firstRunProductionBaseCommit": "60d284932739871166198741603a01103f87cee3",
+  "rebaseConflicts": 0,
+  "configuration": "Release",
+  "targetFramework": "net10.0",
+  "sdkVersion": "10.0.300",
+  "os": {
+    "name": "Linux",
+    "kernel": "6.12.113+",
+    "architecture": "x86_64"
+  },
+  "note": "Fresh local recheck rebased onto c1f35d2dc with zero conflicts. Does not reassign October source pins, hosted CI numbers, or close #2905/#2892. Quarantined Workbench rows are not counted as passing.",
+  "localEvidenceRoot": "/tmp/elsa-execcore-pr2-rerun",
+  "firstRunEvidenceRoot": "/tmp/elsa-execcore-pr2",
+  "artifactRoot": "/opt/cursor/artifacts/execcore-pr2",
+  "quarantineNotCounted": [
+    { "test": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires", "issue": 3147, "trxOutcome": "Passed" },
+    { "test": "Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while_survivor_admits_work", "issue": 3252, "trxOutcome": "Passed" },
+    { "test": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor", "issue": 3259, "trxOutcome": "Passed", "rows": 2 },
+    { "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation", "issue": 3260, "trxOutcome": "Passed", "rows": 4 }
+  ],
+  "countedPassingProcessCases": [
+    "Explicit_cancellation_stops_held_bodies_and_survives_process_restart(InProcess)",
+    "Explicit_cancellation_stops_held_bodies_and_survives_process_restart(Clustered)",
+    "Remaining_lease_wait_is_zero_only_after_the_authored_lease_plus_one_poll"
+  ],
+  "workbenchHashes": {
+    "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll": "47be3123854abbda48f677ee4497f2358178ec47827fd493cb8fb22f46a282e5",
+    "Essentials/tests/Workbench/Tests/bin/Release/net10.0/Elsa.Workbench.Tests.dll": "9c87f1b7b548a50739ae871a6461a20c6d76f7380c04288abb894ea54163e048",
+    "Essentials/tests/Workbench/Fixtures/BackgroundActivities/bin/Release/net10.0/Elsa.Workbench.Tests.BackgroundActivities.dll": "4242f71c7c24f3e5c6c3e70c6aec8dae760276cc94a6af10c59539af35e40b65",
+    "Essentials/tests/Workbench/Fixtures/BackgroundActivities/elsa-package.json": "6cff2ebdf32af0d341a1c01033d060110b9d6cc740b782de8374eb01f84d43ef"
+  },
+  "runs": {
+    "native-integrated-matrix": { "passed": 11, "failed": 0, "skipped": 0, "countedPassing": 3, "quarantinedExecutedNotCounted": 8 },
+    "native-acceptance-ef": { "passed": 50, "failed": 0, "skipped": 0 },
+    "workbench-fixture": { "passed": 44, "failed": 0, "skipped": 0 },
+    "native-placement": { "passed": 92, "failed": 0, "skipped": 0 },
+    "native-distributed-ef": { "passed": 107, "failed": 0, "skipped": 0 },
+    "native-cluster": { "passed": 159, "failed": 0, "skipped": 30 },
+    "native-cluster-ef": { "passed": 88, "failed": 0, "skipped": 1 },
+    "architecture": { "passed": 617, "failed": 0, "skipped": 0 },
+    "maps-check": { "exit": 0, "stdout": "Generated solution filters still describe the project graph." },
+    "runtime-public-api": { "passed": 6, "failed": 0, "skipped": 0 },
+    "interrupted-native-gc": {
+      "classification": "LossSafelyRefusedOrRetryable",
+      "grace": "00:05:00",
+      "pumpSweep": "00:05:00",
+      "pumpMaxBackoff": "00:30:00",
+      "retryPublicationId": "publication-150ToauhYuW",
+      "retryArtifactId": "artifact-version-1"
+    },
+    "rerunOnReconciledHead": {
+      "nativeInterruptedGc": { "passed": 1, "failed": 0, "skipped": 0 },
+      "bpmnUnit": { "passed": 582, "failed": 0, "skipped": 0 },
+      "bpmnInterchange": { "passed": 229, "failed": 0, "skipped": 0 },
+      "nativeAcceptanceEf": { "passed": 50, "failed": 0, "skipped": 0 },
+      "architecture": { "passed": 617, "failed": 0, "skipped": 0 },
+      "mapsCheck": { "exit": 0 }
+    }
+  },
+  "notRun": [
+    { "check": "T012 fence-removal mutation", "reason": "Would mutate production fencing; quickstart forbids committing it." },
+    { "check": "T021 hosted resulting-main CI", "reason": "No GitHub Actions run from this follow-up; historical CI remains on 7d4d2183." },
+    { "check": "Binary ApiCompat last-published nupkgs", "reason": "Elsa.Workflows.Runtime.Core 4.0.61-preview and Elsa.Activities.Bpmn.Core 4.0.2-preview 404 on nuget.org and Feedz." },
+    { "check": "PostgreSQL/SQL Server/MySQL interrupted-GC", "reason": "Docker/Testcontainers unavailable." }
+  ]
+}
