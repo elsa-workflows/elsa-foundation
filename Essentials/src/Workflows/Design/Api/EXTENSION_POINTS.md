@@ -49,9 +49,10 @@ registrations rebind it to the child's collection, and repeated configuration re
 an inherited application-wide `IServiceCollection` registration cannot hide a child duplicate.
 
 The built-in reader's preflight reads organization metadata only. A replacement details reader's
-compatibility default may call its complete `ReadAsync`. The definition GET honors the selected
-authorizer before returning details and preserves the existing reader's not-found response. This
-contract does not replace the bounded query visibility policy used before counts and paging.
+compatibility default may call its complete `ReadAsync`. The definition GET, and the version GET for
+the version's definition, honor the selected authorizer before returning details and preserve the
+existing reader's not-found response. This contract does not replace the bounded query visibility
+policy used before counts and paging.
 
 **Failure semantics (spec 1193).** Any authorizer, built-in or replacement, that throws
 `WorkflowDefinitionAuthorizationException` makes every Design endpoint answer fail-closed as
