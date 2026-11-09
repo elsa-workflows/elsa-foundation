@@ -49,6 +49,16 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
@@ -133,6 +143,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
     <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,

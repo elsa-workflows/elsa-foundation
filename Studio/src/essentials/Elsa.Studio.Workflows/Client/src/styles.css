@@ -3625,31 +3625,6 @@
   color: var(--studio-success-fg);
 }
 
-.wf-test-run-status {
-  position: relative;
-}
-
-.wf-editor-actions .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
-  background: var(--wf-success-soft);
-  color: var(--studio-success-fg);
-  font-weight: 700;
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-warning) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-warning-text);
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="accepted-with-incidents"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
-  color: var(--studio-warning-fg);
-}
-
 .wf-editor-body {
   display: grid;
   min-height: 0;
@@ -4072,6 +4047,12 @@
   gap: 8px 16px;
   margin: 0;
   font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .wf-properties-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .wf-properties-info dt {
@@ -4727,7 +4708,8 @@
   margin: 0;
 }
 
-.wf-inspector > .wf-muted {
+.wf-inspector > .wf-muted,
+.wf-workbench-panel-content > .wf-muted {
   margin: 0;
   padding: 12px;
 }

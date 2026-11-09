@@ -3184,7 +3184,7 @@ describe("workflows module", () => {
       return response({ items: [definition()] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
       api.workflowTestStimulusEditors?.add({
         id: "contoso.test-drive.custom-start",
         supports: ({ option, mode }) => option.driverId === "Contoso.CustomStart" && mode.modeId === "custom-start",
@@ -3212,7 +3212,13 @@ describe("workflows module", () => {
     await fill(inputByLabel(container, "Greeting"), "Hello from test run");
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Test Run dispatched");
+    await waitForText(container, "Latest test run");
+    expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success", title: "Test run started",
+      link: { label: "Open run", path: "/workflows/instances/wfexec-1" }
+    }));
+    expect(container.querySelector(".wf-editor-run-status")).toBeNull();
+    expect(buttonByText(container, "Open run")).not.toBeNull();
 
     const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
     const testRunCall = calls.find(call => call.method === "POST" && urlPath(call.url) === "/publishing/workflows/drafts/test-runs");
@@ -3243,7 +3249,6 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-test-run-capsule")).toBeNull();
     expect(container.querySelector(".wf-test-run-popover")).toBeNull();
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
-    await click(buttonByText(container, "Test Run dispatched"));
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("Runtime");
     expect(container.textContent).toContain("Temporary test · your draft is unchanged");
@@ -3293,7 +3298,7 @@ describe("workflows module", () => {
     await waitForText(container, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
     await click(buttonByText(container, "Proceed with Test Run"));
-    await waitForText(container, "Test Run dispatched");
+    await waitForText(container, "Latest test run");
 
     const requests = fetchMock.mock.calls
       .filter(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")
@@ -3354,7 +3359,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Test Run"));
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Test Run dispatched");
+    await waitForText(container, "Latest test run");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
@@ -3368,7 +3373,7 @@ describe("workflows module", () => {
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 
     await click(buttonByText(container, "Runtime"));
-    await waitForText(container, "Earlier draft");
+    await waitForText(container, "Earlier test run");
     expect(container.textContent).toContain("test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
@@ -3411,11 +3416,11 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Test Run"));
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Test Run rejected");
+    await waitForText(container, "The server rejected this test run.");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
 
-    expect(container.textContent).toContain("Test Run rejected");
+    expect(container.textContent).toContain("The server rejected this test run.");
     expect(container.textContent).toContain("Temporary test · your draft is unchanged");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
@@ -3563,7 +3568,8 @@ describe("workflows module", () => {
     expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.agent.clientId },
       target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "wfexec-1", revision: "wfexec-1" },
       content: { workflowExecutionId: "wfexec-1", activityExecutionId: null } });
-    const explain = [...container.querySelectorAll(".wf-toolbar button")].find(item => item.textContent?.includes("Explain"))!;
+    await click(container.querySelector('button[aria-label="More run actions"]'));
+    const explain = [...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent?.includes("Explain"))!;
     await click(explain);
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       context: { workflowExecutionId: "wfexec-1", activityExecutionId: null, status: "Faulted", attached: true }
@@ -3615,7 +3621,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
-    await waitForText(container, "Review workflow definition");
+    await waitForText(container, "Open definition");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
     expect(container.querySelector(".studio-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
@@ -3623,7 +3629,7 @@ describe("workflows module", () => {
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
-    await click(buttonByText(container, "Review workflow definition"));
+    await click(buttonByText(container, "Open definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
@@ -3685,8 +3691,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
-    await waitForText(container, "Review workflow definition");
-    await click(buttonByText(container, "Review workflow definition"));
+    await waitForText(container, "Open definition");
+    await click(buttonByText(container, "Open definition"));
     await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
@@ -3716,8 +3722,8 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
-      await waitForText(container, "Review workflow definition");
-      await click(buttonByText(container, "Review workflow definition"));
+      await waitForText(container, "Open definition");
+      await click(buttonByText(container, "Open definition"));
       await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
