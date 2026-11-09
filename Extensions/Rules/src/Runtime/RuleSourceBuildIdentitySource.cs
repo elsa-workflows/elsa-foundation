@@ -17,7 +17,9 @@ namespace Elsa.Rules.Runtime;
 /// hash slot holds the SHA-512 of the loaded assembly file instead of a NuGet archive hash. A source-build identity can
 /// therefore never equal a packaged one and stays distinguishable as execution-environment provenance (spec 999 FR-003). It proves which bytes ran, not where they came from: a run admitted under it is
 /// recoverable only by a host that loads byte-identical Rules assemblies. The packaged receipt reader is unchanged
-/// and remains the only identity a deployment can qualify.
+/// and remains the only identity a deployment can qualify. Like the receipt reader, this hashes the assembly files on
+/// disk at the first read and snapshots the result for the provider generation; the version slot carries the loaded
+/// assembly version, and the hashes, not the version, are the identity.
 /// </remarks>
 internal sealed class RuleSourceBuildIdentitySource(ILogger<RuleSourceBuildIdentitySource> logger) : IRuleImplementationIdentitySource
 {

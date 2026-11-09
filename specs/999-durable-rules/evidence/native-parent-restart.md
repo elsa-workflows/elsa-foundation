@@ -55,8 +55,9 @@ surface: exactly one run row, status `Succeeded`, terminal stored, delivery owne
 killed with `SIGKILL` (`Process.Kill(entireProcessTree: true)` on Windows) and a fresh process is started over the same
 content root. Proof: the parent was `Running` with `RunRules` `Suspended` and no incidents before the kill; the killed
 process exited non-zero and the restarted process has a different id; after the restart the parent is `Completed`, exactly
-one `RunRules` activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart), the single run row is
-still `Succeeded` and its delivery is acknowledged.
+one `RunRules` activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart; its line appears exactly
+once in the restarted process's console output and never in the killed process's), the single run row is still
+`Succeeded` and its delivery is acknowledged.
 
 Limits: completion only (fault and cancel across a process kill remain covered by the in-process witnesses above);
 SQLite only; the hold is armed before the parent starts, so the worker cannot deliver ahead of the freeze. The fixture sets

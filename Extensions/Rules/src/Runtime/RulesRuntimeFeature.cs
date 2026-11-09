@@ -36,7 +36,7 @@ public class RulesRuntimeFeature : IShellFeature
     /// <remarks>
     /// The source-build pin is distinguishable from every packaged pin and the host logs a warning when it is used. A run
     /// admitted under it is recoverable only by a host that loads byte-identical Rules assemblies, so a changed build
-    /// leaves such runs unavailable rather than refused. Cannot be combined with <see cref="DeploymentReceiptPath"/>.
+    /// leaves such runs unavailable rather than refused. Cannot be combined with <see cref="DeploymentReceiptPath"/> or <see cref="HostDepsPath"/>.
     /// </remarks>
     [ManifestSetting(DisplayName = "Allow source-build identity", Description = "Use the loaded Rules assemblies as the implementation identity instead of a deployment receipt; development hosts only.", Category = "Deployment")]
     public bool AllowSourceBuildIdentity { get; set; }
@@ -58,8 +58,8 @@ public class RulesRuntimeFeature : IShellFeature
         ArgumentNullException.ThrowIfNull(services);
         if (MaxConcurrentAttempts is < 1 or > 64) throw new ArgumentOutOfRangeException(nameof(MaxConcurrentAttempts));
         if (PollIntervalMilliseconds is < 10 or > 60_000) throw new ArgumentOutOfRangeException(nameof(PollIntervalMilliseconds));
-        if (AllowSourceBuildIdentity && !string.IsNullOrEmpty(DeploymentReceiptPath))
-            throw new InvalidOperationException("AllowSourceBuildIdentity cannot be combined with DeploymentReceiptPath; a host advertises one Rules identity.");
+        if (AllowSourceBuildIdentity && (!string.IsNullOrEmpty(DeploymentReceiptPath) || !string.IsNullOrEmpty(HostDepsPath)))
+            throw new InvalidOperationException("AllowSourceBuildIdentity cannot be combined with DeploymentReceiptPath or HostDepsPath; a host advertises one Rules identity.");
         var options = new RulesRuntimeOptions(MaxConcurrentAttempts, TimeSpan.FromMilliseconds(PollIntervalMilliseconds));
         var acceptNewInvocations = AcceptNewInvocations;
         var receipt = DeploymentReceiptPath;

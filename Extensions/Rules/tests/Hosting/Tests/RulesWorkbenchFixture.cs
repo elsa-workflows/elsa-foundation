@@ -31,6 +31,9 @@ internal sealed class RulesWorkbenchFixture : IAsyncDisposable
     public string HoldPath { get; }
     public string EngagedMarkerPath => HoldPath + ".engaged";
 
+    /// <summary>The console output of every host this fixture killed, oldest first.</summary>
+    public IReadOnlyList<string> KilledHostOutputs => _killedHosts.Select(host => host.Output).ToArray();
+
     /// <summary>The process ids and exit codes of every host this fixture killed, oldest first.</summary>
     public IReadOnlyList<(int ProcessId, int ExitCode)> KilledHosts => _killedHosts.Select(host => (host.ProcessId, host.ExitCode)).ToArray();
 

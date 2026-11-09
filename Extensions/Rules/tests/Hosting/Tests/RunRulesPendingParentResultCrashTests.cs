@@ -65,7 +65,13 @@ public sealed class RunRulesPendingParentResultCrashTests
         var runRules = Assert.Single(activities, item => item!["activityType"]!.GetValue<string>() == RunRulesType)!;
         Assert.Equal("Completed", runRules["status"]!.GetValue<string>());
         if (parent != "Root")
+        {
             Assert.Equal("Completed", Assert.Single(activities, item => item!["activityType"]!.GetValue<string>() == WriteLineType)!["status"]!.GetValue<string>());
+            // The line after the wait ran once, and only in the restarted process.
+            var line = "Recovered real Rules " + parent;
+            Assert.Equal(1, CountOf(fixture.Host.Output, line));
+            Assert.Equal(0, CountOf(Assert.Single(fixture.KilledHostOutputs), line));
+        }
         await WaitForAsync(() => Task.FromResult(fixture.ReadRuns().Single().DeliveryAcknowledged), "The delivery was not acknowledged after the resume.");
         var settled = Assert.Single(fixture.ReadRuns());
         Assert.Equal(SucceededStatus, settled.Status);
@@ -131,6 +137,14 @@ public sealed class RunRulesPendingParentResultCrashTests
     {
         ["referenceKey"] = referenceKey, ["value"] = new JsonObject { ["value"] = value, ["expressionType"] = "Literal" }
     };
+
+    private static int CountOf(string text, string value)
+    {
+        var count = 0;
+        for (var index = text.IndexOf(value, StringComparison.Ordinal); index >= 0; index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
 
     private static string WorkflowStatus(JsonNode view) => view["instance"]!["status"]!.GetValue<string>();
 

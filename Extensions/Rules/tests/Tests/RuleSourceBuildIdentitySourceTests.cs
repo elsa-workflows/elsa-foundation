@@ -44,7 +44,15 @@ public sealed class RuleSourceBuildIdentitySourceTests
             package.SelectedAssets)).ToArray(), sourceBuild.LanguageId, sourceBuild.LanguageVersion, sourceBuild.ReceiptSchemaVersion, sourceBuild.StateSchemaVersion);
 
         Assert.NotEqual(RuleRecordCodec.PinHash(packaged), RuleRecordCodec.PinHash(sourceBuild));
+        // The load-bearing guarantee: the markers only a source-build pin carries, and a receipt-shaped pin never does
+        // (the receipt reader resolves package ids against deps.json, where a "source-build:" id cannot exist).
         Assert.All(sourceBuild.Packages, package => Assert.StartsWith(RuleSourceBuildIdentitySource.ProvenancePrefix, package.PackageId, StringComparison.Ordinal));
+        var receiptShaped = RuleStoreTestFixture.NewInvocation().ExpectedImplementation;
+        Assert.All(receiptShaped.Packages, package =>
+        {
+            Assert.DoesNotContain(':', package.PackageId);
+            Assert.All(package.SelectedAssets, asset => Assert.False(asset.PackageRelativeAssetPath.StartsWith("source-build/", StringComparison.Ordinal)));
+        });
     }
 
     [Fact]
@@ -114,10 +122,12 @@ public sealed class RuleSourceBuildIdentitySourceTests
         Assert.Same(host, replacedProvider.GetRequiredService<IRuleImplementationIdentitySource>());
     }
 
-    [Fact]
-    public void The_feature_refuses_a_source_build_identity_next_to_a_deployment_receipt()
+    [Theory]
+    [InlineData("/deploy/elsa.rules.deployment-receipt.json", "")]
+    [InlineData("", "/deploy/host.deps.json")]
+    public void The_feature_refuses_a_source_build_identity_next_to_deployment_evidence(string receiptPath, string depsPath)
     {
-        var feature = new RulesRuntimeFeature { AllowSourceBuildIdentity = true, DeploymentReceiptPath = "/deploy/elsa.rules.deployment-receipt.json" };
+        var feature = new RulesRuntimeFeature { AllowSourceBuildIdentity = true, DeploymentReceiptPath = receiptPath, HostDepsPath = depsPath };
         var error = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
         Assert.Contains("AllowSourceBuildIdentity", error.Message, StringComparison.Ordinal);
     }
