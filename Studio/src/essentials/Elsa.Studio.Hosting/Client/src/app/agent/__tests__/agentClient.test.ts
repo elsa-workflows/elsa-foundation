@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentApiError, classifyAutonomyFailure, createAgentClient, POLICY_CHANGED } from "../agentClient";
-import { StudioHttpError, type StudioEndpointContext } from "../../../sdk";
+import { StudioHttpError, createHttpClient, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
   it("transports the per-message surface and maps only server-admitted context metadata and opaque payload", async () => {
@@ -129,7 +129,7 @@ describe("agent client", () => {
 
   it("maps the autonomy policy and forwards the requested mode", async () => {
     const context = stubContext();
-    context.http.getJson = vi.fn(async () => ({
+    context.http.getJson = mockGetJson({
       data: {
         enabled: true,
         capabilities: [],
@@ -141,7 +141,7 @@ describe("agent client", () => {
           allowedAutonomyModes: ["manual", "auto-read-only"]
         }
       }
-    }));
+    });
     const client = createAgentClient(context);
 
     const bootstrap = await client.bootstrap();
@@ -164,14 +164,14 @@ describe("agent client", () => {
 
   it("derives allowed autonomy modes from the ceiling when the backend omits them", async () => {
     const context = stubContext();
-    context.http.getJson = vi.fn(async () => ({
+    context.http.getJson = mockGetJson({
       data: {
         enabled: true,
         capabilities: [],
         provider: { providerId: "deterministic-test", isAvailable: true, status: "available" },
         policy: { contextVisibility: true, maxAutonomyMode: "full-auto" }
       }
-    }));
+    });
 
     const bootstrap = await createAgentClient(context).bootstrap();
 
@@ -181,7 +181,7 @@ describe("agent client", () => {
 
   it("surfaces wrapped feedback errors", async () => {
     const context = stubContext();
-    context.http.postJson = vi.fn(async url => {
+    context.http.postJson = mockPostJson(async url => {
       if (url === "/_elsa/agent/feedback") return { error: { code: "feedback_failed", message: "Feedback failed." } };
       return { data: { id: "ignored" } };
     });
@@ -335,8 +335,9 @@ function stubContext(): StudioEndpointContext {
   return {
     baseUrl: "https://foundation.example/",
     http: {
-      getJson: vi.fn(async () => ({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } })),
-      postJson: vi.fn(async url => {
+      ...createHttpClient("https://foundation.example/"),
+      getJson: mockGetJson({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } }),
+      postJson: mockPostJson(async url => {
         if (url === "/_elsa/agent/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };
         if (url.endsWith("/execute")) return { data: { proposalId: "prop_01", executed: true, message: "Executed." } };
@@ -351,7 +352,8 @@ function stubPascalCaseContext(): StudioEndpointContext {
   return {
     baseUrl: "https://foundation.example/",
     http: {
-      getJson: vi.fn(async () => ({
+      ...createHttpClient("https://foundation.example/"),
+      getJson: mockGetJson({
         Data: {
           Enabled: true,
           ProviderStatus: "Available",
@@ -372,8 +374,8 @@ function stubPascalCaseContext(): StudioEndpointContext {
             Surfaces: ["workflow.definition"]
           }]
         }
-      })),
-      postJson: vi.fn(async url => {
+      }),
+      postJson: mockPostJson(async url => {
         if (url === "/_elsa/agent/sessions") return { Data: { SessionId: "agt_01", Status: "Active" } };
         if (url.endsWith("/messages")) return { Data: { Message: { Id: "msg_01" }, Warnings: [] } };
         if (url.endsWith("/execute")) return { Data: { ProposalId: "prop_01", Executed: true, Message: "Executed." } };
@@ -381,4 +383,20 @@ function stubPascalCaseContext(): StudioEndpointContext {
       })
     }
   };
+}
+
+function mockPostJson(respond: (url: string) => Promise<unknown>) {
+  const http = createHttpClient("https://foundation.example/", {
+    fetch: async input => Response.json(await respond(new URL(String(input)).pathname))
+  });
+  vi.spyOn(http, "postJson");
+  return http.postJson;
+}
+
+function mockGetJson(response: unknown) {
+  const http = createHttpClient("https://foundation.example/", {
+    fetch: async () => Response.json(response)
+  });
+  vi.spyOn(http, "getJson");
+  return http.getJson;
 }
