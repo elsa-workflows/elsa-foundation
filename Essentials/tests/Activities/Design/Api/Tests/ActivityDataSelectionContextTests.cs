@@ -51,6 +51,7 @@ public sealed class ActivityDataSelectionContextTests
     [InlineData("depth")]
     [InlineData("members")]
     [InlineData("path")]
+    [InlineData("skip")]
     public async Task Requests_beyond_shared_analysis_limits_are_refused_before_reading_the_draft(string limit)
     {
         using var fixture = new Fixture();
@@ -60,6 +61,7 @@ public sealed class ActivityDataSelectionContextTests
             "take" => query with { Take = 101 },
             "depth" => query with { ShapeLimits = new(17, 512) },
             "members" => query with { ShapeLimits = new(16, 513) },
+            "skip" => query with { Skip = 10001 },
             _ => query with { MemberPath = [.. Enumerable.Repeat("member", 65)] }
         };
         var result = await fixture.Service.ResolveAsync(fixture.Request() with { Query = query }, default);

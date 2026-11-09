@@ -171,7 +171,7 @@ internal sealed class ActivityDataSelectionContextService(
     }
 
     private static bool Bounded(ActivityDataSelectionQuery? query) => query is null ||
-        query.Skip >= 0 && query.Take is >= 1 and <= 100 && (query.Search is null || query.Search.Length <= 256) &&
+        query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100 && (query.Search is null || query.Search.Length <= 256) &&
         !query.MemberPath.IsDefault && query.MemberPath.Length <= 64 && query.MemberPath.All(x => x is not null && x.Length <= 1024) &&
         query.ShapeLimits is { MaximumDepth: >= 0 and <= 16, MaximumMembers: >= 0 and <= 512 };
 }

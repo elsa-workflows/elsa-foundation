@@ -54,7 +54,7 @@ using IfActivity = Elsa.Activities.If.Activities.If;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class PublishWorkflowRequestHandlerTests
+public sealed partial class PublishWorkflowRequestHandlerTests
 {
     private const string UnknownStructureKind = "test.opaque.structure";
     private const string UnknownStructureSchemaVersion = "1.0.0";
