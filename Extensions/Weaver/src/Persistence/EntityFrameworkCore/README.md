@@ -91,7 +91,7 @@ never part of a record; the store records only the owner's Core records.
 
 A row whose ciphertext does not authenticate, whose JSON does not decode, whose plain columns disagree
 with its protected record, or whose schema version this build does not read makes hydration fail with
-`AgentSessionUnavailableException` (`agent.session.unavailable_state`, reason `unreadable`, the cause
+`AgentSessionUnavailableException` (`weaver.session.unavailable_state`, reason `unreadable`, the cause
 kept as the inner exception); nothing is settled or changed. A provider failure leaves the store as an
 `AgentContributionException` naming the session and operation, with the original exception inside.
 

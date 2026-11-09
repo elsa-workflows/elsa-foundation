@@ -9,6 +9,7 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
 | Elsa foundation repo | `elsa-foundation`, this repository: the transitional baseline for Elsa foundation libraries, architecture knowledge, maps, specs, and default implementation work. |
 | Weaver | The user-facing AI assistant experience in Elsa Studio. It is implemented through provider-neutral agent contracts, but Weaver is not the AI provider, SDK adapter, or workflow execution agent. |
+| Weaver session | One conversation between a Studio user and Weaver, with its messages, proposals and audit; it is the unit Weaver runs, pauses, recovers and audits, and it is not an Agent conversation (user-defined). |
 | Provider SDK binding | An adapter from Elsa's AI-provider-neutral agent facade to one model or provider SDK, such as the GitHub Copilot SDK. |
 | Weaver harness provider | An adapter from Elsa's AI-provider-neutral agent facade to a higher-level agent runtime that can own long-running runs, skills, tools, artifacts, memory, sandbox execution, and sub-agent progress. |
 | Weaver run | One long-running harness execution inside a Weaver session. A run may produce progress, tool activity, artifacts, and proposals without redefining the user-visible conversation boundary. |

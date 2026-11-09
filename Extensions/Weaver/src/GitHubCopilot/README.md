@@ -81,7 +81,7 @@ state directory or runtime. That state is provider-owned, not Elsa's recorded st
 - The next turn resumes the Copilot session with the Elsa session ID (ADR 0022). If Copilot cannot resume it, the
   provider creates a new Copilot session with the same ID. For a session with earlier turns, this is an explicit
   outcome: the stream carries a `Progress` event whose payload is an `AgentProviderNotice` with code
-  `agent.provider.github_copilot.conversation_reset`, and the orchestrator records it on the turn's audit trail as a
+  `weaver.provider.github_copilot.conversation_reset`, and the orchestrator records it on the turn's audit trail as a
   `ProviderDiagnostic` record with the code and turn ID. Earlier turns stay in Elsa's transcript, but the new Copilot
   conversation does not hold them. A first turn, which has no earlier conversation, is not a reset.
 

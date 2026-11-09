@@ -104,7 +104,7 @@ describe("agent recovery client", () => {
     expect(classifyRecoveryFailure(new StudioHttpError(503, "down"))).toBe("lost");
     expect(classifyRecoveryFailure(new StudioHttpError(404, "missing"))).toBe("not-found");
     expect(classifyRecoveryFailure(new StudioHttpError(403, "forbidden"))).toBe("not-found");
-    expect(classifyRecoveryFailure(new StudioHttpError(409, "other", null, { error: { code: "agent.other" } }))).toBe("refused");
+    expect(classifyRecoveryFailure(new StudioHttpError(409, "other", null, { error: { code: "weaver.other" } }))).toBe("refused");
   });
 
   it("carries a retryable owner refusal's Retry-After hint from the transport", async () => {

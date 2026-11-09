@@ -123,7 +123,7 @@ must answer 503 with `errorCode` `workflow.authorization.unavailable` and the fi
 `workflow_read_graph` turn after its context was admitted by the actual owner, and the mode changes. The released call's
 pre-dispatch admission refresh asks the same owner before the tool can, so the turn must stop there, before any
 dispatch or adapter return. For the unavailable owner the stop is `workflow.authorization.unavailable` with 503 and the
-engine's fixed owner-unavailable text. For the denying owner it stays `agent.context.incomplete` (400) with the
+engine's fixed owner-unavailable text. For the denying owner it stays `weaver.context.incomplete` (400) with the
 existing read-permission text. The
 tool's own 503 outcome is component evidence, because no native turn reaches it. A random private cause canary must appear on no HTTP body, SSE frame or adapter
 trace. Deselecting the seam must restore the unchanged native definition read. `evidence.witness_manifest()` lists
@@ -212,7 +212,7 @@ bridge discloses it: activities and nested structure, the designer's diagnostics
 and input), the visible Secret Reference, and the selected activity's declared properties, with the credential literal
 only withheld and the server's own `interpretation: "unavailable"` on every non-literal expression (no Expression Module
 registers Weaver tools). The read result addresses each activity by its scope path. A control snapshot that reports the
-credential input as an ordinary literal with a value of its own is refused at admission (`agent.context.incomplete`,
+credential input as an ordinary literal with a value of its own is refused at admission (`weaver.context.incomplete`,
 400, with the module's reason) before any provider call. The owner's draft is unchanged. The packaged consumer ships no
 JavaScript Expression Module and no graph activity definition: JavaScript is disclosed by type and content only, and
 graph activity references are covered by the server and Studio unit tests.
@@ -299,7 +299,7 @@ repeated in every admission, must be the server's own read of exactly that resou
   comparison against another definition's version is refused at preparation;
 - deployment shapes: with `WeaverWorkflows` deselected a version reference, and with
   `WeaverWorkflowsRuntime` deselected an Executable reference, is refused by the engine as no installed module
-  admitting the kind (`agent.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
+  admitting the kind (`weaver.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
   packaged combined host; the AppDomain-wide Design-only and Runtime-only shapes (no `Elsa.Workflows.Design*` assembly in a
   Runtime-only host) are proven by started-shell tests (`WorkflowDesignOnlyHostTests` in `Elsa.Weaver.Tests`,
   `WorkflowRuntimeOnlyHostTests` in `Elsa.Weaver.Workflows.Runtime.Tests`), not by this probe.
@@ -342,7 +342,7 @@ selection, equal to the run API's (an in-progress Run's admissions differ only b
   is offered the read and no mutating workflow tool or run control; the read completes and the Run reads back byte-equal;
 - refused at admission with the module's own text: an unknown Run, an activity execution the Run does not hold, and an actor
   without `workflows/runtime:read`;
-- deployment shape: with `WeaverWorkflowsRuntime` deselected a Run reference is `agent.context.kind_unsupported`;
+- deployment shape: with `WeaverWorkflowsRuntime` deselected a Run reference is `weaver.context.kind_unsupported`;
   the feature is selected again afterwards. The deselection reloads the shell, which empties the consumer's in-memory run
   stores, so this control runs last, after the browser journey; the seam is deselected after it.
 

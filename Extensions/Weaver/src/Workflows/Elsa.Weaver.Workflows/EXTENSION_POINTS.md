@@ -11,7 +11,7 @@ The module contributes to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.
 - `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed change journey (a position change or one Operation Batch, below). It does not advertise runtime investigation, save or publish.
 - `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result: the admitted snapshot plus each activity's scope-path address (slice D). `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
 - `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
-- `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `agent.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `agent.context.incomplete`. A denial keeps `agent.context.incomplete` with 400. `agent.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
+- `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `weaver.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `weaver.context.incomplete`. A denial keeps `weaver.context.incomplete` with 400. `weaver.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
 
 The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
@@ -30,7 +30,7 @@ The module reads two owning domains through their `.Core` contracts only, and re
   `truncated`, `totalCount` and `includedCount`, and reports `budgetBytes`, `includedBytes` and `nextEntryBytes`, so a
   reader can check that the prefix stopped only because the next entry would not fit. `status` is `available`, `denied` (the actor lacks
   `activities/design:read`; no entries) or `unavailable`. A missing, ambiguous or failing catalog owner is
-  `unavailable` with the optional diagnostic `agent.workflow.catalog_unavailable`, whose message names the missing
+  `unavailable` with the optional diagnostic `weaver.workflow.catalog_unavailable`, whose message names the missing
   capability; explanation still works. An owner failure is logged at warning with its cause; the model sees only the fixed
   text.
 - **Permissions.** `workflow.permissions` schema `1` (origin `AuthoritativeRead`) is contributed for each admitted exact
@@ -47,13 +47,13 @@ The module reads two owning domains through their `.Core` contracts only, and re
   than the API's admission. `manage` combines the host decision for the layout tool with the owner's answer: when the host
   `IAgentToolAuthorizer` refuses the layout tool the owner is not asked and `manage` is `denied`, so `denied` does not by
   itself mean the owner refused. A host that refuses `workflow_read_graph` withholds the whole workflow context with the
-  required `agent.workflow.permission_denied` (disclosure is admitted on the read tool's descriptor); a host cannot keep the
+  required `weaver.workflow.permission_denied` (disclosure is admitted on the read tool's descriptor); a host cannot keep the
   workflow context while withholding only the read tool.
 
 Both server reads respect the session's host context policy. When `IAgentPolicyEvaluator.EvaluateContextAsync` does not
 admit a kind (for example a policy whose `AllowedContextKinds` lists only the older workflow kinds), the module does not
 contribute it: no read is made, no required failure follows, and the optional diagnostic
-`agent.workflow.server_read_withheld` says which kind was left out. Explanation and the reviewed layout change keep
+`weaver.workflow.server_read_withheld` says which kind was left out. Explanation and the reviewed layout change keep
 working exactly as before the server reads existed, and re-admission of a disclosure recorded before them adds none.
 
 Both kinds are in the descriptor's `ContextKinds`. `AdmitDisclosureAsync` accepts a retained one only with the module's
@@ -61,7 +61,7 @@ own origin. For the current turn it never trusts a retained read: it reads the c
 again, under the same attachment identities and in the same positions (redacted items stay where they were), so an unchanged answer is the identical projection (no new disclosure
 snapshot) and a changed one is a new snapshot under the session's disclosure limits. Historical admission keeps what was
 disclosed and re-checks only the catalog's read gate (`IActivityAuthoringCatalog.CanReadAsync`) when entries were
-disclosed: a lost read is the required `agent.workflow.permission_denied`, an owner outage the required
+disclosed: a lost read is the required `weaver.workflow.permission_denied`, an owner outage the required
 `activities.catalog.unavailable`, marked owner-unavailable. Receipt continuations are unchanged: guidance only.
 
 Revision identity follows FR-005: `workflow.definition` already carries the exact target, the working-state content
@@ -84,18 +84,18 @@ revision and the client binding. No persisted revision is read in its place.
     visible name is the `displayName` presentation record.
   - **Preparation.** Requires one admitted `workflow.definition` snapshot with structure (each activity's exact version,
     parent, slot and slots) and `workingState: "draft"`. Manage authority is decided before validation, so a reader
-    gets the shared `agent.workflow.permission_denied` (explanation stays available) and learns nothing else. The
+    gets the shared `weaver.workflow.permission_denied` (explanation stays available) and learns nothing else. The
     catalog is read fresh from `IActivityAuthoringCatalog` when an operation needs it. Outcomes, each naming the failing
-    operation, with nothing changed: `agent.workflow.batch.schema_invalid` (400), `agent.workflow.batch.reference_invalid`
+    operation, with nothing changed: `weaver.workflow.batch.schema_invalid` (400), `weaver.workflow.batch.reference_invalid`
     (dangling, reused or removed references, a new id the document still holds in a layout or presentation record, a
     root-scope add without `set-root`, a second `set-root`, an add into or a connection within an activity the same
     batch adds, an add into or a removal from a BPMN scope, cross-scope connections; 422),
-    `agent.workflow.batch.clarification_required` (an absent, hidden or non-addable activity, an undeclared input, an
+    `weaver.workflow.batch.clarification_required` (an absent, hidden or non-addable activity, an undeclared input, an
     ambiguous name with candidates by scope path, a Secret Reference that is not visible, an unreadable catalog; 422),
-    `agent.workflow.batch.credential_literal` (with an offer to bind a visible Secret Reference; 422),
-    `agent.workflow.batch.expression_unsupported` (expression edits belong to the Expression Module; 422),
-    `agent.workflow.batch.target_not_editable` (a published or historical working state; 409),
-    `agent.workflow.batch.structure_required` (409) and `activities.catalog.unavailable` (503). Existing non-addable
+    `weaver.workflow.batch.credential_literal` (with an offer to bind a visible Secret Reference; 422),
+    `weaver.workflow.batch.expression_unsupported` (expression edits belong to the Expression Module; 422),
+    `weaver.workflow.batch.target_not_editable` (a published or historical working state; 409),
+    `weaver.workflow.batch.structure_required` (409) and `activities.catalog.unavailable` (503). Existing non-addable
     activities stay editable.
   - **Risk and review.** Each operation is `ReviewRequired`, or `Destructive` for `remove`, `disconnect` and a
     `set-root` that replaces an existing root. The batch takes the highest. Preparation always returns
@@ -120,7 +120,7 @@ revision and the client binding. No persisted revision is read in its place.
     (49,116 to 50,862). A per-activity encoding added about 150 bytes each and pushed 200 activities to 78,743. Studio
     leaves the structure out when the content would not fit the effective bound (the host's 32 KiB per attachment, see
     [slice D's size rule](#explain-and-troubleshoot-spec-1193-slice-d)), so a draft that fits without structure always
-    still fits; explanation keeps working and a batch is then refused with `agent.workflow.batch.structure_required`
+    still fits; explanation keeps working and a batch is then refused with `weaver.workflow.batch.structure_required`
     (`workflowContextSize.test.tsx`).
   - **Visible Secret References** are, in this slice, the Secret References the draft already binds, which the user
     sees in the designer. No Secrets contract is consulted; a broader picker-backed list is later work.
@@ -152,7 +152,7 @@ identity that consumers compare for equality only, so this is Minor.
 
 `workflow.definition` schema `1` admits three further optional additions from the open editor, each read strictly by
 `WorkflowAgentExplainContext`: an unknown field, a wrong type or a bound exceeded refuses the whole snapshot with
-`agent.workflow.context_invalid`. All three are resource content (untrusted data, never guidance); the installed guidance
+`weaver.workflow.context_invalid`. All three are resource content (untrusted data, never guidance); the installed guidance
 says so.
 
 - **Diagnostics** (FR-018). `diagnostics`: at most 64, in the designer's order, each `severity` (`error` or `warning`),
@@ -176,7 +176,7 @@ says so.
   which binds the selected node to its exact version; without it the snapshot is refused (Studio drops the property
   context before the structure). Studio discloses it only from the descriptor of the node's exact catalog version. When the catalog cannot
   answer for the version (denied, unavailable or not listed) the property context is left out and the optional
-  `agent.workflow.property_context_unverified` diagnostic says so; the draft is still explained.
+  `weaver.workflow.property_context_unverified` diagnostic says so; the draft is still explained.
 - **Graph activities** (FR-014). `graphActivities`: at most 64 references, each the `activityDefinitionId`, exact
   `activityVersionId` and `version`, and the activity indexes that use it (each index at most once, and in the
   structure's version). A graph activity's body belongs to its definition and is never inlined. Studio lists only
@@ -198,9 +198,9 @@ says so.
   fixture (`workflowExplainSnapshot.json` records it; `WorkflowExplainContextTests` holds the server to it). On a chained
   flowchart with GUID catalog versions the structure is kept up to 120 activities (32,496 characters admitted), left out
   from 121 (31,695 without it), and from 126 activities (32,995 even without structure) the snapshot does not fit the
-  host budget at all and is refused (`agent.context.budget_exceeded`); `workflowContextSize.test.tsx` pins these. Lifting
+  host budget at all and is refused (`weaver.context.budget_exceeded`); `workflowContextSize.test.tsx` pins these. Lifting
   that limit is [#3710](https://github.com/elsa-workflows/elsa-foundation/issues/3710).
-- **Expression edits** stay refused at preparation (`agent.workflow.batch.expression_unsupported`), consistent with the
+- **Expression edits** stay refused at preparation (`weaver.workflow.batch.expression_unsupported`), consistent with the
   unavailable interpretation.
 - **Guidance** names the revision rule (an explanation names the revision it read and never attributes an answer to
   another), takes validation findings only from the designer's diagnostics, describes addresses, graph activity
@@ -290,15 +290,15 @@ definition identity and name, the version identity and label, its activity count
 bound, `readingIncomplete` when a container's children could not be read) and the definition's newest versions (at most 50, `versionsTruncated`), plus
 `workflows.version-guidance`. Its target is the version identity only (FR-005); a later authority decision for a version
 target (a retained result, the tool's target) asks `IWorkflowVersionReader.FindDefinitionIdAsync` for the version's
-definition, which reads nothing else, and then that definition's owner, before the version is read. Required refusals: `agent.workflow.version_context_invalid`;
-`agent.workflow.permission_denied` ("Current workflow design read permission is required for the workflow version.");
-`agent.workflow.version_not_found` ("The workflow version is unavailable.") for an unknown version, another definition's
+definition, which reads nothing else, and then that definition's owner, before the version is read. Required refusals: `weaver.workflow.version_context_invalid`;
+`weaver.workflow.permission_denied` ("Current workflow design read permission is required for the workflow version.");
+`weaver.workflow.version_not_found` ("The workflow version is unavailable.") for an unknown version, another definition's
 version and a withheld definition alike, so existence is disclosed no more than the owner discloses it;
 `workflow.authorization.unavailable` (owner threw; for a reference that names its definition, an unknown and an existing
 version then answer alike and nothing is read) and the composition faults `workflow.authority.composition_unavailable` (no or several definition
 authorizers), `workflow.version.reader_unavailable` and `workflow.version.structure_unavailable` (no or several readers or
 activity structure services), each owner-namespaced so the engine reports it as unavailable (503); slice A's
-`agent.workflow.authority_unavailable` keeps its established meaning for the draft tools and is not used here. The order is
+`weaver.workflow.authority_unavailable` keeps its established meaning for the draft tools and is not used here. The order is
 always the host's permission, then (for a version named only by its id) the definition lookup, then the owner, then one read;
 for a version named only by its id (a retained result, a tool target), an unknown id has no definition to ask about, so
 during an owner outage it answers not found (404) while a known id answers unavailable (503). With no version reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own
@@ -333,22 +333,22 @@ two connections. A metadata entry no connection or child claims stays part of th
 installed handler projects is never read as empty: the reading and the comparison say `incomplete` with
 `incompleteReasons`. Input and output values are compared without being disclosed. Lists are bounded (at most 100 each,
 smaller when the result would exceed 24 KiB, well under the host's 32 KiB budget, #3710) and say when they were cut; a read
-that does not fit even its smallest bound is refused as `agent.workflow.version_too_large` (413). Its
+that does not fit even its smallest bound is refused as `weaver.workflow.version_too_large` (413). Its
 `IAgentToolAuthorization` decides a concrete version target by its definition's owner read alone (the definition looked
 up by id, nothing else read). Refusals:
-`agent.workflow.version_context_required` (409), `agent.workflow.version_arguments_invalid` (400),
-`agent.workflow.version_not_found` (404), `agent.workflow.permission_denied` (403), `workflow.authorization.unavailable`
+`weaver.workflow.version_context_required` (409), `weaver.workflow.version_arguments_invalid` (400),
+`weaver.workflow.version_not_found` (404), `weaver.workflow.permission_denied` (403), `workflow.authorization.unavailable`
 and `workflow.version.reader_unavailable` (503).
 
 **Read-only.** A version is immutable. The guidance tells the model to refuse any edit, save, publish or delete of a version
 with zero effect and to offer the current draft instead; no tool targets a version for a change, and
 `workflow_apply_operation_batch` binds only an admitted working-state snapshot, so it refuses a request that holds only a
-version (`agent.workflow.snapshot_required`, FR-015). The capability `workflow.version-explain` (Answer, ReadOnly,
+version (`weaver.workflow.snapshot_required`, FR-015). The capability `workflow.version-explain` (Answer, ReadOnly,
 `workflows/design:read`, kind `workflows.version`, mode `explain`) is declared by `WorkflowAgentCapabilityProvider`.
 
 **Executables and Runs** live in the Runtime-side package [`Elsa.Weaver.Workflows.Runtime`](../Runtime/EXTENSION_POINTS.md),
 so this package keeps referencing Workflows Design only (FR-027, D2). In a Design-only host an Executable reference is
-refused by the engine as `agent.context.kind_unsupported` ("No installed module admits the supplied context kind and
+refused by the engine as `weaver.context.kind_unsupported` ("No installed module admits the supplied context kind and
 owner.") and no Executable tool is offered; in a Runtime-only host the same holds for every kind and tool above.
 
 **SemVer: Minor, additive**: the context source and its two kinds, the tool and its result kind, the capability, and

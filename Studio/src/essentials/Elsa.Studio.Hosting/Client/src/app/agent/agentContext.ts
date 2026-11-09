@@ -74,7 +74,7 @@ export async function collectAgentContext(
       return { collection: await Promise.race([Promise.resolve().then(() => { signal?.throwIfAborted(); return provider.collect({ surface, mode, sessionId, signal: controller.signal }); }), interrupted]) };
     } catch {
       signal?.throwIfAborted();
-      diagnostics.push({ contributorId: provider.id, code: deadline ? "agent.context.deadline" : "agent.context.contributor_failed", message: deadline ? "Context contributor did not finish within its deadline." : "Context contributor could not provide evidence.", required: provider.required === true });
+      diagnostics.push({ contributorId: provider.id, code: deadline ? "weaver.context.deadline" : "weaver.context.contributor_failed", message: deadline ? "Context contributor did not finish within its deadline." : "Context contributor could not provide evidence.", required: provider.required === true });
       return null;
     } finally {
       if (timer !== undefined) clearTimeout(timer);

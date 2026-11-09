@@ -46,7 +46,7 @@ INVALID_CONTEXT = "Only a current Acme status card reference is supported."
 INVALID_SCHEMA = "The installed module does not support this context schema version."
 MALFORMED_RESULT = "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."
 EXPECTED_CONTROLS = {
-    "module-missing": {"stage": "message", "diagnostic": "agent.policyDenied: No installed module contributes the requested capability."},
+    "module-missing": {"stage": "message", "diagnostic": "weaver.policyDenied: No installed module contributes the requested capability."},
     "sdk-incompatible": {"stage": "module-admission", "diagnostic": "incompatible"},
     "pending-module-removed": {"stage": "proposal-lookup", "diagnostic": "weaver.proposal.not_found"},
     "read-denied": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
@@ -54,13 +54,13 @@ EXPECTED_CONTROLS = {
     "cross-user": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
     "cross-tenant": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
     "cross-host": {"stage": "execute", "diagnostic": "acme.home.host_denied"},
-    "foreign-scope": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_CONTEXT},
-    "malformed-scope": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_CONTEXT},
+    "foreign-scope": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_CONTEXT},
+    "malformed-scope": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_CONTEXT},
     "malformed-arguments": {"stage": "tool-preparation", "diagnostic": "acme.home.arguments_invalid"},
-    "missing-resource": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: The Acme status card is absent from the personal Home layout."},
-    "default-resource": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: Create a personal Home layout before using this widget."},
+    "missing-resource": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: The Acme status card is absent from the personal Home layout."},
+    "default-resource": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: Create a personal Home layout before using this widget."},
     "no-op-resource": {"stage": "tool-preparation", "diagnostic": "acme.home.noop"},
-    "invalid-schema": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_SCHEMA},
+    "invalid-schema": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_SCHEMA},
     "stale-revision": {"stage": "execute", "diagnostic": "acme.home.stale"},
     "concurrent-cas": {"stage": "native-cas", "diagnostic": "acme.home.conflict"},
     "malformed-result": {"stage": "client-acknowledgement", "diagnostic": MALFORMED_RESULT},
@@ -164,7 +164,7 @@ def _bootstrap(runtime):
 def _module_missing(runtime, records):
     before, bref, bread = runtime.snapshot("missing-module-owner-before")
     turn = runtime.turn("module-missing", arguments={"visible": True})
-    value = expect_error(turn.message, 403, "agent.policyDenied", message="No installed module contributes the requested capability.")
+    value = expect_error(turn.message, 403, "weaver.policyDenied", message="No installed module contributes the requested capability.")
     check(turn.stream is None and turn.proposal is None, "Absent module unexpectedly prepared an operation")
     after, aref, aread = runtime.snapshot("missing-module-owner-after")
     runtime.record(records, "module-missing", bref, aref, turn.evidence + [bread, aread], _unchanged(before, after),

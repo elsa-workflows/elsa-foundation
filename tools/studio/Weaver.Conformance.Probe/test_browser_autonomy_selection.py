@@ -55,7 +55,7 @@ const server=createServer((request,response)=>{
  if(request.method==='PUT'&&request.url==='/_elsa/weaver/sessions/s1/autonomy'){
   if(SCENARIO==='lost'){held=response;return;}
   response.setHeader('Content-Type','application/json');
-  if(SCENARIO==='busy'){response.statusCode=409;response.end(JSON.stringify({data:null,error:{code:'agent.session.busy'}}));return;}
+  if(SCENARIO==='busy'){response.statusCode=409;response.end(JSON.stringify({data:null,error:{code:'weaver.session.busy'}}));return;}
   response.end(JSON.stringify({data:{...created,autonomyMode:'manual',revision:SCENARIO==='wrong-ack'?5:1},error:null}));return;
  }
  response.statusCode=404;response.end();

@@ -360,7 +360,7 @@ public sealed class EfAgentSessionRecordStoreTests
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("agent.utc-clock", StringComparison.Ordinal)) Interlocked.Increment(ref _count);
+            if (command.CommandText.Contains("weaver.utc-clock", StringComparison.Ordinal)) Interlocked.Increment(ref _count);
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
         }
     }

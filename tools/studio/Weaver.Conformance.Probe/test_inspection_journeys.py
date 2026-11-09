@@ -277,7 +277,7 @@ class VersionTurnTests(unittest.TestCase):
         self.assertEqual("weaver.context.incomplete", require_admission_refused(Response(400, value), TEXTS["version-not-found"])["code"])
         for response, text in ((Response(200, value), TEXTS["version-not-found"]), (Response(400, value), TEXTS["version-denied"]),
                                (Response(503, value), TEXTS["version-not-found"]),
-                               (Response(400, {"error": {"code": "agent.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
+                               (Response(400, {"error": {"code": "weaver.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
             with self.assertRaises(RuntimeError): require_admission_refused(response, text)
 
 

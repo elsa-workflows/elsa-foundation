@@ -72,7 +72,7 @@ describe("WeaverSurface", () => {
     } finally { unmount(); }
   });
 
-  it.each(["agent.context.contributor_failed", "agent.context.deadline", "weaver.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
+  it.each(["weaver.context.contributor_failed", "weaver.context.deadline", "weaver.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
     const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
     api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
@@ -434,7 +434,7 @@ describe("WeaverSurface", () => {
   it.each(["expired", "failed"])("drains an authoritative server %s refusal and releases the original caller without replay", async status => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
     const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
-    const toolResult = status === "failed" ? { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "The owning resource revision changed.", payload: { typeId: "agent.lifecycle.refused", schemaVersion: "1", data: { applied: false } } } : null;
+    const toolResult = status === "failed" ? { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "The owning resource revision changed.", payload: { typeId: "weaver.lifecycle.refused", schemaVersion: "1", data: { applied: false } } } : null;
     const summary = status === "expired" ? "The reviewed invocation expired." : "The owning resource revision changed.";
     const envelope = { error: { code: `weaver.execution.${status}`, message: summary, statusCode: 409 }, data: { proposalId: "proposal", executed: false, status, resourceType: "sample", resourceId: "one", summary, clientInvocation: null, toolResult } };
     client.executeProposal = createAgentClient({ ...api.backend, http: { ...api.backend.http, postJson: vi.fn(async () => { throw new StudioHttpError(409, summary, null, envelope); }) } }).executeProposal;

@@ -34,7 +34,7 @@ describe("agent client", () => {
   });
 
   it.each([{ status: "approved", proposalId: "proposal" }, { status: "expired", proposalId: "another-proposal" }])("does not treat nonterminal or unrelated data as a terminal outcome: %j", async data => {
-    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "agent.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
+    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "weaver.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
     context.http.postJson = vi.fn(async () => { throw error; });
     await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toBe(error);
     expect(error).not.toHaveProperty("terminalOutcome");
@@ -253,7 +253,7 @@ describe("agent client", () => {
     [409, "weaver.session.autonomy_unsupported", "unsupported"],
     [400, "weaver.session.autonomy_invalid", "invalid"],
     [404, "weaver.session.not_found", "not-found"],
-    [403, "agent.forbidden", "refused"]
+    [403, "weaver.forbidden", "refused"]
   ] as const)("classifies a %s %s autonomy refusal as %s for both HTTP and wrapped envelopes", async (status, code, kind) => {
     const envelope = { data: null, error: { code, message: `Refused: ${code}`, statusCode: status } };
     for (const transport of ["http", "wrapped"]) {
@@ -306,7 +306,7 @@ describe("agent client", () => {
       .mockResolvedValueOnce({ data: { message: { id: "m1", status: "Pending", acceptedPolicy: { autonomyMode: "full-auto", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 4 } }, warnings: [] } })
       .mockRejectedValueOnce(new StudioHttpError(409, "Conflict", null, { error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } }))
       .mockResolvedValueOnce({ error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } })
-      .mockRejectedValueOnce(new StudioHttpError(409, "Other conflict", null, { error: { code: "agent.other" } })) as typeof context.http.postJson;
+      .mockRejectedValueOnce(new StudioHttpError(409, "Other conflict", null, { error: { code: "weaver.other" } })) as typeof context.http.postJson;
     const client = createAgentClient(context);
     const request = () => ({ message: "Resize", mode: "build" as const, contextAttachments: [] });
     expect((await client.sendMessage("agt_01", request())).acceptedPolicy).toEqual({ autonomyMode: "full-auto", revision: 4 });

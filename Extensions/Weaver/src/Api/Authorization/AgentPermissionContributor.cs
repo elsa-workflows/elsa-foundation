@@ -20,7 +20,7 @@ public sealed class AgentPermissionContributor : IPermissionContributor
     ];
 
     private Permission Permission(string key, string displayName, string description) =>
-        new(key, displayName, "Agent", description)
+        new(key, displayName, "Weaver", description)
         {
             OwnerId = OwnerId,
             ContributorType = ContributorType

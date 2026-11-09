@@ -573,7 +573,7 @@ async function interceptAcknowledgement(mode) {
 }
 function observedLifecycle(ack, status, summary) {
   expect(ack.value).toMatchObject({ error: null, data: { executed: false, status, summary, toolResult: {
-    succeeded: false, content: summary, payload: { typeId: "agent.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
+    succeeded: false, content: summary, payload: { typeId: "weaver.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
   } } });
 }
 async function proposalFor(action, name) {

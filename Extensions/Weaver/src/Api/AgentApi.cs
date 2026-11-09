@@ -829,7 +829,7 @@ public static class AgentApi
             DateTimeOffset.UtcNow,
             decision.Violations.Select((violation, index) => new { Key = $"{index}:{violation.Code}", violation.Message }).ToDictionary(x => x.Key, x => x.Message)),
             context.RequestAborted);
-        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 403);
+        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("weaver.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 403);
     }
 
     private static async Task<T?> ReadAsync<T>(HttpContext context, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)

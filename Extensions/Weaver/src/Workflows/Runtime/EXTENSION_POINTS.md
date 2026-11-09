@@ -23,9 +23,9 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   require), then `IWorkflowExecutableInspection.GetAsync(artifactId)`; a returned hash that differs from the bound one is
   stale. It admits `workflows.executable` (`AuthoritativeRead`) with the identity, Artifact Hash, root activity type and
   version, node count, live Source Reference count and the Source References (at most 32, `sourceReferencesTruncated`), plus
-  installed guidance. Required refusals: `agent.workflow.executable_context_invalid`, `agent.workflow.permission_denied`
+  installed guidance. Required refusals: `weaver.workflow.executable_context_invalid`, `weaver.workflow.permission_denied`
   ("Current workflow runtime read permission is required for the workflow Executable."),
-  `agent.workflow.executable_not_found` ("The workflow Executable is unavailable."), `agent.workflow.executable_stale`
+  `weaver.workflow.executable_not_found` ("The workflow Executable is unavailable."), `weaver.workflow.executable_stale`
   ("The workflow Executable's Artifact Hash differs from the bound hash, so the context is stale."), and
   `workflow.executable.inspection_unavailable` (no or several inspections; owner-unavailable, 503). Without an
   Executable reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own retained read, reads it again at
@@ -42,11 +42,11 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   (`connectionsOmitted` counts the rest), text values (types, versions, names and ports) are cut at 256 characters and
   counted in `truncatedFields` (identities never are), per-node `inputsTruncated` and `connectionsTruncated` and the overall
   `nodesIncluded` and `graphTruncated` say what was cut, and a read that does not fit even its smallest bound is refused as
-  `agent.workflow.executable_too_large` (413), never returned unbounded, the Source References (FR-028: those the Runtime read discloses under
+  `weaver.workflow.executable_too_large` (413), never returned unbounded, the Source References (FR-028: those the Runtime read discloses under
   `workflows/runtime:read`) and the direct dependencies. Its authorization decides a concrete target by the Executable's
-  current existence at the bound hash. Refusals: `agent.workflow.executable_context_required` (409),
-  `agent.workflow.executable_stale` (409), `agent.workflow.executable_not_found` (404),
-  `agent.workflow.executable_arguments_invalid` (400), `agent.workflow.permission_denied` (403) and
+  current existence at the bound hash. Refusals: `weaver.workflow.executable_context_required` (409),
+  `weaver.workflow.executable_stale` (409), `weaver.workflow.executable_not_found` (404),
+  `weaver.workflow.executable_arguments_invalid` (400), `weaver.workflow.permission_denied` (403) and
   `workflow.executable.inspection_unavailable` (503).
 - `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` declares `workflow.executable-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.executable`, mode `explain`).
@@ -65,14 +65,14 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   `workflows.run` (`AuthoritativeRead`): identity, Executable (artifact id and Artifact Hash), status, `inProgress`, counts,
   persistence mode and granularity, value-inspection permission and the selected execution's identity, type and status (or
   `unavailable`: `pruned`, `unsupported`), never an incident message or a value. A finished Run's projection is stable
-  across admissions; an in-progress one carries `readAt`. Required refusals: `agent.workflow.run_context_invalid` (also two
-  selections of one Run, or an activity execution id equal to the instance id), `agent.workflow.permission_denied` ("Current
-  workflow runtime read permission is required for the workflow Run."), `agent.workflow.run_not_found` ("The workflow Run is
-  unavailable.", an unknown or hidden Run alike), `agent.workflow.run_activity_not_found` ("The selected activity execution is
-  not part of this workflow Run.") and `agent.workflow.run_inspection_unavailable` (no or several inspections;
+  across admissions; an in-progress one carries `readAt`. Required refusals: `weaver.workflow.run_context_invalid` (also two
+  selections of one Run, or an activity execution id equal to the instance id), `weaver.workflow.permission_denied` ("Current
+  workflow runtime read permission is required for the workflow Run."), `weaver.workflow.run_not_found` ("The workflow Run is
+  unavailable.", an unknown or hidden Run alike), `weaver.workflow.run_activity_not_found` ("The selected activity execution is
+  not part of this workflow Run.") and `weaver.workflow.run_inspection_unavailable` (no or several inspections;
   owner-unavailable, 503). `AdmitDisclosureAsync` accepts only its own retained read and `workflow_read_run` results, reads
   the Run again for the current turn and withholds them once the Run (or its selection) is no longer readable, and withholds
-  a retained result (`agent.workflow.run_access_changed`) once it discloses more than the actor's current run access covers:
+  a retained result (`weaver.workflow.run_access_changed`) once it discloses more than the actor's current run access covers:
   incident details read under value inspection, or released values read under payload resolution, that the actor no longer
   holds; a result whose disclosure cannot be read is treated as exceeding.
 - `IAgentTool` with `IAgentToolAuthorization`: `WorkflowReadRunTool`, `workflow_read_run` contract `1`, `ReadOnly`,
@@ -91,10 +91,10 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   KiB, well under the host's 32 KiB check (#3710), by stepping down incidents, activities, values, bookmarks, characters per
   value or view and characters per incident message, to identities and counts only (`incidentsTruncated`, `itemsTruncated`,
   `valuesTruncated`, `bookmarksTruncated`, `valueTruncated`, `valueOmitted`, `viewOmitted`, `outcomesTruncated`); a read that
-  does not fit even then is refused as `agent.workflow.run_too_large` (413), never sent over budget. Refusals:
-  `agent.workflow.run_context_required` (409), `agent.workflow.run_arguments_invalid` (400), `agent.workflow.run_not_found`
-  (404), `agent.workflow.run_activity_not_found` (404), `agent.workflow.permission_denied` (403) and
-  `agent.workflow.run_inspection_unavailable` (503). Its authorization decides a concrete target by the Run's (and the
+  does not fit even then is refused as `weaver.workflow.run_too_large` (413), never sent over budget. Refusals:
+  `weaver.workflow.run_context_required` (409), `weaver.workflow.run_arguments_invalid` (400), `weaver.workflow.run_not_found`
+  (404), `weaver.workflow.run_activity_not_found` (404), `weaver.workflow.permission_denied` (403) and
+  `weaver.workflow.run_inspection_unavailable` (503). Its authorization decides a concrete target by the Run's (and the
   selection's) current visibility.
 - `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` also declares `workflow.run-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.run`, mode `explain`).
@@ -114,12 +114,12 @@ run endpoints' own services (instance, activity execution, state view and value 
 ## Deployment shapes (SC-009)
 
 - **Runtime-only:** this package alone serves the Executable and Run journeys. A draft, version or library reference is refused by
-  the engine as `agent.context.kind_unsupported`, and no Design tool is offered. `Elsa.Weaver.Workflows.Runtime.Tests`
+  the engine as `weaver.context.kind_unsupported`, and no Design tool is offered. `Elsa.Weaver.Workflows.Runtime.Tests`
   composes no Design assembly and asserts, AppDomain-wide, that no `Elsa.Workflows.Design*` assembly (nor
   `Elsa.Weaver.Workflows`) is loaded.
-- **Design-only:** without this package an Executable or Run reference is `agent.context.kind_unsupported` and
+- **Design-only:** without this package an Executable or Run reference is `weaver.context.kind_unsupported` and
   neither `workflow_read_executable` nor `workflow_read_run` is offered (`Elsa.Weaver.Tests`, `WorkflowDeploymentShapeTests`).
-- **Combined:** both packages compose side by side (`Elsa.Workbench` and the Docker compose shells select both features). A host that composes the Workflows Runtime API with Weaver must select `WeaverWorkflowsRuntime`: Studio's Executable Inspector and run page always send their context, and without this package every turn on those pages is refused as `agent.context.kind_unsupported` (see the README's upgrade requirement).
+- **Combined:** both packages compose side by side (`Elsa.Workbench` and the Docker compose shells select both features). A host that composes the Workflows Runtime API with Weaver must select `WeaverWorkflowsRuntime`: Studio's Executable Inspector and run page always send their context, and without this package every turn on those pages is refused as `weaver.context.kind_unsupported` (see the README's upgrade requirement).
 - **Started hosts:** `WorkflowRuntimeOnlyHostTests` activates a real Runtime-only shell (Workflows Runtime API and this feature only) and reads a seeded Executable through the real `WorkflowExecutableInspection`; `WorkflowDesignOnlyHostTests` activates a real Design-only shell.
 
 ## SemVer

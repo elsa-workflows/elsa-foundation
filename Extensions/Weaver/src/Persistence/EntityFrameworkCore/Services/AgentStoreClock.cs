@@ -20,13 +20,13 @@ internal sealed class AgentDatabaseClock : IAgentStoreClock
         {
             // SQLite freezes now only within one statement; integer seconds plus milliseconds avoid float tick loss.
             EfProviderNames.Sqlite => "SELECT 621355968000000000 + CAST(strftime('%s', 'now') AS INTEGER) * 10000000 " +
-                                      "+ CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 10000 AS Value /* agent.utc-clock */",
+                                      "+ CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 10000 AS Value /* weaver.utc-clock */",
             EfProviderNames.SqlServer => "SELECT DATEDIFF_BIG(MICROSECOND, CONVERT(datetime2(7), '0001-01-01T00:00:00.0000000'), " +
-                                         "SYSUTCDATETIME()) * 10 AS Value /* agent.utc-clock */",
+                                         "SYSUTCDATETIME()) * 10 AS Value /* weaver.utc-clock */",
             EfProviderNames.PostgreSql => "SELECT (TRUNC(EXTRACT(EPOCH FROM clock_timestamp()) * 10000000)::bigint + 621355968000000000) " +
-                                          "AS \"Value\" /* agent.utc-clock */",
+                                          "AS \"Value\" /* weaver.utc-clock */",
             EfProviderNames.MySql => "SELECT CAST(621355968000000000 + TIMESTAMPDIFF(MICROSECOND, " +
-                                     "CAST('1970-01-01 00:00:00.000000' AS DATETIME(6)), UTC_TIMESTAMP(6)) * 10 AS SIGNED) AS Value /* agent.utc-clock */",
+                                     "CAST('1970-01-01 00:00:00.000000' AS DATETIME(6)), UTC_TIMESTAMP(6)) * 10 AS SIGNED) AS Value /* weaver.utc-clock */",
             var provider => throw new NotSupportedException($"The agent store has no database clock for provider '{provider}'.")
         };
         var ticks = await context.Database.SqlQueryRaw<long>(sql).SingleAsync(cancellationToken);

@@ -425,7 +425,7 @@ function terminalExecutionError(envelope: unknown, proposalId: string, status?: 
   if (!["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
   const errorStatus = readField(error, "statusCode");
   return new AgentExecutionError(status ?? (typeof errorStatus === "number" ? errorStatus : 409),
-    readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "agent.execution.refused",
+    readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "weaver.execution.refused",
     mapExecution(data as BackendAgentProposalExecutionResult, proposalId), envelope);
 }
 
