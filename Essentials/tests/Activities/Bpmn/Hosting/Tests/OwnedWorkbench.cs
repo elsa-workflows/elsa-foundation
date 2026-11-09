@@ -30,6 +30,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
     internal string ReaderAssemblyPath => Metadata("BpmnHostingReaderAssembly");
     internal int? LastStoppedExitCode { get; private set; }
+    internal const string NativeParentResumeHoldVariable = "ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME";
+    internal string NativeParentResumeHoldPath => Path.Combine(ContentRoot, "hold-native-parent-resume");
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
@@ -136,6 +138,18 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         if (!response.IsSuccessStatusCode) { session.Dispose(); throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}"); }
         return session;
     }
+
+    /// <summary>
+    /// Holds parent-resume delivery so a crash can land before consumption. The same file freezes
+    /// <c>BpmnEmbeddingDelivery</c> (RunBpmn) and <c>ParentResumeExecutor</c> (DispatchWorkflow / callActivity).
+    /// </summary>
+    internal void HoldNativeParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold");
+
+    /// <summary>Holds an active RunBpmn result claim until the owning process is killed.</summary>
+    internal void HoldClaimedBpmnParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold-claim");
+
+    /// <summary>Clears the test-only parent-resume hold; a missing file is already released.</summary>
+    internal void ReleaseNativeParentResumeHold() => File.Delete(NativeParentResumeHoldPath);
 
     /// <summary>Changes new-execution admission at the next launch; accepted work stays operable.</summary>
     internal async Task SetAdmissionAsync(bool admitNewExecutions)
@@ -304,6 +318,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         };
         foreach (var argument in new[] { assembly, "--contentRoot", ContentRoot, "--urls", "http://127.0.0.1:0" }) info.ArgumentList.Add(argument);
         info.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        info.Environment[NativeParentResumeHoldVariable] = NativeParentResumeHoldPath;
         var listening = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
         var owned = new Process { StartInfo = info, EnableRaisingEvents = true };
         owned.Exited += (_, _) => listening.TrySetException(Failure("The owned Workbench exited before listening"));
