@@ -12,6 +12,21 @@ public sealed class ActivityProviderDiagnosticGuidanceTests
         "acme.model.required", "Choose a model connection.", "Select an authorized model in Designer.", "/model", "Choose model connection");
 
     [Fact]
+    public void Existing_binary_entry_point_retains_its_safe_fallback()
+    {
+        var legacy = typeof(ActivityProviderDiagnosticSanitizer).GetMethod(nameof(ActivityProviderDiagnosticSanitizer.Sanitize),
+            [typeof(IEnumerable<ActivityDiagnostic>), typeof(string)]);
+        Assert.NotNull(legacy);
+        var results = Assert.IsAssignableFrom<IReadOnlyList<ActivityDiagnostic>>(legacy.Invoke(null, [new[] { PrivateDiagnostic() }, "acme"]));
+        var result = Assert.Single(results);
+        Assert.Equal($"The activity provider reported diagnostic '{Guidance.Code}'.", result.Message);
+        Assert.Equal("Review the provider documentation for this diagnostic code.", result.Remediation);
+        Assert.Empty(result.Metadata);
+        Assert.Null(result.Location!.JsonPointer);
+        Assert.DoesNotContain("PRIVATE", System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
     public void Declared_guidance_replaces_all_untrusted_runtime_details()
     {
         var result = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([PrivateDiagnostic()], "acme", [Guidance]));

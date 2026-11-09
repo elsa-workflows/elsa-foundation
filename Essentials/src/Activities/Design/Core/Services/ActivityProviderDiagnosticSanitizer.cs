@@ -13,10 +13,20 @@ public static partial class ActivityProviderDiagnosticSanitizer
 {
     private const string FallbackCode = ActivityErrorCodes.ProviderDiagnostic;
 
+    // Retain the existing CLR entry point and fallback copy for previously compiled callers.
+    public static IReadOnlyList<ActivityDiagnostic> Sanitize(
+        IEnumerable<ActivityDiagnostic>? diagnostics,
+        string providerKey) =>
+        Sanitize(diagnostics, providerKey, null).Select(diagnostic => diagnostic with
+        {
+            Message = $"The activity provider reported diagnostic '{diagnostic.Code}'.",
+            Remediation = "Review the provider documentation for this diagnostic code."
+        }).ToArray();
+
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
         string providerKey,
-        IReadOnlyList<ActivityProviderDiagnosticDescriptor>? descriptors = null)
+        IReadOnlyList<ActivityProviderDiagnosticDescriptor>? descriptors)
     {
         // Duplicate/invalid declarations never select an arbitrary public explanation. Bound both the
         // contribution and its strings, and do not use any of the runtime diagnostic's free-form fields.
