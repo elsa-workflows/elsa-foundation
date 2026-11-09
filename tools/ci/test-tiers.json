@@ -665,6 +665,12 @@
       "medianMinutes": 0.06
     },
     {
+      "project": "Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj",
+      "tier": "integration",
+      "medianMinutes": null,
+      "trait": "child-process"
+    },
+    {
       "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
       "tier": "pr",
       "trait": "child-process",
@@ -956,6 +962,12 @@
           "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
           "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest",
           "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
+        ]
+      },
+      {
+        "name": "workbench-etl-hosting",
+        "units": [
+          "Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj"
         ]
       }
     ],
