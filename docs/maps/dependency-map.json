@@ -6072,6 +6072,11 @@
           "type": "pinned-transitive",
           "id": "Npgsql",
           "version": "10.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -6318,6 +6323,11 @@
           "type": "pinned-transitive",
           "id": "Nuplane.Admin",
           "version": "0.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -6539,6 +6549,11 @@
           "type": "pinned-transitive",
           "id": "Nuplane",
           "version": "0.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -7075,6 +7090,11 @@
           "type": "pinned-transitive",
           "id": "Newtonsoft.Json",
           "version": "13.0.4"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -14141,6 +14161,11 @@
           "type": "internal",
           "id": "Elsa3.Activities.Design.Import.Publishing",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa3.Activities.Design.Import.Reconciliation",
+          "path": "Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj"
         },
         {
           "type": "internal",
@@ -25988,6 +26013,115 @@
       ]
     },
     {
+      "path": "Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj",
+      "name": "Elsa3.Activities.Design.Import.Reconciliation",
+      "kind": "source",
+      "domain": "Elsa3",
+      "sub_domain": "-",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa3.Activities.Design.Import.Reconciliation",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Mediator.Core",
+          "path": "Essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Api",
+          "path": "Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Core",
+          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa3.Activities.Design.Import",
+          "path": "Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa3.Activities.Design.Import.Publishing",
+          "path": "Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
       "name": "Elsa3.Mapping",
       "kind": "source",
@@ -26330,6 +26464,11 @@
           "type": "internal",
           "id": "Elsa3.Activities.Design.Import.Publishing",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa3.Activities.Design.Import.Reconciliation",
+          "path": "Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj"
         },
         {
           "type": "internal",
@@ -27321,6 +27460,11 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -27523,6 +27667,50 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj",
+      "name": "Elsa.Etl.Hosting.Tests",
+      "kind": "test",
+      "domain": "Elsa.Etl",
+      "sub_domain": "Hosting.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench",
+          "path": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench.Tests",
+          "path": "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
         }
       ]
     },
@@ -28052,6 +28240,11 @@
           "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
           "version": "0.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         },
         {
           "type": "pinned-transitive",
@@ -29243,6 +29436,55 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj",
+      "name": "Elsa.Rules.Hosting.Tests",
+      "kind": "test",
+      "domain": "Elsa.Rules",
+      "sub_domain": "Hosting.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench",
+          "path": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench.Tests",
+          "path": "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Data.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
         }
       ]
     },
