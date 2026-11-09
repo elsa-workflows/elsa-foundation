@@ -626,13 +626,13 @@ describe("WeaverSurface", () => {
   it("requires local review even in FullAuto and waits for observed acknowledgement before resuming", async () => {
     const api = readyApi(); const client = readyClient();
     const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
-    client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api);
     let observe!: (value: { outcome: "applied"; summary: string; after: typeof invocation.target; result: { typeId: string; schemaVersion: string; data: { value: number } } }) => void;
     const execute = vi.fn(() => new Promise(resolve => { observe = resolve; })) as never;
     api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: execute });
-    client.executeProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
-    client.acknowledgeClient = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value 2.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } }));
+    client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
+    client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value 2.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } }));
     let streams = 0;
     const subscribeStream = vi.fn((_ctx, _url, emit) => {
       if (++streams === 1) {
@@ -662,7 +662,7 @@ describe("WeaverSurface", () => {
     const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
     const toolResult = { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
     api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: async () => ({ outcome: "applied", summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: toolResult.payload }) });
-    client.executeProposal = vi.fn(async () => failure === "acknowledgement" ? { proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation } : { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult });
+    client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => failure === "acknowledgement" ? { proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation } : { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult });
     client.acknowledgeClient = vi.fn(async () => { throw new Error("Acknowledgement transport lost."); });
     let streams = 0;
     const subscribeStream = ((_context, _url, emit, failed) => {
@@ -685,7 +685,7 @@ describe("WeaverSurface", () => {
 
   it("does not open another stream for a completed duplicate delivery", async () => {
     const api = readyApi(); const client = readyClient();
-    client.sendMessage = vi.fn(async () => ({ messageId: "existing", status: "completed", streamUrl: "/stream", warnings: [{ code: "agent.message.duplicate", message: "Already accepted." }] }));
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "existing", status: "completed", streamUrl: "/stream", warnings: [{ code: "agent.message.duplicate", message: "Already accepted." }] }));
     const subscribeStream = vi.fn(() => ({ close() {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
     await flushPromises(); typeAndSend(container, "Inspect"); await flushPromises();
@@ -695,7 +695,7 @@ describe("WeaverSurface", () => {
   it("honors server review in FullAuto and continues a denial without executing or settling twice", async () => {
     const api = readyApi(); const client = readyClient();
     const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
-    client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
     let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
@@ -1124,7 +1124,7 @@ function readyApi() {
 
 function readyClient(): AgentClient {
   return {
-    bootstrap: vi.fn(async () => ({
+    bootstrap: vi.fn<AgentClient["bootstrap"]>(async () => ({
       enabled: true,
       providerStatus: "available",
       modes: ["troubleshoot"],
@@ -1132,15 +1132,19 @@ function readyClient(): AgentClient {
       provider: { providerId: "github-copilot", isAvailable: true, status: "ok", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
       policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] }
     })),
-    createSession: vi.fn(async () => ({ sessionId: "agt_1", status: "active", contextAttachments: [] })),
+    createSession: vi.fn<AgentClient["createSession"]>(async () => ({ sessionId: "agt_1", status: "active", contextAttachments: [] })),
     getSession: vi.fn<AgentClient["getSession"]>(async () => ({ sessionId: "agt_1", status: "active", messages: [] })),
     updateAutonomy: vi.fn<AgentClient["updateAutonomy"]>(),
-    sendMessage: vi.fn(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" })),
-    approveProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "approved" })),
-    denyProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "denied" })),
-    executeProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "executed" })),
+    sendMessage: vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" })),
+    approveProposal: vi.fn<AgentClient["approveProposal"]>(async proposalId => ({ proposalId, approvalStatus: "approved" })),
+    denyProposal: vi.fn<AgentClient["denyProposal"]>(async proposalId => ({ proposalId, approvalStatus: "denied" })),
+    executeProposal: vi.fn<AgentClient["executeProposal"]>(async proposalId => ({ proposalId, approvalStatus: "executed" })),
     acknowledgeClient: vi.fn(),
     submitFeedback: vi.fn(),
+    listSessions: vi.fn(),
+    listProposals: vi.fn(),
+    withdrawMessage: vi.fn(),
+    resolveClientInvocation: vi.fn(),
     cancelTurn: vi.fn(async () => {})
   };
 }
