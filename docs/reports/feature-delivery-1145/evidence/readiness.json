@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "body": {
+    "status": "ready",
+    "shells": [
+      {
+        "name": "default",
+        "state": "Active",
+        "generation": 6,
+        "active": true,
+        "reason": null
+      }
+    ]
+  },
+  "redirectLocation": null
+}
