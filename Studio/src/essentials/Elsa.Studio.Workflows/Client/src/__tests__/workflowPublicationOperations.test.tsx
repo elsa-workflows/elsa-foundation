@@ -25,6 +25,62 @@ afterEach(() => {
 });
 
 describe("workflow publication operations", () => {
+  const placementRefusal = () => Object.assign(new Error("Start trigger placement refused."), { payload: {
+    status: 400, errorCode: "workflow.trigger.placement", triggerNodeId: "timer", compositeNodeId: "sequence",
+    compositeStructureKind: "elsa.sequence.structure", detail: "Move the trigger to the beginning of the sequence."
+  } });
+
+  it("pins a typed preparation refusal to its captured draft and opens node validation without mutations", async () => {
+    const fixture = renderOperations();
+    fixture.postJson.mockRejectedValueOnce(placementRefusal());
+    await fixture.current().preparePublication();
+    await flushUpdates();
+    expect(fixture.onPublicationPlacementRefused).toHaveBeenCalledWith(fixture.currentDraft(), [expect.objectContaining({ path: "timer", severity: "Error" })]);
+    expect(fixture.setActiveRightPanelId).not.toHaveBeenCalled();
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.mutationOrder).toEqual([]);
+  });
+
+  it.each(["edit", "document"])("rejects a delayed Placement refusal after a changed %s", async change => {
+    const fixture = renderOperations();
+    const pending = deferred<PublicationPreflight>();
+    fixture.postJson.mockImplementationOnce(() => pending.promise);
+    const preparation = fixture.current().preparePublication();
+    await vi.waitFor(() => expect(fixture.postJson).toHaveBeenCalledTimes(1));
+    const changed = structuredClone(fixture.currentDraft());
+    if (change === "document") changed.id = "another-draft";
+    else changed.state = { ...changed.state, rootActivity: { nodeId: "edited", activityVersionId: "other", inputs: [], outputs: [] } };
+    fixture.rerenderDraft(changed);
+    pending.reject(placementRefusal());
+    await preparation;
+    await flushUpdates();
+    expect(fixture.onPublicationPlacementRefused).not.toHaveBeenCalled();
+    expect(fixture.setActiveRightPanelId).not.toHaveBeenCalled();
+    expect(fixture.setError.mock.calls.some(([value]) => typeof value === "string" && value.includes("refused"))).toBe(false);
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+  });
+
+  it("closes an authoritative review refusal so its node diagnostics can receive focus", async () => {
+    const fixture = renderOperations();
+    await prepare(fixture);
+    const review = fixture.current().publicationReview!;
+    fixture.postJson.mockRejectedValueOnce(placementRefusal());
+    await fixture.current().reviewPublication(review, review.intent, review.versionSelection);
+    await flushUpdates();
+    expect(fixture.onPublicationPlacementRefused).toHaveBeenCalledTimes(1);
+    expect(fixture.current().publicationReview).toBeNull();
+  });
+
+  it("pins a direct publication refusal and preserves truthful information about the retained version", async () => {
+    const fixture = renderOperations();
+    fixture.setPublishFailure(placementRefusal());
+    await fixture.current().preparePublication("publish");
+    await flushUpdates();
+    expect(fixture.onPublicationPlacementRefused).toHaveBeenCalledWith(fixture.currentDraft(), [expect.objectContaining({ code: "workflow.trigger.placement", path: "timer" })]);
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("was retained");
+  });
+
   it("obtains authoritative snapshot preflight before rendering a mutation-free review", async () => {
     const fixture = renderOperations();
 
@@ -945,6 +1001,7 @@ function renderOperations(options: {
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
   let failNextVersionPreflight = false;
+  let publishFailure: unknown;
   const getJson = vi.fn(async (url: string, _options?: unknown) => {
     if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false, options.legacySlotContract ?? false, options.draftValidations !== undefined);
     if (url === "/design/workflows/drafts/draft-1/validations") {
@@ -1026,6 +1083,7 @@ function renderOperations(options: {
     if (url === "/publishing/workflows/version-2/publish") {
       mutationOrder.push("publish");
       publishAttempts += 1;
+      if (publishFailure) throw publishFailure;
       if (publishAttempts <= (options.stalePublishAttempts ?? 0)) throw Object.assign(new Error("preflight token stale"), { status: 409 });
       if (options.publishValidationDiagnostics) {
         throw Object.assign(new Error("Expression validation rejected publication."), {
@@ -1068,7 +1126,8 @@ function renderOperations(options: {
     setError: vi.fn(),
     setActiveRightPanelId: vi.fn(),
     setInspectorCollapsed: vi.fn(),
-    setAutosavePaused: vi.fn()
+    setAutosavePaused: vi.fn(),
+    onPublicationPlacementRefused: vi.fn()
   };
   let current: Operations | null = null;
   const reviewStates: Operations["publicationReview"][] = [];
@@ -1099,6 +1158,7 @@ function renderOperations(options: {
     postJson,
     mutationOrder,
     failNextVersionPreflight: () => { failNextVersionPreflight = true; },
+    setPublishFailure: (error: unknown) => { publishFailure = error; },
     ...callbacks
   };
 }

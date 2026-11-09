@@ -1,9 +1,10 @@
 import type { DraftValidationError, ValidationError, WorkflowDefinitionState, ActivityNode } from "./workflowTypes";
-import { canStartWorkflow, findMisplacedStartTriggers, flowchartStructureKind } from "./flowchartStartNode";
+import { canStartWorkflow, findMisplacedStartTriggers, flowchartStructureKind, readStartTriggerSwitch, type StartTriggerDescriptor } from "./flowchartStartNode";
 import {
   STRUCTURAL_DANGLING_TYPE,
   STRUCTURAL_NO_START_TYPE,
-  STRUCTURAL_START_TRIGGER_TYPE
+  STRUCTURAL_START_TRIGGER_TYPE,
+  START_TRIGGER_PLACEMENT_TYPE
 } from "./validationDiagnostics";
 import {
   createValidationActivityLabels,
@@ -44,15 +45,16 @@ export function fromDraftValidationError(error: DraftValidationError): Validatio
  */
 export function detectStructuralValidationErrors(
   state: WorkflowDefinitionState | null | undefined,
-  labels?: ValidationActivityLabels
+  labels?: ValidationActivityLabels,
+  catalog?: ReadonlyMap<string, StartTriggerDescriptor>
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const resolved = labels ?? createValidationActivityLabels({ root: state?.rootActivity ?? null });
-  visitFlowcharts(state?.rootActivity ?? null, owner => errors.push(...flowchartStructuralErrors(owner, resolved)));
+  visitFlowcharts(state?.rootActivity ?? null, owner => errors.push(...flowchartStructuralErrors(owner, resolved, catalog)));
   return errors;
 }
 
-function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivityLabels): ValidationError[] {
+function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivityLabels, catalog?: ReadonlyMap<string, StartTriggerDescriptor>): ValidationError[] {
   const payload = owner.structure?.payload ?? {};
   const activities = Array.isArray(payload.activities) ? payload.activities.filter(isActivityNode) : [];
   if (activities.length <= 1) return [];
@@ -71,10 +73,15 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
 
   const errors: ValidationError[] = [];
   const name = (activity: ActivityNode) => labels.labelFor(activity.nodeId);
-  for (const trigger of findMisplacedStartTriggers(owner)) {
+  for (const trigger of findMisplacedStartTriggers(owner, catalog)) {
+    const descriptor = catalog?.get(trigger.activityVersionId);
+    const correction = !descriptor || readStartTriggerSwitch(descriptor)
+      ? 'Make it the start node, remove its incoming connection, or turn off "Can start workflow" for a mid-flow wait.'
+      : "Make it the start node, remove its incoming connection, or use a waiting activity for a mid-flow wait.";
     errors.push({
       type: STRUCTURAL_START_TRIGGER_TYPE,
-      message: `${name(trigger)} can start a workflow, but something connects into it and it is not the start node, so publishing refuses it. Make it the start node, remove its incoming connection, or turn off "Can start workflow" to make it a mid-flow wait.`,
+      severity: "Warning",
+      message: `${name(trigger)} can start a workflow, but something connects into it and it is not the start node. If it registers a workflow start, publishing will refuse this placement. ${correction}`,
       path: trigger.nodeId
     });
   }
@@ -94,7 +101,7 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
   if (startNodeId && activities.some(activity => activity.nodeId === startNodeId)) {
     const targets = new Set([...outgoing.values()].flatMap(next => [...next]));
     const triggerEntries = activities
-      .filter(activity => canStartWorkflow(activity) && !targets.has(activity.nodeId))
+      .filter(activity => canStartWorkflow(activity, catalog?.get(activity.activityVersionId)) && !targets.has(activity.nodeId))
       .map(activity => activity.nodeId);
     const reachable = new Set<string>();
     const stack = [startNodeId, ...triggerEntries];
@@ -126,11 +133,14 @@ export function combineValidationErrors(sources: {
   draftErrors?: ValidationError[] | null;
   serverErrors?: DraftValidationError[] | null;
   structuralErrors?: ValidationError[] | null;
+  publicationErrors?: ValidationError[] | null;
 }): ValidationError[] {
   const combined: ValidationError[] = [
+    ...(sources.publicationErrors ?? []),
     ...(sources.serverErrors ?? []).map(fromDraftValidationError),
     ...(sources.draftErrors ?? []),
-    ...(sources.structuralErrors ?? [])
+    ...(sources.structuralErrors ?? []).filter(error => error.type !== STRUCTURAL_START_TRIGGER_TYPE ||
+      !sources.publicationErrors?.some(authoritative => authoritative.code === START_TRIGGER_PLACEMENT_TYPE && authoritative.path === error.path))
   ];
   const seen = new Set<string>();
   const result: ValidationError[] = [];

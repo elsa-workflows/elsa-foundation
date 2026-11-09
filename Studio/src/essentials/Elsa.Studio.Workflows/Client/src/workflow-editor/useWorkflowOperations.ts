@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
+import { isCurrentPublicationSnapshot, readTriggerPlacementErrors } from "./triggerPlacementValidation";
 import {
   getWorkflowDefinitionVersion,
   getWorkflowPromotionVersionCapabilities,
@@ -72,6 +73,7 @@ interface WorkflowOperationsParams {
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
   setAutosavePaused(paused: boolean): void;
+  onPublicationPlacementRefused?(snapshot: WorkflowDraft, errors: ValidationError[]): void;
 }
 
 // The editor's async command handlers: export JSON, save, promote+publish, and dispatch a transient test
@@ -95,7 +97,8 @@ export function useWorkflowOperations({
   setError,
   setActiveRightPanelId,
   setInspectorCollapsed,
-  setAutosavePaused
+  setAutosavePaused,
+  onPublicationPlacementRefused
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const latestDraftRef = useRef(draft);
@@ -104,6 +107,13 @@ export function useWorkflowOperations({
   const publicationMutationInFlight = useRef(false);
   const publicationPreparationInFlight = useRef(false);
   const [quickPublishing, setQuickPublishing] = useState(false);
+  const reportPlacementRefusal = useCallback((error: unknown, snapshot: WorkflowDraft | null) => {
+    const errors = readTriggerPlacementErrors(error);
+    if (!errors.length || !snapshot) return null;
+    if (!isCurrentPublicationSnapshot(latestDraftRef.current, snapshot)) return "stale";
+    onPublicationPlacementRefused?.(snapshot, errors);
+    return "current";
+  }, [onPublicationPlacementRefused]);
   const [expressionValidationWarning, setExpressionValidationWarning] = useState<{
     draft: WorkflowDraft;
     inputs: WorkflowExecutionInputs;
@@ -206,6 +216,14 @@ export function useWorkflowOperations({
       } : current);
     } catch (error) {
       if (request !== publicationReviewRequest.current) return;
+      const placement = reportPlacementRefusal(error, review.draftSnapshot);
+      if (placement) {
+        setPublicationReview(null);
+        setAutosavePaused(false);
+        setStatus("");
+        if (placement === "current") setError(`Publication review refused this trigger placement. No version was promoted or published. ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
       const reason = decorateConversionDiagnostic(error instanceof Error ? error.message : String(error));
       setPublicationReview(current => current ? {
         ...current,
@@ -220,7 +238,7 @@ export function useWorkflowOperations({
       } : current);
       setError(`Could not prepare an authoritative publication review. No changes were saved, promoted, or published. ${reason}`);
     }
-  }, [context, setError]);
+  }, [context, reportPlacementRefusal, setAutosavePaused, setError, setStatus]);
 
   const executePublication = useCallback(async (
     publicationReview: PublicationReviewState,
@@ -345,6 +363,16 @@ export function useWorkflowOperations({
       }
       setAutosavePaused(false);
     } catch (e) {
+      const placement = reportPlacementRefusal(e, publicationReview.draftSnapshot);
+      if (placement) {
+        setPublicationReview(null);
+        setAutosavePaused(false);
+        setStatus("");
+        if (placement === "current") setError(`Publication refused this trigger placement. ${promotedVersionId
+          ? `Promoted version '${promotedVersionId}' was retained; no publication was activated.`
+          : savedDraft ? "The draft was saved; no version was promoted or published." : "No version was promoted or published."} ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
       setStatus("");
       const failureMessage = decorateConversionDiagnostic(e instanceof Error ? e.message : String(e));
       const publicationValidationErrors = extractExpressionValidationDiagnosticMessages(e);
@@ -399,7 +427,7 @@ export function useWorkflowOperations({
       publicationMutationInFlight.current = false;
       setOperation("idle");
     }
-  }, [context, reload, reviewPublication, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);
+  }, [context, reload, reportPlacementRefusal, reviewPublication, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);
 
   const confirmPublication = useCallback(async (
     intent: PublicationIntent,
@@ -420,9 +448,10 @@ export function useWorkflowOperations({
     // The snapshot is this render's draft; its history line is captured now with it, before any await, since the author
     // may Undo or Redo while the save settles or the review is open.
     const draftLineage = lineage ? [...lineage()] : undefined;
+    let draftSnapshot: WorkflowDraft | null = null;
     try {
       await flushPendingSave();
-      const draftSnapshot = structuredClone(draft);
+      draftSnapshot = structuredClone(draft);
       setStatus(mode === "publish" ? "Preparing publication..." : "Preparing publication review...");
       // Policy and preflight reads never promote a version. Both actions use the same snapshot
       // and authoritative evidence; only direct Publish proceeds without an author review dialog.
@@ -488,6 +517,12 @@ export function useWorkflowOperations({
         setStatus(mode === "publish" ? "Publication needs review." : "");
       }
     } catch (error) {
+      if (reportPlacementRefusal(error, draftSnapshot) === "stale") {
+        setPublicationReview(null);
+        setAutosavePaused(false);
+        setStatus("");
+        return;
+      }
       setPublicationReview(null);
       setAutosavePaused(false);
       setStatus("");
@@ -497,7 +532,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, reportPlacementRefusal, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
