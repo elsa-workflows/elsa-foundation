@@ -43,6 +43,21 @@ public interface ITokenService
     ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Answers, from the identity provider's current records, whether the Elsa user a token names may still hold
+/// tokens. Token refresh asks it before re-issuing, so a user who was disabled or deleted after signing in gets no
+/// new access token from a refresh token, and that user's outstanding refresh tokens are revoked. It is the same
+/// check password sign-in and cookie validation apply. The default knows no users and refuses every one, so a
+/// host that issues user tokens fails closed until the provider that owns the users replaces it. A store read
+/// failure propagates so the refresh fails rather than passes.
+/// </summary>
+[ReplacementContract]
+public interface IUserTokenEligibility
+{
+    /// <summary>True when the user exists in <paramref name="tenantId"/> and is not disabled.</summary>
+    ValueTask<bool> IsEligibleAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+}
+
 public interface IAuthSessionService
 {
     ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);

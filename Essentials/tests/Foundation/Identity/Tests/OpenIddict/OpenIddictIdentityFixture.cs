@@ -17,12 +17,17 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
 {
     public ServiceProvider Services { get; }
 
-    public OpenIddictIdentityFixture(Action<OpenIddictIdentityOptions>? configure = null)
+    /// <param name="configureServices">
+    /// Runs before the OpenIddict registration, so a test can supply a replacement contract through its
+    /// <c>Replace*</c> method (an <see cref="IUserTokenEligibility"/>, for one) that the registration then keeps.
+    /// </param>
+    public OpenIddictIdentityFixture(Action<OpenIddictIdentityOptions>? configure = null, Action<IServiceCollection>? configureServices = null)
     {
         var databaseName = $"openiddict-{Guid.NewGuid():n}";
 
         var services = new ServiceCollection();
         services.AddLogging();
+        configureServices?.Invoke(services);
         services.AddOpenIddictVendorForTests(
             builder => ConfigureInMemoryStore(builder, databaseName));
         services.AddFoundationIdentityOpenIddict(

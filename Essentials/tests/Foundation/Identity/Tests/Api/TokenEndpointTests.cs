@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -363,6 +364,44 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refresh_For_A_Disabled_User_Returns_401_Issues_Nothing_And_Revokes_Their_Other_Refresh_Tokens()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var first = await IssueRefreshTokenForAsync(accessToken);
+        var second = await IssueRefreshTokenForAsync(accessToken);
+        var (tenantId, userId) = await UserOfAsync(accessToken);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = await IssueRefreshTokenForAsync(accessToken) })).StatusCode);
+
+        await SetUserStatusAsync(tenantId, userId, UserStatus.Disabled);
+
+        // invalid_grant on the wire is a bare 401 with no token in the body.
+        var refused = await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = first });
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        Assert.DoesNotContain("accessToken", await refused.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        // The refusal revoked the user's other outstanding refresh token too, and re-enabling does not revive it.
+        await SetUserStatusAsync(tenantId, userId, UserStatus.Active);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = second })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+    }
+
+    [Fact]
+    public async Task Refresh_For_A_Deleted_User_Returns_401()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var refreshToken = await IssueRefreshTokenForAsync(accessToken);
+        var (tenantId, userId) = await UserOfAsync(accessToken);
+
+        await using (var scope = _fixture.Services.CreateAsyncScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().DeleteAsync(tenantId, userId));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+    }
+
+    [Fact]
     public async Task Refresh_With_A_Garbage_Token_Returns_401_Not_500()
     {
         // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
@@ -444,14 +483,34 @@ public sealed class TokenEndpointTests : IAsyncLifetime
 
     private async Task<string> IssueRefreshTokenForAsync(string accessToken) => (await IssueForAsync(_fixture, accessToken)).RefreshToken!;
 
-    /// <summary>Issues a pair in the access token's tenant, for its subject unless another is named.</summary>
+    /// <summary>
+    /// Issues a pair in the access token's tenant, for its subject unless another is named. For its own subject the
+    /// pair names the Elsa user, as the exchange does; a named other subject is no Elsa user.
+    /// </summary>
     private static async Task<TokenIssueResult> IssueForAsync(TokenEndpointFixture fixture, string accessToken, string? subject = null)
     {
         await using var scope = fixture.Services.CreateAsyncScope();
         var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
         var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
         return await tokens.IssueAsync(new TokenIssueRequest(
-            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []));
+            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, [])
+        {
+            CanonicalUserId = subject is null ? principal.FindFirst(IdentityClaimTypes.UserId)?.Value : null
+        });
+    }
+
+    /// <summary>The tenant and Elsa user the access token was issued to.</summary>
+    private async Task<(string TenantId, string UserId)> UserOfAsync(string accessToken)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var principal = (await scope.ServiceProvider.GetRequiredService<ITokenService>().ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        return (principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
+    }
+
+    private async Task SetUserStatusAsync(string tenantId, string userId, UserStatus status)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().SetStatusAsync(tenantId, userId, status));
     }
 
     private static async Task<HttpStatusCode> CallProtectedAsync(HttpClient client, string accessToken)
