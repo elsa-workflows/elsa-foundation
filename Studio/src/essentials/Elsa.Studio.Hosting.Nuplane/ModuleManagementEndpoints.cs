@@ -192,8 +192,10 @@ internal static class ModuleManagementEndpoints
         result["Name"] = name;
         result["ServiceIndex"] = feed.ServiceIndex;
         result["DirectoryPath"] = feed.DirectoryPath;
-        // A write without a credential keeps the stored one: the browser never receives it, so it cannot send it back.
+        // A write without a credential keeps the stored one for the same service index: the browser never receives it, so it
+        // cannot send it back. A new service index never inherits the credential issued for the old one.
         if (!string.IsNullOrWhiteSpace(feed.Credentials)) result["Credentials"] = feed.Credentials;
+        else if (!string.Equals((string?)previous?["ServiceIndex"], feed.ServiceIndex, StringComparison.Ordinal)) result.Remove("Credentials");
         result["IncludeAll"] = feed.IncludeAll;
         result["IncludePatterns"] = JsonSerializer.SerializeToNode(feed.IncludePatterns ?? [], JsonOptions);
         var directory = ManagementConfigurationStore.Object(result, "Directory");

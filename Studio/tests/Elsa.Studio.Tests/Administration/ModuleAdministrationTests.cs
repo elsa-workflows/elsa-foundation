@@ -204,7 +204,6 @@ public sealed class ModuleAdministrationTests
         Assert.DoesNotContain(credential, body, StringComparison.Ordinal);
         var feed = Assert.Single(JsonNode.Parse(body)!["feeds"]!.AsArray(), feed => (string?)feed!["name"] == "private")!.AsObject();
         Assert.Equal("private-feed", (string?)feed["directoryPath"]);
-        Assert.False(feed.ContainsKey("credentials"));
         Assert.DoesNotContain(feed, property => property.Key.Contains("credential", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -224,6 +223,25 @@ public sealed class ModuleAdministrationTests
         using var registry = await host.Client.GetAsync(Prefix + "/registry");
         registry.EnsureSuccessStatusCode();
         Assert.DoesNotContain(credential, await registry.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_feed_edit_that_changes_the_service_index_drops_the_stored_credential()
+    {
+        const string credential = "secrets://vault/issued-for-private-host-3735";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"remote","ServiceIndex":"https://private.example/v3/index.json","Credentials":"CREDENTIAL","IncludeAll":true}]}}}""".Replace("CREDENTIAL", credential)));
+        var edited = new JsonObject
+        {
+            ["name"] = "remote", ["serviceIndex"] = "https://public.example/v3/index.json", ["includeAll"] = true,
+            ["includePatterns"] = new JsonArray("*"), ["directory"] = new JsonObject { ["watch"] = false, ["debounceWindow"] = "00:00:01" }
+        };
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/remote", edited);
+        edit.EnsureSuccessStatusCode();
+        var feed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!["Nuplane"]!["Setup"]!["Feeds"]![0]!.AsObject();
+        Assert.Equal("https://public.example/v3/index.json", (string?)feed["ServiceIndex"]);
+        Assert.False(feed.ContainsKey("Credentials"));
     }
 
     [Fact]
