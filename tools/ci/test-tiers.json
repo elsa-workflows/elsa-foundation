@@ -1210,11 +1210,6 @@
       "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
       "issue": 3260,
       "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Expressions.JavaScript.Jint.Tests.StatementBindingTests.Statement_body_honors_cancellation_during_evaluation",
-      "issue": 3262,
-      "since": "2026-10-22"
     }
   ]
 }
