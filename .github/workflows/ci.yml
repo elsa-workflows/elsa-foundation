@@ -1042,12 +1042,15 @@ jobs:
         working-directory: Studio
 
       - name: Run browser tests
+        id: browser-tests
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
-      # Playwright keeps a trace only for failed cases (retain-on-failure); without this step the job discards it.
+      # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
+      # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
+      # including the cancelled outcome so a shard that hits the 45-minute job timeout still surfaces what failed first.
       - name: Upload failed browser traces
-        if: ${{ failure() }}
+        if: ${{ steps.browser-tests.outcome == 'failure' || steps.browser-tests.outcome == 'cancelled' }}
         uses: actions/upload-artifact@v4
         with:
           name: browser-failures-${{ matrix.shard }}
