@@ -23,17 +23,21 @@ public sealed class RunEtlPendingParentResultCrashTests
     {
         await using var fixture = await EtlWorkbenchFixture.StartAsync();
         var selection = await fixture.PublishPipelineAsync();
+        // Armed before the parent starts: the hold is read only inside the result delivery, after the run is terminal
+        // and its lease claimed, so arming early closes the window in which the worker could deliver first.
+        await fixture.HoldClaimedResultDeliveryAsync();
         var execution = await StartNativeParentAsync(fixture, parent, selection);
         var nativePath = "/runtime/workflows/instances/" + execution;
 
         // The parent reaches its durable RunEtl wait; the Workbench's own ETL worker then admits and runs the pipeline.
         await WaitForAsync(async () => ActivityStatus(await fixture.GetAsync(nativePath), RunEtlType) == "Suspended",
             "The native parent did not reach its RunEtl wait.");
-        await fixture.HoldClaimedResultDeliveryAsync();
         // ETL REST serializes enums in camelCase, so a terminal run reads "succeeded".
         var runId = await WaitForAsync(async () =>
         {
-            var run = (await fixture.GetAsync("/etl/runs?limit=100"))["items"]!.AsArray().SingleOrDefault();
+            var runs = (await fixture.GetAsync("/etl/runs?limit=100"))["items"]!.AsArray();
+            Assert.True(runs.Count <= 1, "The pipeline was admitted more than once before the kill: " + runs.ToJsonString());
+            var run = runs.SingleOrDefault();
             return run?["status"]?.GetValue<string>() == "succeeded" ? run["runId"]!.GetValue<string>() : null;
         }, "The real RunEtl run did not reach its terminal result.");
 
@@ -44,7 +48,12 @@ public sealed class RunEtlPendingParentResultCrashTests
         Assert.Equal("Suspended", ActivityStatus(beforeKill, RunEtlType));
         Assert.Empty(beforeKill["incidents"]!.AsArray());
 
+        var killedProcessId = fixture.Host.ProcessId;
         await fixture.CrashAndRestartAsync();
+        var (killedId, exitCode) = Assert.Single(fixture.KilledHosts);
+        Assert.Equal(killedProcessId, killedId);
+        Assert.NotEqual(0, exitCode);
+        Assert.NotEqual(killedProcessId, fixture.Host.ProcessId);
 
         // The restarted process recovers the claimed delivery once its lease lapses and resumes the parent exactly once.
         await WaitForAsync(async () => WorkflowStatus(await fixture.GetAsync(nativePath)) == "Completed",
@@ -120,7 +129,7 @@ public sealed class RunEtlPendingParentResultCrashTests
         ["referenceKey"] = referenceKey, ["value"] = new JsonObject { ["value"] = value, ["expressionType"] = "Literal" }
     };
 
-    private static string WorkflowStatus(JsonNode view) => (view["instance"]?["status"] ?? view["status"])!.GetValue<string>();
+    private static string WorkflowStatus(JsonNode view) => view["instance"]!["status"]!.GetValue<string>();
 
     private static string? ActivityStatus(JsonNode view, string activityType) =>
         view["activities"]!.AsArray().SingleOrDefault(item => item!["activityType"]!.GetValue<string>() == activityType)?["status"]?.GetValue<string>();

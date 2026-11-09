@@ -17,6 +17,7 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
     private const string HoldVariable = "ELSA_HOLD_NATIVE_RESULT_DELIVERY";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly string _ownedDirectory;
+    private readonly List<WorkbenchProcess> _killedHosts = [];
 
     private EtlWorkbenchFixture(string ownedDirectory, string holdPath, WorkbenchProcess host)
     {
@@ -29,6 +30,9 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
     public string HoldPath { get; }
     public string EngagedMarkerPath => HoldPath + ".engaged";
 
+    /// <summary>The process ids and exit codes of every host this fixture killed, oldest first.</summary>
+    public IReadOnlyList<(int ProcessId, int ExitCode)> KilledHosts => _killedHosts.Select(host => (host.ProcessId, host.ExitCode)).ToArray();
+
     public static async Task<EtlWorkbenchFixture> StartAsync(double recoverySweepSeconds = 0.2)
     {
         var owned = Directory.CreateTempSubdirectory("elsa-etl-hosting-").FullName;
@@ -37,7 +41,16 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
         {
             Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings) { [HoldVariable] = holdPath }
         };
-        var host = await WorkbenchProcess.StartAsync(shell, contentRoot => PrepareContentRoot(contentRoot, recoverySweepSeconds));
+        WorkbenchProcess host;
+        try
+        {
+            host = await WorkbenchProcess.StartAsync(shell, contentRoot => PrepareContentRoot(contentRoot, recoverySweepSeconds));
+        }
+        catch
+        {
+            Directory.Delete(owned, recursive: true);
+            throw;
+        }
         var fixture = new EtlWorkbenchFixture(owned, holdPath, host);
         try
         {
@@ -52,7 +65,13 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
     }
 
     /// <summary>Freezes the next real result delivery after its lease is claimed and before the parent is resumed.</summary>
-    public Task HoldClaimedResultDeliveryAsync() => File.WriteAllTextAsync(HoldPath, "hold-claim");
+    public async Task HoldClaimedResultDeliveryAsync()
+    {
+        // Written whole and moved into place, so a worker poll overlapping the write never reads an empty hold.
+        var staged = HoldPath + ".staged";
+        await File.WriteAllTextAsync(staged, "hold-claim");
+        File.Move(staged, HoldPath, overwrite: true);
+    }
 
     public void ReleaseHold()
     {
@@ -63,7 +82,9 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
     /// <summary>Kills the Workbench process without cleanup and boots a fresh one over the same content root and SQLite files.</summary>
     public async Task CrashAndRestartAsync()
     {
-        Host = await Host.CrashAndRestartAsync(_ => ReleaseHold());
+        var killed = Host;
+        Host = await killed.CrashAndRestartAsync(_ => ReleaseHold());
+        _killedHosts.Add(killed);
         await LoginAsync();
     }
 
@@ -166,9 +187,12 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
                 Binding("output", "MainOutput", "output-v1", mainRoot, immutableInput: false, atomicPublication: true, null),
                 Binding("errors", "ErrorOutput", "errors-v1", errorRoot, immutableInput: false, atomicPublication: true, null))
         };
+        // The delivery lease has no heartbeat while a delivery is in flight, so the restarted host can reclaim the
+        // frozen claim only after it lapses; the five-second floor keeps each row short without changing the proof.
         features["EtlRuntimeEntityFrameworkCore"] = new JsonObject
         {
-            ["Provider"] = "Sqlite", ["ConnectionString"] = $"Data Source={Path.Combine(etlRoot, "etl-runtime.db")};Pooling=False"
+            ["Provider"] = "Sqlite", ["ConnectionString"] = $"Data Source={Path.Combine(etlRoot, "etl-runtime.db")};Pooling=False",
+            ["DeliveryLeaseSeconds"] = 5
         };
         features["EtlRuntimeApi"] = new JsonObject { ["CursorSigningKey"] = "finite-file-etl-runtime-cursor-key-for-hosting-tests" };
         features["EtlWorkflowsDesign"] = new JsonObject();
@@ -198,6 +222,8 @@ internal sealed class EtlWorkbenchFixture : IAsyncDisposable
     {
         try
         {
+            foreach (var killed in _killedHosts)
+                await killed.DisposeAsync();
             await Host.DisposeAsync();
         }
         finally

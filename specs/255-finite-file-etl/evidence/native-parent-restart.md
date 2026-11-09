@@ -54,10 +54,13 @@ parent resume by the `ELSA_HOLD_NATIVE_RESULT_DELIVERY` test hold in `EtlNativeR
 added to `ParentResumeExecutor` and `BpmnEmbeddingDelivery`; production hosts never set the variable, and the seam writes
 an `.engaged` marker so the test observes the frozen claim instead of guessing). The process is then killed with
 `SIGKILL` (`Process.Kill(entireProcessTree: true)` on Windows) and a fresh process is started over the same content root.
-Proof: the parent was `Running` with `RunEtl` `Suspended` and no incidents before the kill; after the restart the parent
-is `Completed`, exactly one `RunEtl` activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart),
-the single ETL run is `Succeeded`, and no second run exists.
+Proof: the parent was `Running` with `RunEtl` `Suspended` and no incidents before the kill; the killed process exited
+non-zero and the restarted process has a different id; after the restart the parent is `Completed`, exactly one `RunEtl`
+activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart), the single ETL run is `succeeded`, and
+no second run exists. The hold is armed before the parent starts, so the worker cannot deliver ahead of the freeze.
 
 Limits: completion only (fault and cancel across a process kill remain covered by the in-process witnesses above);
 SQLite only; the restarted process recovers the claimed delivery when the dead owner's lease lapses, so each case takes
-the lease duration plus two Workbench starts (about 40 seconds per row locally; the three rows ran in two minutes).
+the delivery lease plus two Workbench starts. The fixture sets `DeliveryLeaseSeconds` to its floor of 5 (production default
+30; the lease has no heartbeat while a delivery is in flight), against a 90-second post-restart deadline; each row takes
+about 13 seconds locally.

@@ -36,3 +36,9 @@ In-process host-rebuild witnesses for a native parent waiting on `RunEtl` ([evid
 ```bash
 dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --filter "FullyQualifiedName~EtlNativeCompositeJourneyTests&FullyQualifiedName~host_rebuild"
 ```
+
+Process-kill witnesses over the production Workbench (same evidence). The project builds the Workbench, starts it as a child process per row and kills it; the three rows run serially in about one minute after the build:
+
+```bash
+dotnet test Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj
+```
