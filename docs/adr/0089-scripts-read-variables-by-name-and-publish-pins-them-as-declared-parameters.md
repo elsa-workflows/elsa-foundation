@@ -11,10 +11,15 @@ not write variables" would be superseded by
 Its read model, decisions 4 and 5 included, would then cover input-binding expressions only; RunJavaScript would
 read through ADR 0090's step sessions.
 
-Amendment proposed (2026-10-29, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) analysis
-A-4 and decision D-7): scripts read through a read-only accessor at evaluation time, publish validates names instead of
-pinning them, and the engine records the actual reads. If accepted, it replaces decisions 2 to 5 and 7; decisions 1, 6
-and 8 stay. See *Amendment* below.
+Amendment (2026-11-09, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) analysis A-4 and
+decision D-7): the broad **run-time-accessor** replacement first proposed on 2026-10-29 (publish validates names
+instead of pinning them; the engine records the actual reads) is **withdrawn**. @sfmskywalker directed the minimal
+amendment (reviewer question 6, 2026-11-06), and defining **S-4** (spec 1222,
+[#4024](https://github.com/elsa-workflows/elsa-foundation/pull/4024)) established that **computed variable reads are
+deferred** — which keeps the **original pinning model of decisions 1–8 as the live decision**. This amendment therefore
+only (a) settles the rename mechanism, (b) clarifies input-binding reads versus the RunJavaScript body session, and
+(c) defers the computed-read capability and the `activities.<name>.<output>` root to their own specs. See
+*Amendment (reduced)* below.
 
 Part of epic #3052 and program #2310. Constrained by
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §5 (explicit, pure
@@ -73,13 +78,16 @@ resolves to is a behaviour change.
 **4. Run time sees only declared values.** The evaluator receives only the pinned parameters, each resolved,
 type-checked, policy-checked and snapshotted through the existing declared-parameter path. There is no run-time name
 lookup and no frame-chain projection for scripts. Spec 095's guarantees are kept: determinism, policy taint, exact
-editor completions, and an exact answer to "which expressions read this variable?".
+editor completions, and an exact answer to "which expressions read this variable?". (For the RunJavaScript activity
+**body**, this describes reads through its ADR 0092 variable session, which equals the pinned snapshot until writes
+exist — see *Amendment (reduced)* R2.)
 
 **5. Computed names are refused at publish.** `variables[name]`, `getVariable(expr)` with a non-literal argument,
 or passing `variables` or `getVariable` around as a value, is a publish diagnostic. This is the same reason the
 importer refuses such reads with `VF-IMP-006`. A name that resolves to no visible variable is also a publish
 diagnostic, not a run-time `undefined`. So is a read of a transient (non-durable) variable, because its value cannot
-be snapshotted.
+be snapshotted. The computed-read **capability** — supporting a variable named at run time without a hidden
+load-all — is deferred to a dedicated follow-up spec (*Amendment (reduced)* R3); this ADR does not support it.
 
 **6. `get<Name>()` leaves the runtime.** It survives only as an Elsa 3 import form that the converter rewrites, using
 Elsa 3's naming rule (`Elsa3JavaScriptNames`). The runtime's `ToGetterName` and the getter completions in
@@ -88,7 +96,9 @@ Elsa 3's naming rule (`Elsa3JavaScriptNames`). The runtime's `ToGetterName` and 
 **7. `args` stays the canonical form and stays authorable.** `variables.X` is a convenience for variables; `args` is
 what every parameter is underneath. Workflow inputs, activity results and instance metadata are still read through
 `args`, as on main today. An author may also write `args.X` for an explicit parameter. A script must not declare
-the same variable both ways; publish refuses that as ambiguous.
+the same variable both ways; publish refuses that as ambiguous. (S-4 exposes pinned variable reads under a `variables`
+root distinct from `args` via a per-parameter surface flag — open question 1 — which may make this refusal
+unnecessary; the implementing spec decides.)
 
 **8. An unset variable reads as `null`.** A name that resolves to a declared variable with no value binds JSON
 `null`, as Elsa 3's `getVariable` returned and as the workflow-instance binding treats an absent correlation ID. It
@@ -100,141 +110,67 @@ intrinsic (ADR 0045 §4). (Proposed amendment:
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
 would let activities, RunJavaScript included, change variables; input-binding expressions would stay read-only.)
 
-## Amendment (epic #3052, analysis A-4 and decision D-7, 2026-10-29)
+## Amendment (reduced) — epic #3052, analysis A-4 and decision D-7, 2026-11-09
 
-**Why.** Declared parameters, and pinning reads into them at publish, served the determinism and replay model of the
-original ADR 0045 §5: every read known before evaluation, re-evaluation giving the same result, and taint, completions
-and "which expressions read this variable?" answered statically. Three things changed:
-- **D-1 and D-2 dropped expression determinism.** The contract is now that a recorded step never runs again and
-  recovery runs forward ([ADR 0045 §5 amendment, #3384](https://github.com/elsa-workflows/elsa-foundation/pull/3384)).
-- **The input snapshot already pins the result.** Spec 095 §4: retry and resume do not re-evaluate an already pinned
-  input expression. Recovery needs what came out of an expression, not what it read.
-- **D-7 already accepts a run-time lookup** for computed names such as `getVariable(name)`. Keeping publish pinning
-  beside it means two read mechanisms.
+**Why reduced.** The 2026-10-29 amendment proposed replacing publish-time pinning with a single run-time accessor
+that validates names at publish and records the actual reads at evaluation, so that computed names could be looked up
+at run time. Two things changed it:
 
-So the main reason for publish-inferred parameters is gone, and inference at publish is machinery kept alive to serve
-them. This amendment replaces decisions 2 to 5 and 7 with one read mechanism. Decisions 1 (authors write variables by
-name), 6 (`get<Name>()` leaves the runtime) and 8 (an unset variable reads as `null`) stay.
+- **@sfmskywalker directed the minimal amendment** (reviewer question 6, 2026-11-06): keep publish-time resolution and
+  pinning for statically resolvable variable reads; do not adopt the broad replacement.
+- **Defining S-4** (spec 1222, [#4024](https://github.com/elsa-workflows/elsa-foundation/pull/4024)) found that
+  allowing a computed variable read forces the engine to **pre-load every visible variable before each evaluation**
+  (Jint reads are synchronous, variable values may be stored externally and loaded asynchronously, and the key is
+  unknown until run time). Under repeated activity evaluation that is a hidden performance cliff. So computed reads are
+  **deferred and refused** (decision 5), and with them the main reason for a run-time accessor disappears.
 
-This also changes D-7 as agreed on the epic, which says publish pins the names it can resolve. Everything else in D-7
-holds: scripts read `variables.X`, computed names are looked up at run time and reported conservatively, actual reads
-are checked for protection, and the converter emits `variables.X`. If the amendment is rejected, the minimal amendment
-under *Alternatives considered* writes D-7 as agreed.
+The original pinning model of **decisions 1–8 is the live decision**. This amendment keeps those decisions and only
+settles the three points below. (S-4 findings F-1–F-3, posted on this PR and #4024.)
 
-**A1. One read mechanism: a read-only accessor at evaluation time.** A script reads through roots the evaluator
-provides:
-- `variables.X`, with the aliases of decision 1, and computed names (`variables[name]`, `getVariable(expr)`);
-- `input.X` for workflow inputs;
-- `activities.<name>.<output>` for results of activities the node can see (spec 265's graph scope reads);
-- `workflow.correlationId` and `workflow.instanceId`.
+**R1. Rename safety** (settles reviewer questions 2 and 4; @sfmskywalker's direction, 2026-11-06). Readable names stay
+in the authored script source — not stable ids. Renaming a referenced declaration updates the references tooling can
+resolve; references it cannot safely update (for example run-time-constructed names) are surfaced for manual repair.
+A rename must not silently break a read or retarget it to another declaration. Publish refusing a name that no longer
+resolves is the safety net, and a name that now resolves to a different declaration than the previously published
+version is a publish warning. Published workflow versions never change; the risk is in the draft. This chooses
+readable source with reference updates over embedding ids; it does not prohibit internal symbol identities.
 
-Names resolve against the node's visible scopes, nearest first, in the order decision 2 describes, now at run time
-through the scoped reader the runtime already has (`TryReadScopedVariableValue`). Liquid gets the same roots. The
-RunJavaScript activity body reads the same way; whether it may also write is A-3 and ADR 0090.
+**R2. Input-binding reads versus the RunJavaScript body session** (S-4 finding F-2). Decision 4's "run time sees only
+declared values" is exact for **input-binding expressions**, which read the pinned input snapshot. The **RunJavaScript
+body** reads through its variable **session** ([ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411)),
+which equals the pinned snapshot **until writes exist**; writes are ADR 0090 / S-7. So the body is not limited to a
+frozen snapshot once writes land, and the two surfaces (snapshot vs session) stay distinct.
 
-**A1a. Which activity result a read sees** (@sfmskywalker, reconciliation row 13, 2026-10-30; the root name
-`activities.` agreed). `activities.<name>.<output>` reads one committed, successful occurrence of that activity: the
-occurrence in the reading node's own scope, resolved like a variable, nearest scope first. It never reads the globally
-latest occurrence. So an activity placed twice, or run again inside a graph-activity invocation, gives each reader the
-result its own producer made, as spec 265 already requires for graph bodies (FR-007; user story 2, scenario 2).
-- `activities.<name>.<output>`, and `getOutputs(name)` for an activity named by a computed `name`, are **required**
-  reads: they fail when no eligible successful occurrence exists.
-- `tryGetOutputs(name)` permits absence and returns `null` for it. A successful output may itself be `null`, so `null`
-  alone does not say which happened.
-- An invalid reference, an ambiguous occurrence (more than one eligible occurrence in the same scope) and denied
-  access fail in both forms. A read never waits for or schedules its producer.
+**R3. Computed reads deferred** (S-4 finding F-1). Computed variable names stay refused at publish (decision 5). The
+computed-read capability — whether and how to support a dynamically named read without a hidden load-all (for example
+an explicitly declared dynamic subset) — is a dedicated follow-up spec. This supersedes the epic's earlier direction
+that a computed variable name matching nothing reads `undefined` with a warning: that assumed computed reads were
+supported at run time, and with them refused there is no run-time miss to handle.
 
-These forms are for activity outputs only. A computed **variable** name that matches nothing reads `undefined` with a
-warning (A4, question 3); variables get no `try` form.
+**R4. The `activities.<name>.<output>` root deferred** (S-4 finding F-3). The 2026-10-29 draft added an
+`activities.<name>.<output>` script root with its own occurrence-resolution rules. spec 265 has no such JavaScript
+root (body output reads go through the `ActivityResult` binding / `getOutput` lowering), and it is new surface beyond
+S-4's issues. It is split into its own spec; this ADR covers **variable** reads. (`input.X` and `workflow.*` continue
+to read as they do today — see decision 7 and *Open questions* 3.)
 
-**A2. One consistent view per materialization.** Every read made while a node's inputs are materialized comes from the
-same committed state: the state the input snapshot is taken from (ADR 0045 §3). A script never sees a value that another
-branch commits while it runs. This is the read side of
-[ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411) (decision 10: no gap between reads and body).
-
-**A3. The engine records the actual reads.** Every read enters the invocation's input read set (ADR 0092 decision 3),
-with the version and digest it saw, and is committed with the input snapshot. The recorded reads serve:
-- **protection:** a result inherits the strongest protection policy of what it read, as A-1 proposes, checked on the
-  actual reads instead of refused at publish;
-- **inspection:** "which invocations read this variable, and which version";
-- **lost-update detection** in ADR 0092 (a read-modify-write needs its base). This also replaces ADR 0090 §7's
-  comparison of serialized values: conflicts are checked on the recorded versions (ADR 0090 amendment, [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425),
-  C5).
-
-**A4. Publish validates; it does not add.** Publish parses each script with the language's parser (decision 2's rule,
-no regular expressions) and checks it. It adds no parameter bindings.
-- A statically resolvable name that resolves to nothing visible is a publish diagnostic.
-- A computed name is allowed. Publish reports it conservatively: "may read any visible variable".
-- A computed variable name that resolves to no visible variable at run time reads as `undefined` in JavaScript, and a
-  warning is recorded with the read marked absent. This rule is for variable names only; activity outputs follow A1a
-  (question 3; ADR 0045 §2 as amended in
-  [#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388)).
-- A statically resolvable name that now resolves to a different declaration than in the previously published version
-  is a publish warning (kept from the Consequences below).
-- A transient (non-durable) variable is readable, because only the expression's result is persisted. It enters the
-  read set without a digest.
-
-**A5. `args` stays for explicit bindings.** Literals, composed expressions and hand-wired values remain declared
-parameters, as spec 095 defines them. A script may read one value both ways: both come from the same view (A2), so
-decision 7's ambiguity refusal is no longer needed.
-
-**A6. The evaluator gets a read-only reader port.** Spec 095's expression contract §1 says the evaluation request
-contains no variable frame. That changes: the request carries a port that answers reads from the view of A2 and records
-them (A3). It cannot write, enumerate other scopes or reach services. The evaluator stays testable with a fake port.
-
-**A7. A rename never silently breaks or changes a read.** Renaming a variable or an activity must not change what a
-script reads without the author seeing it (agreed by @j03y-nxxbz and @FransVanEk on the epic). A published version
-never changes, so the risk is in the draft. Two mechanisms are possible (reviewer question 2):
-- the source stores stable ids and Studio shows names;
-- Studio's rename updates every reference.
-
-In both, publish refusing a name that no longer resolves (A4) is the safety net.
-
-**Writes are unchanged by this amendment.** Input-binding expressions never write (D-3). Writes from activities are A-3
-and ADR 0090.
-
-**What this gives up:**
-- **Exact static answers.** "Which expressions read X" becomes best effort in tooling plus the recorded actual reads.
-- **Taint at publish.** Protection becomes a run-time check on the actual reads (A3).
-- **A fully self-contained evaluator.** It gets a read-only port instead of only parameter values (A6). This reverses an
-  explicit spec 095 principle.
-- **Resolution at publish.** A new inner declaration that shadows an outer one changes what a script reads. That is a
-  definition change, so a new version, and A4 warns about it.
-
-**What this gains:**
-- **One read mechanism** instead of pinning plus a run-time fallback.
-- **A simpler, more faithful converter.** It keeps Elsa 3 reads as written (`Variables.X` becomes `variables.X`;
-  `get<Name>()` is still rewritten, decision 6) instead of rewriting them into `args`. That rewrite is where #3296 (a
-  script's own `args` shadows converted reads) and the wrapper problems on #3204 come from. Computed
-  `getVariable(name)` converts instead of being refused with `VF-IMP-006`.
-- **Transient variables become readable** (A4).
-- **Authors write what they mean,** in Elsa 3's form.
-
-**What it touches:**
-- **ADR 0045 §5.** "cannot … discover workflow values through ambient name-based accessors" becomes: input-binding
-  expressions read through the read-only accessor, and their reads are recorded. #3384 adopts this once the amendment
-  is agreed.
-- **Spec 095:** expression contract §1 (the reader port) and §6 (the importer no longer lowers reads to `args`), in the
-  implementing spec (S-4 on the epic).
-- **ADR 0092 decision 3** already records actual reads, including run-time lookups once D-7 is written here.
-- **ADR 0090 §3** refuses computed names, as decision 5 does; it follows this amendment.
+**What this still touches:**
+- **Spec 095.** The implementing spec (S-4, spec 1222) adds a per-parameter **surface flag** that exposes a pinned
+  `Variable` parameter under a `variables` root distinct from `args` (changes the expression contract §1 and §6; open
+  question 1). This is what removes the #3296 collision (converted variable reads are no longer lowered to `args`).
+- **ADR 0045 §5.** Satisfied: the script names a value, but publish turns that name into an explicit, declared
+  parameter, so no evaluator discovers values by name at run time.
+- **ADR 0092 decision 3.** The pinned reads are recorded in the input read set.
+- **ADR 0090 §3.** Refuses computed names, consistent with decision 5.
 
 **Questions for reviewers** (@sfmskywalker, @FransVanEk):
-1. Do you agree that publish-inferred parameters lost their main reason with D-1 and D-2? Is anything lost that A2,
-   A3 and A6 do not cover?
-2. Renames (A7): ids in the source, or rename updates every reference?
-3. A computed name that resolves to no visible variable at run time: does it read `null` and record a warning, as Elsa
-   3's `getVariable` returned, or does it fault the evaluation? **Proposed by @FransVanEk and agreed by @j03y-nxxbz
-   (2026-10-29): neither.** It reads as `undefined`, JavaScript's own "not there", and a warning is recorded with the
-   read marked absent (A4). `null` would erase the difference between null and missing. **Agreed by @sfmskywalker**
-   (2026-10-29, [comment](https://github.com/elsa-workflows/elsa-foundation/pull/3420#issuecomment-6503643338);
-   confirmed 2026-10-30, [comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6519726021)),
-   with the rule limited to computed variable names, as A4 now says. All three agree.
-4. `activities.<name>.<output>`: addressed by name or by id in the source (ties to question 2)?
-5. @FransVanEk: your §5 answer (pinning plus a run-time fallback is fine if the reads are part of the step's input
-   snapshot) and your answers on matrix rows 12 and 13: do they hold under A2 and A3?
-6. @sfmskywalker: this takes over your planned amendment of decisions 4 and 5, which D-7 asked for. Do you agree, or do
-   you prefer the minimal amendment under *Alternatives considered*?
+1. Do you agree to **reduce** this ADR to the original pinning model (decisions 1–8) with computed reads deferred,
+   rather than the 2026-10-29 run-time-accessor replacement? (This records @sfmskywalker's question-6 direction.)
+2. **Rename (R1):** confirm readable-names-in-source plus Studio reference updates (your 2026-11-06 direction) as the
+   decision.
+3. **@FransVanEk:** does your §5 answer (pinning plus a run-time fallback is fine if the reads are part of the step's
+   input snapshot) still hold now that computed reads are **deferred** rather than given a run-time fallback?
+4. Do you agree to move the **computed-read capability** (R3) and the **`activities.<name>.<output>` root** (R4) to
+   their own specs?
 
 ## Consequences
 
@@ -242,13 +178,17 @@ and ADR 0090.
   Elsa 3 variable reads, spelled as the variable is declared, and keeps `args.X` for inputs, activity results and
   instance metadata. Converted workflows then behave like authored ones when they are edited later. To stay
   faithful, the converter checks that publish's resolution picks the same declaration as Elsa 3's resolution, and
-  refuses the read when they differ. Until publish pinning lands, it keeps emitting `args.X`. Per #3010 it emits
-  statement bodies as they are and no longer wraps them in `(function () { … })()`. A converted read of a variable
-  that is transient in the Elsa 4 workflow is flagged at import with its own diagnostic, so the failure points at the
-  Elsa 3 source rather than at publish (decision 5).
+  refuses the read when they differ. It refuses (faithful-or-refuse), with guidance, when a script's own declared
+  `args` would collide with lowered `args` reads (#3296), and it gives the RunJavaScript `arguments` expression its
+  real result type instead of a hard-coded `Object` (#3287, with #3167). Per #3010 it emits statement bodies as they
+  are and no longer wraps them in `(function () { … })()` on the body path. A computed `getVariable(name)` is refused,
+  as the importer already does (`VF-IMP-006`, decision 5). A converted read of a variable that is transient in the
+  Elsa 4 workflow is flagged at import with its own diagnostic, so the failure points at the Elsa 3 source rather than
+  at publish (decision 5).
 - **Runtime.** `SetReadOnlyVariables` builds `variables` from pinned parameters, not from `AmbientVariables`. The
   regular-expression read detection, the "computed access exposes everything" path and the ambient frame projection
   for scripts go. `ExpressionEvaluationRequest.AmbientVariables` either goes or is filled only from pinned values.
+  Only the variables a script names are materialized.
 - **Publish and Studio.** Publish gains a JavaScript read-set check, which closes the spec 265 R-9 gap for workflows
   and graph activity bodies. Studio can show the nearest-scope resolution and flag a name that a new inner
   declaration would start to shadow; `GetShadowingWarnings` is a starting point.
@@ -271,26 +211,29 @@ lowered form.
 
 **Ambient only, looked up at run time (main today).** Easiest to write and closest to Elsa 3. The read set is
 known only at run time and detected by regular expression, computed access over-approximates to every visible
-variable, publish cannot check reads, and tooling can only guess what a script touches. Rejected. (The amendment's
-run-time accessor differs: it parses rather than matches, publish validates every resolvable name, and the engine
-records the actual reads.)
+variable, publish cannot check reads, and tooling can only guess what a script touches. Rejected.
 
-**Minimal D-7 amendment (considered for the 2026-10-29 amendment).** Keep decisions 2 to 4 and pin every statically
-resolvable name at publish. Change decision 4 so that a computed name falls back to a run-time lookup that is reported
-conservatively and whose actual reads are recorded with the input snapshot. Change decision 5 so that computed names are
-no longer refused, and reword decision 4's determinism guarantee, which D-1 dropped. This satisfies D-7 and
-@FransVanEk's §5 condition with the smallest change, but keeps two read mechanisms side by side. Not chosen; it is the
-fallback if the amendment is rejected.
+**Broad run-time accessor (the 2026-10-29 draft).** Replace pinning entirely: publish validates names and the engine
+records the actual reads at evaluation, so computed names look up at run time. **Withdrawn** — @sfmskywalker directed
+the minimal amendment (reviewer question 6), and the run-time lookup for computed names forces a hidden load-all
+(see *Amendment (reduced)*).
+
+**Minimal D-7 amendment with a run-time fallback for computed names.** Keep decisions 2 to 4 and pin every statically
+resolvable name, but let a computed name fall back to a run-time lookup reported conservatively, with its actual reads
+recorded. Considered, not chosen: the fallback still has to pre-load the visible set to serve a synchronous read, so it
+carries the load-all cost and keeps two read mechanisms. Computed reads are **deferred** instead (R3), which keeps a
+single mechanism — publish-time pinning — and leaves dynamic access to its own spec.
 
 ## Open questions
 
-1. **Serialized shape.** How the compiled binding marks a parameter as exposed under `variables` rather than `args`
-   (a separate map, or a per-parameter surface flag), and how its name avoids colliding with authored `args` names.
-   This belongs to the implementation spec and changes spec 095's contract.
-2. **Loop iteration values.** Loop iteration values (ADR 0028) are exposed today from iteration frames by key. The
-   implementation spec must confirm how they are pinned.
-3. **Inputs by name.** Whether `input.X` (Elsa 3's `getInput`) should get the same treatment later. Out of scope
-   here.
+1. **Serialized shape (S-4, spec 1222).** How the compiled binding marks a parameter as exposed under `variables`
+   rather than `args`. The implementing spec uses a per-parameter **surface flag** (`variables` | `args`, default
+   `args`), so the roots are separate objects and a `variables` name cannot collide with an authored `args` name.
+   Changes spec 095's expression contract §1 and §6.
+2. **Loop iteration values (S-4, spec 1222).** Loop iteration values (ADR 0028) are exposed today from iteration
+   frames by key. The implementing spec confirms how they are pinned and read.
+3. **Inputs by name.** Whether `input.X` (Elsa 3's `getInput`) should be resolved and pinned by name later. Out of
+   scope here; `input.X` reads as it does today.
 4. **Writes.** Stay intrinsics and captures.
    [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) (proposed) answers
    this: input-binding expressions stay read-only, and activities change variables as a unit of work.
