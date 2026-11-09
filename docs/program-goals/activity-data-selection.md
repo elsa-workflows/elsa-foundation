@@ -22,8 +22,10 @@ the delivery plan owns the detailed milestone gates and evidence matrix. This pa
 
 [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) records the scoped owner instruction,
 "Proceed as proposed". Run alongside active programs, displace none, preserve Foundation/Studio
-consolidation's priority one, and coordinate shared Studio/runtime changes. Keep one integration lane;
-parallel Foundation/picker work follows the committed shared contract and uses separate worktrees/leaves.
+consolidation's priority one, and coordinate shared Studio/runtime changes. The owner's
+[9 November continuation](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6739568560)
+uses one implementation worker at a time: finish the Foundation leaf and its resulting-main qualification
+before starting the remaining delivery leaves. Keep each leaf in an isolated worktree.
 
 - Reuse [feature #3094](https://github.com/elsa-workflows/elsa-foundation/issues/3094). Preserve its compensation
   relationship and narrower independently deliverable whole-output slice instead of duplicating the feature.
@@ -76,14 +78,21 @@ formal approval, passed its required exact-head checks and merged as `f50b72075`
 at exact descendant `f6ebd0e10`: all selected GitHub jobs succeeded and the unchanged aggregate predicates
 passed separately; the queued hosted aggregates were not relabelled passed. This does not qualify later main.
 
-Foundation [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922) now owns T004–T010 under
-its specific claim, with separate metadata, analysis, Graph and integrating transport/publication worktrees.
-Draft [PR #3948](https://github.com/elsa-workflows/elsa-foundation/pull/3948) is the shared-analysis
+Foundation [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922) owns T004–T010 under
+its [specific claim](https://github.com/elsa-workflows/elsa-foundation/issues/3922#issuecomment-6676170172),
+with one implementation worker and a coordinating reviewer.
+[PR #3948](https://github.com/elsa-workflows/elsa-foundation/pull/3948) is the shared-analysis
 foundation leaf: T004–T010 source and Evaluate Decision whole-`$result` description, without runtime
-member binding or Studio chooser/inspector. Its initial base is qualified f6; newer Decisions/auth
-source is integrated but still needs candidate qualification. No production journey is accepted by
-these contracts or source changes. #3094 and the remaining runtime, Studio, expression/editing,
-causal/restart and final UX work retain their own gates.
+member binding or Studio chooser/inspector. Its
+[local qualification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728799519)
+preserves the exact source heads for 21 owning whole suites and seven mutation proofs; it is not a
+protected-CI pass on the integrated candidate. The branch now integrates main `8d03b1623`, whose
+[CI run passed](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42604146302).
+Integrated-candidate checks, formal Code Review round 2 and resulting-main qualification remain pending;
+the private author loop remains capped/unconverged at round 3. Spec 1215 remains unimplemented and
+T003/T004–T010 stay unchecked. No production journey is accepted by these source changes or historical
+receipts. #3094 and the remaining runtime, Studio, expression/editing, causal/restart and final UX work
+retain their own gates.
 
 ## Completion
 
