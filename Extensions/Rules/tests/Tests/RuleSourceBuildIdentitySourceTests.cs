@@ -44,8 +44,9 @@ public sealed class RuleSourceBuildIdentitySourceTests
             package.SelectedAssets)).ToArray(), sourceBuild.LanguageId, sourceBuild.LanguageVersion, sourceBuild.ReceiptSchemaVersion, sourceBuild.StateSchemaVersion);
 
         Assert.NotEqual(RuleRecordCodec.PinHash(packaged), RuleRecordCodec.PinHash(sourceBuild));
-        // The load-bearing guarantee: the markers only a source-build pin carries, and a receipt-shaped pin never does
-        // (the receipt reader resolves package ids against deps.json, where a "source-build:" id cannot exist).
+        // The load-bearing guarantee: the markers only a source-build pin carries. The synthetic receipt-shaped fixture pin
+        // carries neither, and the receipt reader cannot produce them either: it resolves package ids against deps.json
+        // library names and rejects ':' in asset paths (RuleDeploymentIdentitySourceTests covers that reader).
         Assert.All(sourceBuild.Packages, package => Assert.StartsWith(RuleSourceBuildIdentitySource.ProvenancePrefix, package.PackageId, StringComparison.Ordinal));
         var receiptShaped = RuleStoreTestFixture.NewInvocation().ExpectedImplementation;
         Assert.All(receiptShaped.Packages, package =>

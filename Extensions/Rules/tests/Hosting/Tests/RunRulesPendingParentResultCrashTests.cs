@@ -69,7 +69,8 @@ public sealed class RunRulesPendingParentResultCrashTests
             Assert.Equal("Completed", Assert.Single(activities, item => item!["activityType"]!.GetValue<string>() == WriteLineType)!["status"]!.GetValue<string>());
             // The line after the wait ran once, and only in the restarted process.
             var line = "Recovered real Rules " + parent;
-            Assert.Equal(1, CountOf(fixture.Host.Output, line));
+            // The console pipe is read asynchronously, so the line may trail the completion by a moment.
+            await WaitForAsync(() => Task.FromResult(CountOf(fixture.Host.Output, line) == 1), "The WriteLine text did not appear exactly once in the restarted process's output.");
             Assert.Equal(0, CountOf(Assert.Single(fixture.KilledHostOutputs), line));
         }
         await WaitForAsync(() => Task.FromResult(fixture.ReadRuns().Single().DeliveryAcknowledged), "The delivery was not acknowledged after the resume.");
