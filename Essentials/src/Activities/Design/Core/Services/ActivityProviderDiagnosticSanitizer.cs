@@ -17,11 +17,7 @@ public static partial class ActivityProviderDiagnosticSanitizer
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
         string providerKey) =>
-        Sanitize(diagnostics, providerKey, null).Select(diagnostic => diagnostic with
-        {
-            Message = $"The activity provider reported diagnostic '{diagnostic.Code}'.",
-            Remediation = "Review the provider documentation for this diagnostic code."
-        }).ToArray();
+        Sanitize(diagnostics, providerKey, null);
 
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
@@ -35,11 +31,13 @@ public static partial class ActivityProviderDiagnosticSanitizer
             .GroupBy(x => x.Code, StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
             .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
-        return ActivityDiagnosticOrderer.Order((diagnostics ?? []).Select(x => Sanitize(x, providerKey, guidance)));
+        // Providers without a catalog keep the original diagnostic wire bytes and proposal fingerprints.
+        var legacyFallback = descriptors is null || descriptors.Count == 0;
+        return ActivityDiagnosticOrderer.Order((diagnostics ?? []).Select(x => Sanitize(x, providerKey, guidance, legacyFallback)));
     }
 
     private static ActivityDiagnostic Sanitize(ActivityDiagnostic diagnostic, string providerKey,
-        IReadOnlyDictionary<string, ActivityProviderDiagnosticDescriptor> guidance)
+        IReadOnlyDictionary<string, ActivityProviderDiagnosticDescriptor> guidance, bool legacyFallback)
     {
         var code = diagnostic.Code is { } candidateCode && DiagnosticCodePattern().IsMatch(candidateCode)
             ? candidateCode
@@ -52,10 +50,10 @@ public static partial class ActivityProviderDiagnosticSanitizer
         return new(
             code,
             diagnostic.Severity,
-            descriptor?.Message ?? "The activity provider reported an issue.",
+            descriptor?.Message ?? (legacyFallback ? $"The activity provider reported diagnostic '{code}'." : "The activity provider reported an issue."),
             new("ActivityDefinition", safeProviderKey),
             new(ProviderKey: safeProviderKey, JsonPointer: descriptor?.JsonPointer),
-            descriptor?.Remediation ?? "Ask an administrator to review the diagnostic details and activity provider logs.",
+            descriptor?.Remediation ?? (legacyFallback ? "Review the provider documentation for this diagnostic code." : "Ask an administrator to review the diagnostic details and activity provider logs."),
             descriptor?.ActionLabel is { } action
                 ? new Dictionary<string, string>(StringComparer.Ordinal) { ["actionLabel"] = action }
                 : new Dictionary<string, string>(StringComparer.Ordinal));
