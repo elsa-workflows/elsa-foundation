@@ -1045,6 +1045,16 @@ jobs:
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
+      # Playwright keeps a trace only for failed cases (retain-on-failure); without this step the job discards it.
+      - name: Upload failed browser traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures-${{ matrix.shard }}
+          path: Studio/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope
