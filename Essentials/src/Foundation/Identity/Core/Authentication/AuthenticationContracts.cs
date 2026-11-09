@@ -39,8 +39,51 @@ public interface ITokenService
 
     ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Revokes every access and refresh token issued to <paramref name="subjectId"/>, as sign-out requires.</summary>
-    ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default);
+    /// <summary>Revokes every access and refresh token issued to <paramref name="subject"/>, as sign-out requires.</summary>
+    ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// The identity tokens are stored and revoked under. An Elsa user is one subject per tenant, whichever provider
+/// signed it in; a subject that names no Elsa user is one per tenant and provider. So two providers' equal
+/// <c>sub</c> values, one <c>sub</c> in two tenants, or a provider <c>sub</c> equal to an Elsa user id never share
+/// tokens, and one sign-out, disable or delete revokes one user's tokens only.
+/// </summary>
+public sealed record TokenSubject
+{
+    private TokenSubject(string tenantId, string? userId, string? provider, string? providerSubject)
+    {
+        TenantId = tenantId;
+        UserId = userId;
+        Provider = provider;
+        ProviderSubject = providerSubject;
+    }
+
+    public string TenantId { get; }
+
+    /// <summary>The Elsa user, when the subject is one.</summary>
+    public string? UserId { get; }
+
+    /// <summary>The provider that authenticated <see cref="ProviderSubject"/>, when the subject names no Elsa user.</summary>
+    public string? Provider { get; }
+
+    /// <summary>The provider's own subject, when the subject names no Elsa user.</summary>
+    public string? ProviderSubject { get; }
+
+    public static TokenSubject ForUser(string tenantId, string userId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        return new(tenantId, userId, null, null);
+    }
+
+    public static TokenSubject ForProviderSubject(string tenantId, string provider, string providerSubject)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerSubject);
+        return new(tenantId, null, provider, providerSubject);
+    }
 }
 
 /// <summary>
@@ -118,6 +161,12 @@ public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadO
 {
     /// <summary>Canonical Elsa user established by the issuing authority; absent for non-user subjects.</summary>
     public string? CanonicalUserId { get; init; }
+
+    /// <summary>
+    /// The provider that authenticated <see cref="SubjectId"/>. Required when there is no <see cref="CanonicalUserId"/>:
+    /// together with <see cref="TenantId"/> it scopes the <see cref="TokenSubject"/> the tokens are stored under.
+    /// </summary>
+    public string? Provider { get; init; }
 }
 
 public sealed record TokenIssueResult(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);
