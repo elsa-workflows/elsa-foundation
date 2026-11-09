@@ -374,7 +374,7 @@ public static class FoundationIdentityApi
         var providers = principal.FindAll(IdentityClaimTypes.SubjectProvider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
         if (providers.Length == 0)
             providers = principal.FindAll(IdentityClaimTypes.Provider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
-        if (string.IsNullOrWhiteSpace(subject) || users.Length > 1 || providers.Length > 1)
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId) || users.Length > 1 || providers.Length > 1)
             return false;
 
         if (users.Length == 1)

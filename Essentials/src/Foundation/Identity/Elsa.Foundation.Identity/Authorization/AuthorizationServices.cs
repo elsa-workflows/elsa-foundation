@@ -544,8 +544,13 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
         return ValueTask.FromResult(new ClaimsNormalizationResult(new ClaimsPrincipal(identity), roles, permissions));
     }
 
+    private static readonly string[] InternalIdentityClaimTypes =
+    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.SubjectProvider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission, IdentityClaimTypes.UserId];
+
+    // Case-insensitive, as ClaimsPrincipal.FindAll and FindFirstValue read claim types: an incoming claim that differs
+    // from an internal type only in case would otherwise survive the strip and still be honoured downstream.
     private static bool IsInternalIdentityClaim(string claimType) =>
-        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.SubjectProvider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission or IdentityClaimTypes.UserId;
+        InternalIdentityClaimTypes.Contains(claimType, StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
