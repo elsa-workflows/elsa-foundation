@@ -7,6 +7,7 @@ using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Exceptions;
 using Elsa.Testing;
 using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
@@ -93,6 +94,23 @@ public sealed class VersionReadAuthorizationTests
         Assert.Equal(StatusCodes.Status403Forbidden, status);
         // The definition GET's resource-scoped permission refusal, even though the replacement owner would allow.
         Assert.Equal("""{"errors":{"generalErrors":["The requested workflow library operation is not permitted."]},"message":"One or more errors occurred!","statusCode":403}""", body);
+        Assert.Empty(host.Authorizer.ReadDecisions);
+    }
+
+    [Fact]
+    public async Task The_Read_decision_names_the_version_s_definition_as_its_resource()
+    {
+        // The actor holds Read; a resource handler denies it for this one definition, so the resource must be the
+        // version's definition, not the version id or no resource at all.
+        var handler = new DenyingDefinitionResource(DefinitionId);
+        using var host = new Host(allow: true, configure: services => services.AddSingleton<IPermissionResourceHandler>(handler));
+
+        var (status, _, body) = await host.GetAsync();
+
+        Assert.Equal(StatusCodes.Status403Forbidden, status);
+        Assert.Contains("The requested workflow library operation is not permitted.", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(VersionId, body, StringComparison.Ordinal);
+        Assert.Equal([DefinitionId], handler.DeniedDefinitions);
         Assert.Empty(host.Authorizer.ReadDecisions);
     }
 
@@ -214,6 +232,21 @@ public sealed class VersionReadAuthorizationTests
 
         public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException("A version read never asks for management authority.");
+    }
+
+    /// <summary>Denies the Read permission for one definition resource and records which definitions it denied.</summary>
+    private sealed class DenyingDefinitionResource(string definitionId) : IPermissionResourceHandler
+    {
+        internal List<string> DeniedDefinitions { get; } = [];
+
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.Resource is not WorkflowLibraryResource { DefinitionId: { } id } || id != definitionId
+                || context.Permission != WorkflowDesignPermissions.Read)
+                return ValueTask.FromResult<PermissionEvaluationResult?>(null);
+            DeniedDefinitions.Add(id);
+            return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Denied("This definition is withheld from the actor."));
+        }
     }
 
     private sealed class ThrowingAuthorizer : IWorkflowDefinitionAuthorizer
