@@ -12,7 +12,7 @@ Separate Publishing's required internal Runtime support from Runtime HTTP/execut
 
 **Language/Version**: C#/.NET10; existing TypeScript Studio client.
 
-**Primary Dependencies**: Existing CShells features, NativeEndpoints1.0.0-preview.6 explicit `MapEndpoint<T>`, current capability catalog, Publishing/Runtime stable contracts, existing Foundation Identity host substrate. No new dependency.
+**Primary Dependencies**: Existing CShells features, ValenceWorks.MinimalEndpoints 1.0.0 explicit `MapEndpoint<T>`, current capability catalog, Publishing/Runtime stable contracts, existing Foundation Identity host substrate. No new dependency.
 
 **Storage**: Existing Activities Design, Workflows Design, Publishing and Runtime contexts bound through named persistence resources. Support uses unchanged Runtime R01-R29 aggregate/migrations; all existing private cursor-key validation remains.
 

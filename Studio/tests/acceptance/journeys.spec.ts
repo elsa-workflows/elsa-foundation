@@ -3,11 +3,12 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { userTasksJourney } from "./userTasksJourney";
+import { decisionsJourney } from "./decisionsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
-  await page.screenshot({ path: screenshot, fullPage: true });
+  await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
@@ -27,9 +28,10 @@ const browserErrors = new WeakMap<Page, string[]>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
-  // Teardown also runs after failed interactions against these disposable stores.
+  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
   for (const creation of createdWorkflows.get(page) ?? []) {
     const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
     expect(removed.ok()).toBe(true);
@@ -460,6 +462,7 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await submitAndInspect(templateNames[1], descriptions[1]);
   await capture(page, info, "template-persisted");
 });
+
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
 });

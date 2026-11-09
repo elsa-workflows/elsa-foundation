@@ -9,6 +9,8 @@ public static class EfSourceModel
 {
     internal const string SchemaFamily = "SourceRevisions";
     internal const string SchemaVersion = "1.0.0";
+    internal static bool Maps(Type type) => type == typeof(SourceWorkingCopy) || type == typeof(SourceSnapshot) ||
+        type == typeof(SourceSnapshotPin);
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(EfSourceModel).Assembly, SchemaFamily);
     public static ModelBuilder AddSourceRevisions(this ModelBuilder model, string prefix, string provider)
     {

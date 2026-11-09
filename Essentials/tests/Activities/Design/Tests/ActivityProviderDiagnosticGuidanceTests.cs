@@ -12,15 +12,17 @@ public sealed class ActivityProviderDiagnosticGuidanceTests
         "acme.model.required", "Choose a model connection.", "Select an authorized model in Designer.", "/model", "Choose model connection");
 
     [Fact]
-    public void Existing_binary_entry_point_retains_its_safe_fallback()
+    public void Existing_binary_entry_point_keeps_the_current_non_disclosing_fallback()
     {
         var legacy = typeof(ActivityProviderDiagnosticSanitizer).GetMethod(nameof(ActivityProviderDiagnosticSanitizer.Sanitize),
             [typeof(IEnumerable<ActivityDiagnostic>), typeof(string)]);
         Assert.NotNull(legacy);
         var results = Assert.IsAssignableFrom<IReadOnlyList<ActivityDiagnostic>>(legacy.Invoke(null, [new[] { PrivateDiagnostic() }, "acme"]));
         var result = Assert.Single(results);
-        Assert.Equal($"The activity provider reported diagnostic '{Guidance.Code}'.", result.Message);
-        Assert.Equal("Review the provider documentation for this diagnostic code.", result.Remediation);
+        var expected = Assert.Single(ActivityProviderDiagnosticSanitizer.Sanitize([PrivateDiagnostic()], "acme", null));
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected), System.Text.Json.JsonSerializer.Serialize(result));
+        Assert.Equal("The activity provider reported an issue.", result.Message);
+        Assert.Contains("administrator", result.Remediation);
         Assert.Empty(result.Metadata);
         Assert.Null(result.Location!.JsonPointer);
         Assert.DoesNotContain("PRIVATE", System.Text.Json.JsonSerializer.Serialize(result));

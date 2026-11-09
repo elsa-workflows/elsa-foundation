@@ -13,7 +13,8 @@ public static partial class ActivityProviderDiagnosticSanitizer
 {
     private const string FallbackCode = ActivityErrorCodes.ProviderDiagnostic;
 
-    // Retain the existing CLR entry point and fallback copy for previously compiled callers.
+    // Keep the two-parameter CLR entry point: callers compiled against the preview packages that carried only this
+    // shape (4.0.23-preview) bind to it directly, while optional parameters alone are not binary-compatible.
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
         string providerKey) =>
@@ -22,7 +23,7 @@ public static partial class ActivityProviderDiagnosticSanitizer
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,
         string providerKey,
-        IReadOnlyList<ActivityProviderDiagnosticDescriptor>? descriptors)
+        IReadOnlyList<ActivityProviderDiagnosticDescriptor>? descriptors = null)
     {
         // Duplicate/invalid declarations never select an arbitrary public explanation. Bound both the
         // contribution and its strings, and do not use any of the runtime diagnostic's free-form fields.
@@ -31,13 +32,11 @@ public static partial class ActivityProviderDiagnosticSanitizer
             .GroupBy(x => x.Code, StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
             .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
-        // Providers without a catalog keep the original diagnostic wire bytes and proposal fingerprints.
-        var legacyFallback = descriptors is null || descriptors.Count == 0;
-        return ActivityDiagnosticOrderer.Order((diagnostics ?? []).Select(x => Sanitize(x, providerKey, guidance, legacyFallback)));
+        return ActivityDiagnosticOrderer.Order((diagnostics ?? []).Select(x => Sanitize(x, providerKey, guidance)));
     }
 
     private static ActivityDiagnostic Sanitize(ActivityDiagnostic diagnostic, string providerKey,
-        IReadOnlyDictionary<string, ActivityProviderDiagnosticDescriptor> guidance, bool legacyFallback)
+        IReadOnlyDictionary<string, ActivityProviderDiagnosticDescriptor> guidance)
     {
         var code = diagnostic.Code is { } candidateCode && DiagnosticCodePattern().IsMatch(candidateCode)
             ? candidateCode
@@ -50,10 +49,10 @@ public static partial class ActivityProviderDiagnosticSanitizer
         return new(
             code,
             diagnostic.Severity,
-            descriptor?.Message ?? (legacyFallback ? $"The activity provider reported diagnostic '{code}'." : "The activity provider reported an issue."),
+            descriptor?.Message ?? "The activity provider reported an issue.",
             new("ActivityDefinition", safeProviderKey),
             new(ProviderKey: safeProviderKey, JsonPointer: descriptor?.JsonPointer),
-            descriptor?.Remediation ?? (legacyFallback ? "Review the provider documentation for this diagnostic code." : "Ask an administrator to review the diagnostic details and activity provider logs."),
+            descriptor?.Remediation ?? "Ask an administrator to review the diagnostic details and activity provider logs.",
             descriptor?.ActionLabel is { } action
                 ? new Dictionary<string, string>(StringComparer.Ordinal) { ["actionLabel"] = action }
                 : new Dictionary<string, string>(StringComparer.Ordinal));
