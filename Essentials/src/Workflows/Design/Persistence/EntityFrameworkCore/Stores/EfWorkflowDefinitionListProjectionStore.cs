@@ -65,7 +65,18 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
             latestDrafts.TryGetValue(key, out var draft);
             definitionVersions.TryGetValue(key, out var rows);
             var latest = rows?.FirstOrDefault();
-            return new WorkflowDefinitionListProjection(id, draft?.Id, latest?.Id, latest?.Version, rows?.Length ?? 0);
+            var draftSourceVersion = draft?.SourceVersionId is { } sourceVersionId
+                ? rows?.FirstOrDefault(version => StringComparer.Ordinal.Equals(version.Id, sourceVersionId))
+                : null;
+            return new WorkflowDefinitionListProjection(
+                id,
+                draft?.Id,
+                latest?.Id,
+                latest?.Version,
+                rows?.Length ?? 0,
+                draft?.SourceVersionId,
+                draftSourceVersion?.Version,
+                rows?.Select(version => new WorkflowDefinitionVersionProjection(version.Id, version.Version)).ToArray() ?? []);
         }).ToArray();
     }
 

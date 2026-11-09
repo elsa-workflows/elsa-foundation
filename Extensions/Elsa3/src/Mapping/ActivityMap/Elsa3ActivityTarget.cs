@@ -13,9 +13,6 @@ public abstract record Elsa3ActivityTarget
     /// <summary>An engine intrinsic, placed by its stable version id; it has no catalog row.</summary>
     public sealed record Intrinsic(string ActivityVersionId) : Elsa3ActivityTarget;
 
-    /// <summary>Graph-level structure that a later conversion stage owns. No built-in entry uses it since spec 239.</summary>
-    public sealed record GraphLevel(string Reason, string OwningIssue) : Elsa3ActivityTarget;
-
     /// <summary>A flowchart construct graph conversion consumes: it becomes connections or the start node, never a node.</summary>
     public sealed record GraphConstruct(Elsa3GraphConstructKind Kind) : Elsa3ActivityTarget;
 

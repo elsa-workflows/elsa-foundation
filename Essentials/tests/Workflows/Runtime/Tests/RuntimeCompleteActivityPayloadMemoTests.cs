@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Xunit;
@@ -58,6 +60,94 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
         Assert.ThrowsAny<Exception>(() => RuntimeCompleteActivityPayloadMemo.Deserialize(workItem));
     }
 
+    [Fact]
+    public void ParentOutcomePayload_RoundTripsVersionedFaultAndOrderedNotificationBatch()
+    {
+        var payload = NewParentOutcomePayload();
+
+        var json = JsonSerializer.SerializeToElement(payload);
+        var deserialized = json.Deserialize<RuntimeCompleteActivityCommandPayload>();
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, deserialized.CompletionKind);
+        Assert.Equal(RuntimeParentOutcome.CurrentVersion, deserialized.ParentOutcome?.Version);
+        Assert.Equal("incident-1", deserialized.ParentOutcome?.IncidentId);
+        Assert.Equal("masked fault message", deserialized.ParentOutcome?.Fault.Message);
+        Assert.Equal(new[] { "first", "second" }, deserialized.ParentOutcome?.Notifications.Select(notification => notification.Code));
+    }
+
+    [Fact]
+    public void LegacyPayload_OmitsNullParentOutcomeAndKeepsTheOriginalConstructorSignature()
+    {
+        var payload = new RuntimeCompleteActivityCommandPayload(
+            NewIdentity(),
+            "node-start",
+            "actexec-parent",
+            null,
+            null,
+            ["Done"],
+            RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
+
+        var json = JsonSerializer.SerializeToElement(payload);
+        var constructor = typeof(RuntimeCompleteActivityCommandPayload).GetConstructor([
+            typeof(WorkflowExecutableIdentity),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(IReadOnlyCollection<string>),
+            typeof(string),
+            typeof(SchedulerCompletionKind),
+            typeof(string)
+        ]);
+
+        Assert.NotNull(constructor);
+        Assert.False(json.TryGetProperty(nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome), out _));
+        Assert.Null(json.Deserialize<RuntimeCompleteActivityCommandPayload>()?.ParentOutcome);
+    }
+
+    [Fact]
+    public void ParentOutcome_RejectsUnsupportedVersionAndEmptyNotificationBatch()
+    {
+        var fault = new ActivityFault("child-fault", "masked fault message");
+        var notification = new ActivityChildNotifiedContext("actexec-child", "node-child", "signal");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeParentOutcome(2, fault, "incident-1", [notification]));
+        Assert.Throws<ArgumentException>(() => new RuntimeParentOutcome(RuntimeParentOutcome.CurrentVersion, fault, "incident-1", []));
+    }
+
+    [Fact]
+    public void ParentOutcomePayload_RejectsNotificationsFromAnotherChild()
+    {
+        var outcome = new RuntimeParentOutcome(
+            RuntimeParentOutcome.CurrentVersion,
+            new ActivityFault("child-fault", "masked fault message"),
+            "incident-1",
+            [new ActivityChildNotifiedContext("actexec-other", "node-other", "signal")]);
+
+        Assert.Throws<ArgumentException>(() => new RuntimeCompleteActivityCommandPayload(
+            NewIdentity(),
+            "node-parent",
+            "actexec-parent",
+            "actexec-grandparent",
+            "branch-a",
+            ["Done"],
+            RuntimeCompleteActivityCommandPayload.ParentOutcomeEvaluationReason,
+            SchedulerCompletionKind.ParentOutcomeEvaluation,
+            "actexec-child",
+            outcome));
+    }
+
+    [Fact]
+    public void ParentOutcomePayload_RejectsUnknownVersionDuringDeserialization()
+    {
+        var json = JsonNode.Parse(JsonSerializer.Serialize(NewParentOutcomePayload()))!.AsObject();
+        json[nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome)]![nameof(RuntimeParentOutcome.Version)] = RuntimeParentOutcome.CurrentVersion + 1;
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => json.Deserialize<RuntimeCompleteActivityCommandPayload>());
+        Assert.Equal("version", exception.ParamName);
+    }
+
     private RuntimeSchedulerWorkItem NewCompleteActivityWorkItem(int index = 1)
     {
         var payload = new RuntimeCompleteActivityCommandPayload(
@@ -73,4 +163,23 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
 
         return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, index: index, payload: JsonSerializer.SerializeToElement(payload));
     }
+
+    private RuntimeCompleteActivityCommandPayload NewParentOutcomePayload() => new(
+        NewIdentity(),
+        "node-parent",
+        "actexec-parent",
+        "actexec-grandparent",
+        "branch-a",
+        ["Done"],
+        RuntimeCompleteActivityCommandPayload.ParentOutcomeEvaluationReason,
+        SchedulerCompletionKind.ParentOutcomeEvaluation,
+        "actexec-child",
+        new RuntimeParentOutcome(
+            RuntimeParentOutcome.CurrentVersion,
+            new ActivityFault("child-fault", "masked fault message"),
+            "incident-1",
+            [
+                new ActivityChildNotifiedContext("actexec-child", "node-child", "first"),
+                new ActivityChildNotifiedContext("actexec-child", "node-child", "second")
+            ]));
 }

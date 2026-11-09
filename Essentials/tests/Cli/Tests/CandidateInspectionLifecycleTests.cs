@@ -16,7 +16,7 @@ public sealed class CandidateInspectionLifecycleTests
     [InlineData("process-flood", false)]
     [InlineData("process-timeout", true)]
     [InlineData("process-timeout", false)]
-    public async Task Post_dispatch_refusals_recheck_inputs_and_preserve_unchanged_outcomes(string outcome, bool changeInput)
+    public async Task Post_dispatch_refusals_recheck_inputs_and_follow_cleanup_precedence(string outcome, bool changeInput)
     {
         if (OperatingSystem.IsWindows())
             return;
@@ -49,17 +49,21 @@ public sealed class CandidateInspectionLifecycleTests
             if (changeInput)
                 File.AppendAllText(unusedProfile, " ");
             var refusal = await pending.WaitAsync(TimeSpan.FromSeconds(75));
-            var expectedCode = changeInput ? "composition-input-changed" : outcome switch
+            // Cleanup has its own bounded deadline and supersedes a timeout if it cannot
+            // establish termination/quiescence. Fake-clock process tests prove each outcome;
+            // this real-child test must also accept that fail-closed result under runner load.
+            string[] expectedCodes = changeInput ? ["composition-input-changed"] : outcome switch
             {
-                "host-refusal" => "resource-context-conflict",
-                "process-flood" => "candidate-response-too-large",
-                _ => "candidate-inspection-timeout"
+                "host-refusal" => ["resource-context-conflict"],
+                "process-flood" => ["candidate-response-too-large"],
+                "process-timeout" => ["candidate-inspection-timeout", "candidate-cleanup-failed"],
+                _ => throw new ArgumentOutOfRangeException(nameof(outcome))
             };
 
             Assert.Equal(!changeInput && outcome == "host-refusal" ? ToolExitCode.Refusal : ToolExitCode.ResolutionFailure,
                 refusal.ExitCode);
             Assert.Empty(refusal.Output);
-            Assert.Contains(expectedCode, refusal.Error, StringComparison.Ordinal);
+            Assert.Contains(expectedCodes, code => refusal.Error.Contains($"[{code}]", StringComparison.Ordinal));
             Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
             Assert.DoesNotContain(fixture.SourceDirectory, refusal.Text, StringComparison.Ordinal);
             Assert.False(Directory.Exists(Path.Join(fixture.SourceDirectory, "candidate")));

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,9 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         var snapshot = services.ToArray();
         try
         {
+            // Admissions, results and cancellation tombstones must share the native checkpoint transaction.
+            services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
+            services.TryAddScoped<IRuntimeModelExecutionReader, EfRuntimeModelExecutionReader>();
             RequireEfParticipants(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
 
@@ -34,7 +38,12 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             foreach (var descriptor in contracts)
                 services.Remove(descriptor);
 
-            services.TryAddScoped<EfRuntimeCheckpointCommitStore>();
+            services.TryAddScoped(provider => new EfRuntimeCheckpointCommitStore(
+                provider.GetRequiredService<RuntimeDbContext>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                provider.GetService<TimeProvider>(),
+                provider.GetService<IWorkflowExecutableRootWriteLeaseManager>())
+            { CoalescingSessions = provider.GetService<IRuntimeCoalescingSessionAccessor>() });
             var concrete = services.Single(descriptor => descriptor.ServiceType == typeof(EfRuntimeCheckpointCommitStore));
             var contract = ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(provider =>
                 provider.GetRequiredService<EfRuntimeCheckpointCommitStore>());
@@ -79,6 +88,9 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         RuntimeWorkflowDispatchStoreBackend.Find(services)!.EnsureOwnsRegisteredContracts(services);
         Require("post-commit outbox", RuntimePostCommitOutboxStoreBackend.Find(services)?.Name, RuntimePostCommitOutboxStoreBackend.EntityFramework);
         RuntimePostCommitOutboxStoreBackend.Find(services)!.EnsureOwnsRegisteredContracts(services);
+        var backgroundWork = RuntimeBackgroundActivityWorkEfRegistration.Find(services)
+            ?? throw new InvalidOperationException("Runtime checkpoint EF persistence requires the EF background activity work ledger.");
+        backgroundWork.EnsureOwnsRegisteredContract(services);
     }
 
     private static void Require(string participant, string? selected, string expected)

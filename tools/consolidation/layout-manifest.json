@@ -2760,6 +2760,15 @@
     },
     {
       "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj",
+      "target": "Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj",
+      "project_name": "Elsa.Studio.Connections",
+      "package_id": "Elsa.Studio.Connections",
+      "assembly_name": "Elsa.Studio.Connections",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
       "source": "src/extensions/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj",
       "target": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj",
       "project_name": "Elsa.Studio.Weaver.Core",

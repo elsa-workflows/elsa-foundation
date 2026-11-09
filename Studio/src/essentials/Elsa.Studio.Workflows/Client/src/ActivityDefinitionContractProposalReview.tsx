@@ -153,37 +153,36 @@ export function ActivityDefinitionContractProposalReview({
   return <section className="ad-publication-review" aria-labelledby="activity-contract-proposals-title">
     <header className="ad-publication-header">
       <div>
-        <span className="ad-kicker">Provider-inferred · explicit review</span>
-        <h2 id="activity-contract-proposals-title">Contract proposals</h2>
-        <p>Inference runs in the background for the exact saved provider revision. It never changes the draft until selected changes are applied.</p>
+        <h2 id="activity-contract-proposals-title">Suggested interface updates</h2>
+        <p>Review suggested inputs, outputs and outcomes before adding them to your activity.</p>
       </div>
       <button type="button" className="ad-primary-action" onClick={requestRecompute} disabled={!enabled || phase === "loading" || phase === "applying"}>
-        <RefreshCw size={16} aria-hidden /> Recompute
+        <RefreshCw size={16} aria-hidden /> Refresh suggestions
       </button>
     </header>
-    <ActivityDefinitionContractProposalStatus phase={phase} revision={draft.revision} failure={failure} />
+    <ActivityDefinitionContractProposalStatus phase={phase} failure={failure} />
     {proposal && phase !== "stale" ? <>
-      <dl className="ad-publication-summary" aria-label="Exact proposal binding">
+      <details className="ad-proposal-technical"><summary>Technical details</summary><dl className="ad-publication-summary" aria-label="Exact proposal binding">
         <div><dt>Draft revision</dt><dd>{proposal.revision}</dd></div>
         <div><dt>Provider</dt><dd>{proposal.providerKey}</dd></div>
         <div><dt>Provider schema</dt><dd>{proposal.providerSchemaVersion}</dd></div>
         <div><dt>Implementation fingerprint</dt><dd><code>{proposal.manifestFingerprint}</code></dd></div>
-      </dl>
+      </dl></details>
       {reviews.length ? <ActivityDefinitionContractProposalChangeList
         reviews={reviews}
         decisions={decisions}
         onDecision={(changeId, selected) => setDecisions(current => ({ ...current, [changeId]: selected }))}
-      /> : <p className="ad-publication-empty">The provider proposed no public-contract changes for this exact implementation.</p>}
+      /> : <p className="ad-publication-empty">No suggestions for this saved design.</p>}
       {proposal.diagnostics.length ? <section className="ad-publication-diagnostics" aria-labelledby="activity-proposal-diagnostics-title">
         <h3 id="activity-proposal-diagnostics-title">Proposal diagnostics</h3>
         <ActivityDiagnosticList diagnostics={proposal.diagnostics} onFocus={onFocusDiagnostic} label="Proposal diagnostics" />
       </section> : null}
-      <footer className="ad-publication-actions">
+      {reviews.length ? <footer className="ad-publication-actions">
         <span>{selectedChangeIds.length} of {reviews.length} changes selected. Destructive and unsupported changes start unselected.</span>
         <button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={phase !== "ready" || selectedChangeIds.length === 0 || hasErrors}>
-          {phase === "applying" ? "Applying exact proposal…" : "Apply selected changes"}
+          {phase === "applying" ? "Applying changes…" : "Apply selected changes"}
         </button>
-      </footer>
+      </footer> : null}
     </> : null}
   </section>;
 }

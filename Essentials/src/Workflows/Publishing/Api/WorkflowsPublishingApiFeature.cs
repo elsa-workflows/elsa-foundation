@@ -24,7 +24,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -66,6 +66,7 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
         services.TryAddScoped<RuntimeRequirementPreflight>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
+        services.TryAddScoped<ITestRunWaitOperations, TestRunWaitOperations>();
 
         // The workflow-publish + compile engine (compiler + collaborators, publication stores/activator,
         // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via

@@ -71,12 +71,37 @@ public abstract class EfDesignCommand(WorkflowsDesignDbContext db, IPersistenceA
     }
 }
 
-public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities) : EfDesignCommand(db, access, atomic), IAddWorkflowDefinitionCommand
+public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IDistributedLockProvider? lockProvider = null) : EfDesignCommand(db, access, atomic), IAddWorkflowDefinitionCommand
 {
+    /// <summary>Preserves the published constructor for callers that do not use workflow folders.</summary>
+    public EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access,
+        IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities)
+        : this(db, access, atomic, serializer, identities, null) { }
+
     public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, CancellationToken ct = default) => Execute(key, definition, draft, [], [], ct);
     public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, CancellationToken ct = default) => Execute(key, definition, draft, layout, [], ct);
-    public async Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, IReadOnlyCollection<ActivityPresentationRecord> presentation, CancellationToken ct = default)
+    public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, IReadOnlyCollection<ActivityPresentationRecord> presentation, CancellationToken ct = default) =>
+        ExecuteCore(key, definition, draft, layout, presentation, null, null, ct);
+
+    public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout, IReadOnlyCollection<ActivityPresentationRecord> presentation,
+        string? folderId, string actorId, CancellationToken ct = default) =>
+        ExecuteCore(key, definition, draft, layout, presentation, folderId, actorId, ct);
+
+    private async Task<WorkflowDefinitionCreated> ExecuteCore(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout, IReadOnlyCollection<ActivityPresentationRecord> presentation,
+        string? folderId, string? actorId, CancellationToken ct)
     {
+        if (folderId is not null)
+        {
+            if (!folderId.StartsWith("folder-", StringComparison.Ordinal) || !Guid.TryParseExact(folderId[7..], "N", out _))
+                throw new ArgumentException("The destination folder identity is invalid.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
+            if (actorId.Length > 256) throw new ArgumentException("Actor identifiers cannot exceed 256 characters.");
+        }
+        await using var hierarchy = folderId is null ? null : await EfWorkflowLibraryStore.AcquireHierarchyAsync(Access, lockProvider, ct);
+        using var lease = hierarchy is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct, hierarchy.HandleLostToken);
+        var writeToken = lease?.Token ?? ct;
         ArgumentNullException.ThrowIfNull(definition); ArgumentNullException.ThrowIfNull(draft); definition.TenantId = WriteTenant(definition.TenantId); draft.TenantId = WriteTenant(draft.TenantId);
         if (!WorkflowDefinitionIdentity.Equals(definition.Id, draft.WorkflowDefinitionId)) throw new ArgumentException("The first draft must belong to the definition.", nameof(draft));
         draft.WorkflowDefinitionId = definition.Id;
@@ -91,7 +116,28 @@ public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, 
             draft.StateSource!,
             EfDesignSupport.LayoutMaterial(layout),
             EfDesignSupport.PresentationMaterial(normalizedPresentation));
-        return await Atomic.ExecuteAsync(key, "workflow.definition.create.v1", requestMaterial, [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async token => { EfDesignSupport.SetDefinitionSearchKeys(Db, definition); Db.Definitions.Add(definition); Db.Drafts.Add(draft); var sibling = WorkflowDefinitionDraftLayout.CreateFor(identities, draft.Id, layout, normalizedPresentation); sibling.TenantId = draft.TenantId; EfDesignSupport.Stamp(sibling, Now); EfDesignSupport.SetLayout(Db, sibling, layout, normalizedPresentation); Db.DraftLayouts.Add(sibling); await Task.CompletedTask; return new WorkflowDefinitionCreated(definition.Id, draft.Id); }, ct);
+        var operation = folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1";
+        object material = folderId is null ? requestMaterial : new { requestMaterial, folderId, actorId };
+        return await Atomic.ExecuteAsync(key, operation, material, [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async token =>
+        {
+            if (folderId is not null)
+            {
+                await EfWorkflowLibraryStore.TouchFenceAsync(Db, Access, token);
+                if (!await Scoped(Db.Folders, row => row.TenantId).AnyAsync(row => row.Id == folderId, token))
+                    throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+                var hash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definition.Id));
+                Db.Organizations.Add(new WorkflowOrganizationEntity { Id = hash, TenantId = definition.TenantId,
+                    DefinitionId = definition.Id, DefinitionHash = hash, FolderId = folderId,
+                    Revision = Guid.NewGuid().ToString("N"), CreatedAt = Now, LastModifiedAt = Now });
+                Db.LibraryAudit.Add(new WorkflowLibraryAuditEntity { Id = "audit-" + Guid.NewGuid().ToString("N"),
+                    TenantId = definition.TenantId, TargetId = definition.Id, ActorId = actorId!, Operation = "workflow.create-in-folder",
+                    OperationKey = key.Value, BeforeJson = "null", AfterJson = System.Text.Json.JsonSerializer.Serialize(new { folderId }), CreatedAt = Now, LastModifiedAt = Now });
+            }
+            EfDesignSupport.SetDefinitionSearchKeys(Db, definition); Db.Definitions.Add(definition); Db.Drafts.Add(draft);
+            var sibling = WorkflowDefinitionDraftLayout.CreateFor(identities, draft.Id, layout, normalizedPresentation);
+            sibling.TenantId = draft.TenantId; EfDesignSupport.Stamp(sibling, Now); EfDesignSupport.SetLayout(Db, sibling, layout, normalizedPresentation);
+            Db.DraftLayouts.Add(sibling); return new WorkflowDefinitionCreated(definition.Id, draft.Id);
+        }, writeToken);
     }
 }
 
@@ -297,7 +343,10 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         {
             var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(request.DraftId), token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
             EfDesignSupport.EnsureExactIdentity(request.DraftId, row.Id, "workflow draft update lookup");
-            row.State = request.State; row.StateSource = stateJson;
+            row.State = request.State;
+            var source = row.Source ?? throw new InvalidOperationException("Workflow source storage is unavailable.");
+            // Preserve the domain command's locked mutation semantics; CAS is enforced by the shared row at commit.
+            EfSourceRevisions.StageSave(Db, source, WorkflowSourceRevisions.Scope(row.TenantId), row.WorkflowDefinitionId, row.Id, source.Revision, row.Id, WorkflowSourceRevisions.Profile, stateJson);
             errors = inlineEvents is null ? [] : (await inlineEvents.DeriveValidationErrorsAsync(row, token)).ToArray();
             row.LastModifiedAt = Now;
             var layout = await Scoped(Db.DraftLayouts, x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftIdLookupHash == EfDesignSupport.LookupHash(request.DraftId), token);
@@ -348,7 +397,7 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
     public const string OperationKind = "workflow.definition.permanent-delete.v1";
     private const int ProviderSafeKeyBatchSize = 200;
 
-    public async Task Execute(DesignOperationKey key, string definitionId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); var allGuards = (guards ?? []).ToArray(); var publicationGuards = allGuards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().ToArray(); await Atomic.ExecuteAsync(key, OperationKind, new PermanentDeleteRequestMaterial(definitionId), [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.VersionLayouts], async token => { if (publicationGuards.Length == 0) throw new PermanentDeletionUnavailableException(definitionId); var idKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId)); var row = await Scoped(Db.Definitions, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == idKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId); EfDesignSupport.EnsureDefinitionIdentity(definitionId, row.Id, "workflow definition permanent deletion lookup"); if (row.DeletedAt is null) throw new WorkflowDefinitionNotSoftDeletedException(row.Id); foreach (var guard in allGuards) await guard.EnsureCanDeleteAsync(row.Id, token); await RetireReconciliationMarkersAsync(row, token); Db.Definitions.Remove(row); return true; }, ct); }
+    public async Task Execute(DesignOperationKey key, string definitionId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); var allGuards = (guards ?? []).ToArray(); var publicationGuards = allGuards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().ToArray(); await Atomic.ExecuteAsync(key, OperationKind, new PermanentDeleteRequestMaterial(definitionId), [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.VersionLayouts], async token => { if (publicationGuards.Length == 0) throw new PermanentDeletionUnavailableException(definitionId); var idKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId)); var row = await Scoped(Db.Definitions, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == idKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId); EfDesignSupport.EnsureDefinitionIdentity(definitionId, row.Id, "workflow definition permanent deletion lookup"); if (row.DeletedAt is null) throw new WorkflowDefinitionNotSoftDeletedException(row.Id); foreach (var guard in allGuards) await guard.EnsureCanDeleteAsync(row.Id, token); await RetireReconciliationMarkersAsync(row, token); await Scoped(Db.Drafts, x => x.TenantId).Where(x => x.WorkflowDefinitionIdLookupHash == row.IdLookupHash).LoadAsync(token); Db.Definitions.Remove(row); return true; }, ct); }
 
     /// <summary>
     /// Removes, in the delete's own transaction, every operation marker the workflow reconciler wrote for
@@ -429,8 +478,11 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                     if (inlineEvents is not null)
                     {
                         var errors = await inlineEvents.DeriveValidationErrorsAsync(draft, token);
-                        if (errors.Count > 0)
-                            throw new DraftHasValidationErrorsException(draftId, errors);
+                        var blocking = errors
+                            .Where(error => !string.Equals(error.Severity, ValidationSeverities.Warning, StringComparison.Ordinal))
+                            .ToArray();
+                        if (blocking.Length > 0)
+                            throw new DraftHasValidationErrorsException(draftId, blocking);
                     }
 
                     var latest = await versionStore.FindLatestVersionAsync(draft.WorkflowDefinitionId, token);

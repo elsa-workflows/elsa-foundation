@@ -38,8 +38,9 @@ public sealed class Elsa3ReusableTerminalTests
         Assert.Null(complete.Intrinsic);
         Assert.Equal("fail", Text(Input(complete, "outcome")));
         Assert.Equal([("done", "Done"), ("fail", "fail")], Outcomes(result.Value));
-        Assert.Equal(("done", "done"), Assert.Single(result.Value.OutcomeMappings) is var mapping ? (mapping.SourceOutcomeReferenceKey, mapping.BoundaryOutcomeReferenceKey) : default);
+        Assert.Equal(("Done", "done"), Assert.Single(result.Value.OutcomeMappings) is var mapping ? (mapping.SourceOutcomeReferenceKey, mapping.BoundaryOutcomeReferenceKey) : default);
         Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+        GraphProviderProof.AssertCompiled(await GraphProviderProof.CompileAsync(catalog, result.Value));
     }
 
     [Fact]
@@ -55,6 +56,7 @@ public sealed class Elsa3ReusableTerminalTests
         Assert.Equal("done", Text(Input(Node(result.Value!.State, "end"), "outcome")));
         Assert.Equal([("done", "Done")], Outcomes(result.Value));
         Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+        GraphProviderProof.AssertCompiled(await GraphProviderProof.CompileAsync(catalog, result.Value));
     }
 
     [Fact]
@@ -133,32 +135,43 @@ public sealed class Elsa3ReusableTerminalTests
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics).Code);
     }
 
-    [Fact]
-    public async Task SetOutput_of_a_declared_output_writes_a_mapped_graph_variable()
+    [Theory]
+    [InlineData("Elsa.SetOutput")]
+    [InlineData("Elsa.SetName")]
+    [InlineData("Elsa.Correlate")]
+    public async Task An_activity_that_becomes_an_engine_intrinsic_refuses_the_reusable(string type)
     {
-        var output = new Elsa3WorkflowArgumentDefinition { Name = "CustomOutput", Type = "String" };
+        // Spec 246 D-7: a graph activity resolves every node to a published version and intrinsics have none, so the
+        // conversion names the node instead of letting publish fail on an unresolved dependency.
+        var set = type switch
+        {
+            "Elsa.SetOutput" => Activity("set", type, ("outputName", Literal("CustomOutput")), ("outputValue", Literal("42"))),
+            "Elsa.SetName" => Activity("set", type, ("value", Literal("name"))),
+            _ => Activity("set", type, ("correlationId", Literal("id")))
+        };
         var definition = Reusable(
-            Sequence("root", Activity("set", "Elsa.SetOutput", ("outputName", Literal("CustomOutput")), ("outputValue", Literal("42")))),
-            outputs: [output]);
-        var catalog = RealActivityCatalog.Create();
+            Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("x"))), set),
+            outputs: [new Elsa3WorkflowArgumentDefinition { Name = "CustomOutput", Type = "String" }]);
 
-        var result = await ConversionServices.ConvertAsync(catalog, definition, isReusable: true);
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported, error.Code);
+        Assert.Equal("set", error.Metadata["ActivityNodeId"]);
+        Assert.Equal(type, error.Metadata["ActivityType"]);
+    }
+
+    [Fact]
+    public async Task The_same_activity_in_a_non_reusable_workflow_still_converts()
+    {
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("set", "Elsa.SetOutput", ("outputName", Literal("CustomOutput")), ("outputValue", Literal("42")))),
+            outputs: [new Elsa3WorkflowArgumentDefinition { Name = "CustomOutput", Type = "String" }]);
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: false);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        var variableKey = Elsa3ReusableOutputWriteRewrite.VariableKey("CustomOutput");
-        var set = Node(result.Value!.State, "set");
-        Assert.Equal(Elsa3IntrinsicContracts.Set, set.ActivityVersionId);
-        Assert.Equal(AuthoredWorkflowIntrinsicKind.Set, set.Intrinsic!.Kind);
-        Assert.Equal(variableKey, set.Intrinsic.Variable!.ReferenceKey);
-        Assert.Contains(result.Value.State.Variables, variable => variable.ReferenceKey == variableKey);
-        var mapping = Assert.Single(result.Value.OutputMappings);
-        Assert.Equal(("CustomOutput", variableKey), (mapping.OutputReferenceKey, mapping.VariableReferenceKey));
-
-        var manifest = Elsa3.Mapping.Services.Elsa3ReusableActivityImportMaterializer.BuildGraphManifest(result.Value);
-        var manifestMapping = Assert.Single(manifest.GetProperty("outputMappings").EnumerateArray());
-        Assert.Equal("CustomOutput", manifestMapping.GetProperty("outputReferenceKey").GetString());
-        Assert.Equal(variableKey, manifestMapping.GetProperty("source").GetProperty("value").GetProperty("referenceKey").GetString());
-        Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
     }
 
     [Fact]

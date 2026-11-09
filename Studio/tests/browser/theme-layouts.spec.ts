@@ -63,3 +63,31 @@ test("classic layout keeps the docked designer", async ({ page }) => {
   await expect(page.getByRole("separator", { name: "Resize activities panel" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add step" })).toHaveCount(0);
 });
+
+test("classic layout hides the minimap while a one-step graph fits the canvas", async ({ page }) => {
+  await openFlowchartWithOneStep(page, "classic");
+  await expect(page.locator(".react-flow")).toBeVisible();
+  await expect.poll(async () => page.locator(".react-flow").evaluate(element => {
+    const box = (element as HTMLElement).getBoundingClientRect();
+    return box.width > 100 && box.height > 100;
+  })).toBe(true);
+  await expect(page.locator(".react-flow__node")).toHaveCount(1);
+  await expect(page.locator(".react-flow__minimap")).toHaveCount(0);
+});
+
+test("classic layout shows the minimap once the graph outgrows the canvas", async ({ page }) => {
+  await openFlowchartWithOneStep(page, "classic");
+  await addWriteLinesFromPalette(page, 4);
+  await expect(page.locator("[data-graph-node-id]")).toHaveCount(5);
+  await expect.poll(async () => page.locator(".react-flow__minimap").count()).toBe(1);
+});
+
+async function addWriteLinesFromPalette(page: Page, count: number) {
+  const writeLine = page.getByRole("treeitem", { name: /Write line/ });
+  if (await writeLine.count() === 0) {
+    await page.getByRole("treeitem", { name: /Primitives/i }).click();
+  }
+  for (let index = 0; index < count; index += 1) {
+    await writeLine.click();
+  }
+}

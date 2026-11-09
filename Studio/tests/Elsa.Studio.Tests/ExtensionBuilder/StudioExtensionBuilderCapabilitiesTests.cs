@@ -1,3 +1,4 @@
+using Elsa.Studio.Api.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -15,7 +16,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// standing in for the backend host so the status mapping, the <c>extension-builder:read</c> gate, and the "zero
 /// outbound calls when unconfigured" fail-closed guarantee are asserted against the wire.
 /// </summary>
-public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
+public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncLifetime
 {
     private const string CapabilitiesRoute = StudioExtensionBuilderBridge.RouteGroup + StudioExtensionBuilderBridge.CapabilitiesRoute;
     private const string BackendCapabilitiesPath = StudioExtensionBuilderBridge.BackendRoot + "/capabilities";
@@ -107,7 +108,7 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
     {
         // module-management:read does NOT satisfy the Extension Builder capabilities gate — the surfaces are gated
         // independently, so a module-only holder is forbidden (403).
-        var (client, backend) = await StartAuthenticatedHostWithBackendAsync(StudioBridgeAuth.ModuleManagementReadPermission);
+        var (client, backend) = await StartAuthenticatedHostWithBackendAsync(StudioBridgeAuthorization.ModuleManagementReadPermission);
 
         var response = await client.GetAsync(CapabilitiesRoute);
 
@@ -171,7 +172,9 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
         return _app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

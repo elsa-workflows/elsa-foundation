@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "loading": {
+    "loadMode": "HostIntegrated",
+    "scope": "DependencyClosure",
+    "reason": "Owned deterministic M1 qualification against explicitly declared host-provided Core contracts."
+  }
+}

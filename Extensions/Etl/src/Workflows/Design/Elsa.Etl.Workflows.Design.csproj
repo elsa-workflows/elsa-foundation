@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />
+    <ProjectReference Include="../../Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
+    <ProjectReference Include="../Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Etl.Tests" />
+  </ItemGroup>
+</Project>

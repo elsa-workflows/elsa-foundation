@@ -1,0 +1,19 @@
+{
+  "packages": [
+    {
+      "name": "Bpmn.Model/0.5.0",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+      "standardProbeReleasedPackageEqual": true
+    },
+    {
+      "name": "Bpmn.Semantics/0.5.0",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+      "standardProbeReleasedPackageEqual": true
+    },
+    {
+      "name": "Bpmn.Interchange/0.5.0",
+      "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9",
+      "standardProbeReleasedPackageEqual": true
+    }
+  ]
+}

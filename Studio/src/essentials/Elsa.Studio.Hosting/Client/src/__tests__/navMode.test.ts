@@ -1,0 +1,133 @@
+// @vitest-environment node
+
+import { describe, expect, it } from "vitest";
+import { getThemeNavMode, isNavModePreference, navModePreferences, resolveNavMode } from "../app/themes/navMode";
+import { builtInThemeDefinitions } from "../app/themes/presets";
+import { studioThemeLayouts } from "../sdk/themeLayout";
+import { read, ruleBody } from "./themeTestUtils";
+
+const stylesCss = read("../app/styles.css");
+const mobileShellCss = stylesCss.match(/@media \(max-width: 1024px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
+const phoneShellCss = stylesCss.match(/@media \(max-width: 640px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
+const layoutsCss = read("../app/themes/layouts.css").replace(/\/\*[\s\S]*?\*\//g, "");
+// The desktop media block closes at the first column-zero brace; the status bar rules follow it.
+const desktopEnd = layoutsCss.indexOf("\n}\n");
+const desktopCss = layoutsCss.slice(0, desktopEnd);
+const everyWidthCss = layoutsCss.slice(desktopEnd);
+
+const topNav = 'html[data-nav-mode="top"]';
+const selectors = (css: string) =>
+  [...css.matchAll(/html\[[^{]+(?=\{)/g)].flatMap(match => match[0].split(",").map(selector => selector.trim()));
+const zIndex = (body: string) => Number(body.match(/z-index:\s*(\d+);/)?.[1]);
+
+describe("navigation mode resolution", () => {
+  it.each(studioThemeLayouts)("lets Left and Top override the %s layout, and Theme default follow it", layout => {
+    expect(resolveNavMode(layout, "left")).toBe("left");
+    expect(resolveNavMode(layout, "top")).toBe("top");
+    expect(resolveNavMode(layout, "theme")).toBe(layout === "workbench" ? "top" : "left");
+  });
+
+  it("defaults every built-in theme to the sidebar except Schematic", () => {
+    expect(builtInThemeDefinitions.filter(theme => getThemeNavMode(theme.layout) === "top").map(theme => theme.id)).toEqual(["schematic"]);
+  });
+
+  it("accepts only the three preferences from storage", () => {
+    expect(navModePreferences.every(isNavModePreference)).toBe(true);
+    expect([null, "", "bottom", "workbench"].some(isNavModePreference)).toBe(false);
+  });
+});
+
+describe("navigation mode stylesheet", () => {
+  it("keys the menubar and status bar on the navigation mode, never on a theme layout", () => {
+    const menubarParts = /\.(sidebar-top|sidebar-search|sidebar-collapse-toggle|nav-children|nav-item-group|nav-icon-tile|studio-statusbar)\b/;
+
+    expect(selectors(layoutsCss).filter(selector => selector.includes("data-theme-layout") && menubarParts.test(selector))).toEqual([]);
+    expect(selectors(layoutsCss).some(selector => selector.startsWith('html[data-theme-layout="workbench"] .sidebar'))).toBe(false);
+    expect(selectors(layoutsCss).filter(selector => selector.includes("data-theme-layout") && selector.includes("data-nav-mode"))).toEqual([]);
+  });
+
+  // A layout that insets its main frame states the inset once; the start side follows the navigation.
+  it("keeps the editorial desk margin on the sheet's start side only when no sidebar provides it", () => {
+    const editorial = 'html[data-theme-layout="editorial"]';
+
+    expect(ruleBody(layoutsCss, `${editorial} .studio-shell`)).toMatch(/--shell-frame-inset:\s*10px;/);
+    expect(ruleBody(layoutsCss, `${editorial} .main-frame`)).toMatch(
+      /margin:\s*var\(--shell-frame-inset\) var\(--shell-frame-inset\) var\(--shell-frame-inset\) var\(--shell-frame-inset-start, 0\);/);
+    expect(ruleBody(layoutsCss, `${topNav} .studio-shell`)).toMatch(/--shell-frame-inset-start:\s*var\(--shell-frame-inset, 0\);/);
+  });
+
+  it("confines the menubar to desktop widths and renders the status bar at every width", () => {
+    const everyWidth = selectors(everyWidthCss);
+
+    expect(selectors(desktopCss)).toContain(`${topNav} .sidebar`);
+    expect(selectors(desktopCss).some(selector => selector.includes(".studio-statusbar"))).toBe(false);
+    expect(everyWidth.length).toBeGreaterThan(0);
+    expect(everyWidth.every(selector => selector.startsWith(`${topNav} .studio-statusbar`))).toBe(true);
+  });
+
+  // Floating and editorial restyle `.sidebar` at the same specificity, so source order decides.
+  it.each(["floating", "editorial"])("places the menubar rules after the %s layout's sidebar rules", layout => {
+    const layoutSidebar = desktopCss.lastIndexOf(`html[data-theme-layout="${layout}"] .sidebar`);
+
+    expect(layoutSidebar).toBeGreaterThan(-1);
+    expect(desktopCss.indexOf(`${topNav} .sidebar {`)).toBeGreaterThan(layoutSidebar);
+  });
+
+  it("lifts the menubar above the sticky topbar so dropdowns clear it, and lets a long navigation wrap", () => {
+    const menubar = ruleBody(layoutsCss, `${topNav} .sidebar`);
+
+    expect(menubar).toMatch(/position:\s*relative;/);
+    expect(zIndex(menubar)).toBeGreaterThan(zIndex(ruleBody(stylesCss, ".topbar")));
+    expect(menubar).toMatch(/flex-wrap:\s*wrap;/);
+    expect(menubar).toMatch(/overflow:\s*visible;/);
+  });
+
+  it("opens More tools out of flow and keeps nested links inside the scrollable dropdown", () => {
+    const overlay = ruleBody(desktopCss, `${topNav} :is(.nav-children, .nav-disclosure-panel)`);
+    const disclosure = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel`);
+
+    expect(ruleBody(desktopCss, `${topNav} .nav-section-more`)).toMatch(/position:\s*relative;/);
+    expect(ruleBody(desktopCss, `${topNav} .nav-disclosure`)).toMatch(/width:\s*auto;/);
+    expect(overlay).toMatch(/position:\s*absolute;/);
+    expect(overlay).toMatch(/top:\s*100%;/);
+    expect(zIndex(overlay)).toBeGreaterThan(0);
+    expect(disclosure).toMatch(/max-height:\s*calc\(100dvh - 110px\);/);
+    expect(disclosure).toMatch(/overflow-y:\s*auto;/);
+    const nestedChildren = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-children`);
+    const nestedChildLayout = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-item-group > .nav-children`);
+    expect(nestedChildren).toMatch(/position:\s*static;/);
+    expect(nestedChildLayout).toMatch(/display:\s*grid;/);
+  });
+
+  it("keeps narrow-screen navigation in a compact, horizontally reachable strip", () => {
+    expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
+    expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/overflow-x:\s*auto;/);
+    expect(ruleBody(mobileShellCss, ".sidebar-collapse-toggle")).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="top"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, ".nav-section")).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, ".nav-item-group")).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, ".nav-children")).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, ".nav-heading")).toMatch(/display:\s*none;/);
+    expect(ruleBody(phoneShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
+    expect(ruleBody(stylesCss, ".sidebar-collapsed .sidebar-search")).toMatch(/display:\s*none;/);
+  });
+
+  it("moves left-nav account access to the top bar on narrow screens", () => {
+    expect(ruleBody(stylesCss, ".topbar-actions .user-menu")).toMatch(/display:\s*none;/);
+    expect(ruleBody(stylesCss, 'html[data-nav-mode="top"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
+  });
+
+  it("keeps left-rail hierarchy and environment details quiet and token-based", () => {
+    expect(ruleBody(stylesCss, ".sidebar-top")).toMatch(/radial-gradient\([^;]*var\(--studio-accent\)/);
+    expect(ruleBody(stylesCss, ".nav-children")).toMatch(/border-left:\s*1px solid color-mix\(in srgb, var\(--studio-border\)/);
+    expect(ruleBody(stylesCss, ".nav-section a.nav-child.active")).toMatch(/background:\s*color-mix\(in srgb, var\(--studio-accent\) 8%, transparent\)/);
+    expect(ruleBody(stylesCss, ".sidebar-environment")).toMatch(/grid-template-columns:\s*28px minmax\(0, 1fr\)/);
+    expect(ruleBody(stylesCss, ".sidebar-status-dot")).toMatch(/background:\s*var\(--studio-text-muted\)/);
+    expect(ruleBody(stylesCss, ".sidebar-status-dot")).not.toMatch(/var\(--success\)/);
+    expect(stylesCss).toMatch(/sidebar-collapsed \.sidebar-environment-copy/);
+    expect(stylesCss).toMatch(/sidebar-collapsed \.sidebar-account \.user-menu-name/);
+  });
+});

@@ -34,6 +34,8 @@ public sealed class WorkflowDefinitionProjectionTests
         {
             var ordinal = int.Parse(view.Id["definition-".Length..]);
             Assert.Equal($"draft-{ordinal}", RequiredProperty<string>(view, "DraftId"));
+            Assert.Equal($"version-{ordinal}-1", RequiredProperty<string>(view, "DraftSourceVersionId"));
+            Assert.Equal("1.0.0", RequiredProperty<string>(view, "DraftSourceVersion"));
             Assert.Equal($"version-{ordinal}-2", RequiredProperty<string>(view, "LatestVersionId"));
             Assert.Equal("2.0.0", RequiredProperty<string>(view, "LatestVersion"));
             Assert.Equal(2, RequiredProperty<int>(view, "VersionCount"));
@@ -140,7 +142,10 @@ public sealed class WorkflowDefinitionProjectionTests
                         $"draft-{ordinal}",
                         $"version-{ordinal}-2",
                         "2.0.0",
-                        2);
+                        2,
+                        $"version-{ordinal}-1",
+                        "1.0.0",
+                        [new($"version-{ordinal}-1", "1.0.0"), new($"version-{ordinal}-2", "2.0.0")]);
                 })
                 .ToArray();
             return Task.FromResult(projections);

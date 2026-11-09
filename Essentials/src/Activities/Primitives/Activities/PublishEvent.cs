@@ -32,6 +32,7 @@ namespace Elsa.Activities.Primitives.Activities;
 [RefusesSecretBinding(nameof(EventName), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(Payload), SecretBindingRefusalReason.PersistedByActivity)]
+[Activity(Icon = "Radio")]
 [ActivityOutcome(ActivityOutcomes.Done)]
 public sealed class PublishEvent(IPublishStimulusStager stager) : Activity<ActivityUnit>
 {

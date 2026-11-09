@@ -1,10 +1,34 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStore<InMemoryActivityExecutionStateStore.ActivityExecutionStateKey, ActivityExecutionState>, IActivityExecutionStateStore
 {
+    private readonly object _coordinationBinding = new();
+    private InMemoryRuntimeCheckpointStoreState? _checkpointState;
+    internal bool Coordinates(InMemoryRuntimeCheckpointStoreState state) => ReferenceEquals(_checkpointState, state);
+    internal void BindCheckpointState(InMemoryRuntimeCheckpointStoreState state)
+    {
+        lock (_coordinationBinding)
+        {
+            if (_checkpointState is not null && !ReferenceEquals(_checkpointState, state))
+                throw new NotSupportedException("A native activity store cannot join two checkpoint coordination boundaries.");
+            _checkpointState = state;
+        }
+    }
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId, InMemoryRuntimeCheckpointStoreState owner)
+    {
+        if (_checkpointState is not null && !ReferenceEquals(_checkpointState, owner))
+            throw new NotSupportedException("Bulk activity cleanup requires the owning checkpoint boundary.");
+        var states = SnapshotValues(state =>
+            StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId));
+        foreach (var state in states)
+            Remove(new ActivityExecutionStateKey(workflowExecutionId, state.Execution.ActivityExecutionId));
+    }
+
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -12,7 +36,13 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
         state.EnsureSupersessionCompatible();
 
         var key = new ActivityExecutionStateKey(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
-        return new(Save(key, state));
+        InMemoryRuntimeCheckpointStoreState coordination;
+        lock (_coordinationBinding)
+        {
+            if (_checkpointState is null) return new(Save(key, state));
+            coordination = _checkpointState;
+        }
+        return coordination.ExecuteWriteGateAsync(_ => ValueTask.FromResult(Save(key, state)), cancellationToken);
     }
 
     public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)

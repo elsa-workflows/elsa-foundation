@@ -20,15 +20,22 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { WorkflowRuntimePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
-import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
+import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
+import { createLocalNotificationStorage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/notificationStorage";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import { NotificationCenter } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/NotificationCenter";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
   createEndpointContext,
+  createNotificationController,
   type StudioActivityDescriptor,
   type StudioAiContributionApi,
   type StudioEndpointContext,
@@ -40,7 +47,8 @@ import type {
   ActivityCatalogItem,
   ActivityExecutionStateSummary,
   ActivityNode,
-  WorkflowDraft
+  WorkflowDraft,
+  WorkflowTestRunView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
@@ -56,6 +64,8 @@ import { createPublicationReview, type PublicationReviewState, type PublicationV
 import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+import { ConnectionPickerEditor } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor";
+import { SecretPickerEditor } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretPickerEditor";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
@@ -66,15 +76,22 @@ import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionVersionView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
-import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
+import { applyMaterialVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
+import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
+import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const scalarInputsFixture = searchParams.get("mode") === "scalar-inputs";
+const secretReferenceFixture = searchParams.get("mode") === "secret-reference";
+const connectionReferenceFixture = searchParams.get("mode") === "connection-reference";
+const referenceFixture = secretReferenceFixture || connectionReferenceFixture;
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const inputEvidenceFixture = searchParams.get("mode") === "input-evidence";
 const runDetailFixture = searchParams.get("mode") === "run-detail" || inputEvidenceFixture;
@@ -92,12 +109,14 @@ const activityInspectorTabsFixture = searchParams.get("mode") === "activity-insp
 const validationLabelsFixture = searchParams.get("mode") === "validation-labels"
   || searchParams.get("mode") === "validation-labels-before";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
+const workflowPublishChoiceFixture = searchParams.get("mode") === "workflow-publish-choice";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
 const activityDuplicateFixture = searchParams.get("mode") === "activity-duplicate";
 const activityDuplicateEditorFixture = searchParams.get("mode") === "activity-duplicate-editor";
 const navPlacementFixture = searchParams.get("mode") === "nav-placement";
 const navBeforeFixture = searchParams.get("mode") === "nav-before";
+const homeDashboardFixture = searchParams.get("mode") === "home-dashboard";
 const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
 const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
 const settingsFixture = searchParams.get("mode") === "settings";
@@ -107,6 +126,11 @@ const expressionToolingUnavailable = searchParams.get("tooling") === "unavailabl
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
 const referenceJavaScriptExpression = `formatTotal(total)${" + total".repeat(248)}`;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function DirectWorkflowDefinitions({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const session = useWorkflowDefinitionBrowseSession(context);
+  return <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} session={session} />;
+}
 const endpointContext = createEndpointContext(window.location.origin);
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
@@ -116,6 +140,7 @@ const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentT
 function WorkflowToolbarFixture() {
   const [status, setStatus] = useState("");
   const [autosave, setAutosave] = useState(true);
+  const [runStatus, setRunStatus] = useState("");
   const [selectedAction, setSelectedAction] = useState("");
   const selectAction = (label: string) => () => setSelectedAction(label);
   return (
@@ -135,8 +160,8 @@ function WorkflowToolbarFixture() {
         onAutoLayout={selectAction("Auto-layout")}
         onBack={selectAction("Definitions")}
         onSave={selectAction("Save")}
-        onPublish={selectAction("Review & publish")}
-        onRun={selectAction("Run")}
+        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
+        onRun={selectAction("Test Run")}
         canRun
         runTitle="Run a transient test of the current design"
         moreActions={[
@@ -152,14 +177,27 @@ function WorkflowToolbarFixture() {
           ] }
         ]}
       />
+      {runStatus ? <WorkflowRuntimePanel testRun={toolbarTestRun(runStatus)} onOpenRun={selectAction("Open run")} /> : null}
       <section className="browser-toolbar-controls" aria-label="Toolbar test controls">
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
-          {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+          {["", "Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+        </select></label>
+        <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
+          {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}
         </select></label>
         <p>Selected action: {selectedAction || "None"}</p>
       </section>
     </main>
   );
+}
+
+function toolbarTestRun(state: string): WorkflowTestRunView {
+  return {
+    testRunId: "toolbar-test-run", definitionId: "toolbar-definition", definitionVersionId: "draft:1",
+    status: state === "rejected" ? "Rejected" : "DispatchAccepted",
+    commandDispatchStatus: state === "runtime-issue" ? "AcceptedButFaulted" : "Accepted",
+    incidentCount: state === "incidents" ? 2 : 0
+  };
 }
 
 function ActivityDefinitionRoutesFixture() {
@@ -579,20 +617,60 @@ const scalarInputDescriptor: StudioActivityDescriptor = {
   ports: []
 };
 
+const secretReferenceDescriptor: StudioActivityDescriptor = {
+  ...scalarInputDescriptor,
+  inputs: [
+    ...scalarInputDescriptor.inputs,
+    { name: "ApiToken", displayName: "API token", typeName: "System.String", uiHint: "singleline", isWrapped: true, defaultSyntax: "Literal", isBrowsable: true }
+  ]
+};
+
+const connectionReferenceDescriptor: StudioActivityDescriptor = {
+  ...scalarInputDescriptor,
+  displayName: "Send HTTP Request",
+  inputs: [{ name: "Connection", displayName: "Connection", typeName: "ConnectionReference", uiHint: "connection-picker",
+    connectionType: "http", isWrapped: true, defaultSyntax: "Connection", isBrowsable: true }]
+};
+
+const connectionPickerContext = createEndpointContext(searchParams.get("backend") ?? window.location.origin);
+const connectionPickerExpressionEditor: StudioExpressionEditorContribution = {
+  id: "browser.connection-reference-editor",
+  order: 100,
+  supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
+  surfaces: { inline: props => <ConnectionPickerEditor {...props} endpointContext={connectionPickerContext} /> },
+  createDefaultValue: () => null
+};
+
 const scalarInputValues: Record<string, unknown> = {
   PolicyReference: "abc", ProposedPremium: 100.5, RenewalCount: 1, Rate: 0.5,
   Duration: "00:00:30", Priority: "normal", Identifier: "", Notes: "", References: []
 };
 
+const secretPickerExpressionEditor: StudioExpressionEditorContribution = {
+  id: "browser.secret-reference-editor",
+  order: 100,
+  supports: context => context.syntax === "Secret",
+  surfaces: {
+    inline: props => <SecretPickerEditor {...props} endpointContext={endpointContext} />
+  },
+  createDefaultValue: () => null
+};
+
 function Fixture() {
+  const activeScalarDescriptor = connectionReferenceFixture ? connectionReferenceDescriptor
+    : secretReferenceFixture ? secretReferenceDescriptor : scalarInputDescriptor;
   const [activity, setActivity] = useState<ActivityNode>({
     nodeId: "http-endpoint-1",
     activityVersionId: "http-endpoint-v1",
-    ...(scalarInputsFixture ? Object.fromEntries(scalarInputDescriptor.inputs.map(input => [
+    ...(scalarInputsFixture || referenceFixture ? Object.fromEntries(activeScalarDescriptor.inputs.map(input => [
       input.name[0]!.toLowerCase() + input.name.slice(1),
-      { typeName: input.typeName, expression: { type: "Literal", value: scalarInputValues[input.name] } }
+      { typeName: input.typeName, expression: input.name === "Connection"
+        ? { type: "Connection", value: null }
+        : input.name === "ApiToken"
+          ? { type: "Secret", value: null }
+          : { type: "Literal", value: scalarInputValues[input.name] } }
     ])) : {}),
-    inputs: scalarInputsFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
+    inputs: scalarInputsFixture || referenceFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
     outputs: [],
     structure: null,
     ...(dictionaryFixture ? {
@@ -613,7 +691,15 @@ function Fixture() {
     } : {})
   });
 
-  const activeDescriptor = scalarInputsFixture ? scalarInputDescriptor : dictionaryFixture ? dictionaryDescriptor : descriptor;
+  const activeDescriptor = scalarInputsFixture
+    ? scalarInputDescriptor
+    : connectionReferenceFixture
+      ? connectionReferenceDescriptor
+      : secretReferenceFixture
+        ? secretReferenceDescriptor
+        : dictionaryFixture
+          ? dictionaryDescriptor
+          : descriptor;
 
   return (
     <main className="wf-editor browser-fixture">
@@ -621,15 +707,18 @@ function Fixture() {
         <h1>Workflow designer</h1>
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
       </div>
-      <aside className={`wf-inspector browser-inspector${scalarInputsFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
+      <aside className={`wf-inspector browser-inspector${scalarInputsFixture || referenceFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
         <h2>{activeDescriptor.displayName}</h2>
         {scalarInputsFixture ? null : <div className="browser-inspector-spacer" aria-hidden="true" />}
         <ActivityPropertiesPanel
           activity={activity}
           descriptor={activeDescriptor}
-          editors={scalarInputsFixture ? builtInPropertyEditors : []}
-          expressionEditors={[]}
-          expressionDescriptors={expressionDescriptors}
+          editors={scalarInputsFixture || referenceFixture ? builtInPropertyEditors : []}
+          expressionEditors={connectionReferenceFixture ? [connectionPickerExpressionEditor]
+            : secretReferenceFixture ? [secretPickerExpressionEditor] : []}
+          expressionDescriptors={connectionReferenceFixture
+            ? [{ type: "Connection", displayName: "Connection", editingMode: "reference" }, ...expressionDescriptors]
+            : expressionDescriptors}
           expressionDescriptorStatus="ready"
           descriptorStatus="ready"
           visibleVariables={[]}
@@ -846,6 +935,15 @@ function LazyBoundaryFixture() {
 
 function MoveDefinitionsFixture() {
   const [moved, setMoved] = useState(false);
+  // The host owns notifications at runtime; the fixture stands in for it with a localStorage-backed
+  // controller so results survive a page reload the way they do in the real shell.
+  const [notifications] = useState(() => {
+    const controller = createNotificationController({ storage: createLocalNotificationStorage() });
+    controller.setScope("fixture");
+    setNotifications(controller.api);
+    return controller;
+  });
+  const navigateFixture = useCallback((path: string) => window.history.pushState({}, "", path), []);
   const movedRef = useRef(false);
   const destinationRef = useRef<string | null | undefined>(undefined);
   const movedDefinitionIdRef = useRef<string | undefined>(undefined);
@@ -913,7 +1011,9 @@ function MoveDefinitionsFixture() {
 
   return <main className="wf-editor browser-fixture" data-moved={moved}>
     <h1>Workflow definitions</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <NotificationCenter controller={notifications} navigate={navigateFixture} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
+    <ToastHost controller={notifications} navigate={navigateFixture} />
   </main>;
 }
 
@@ -1061,7 +1161,7 @@ function FolderRestructureFixture() {
 
   return <main className="wf-editor browser-fixture">
     <h1>Workflow folders</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
   </main>;
 }
 
@@ -1101,7 +1201,18 @@ function RunDetailFixture() {
             </section>
             <div className="wf-side-resize-spacer" />
             <aside className="wf-instance-inspector" aria-label="Run details">
-              <header><h3>Activity details</h3></header>
+              <header>
+                <h3>Activity details</h3>
+                {layout.mode === "desktop" ? (
+                  <button
+                    type="button"
+                    aria-label={layout.inspectorMaximized ? "Restore run details panel" : "Maximize run details panel"}
+                    onClick={layout.toggleInspectorMaximized}
+                  >
+                    {layout.inspectorMaximized ? "Restore" : "Maximize"}
+                  </button>
+                ) : null}
+              </header>
               {inputEvidenceFixture ? <div className="wf-instance-tab-content"><ActivityInputEvidenceFixture context={endpointContext} /></div> : <div className="wf-instance-section">Evaluated inputs</div>}
             </aside>
           </div>
@@ -1498,8 +1609,26 @@ function publicationReview(): PublicationReviewState {
     slots,
     catalog: []
   });
+  const triggerKey = "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7";
+  const conflictOutcome = searchParams.get("outcome") === "conflict";
+  const conflict = conflictOutcome
+    ? {
+        key: triggerKey,
+        cardinality: "exclusive" as const,
+        publicationId: "publication-default",
+        slotName: "default",
+        ...(searchParams.get("descriptor") === "0" ? {} : { descriptor: "GET /orders/{id}" })
+      }
+    : null;
   return {
     ...review,
+    // Spec 261 FR-515: `warnings=1` lists the replay-safe warnings a compensation scope with Write Line steps gets.
+    validationWarnings: searchParams.get("warnings") === "1"
+      ? [
+        "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.",
+        "The compensation of \"Charge card\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own."
+      ]
+      : review.validationWarnings,
     exactVersionSupported: searchParams.get("exact") !== "unsupported",
     versionPreflightSupported: searchParams.get("exact") !== "unsupported",
     proposedVersion: "2.0.0",
@@ -1512,10 +1641,10 @@ function publicationReview(): PublicationReviewState {
       resolvedAction: "replace",
       policySource: "host",
       policyRevision: 12,
-      canActivate: true,
-      claims: [{ key: "http:/orders", cardinality: "exclusive" }],
-      triggers: [{ change: "added", key: "http:/orders", cardinality: "exclusive" }],
-      conflicts: []
+      canActivate: !conflictOutcome,
+      claims: [{ key: triggerKey, cardinality: "exclusive" }],
+      triggers: [{ change: "added", key: triggerKey, cardinality: "exclusive" }],
+      conflicts: conflict ? [conflict] : []
     },
     versionPreflight: {
       isReady: true,
@@ -1611,17 +1740,29 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !userMenuFixture) {
+const materialVariant = searchParams.get("theme") === "material";
+const classicVariant = searchParams.get("theme") === "classic";
+const fixtureTheme = classicVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
+if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !homeDashboardFixture && searchParams.get("mode") !== "definition-versions" && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
     }
   }
+}
+if (materialVariant) {
+  document.documentElement.dataset.themeMaterial = "browser-fixture";
+  applyMaterialVariables(document.documentElement, {
+    cssVariables: {
+      "--studio-material-send-bg": "rgb(31, 87, 123)",
+      "--studio-material-send-text": "rgb(255, 255, 255)",
+      "--studio-material-edge": "rgb(16, 48, 68)"
+    }
+  });
 }
 if (activityIconsFixture && searchParams.get("host-override") === "1") {
   document.documentElement.style.setProperty("--studio-wf-activity-terminal", "rgb(255, 17, 0)");
@@ -1633,6 +1774,76 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
+  if (moveDefinitionsFixture) await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+  if (searchParams.get("mode") === "intrinsic-labels") {
+    const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
+    root.render(<IntrinsicLabelsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "http-progressive-disclosure") {
+    const { HttpProgressiveDisclosureFixture } = await import("./httpProgressiveDisclosureFixture");
+    root.render(<HttpProgressiveDisclosureFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "connections") {
+    const { ConnectionsFixture } = await import("./connectionsFixture");
+    root.render(<ConnectionsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-authorization-unavailable") {
+    const { WorkflowAuthorizationUnavailableFixture } = await import("./workflowAuthorizationUnavailableFixture");
+    root.render(<WorkflowAuthorizationUnavailableFixture />);
+    return;
+  }
+  if (workflowPublishChoiceFixture) {
+    const { WorkflowPublishChoiceFixture } = await import("./workflowPublishChoiceFixture");
+    root.render(<WorkflowPublishChoiceFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-creation-readiness") {
+    const { WorkflowCreationReadinessFixture } = await import("./workflowCreationReadinessFixture");
+    root.render(<WorkflowCreationReadinessFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "activity-authoring") {
+    const { ActivityAuthoringFixture } = await import("./activityAuthoringFixture");
+    root.render(<ActivityAuthoringFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "studio-scroll-containment") {
+    const { StudioScrollContainmentFixture } = await import("./studioScrollContainmentFixture");
+    root.render(<StudioScrollContainmentFixture />);
+
+    return;
+  }
+  if (searchParams.get("mode") === "compensation-scope") {
+    const { CompensationScopeFixture } = await import("./compensationScopeFixture");
+    const view = searchParams.get("view");
+    const views = ["run", "waiting", "retry", "nested", "confirmed", "loop", "actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"] as const;
+    root.render(<CompensationScopeFixture view={views.find(candidate => candidate === view) ?? "author"} outcome={searchParams.get("outcome") ?? undefined} />);
+    return;
+  }
+  if (searchParams.get("mode") === "incident-diagnostics") {
+    const { IncidentDiagnosticsFixture } = await import("./incidentDiagnosticsFixture");
+    root.render(<IncidentDiagnosticsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "definition-versions") {
+    const { DefinitionVersionsFixture } = await import("./definitionVersionsFixture");
+    root.render(<DefinitionVersionsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-definition-browse") {
+    const { WorkflowDefinitionBrowseFixture } = await import("./workflowDefinitionBrowseFixture");
+    root.render(<WorkflowDefinitionBrowseFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-library") {
+    const { WorkflowLibraryFixture } = await import("./workflowLibraryFixture");
+    root.render(<WorkflowLibraryFixture />);
+    return;
+  }
   if (navBeforeFixture) {
     const { NavBeforeFixture } = await import("./navBeforeFixture");
     root.render(<NavBeforeFixture />);
@@ -1663,9 +1874,19 @@ async function renderRequestedFixture() {
     root.render(<HomeFixture />);
     return;
   }
+  if (homeDashboardFixture) {
+    const { HomeDashboardFixture } = await import("./homeDashboardFixture");
+    root.render(<HomeDashboardFixture />);
+    return;
+  }
   if (activityDuplicateFixture) {
     const { ActivityDuplicateFixture } = await import("./activityDuplicateFixture");
     root.render(<ActivityDuplicateFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-templates") {
+    const { WorkflowTemplatesFixture } = await import("./workflowTemplatesFixture");
+    root.render(<WorkflowTemplatesFixture />);
     return;
   }
   if (activityDuplicateEditorFixture) {
@@ -1677,6 +1898,10 @@ async function renderRequestedFixture() {
     const { ValidationLabelsFixture } = await import("./validationLabelsFixture");
     root.render(<ValidationLabelsFixture />);
     return;
+  }
+
+  if (activityDefinitionsFixture) {
+    await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css");
   }
 
   root.render(

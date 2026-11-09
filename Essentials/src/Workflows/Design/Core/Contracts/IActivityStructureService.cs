@@ -12,7 +12,17 @@ public interface IActivityStructureService
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
 
+    /// <summary>Projects the owning handler's structure inputs and consumed ordinary-input keys.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
+
+    /// <summary>
+    /// The direct children of <paramref name="activity"/> whose results its structure handler guarantees are
+    /// committed before the direct child <paramref name="childNodeId"/> runs, most relevant first; see
+    /// <see cref="IActivityStructureHandler.ChildrenCompletedBefore"/>.
+    /// </summary>
+    IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
 
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 

@@ -113,6 +113,33 @@ internal static class Elsa3TypedValues
             ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = literal }
         });
 
+    /// <summary>A literal-bound typed value of type <paramref name="typeAlias"/> holding <paramref name="literal"/> as JSON.</summary>
+    public static JsonElement CreateLiteral(string typeAlias, JsonNode? literal) =>
+        JsonSerializer.SerializeToElement(new JsonObject
+        {
+            ["typeName"] = typeAlias,
+            ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = literal }
+        });
+
+    /// <summary>A typed value of type <paramref name="typeAlias"/> bound to a literal null (spec 267).</summary>
+    public static JsonElement CreateNull(string typeAlias) =>
+        JsonSerializer.SerializeToElement(new JsonObject
+        {
+            ["typeName"] = typeAlias,
+            ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = null }
+        });
+
+    /// <summary>Whether the property is a literal holding null: <c>{ expression: { type: "Literal", value: null } }</c>.</summary>
+    public static bool IsNullLiteral(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object &&
+        value.TryGetProperty("expression", out var expression) &&
+        expression.ValueKind == JsonValueKind.Object &&
+        expression.TryGetProperty("type", out var type) &&
+        type.ValueKind == JsonValueKind.String &&
+        string.Equals(type.GetString(), Literal, StringComparison.OrdinalIgnoreCase) &&
+        expression.TryGetProperty("value", out var literal) &&
+        literal.ValueKind == JsonValueKind.Null;
+
     /// <summary>A typed value bound to an expression of <paramref name="expressionType"/>.</summary>
     public static JsonElement CreateExpression(string typeAlias, string expressionType, string expression) =>
         JsonSerializer.SerializeToElement(new JsonObject

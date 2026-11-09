@@ -87,11 +87,29 @@ const contextPayload = {
   }
 };
 
-function outcome(payload: unknown, state = "Success", documentRevision = "3", contextRevision = "context-1") {
+function outcome(payload: unknown, state: unknown = "Success", documentRevision = "3", contextRevision = "context-1") {
   return {
     result: {
       state,
       contractVersion: { major: 1, minor: 0 },
+      documentRevision,
+      contextRevision,
+      payload
+    }
+  };
+}
+
+function numericOutcome(
+  payload: unknown,
+  state: number,
+  documentRevision = "3",
+  contextRevision = "context-1",
+  major = 1
+) {
+  return {
+    result: {
+      state,
+      contractVersion: { major, minor: 0 },
       documentRevision,
       contextRevision,
       payload
@@ -439,5 +457,120 @@ describe("expression tooling transport", () => {
       resolved.data!,
       { line: 0, column: 1 }
     )).resolves.toMatchObject({ state: "stale" });
+  });
+
+  it("parses contract-v1 numeric enum values in authoring context and validation payloads", async () => {
+    const symbols = Array.from({ length: 9 }, (_, kind) => ({
+      symbolId: `wire-${kind}`,
+      name: `symbol-${kind}`,
+      kind,
+      valueShape: {
+        kind: kind < 7 ? kind : 0,
+        displayName: `Shape${kind}`,
+        isNullable: false,
+        ...(kind === 3 ? { item: { kind: 1, displayName: "Item", isNullable: false } } : {})
+      }
+    }));
+    const numericContextPayload = {
+      ...contextPayload,
+      expectedResultShape: { ...contextPayload.expectedResultShape, kind: 1 },
+      rootSymbols: symbols
+    };
+    const api = createContext(vi.fn(async (url: string) => {
+      if (url.endsWith("/context")) return numericOutcome(numericContextPayload, 1);
+      if (url.endsWith("/validate")) return numericOutcome({
+        diagnostics: [
+          {
+            code: "EXPR001",
+            severity: 0,
+            message: "Unknown name.",
+            range: { start: { line: 0, character: 1 }, end: { line: 0, character: 4 } }
+          },
+          {
+            code: "EXPR002",
+            severity: 1,
+            message: "Prefer a declared input.",
+            range: { start: { line: 0, character: 5 }, end: { line: 0, character: 8 } }
+          }
+        ]
+      }, 0);
+      throw new Error(`Unexpected POST ${url}`);
+    }));
+    const tooling = client(api.context);
+    const contextResult = await tooling.getAuthoringContext(document, {});
+
+    expect(contextResult).toMatchObject({
+      state: "supported-empty",
+      contextVersion: "context-1",
+      data: {
+        expectedResultShape: { kind: "scalar" },
+        rootSymbols: [
+          { id: "Variable:wire-0", kind: "value" },
+          { id: "WorkflowInput:wire-1", kind: "value" },
+          { id: "ActivityResult:wire-2", kind: "value" },
+          { id: "Function:wire-3", kind: "function" },
+          { id: "Filter:wire-4", kind: "filter" },
+          { id: "Tag:wire-5", kind: "tag" },
+          { id: "Namespace:wire-6", kind: "namespace" },
+          { id: "Member:wire-7", kind: "member" },
+          { id: "Extension:wire-8", kind: "function" }
+        ],
+        workflowInputs: [{ name: "symbol-1" }],
+        visibleVariables: [{ name: "symbol-0" }],
+        visibleActivityOutputs: [{ name: "symbol-2" }]
+      }
+    });
+
+    const shapes = await Promise.all(symbols.slice(0, 7).map(async (_symbol, kind) => {
+      const shapeId = contextResult.data!.rootSymbols![kind]!.shapeId!;
+      return (await tooling.getValueShape(document, contextResult.data!, shapeId)).data?.kind;
+    }));
+    expect(shapes).toEqual(["unknown", "scalar", "object", "collection", "object", "callable", "object"]);
+    await expect(tooling.getValueShape(
+      document,
+      contextResult.data!,
+      contextResult.data!.rootSymbols![3]!.shapeId! + ":item"
+    )).resolves.toMatchObject({ state: "ready", data: { kind: "scalar", displayName: "Item" } });
+
+    await expect(tooling.validate(document, contextResult.data!)).resolves.toMatchObject({
+      state: "ready",
+      data: {
+        diagnostics: [
+          { severity: "error", code: "EXPR001", message: "Unknown name." },
+          { severity: "warning", code: "EXPR002", message: "Prefer a declared input." }
+        ]
+      }
+    });
+  });
+
+  it.each([
+    [2, "unavailable"],
+    [3, "unauthorized"],
+    [4, "incompatible"],
+    [5, "stale"],
+    [6, "canceled"]
+  ] as const)("maps numeric outcome state %i to %s", async (wireState, expectedState) => {
+    const api = createContext(vi.fn(async () => numericOutcome(undefined, wireState)));
+    await expect(client(api.context).getAuthoringContext(document, {})).resolves.toMatchObject({ state: expectedState });
+  });
+
+  it.each([7, -1, 1.5, "FutureState"])("keeps unknown outcome state %s incompatible", async wireState => {
+    const api = createContext(vi.fn(async () => outcome(contextPayload, wireState)));
+    await expect(client(api.context).getAuthoringContext(document, {})).resolves.toMatchObject({ state: "incompatible" });
+  });
+
+  it("keeps numeric outcomes bound to the supported major and requested revisions", async () => {
+    const incompatibleApi = createContext(vi.fn(async () => numericOutcome(contextPayload, 0, "3", "context-1", 2)));
+    await expect(client(incompatibleApi.context).getAuthoringContext(document, {})).resolves.toMatchObject({
+      state: "incompatible"
+    });
+
+    const staleApi = createContext(vi.fn(async (url: string) => {
+      if (url.endsWith("/context")) return numericOutcome(contextPayload, 0);
+      return numericOutcome({ items: [{ label: "stale" }] }, 0, "2", "old-context");
+    }));
+    const tooling = client(staleApi.context);
+    const resolved = await tooling.getAuthoringContext(document, {});
+    await expect(tooling.getCatalog(document, resolved.data!)).resolves.toMatchObject({ state: "stale" });
   });
 });

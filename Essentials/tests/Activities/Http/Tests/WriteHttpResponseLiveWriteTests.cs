@@ -41,7 +41,7 @@ public sealed class WriteHttpResponseLiveWriteTests
         var store = await StoreWith(new HttpResponseInstruction(
             201,
             new Dictionary<string, string[]> { ["X-Custom"] = ["v1"] },
-            """{"id":42}""",
+            Text("""{"id":42}"""),
             "application/json"));
         var delivery = new HttpResponseInstructionDelivery(store, [new StubJsonContentFactory()]);
         var httpContext = NewHttpContext();
@@ -62,7 +62,7 @@ public sealed class WriteHttpResponseLiveWriteTests
         {
             ["X-Custom"] = ["first", "second"]
         };
-        var instruction = new HttpResponseInstruction(202, headers, "accepted", "text/plain");
+        var instruction = new HttpResponseInstruction(202, headers, Text("accepted"), "text/plain");
         var now = DateTimeOffset.UnixEpoch.AddSeconds(1);
         var activityType = TypeAliasConvention.CanonicalAlias(typeof(WriteHttpResponse));
         var contract = new ActivityContract(
@@ -110,7 +110,7 @@ public sealed class WriteHttpResponseLiveWriteTests
         var store = await StoreWith(new HttpResponseInstruction(
             200,
             new Dictionary<string, string[]>(),
-            "<x/>",
+            Text("<x/>"),
             "application/vnd.custom+xml"));
         var delivery = new HttpResponseInstructionDelivery(store, [new StubJsonContentFactory()]);
         var httpContext = NewHttpContext();
@@ -126,7 +126,7 @@ public sealed class WriteHttpResponseLiveWriteTests
         var store = await StoreWith(new HttpResponseInstruction(
             200,
             new Dictionary<string, string[]>(),
-            "hello",
+            Text("hello"),
             null));
         var delivery = new HttpResponseInstructionDelivery(store, []);
         var httpContext = NewHttpContext();

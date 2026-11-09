@@ -31,7 +31,7 @@ internal static class Elsa3OutcomeKey
                 Elsa3MigrationDiagnosticSeverity.Error,
                 Elsa3ActivityDiagnosticCodes.UnsupportedMode,
                 $"Complete node '{nodeId}' names outcome 'done', which shares Elsa 4's reference key 'done' with the natural outcome 'Done'.",
-                "Rename the outcome before converting.",
+                "Rename the outcome in the Elsa 3 workflow (for example to 'Completed'), and change every workflow that routes on 'done' to the new name.",
                 path,
                 new Dictionary<string, string> { ["ActivityNodeId"] = nodeId }));
         }

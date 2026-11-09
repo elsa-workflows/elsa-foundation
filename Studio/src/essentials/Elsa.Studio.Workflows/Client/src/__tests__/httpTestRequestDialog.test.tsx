@@ -7,11 +7,11 @@ import { capabilityIds, clearApiCapabilityCache } from "../api/capabilities";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import type { WorkflowExecutableDetails, WorkflowExecutableInputSources } from "../workflowTypes";
 import { HttpTestRequestDialog } from "../workflow-editor/HttpTestRequestDialog";
-import { workflowHttpBasePathCapabilityRelation, workflowHttpBasePathUnavailableMessage } from "../workflow-editor/httpTestRequest";
+import { publishedHttpEndpointLiteralsMissingMessage, workflowHttpBasePathCapabilityRelation, workflowHttpBasePathUnavailableMessage } from "../workflow-editor/httpTestRequest";
 
 vi.mock("../api/runtime", () => ({ getExecutable: vi.fn(), getExecutableInputSources: vi.fn() }));
 
-let mounted: { root: Root; container: HTMLElement } | null = null;
+let mounted: { root: Root; container: HTMLElement; onClose: () => void } | null = null;
 const requestResponse = vi.fn<NonNullable<StudioEndpointContext["http"]["requestResponse"]>>();
 const getJson = vi.fn();
 const context = {
@@ -29,6 +29,7 @@ afterEach(async () => {
   vi.mocked(getExecutableInputSources).mockReset();
   requestResponse.mockReset();
   getJson.mockReset();
+  context.headers = undefined;
   clearApiCapabilityCache();
 });
 
@@ -85,6 +86,28 @@ describe("HTTP test request dialog", () => {
     expect(getExecutableInputSources).toHaveBeenCalledWith(context, "artifact-1", "reference-1");
   });
 
+  it("offers every published method and sends the selected method", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    const methods = ["GET", "POST", "PUT", "HEAD", "DELETE", "OPTIONS", "PATCH"];
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs(methods));
+    requestResponse.mockImplementation(async () => new Response("", { status: 200 }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("select[aria-label='HTTP method']")).not.toBeNull());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='HTTP method']")!;
+    expect([...select.options].map(option => option.value)).toEqual(methods);
+    expect(container.textContent).toContain("Publish draft changes before testing them.");
+    for (const [index, method] of methods.entries()) {
+      flushSync(() => { select.value = method; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      await click(container.querySelector("button[type='submit']")!);
+      await waitFor(() => expect(requestResponse).toHaveBeenCalledTimes(index + 1));
+      expect(requestResponse.mock.calls[index][1]?.method).toBe(method);
+      const carriesBody = method !== "GET" && method !== "HEAD";
+      expect(requestResponse.mock.calls[index][1]?.body !== undefined).toBe(carriesBody);
+      await waitFor(() => expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false));
+    }
+  });
+
   it("offers common content types and sends a custom type unchanged", async () => {
     advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -105,6 +128,134 @@ describe("HTTP test request dialog", () => {
     await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
     expect(new Headers(requestResponse.mock.calls[0][1]?.headers).get("Content-Type"))
       .toBe("application/vnd.acme.order+json; charset=utf-8");
+  });
+
+  it.each(["POST", "GET", "HEAD"])("sends optional request headers with %s", async method => {
+    const container = await renderHeaderDialog(["POST", "GET", "HEAD"]);
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-Correlation-ID");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "test-123");
+
+    const methodSelect = container.querySelector<HTMLSelectElement>("select[aria-label='HTTP method']")!;
+    flushSync(() => {
+      methodSelect.value = method;
+      methodSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
+
+    const [, init] = requestResponse.mock.calls[0];
+    const headers = new Headers(init?.headers);
+    expect(headers.get("X-Correlation-ID")).toBe("test-123");
+    expect(headers.get("Accept")).toBe("*/*");
+    expect(headers.has("Content-Type")).toBe(method === "POST");
+    expect(init?.body !== undefined).toBe(method === "POST");
+  });
+
+  it("adds and removes request header rows before sending", async () => {
+    const container = await renderHeaderDialog();
+    const addHeader = container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!;
+    await click(addHeader);
+    await click(addHeader);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-Remove-Me");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "removed");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 2 name']")!, "X-Keep-Me");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 2 value']")!, "kept");
+    await click(container.querySelector<HTMLButtonElement>("button[aria-label='Remove header 1']")!);
+
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
+    const headers = new Headers(requestResponse.mock.calls[0][1]?.headers);
+    expect(headers.has("X-Remove-Me")).toBe(false);
+    expect(headers.get("X-Keep-Me")).toBe("kept");
+  });
+
+  it("shows invalid header names and does not send the request", async () => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X Invalid");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "value");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Header 1 has an invalid name or value."));
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("shows invalid header values without exposing them or sending the request", async () => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-Note");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "secret-😀");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Header 1 has an invalid name or value."));
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("secret-😀");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not let a custom header override a host-configured value or expose either value", async () => {
+    context.headers = { "X-Studio-Scope": "host-secret" };
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "x-studio-scope");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "caller-secret");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Header 1 is configured by Studio and cannot be overridden."));
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("host-secret");
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("caller-secret");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not let the request content type override a host-configured value", async () => {
+    context.headers = { "Content-Type": "application/vnd.host+json" };
+    const container = await renderHeaderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Request Content-Type is configured by Studio and cannot be overridden."));
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it.each(["Authorization", "Cookie", "Proxy-Authorization"])("rejects the %s header before sending", async name => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, name);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "caller-value");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Authentication headers are managed by the browser or Studio transport."));
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("reserves Content-Type for the request content type field", async () => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "content-type");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "text/plain");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Set Content-Type using the Request content type field."));
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("clears custom headers when the dialog is closed and reopened", async () => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-Private-Test");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "sensitive-value");
+
+    await setDialogOpen(false);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await setDialogOpen(true);
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await waitFor(() => expect(container.querySelector("summary")?.textContent).toBe("Request headers"));
+
+    expect(container.querySelector("input[aria-label='Header 1 value']")).toBeNull();
+    expect(container.textContent).not.toContain("sensitive-value");
   });
 
   it("closes content type suggestions before closing the dialog with Escape", async () => {
@@ -267,19 +418,18 @@ describe("HTTP test request dialog", () => {
   });
 
   it("blocks duplicate sends and aborts the active request when the dialog closes", async () => {
-    advertiseWorkflowHttpBasePath();
-    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
-    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    const onClose = vi.fn();
+    const container = await renderHeaderDialog(["POST"], onClose);
     let resolveResponse!: (response: Response) => void;
     let requestSignal: AbortSignal | undefined;
     requestResponse.mockImplementation((_url, init) => {
       requestSignal = init?.signal as AbortSignal | undefined;
       return new Promise(resolve => { resolveResponse = resolve; });
     });
-    const onClose = vi.fn();
 
-    const container = await renderDialog(onClose);
-    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-In-Flight");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "locked");
     const send = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
     await click(send);
     await click(send);
@@ -288,6 +438,10 @@ describe("HTTP test request dialog", () => {
     expect(requestSignal?.aborted).toBe(false);
     expect(container.querySelector<HTMLInputElement>("input[role='combobox']")!.disabled).toBe(true);
     expect(container.querySelector("[role='listbox']")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button[aria-label='Remove header 1']")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!.disabled).toBe(true);
     await click(container.querySelector<HTMLButtonElement>("button[aria-label='Close test request']")!);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(requestSignal?.aborted).toBe(true);
@@ -295,6 +449,22 @@ describe("HTTP test request dialog", () => {
     resolveResponse(new Response("late response", { status: 200 }));
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(container.textContent).not.toContain("late response");
+
+    requestResponse.mockResolvedValue(new Response("reopened response", { status: 200 }));
+    await setDialogOpen(false);
+    await setDialogOpen(true);
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await waitFor(() => expect(container.querySelector("summary")?.textContent).toBe("Request headers"));
+    const reopenedSend = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    expect(reopenedSend.disabled).toBe(false);
+
+    container.querySelector<HTMLDetailsElement>(".wf-http-test-request-headers")!.open = true;
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!.disabled).toBe(false);
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!.disabled).toBe(false);
+    await click(reopenedSend);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(container.textContent).toContain("reopened response"));
   });
 
   it("explains when published input settings are unavailable and does not send", async () => {
@@ -337,6 +507,74 @@ describe("HTTP test request dialog", () => {
     );
   });
 
+  it("shows the request form for the published HttpEndpoint input-sources payload", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedHttpPingExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedHttpPingInputs());
+
+    const container = await renderDialog(undefined, { authoredActivityId: "root", artifactId: "artifact-ca2981d0ace2" });
+    await waitFor(() => expect(container.querySelector("select[aria-label='HTTP method']")).not.toBeNull());
+
+    const send = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Endpoint path']")!.value).toBe("/ux-qa-ping");
+    expect([...container.querySelectorAll<HTMLOptionElement>("select[aria-label='HTTP method'] option")].map(option => option.value))
+      .toEqual(["GET", "POST", "PUT", "HEAD", "DELETE"]);
+    expect(send.textContent).toContain("Send request");
+    expect(send.dataset.variant).toBe("primary");
+    expect(container.querySelector(".wf-http-test-error")).toBeNull();
+  });
+
+  it("offers Publish draft when published literals are missing instead of a bare error", async () => {
+    const onPublishDraft = vi.fn();
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue({
+      artifactId: "artifact-1",
+      sourceReferenceId: "reference-1",
+      accessState: "allowed",
+      authoredInputs: [],
+      compiledInputs: []
+    });
+
+    const container = await renderDialog(undefined, { onPublishDraft });
+    await waitFor(() => expect(container.textContent).toContain(publishedHttpEndpointLiteralsMissingMessage));
+
+    expect(container.querySelector("button[type='submit']")).toBeNull();
+    expect(container.querySelector(".wf-http-test-error")).toBeNull();
+    expect(container.querySelector(".studio-result-state")?.textContent).toContain("Cannot build a test request");
+    const publish = [...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")!;
+    expect(publish.dataset.variant).toBe("primary");
+    await click(publish);
+    expect(onPublishDraft).toHaveBeenCalledOnce();
+  });
+
+  it("keeps published-version inspection available without offering unsupported publication", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue({ artifactId: "artifact-1", sourceReferenceId: "reference-1", accessState: "allowed", authoredInputs: [], compiledInputs: [] });
+    const onPublishDraft = vi.fn(), onOpenPublishedVersion = vi.fn();
+    const container = await renderDialog(undefined, { onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason: "Publishing is unavailable on this backend." });
+    await waitFor(() => expect(container.textContent).toContain(publishedHttpEndpointLiteralsMissingMessage));
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")).toBeUndefined();
+    const inspect = [...container.querySelectorAll("button")].find(button => button.textContent === "Open published version")!;
+    expect(inspect).toBeTruthy();
+    await click(inspect);
+    expect(onOpenPublishedVersion).toHaveBeenCalledOnce();
+    expect(onPublishDraft).not.toHaveBeenCalled();
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("explains an unavailable publication capability when no published endpoint exists", async () => {
+    const onPublishDraft = vi.fn();
+    const container = await renderDialog(undefined, { artifactId: null, onPublishDraft, publicationUnavailableReason: "Publishing is unavailable on this backend." });
+    await waitFor(() => expect(container.textContent).toContain("Publishing is unavailable on this backend."));
+    expect(container.textContent).toContain("Published endpoint unavailable");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")).toBeUndefined();
+    expect(container.querySelector("button[type='submit']")).toBeNull();
+    expect(onPublishDraft).not.toHaveBeenCalled();
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
   it("does not render a sendable request when the server omits the workflow mount capability", async () => {
     getJson.mockResolvedValue({ capabilities: [] });
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -357,21 +595,56 @@ function advertiseWorkflowHttpBasePath(basePath = "workflows/http") {
   }] });
 }
 
-async function renderDialog(onClose = () => undefined) {
+async function renderDialog(onClose = () => undefined, extras: {
+  artifactId?: string | null;
+  authoredActivityId?: string;
+  onPublishDraft?(): void;
+  onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
+} = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  mounted = { root, container };
+  mounted = { root, container, onClose };
   flushSync(() => root.render(
     <HttpTestRequestDialog
       context={context}
       open
-      artifactId="artifact-1"
-      authoredActivityId="endpoint-1"
+      artifactId={extras.artifactId === undefined ? "artifact-1" : extras.artifactId}
+      authoredActivityId={extras.authoredActivityId ?? "endpoint-1"}
       onClose={onClose}
+      onPublishDraft={extras.onPublishDraft}
+      onOpenPublishedVersion={extras.onOpenPublishedVersion}
+      publicationUnavailableReason={extras.publicationUnavailableReason}
     />
   ));
   return container;
+}
+
+async function renderHeaderDialog(methods: string[] = ["POST"], onClose = () => undefined) {
+  advertiseWorkflowHttpBasePath();
+  vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+  vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs(methods));
+  requestResponse.mockResolvedValue(new Response("ok", { status: 200 }));
+
+  const container = await renderDialog(onClose);
+  await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+  container.querySelector<HTMLDetailsElement>(".wf-http-test-request-headers")!.open = true;
+  return container;
+}
+
+async function setDialogOpen(open: boolean) {
+  const current = mounted;
+  if (!current) throw new Error("The HTTP test dialog is not mounted.");
+  flushSync(() => current.root.render(
+    <HttpTestRequestDialog
+      context={context}
+      open={open}
+      artifactId="artifact-1"
+      authoredActivityId="endpoint-1"
+      onClose={current.onClose}
+    />
+  ));
 }
 
 async function click(element: HTMLElement) {
@@ -438,7 +711,70 @@ function publishedExecutable(): WorkflowExecutableDetails {
   };
 }
 
-function publishedEndpointInputs(method = "POST"): WorkflowExecutableInputSources {
+function publishedHttpPingExecutable(): WorkflowExecutableDetails {
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    artifactHash: "hash",
+    createdAt: "2026-10-31T00:00:00Z",
+    rootActivityType: "Elsa.HttpEndpoint",
+    rootActivityVersion: "1.1.0",
+    nodeCount: 1,
+    resumeTargetCount: 0,
+    chosenReference: { sourceReferenceId: "publication-1", selection: "newest-live", layout: [] },
+    references: [],
+    rootActivity: {
+      executableNodeId: "root",
+      authoredActivityId: "root",
+      activityType: "Elsa.HttpEndpoint",
+      activityTypeVersion: "1.1.0",
+      inputBindings: [
+        { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: null },
+        { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: null }
+      ],
+      childSlots: []
+    }
+  };
+}
+
+function publishedHttpPingInputs(): WorkflowExecutableInputSources {
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    sourceReferenceId: "publication-1",
+    accessState: "allowed",
+    authoredInputs: [
+      { executableNodeId: "root", inputKey: "Path", expressionType: "Literal", value: "/ux-qa-ping", accessState: "allowed" },
+      { executableNodeId: "root", inputKey: "SupportedMethods", expressionType: "Object", value: '["GET","POST","PUT","HEAD","DELETE"]', accessState: "allowed" }
+    ],
+    compiledInputs: [
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "Path",
+          inputKey: "Path",
+          source: "Literal",
+          summary: '"/ux-qa-ping"',
+          literalValue: { valueKind: 3 },
+          metadata: { referenceKey: "Path" }
+        }
+      },
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "SupportedMethods",
+          inputKey: "SupportedMethods",
+          source: "Literal",
+          summary: '["GET","POST","PUT","HEAD","DELETE"]',
+          literalValue: { valueKind: 2 },
+          metadata: { referenceKey: "SupportedMethods" }
+        }
+      }
+    ]
+  };
+}
+
+function publishedEndpointInputs(method: string | string[] = "POST"): WorkflowExecutableInputSources {
   return {
     artifactId: "artifact-1",
     sourceReferenceId: "reference-1",
@@ -446,7 +782,7 @@ function publishedEndpointInputs(method = "POST"): WorkflowExecutableInputSource
     authoredInputs: [],
     compiledInputs: [
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: "orders/{id:int}" } },
-      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: [method] } },
+      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: Array.isArray(method) ? method : [method] } },
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "ResponseMode", inputKey: "ResponseMode", source: "Literal", literalValue: 0 } }
     ]
   };

@@ -43,7 +43,8 @@ public sealed class RuntimeOutputCaptureProjector
         IActivityCompletionTransition transition,
         ActivityCompletionProjection completion,
         DateTimeOffset capturedAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ActivityExecutionState? closedScopeBoundary = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -67,6 +68,13 @@ public sealed class RuntimeOutputCaptureProjector
                 throw new InvalidOperationException($"Activity completion did not produce declared output projection '{capture.OutputName}'.");
             if (projected.Presence == ValuePresence.Absent)
                 continue;
+            if (capture.Metadata.TryGetValue(RuntimeMetadataKeys.CaptureTargetScopeId, out var targetScopeId))
+            {
+                changes.Add(await ProjectGraphVariableAsync(
+                    workflowExecutionId, activityExecutionId, capture, projectionContract, projected, transition, targetScopeId,
+                    closedScopeBoundary, capturedAt, cancellationToken));
+                continue;
+            }
             var targetsVariable = capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal);
             // A result whose policy requires encryption is withheld by the completion projector and
             // holds no value to capture; a present projection whose policy requires encryption, which only a projection
@@ -134,6 +142,65 @@ public sealed class RuntimeOutputCaptureProjector
         }
 
         return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites);
+    }
+
+    /// <summary>
+    /// A capture into a graph variable writes the variable row of the producer's nearest closed activity
+    /// execution scope, the row that boundary's activation owns, so later body nodes and its output mappings read it.
+    /// A graph variable has no withheld form, so a withheld value is refused as for a durable output.
+    /// </summary>
+    private async ValueTask<RuntimeStateChange<DurableValueState>> ProjectGraphVariableAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        RuntimeOutputCapture capture,
+        ActivityResultProjectionContract projectionContract,
+        ValueEnvelope projected,
+        IActivityCompletionTransition transition,
+        string targetScopeId,
+        ActivityExecutionState? closedScopeBoundary,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken)
+    {
+        if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
+            throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
+        ValidateDurableCaptureBoundary(capture, projected);
+        if (closedScopeBoundary is null ||
+            !StringComparer.Ordinal.Equals(closedScopeBoundary.Execution.ExecutableNodeId, targetScopeId))
+        {
+            throw new InvalidOperationException(
+                $"Output capture '{capture.OutputName}' writes a variable of graph scope '{targetScopeId}', which is not the nearest closed activity execution scope of activity '{activityExecutionId}'.");
+        }
+
+        var value = capture.ConversionPlan is null
+            ? StringComparer.Ordinal.Equals(projectionContract.Path, "$")
+                ? transition.Result
+                : projected.Presence == ValuePresence.ExplicitNull
+                    ? null
+                    : projected.InlineValue
+            : ToEncodedValue(_valueConversionExecutor.Convert(projected, capture.ConversionPlan));
+        var encoding = await _storageDrivers.GetRequired(capture.StorageDriverKey).EncodeAsync(value, capture.Type, cancellationToken);
+        var boundaryId = closedScopeBoundary.InvocationId;
+        var referenceKey = capture.Metadata[RuntimeMetadataKeys.TargetVariableReferenceKey];
+        var durableValueId = ActivityExecutionScopeKeys.Variable(boundaryId, referenceKey);
+        var metadata = ActivityExecutionScopeValues.Metadata(
+            boundaryId,
+            ActivityExecutionScopeValues.VariableRole,
+            referenceKey,
+            capture.StorageDriverKey,
+            variableName: capture.Metadata.GetValueOrDefault(RuntimeMetadataKeys.VariableName, referenceKey));
+        var state = new DurableValueState(
+            durableValueId,
+            workflowExecutionId,
+            durableValueId,
+            capture.Type,
+            DurableValueLifecycle.Instance,
+            encoding.Storage,
+            encoding.InlineValue,
+            encoding.ExternalReference,
+            boundaryId,
+            capturedAt,
+            RuntimeModelMetadata.Snapshot(metadata));
+        return new RuntimeStateChange<DurableValueState>(durableValueId, RuntimeStateChangeOperation.Upsert, state, state.Metadata);
     }
 
     private static string TargetVariableKey(RuntimeOutputCapture capture, ExecutableNode node) =>

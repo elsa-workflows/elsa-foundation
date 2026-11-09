@@ -159,6 +159,21 @@ public sealed class AuthorizationContractsTests
     }
 
     [Fact]
+    public void RequireAllPermissionsAttributeCarriesTheAllModePolicyItsConventionApplies()
+    {
+        var attribute = new RequireAllPermissionsAttribute("orders:read", "orders:write");
+        var builder = new TestEndpointConventionBuilder();
+        attribute.Apply(builder);
+        var endpointBuilder = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse("/test"), 0);
+        foreach (var convention in builder.Conventions)
+            convention(endpointBuilder);
+
+        Assert.Equal(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All("orders:read", "orders:write")), attribute.Policy);
+        Assert.Equal(["orders:read", "orders:write"], attribute.Permissions);
+        Assert.Contains(endpointBuilder.Metadata.OfType<AuthorizeAttribute>(), authorize => authorize.Policy == attribute.Policy);
+    }
+
+    [Fact]
     public async Task RequirePermissionPolicyProviderBuildsPermissionRequirement()
     {
         var services = new ServiceCollection();

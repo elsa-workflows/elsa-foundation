@@ -50,3 +50,27 @@ test.describe("navigation placement", () => {
     await page.screenshot({ path: resolve(screenshotDir, "before.png"), fullPage: false });
   });
 });
+
+for (const width of [390, 768, 1024]) {
+  test(`More tools keeps narrow navigation height stable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/?mode=nav-placement");
+    const sidebar = page.locator(".sidebar");
+    const before = await sidebar.boundingBox();
+    await page.getByRole("button", { name: "More tools", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Secrets", exact: true })).toBeVisible();
+    const after = await sidebar.boundingBox();
+    expect(before).not.toBeNull();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after!.height - before!.height)).toBeLessThanOrEqual(1);
+    expect(after!.height).toBeLessThan(100);
+    await page.getByRole("button", { name: "More tools", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Executables", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    const secrets = page.getByRole("link", { name: "Secrets", exact: true });
+    await expect(secrets).toBeFocused();
+    await expect(secrets).toBeInViewport({ ratio: 1 });
+  });
+}

@@ -102,11 +102,20 @@ public sealed class WorkflowAlterationTargetCaptureTask
         var start = DecodeExplicitCursor(plan.CaptureCursor);
         var executionIds = plan.Target.ExecutionIds.Skip(start).Take(pageSize).ToArray();
         var targets = new List<WorkflowAlterationCapturedTarget>(executionIds.Length);
+        var authorized = plan.AuthorizedExecutionIds is { } ids ? new HashSet<string>(ids, StringComparer.Ordinal) : null;
         foreach (var executionId in executionIds)
         {
-            var state = await _workflowExecutions.FindAsync(executionId, cancellationToken);
+            // A run the submitter was not authorized to manage, run by run at admission, is never read or captured and
+            // fails exactly like a missing run, as run deletion reports a refusal (spec 260 FR-406).
+            var state = authorized is not null && !authorized.Contains(executionId)
+                ? null
+                : await _workflowExecutions.FindAsync(executionId, cancellationToken);
+            // An explicit target names one run of the caller's tenant, whatever execution authority started it, as
+            // run deletion does (spec 260 FR-406, owner decision OD16). The run's authority is still captured below for
+            // the concurrency check, so a run whose authority changes after capture fails. Query targets keep the
+            // authority filter.
             targets.Add(state is not null &&
-                        MatchesAuthority(state, plan.AuthorityScope)
+                        MatchesTenant(state, plan.AuthorityScope)
                 ? await ToCapturedTargetAsync(state, activityConcurrencyIds, cancellationToken)
                 : new WorkflowAlterationCapturedTarget(
                     executionId,
@@ -155,16 +164,10 @@ public sealed class WorkflowAlterationTargetCaptureTask
                 state.Authority));
     }
 
-    private static bool MatchesAuthority(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>
+    private static bool MatchesTenant(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>
         StringComparer.Ordinal.Equals(
             state.TenantId ?? WorkflowExecutionPartition.DefaultValue,
-            scope.TenantPartition) &&
-        state.Authority is { } authority &&
-        WorkflowExecutionAuthoritySnapshot.Matches(
-            authority,
-            scope.SystemIdentity,
-            scope.RootInitiator,
-            scope.Metadata);
+            scope.TenantPartition);
 
     private IReadOnlyCollection<string> ReadActivityConcurrencyIds(WorkflowAlterationPlanState plan)
     {
@@ -186,6 +189,7 @@ public sealed class WorkflowAlterationTargetCaptureTask
             {
                 "ScheduleActivity" => "parentActivityExecutionId",
                 "RescheduleActivity" => "sourceActivityExecutionId",
+                "RetryFaultedActivity" => "sourceActivityExecutionId",
                 _ => null
             };
             if (propertyName is not null &&

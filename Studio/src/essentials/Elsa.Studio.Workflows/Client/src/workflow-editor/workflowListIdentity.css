@@ -1,0 +1,49 @@
+/* Compact identifiers shared by definition and run collections. */
+.wf-list-primary-id { min-width: 0; }
+.wf-list-primary-id .studio-copyable-identifier { grid-template-columns: minmax(0, 1fr) max-content; gap: 4px; font-size: var(--studio-label-size); }
+.wf-list-primary-id .studio-copyable-identifier__label { display: none; }
+.wf-list-identity-details { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.wf-list-identity-details .studio-copyable-identifier { min-width: 0; grid-template-columns: minmax(0, 1fr) max-content; gap: 3px; font-size: var(--studio-label-size); }
+.wf-list-identity-details .studio-copyable-identifier__label { grid-area: 1 / 1 / 2 / -1; }
+.wf-list-identity-details .studio-copyable-identifier__value { grid-area: 2 / 1 / 3 / 2; }
+.wf-list-identity-details .studio-copyable-identifier__button { grid-area: 2 / 2 / 3 / 3; width: 24px; height: 24px; }
+.wf-definition-identifiers-trigger { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--studio-radius-sm); color: var(--studio-text-muted); background: transparent; cursor: pointer; }
+.wf-definition-identifiers-trigger:hover { color: var(--studio-text); background: var(--studio-surface-muted); }
+.wf-definition-identifiers-trigger:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.wf-definition-identifiers-popover {
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  padding: 12px;
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  box-shadow: var(--studio-shadow-sm);
+  font-size: var(--studio-label-size);
+}
+
+.wf-definition-identifiers-popover header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wf-definition-extra-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 8px;
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.wf-definition-extra-details p {
+  margin: 4px 0;
+}
+
+.wf-definition-extra-details:empty {
+  display: none;
+}

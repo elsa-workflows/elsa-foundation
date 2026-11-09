@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 
@@ -22,6 +21,9 @@ public sealed class RescheduleActivityAlterationHandler(
     private readonly IIncidentStateStore _incidentStateStore = incidentStateStore ?? throw new ArgumentNullException(nameof(incidentStateStore));
     private readonly ActivityExecutionSupersessionPlanner _supersessionPlanner = supersessionPlanner ?? throw new ArgumentNullException(nameof(supersessionPlanner));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    private const string Slug = "reschedule";
+    private const string Reason = "OperatorRescheduleActivity";
 
     public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(
         WorkflowAlterationPreflightContext context,
@@ -43,8 +45,8 @@ public sealed class RescheduleActivityAlterationHandler(
             return WorkflowAlterationPreflightResult.Rejected("SourceActivityNotFound", "The requested source activity does not exist.");
         if (WorkflowAlterationCapturedConcurrencyValidator.ValidateActivity(context.Job, source, "source") is { } sourceConflict)
             return WorkflowAlterationPreflightResult.Rejected(sourceConflict.Code, sourceConflict.Message);
-        var supersededSubtree = SupersededSubtree(source, activities);
-        var supersededSubtreeScopes = SupersededSubtreeScopes(supersededSubtree);
+        var supersededSubtree = ActivitySuccessorStaging.SupersededSubtree(source, activities);
+        var supersededSubtreeScopes = ActivitySuccessorStaging.SupersededSubtreeScopes(supersededSubtree);
         if (activityView.ActiveSchedulerClaims.Any(claim => claim.Item.ExecutionScopeId is { } scope && supersededSubtreeScopes.Contains(scope)))
             return WorkflowAlterationPreflightResult.Rejected("SourceWorkClaimed", "The source activity has claimed scheduler work and cannot be superseded.");
         if (source.Status is not (ActivityExecutionStatus.Scheduled or ActivityExecutionStatus.Waiting or ActivityExecutionStatus.Suspended or ActivityExecutionStatus.Faulted))
@@ -59,15 +61,13 @@ public sealed class RescheduleActivityAlterationHandler(
         var executable = await _executableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !Equals(executable.Identity, workflow.PinnedExecutable) || !executable.NodesById.TryGetValue(source.Execution.ExecutableNodeId, out var sourceNode))
             return WorkflowAlterationPreflightResult.Rejected("PinnedExecutableUnavailable", "The source activity node is unavailable in the pinned executable.");
+        if (ParentThatEvaluatedSourceRefusal(source, activities, executable) is { } parentRefusal)
+            return parentRefusal;
 
-        var successorId = RuntimeChainId.Derive(context.Job.JobId, $"alteration-reschedule:{context.Ordinal}:{source.Execution.ActivityExecutionId}");
-        var scopeId = RuntimeChainId.Derive(successorId, "scope");
+        var successorId = ActivitySuccessorStaging.SuccessorId(context, Slug, source);
+        var scopeId = ActivitySuccessorStaging.SuccessorScopeId(successorId);
         var now = _timeProvider.GetUtcNow();
-        // StartActivity executes intrinsics only from Scheduled. A preserved input snapshot therefore means a direct
-        // Running → Start continuation only for CLR activities; intrinsic successors must re-enter through Schedule.
-        var successorStatus = sourceNode.IntrinsicKind is null && source.InputSnapshot is not null
-            ? ActivityExecutionStatus.Running
-            : ActivityExecutionStatus.Scheduled;
+        // The successor keeps the scheduling metadata its parent gave the source, so the parent still routes its outcome.
         var provenance = ActivitySchedulingProvenance.From(
             workflow.WorkflowExecutionId,
             source.ParentActivityExecutionId,
@@ -76,102 +76,80 @@ public sealed class RescheduleActivityAlterationHandler(
             source.IterationId,
             source.Provenance.ExecutionPathId,
             scopeId,
-            "OperatorRescheduleActivity");
-        var successor = source with
-        {
-            Execution = source.Execution with { ActivityExecutionId = successorId },
-            Status = successorStatus,
-            SubStatus = null,
-            ExecutionSequence = StableSequence(successorId),
-            ScheduledAt = now,
-            StartedAt = successorStatus == ActivityExecutionStatus.Running ? now : null,
-            CompletedAt = null,
-            Provenance = provenance,
-            ExecutionScopeId = scopeId,
-            BookmarkIds = [],
-            IncidentIds = [],
-            FaultCount = 0,
-            AggregateFaultCount = 0,
-            Metadata = NewMetadata(source.Metadata, source.Execution.ActivityExecutionId),
-            Attempts = [],
-            PrivateState = null,
-            Completion = null,
-            Fault = null,
-            TriggerRegistrations = [],
-            TriggerDeliveries = [],
-            Attempt = null,
-            SupersededByActivityExecutionId = null,
-            SupersededAt = null
-        };
-        var superseded = source with
-        {
-            Status = ActivityExecutionStatus.Superseded,
-            CompletedAt = now,
-            SupersededByActivityExecutionId = successorId,
-            SupersededAt = now
-        };
-        superseded.EnsureSupersessionCompatible();
+            Reason,
+            source.Provenance.Metadata);
+        var successor = ActivitySuccessorStaging.NewSuccessor(
+            source,
+            sourceNode,
+            successorId,
+            scopeId,
+            provenance,
+            ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId),
+            now);
+        var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
-        var continuation = NewContinuation(workflow, successor, context, now);
+        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
-        context.Staging.Stage(new RescheduleActivityStagedChange(
+        context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
+            $"runtime.alteration.reschedule:{superseded.Execution.ActivityExecutionId}",
             superseded,
             successor,
             supersession.CancelledDescendants,
             supersession.Cleanup,
             ActivityExecutionInspectionProjection.FromState(superseded, $"checkpoint:alteration:{context.Job.JobId}", now),
             ActivityExecutionInspectionProjection.FromState(successor, $"checkpoint:alteration:{context.Job.JobId}", now),
-            continuation));
+            continuation,
+            Incidents: []));
         return WorkflowAlterationPreflightResult.Accepted();
     }
 
-    private static RuntimePostCommitIntent NewContinuation(
-        WorkflowExecutionState workflow,
-        ActivityExecutionState successor,
-        WorkflowAlterationPreflightContext context,
-        DateTimeOffset now)
+    // A faulted source's outcome may only go somewhere that still expects it (#3135). Every structural parent above
+    // it must still be running: a parent or ancestor that faulted, completed or was cancelled on or after the fault
+    // never consumes the successor's outcome, and the successor's effects would happen outside it (for example the
+    // rest of a Sequence after its compensation scope faulted). A parent that already evaluated the fault may also have
+    // stopped tracking the child (a BPMN error boundary or late-fault guard drops it), and the runtime cannot tell from
+    // outside whether it still expects an outcome, so such a parent must have opted in
+    // (IRuntimeAcceptsRescheduledFaultedChild).
+    private static WorkflowAlterationPreflightResult? ParentThatEvaluatedSourceRefusal(
+        ActivityExecutionState source,
+        IReadOnlyCollection<ActivityExecutionState> activities,
+        WorkflowExecutable executable)
     {
-        var commandKind = successor.Status == ActivityExecutionStatus.Running
-            ? WorkflowExecutionCommandKind.StartActivity
-            : WorkflowExecutionCommandKind.ScheduleActivity;
-        object payload = successor.Status == ActivityExecutionStatus.Running
-            ? new RuntimeStartActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, "OperatorRescheduleActivity")
-            : new RuntimeScheduleActivityCommandPayload(workflow.PinnedExecutable, successor.Execution.ExecutableNodeId, successor.Execution.ActivityExecutionId, "OperatorRescheduleActivity", successor.SchedulingActivityExecutionId, successor.ParentActivityExecutionId, successor.Provenance);
-        var workItem = new RuntimeSchedulerWorkItem(
-            RuntimeChainId.Derive(context.Job.JobId, $"alteration-reschedule-work:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
-            workflow.WorkflowExecutionId,
-            RuntimeChainId.Derive(context.Job.JobId, $"alteration-reschedule-command:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
-            commandKind,
-            context.Job.JobId,
-            RuntimeChainId.Derive(context.Job.JobId, $"alteration-reschedule-idempotency:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
-            now,
-            now,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["runtime.alteration.jobId"] = context.Job.JobId,
-                ["runtime.alteration.planId"] = context.Job.PlanId,
-                ["runtime.alteration.kind"] = context.Envelope.Kind
-            },
-            envelopeMetadata: new Dictionary<string, string>(),
-            executionScopeId: successor.ExecutionScopeId);
-        return new RuntimePostCommitIntent(
-            $"alteration:{context.Job.JobId}:reschedule:{context.Ordinal}:{successor.Execution.ActivityExecutionId}",
-            workflow.WorkflowExecutionId,
-            RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            now,
-            successor.Execution.ActivityExecutionId,
-            workItem.IdempotencyKey,
-            JsonSerializer.SerializeToElement(workItem),
-            workItem.CommandMetadata,
-            materializedSchedulerWorkItem: workItem);
-    }
+        // An ancestor that received this fault past a composite that does not handle it (spec 258 R-3) and deferred
+        // already decided on it, for example a compensation scope that abandoned the step without cancelling it.
+        if (source.Metadata.TryGetValue(RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId, out var descendantWorkItemId) &&
+            !string.IsNullOrWhiteSpace(descendantWorkItemId))
+            return WorkflowAlterationPreflightResult.Rejected(
+                "SourceFaultHandledByAncestor",
+                "An ancestor of the source activity already received and decided on its fault.");
 
-    private static IReadOnlyDictionary<string, string> NewMetadata(IReadOnlyDictionary<string, string> source, string sourceId)
-    {
-        var metadata = source.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.supersedesActivityExecutionId"] = sourceId;
-        return metadata;
+        var evaluatedByParent = source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) &&
+                                !string.IsNullOrWhiteSpace(processedWorkItemId);
+        if (source.Status != ActivityExecutionStatus.Faulted && !evaluatedByParent)
+            return null;
+
+        var byId = activities.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
+        ActivityExecutionState? parent = null;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var ancestorId = source.ParentActivityExecutionId; ancestorId is not null && visited.Add(ancestorId);)
+        {
+            var isParent = parent is null;
+            if (!byId.TryGetValue(ancestorId, out var ancestor) || ancestor.Status != ActivityExecutionStatus.Running)
+                return isParent
+                    ? WorkflowAlterationPreflightResult.Rejected("SourceParentNotRunning", "The source activity's parent is not running, so nothing would receive the successor's outcome.")
+                    : WorkflowAlterationPreflightResult.Rejected("SourceAncestorNotRunning", "An ancestor of the source activity is not running, so the successor would run outside it.");
+            parent ??= ancestor;
+            ancestorId = ancestor.ParentActivityExecutionId;
+        }
+
+        if (!evaluatedByParent || parent is null)
+            return null;
+        if (!executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var parentNode) ||
+            !StringComparer.OrdinalIgnoreCase.Equals(parentNode.Metadata.GetValueOrDefault(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild), "true"))
+            return WorkflowAlterationPreflightResult.Rejected(
+                "ParentDoesNotAcceptRescheduledChild",
+                "The source activity's parent already evaluated its fault and does not accept a rescheduled child's outcome.");
+        return null;
     }
 
     private static bool TryReadPayload(JsonElement payload, out string sourceId)
@@ -183,73 +161,5 @@ public sealed class RescheduleActivityAlterationHandler(
             return false;
         sourceId = source.GetString()?.Trim() ?? string.Empty;
         return !string.IsNullOrWhiteSpace(sourceId);
-    }
-
-    private static long StableSequence(string value) => BitConverter.ToInt64(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)), 0) & long.MaxValue;
-
-    private static IReadOnlyCollection<ActivityExecutionState> SupersededSubtree(
-        ActivityExecutionState source,
-        IReadOnlyCollection<ActivityExecutionState> activities)
-    {
-        var children = activities
-            .Where(activity => !string.IsNullOrWhiteSpace(activity.ParentActivityExecutionId))
-            .GroupBy(activity => activity.ParentActivityExecutionId!, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group, StringComparer.Ordinal);
-        var result = new List<ActivityExecutionState>();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var queue = new Queue<ActivityExecutionState>([source]);
-        while (queue.TryDequeue(out var activity))
-        {
-            if (!visited.Add(activity.Execution.ActivityExecutionId))
-                continue;
-            result.Add(activity);
-            if (children.TryGetValue(activity.Execution.ActivityExecutionId, out var descendants))
-                foreach (var descendant in descendants)
-                    queue.Enqueue(descendant);
-        }
-
-        return result;
-    }
-
-    private static IReadOnlySet<string> SupersededSubtreeScopes(IReadOnlyCollection<ActivityExecutionState> activities) =>
-        activities
-            .SelectMany(activity => new[] { activity.Execution.ActivityExecutionId, activity.ExecutionScopeId })
-            .Where(scope => !string.IsNullOrWhiteSpace(scope))
-            .Select(scope => scope!)
-            .ToHashSet(StringComparer.Ordinal);
-
-    private sealed record RescheduleActivityStagedChange(
-        ActivityExecutionState Superseded,
-        ActivityExecutionState Successor,
-        IReadOnlyCollection<ActivityExecutionState> CancelledDescendants,
-        ActivityScopeCleanupRequest Cleanup,
-        ActivityExecutionInspectionProjection SupersededInspection,
-        ActivityExecutionInspectionProjection SuccessorInspection,
-        RuntimePostCommitIntent Continuation) : IWorkflowAlterationRuntimeCheckpointStagedChange
-    {
-        public string ChangeKey => $"runtime.alteration.reschedule:{Superseded.Execution.ActivityExecutionId}";
-
-        public void Apply(WorkflowAlterationRuntimeCheckpointStateBuilder builder)
-        {
-            var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
-            builder.AddActivityExecution(new RuntimeStateChange<ActivityExecutionState>(Superseded.Execution.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, Superseded, metadata));
-            builder.AddActivityExecution(new RuntimeStateChange<ActivityExecutionState>(Successor.Execution.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, Successor, metadata));
-            foreach (var descendant in CancelledDescendants)
-            {
-                builder.AddActivityExecution(new RuntimeStateChange<ActivityExecutionState>(descendant.Execution.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, descendant, metadata));
-                builder.AddActivityExecutionInspection(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                    descendant.Execution.ActivityExecutionId,
-                    RuntimeStateChangeOperation.Upsert,
-                    ActivityExecutionInspectionProjection.FromState(descendant, SupersededInspection.LastCheckpointId ?? $"checkpoint:alteration:{Superseded.Execution.ActivityExecutionId}", SupersededAt(), metadata: metadata),
-                    metadata));
-            }
-            builder.AddActivityExecutionInspection(new RuntimeStateChange<ActivityExecutionInspectionProjection>(SupersededInspection.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, SupersededInspection, metadata));
-            builder.AddActivityExecutionInspection(new RuntimeStateChange<ActivityExecutionInspectionProjection>(SuccessorInspection.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, SuccessorInspection, metadata));
-            builder.AddActivityScopeCleanup(Cleanup);
-            builder.AddPostCommitIntent(Continuation);
-        }
-
-        private DateTimeOffset SupersededAt() => Superseded.SupersededAt ?? Superseded.CompletedAt
-            ?? throw new InvalidOperationException("A superseded activity must carry its terminal timestamp.");
     }
 }

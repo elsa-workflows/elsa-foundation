@@ -54,7 +54,7 @@ public sealed class WriteHttpResponseExecutionTests
     [Fact]
     public async Task UnassignedStatusCodeUsesTheActivityDefault()
     {
-        var activity = new WriteHttpResponse { Body = "ok" };
+        var activity = new WriteHttpResponse { Body = HttpResponseInstructionFixture.Text("ok") };
 
         var transition = await ((IActivity)activity).ExecuteAsync(
             new ActivityExecutionContext("wf-1", "invocation-1", "attempt-1", NodeId, CancellationToken.None));

@@ -84,6 +84,22 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private static Elsa3MemberRule StartOnly() =>
         UseRestriction("CanStartWorkflow", "true", Elsa3MemberKind.CustomProperty);
 
+    /// <summary>Null (spec 267): Elsa 3 ran with a value Elsa 4's default equals.</summary>
+    private static Elsa3NullConversion NullUnbound => new(Elsa3NullRule.NoBinding);
+
+    /// <summary>Null (spec 267): Elsa 3 ran with null, which the Elsa 4 input accepts.</summary>
+    private static Elsa3NullConversion NullAsNull => new(Elsa3NullRule.TypedNull);
+
+    /// <summary>Null (spec 267): Elsa 3 ran with <paramref name="value"/>, which Elsa 4's default differs from.</summary>
+    private static Elsa3NullConversion NullEmits(string value) => new(Elsa3NullRule.Emit, value);
+
+    /// <summary>Null (spec 267): Elsa 4 cannot reproduce or represent what Elsa 3 did.</summary>
+    private static Elsa3NullConversion NullRefused(string reason, string? whenBound = null) =>
+        new(Elsa3NullRule.Refuse, Reason: reason, WhenBound: whenBound);
+
+    /// <summary>Null (spec 267): Elsa 3 rejected the activity as missing a required input.</summary>
+    private static Elsa3NullConversion NullRequired => NullRefused("Elsa 3 rejects the activity without it.");
+
     private static Elsa3OutcomeRule Outcome(string elsa3, params string[] elsa4) => new(elsa3, elsa4);
 
     private static Elsa3OutcomeRule UnsupportedOutcome(string elsa3, string reason) => new(elsa3, [], reason);

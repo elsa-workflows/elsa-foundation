@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "baseHead": "123ef7bcbef5ee9b34e50a1c2a35a7c872e80223",
+  "ciFailure": {
+    "run": 39765000760,
+    "job": 119778143929,
+    "phase": "Restore",
+    "diagnostic": "NU1004 stale transitive Workbench Rules project references",
+    "logSha256": "af85c7d5f3977dadd75278ad901c1d301bb50cf9c8695e8b9c52cbd0d731c6c4"
+  },
+  "steps": [
+    {
+      "name": "reproduce",
+      "command": [
+        "dotnet",
+        "restore",
+        "Elsa.Server.slnx",
+        "-p:Configuration=Release",
+        "--locked-mode",
+        "-p:WarningsNotAsErrors=NU1603"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 10.73,
+      "log": "/tmp/rules-pr3192-lock-repair/reproduce.log"
+    },
+    {
+      "name": "refresh",
+      "command": [
+        "dotnet",
+        "restore",
+        "Elsa.Server.slnx",
+        "-p:Configuration=Release",
+        "-p:WarningsNotAsErrors=NU1603"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 9.72,
+      "log": "/tmp/rules-pr3192-lock-repair/refresh.log"
+    },
+    {
+      "name": "verify",
+      "command": [
+        "bash",
+        "tools/architecture/restore-ci-project-graph.sh",
+        "--locked-mode",
+        "-p:WarningsNotAsErrors=NU1603"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 19.38,
+      "log": "/tmp/rules-pr3192-lock-repair/verify.log"
+    }
+  ],
+  "affectedLocks": [
+    "Essentials/tests/Modularity/Tests/packages.lock.json",
+    "Essentials/tests/Modularity/ProviderTests/packages.lock.json"
+  ],
+  "externalPackageVersionsUnchanged": true,
+  "rawArtifacts": {
+    "receipt.json": {
+      "path": "/tmp/rules-pr3192-lock-repair/receipt.json",
+      "sha256": "d78a88ef2a0aa22ed7d890fa0783634dee5ef9cb17a661df68567bb66ee22545"
+    },
+    "reproduce.log": {
+      "path": "/tmp/rules-pr3192-lock-repair/reproduce.log",
+      "sha256": "7585546defe3c60df8790a538d53ec91df729681237b3e46cbd677e6206f521d"
+    },
+    "refresh.log": {
+      "path": "/tmp/rules-pr3192-lock-repair/refresh.log",
+      "sha256": "7f9fab79d29b16487177d00621b619640ba2c412fe0e9ed5db42fd41139dff6e"
+    },
+    "verify.log": {
+      "path": "/tmp/rules-pr3192-lock-repair/verify.log",
+      "sha256": "02c81379ed1b9d88e0b557f0d1d9a9cf49517a4e6677813484142c818f8dba8f"
+    }
+  },
+  "generatedFilters": {
+    "exitCode": 0,
+    "log": "/tmp/rules-pr3192-lock-repair/filters.log",
+    "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+  },
+  "repairedLockHashes": {
+    "Essentials/tests/Modularity/Tests/packages.lock.json": "58b70b1a746f2ff91aab3765722951aaf2226fb7b34a2e7534383fb786f97194",
+    "Essentials/tests/Modularity/ProviderTests/packages.lock.json": "d907f3c373cdc60057d70f622f5e1140d8ef37792aaa102524c927922f51fa11"
+  }
+}

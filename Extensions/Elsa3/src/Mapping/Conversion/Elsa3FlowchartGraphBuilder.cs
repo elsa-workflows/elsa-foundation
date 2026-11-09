@@ -628,7 +628,9 @@ internal static class Elsa3FlowchartGraphBuilder
         {
             foreach (var child in _children.Where(child => child.CustomProperties?.CanStartWorkflow == true && !ReferenceEquals(child, start)))
             {
-                if (Construct(child) is not null || !edges.Any(edge => ReferenceEquals(edge.Target, child)))
+                // A non-trigger never fires, so its flag only took part in choosing the start node.
+                if (Construct(child) is not null || Elsa3ActivityNormalizer.IsNonTrigger(plan.Find(child)) ||
+                    !edges.Any(edge => ReferenceEquals(edge.Target, child)))
                     continue;
 
                 Error(GraphStartTriggerMisplaced, plan.Find(child)!.JsonPath, child,

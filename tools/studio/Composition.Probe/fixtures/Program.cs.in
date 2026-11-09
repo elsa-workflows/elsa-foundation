@@ -1,0 +1,157 @@
+using System.Runtime.CompilerServices;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
+using Elsa.Studio.Api.Authorization;
+using Elsa.Studio.Hosting;
+#if STATIC_CUSTOM
+using Acme.Studio.Composition;
+#endif
+#if THEMES
+using Elsa.Studio.Hosting.Themes;
+#endif
+#if ADMINISTRATION
+using CShells.Nuplane;
+using Elsa.Studio.Hosting.Nuplane;
+using Microsoft.Extensions.Options;
+using Nuplane.Admin;
+using Nuplane.Builder;
+using Nuplane.Feeds.Configuration;
+using Nuplane.Reconciliation.Configuration;
+using Nuplane.Reconciliation.LockFile;
+using Nuplane.Sources.Directory.Builder;
+#endif
+#if CONSOLE_STREAM
+using Elsa.Studio.ConsoleStream;
+using Elsa.Studio.ConsoleStream.Extensions;
+ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
+Console.WriteLine("composition:early-capture");
+#endif
+
+var builder = WebApplication.CreateBuilder(args);
+var studio = builder.AddElsaStudio(options =>
+{
+    options.ShellName = "Authoring";
+#if CONSOLE_STREAM
+    options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath];
+#endif
+});
+#if STATIC_CUSTOM
+studio.ConfigureShells(shells => shells.WithAssemblies(typeof(CustomStudioFeature).Assembly));
+#endif
+#if THEMES
+studio.AddElsaStudioThemes(options =>
+{
+    options.StoreFile = "state/themes.json";
+    options.AssetsDirectory = "state/materials";
+    options.ThemesDirectory = "sources/themes.json";
+});
+#endif
+#if ADMINISTRATION
+var stateFile = Path.Combine(builder.Environment.ContentRootPath, "native-store", "state.json");
+studio.AddElsaStudioNuplane(options => options.DirectoryFeedName = "composition-runtime",
+    configureNuplane: nuplane =>
+    {
+        nuplane.WithStateFile(stateFile).UseCoordinatedPackageStore([new("default", "studio", stateFile)], true);
+        nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(builder.Environment.ContentRootPath, "native-store", "installs"));
+        nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(builder.Environment.ContentRootPath, "native-store", "nuplane.lock.json"));
+        nuplane.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);
+        nuplane.AddDirectoryFeed("composition-runtime", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+    });
+builder.Services.PostConfigure<NuplaneIntegrationOptions>(options =>
+    options.AutoReload = !builder.Configuration.GetValue("Qualification:DisableAutomaticReload", false));
+#endif
+#if CONSOLE_STREAM
+studio.ConfigureShells(shells => shells.WithAssemblies(typeof(ConsoleStreamStudioFeature).Assembly));
+ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(builder.Configuration);
+builder.Services.AddConsoleStreamStudioHostIfEnabled(builder.Configuration);
+#endif
+
+await using var app = builder.Build();
+await using var proof = new QualificationState();
+var registry = app.Services.GetRequiredService<IShellRegistry>();
+app.UseElsaStudio();
+app.MapElsaStudio();
+#if ADMINISTRATION
+app.MapElsaStudioNuplane();
+#endif
+#if CONSOLE_STREAM
+app.MapConsoleStreamStudioIfEnabled(builder.Configuration, StudioBridgeAuthorization.PolicyName);
+#endif
+
+// These are owned qualification observations, not replacements for product endpoints or services.
+var coldAtReady = false;
+app.MapGet("/__qualification/read", () => Results.Ok(new { coldAtReady }))
+    .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
+app.MapPost("/__qualification/mutate", () => Results.NoContent())
+    .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
+app.MapGet("/__qualification/generation", async () =>
+{
+    var shell = registry.GetActive("Authoring") ?? throw new InvalidOperationException("No serving shell.");
+    await using var scope = shell.BeginScope();
+    return new { generation = proof.Generation(shell), value = scope.ServiceProvider.GetService<string>(), retained = proof.RetainedValue };
+}).RequireAuthorization(StudioBridgeAuthorization.PolicyName);
+app.MapPost("/__qualification/retain", () =>
+{
+    var shell = registry.GetActive("Authoring") ?? throw new InvalidOperationException("No serving shell.");
+    var scope = shell.BeginScope();
+    proof.Retain(scope, () => scope.ServiceProvider.GetService<string>());
+    return Results.NoContent();
+}).RequireAuthorization(StudioBridgeAuthorization.PolicyName);
+app.MapPost("/__qualification/release", async () => { await proof.ReleaseAsync(); return Results.NoContent(); })
+    .RequireAuthorization(StudioBridgeAuthorization.PolicyName);
+app.MapPost("/__qualification/emit/{marker}", (string marker) =>
+{
+    Console.WriteLine("composition:" + marker);
+    return Results.NoContent();
+}).RequireAuthorization(StudioBridgeAuthorization.PolicyName);
+#if ADMINISTRATION
+app.MapPost("/__qualification/reconcile", async (INuplaneAdminOperations operations, CancellationToken cancellationToken) =>
+    await operations.TriggerReconcileAsync(cancellationToken)).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
+#endif
+
+#if ADMINISTRATION
+Directory.CreateDirectory(Path.Combine(builder.Environment.ContentRootPath, "native-store", "installs"));
+var maintenance = app.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
+var enrollment = await maintenance.PreviewEnrollmentAsync();
+if (enrollment.Membership == "Unenrolled")
+{
+    if (!builder.Configuration.GetValue("Qualification:EnrollOwnedStore", false))
+        throw new InvalidOperationException("This owned native fixture requires an explicit enrollment selection.");
+    var enrolled = await maintenance.EnrollAsync(new("default", enrollment.RootIdentity!, 1, true, ["studio"], []));
+    if (enrolled.Status != "Complete") throw new InvalidOperationException("Owned native enrollment failed: " + enrolled.Status);
+}
+else if (enrollment.Membership != "Complete") throw new InvalidOperationException("Native enrollment is not complete.");
+#endif
+await app.StartAsync();
+#if ADMINISTRATION
+var initial = await app.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
+if (initial.RunResult is not { IsDegraded: false }) throw new InvalidOperationException("Initial actual package reconciliation failed.");
+#endif
+coldAtReady = !registry.GetActiveShells().Any();
+if (!coldAtReady) throw new InvalidOperationException("The qualification shell was unexpectedly activated before the first request.");
+Console.WriteLine("COMPOSITION_QUALIFICATION_READY");
+await app.WaitForShutdownAsync();
+
+sealed class QualificationState : IAsyncDisposable
+{
+    private readonly ConditionalWeakTable<object, GenerationIdentity> _generations = new();
+    private IAsyncDisposable? _retained;
+    private Func<string?>? _readRetained;
+    public string Generation(object shell) => _generations.GetValue(shell, _ => new(Guid.NewGuid().ToString("N"))).Id;
+    public string? RetainedValue => _readRetained?.Invoke();
+    public void Retain(IAsyncDisposable scope, Func<string?> read)
+    {
+        if (_retained is not null) throw new InvalidOperationException("A generation scope is already retained.");
+        _retained = scope;
+        _readRetained = read;
+    }
+    public async ValueTask ReleaseAsync()
+    {
+        var scope = _retained;
+        _retained = null;
+        _readRetained = null;
+        if (scope is not null) await scope.DisposeAsync();
+    }
+    public ValueTask DisposeAsync() => ReleaseAsync();
+    private sealed record GenerationIdentity(string Id);
+}

@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getRegisteredActivityIcon, registerActivityIcons } from "@elsa-workflows/studio-sdk";
 import { ActivityIconGlyph } from "../activityIconGlyphs";
+import { resolveActivityIcon, resolveActivityIconFallback } from "../activityIcons";
+import { writeLine } from "./fixtures";
 
 function SlackIcon({ size = 15 }: { size?: number }) {
   return <svg data-testid="slack-icon" width={size} height={size} viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /></svg>;
@@ -25,6 +27,14 @@ vi.mock("lucide-react/dynamicIconImports", () => ({
 let root: Root;
 let container: HTMLDivElement;
 
+function renderCatalogIcon(iconName: string) {
+  const activity = { ...writeLine, activityDefinitionId: "acme-slack", iconName };
+  flushSync(() => root.render(<ActivityIconGlyph
+    icon={resolveActivityIcon(activity)}
+    fallback={resolveActivityIconFallback(activity)}
+  />));
+}
+
 beforeEach(() => {
   mockRocketCalls.length = 0;
   registerActivityIcons({ slack: null });
@@ -44,13 +54,13 @@ describe("ActivityIconGlyph extension contract", () => {
     registerActivityIcons({ slack: SlackIcon });
     expect(getRegisteredActivityIcon("ext:slack")).toBe(SlackIcon);
 
-    flushSync(() => root.render(<ActivityIconGlyph icon="ext:slack" fallback="email" />));
+    renderCatalogIcon("ext:slack");
 
     expect(container.querySelector("[data-testid='slack-icon']")).toBeTruthy();
   });
 
   it("matches ext: names case-insensitively and re-renders a late registration", () => {
-    flushSync(() => root.render(<ActivityIconGlyph icon="ext:Slack" fallback="email" />));
+    renderCatalogIcon("ext:Slack");
     expect(container.querySelector("[data-testid='slack-icon']")).toBeNull();
 
     flushSync(() => registerActivityIcons({ Slack: SlackIcon }));
@@ -59,15 +69,16 @@ describe("ActivityIconGlyph extension contract", () => {
     expect(container.querySelector("[data-testid='slack-icon']")).toBeTruthy();
   });
 
-  it("falls back to the category icon when ext: is unknown", () => {
-    flushSync(() => root.render(<ActivityIconGlyph icon="ext:missing" fallback="email" />));
+  it("falls back to the activity type icon when ext: is unknown", () => {
+    renderCatalogIcon("ext:missing");
 
     expect(container.querySelector("[data-testid='slack-icon']")).toBeNull();
     expect(container.querySelector("svg")).toBeTruthy();
+    expect(container.querySelector(".lucide-terminal")).toBeTruthy();
   });
 
   it("renders asset: values as an img", () => {
-    flushSync(() => root.render(<ActivityIconGlyph icon="asset:Acme.Slack/icons/slack.svg" fallback="activity" />));
+    renderCatalogIcon("asset:Acme.Slack/icons/slack.svg");
 
     const image = container.querySelector("img.wf-activity-icon-asset") as HTMLImageElement | null;
     expect(image?.getAttribute("src")).toBe("/_content/Acme.Slack/icons/slack.svg");
@@ -75,7 +86,7 @@ describe("ActivityIconGlyph extension contract", () => {
   });
 
   it("falls back when an asset image fails to load", () => {
-    flushSync(() => root.render(<ActivityIconGlyph icon="asset:Acme.Slack/icons/missing.svg" fallback="activity" />));
+    renderCatalogIcon("asset:Acme.Slack/icons/missing.svg");
 
     const image = container.querySelector("img") as HTMLImageElement;
     flushSync(() => image.dispatchEvent(new Event("error")));
@@ -85,7 +96,7 @@ describe("ActivityIconGlyph extension contract", () => {
   });
 
   it("stores a lazily loaded lucide component without invoking it as a setState updater", async () => {
-    flushSync(() => root.render(<ActivityIconGlyph icon="Rocket" fallback="activity" />));
+    renderCatalogIcon("Rocket");
 
     await vi.waitFor(() => {
       expect(container.querySelector("[data-testid='rocket-icon']")).toBeTruthy();

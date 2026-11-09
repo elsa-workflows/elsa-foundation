@@ -1,0 +1,25 @@
+{
+  "sourcePath": "Extensions/Etl/src/Workflows/Runtime/Activities/RunEtl.cs",
+  "originalSha256": "a770994e28c1bb4ad3f4b4bd93e1f47ec54ac8b81015bab52898ebd156e5f6b4",
+  "byteExactRestoration": true,
+  "mutations": [
+    {
+      "change": "without-declaration",
+      "exitCode": 1,
+      "log": "/tmp/elsa-program-20261020-reprioritization/native-graph-without-declaration.log",
+      "expectedFailure": "All three placed controls fail because source publication has no local etl-completed target."
+    },
+    {
+      "change": "without-frozen-target",
+      "exitCode": 1,
+      "log": "/tmp/elsa-program-20261020-reprioritization/native-graph-without-frozen-target.log",
+      "expectedFailure": "All three placed controls fail because actual registration target does not match the reconstructed composed address."
+    }
+  ],
+  "restoredFullEtl": {
+    "exitCode": 0,
+    "passed": 272,
+    "failed": 0,
+    "skipped": 0
+  }
+}

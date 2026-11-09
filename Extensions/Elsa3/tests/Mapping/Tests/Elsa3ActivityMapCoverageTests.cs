@@ -106,6 +106,109 @@ public sealed class Elsa3ActivityMapCoverageTests
                 $"'{elsa3Type}' maps an outcome to '{outcome}', which '{typeKey}' does not declare.");
     }
 
+    /// <summary>
+    /// Spec 267 FR-008: every carried or narrowed input records what a JSON <c>null</c> converts to, or carries the Elsa 3
+    /// default it emits for one (R2, or R5 with a default). A member with neither is a gap in the spec's table.
+    /// </summary>
+    [Fact]
+    public void Every_carried_or_narrowed_input_records_its_null_conversion()
+    {
+        var gaps = Map.Entries
+            .SelectMany(entry => entry.Members.Select(rule => (entry.Elsa3TypeName, Rule: rule)))
+            .Where(item => item.Rule is { Kind: Elsa3MemberKind.Input, Rule: Elsa3MemberRuleKind.Carry or Elsa3MemberRuleKind.NarrowedContract })
+            .Where(item => item.Rule.OnNull is null && item.Rule.Elsa3Default is null)
+            .Select(item => $"{item.Elsa3TypeName}.{item.Rule.Elsa3Name}");
+
+        Assert.Empty(gaps);
+    }
+
+    /// <summary>
+    /// Spec 267 research R-7: the Elsa 4 side of the null table holds in the real catalog. A typed null needs an input that
+    /// accepts null and is optional; no binding needs an optional input.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CatalogEntries))]
+    public async Task Every_null_conversion_fits_the_real_catalog(string elsa3Type)
+    {
+        var entry = Map.Find(elsa3Type)!;
+        var typeKey = ((Elsa3ActivityTarget.CatalogActivity)entry.Target).ActivityTypeKey;
+        var catalog = RealActivityCatalog.Create();
+        var version = await catalog.GetVersion(catalog.VersionIdOf(typeKey));
+
+        foreach (var rule in entry.Members.Where(rule => rule.OnNull is not null))
+        {
+            var input = version.Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
+            var name = $"'{elsa3Type}.{rule.Elsa3Name}'";
+            // A refusal that only applies when another member is bound converts to a typed null otherwise.
+            if (rule.OnNull is { Rule: Elsa3NullRule.TypedNull } or { Rule: Elsa3NullRule.Refuse, WhenBound: not null })
+                Assert.True(input.IsNullable && !input.IsRequired, $"{name} converts a null to a typed null, but '{typeKey}.{input.ReferenceKey}' does not accept one.");
+            if (rule.OnNull is { Rule: Elsa3NullRule.NoBinding })
+                Assert.False(input.IsRequired, $"{name} leaves a null unbound, but '{typeKey}.{input.ReferenceKey}' is required.");
+        }
+    }
+
+    /// <summary>
+    /// Spec 248 D-3: an entry without a <c>canStartWorkflow</c> rule drops the flag, because Elsa 3 only uses it there to
+    /// pick a flowchart's start. That is faithful only for non-triggers, so exactly the Elsa 3 triggers declare one.
+    /// </summary>
+    [Fact]
+    public void Exactly_the_elsa3_triggers_with_a_counterpart_classify_canStartWorkflow()
+    {
+        string[] triggers = ["Elsa.Cron", "Elsa.Event", "Elsa.HttpEndpoint", "Elsa.StartAt", "Elsa.Timer"];
+        var classifying = Map.Entries
+            .Where(entry => entry.Members.Any(rule =>
+                rule.Kind == Elsa3MemberKind.CustomProperty && StringComparer.OrdinalIgnoreCase.Equals(rule.Elsa3Name, "CanStartWorkflow")))
+            .Select(entry => entry.Elsa3TypeName)
+            .Order(StringComparer.Ordinal);
+        var expected = triggers.Where(type => Map.Find(type) is { Target: not Elsa3ActivityTarget.NoCounterpart });
+
+        Assert.Equal(expected, classifying);
+    }
+
+    /// <summary>
+    /// The member map's "Elsa 4 required members with no Elsa 3 source": these have no R2 default, so an unset member is
+    /// refused. WriteLine.text left the list in spec 248: Elsa 3 writes an empty line, so it defaults to "".
+    /// </summary>
+    [Fact]
+    public void Required_members_with_no_elsa3_source_have_no_default_and_WriteLine_text_defaults_to_empty()
+    {
+        (string Type, string Elsa4Key)[] unsourced =
+        [
+            ("Elsa.SendHttpRequest", "Url"), ("Elsa.HttpEndpoint", "Path"), ("Elsa.Event", "EventName"),
+            ("Elsa.PublishEvent", "EventName"), ("Elsa.Cron", "Expression"), ("Elsa.DispatchWorkflow", "WorkflowDefinitionId"),
+            ("Elsa.RunJavaScript", "script")
+        ];
+
+        Assert.All(unsourced, member => Assert.DoesNotContain(Map.Find(member.Type)!.Members, rule =>
+            rule.Rule == Elsa3MemberRuleKind.DefaultFlip && rule.Elsa4Key == member.Elsa4Key));
+        var text = Assert.Single(Map.Find("Elsa.WriteLine")!.Members);
+        Assert.Equal(Elsa3MemberRuleKind.DefaultFlip, text.Rule);
+        Assert.Equal("text", text.Elsa4Key);
+        Assert.Equal(string.Empty, text.Elsa3Default?.GetString());
+    }
+
+    /// <summary>
+    /// Spec 256: WriteHttpResponse.Content carries any value Elsa 4 sends the same (the body is a JSON value), and its
+    /// content type drops a blank expression. These contracts read the WriteHttpResponse siblings, so no other member uses them.
+    /// </summary>
+    [Fact]
+    public void WriteHttpResponse_content_and_content_type_use_the_response_contracts_only()
+    {
+        var members = Map.Find("Elsa.WriteHttpResponse")!.Members;
+        var content = Assert.Single(members, rule => rule.Elsa3Name == "Content");
+        Assert.Equal("Body", content.Elsa4Key);
+        Assert.Equal(Elsa3ValueContract.HttpResponseBody, content.Contract);
+        var contentType = Assert.Single(members, rule => rule.Elsa3Name == "ContentType");
+        Assert.Equal("ContentType", contentType.Elsa4Key);
+        Assert.Equal(Elsa3ValueContract.HttpResponseContentType, contentType.Contract);
+
+        var users = Map.Entries
+            .Where(entry => entry.Members.Any(rule =>
+                rule.Contract is Elsa3ValueContract.HttpResponseBody or Elsa3ValueContract.HttpResponseContentType))
+            .Select(entry => entry.Elsa3TypeName);
+        Assert.Equal(["Elsa.WriteHttpResponse"], users);
+    }
+
     [Fact]
     public void Every_intrinsic_target_and_key_exists()
     {
@@ -132,12 +235,14 @@ public sealed class Elsa3ActivityMapCoverageTests
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
         // The terminal-placement rewrite raises the first two for reusable workflows (plan D-6, D-7); graph conversion
-        // raises the third for connections Elsa 3 never follows (spec 239 G-7).
+        // raises the third for connections Elsa 3 never follows (spec 239 G-7); the member pass raises the fourth for a null
+        // member bound by name (#3293).
         string[] raisedByRewrites =
         [
             Elsa3ActivityDiagnosticCodes.OutcomeUndeclared,
             Elsa3ActivityDiagnosticCodes.OutcomeUnreached,
-            Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved
+            Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved,
+            Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default
         ];
 
         Assert.All(declared, code => Assert.Contains(code, codes));

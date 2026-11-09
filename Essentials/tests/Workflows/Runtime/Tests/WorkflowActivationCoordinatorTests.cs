@@ -2,11 +2,13 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -21,6 +23,62 @@ public sealed class WorkflowActivationCoordinatorTests
     private readonly Harness _harness = new();
 
     [Fact]
+    public async Task An_undeclared_channel_is_refused_before_mutation_and_leaves_its_running_activation_untouched()
+    {
+        var incumbent = await _harness.ActivateAsync("incumbent", "artifact-1", slotName: "Preview");
+        _harness.ResetCalls();
+        _harness.ConfigureChannelPolicy(new()
+        {
+            AllowAdHocChannels = false,
+            Channels = [new() { Name = "preview", DisplayName = "Preview" }]
+        });
+
+        var rejected = await _harness.ActivateAsync(
+            "candidate",
+            "artifact-2",
+            incumbent.Slot.Revision,
+            slotName: "Preview");
+
+        Assert.False(rejected.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.ChannelNotAllowed, rejected.Outcome);
+        Assert.Equal(WorkflowActivationStep.ChannelValidation, rejected.FailedStep);
+        Assert.Equal(incumbent.Slot, rejected.Slot);
+        Assert.Empty(_harness.Calls);
+        Assert.Equal("incumbent", await _harness.SlotActivationAsync("Preview"));
+        Assert.Equal(WorkflowActivationProjectionState.Active, await _harness.Bindings.FindActivationStateAsync("incumbent"));
+        await _harness.AssertLiveAsync("incumbent");
+        Assert.Null(await _harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")));
+    }
+
+    [Fact]
+    public async Task A_declared_channel_is_accepted_when_ad_hoc_channels_are_disabled()
+    {
+        var harness = new Harness(new()
+        {
+            AllowAdHocChannels = false,
+            Channels = [new() { Name = "production", DisplayName = "Production" }]
+        });
+
+        var result = await harness.ActivateAsync("activation-1", "artifact-1", slotName: "production");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("activation-1", result.Slot.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task Default_channel_policy_allows_an_ad_hoc_channel()
+    {
+        Assert.True(new ActivationChannelOptions().AllowAdHocChannels);
+        var harness = new Harness();
+
+        var result = await harness.ActivateAsync("activation-1", "artifact-1", slotName: "canary");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+    }
+
+    [Fact]
     public async Task Activation_runs_the_atomic_logical_sequence_and_stamps_the_reference()
     {
         var result = await _harness.ActivateAsync("activation-1", "artifact-1");
@@ -32,6 +90,7 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Equal(WorkflowActivationSlotIdentity.Create("definition-1", "default"), result.Reference.SlotId);
         Assert.Equal(["lease", "reference:save", "projection:prepare", "switch:activate", "observer"], _harness.Calls);
         Assert.Equal(["activation-1"], await _harness.ServingAsync());
+        Assert.Equal("definition-1", _harness.Observer.LastSnapshot?.DefinitionId);
     }
 
     [Fact]
@@ -267,6 +326,7 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Null(result.Slot.ActiveActivationId);
         Assert.Empty(await _harness.ServingAsync());
         Assert.Equal(["switch:deactivate", "observer"], _harness.Calls);
+        Assert.Equal("definition-1", _harness.Observer.LastSnapshot?.DefinitionId);
 
         var repeat = await _harness.DeactivateAsync(result.Slot.Revision);
         Assert.Equal(WorkflowActivationOutcome.AlreadyInactive, repeat.Outcome);
@@ -581,13 +641,13 @@ public sealed class WorkflowActivationCoordinatorTests
 
     private sealed class Harness
     {
-        public Harness()
+        public Harness(ActivationChannelOptions? activationChannelOptions = null)
         {
             References = new(new InMemoryWorkflowExecutableSourceReferenceStore(), Calls);
             Indexer = new(Bindings, Calls);
             Observer = new(Calls);
             Switch = new(new InMemoryWorkflowActivationSwitch(Authority, References, new FakeTimeProvider(Now), Bindings), Calls);
-            Coordinator = new(Authority, Switch, References, new RecordingLease(Calls), new FakeTimeProvider(Now), Indexer, Bindings, triggerObservers: [Observer], logger: Logger);
+            Coordinator = CreateCoordinator(activationChannelOptions);
         }
 
         public RecordingLogger<WorkflowActivationCoordinator> Logger { get; } = new();
@@ -598,7 +658,21 @@ public sealed class WorkflowActivationCoordinatorTests
         public RecordingIndexer Indexer { get; }
         public RecordingObserver Observer { get; }
         public RecordingSwitch Switch { get; }
-        public WorkflowActivationCoordinator Coordinator { get; }
+        public WorkflowActivationCoordinator Coordinator { get; private set; }
+
+        public void ConfigureChannelPolicy(ActivationChannelOptions options) => Coordinator = CreateCoordinator(options);
+
+        private WorkflowActivationCoordinator CreateCoordinator(ActivationChannelOptions? options) => new(
+            Authority,
+            Switch,
+            References,
+            new RecordingLease(Calls),
+            new FakeTimeProvider(Now),
+            Indexer,
+            Bindings,
+            triggerObservers: [Observer],
+            logger: Logger,
+            activationChannelOptions: options is null ? null : Options.Create(options));
 
         public void ResetCalls() => Calls.Clear();
 
@@ -627,11 +701,12 @@ public sealed class WorkflowActivationCoordinatorTests
             string artifactId,
             WorkflowActivationSource? source = null,
             long expectedRevision = 0,
-            WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
+            WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner,
+            string slotName = "default") =>
             new(
                 Executable(artifactId),
                 Reference(artifactId),
-                "default",
+                slotName,
                 activationId,
                 source ?? WorkflowActivationSource.Publishing,
                 expectedRevision,
@@ -642,8 +717,9 @@ public sealed class WorkflowActivationCoordinatorTests
             string artifactId,
             long expectedRevision = 0,
             WorkflowActivationSource? source = null,
-            WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
-            Coordinator.ActivateAsync(Command(activationId, artifactId, source, expectedRevision, intent));
+            WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner,
+            string slotName = "default") =>
+            Coordinator.ActivateAsync(Command(activationId, artifactId, source, expectedRevision, intent, slotName));
 
         public ValueTask<WorkflowActivationResult> DeactivateAsync(long expectedRevision, CancellationToken cancellationToken = default) =>
             Coordinator.DeactivateAsync(new(Executable("artifact-1"), "default", WorkflowActivationSource.Publishing, expectedRevision), cancellationToken);
@@ -651,7 +727,7 @@ public sealed class WorkflowActivationCoordinatorTests
         public async Task<string[]> ServingAsync() =>
             (await Bindings.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("test", "hash-1"))).Items.Select(binding => binding.ActivationId!).Order(StringComparer.Ordinal).ToArray();
 
-        public async Task<string?> SlotActivationAsync() => (await Authority.FindAsync("definition-1", "default"))?.ActiveActivationId;
+        public async Task<string?> SlotActivationAsync(string slotName = "default") => (await Authority.FindAsync("definition-1", slotName))?.ActiveActivationId;
 
         public async Task<long> RevisionAsync() => (await Authority.FindAsync("definition-1", "default"))?.Revision ?? 0;
 
@@ -854,11 +930,13 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public bool ThrowOnce { get; set; }
         public int Calls { get; private set; }
+        public WorkflowTriggerIndexSnapshot? LastSnapshot { get; private set; }
         public CancellationTokenSource? CancelAfterCall { get; set; }
 
         public async ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
             Calls++;
+            LastSnapshot = snapshot;
             calls.Add("observer");
             if (CancelAfterCall is { } source)
             {

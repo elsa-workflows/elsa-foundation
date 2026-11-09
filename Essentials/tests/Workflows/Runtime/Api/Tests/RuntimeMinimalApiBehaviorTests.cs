@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -10,6 +11,7 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -20,7 +22,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -40,6 +42,97 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private const string LayoutPath = ActivityPath + "/layout";
     private const string ValuePayloadPath = ActivityPath + "/value-evidence/value-1/payload";
     private const string ActivationSlotPath = "/runtime/workflows/activation-slots/definition-1/default";
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Persistence_mode_read_reports_the_configured_host_default(PersistenceMode mode)
+    {
+        await using var host = await StartAsync(_ => null, services =>
+            services.AddSingleton(new PersistenceModeOptions { Mode = mode }));
+        using var response = await host.Client.GetAsync("/runtime/workflows/persistence-mode");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(mode.ToString(), json.RootElement.GetProperty("persistenceMode").GetString());
+        var endpoint = host.FindEndpoint("runtime/workflows/persistence-mode");
+        var policy = Assert.Single(endpoint.Metadata.GetOrderedMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(policy.Policy!);
+        Assert.Equal(PermissionKey.Normalize(Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
+        var link = Assert.Single(Elsa.Workflows.Runtime.Api.Capabilities.RuntimeApiCapabilities.StaticDeclaration.Links,
+            item => item.Rel == "runtime-persistence-mode");
+        Assert.Equal("runtime/workflows/persistence-mode", link.Href);
+        Assert.False(link.Templated);
+    }
+
+    [Fact]
+    public async Task Activity_collection_pages_exact_matches_and_binds_cursor_to_query_and_access()
+    {
+        var workflows = new Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore();
+        var inspections = new Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionInspectionStore();
+        var authorization = new BrowserAuthorization();
+        var now = DateTimeOffset.UnixEpoch;
+        await workflows.SaveAsync(new WorkflowExecutionState("wf-1", new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Completed, null, now, now, now, now, null, null, "tenant-a", new Dictionary<string, string>()));
+        foreach (var id in new[] { "ae-2", "ae-1" })
+        {
+            await inspections.SaveAsync(new ActivityExecutionInspectionProjection(id, "wf-1", "node", "authored", "Custom.Activity", "1",
+                ActivityExecutionStatus.Completed, null, 1, now, now, now, null, null, now,
+                ActivitySchedulingProvenance.From("wf-1", null, null, null, null, null, null, "test"), ["Done"], [], [], [],
+                new Dictionary<string, string> { ["private"] = "must-not-leak" }));
+        }
+        var codec = new Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+        { SigningKey = "browser-test-signing-key-at-least-32-bytes" }));
+        await using var host = await StartAsync(_ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted), services =>
+        {
+            services.AddSingleton<IWorkflowExecutionStateStore>(workflows);
+            services.AddSingleton<IActivityExecutionInspectionStore>(inspections);
+            services.AddSingleton<IActivityInspectionContextAsync>(authorization);
+            services.AddSingleton<IRuntimeRecoveryContinuationCodec>(codec);
+        });
+        const string path = "/runtime/workflows/instances/wf-1/activity-executions?executableNodeId=node&limit=1";
+        using var response = await host.Client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("must-not-leak", text, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(text);
+        Assert.Equal(2, json.RootElement.GetProperty("totalCount").GetInt64());
+        Assert.Equal(2, json.RootElement.GetProperty("items")[0].GetProperty("position").GetInt64());
+        Assert.Equal("ae-2", json.RootElement.GetProperty("items")[0].GetProperty("execution").GetProperty("activityExecutionId").GetString());
+        var cursor = Uri.EscapeDataString(json.RootElement.GetProperty("previousCursor").GetString()!);
+        using var earlier = await host.Client.GetAsync(path + "&cursor=" + cursor);
+        Assert.Equal(HttpStatusCode.OK, earlier.StatusCode);
+        using var earlierJson = JsonDocument.Parse(await earlier.Content.ReadAsStringAsync());
+        Assert.Equal("ae-1", earlierJson.RootElement.GetProperty("items")[0].GetProperty("execution").GetProperty("activityExecutionId").GetString());
+        using var changedQuery = await host.Client.GetAsync(path + "&parentActivityExecutionId=other&cursor=" + cursor);
+        Assert.Equal(HttpStatusCode.BadRequest, changedQuery.StatusCode);
+        authorization.Profile = "changed";
+        using var changedAccess = await host.Client.GetAsync(path + "&cursor=" + cursor);
+        Assert.Equal(HttpStatusCode.BadRequest, changedAccess.StatusCode);
+        authorization.TenantScope = "tenant-b";
+        using var otherTenant = await host.Client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.NotFound, otherTenant.StatusCode);
+        authorization.TenantScope = "tenant-a";
+        authorization.Allowed = false;
+        using var denied = await host.Client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+        Assert.DoesNotContain("ae-2", await denied.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    private sealed class BrowserAuthorization : IActivityInspectionContextAsync
+    {
+        public string TenantScope { get; set; } = "tenant-a";
+        public string AuditSubject => "browser-test";
+        public string RequestCorrelationId => "test";
+        public string Profile { get; set; } = "structure-only";
+        public bool Allowed { get; set; } = true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Profile);
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Allowed && workflowExecution.TenantId == TenantScope);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    }
 
     [Theory]
     [InlineData(WorkflowExecutionCommandDispatchStatus.Accepted, HttpStatusCode.OK)]
@@ -71,7 +164,15 @@ public sealed class RuntimeMinimalApiBehaviorTests
             DateTimeOffset.UnixEpoch));
         await using var host = await StartAsync(
             _ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted),
-            services => services.AddSingleton<IWorkflowActivationAuthority>(authority));
+            services =>
+            {
+                services.AddSingleton<IWorkflowActivationAuthority>(authority);
+                services.Configure<ActivationChannelOptions>(options =>
+                {
+                    options.AllowAdHocChannels = false;
+                    options.Channels = [new() { Name = "default", DisplayName = "Production", Description = "Normal traffic" }];
+                });
+            });
 
         using var list = await host.Client.GetAsync("/runtime/workflows/activation-slots/definition-1");
         using var detail = await host.Client.GetAsync(ActivationSlotPath);
@@ -80,9 +181,14 @@ public sealed class RuntimeMinimalApiBehaviorTests
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        var listBody = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(listBody.GetProperty("allowAdHocChannels").GetBoolean());
+        Assert.Equal("Production", Assert.Single(listBody.GetProperty("channels").EnumerateArray())
+            .GetProperty("displayName").GetString());
         var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("activation-1", detailBody.GetProperty("activeActivationId").GetString());
         Assert.Equal("artifact-reconciliation", detailBody.GetProperty("sourceKind").GetString());
+        Assert.Equal("Normal traffic", detailBody.GetProperty("channel").GetProperty("description").GetString());
     }
 
     [Theory]
@@ -138,7 +244,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     /// gate as a bare 415, not as the 400 problem document every other required mode produces.
     /// <para>
     /// The coverage used to live in the in-tree framework's own suite, which went away when the
-    /// framework moved to NativeEndpoints. Without a test here, the five endpoints depend on a
+    /// framework moved to MinimalEndpoints. Without a test here, the five endpoints depend on a
     /// package behaviour that nothing in this repository checks, and a future package change could
     /// move them from 415 to 400 silently.
     /// </para>
@@ -185,6 +291,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     [Theory]
     [InlineData(typeof(WorkflowExecutableNotFoundException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(WorkflowExecutableReferenceRejectedException), HttpStatusCode.Conflict)]
+    [InlineData(typeof(WorkflowExecutableStartRejectedException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(ArgumentException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(InvalidOperationException), HttpStatusCode.InternalServerError)]
     public async Task Execute_maps_expected_failures_to_problem_details_without_disclosing_unexpected_errors(
@@ -196,6 +303,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
             ? new WorkflowExecutableNotFoundException("artifact-1")
             : exceptionType == typeof(WorkflowExecutableReferenceRejectedException)
                 ? new WorkflowExecutableReferenceRejectedException("artifact-1", WorkflowExecutableReferenceScope.Published, WorkflowExecutableReferenceRejectionReason.SelectionNotFound)
+                : exceptionType == typeof(WorkflowExecutableStartRejectedException)
+                    ? new WorkflowExecutableStartRejectedException(WorkflowExecutableStartRejectionCategory.Input, "runtime.input.missing-required", "Required workflow input 'count' was not supplied.")
                 : exceptionType == typeof(ArgumentException)
                     ? new ArgumentException("invalid execute request", "sourceReferenceId")
                     : new InvalidOperationException(secret);
@@ -209,6 +318,21 @@ public sealed class RuntimeMinimalApiBehaviorTests
             Assert.DoesNotContain(secret, body, StringComparison.Ordinal);
         else
             Assert.Contains("runtime-request", body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Input, HttpStatusCode.BadRequest)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Policy, HttpStatusCode.InternalServerError)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Authority, HttpStatusCode.InternalServerError)]
+    public async Task Execute_maps_only_an_input_contract_start_rejection_to_bad_request(
+        WorkflowExecutableStartRejectionCategory category,
+        HttpStatusCode expectedStatus)
+    {
+        await using var host = await StartAsync(_ => throw new WorkflowExecutableStartRejectedException(category, "reason", "Start refused."));
+
+        using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
+
+        Assert.Equal(expectedStatus, response.StatusCode);
     }
 
     [Theory]

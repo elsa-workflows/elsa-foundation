@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionAttempt,
+  ActivityStateView,
   ActivityExecutionHierarchyPage,
   ActivityExecutionLayout,
   RuntimeDiagnosticsEvidenceLevel,
@@ -19,6 +21,7 @@ import type {
 } from "../workflowTypes";
 import { capabilityIds, getApiCapability, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
+import { mapWorkflowInstanceDetails } from "../workflowInstanceInspection";
 
 export const runtimeKeys = {
   all: ["workflow-runtime"] as const,
@@ -214,6 +217,44 @@ export interface WorkflowInstanceListPage {
   totalCount: number;
 }
 
+export interface DeleteWorkflowInstanceResponse {
+  workflowExecutionId: string;
+  status: "Deleted";
+}
+
+export function supportsWorkflowInstanceDeletion(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "workflow-instance-delete");
+}
+
+export async function deleteWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "workflow-instance-delete",
+    { workflowExecutionId });
+
+  try {
+    const response = signal
+      ? await context.http.deleteJson<DeleteWorkflowInstanceResponse>(path, { signal })
+      : await context.http.deleteJson<DeleteWorkflowInstanceResponse>(path);
+    if (response?.workflowExecutionId !== workflowExecutionId || response.status !== "Deleted") {
+      throw new Error("Runtime returned an invalid workflow instance deletion response.");
+    }
+    return response;
+  } catch (error) {
+    // A 404 can also mean resource authorization denied deletion. Keep that distinction private without
+    // claiming success: the run may still be visible to an operator who can inspect but cannot manage it.
+    if (getHttpStatus(error) === 404) throw new Error("The run is unavailable or you do not have permission to delete it. Refresh the list.");
+    throw error;
+  }
+}
+
+function getHttpStatus(error: unknown) {
+  if (typeof error !== "object" || error === null || !("status" in error)) return undefined;
+  const status = error.status;
+  return typeof status === "number" ? status : undefined;
+}
+
 export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest = {}) {
   const parameters = new URLSearchParams();
   if (request.status) parameters.set("status", request.status);
@@ -275,13 +316,13 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
   } satisfies WorkflowInstanceListPage;
 }
 
-export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
+export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-instance",
     { workflowExecutionId });
-  return context.http.getJson<WorkflowInstanceDetails>(path);
+  return mapWorkflowInstanceDetails(await (signal ? context.http.getJson<WorkflowInstanceDetails>(path, { signal }) : context.http.getJson<WorkflowInstanceDetails>(path)));
 }
 
 export async function getActivityExecutionInspection(
@@ -300,8 +341,75 @@ export async function getActivityExecutionInspection(
     : context.http.getJson<ActivityExecutionInspection>(path);
 }
 
+/** Whether the host serves the activity state view (spec 260 R-6); it advertises the link only when a module projects one. */
+export function supportsActivityStateView(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution-state-view");
+}
+
+/**
+ * Reads a live structural activity's projected private state, such as a compensation scope's journal. A 404 means the run
+ * or activity is unknown, belongs to another tenant, or the caller may not inspect it; the response never says which.
+ */
+export async function getActivityStateView(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-state-view",
+    { workflowExecutionId, activityExecutionId });
+  return signal
+    ? context.http.getJson<ActivityStateView>(path, { signal })
+    : context.http.getJson<ActivityStateView>(path);
+}
+
 export function supportsActivityExecutionInspection(context: StudioEndpointContext) {
   return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution");
+}
+
+export interface ActivityExecutionBrowseEntry {
+  iterationPosition?: number | null;
+  attempt?: Pick<ActivityExecutionAttempt, "attemptNumber"> & Partial<ActivityExecutionAttempt> | null;
+  execution: import("../workflowTypes").ActivityExecutionStateSummary & { executionSequence: number };
+  position: number;
+  previousActivityExecutionId: string | null;
+  nextActivityExecutionId: string | null;
+}
+
+export interface ActivityExecutionBrowsePage {
+  items: ActivityExecutionBrowseEntry[];
+  totalCount: number;
+  previousCursor: string | null;
+  nextCursor: string | null;
+}
+
+export interface ActivityExecutionBrowseRequest {
+  executableNodeId?: string;
+  parentActivityExecutionId?: string;
+  ancestorActivityExecutionId?: string;
+  anchorActivityExecutionId?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export function supportsActivityExecutionBrowsing(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-executions");
+}
+
+export async function browseActivityExecutions(context: StudioEndpointContext, workflowExecutionId: string,
+  request: ActivityExecutionBrowseRequest = {}, signal?: AbortSignal): Promise<ActivityExecutionBrowsePage> {
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "activity-executions", { workflowExecutionId });
+  const parameters = new URLSearchParams({ limit: String(request.limit ?? 50) });
+  for (const [key, value] of Object.entries(request)) if (value !== undefined) parameters.set(key, String(value));
+  const page = await context.http.getJson<ActivityExecutionBrowsePage>(`${path}?${parameters}`, { signal });
+  return { ...page, items: page.items.map(item => ({ ...item, execution: {
+    ...item.execution,
+    parentActivityExecutionId: item.execution.provenance?.parentActivityExecutionId,
+    iterationId: item.execution.provenance?.iterationId
+  } })) };
 }
 
 export interface ActivityExecutionDescendantsRequest {

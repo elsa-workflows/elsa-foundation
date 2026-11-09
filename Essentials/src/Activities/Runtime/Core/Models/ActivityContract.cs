@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -23,8 +24,9 @@ public sealed class ActivityContract
         ActivityResultContract result,
         IReadOnlyCollection<string> outcomes,
         ActivityActivationRequirement activation,
-        SideEffectProfile sideEffectProfile = SideEffectProfile.External)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile)
+        SideEffectProfile sideEffectProfile = SideEffectProfile.External,
+        bool supportsBackgroundExecution = false)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -40,6 +42,31 @@ public sealed class ActivityContract
         IEnumerable<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External)
+        : this(
+            activityTypeKey,
+            contractVersion,
+            descriptorKind,
+            descriptorPayload,
+            inputs,
+            result,
+            outcomes,
+            activation,
+            sideEffectProfile,
+            supportsBackgroundExecution: false)
+    {
+    }
+
+    public ActivityContract(
+        string activityTypeKey,
+        string contractVersion,
+        string descriptorKind,
+        JsonElement descriptorPayload,
+        IEnumerable<ActivityInputContract> inputs,
+        ActivityResultContract result,
+        IEnumerable<string> outcomes,
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile,
+        bool supportsBackgroundExecution)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -64,11 +91,12 @@ public sealed class ActivityContract
         ContractVersion = contractVersion;
         DescriptorKind = descriptorKind;
         DescriptorPayload = descriptorPayload.Clone();
-        Inputs = inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        Inputs = new ReadOnlyDictionary<string, ActivityInputContract>(inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal));
         Result = result;
         Outcomes = outcomeArray.ToArray();
         Activation = activation;
         SideEffectProfile = sideEffectProfile;
+        SupportsBackgroundExecution = supportsBackgroundExecution;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -92,6 +120,13 @@ public sealed class ActivityContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SideEffectProfile SideEffectProfile { get; }
+
+    /// <summary>
+    /// Whether this activity type explicitly declares support for durable background execution. The default false
+    /// value is omitted from the serialized contract and fingerprint to preserve existing artifacts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SupportsBackgroundExecution { get; }
 
     private string ComputeFingerprint()
     {
@@ -118,6 +153,11 @@ public sealed class ActivityContract
         if (SideEffectProfile != SideEffectProfile.External)
             node["sideEffectProfile"] = SideEffectProfile.ToString();
 
+        // This declaration changes the capabilities pinned to the activity contract. Keep the default false
+        // shape byte-identical for existing contracts.
+        if (SupportsBackgroundExecution)
+            node[nameof(SupportsBackgroundExecution)] = true;
+
         var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
@@ -140,6 +180,12 @@ public sealed class ActivityContract
         // the canonical shape, and the fingerprint, it had before the flag existed.
         if (input.IsCredential)
             projection[nameof(input.IsCredential)] = true;
+
+        if (input.IsStructureInput)
+            projection[nameof(input.IsStructureInput)] = true;
+
+        if (!string.IsNullOrWhiteSpace(input.ConnectionType))
+            projection[nameof(input.ConnectionType)] = input.ConnectionType;
 
         return projection;
     }
@@ -216,7 +262,8 @@ public sealed class ActivityInputContract
         JsonElement? defaultValue,
         ActivityValuePolicy policy,
         IReadOnlyDictionary<string, string>? editorMetadata = null,
-        bool isCredential = false)
+        bool isCredential = false,
+        string? connectionType = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -238,6 +285,7 @@ public sealed class ActivityInputContract
             ? new Dictionary<string, string>()
             : new Dictionary<string, string>(editorMetadata, StringComparer.Ordinal);
         IsCredential = isCredential;
+        ConnectionType = string.IsNullOrWhiteSpace(connectionType) ? null : connectionType;
     }
 
     public string Key { get; }
@@ -259,6 +307,24 @@ public sealed class ActivityInputContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsCredential { get; }
+
+    /// <summary>
+    /// The required connection type when this input is a connection reference
+    /// (<c>[ActivityConnection(ConnectionType = ...)]</c>). Omitted from the serialized shape, and from the
+    /// fingerprint, while null, so a contract whose inputs declare none keeps the document and fingerprint it had
+    /// before the field existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConnectionType { get; }
+
+    /// <summary>
+    /// The owning executable structure selects whether this input is consumed before activation.
+    /// Consumed values are pinned in the invocation snapshot; unconsumed values are deliberately absent.
+    /// These inputs are delivered to the structure-input consumer, not hydrated into CLR properties.
+    /// Omitted while false to preserve existing contracts and fingerprints.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsStructureInput { get; init; }
 }
 
 public sealed class ActivityResultContract

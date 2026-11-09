@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, Send, X } from "lucide-react";
+import { AlertCircle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioButton, StudioResultState } from "@elsa-workflows/studio-ui";
 import { EditableCombobox } from "../EditableCombobox";
+import { HttpRequestHeadersEditor } from "./HttpRequestHeadersEditor";
+import { makeHttpTestRequestHeaders, type HttpTestRequestHeader } from "./httpTestRequestHeaders";
 import { HttpMessageBodyEditor } from "./HttpMessageBodyEditor";
 import { HttpTestResponse, type HttpTestResult } from "./HttpTestResponse";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -11,12 +14,16 @@ import {
   getWorkflowHttpBasePath,
   makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
+  publishedHttpEndpointLiteralsMissingMessage,
   readHttpEndpointResponseMetadata,
+  readHttpEndpointExecutionId,
   resolveHttpTestEndpointPath,
   type PublishedHttpEndpoint
 } from "./httpTestRequest";
 import { useDialogFocus } from "./useDialogFocus";
 import "./HttpTestRequestDialog.css";
+
+type HttpTestLoadFailure = "missing-literals" | "publish-required" | "error" | "";
 
 const contentTypeSuggestions = [
   "application/json",
@@ -38,25 +45,33 @@ export function HttpTestRequestDialog({
   open,
   artifactId,
   authoredActivityId,
-  onClose
+  onClose,
+  onPublishDraft,
+  onOpenPublishedVersion,
+  publicationUnavailableReason
 }: {
   context: StudioEndpointContext;
   open: boolean;
   artifactId: string | null;
   authoredActivityId: string;
   onClose(): void;
+  onPublishDraft?(): void;
+  onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const sending = useRef(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [loadFailure, setLoadFailure] = useState<HttpTestLoadFailure>("");
   const [endpoint, setEndpoint] = useState<PublishedHttpEndpoint | null>(null);
   const [workflowHttpBasePath, setWorkflowHttpBasePath] = useState<string | null>(null);
   const [path, setPath] = useState("");
   const [method, setMethod] = useState("");
   const [requestBody, setRequestBody] = useState(exampleJson);
   const [contentType, setContentType] = useState("application/json");
+  const [requestHeaders, setRequestHeaders] = useState<HttpTestRequestHeader[]>([]);
   const [requestError, setRequestError] = useState("");
   const [result, setResult] = useState<HttpTestResult | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -65,6 +80,7 @@ export function HttpTestRequestDialog({
     const request = activeRequest.current;
     activeRequest.current = null;
     sending.current = false;
+    setIsSending(false);
     request?.abort();
     onClose();
   }, [onClose]);
@@ -80,10 +96,13 @@ export function HttpTestRequestDialog({
     setEndpoint(null);
     setWorkflowHttpBasePath(null);
     setLoadError("");
+    setLoadFailure("");
     setRequestError("");
     setResult(null);
+    setRequestHeaders([]);
     if (!artifactId) {
       setLoadError("Publish this workflow before testing its HTTP endpoint.");
+      setLoadFailure("publish-required");
       return () => { active = false; };
     }
 
@@ -105,7 +124,8 @@ export function HttpTestRequestDialog({
         if (!active) return;
         const selected = findPublishedHttpEndpoint(executable, authoredActivityId, inputSources);
         if (!selected) {
-          setLoadError("Studio needs literal Path and SupportedMethods values in the published endpoint to build a test request.");
+          setLoadError(publishedHttpEndpointLiteralsMissingMessage);
+          setLoadFailure("missing-literals");
           return;
         }
         setEndpoint(selected);
@@ -114,7 +134,10 @@ export function HttpTestRequestDialog({
         setRequestBody(exampleJson);
         setContentType("application/json");
       } catch (error) {
-        if (active) setLoadError(error instanceof Error ? error.message : "Studio could not load the published workflow endpoint.");
+        if (active) {
+          setLoadError(error instanceof Error ? error.message : "Studio could not load the published workflow endpoint.");
+          setLoadFailure("error");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -137,9 +160,12 @@ export function HttpTestRequestDialog({
       return;
     }
 
+    const carriesBody = method !== "GET" && method !== "HEAD";
     let requestPath: string;
+    let headers: Headers;
     try {
       requestPath = resolveHttpTestEndpointPath(context.baseUrl, path, workflowHttpBasePath);
+      headers = makeHttpTestRequestHeaders(requestHeaders, carriesBody ? contentType : null, context.headers);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Enter a valid path on the configured backend.");
       return;
@@ -157,10 +183,6 @@ export function HttpTestRequestDialog({
     }, requestTimeoutMs);
 
     try {
-      const carriesBody = method !== "GET" && method !== "HEAD";
-      const headers = new Headers({ Accept: "*/*" });
-      if (carriesBody && contentType.trim()) headers.set("Content-Type", contentType.trim());
-
       // `context.http` keeps Studio's configured auth and credentials transport. This endpoint returns
       // workflow output, so retain the raw response instead of passing it through the JSON API parser.
       const response = await send.call(context.http, requestPath, {
@@ -187,6 +209,8 @@ export function HttpTestRequestDialog({
         contentType: response.headers.get("content-type") || "",
         headers: [...response.headers.entries()],
         body,
+        responseReason: responseMetadata?.reason,
+        workflowExecutionId: responseMetadata ? readHttpEndpointExecutionId(body) : null,
         acceptedMessage: response.status === 202
           ? describeHttpEndpointAcceptedResponse(responseMetadata)
           : null
@@ -229,7 +253,7 @@ export function HttpTestRequestDialog({
           <div>
             <span>Published workflow</span>
             <h3 id="http-test-title">Send an HTTP test request</h3>
-            <p id="http-test-description">Send a real request to this workflow’s published endpoint.</p>
+            <p id="http-test-description">Uses the published endpoint’s methods and settings. Publish draft changes before testing them.</p>
           </div>
           <button type="button" className="wf-icon-button" aria-label="Close test request" onClick={close}>
             <X size={18} aria-hidden="true" />
@@ -238,7 +262,17 @@ export function HttpTestRequestDialog({
 
         <div className="wf-http-test-body">
           {loading ? <p className="wf-http-test-state" role="status"><LoaderCircle size={16} className="wf-http-test-spinner" /> Loading published endpoint…</p> : null}
-          {loadError ? <p className="wf-http-test-error" role="alert">{loadError}</p> : null}
+          {loadError && (loadFailure === "missing-literals" || loadFailure === "publish-required") ? (
+            <StudioResultState
+              headingLevel={3}
+              tone="danger"
+              icon={<AlertCircle size={18} aria-hidden="true" />}
+              title={loadFailure === "publish-required" ? publicationUnavailableReason ? "Published endpoint unavailable" : "Publish this workflow" : "Cannot build a test request"}
+              description={loadFailure === "publish-required" && publicationUnavailableReason ? publicationUnavailableReason : loadError}
+              actions={httpTestRecoveryAction({ loadFailure, onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason })}
+            />
+          ) : null}
+          {loadError && loadFailure === "error" ? <p className="wf-http-test-error" role="alert">{loadError}</p> : null}
 
           {endpoint ? (
             <form onSubmit={event => { event.preventDefault(); void sendRequest(); }}>
@@ -273,12 +307,14 @@ export function HttpTestRequestDialog({
                     />
                   </div>
                 </div>
-                <button type="submit" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>
+                <StudioButton type="submit" variant="primary" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>
                   {isSending ? <LoaderCircle size={15} className="wf-http-test-spinner" /> : <Send size={15} />}
                   {isSending ? "Sending request…" : "Send request"}
-                </button>
+                </StudioButton>
               </div>
               <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
+
+              <HttpRequestHeadersEditor rows={requestHeaders} disabled={isSending} onChange={setRequestHeaders} />
 
               <EditableCombobox
                   className="wf-form-field wf-http-test-content-type"
@@ -304,9 +340,29 @@ export function HttpTestRequestDialog({
           ) : null}
 
           {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
-          {result ? <HttpTestResponse result={result} /> : null}
+          {result ? <HttpTestResponse result={result} context={context} /> : null}
         </div>
       </section>
     </div>
   );
+}
+
+function httpTestRecoveryAction({
+  loadFailure,
+  onPublishDraft,
+  onOpenPublishedVersion,
+  publicationUnavailableReason
+}: {
+  loadFailure: HttpTestLoadFailure;
+  onPublishDraft?(): void;
+  onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
+}) {
+  if (onPublishDraft && !publicationUnavailableReason) {
+    return <StudioButton variant="primary" onClick={onPublishDraft}>Publish draft</StudioButton>;
+  }
+  if (onOpenPublishedVersion && loadFailure === "missing-literals") {
+    return <StudioButton variant="primary" onClick={onOpenPublishedVersion}>Open published version</StudioButton>;
+  }
+  return null;
 }

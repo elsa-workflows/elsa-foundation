@@ -56,7 +56,7 @@ public sealed class Elsa3NodeConverterTests
         if (!whole.Succeeded)
         {
             Assert.False(prepared.Succeeded);
-            Assert.Equal(Codes(whole.Diagnostics), Codes(prepared.Diagnostics.Where(diagnostic => diagnostic.Code != Elsa3ActivityDiagnosticCodes.GraphConversionPending)));
+            Assert.Equal(Codes(whole.Diagnostics), Codes(prepared.Diagnostics));
             Assert.Contains(prepared.Diagnostics, diagnostic => diagnostic.Code.StartsWith("VF-IMP-", StringComparison.Ordinal));
             return;
         }
@@ -101,8 +101,8 @@ public sealed class Elsa3NodeConverterTests
         var prepared = await converter.PrepareAsync(new Elsa3ConversionRequest(definition));
         var chart = await converter.ConvertNodeAsync(prepared.Value!, definition.Root!);
 
-        // Graph conversion runs inside preparation (spec 239 R-1, R-9), so a Flowchart is no longer left to the caller.
-        Assert.Empty(prepared.Value!.Deferred);
+        // Graph conversion runs inside preparation (spec 239 R-1, R-9), so a Flowchart converts as one node.
+        Assert.True(prepared.Succeeded, Describe(prepared.Diagnostics));
         Assert.True(chart.Succeeded, Describe(chart.Diagnostics));
         Assert.Equal("elsa.flowchart.structure", chart.Value!.Structure!.Kind);
         Assert.Equal("node", chart.Value.Structure.Payload.GetProperty("startNodeId").GetString());
@@ -171,7 +171,7 @@ public sealed class Elsa3NodeConverterTests
         Assert.Equal("context", refusal.ParamName);
     }
 
-    private sealed class ForeignContext(Elsa3ConversionRequest request) : Elsa3NodeConversionContext(request, []);
+    private sealed class ForeignContext(Elsa3ConversionRequest request) : Elsa3NodeConversionContext(request);
 
     private static async Task<(Elsa3MigrationResult<Elsa3NodeConversionContext> Prepared, Elsa3MigrationResult<Elsa.Workflows.Design.Core.Models.ActivityNode>? Node)> ConvertChildAsync(
         RealActivityCatalog catalog,

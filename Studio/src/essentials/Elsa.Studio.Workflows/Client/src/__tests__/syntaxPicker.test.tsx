@@ -13,6 +13,67 @@ afterEach(() => {
 });
 
 describe("SyntaxPicker", () => {
+  it.each([
+    ["Literal", "literal", "lucide-type"],
+    ["JavaScript", "text", "lucide-code-xml"],
+    ["Liquid", "text", "lucide-code-xml"],
+    ["Secret", "reference", "lucide-key-round"],
+    ["Variable", "reference", "lucide-braces"],
+    ["Object", "literal", "lucide-braces"],
+    ["Connection", "reference", "lucide-cable"]
+  ] as const)("shows a compact %s icon and announces the current mode", (type, editingMode, iconClass) => {
+    const host = mount(
+      <SyntaxPicker
+        label="Text expression syntax"
+        value={type}
+        descriptors={[{ type, displayName: type, editingMode }]}
+        disabled={false}
+        variant="inline"
+        onChange={() => {}}
+      />
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!;
+    expect(trigger.getAttribute("aria-label")).toBe(`Text expression syntax: ${type}`);
+    expect(trigger.title).toBe(type);
+    expect(trigger.querySelector("svg")?.classList.contains(iconClass)).toBe(true);
+  });
+
+  it("renders a compact mode icon in the property-heading variant", () => {
+    const host = mount(
+      <SyntaxPicker
+        label="Authorization expression syntax"
+        value="Secret"
+        descriptors={[{ type: "Secret", displayName: "Secret", editingMode: "reference" }]}
+        disabled={false}
+        variant="compact"
+        onChange={() => {}}
+      />
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!;
+    expect(host.querySelector(".wf-syntax-picker.compact")).not.toBeNull();
+    expect(host.querySelector(".wf-syntax-picker.inline")).toBeNull();
+    expect(trigger.getAttribute("aria-label")).toBe("Authorization expression syntax: Secret");
+    expect(trigger.title).toBe("Secret");
+    expect(trigger.querySelector("svg")?.classList.contains("lucide-key-round")).toBe(true);
+  });
+
+  it("keeps the compact trigger disabled when the property is read-only", () => {
+    const host = mount(
+      <SyntaxPicker
+        label="Text expression syntax"
+        value="Literal"
+        descriptors={[{ type: "Literal", displayName: "Literal", editingMode: "literal" }]}
+        disabled
+        variant="compact"
+        onChange={() => {}}
+      />
+    );
+
+    expect(host.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.disabled).toBe(true);
+  });
+
   it("portals the listbox and supports conventional keyboard selection and focus restoration", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

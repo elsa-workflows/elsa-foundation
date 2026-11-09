@@ -19,11 +19,13 @@ public sealed class ExpressionDraftSemanticValidator(
     {
         var diagnostics = new List<ExpressionDiagnostic>();
         var unavailable = false;
-        foreach (var node in Walk(state.RootActivity))
-        foreach (var (argumentBag, argument) in node.Inputs.Select(argument => ("inputs", argument))
-                     .Concat(node.Outputs.Select(argument => ("outputs", argument))))
+        foreach (var (node, projection) in Walk(state.RootActivity).Select(node => (node, structureService.ProjectInputs(node))))
+        foreach (var (argumentBag, argument) in node.Inputs.Where(argument => !projection.ConsumedInputKeys.Contains(argument.ReferenceKey, StringComparer.Ordinal))
+            .Select(argument => ("inputs", argument)).Concat(node.Outputs.Select(argument => ("outputs", argument)))
+            .Concat(projection.Inputs.Where(input => input.State is not null)
+                .Select(input => ("structure", input.State! with { ReferenceKey = input.ReferenceKey }))))
         {
-            if (string.IsNullOrWhiteSpace(argument.Value.ExpressionType))
+            if (argument.Value is null || string.IsNullOrWhiteSpace(argument.Value.ExpressionType))
                 continue;
             var provider = providerResolver.Find(argument.Value.ExpressionType);
             if (provider is null)
@@ -40,7 +42,8 @@ public sealed class ExpressionDraftSemanticValidator(
                 continue;
             var authoredPath = $"{node.NodeId}/{argumentBag}/{argument.ReferenceKey}";
             var revision = Revision(source);
-            var document = new ExpressionAuthoringDocument($"{documentScope}:{node.NodeId}:{argument.ReferenceKey}:{argument.Value.ExpressionType}", documentScope, node.NodeId, argument.ReferenceKey, argument.Value.ExpressionType, revision);
+            var expectedType = projection.Inputs.FirstOrDefault(input => input.ReferenceKey == argument.ReferenceKey)?.Definition?.Type.Alias;
+            var document = new ExpressionAuthoringDocument($"{documentScope}:{node.NodeId}:{argument.ReferenceKey}:{argument.Value.ExpressionType}", documentScope, node.NodeId, argument.ReferenceKey, argument.Value.ExpressionType, revision, expectedType);
             var context = new ExpressionAuthoringContext(ExpressionToolingContractVersion.V1, document, revision, revision, [], new());
             ExpressionToolingOutcome<ExpressionDiagnosticSet> result;
             try

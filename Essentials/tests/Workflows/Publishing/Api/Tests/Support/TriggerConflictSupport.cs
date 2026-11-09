@@ -37,7 +37,7 @@ internal static class TriggerConflictSupport
         extractor.ClaimsExclusiveTrigger = true;
     }
 
-    private static WorkflowTriggerBinding ExclusiveBinding(string definitionId, string artifactId, string executableNodeId, DateTimeOffset now) =>
+    private static WorkflowTriggerBinding ExclusiveBinding(string definitionId, string artifactId, string executableNodeId, DateTimeOffset now, string? descriptor = null) =>
         new(
             WorkflowTriggerBinding.BuildId(artifactId, executableNodeId, StimulusHash),
             artifactId,
@@ -48,7 +48,10 @@ internal static class TriggerConflictSupport
             StimulusType,
             StimulusHash,
             CorrelationScope: null,
-            new Dictionary<string, string>(),
+            descriptor is null ? new Dictionary<string, string>() : new Dictionary<string, string>
+            {
+                [TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey] = descriptor
+            },
             now,
             Cardinality: TriggerCardinality.Exclusive);
 
@@ -56,10 +59,11 @@ internal static class TriggerConflictSupport
     internal sealed class StubTriggerExtractor : IWorkflowTriggerBindingExtractor
     {
         public bool ClaimsExclusiveTrigger { get; set; }
+        public string? DisplayDescriptor { get; set; }
 
         public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable) =>
             ClaimsExclusiveTrigger
-                ? [ExclusiveBinding(executable.Identity.DefinitionId, executable.Identity.ArtifactId, executable.RootActivity.ExecutableNodeId, DateTimeOffset.UtcNow)]
+                ? [ExclusiveBinding(executable.Identity.DefinitionId, executable.Identity.ArtifactId, executable.RootActivity.ExecutableNodeId, DateTimeOffset.UtcNow, DisplayDescriptor)]
                 : [];
     }
 }

@@ -77,6 +77,36 @@
       }
     },
     {
+      "alias": "Elsa.Activities.Bpmn.Activities.RunBpmn",
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.RunBpmn",
+      "version": "1.0.0",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Model",
+          "name": "Model",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
       "alias": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "version": "1.0.0",
@@ -625,15 +655,15 @@
       "executionType": "Action",
       "inputs": [
         {
-          "key": "Authorization",
-          "name": "Authorization",
-          "type": "String",
+          "key": "Connection",
+          "name": "Connection",
+          "type": "Elsa.Activities.Runtime.Core.Models.ConnectionReference",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "connection-picker",
           "defaultValue": null,
-          "defaultSyntax": null,
+          "defaultSyntax": "Connection",
           "uiSpecifications": null
         },
         {
@@ -802,14 +832,14 @@
     {
       "alias": "Elsa.Activities.Http.Activities.WriteHttpResponse",
       "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "category": "Http",
       "executionType": "Action",
       "inputs": [
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
@@ -859,9 +889,9 @@
         {
           "key": "Body",
           "name": "Body",
-          "type": "String",
+          "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
-          "isRequired": true,
+          "isRequired": false,
           "isNullable": true,
           "sourceRepresentation": null
         },
@@ -870,7 +900,7 @@
           "name": "ContentType",
           "type": "String",
           "collectionKind": "Single",
-          "isRequired": true,
+          "isRequired": false,
           "isNullable": true,
           "sourceRepresentation": null
         },
@@ -1009,6 +1039,162 @@
       "structure": null
     },
     {
+      "alias": "Elsa.Activities.Primitives.Activities.CreateUserTask",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.CreateUserTask",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Actions",
+          "name": "Actions",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": "user-task-actions",
+          "defaultValue": "[\"Approve\",\"Reject\"]",
+          "defaultSyntax": "Object",
+          "uiSpecifications": null
+        },
+        {
+          "key": "AssigneeId",
+          "name": "AssigneeId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": "user-task-user",
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Description",
+          "name": "Description",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "FormId",
+          "name": "FormId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": "user-task-form",
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "FormVersion",
+          "name": "FormVersion",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "GroupId",
+          "name": "GroupId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": "user-task-group",
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "OptionalFormActions",
+          "name": "OptionalFormActions",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "[]",
+          "defaultSyntax": "Object",
+          "uiSpecifications": null
+        },
+        {
+          "key": "Prefill",
+          "name": "Prefill",
+          "type": "System.Text.Json.JsonElement",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "{}",
+          "defaultSyntax": "Object",
+          "uiSpecifications": null
+        },
+        {
+          "key": "Title",
+          "name": "Title",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "User task",
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "Action",
+          "name": "Action",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "Data",
+          "name": "Data",
+          "type": "System.Text.Json.JsonElement",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "TaskId",
+          "name": "TaskId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": true,
+        "ports": [],
+        "dynamic": {
+          "kind": "valuePerItem",
+          "source": "Actions",
+          "unmatched": "Unmatched"
+        }
+      },
+      "structure": null
+    },
+    {
       "alias": "Elsa.Activities.Primitives.Activities.Event",
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.Event",
       "version": "1.0.0",
@@ -1053,6 +1239,15 @@
         }
       ],
       "outputs": [
+        {
+          "key": "Payload",
+          "name": "Payload",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
         {
           "key": "Result",
           "name": "EventName",
@@ -1521,7 +1716,7 @@
     {
       "alias": "Elsa.Activities.Switch.Activities.Switch",
       "activityTypeKey": "Elsa.Activities.Switch.Activities.Switch",
-      "version": "1.0.0",
+      "version": "4.1.0",
       "category": "Control Flow",
       "executionType": "Action",
       "inputs": [
@@ -1549,7 +1744,7 @@
       },
       "structure": {
         "kind": "elsa.switch.structure",
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "2.0.0",
         "mode": "generic",
         "supportsScopedVariables": false,
         "slots": [
@@ -1557,7 +1752,9 @@
             "cardinality": "single",
             "childProperty": "activity",
             "collectionProperty": "cases",
+            "conditionProperty": "condition",
             "displayName": "Cases",
+            "itemIdProperty": "caseId",
             "labelProperty": "match",
             "name": "Switch.Case",
             "property": "cases",

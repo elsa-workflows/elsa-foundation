@@ -108,8 +108,8 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
     public IWorkflowEngineTracer Tracer => new NamingTracer(this, new ActivitySourceWorkflowEngineTracer(_source));
 
     /// <summary>
-    /// Gives the calling asynchronous flow a memory of whole stacks to stitch truncated ones onto, unless it has one. Call
-    /// it from the method that starts the work; the memory flows into everything that method awaits.
+    /// Gives the calling asynchronous flow a memory of whole and stitched stacks to stitch truncated ones onto, unless it
+    /// has one. Call it from the method that starts the work; the memory flows into everything that method awaits.
     /// </summary>
     public void BeginFlow() => _flow.Value ??= new CommandCostFlowMemory();
 
@@ -302,7 +302,10 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
         return result;
     }
 
-    /// <summary>A whole stack is remembered for the flow; a stack that lost its callers is stitched onto the flow's latest whole one.</summary>
+    /// <summary>
+    /// A whole stack is remembered for the flow; a stack that lost its callers is stitched onto the flow's latest whole one,
+    /// or, when no whole one matches, its latest stitched one, and the result is remembered as a stitched stack.
+    /// </summary>
     private CommandCostAttribution Complete(CommandCostAttribution attribution)
     {
         if (attribution.HasCaller)
@@ -311,7 +314,10 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
             return attribution;
         }
 
-        return _flow.Value?.Stitch(attribution) ?? attribution;
+        if (_flow.Value is not { } flow || flow.Stitch(attribution) is not { } stitched)
+            return attribution;
+        flow.Remember(stitched);
+        return stitched;
     }
 
     private (bool InDrain, string Dispatch, string Checkpoint) EnginePhase()

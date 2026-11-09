@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
@@ -12,7 +13,8 @@ public sealed class WorkflowAlterationPlanApiService(
     WorkflowAlterationPlanService planService,
     IWorkflowAlterationStore store,
     IWorkflowAlterationAdmissionGate admissionGate,
-    IWorkflowAlterationRequestContext requestContext) : IWorkflowAlterationPlanApiService
+    IWorkflowAlterationRequestContext requestContext,
+    IWorkflowExecutionStateStore workflowExecutions) : IWorkflowAlterationPlanApiService
 {
     internal const int MaximumIdempotencyKeyLength = 256;
 
@@ -30,8 +32,31 @@ public sealed class WorkflowAlterationPlanApiService(
         if (!admission.IsAccepted)
             throw new WorkflowAlterationAdmissionRejectedException(admission.RetryAfter);
 
-        var result = await planService.SubmitAsync(submission, requestContext.Operator, request.IdempotencyKey, cancellationToken);
+        var authorized = await AuthorizeExplicitTargetsAsync(submission, cancellationToken);
+        var result = await planService.SubmitAsync(submission, requestContext.Operator, request.IdempotencyKey, cancellationToken, authorized);
         return WorkflowAlterationPlanSubmissionView.From(result.Plan, result.IsReplay);
+    }
+
+    /// <summary>
+    /// Authorizes each explicitly named run of the caller's tenant as run deletion does (spec 260 FR-406). A refused
+    /// run does not reject the plan: it is left out of the authorized set, and capture records it as
+    /// <c>TargetNotFound</c> without reading it, the same outcome as a missing or foreign run, so the response never
+    /// reveals that a refused run exists. Query targets keep their capture-time authority filter.
+    /// </summary>
+    private async ValueTask<IReadOnlyCollection<string>?> AuthorizeExplicitTargetsAsync(WorkflowAlterationSubmission submission, CancellationToken cancellationToken)
+    {
+        if (submission.Target.Query is not null)
+            return null;
+        var authorized = new List<string>(submission.Target.ExecutionIds.Count);
+        foreach (var executionId in submission.Target.ExecutionIds)
+        {
+            var execution = await workflowExecutions.FindAsync(executionId, cancellationToken);
+            if (execution is not null &&
+                StringComparer.Ordinal.Equals(execution.TenantId ?? WorkflowExecutionPartition.DefaultValue, submission.AuthorityScope.TenantPartition) &&
+                await requestContext.CanManageAsync(execution, cancellationToken))
+                authorized.Add(executionId);
+        }
+        return authorized;
     }
 
     public async Task<WorkflowAlterationPlanView> GetPlanAsync(GetWorkflowAlterationPlan request, CancellationToken cancellationToken)

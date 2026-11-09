@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Http.Core.Contracts;
@@ -17,6 +20,10 @@ public sealed class HttpResponseInstructionDelivery(
     IEnumerable<IHttpContentFactory> contentFactories)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonWriterOptions BodyWriterOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
     private static readonly string ResultTypeAlias = TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction));
 
     /// <summary>
@@ -69,28 +76,54 @@ public sealed class HttpResponseInstructionDelivery(
         foreach (var (name, values) in instruction.Headers)
             response.Headers[name] = values;
 
-        if (string.IsNullOrEmpty(instruction.Body))
+        var body = BodyText(instruction.Body);
+        var contentType = string.IsNullOrWhiteSpace(instruction.ContentType)
+            ? InferContentType(instruction.Body)
+            : instruction.ContentType;
+
+        if (string.IsNullOrEmpty(body) || instruction.StatusCode == StatusCodes.Status204NoContent)
         {
             if (!string.IsNullOrWhiteSpace(instruction.ContentType))
                 response.ContentType = instruction.ContentType;
             return;
         }
 
-        var factory = MatchContentFactory(instruction.ContentType);
+        var factory = MatchContentFactory(contentType);
         if (factory is not null)
         {
-            using var content = factory.CreateHttpContent(instruction.Body, instruction.ContentType!);
+            using var content = factory.CreateHttpContent(body, contentType);
             if (content.Headers.ContentType is { } factoryContentType)
                 response.ContentType = factoryContentType.ToString();
             await content.CopyToAsync(response.Body, cancellationToken);
             return;
         }
 
-        response.ContentType = string.IsNullOrWhiteSpace(instruction.ContentType)
-            ? "text/plain"
-            : instruction.ContentType;
-        await response.WriteAsync(instruction.Body, cancellationToken);
+        response.ContentType = contentType;
+        await response.WriteAsync(body, cancellationToken);
     }
+
+    /// <summary>
+    /// The text to send: a JSON string as its text, any other value as compact JSON with its keys and characters as the
+    /// workflow produced them. A JSON null is no body.
+    /// </summary>
+    private static string? BodyText(JsonElement? body) => body switch
+    {
+        null or { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+        { ValueKind: JsonValueKind.String } text => text.GetString(),
+        { } value => CompactJson(value)
+    };
+
+    private static string CompactJson(JsonElement value)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer, BodyWriterOptions))
+            value.WriteTo(writer);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>Elsa 3's inference for an unset content type: text is <c>text/plain</c>, any other value JSON.</summary>
+    private static string InferContentType(JsonElement? body) =>
+        body is { ValueKind: JsonValueKind.String } ? "text/plain" : "application/json";
 
     private IHttpContentFactory? MatchContentFactory(string? contentType)
     {

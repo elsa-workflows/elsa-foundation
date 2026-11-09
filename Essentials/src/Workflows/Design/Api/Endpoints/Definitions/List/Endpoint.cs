@@ -3,11 +3,12 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 
@@ -26,6 +27,12 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionListView> HandleAsync(ListDefinitions request, CancellationToken cancellationToken)
     {
+        // Legacy clients must not silently turn a stale scoped URL into the entire library.
+        if (HttpContext is { } context && !WorkflowLibraryAccess.OrganizationEnabled(context))
+            WorkflowLibraryAccess.RequireUnconstrained(context, context.Request.Query.Keys.Any(key =>
+            key.Equals("folderId", StringComparison.OrdinalIgnoreCase) || key.Equals("unfiled", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("includeDescendants", StringComparison.OrdinalIgnoreCase) || key.Equals("tagFilters", StringComparison.OrdinalIgnoreCase) ||
+            key.Equals("favoritesOnly", StringComparison.OrdinalIgnoreCase)));
         var filter = new WorkflowDefinitionFilter
         {
             Id = request.Id,
@@ -56,14 +63,19 @@ public sealed class Endpoint(
         var projectionsByDefinitionId = projections.ToDictionary(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);
-        var publicationStates = publicationStateLookup is null
+        var publicationSummaries = publicationStateLookup is null
             ? null
             : await publicationStateLookup.ListByDefinitionIdsAsync(definitionIds, cancellationToken);
+        var versionsByDefinitionId = projections.ToDictionary(
+            projection => projection.WorkflowDefinitionId,
+            projection => projection.Versions?.ToDictionary(version => version.Id, version => version.Version, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
 
         var items = definitions.Select(definition =>
         {
             projectionsByDefinitionId.TryGetValue(definition.Id, out var projection);
-            return new WorkflowDefinitionView(
+            var view = new WorkflowDefinitionView(
                 definition.Id,
                 definition.Name,
                 definition.Description,
@@ -73,7 +85,13 @@ public sealed class Endpoint(
                 projection?.DraftId,
                 projection?.LatestVersionId,
                 projection?.LatestVersion,
-                projection?.VersionCount ?? 0).WithPublicationState(publicationStates);
+                projection?.VersionCount ?? 0,
+                DraftSourceVersionId: projection?.DraftSourceVersionId,
+                DraftSourceVersion: projection?.DraftSourceVersion)
+                .WithPublicationState(
+                    publicationSummaries,
+                    versionsByDefinitionId.GetValueOrDefault(definition.Id));
+            return view;
         }).ToArray();
         return new WorkflowDefinitionListView(items);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatActivityDefinitionDate, humanizeTypeName, resolveActivityDefinitionTitle, truncate } from "../workflowFormatting";
+import { formatActivityDefinitionDate, humanizeTypeName, resolveActivityDefinitionTitle, shortTypeName, truncate } from "../workflowFormatting";
 
 describe("workflow formatting helpers", () => {
   it("humanizes the last CLR/type-key segment", () => {
@@ -8,6 +8,11 @@ describe("workflow formatting helpers", () => {
     expect(humanizeTypeName("write_line")).toBe("write line");
     expect(humanizeTypeName("")).toBe("");
     expect(humanizeTypeName(null)).toBe("");
+  });
+
+  it("shortens unavailable executable type keys without treating their version as the type name", () => {
+    expect(shortTypeName("executable-missing:Elsa.HttpEndpoint@1.1.0")).toBe("HttpEndpoint");
+    expect(shortTypeName("Elsa.Activities.Http.SendHttpRequest")).toBe("SendHttpRequest");
   });
 
   it("prefers a distinct backend display name and never double-applies humanization", () => {

@@ -8,8 +8,13 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 
 public sealed class ActivityDefinitionLookup(
     IActivityDefinitionVersionStore versionStore,
-    IActivityDefinitionStore definitionStore) : IActivityDefinitionLookup
+    IActivityDefinitionStore definitionStore,
+    IActivityDefinitionAuthoringStore? authoringStore,
+    IActivityDefinitionVersionPublicationStore? publicationStore) : IActivityDefinitionLookup
 {
+    public ActivityDefinitionLookup(IActivityDefinitionVersionStore versionStore, IActivityDefinitionStore definitionStore)
+        : this(versionStore, definitionStore, null, null) { }
+
     public async Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
     {
         return await definitionStore.FindByIdOrActivityTypeKeyAsync(idOrActivityTypeKey, idOrActivityTypeKey, cancellationToken)
@@ -63,5 +68,25 @@ public sealed class ActivityDefinitionLookup(
     {
         var versions = await versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
         return versions.Select(e => new ActivityDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
+    }
+
+    public async Task<ActivityDefinitionVersionSummary?> FindRecommendedVersion(string definitionId, CancellationToken cancellationToken = default)
+    {
+        if (authoringStore is null || publicationStore is null ||
+            !(await definitionStore.ListAsync(new ActivityDefinitionFilter { Id = definitionId }, cancellationToken)).Any())
+            return null;
+
+        var state = await authoringStore.FindAsync(definitionId, cancellationToken);
+        if (state?.RecommendedVersionId is not { } versionId)
+            return null;
+        var publication = await publicationStore.FindAsync(versionId, cancellationToken);
+        if (publication is null || publication.DefinitionId != definitionId || publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+            return null;
+        Entities.ActivityDefinitionVersion version;
+        try { version = await versionStore.GetAsync(versionId, cancellationToken); }
+        catch (EntityNotFoundException) { return null; }
+        return version.DefinitionId == definitionId && version.Version == publication.Version
+            ? new(version.Id, version.Version, version.CreatedAt, version.ExecutionType)
+            : null;
     }
 }

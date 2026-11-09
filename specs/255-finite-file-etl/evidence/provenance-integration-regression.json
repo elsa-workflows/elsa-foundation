@@ -1,0 +1,20 @@
+{
+  "source": "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs",
+  "fixedSha256": "46f807a62ec0587256a7b34eed7975beb6c3cd4c32a4814c721f5a03de5da840",
+  "mutatedSha256": "415d9aac4050c700433eb8bf364441c2ace1ec6b703d884013f0634925b2a494",
+  "mutation": "Supply delivery-command metadata instead of committed direct/via-child scheduling provenance to the two callback constructors.",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~CombinedOutcomeCallback_UsesCommittedChildSchedulingMetadata_WhenDeliveryMetadataDisagrees|FullyQualifiedName~DescendantFaultCallback_UsesCommittedViaChildMetadata_WhenDeliveryMetadataDisagrees",
+    "--logger",
+    "console;verbosity=normal"
+  ],
+  "exitCode": 1,
+  "result": "Both real scheduler callback tests fail explicitly when committed provenance is replaced by disagreeing command metadata.",
+  "restoredByteExactly": true,
+  "restorationValidation": "Byte-exact restored source: full affected activity-runtime suite 604 passed, zero failed/skipped."
+}

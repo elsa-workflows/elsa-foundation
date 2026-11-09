@@ -1,0 +1,28 @@
+{
+  "sourcePath": "Extensions/Etl/src/Runtime/Output/EtlAcceptedOutputMaterializer.cs",
+  "restoredSha256": "638975d690576f211bd817642fab062874084d5c4727d34ec99fbba6ac31002f",
+  "byteExactRestoration": true,
+  "removedExitCode": 1,
+  "removedCommand": [
+    "dotnet",
+    "test",
+    "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~Missing_or_corrupt_accepted_chunk"
+  ],
+  "restoredExitCode": 0,
+  "restoredCommand": [
+    "dotnet",
+    "test",
+    "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~materializ"
+  ],
+  "removedFailed": 1,
+  "removedPassed": 1,
+  "restoredPassed": 13,
+  "restoredFailed": 0,
+  "restoredSkipped": 0
+}

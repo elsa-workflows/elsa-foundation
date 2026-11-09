@@ -54,20 +54,82 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
+  variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
+  carries the result as a `Literal`:
+  - no value → no starting value (the variable starts empty);
+  - `Object` → the text, unparsed, even when it is JSON;
+  - `String`, primitives and enums → the text converted to the type (`"5"` → `5`, `"true"` → `true`);
+  - a collection (`List<T>`, `T[]` or an array flag) whose element type Elsa 4 knows → a JSON array. The variable is
+    `T` with collection kind List or Array. Every item must be JSON of `T`, read as Elsa 3 read it (enums by name,
+    property names case-insensitive) and written for Elsa 4 as plain JSON (an enum as its number). As in Elsa 3, a
+    number written as a string (`["5"]` for `List<Int32>`) does not convert;
+  - `ObjectDictionary` and `HttpHeaders` → `Object` holding a JSON object;
+  - any other type Elsa 4 does not know (a nested collection such as `List<List<String>>`, `ObjectDictionary[]`, a
+    custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON,
+    exactly as written: Elsa 3 deserialized it case-insensitively and wrote camelCase names, but `Object` keeps the
+    names as the author wrote them (`{"ID":1}` stays `ID`).
+
+  A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
+  element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
+
+  Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
+  value that:
+  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+    `["a","b"]`);
+  - has an item that does not convert to the element type;
+  - is not a JSON object for a dictionary;
+  - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
+  - is not JSON, on a type Elsa 4 does not know: Elsa 3 converted such text in a way the converter cannot know.
+
+  Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
   endpoint must sit in a list of activities (a Sequence or a Flowchart) so that a node can follow it; in a Flowchart the
   node is connected between the endpoint and the endpoint's former successors.
-- **JavaScript.**
-  - `getVariable("x")`, `getInput("x")` and `variables.x` become bindings, read as `args.x`.
-  - A statement-form expression is wrapped in a function that returns its last expression.
-  - A RunJavaScript body is rewritten so its reads go through the `arguments` input, and its completion value becomes
-    a `return`.
-  - What Elsa 4 cannot run is refused (`VF-IMP-005`/`006`): Elsa 3 host functions such as generated `get{Name}()`
-    accessors, `getCorrelationId`, `newGuid` or `setOutcome`, as well as `new Date()`, CLR globals, lodash/moment and
-    Elsa 3 `args`.
-  - Widening what converts is #2717.
+- **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
+  R2 default counts as bound even when it is blank. Any other required Elsa 4 input with no Elsa 3 value is
+  `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND`.
+- **Null members (spec 267).** Elsa 3's exporter writes `null` for every member the author never set. A null member
+  converts to what the Elsa 3 runtime ran the activity with, as each map rule records (`OnNull`):
+  - Elsa 3 ran with null and the Elsa 4 input accepts null: a `Literal` holding null (RunJavaScript's
+    `possibleOutcomes`, HttpEndpoint's `Policy`, …).
+  - Elsa 3 ran with a value Elsa 4's default equals: no binding (If's `Condition`, …).
+  - Elsa 3 ran with a value Elsa 4's default differs from: that value, as for an absent member (R2), plus
+    FlowSendHttpRequest's `[200]` and an empty string for Correlate and SetName, which Elsa 4 reads as clearing them.
+  - Elsa 4 cannot reproduce or represent what Elsa 3 did: `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`, naming the member and why
+    (For's `step` ran as 0, ForEach's `items` and the header members faulted, a SendHttpRequest with content and a
+    null content type sent no body, a required member rejected the activity, a null SetVariable or SetOutput value
+    cannot be published: #3280).
+
+  A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
+  holding a literal null converts as a JSON null does. Nothing above reports a warning, except one case (#3293). On an
+  alias or a verbatim catalog key, Elsa 3 ran a null with its own activity's default, which the conversion cannot see.
+  Where the Elsa 4 input declares a default, the member converts with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, which
+  names that default and says what to set to keep Elsa 3's value: the member in the Elsa 3 workflow, or the input on the
+  converted activity.
+- **`canStartWorkflow` on a non-trigger** (a WriteLine, SetVariable, …) only picks a flowchart's start node, as in Elsa 3
+  when no trigger fired. It is dropped after that, without a diagnostic. HttpEndpoint and Event carry the flag; Cron and
+  Timer require it.
+- **Declared types.** Value-flow lowering compares a value with the Elsa 4 member in the shape normalization gave it:
+  `HttpStatusCode` is an integer, `HttpHeaders` a dictionary of string arrays, `ObjectDictionary` a dictionary, and
+  `List<T>` a list of `T`. A declared type that still does not fit is `VF-IMP-008`. A lowered expression declares the
+  Elsa 3 type as its result type, except for a JSON member (`JsonElement`, `Object`, `Any`), for every activity: it
+  accepts any value, so the expression declares the member's own type, which publication requires verbatim. A script
+  bound to a JSON member must therefore be declared untyped in Elsa 3 (`Object`, or a list or dictionary of objects):
+  Elsa 3 converted a typed declaration's result (`Int32` turns `"5"` into 5), and Elsa 4 would take the value as
+  returned, so a typed declaration is `VF-IMP-008`.
+- **HTTP response body.** Elsa 4's `WriteHttpResponse.Body` is a JSON value: text is sent as is, anything else as JSON,
+  and an unset content type is inferred as Elsa 3 did (`text/plain` for text, `application/json` otherwise). Elsa 3
+  `Content` therefore converts when it is a literal or a `String` variable, or when the content type is unset, blank or JSON.
+  Elsa 3 matched its JSON writer by exact media type and sent any other value's type name as text: another spelling of
+  a JSON type (letter case, a parameter, `+json`) converts with `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`, because
+  Elsa 4 sends the JSON. An object with a non-JSON or computed content type and binary content are
+  `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`; a script with a typed declaration is `VF-IMP-008` (above). A content type expression with
+  a blank script is dropped.
+- **JavaScript** converts when Elsa 4 runs it the same, and is refused otherwise. See
+  [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):
   - The body becomes a schema-2 graph.
   - `SetOutput` of a declared output writes a synthesized variable (`elsa3.output.{hash}`) that `outputMappings`
@@ -102,7 +164,78 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     trigger that another activity leads into, and that is not the start node, is
     `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`: Elsa 4 cannot begin a run there.
   - Conversion assumes the host's default `deadPathJoin` flowchart join option.
-- **Imported reusable activities** are not yet published, so they do not run as graphs until #2796.
+- **Imported reusable activities are published after the import commits** (spec 246). The commit writes each new
+  activity definition with no head and the draft of its first selected version; the import's publish phase then
+  publishes every selected version through the activity publisher under the plan's version id, dependencies first and
+  the versions of one definition in ascending order. The apply, a replay and a status read report each version's
+  publication state; a version the publisher refuses blocks only the versions that use it, and a later apply of the
+  same export (a new idempotency key) publishes what is still missing. Publishing needs the
+  `Elsa3ImportActivitiesPublishing` feature; without it, an apply that selects a reusable workflow is refused with
+  `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE`.
+  - Conversion runs the selected reusable versions in that publish order, so a caller routes on the outcomes the
+    target's own conversion declares (its published contract).
+  - A reusable body's natural completion maps from its root's own `Done` key to the boundary's `done`.
+  - Refused until Elsa 4 graph activities support them: a reusable whose body starts from a trigger
+    (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`; 'Can start workflow' on a non-trigger only picks the start node and is fine), uses an engine intrinsic (SetVariable, SetOutput, Correlate, SetName, Finish, or a captured HTTP Endpoint header or query projection)
+    (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023).
+  - A reusable body that reads its inputs, its variables or another activity's result, or captures an output into
+    one of its variables, converts as a workflow body does: an Elsa 4 graph activity is a closed scope whose request
+    is its own inputs and whose root variables are its own (spec 265, #3027).
+  - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).
+
+## Migrating Elsa 3 JavaScript
+
+Elsa 4 evaluates JavaScript in a sandbox. Each expression sees only the parameters it declares (`args`), and the
+sandbox has no clock, no randomness and no host functions. The converter therefore converts an Elsa 3 construct only
+when Elsa 4 gives the same result. Anything else refuses the whole definition with a stable code. The guidance in each
+refusal says what to change in the Elsa 3 workflow so that it converts. Specs 236 and 247 hold the details (spec 247:
+`specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md`).
+
+### What converts
+
+| Elsa 3 | Elsa 4 |
+|---|---|
+| `getVariable("x")`, `getInput("x")`, `variables.x` | A declared parameter, read as `args.x` |
+| `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same parameter as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
+| `getCorrelationId()`, `getWorkflowInstanceId()` | A `WorkflowInstance` parameter that reads the running instance's correlation ID (null when it has none) or instance ID |
+| `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
+| A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
+| A statement-form expression | A function that returns its last expression |
+| A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
+| An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
+
+### What is refused, and what to change in Elsa 3
+
+| Elsa 3 construct | Code | Change in the Elsa 3 workflow |
+|---|---|---|
+| `newGuid()`, `newGuidString()`, `newShortGuid()`, `Guid`, `Math.random()` | `VF-IMP-005` | Use `getWorkflowInstanceId()` when one unique value per run is enough; otherwise pass the value in as a workflow input |
+| `new Date()`, `Date.now()`, `DateTime`, any use of `Date` | `VF-IMP-005` | Replace a wait loop with a Delay activity. Pass the current time or date values in as workflow inputs |
+| `setOutcome(…)`, `setOutcomes(…)` | `VF-IMP-005` | Route with a Decision or Switch activity whose conditions carry the script's logic |
+| `toJson(x)` | `VF-IMP-005` | Use `JSON.stringify(x)`, or `JSON.parse(JSON.stringify(x))` to copy a value. Elsa 3's `toJson` escaped HTML characters and kept .NET casing |
+| `parseGuid(s)` | `VF-IMP-005` | Keep the GUID as a string |
+| Byte, stream and Base64 helpers | `VF-IMP-005` | Move the conversion into an activity |
+| `getConfig(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
+| `setVariable`, `set{Name}(…)`, mutating a value read from the workflow | `VF-IMP-005` | Use a Set Variable activity |
+| `setCorrelationId`, `setWorkflowInstanceName` | `VF-IMP-005` | Use a Correlate or Set Name activity |
+| `get{Output}From{Activity}()`, `getOutputFrom`, a computed name | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable |
+| A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
+| lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |
+| Any other undeclared function | `VF-IMP-005` | Replace it with plain JavaScript, or move it into an activity |
+| Syntax that only parses in sloppy mode: `with`, a legacy octal literal such as `010`, duplicate parameter names, `delete` of a variable, a reserved word such as `let`, `static` or `yield` as a name | `VF-IMP-007` | Rewrite it without that syntax (write `0o10` or `8` for an octal literal). Elsa 4 runs JavaScript in strict mode |
+| An assignment to a name the script never declares (`total = 1`) | `VF-IMP-007` | Declare it with `let` first. Elsa 3 created a global; Elsa 4's strict mode fails |
+| `this` or `arguments` outside a function | `VF-IMP-007` | Read the value through `getVariable`, `getInput` or a local variable |
+| Changing `arguments[i]`, or a parameter, in a function that reads `arguments` | `VF-IMP-007` | Copy the value into a local `let` variable and change that. Elsa 3 kept them linked; Elsa 4 does not |
+
+A workflow that genuinely needs the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit
+capability for them (#3026). Elsa 4 deliberately strips them from expressions to keep them deterministic.
+
+Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
+- `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
+- An `undefined` value inside an object result (`{ discount: undefined }`) kept its key as `null` in Elsa 3; Elsa 4
+  drops the key, which shows in serialized bodies and in `in` or `Object.keys` (#3170).
+- A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
+  (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004` (#3172).
+- Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
 
 ## Nesting budget
 

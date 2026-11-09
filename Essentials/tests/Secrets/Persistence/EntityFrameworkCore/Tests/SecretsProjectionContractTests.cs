@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
@@ -223,6 +224,79 @@ public sealed class SecretsProjectionContractTests
             File.Delete($"{path}-wal");
             File.Delete($"{path}-shm");
         }
+    }
+
+    /// <summary>
+    /// A name the secret holding it shares with secrets deleted under it is several rows. When a page ends on the first
+    /// of them, the next page must still start inside that name: a cursor without the tombstone would skip the rest, and
+    /// the audit would call the database current without ever reading the rows it skipped.
+    /// </summary>
+    [Fact]
+    public async Task Audit_and_reindex_reach_every_row_of_a_name_that_straddles_a_page_boundary()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        for (var index = 0; index < 99; index++)
+            fixture.Context.Secrets.Add(SecretDocument.FromSecret(CreateSecret("text", $"a.current.{index:D3}")).ToRecord());
+        fixture.Context.Secrets.Add(SecretDocument.FromSecret(CreateSecret("text", "b.shared")).ToRecord());
+        var deleted = CreateSecret("ƛ", "b.shared");
+        deleted.Status = SecretStatus.Deleted;
+        fixture.Context.Secrets.Add((SecretDocument.FromSecret(deleted) with { TypeNameLookupKey = "ƛ" }).ToRecord());
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        Assert.True(await SecretsProjectionContract.HasLegacyProjectionsAsync(fixture.Context));
+        Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(fixture.Context));
+        Assert.False(await SecretsProjectionContract.HasLegacyProjectionsAsync(fixture.Context));
+        var repaired = await fixture.Context.Secrets.AsNoTracking().SingleAsync(record => record.Tombstone == deleted.Id);
+        Assert.Equal("Ƛ", repaired.TypeNameLookupKey);
+    }
+
+    /// <summary>
+    /// A live secret under a tombstone would be invisible to every lookup, and nothing says it should take the name back.
+    /// A deleted secret in the row that holds its name is moved under its id by the reindex, which an id that is blank or
+    /// longer than the column cannot be. None of these rows is repaired: the audit and the reindex both fail closed on it,
+    /// naming the row, and leave it as it was.
+    /// </summary>
+    [Theory]
+    [InlineData("live-under-a-tombstone")]
+    [InlineData("deleted-with-a-blank-id")]
+    [InlineData("deleted-with-an-oversized-id")]
+    public async Task A_row_whose_tombstone_disagrees_with_its_secrets_status_fails_closed_unless_the_reindex_can_move_it(
+        string misplacement)
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var secret = CreateSecret("text", "misplaced");
+        var tombstone = "";
+        switch (misplacement)
+        {
+            case "live-under-a-tombstone":
+                tombstone = secret.Id;
+                break;
+            case "deleted-with-a-blank-id":
+                secret.Status = SecretStatus.Deleted;
+                secret.Id = " ";
+                break;
+            case "deleted-with-an-oversized-id":
+                secret.Status = SecretStatus.Deleted;
+                secret.Id = new string('x', SecretRecordConfiguration.TombstoneMaximumLength + 1);
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown test misplacement '{misplacement}'.");
+        }
+
+        var record = SecretDocument.FromSecret(secret).ToRecord();
+        record.Tombstone = tombstone;
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var startup = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        Assert.Equal("misplaced", startup.NormalizedName);
+        var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.ReindexAsync(fixture.Context));
+        Assert.Equal("misplaced", reindex.NormalizedName);
+        Assert.Equal(tombstone, (await fixture.Context.Secrets.AsNoTracking().SingleAsync()).Tombstone);
     }
 
     [Fact]

@@ -22,6 +22,7 @@ namespace Elsa.Activities.Primitives.Activities;
 // expression binding is evaluated under binding-pure-v1 (no time, randomness, services or I/O), so a re-run returns
 // the same value. Secret bindings are refused above, so no value can change between runs.
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
+[Activity(Icon = "Braces")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Inline : Activity<object?>
 {

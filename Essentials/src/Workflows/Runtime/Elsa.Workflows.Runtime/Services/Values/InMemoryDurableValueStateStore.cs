@@ -6,6 +6,13 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 [RuntimeDefaultRegistration]
 public sealed class InMemoryDurableValueStateStore : InMemoryKeyedStateStore<InMemoryDurableValueStateStore.DurableValueStateKey, DurableValueState>, IDurableValueStateStore
 {
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        foreach (var state in Snapshot(key =>
+                     StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId)))
+            Remove(new DurableValueStateKey(workflowExecutionId, state.DurableValueId));
+    }
+
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "task": "T043",
+  "sourceParentCommit": "1bcdec63dd81529f8b44e94d27d9c39cec6cc88c",
+  "sourceFilesSha256": {
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs": "b2e176eb3bd6d1e1ac928abbb41eba51ca0fe76b8227e5b2ad5dfc3f93c037ad",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs": "b9ac70abd71a187054f08b674c77a71929d426bf896f0328ddf8fec8fe99406d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/DispatchWorkflowResumeGuard.cs": "10a849d77858fbcb5d4897fb11b4d6648afd015dd42e6ee855781bedd6712de5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationExecutor.cs": "bdcbfce6f2692d083a1c19e0def64fc544e835902f0ff7b8fddaa4c385fd0d80",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "ceaee26fc19be0e66640de01f24b16144382239afcde66de79e2d4a513e9bd93",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "fa3de40b482dc6ed0dd0f8f355e66c5978c9fdbc64aac39fb5addfc484cfa1cf",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundaryInitializer.cs": "2bd776d165648ef34110d3158f695fd26367e7340061814007092110cdd850d5",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs": "4fbcd54bb0dd0a65ae208a9bf4fbee746bf88bfd759a492731b63fd5ce5fe84a",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCancellationCheckpointService.cs": "fa1270958fafc5694df8c087ec10aaf84f25f43f3a89e3e04e6d34dc001a3383",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFaultIncidentRecorder.cs": "96efedcebf20b2656ae0e3079a9b88c383832c569ec27397ccb8d55084992a1a",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ChildControlDelivery.cs": "f1e9dcb2a738af6c0432edceca188d7c762eeb12ec0ecd7aacb35a76a0b500db",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ChildControlInboxEvaluation.cs": "0e562a6835daa02bdf57563348de691c0c3315dc8530297d9d8b26069a0b7da5",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/StructuralCallbackEvaluation.cs": "2633ea814af6c475059b650670f7bd819b092efbe3903ca4b88a38328b169f6d",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/StructuralChildControlContribution.cs": "65370ae152b424e1bf1e33386eb2eb87f3287e507730cdba4cbadb4da90c8aed",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/StructuralParentEvaluationSupport.cs": "6d3552d0af07f6dd27264e5befecd3c96b70d60f2109ae12db9db1ffccbfe924",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowChildControlSchedulerWorkHandler.cs": "d91dafdbafd831439985e97f5ae5b1a9f5e3c2061d67c6975c0b9478dcdeaa0e",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "7937705377c2662b4575870ff87506268805959eb915afa9de969cbbb5932e8a",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": "01b161949858149289465d50f01a84db5bc272bd4429294d574063c4a6b98aa2",
+    "Essentials/src/Workflows/Runtime/Api/Services/WorkflowInstanceDeletionService.cs": "8d79cbb059005e333f76d8f4670f0a9367ee2ac757ce9b0bd302753685723d9e",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeWorkflowControlBoundary.cs": "6bee4cd426cdd57d91dc4115ec2d7f2dc4c898c1d2379b95f1237e23fe308e0f",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutionStateStore.cs": "7c40587e2259b871033c98290c9dfa6812db1d268010e07d1534769b90b3a6df",
+    "Essentials/src/Workflows/Runtime/Core/Events/ActivityResumeValidating.cs": "4bca044e2577a43fd57b70612bc654b526eb4bf45caec622f157b1ec7b83e843",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/RuntimeSchedulerWorkUnavailableException.cs": "8f6ca908ba14527069ba07f95b882ca112f50be4edd699a0e204f7f1099c18da",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/WorkflowControlBoundaryException.cs": "26010d87fc68f75fb29229a48d7901d173c367cba649e944a706bd445fe79da6",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlCommandPayload.cs": "d09c19f16fda45ceda707950535d1bfef3980d26f8aaac5ba219a39bb7cb9a35",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlContext.cs": "80c82532969ab5ddf895056a3270f1722304c14c7071464d25f1bb90ec960081",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs": "1240f82279f4c91c19a912c823b4f6833fd394d3e680929c36f56c99e25e051d",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionDeletion.cs": "6ef3031a25791f53b6ff4f30e800e089c5cbcbc001eb75abb4e9297f24bcb971",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "d0b1488be01136b84ecb66d1c9e7858fae11fdfbad2ce64cfa0bde9862c603ff",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs": "12030d8d1ab7448a77a5f3c22edb80de6c831eb52f5201ab8f28d7295aedca7e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/InMemoryWorkflowExecutionStateStore.cs": "e6600e7518b41cf3431e19d137675398c93da6942d928cc6ef09e8fd5280e885",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerCommandRouter.cs": "01d92b7872ae61b84edf7c797dd9f307239985c7567a60ae1eb4015b074afbbe",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs": "39c4f82db5f7f67a558814507bd5bf4a06a6585ef86cf580b3b721f27e654cd5",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "50bf24f7d4753c0fd65ea64588ab116866b3d8ec4ce59c3244cd6b2131c3273b",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "a4def58b8e88fff5f805cc13e5a48d4c8f7a10b5cf6441285d93433b8fda63b0",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowEndToEndTests.cs": "f3ff6a935def0f63de54d5418c692f683e4ed570d7d58782f924ad4e847f6dfb",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowRuntimeTestFixture.cs": "9f37883c3bf1b72c952a99eea2a30f1262c5bbc85153ece566b932e1aecf00ae",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlBoundaryTests.cs": "df90b2214eaf0ab60cfc495527ab76d90d9dccb442425afc2346c03009c7acbe",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlInboxTests.cs": "259afde270ff4d203e47909c6549e323b5b14f98bc533e00e9c184f9960d82a6",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlTransportTests.cs": "5b3bfa89ad38a6ed53180a35ad2eb7fbcc978eaf7859fc3ee084a2119a935273",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowDispatchCompletionEnricherTests.cs": "d64af74900fa9feb50043da26bc9f90adb491604469f18a624a0cc7c1f5d68bc",
+    "Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs": "d06bbbc27619aecdde5a89e57fb9d20e6edaab76d07f9c80c061cdc399cd5527",
+    "Essentials/tests/Workflows/Runtime/Api/Tests/WorkflowInstanceDeletionIntegrationTests.cs": "19035432ddd25ed9c3d996881463848b8e394ca17744ff9ec48d132da46072e9",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/DispatchWorkflowStoreContractTests.cs": "d3dd55e650ec287976401a95cb90568ef4f87b812d3bb71bc5bd0878cc15775f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfWorkflowExecutionDeletionStoreTests.cs": "e1fdc669db68e24fd06a18179f992e246c7ffa59d9bf909a21f487e02c73031c",
+    "Essentials/tests/Workflows/Runtime/Tests/InMemoryWorkflowExecutionDeletionStoreTests.cs": "ffb440a216a95eb03d7804d0fcf10c511b5e7ba874081e785353a4308d3bcaf5"
+  },
+  "qualification": "in-process host plus constructed provider retention and direct provider failure controls",
+  "inProcessInboxCases": 11,
+  "checks": [
+    {
+      "project": "DispatchWorkflow",
+      "passed": 335,
+      "failed": 0
+    },
+    {
+      "project": "Activities Runtime",
+      "passed": 664,
+      "failed": 0
+    },
+    {
+      "project": "Workflow Runtime",
+      "passed": 2648,
+      "failed": 0
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1022,
+      "failed": 0
+    },
+    {
+      "project": "Deletion API integration",
+      "passed": 21,
+      "failed": 0
+    },
+    {
+      "project": "Publishing compiler controls",
+      "passed": 147,
+      "failed": 0
+    }
+  ],
+  "mutations": [
+    {
+      "change": "omit pre-claim source event",
+      "failed": 1
+    },
+    {
+      "change": "omit intentional-fault inbox contribution",
+      "failed": 1,
+      "passed": 2
+    },
+    {
+      "change": "skip missing ordinal to terminal",
+      "failed": 2
+    },
+    {
+      "change": "omit in-memory retention guard",
+      "failed": 2
+    },
+    {
+      "change": "omit EF retention guard",
+      "failed": 2
+    },
+    {
+      "change": "capture deletion ownership after final dependency read",
+      "failed": 1
+    }
+  ],
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "remainingGates": [
+    "T044 BPMN authored interpretation",
+    "T045 actual host and fresh EF buffered-gap recovery, split/concurrent claims",
+    "T024 dedicated local combined outcome",
+    "T029 ordinary compensation",
+    "T032 duplicate semantics deletion",
+    "T036 final current source host and Studio",
+    "T037 complete PR author review and exact-head required CI",
+    "T038 merge and resulting-main verification",
+    "later ADR0063 acceptance",
+    "2898 and 2907 production acceptance"
+  ],
+  "componentReviews": {
+    "correctness": "clean",
+    "standards": "clean",
+    "acceptance": "clean",
+    "completePrReviewRounds": 0
+  }
+}

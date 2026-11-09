@@ -1,7 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
@@ -20,13 +22,15 @@ public sealed partial class WorkflowActivationCoordinator(
     IWorkflowTriggerBindingStore? triggerBindingStore = null,
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
     IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
-    ILogger<WorkflowActivationCoordinator>? logger = null) : IWorkflowActivationCoordinator
+    ILogger<WorkflowActivationCoordinator>? logger = null,
+    IOptions<ActivationChannelOptions>? activationChannelOptions = null) : IWorkflowActivationCoordinator
 {
     public const string ReplacedRetireReason = "activation-replaced";
     public const string FailedRetireReason = "activation-failed";
 
     private const int MaximumDiagnosticLength = 512;
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _triggerObservers = triggerObservers?.ToArray() ?? [];
+    private readonly ActivationChannelOptions _activationChannelOptions = activationChannelOptions?.Value ?? new();
 
     public async ValueTask<WorkflowActivationResult> ActivateAsync(
         WorkflowActivationCommand command,
@@ -47,6 +51,14 @@ public sealed partial class WorkflowActivationCoordinator(
                 nameof(command));
 
         var definitionId = identity.DefinitionId;
+        if (!_activationChannelOptions.Allows(command.SlotName))
+            return new(
+                false,
+                WorkflowActivationOutcome.ChannelNotAllowed,
+                await authority.FindAsync(definitionId, command.SlotName, cancellationToken) ?? EmptySlot(definitionId, command.SlotName),
+                Diagnostic: $"Activation channel '{command.SlotName}' is not declared for this shell.",
+                FailedStep: WorkflowActivationStep.ChannelValidation);
+
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
         GuardComposition(definitionId, command.SlotName, command.ActivationId);
 
@@ -169,7 +181,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -284,7 +296,7 @@ public sealed partial class WorkflowActivationCoordinator(
         {
             artifactId ??= (await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), CancellationToken.None))?.ArtifactId
                            ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference to name its artifact.");
-            await NotifyTriggerObserversAsync(activationId, artifactId, CancellationToken.None);
+            await NotifyTriggerObserversAsync(slot.WorkflowDefinitionId, activationId, artifactId, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -459,7 +471,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -539,6 +551,7 @@ public sealed partial class WorkflowActivationCoordinator(
         await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
 
     private async ValueTask NotifyTriggerObserversAsync(
+        string definitionId,
         string activationId,
         string fallbackArtifactId,
         CancellationToken cancellationToken)
@@ -549,7 +562,11 @@ public sealed partial class WorkflowActivationCoordinator(
 
         var bindings = await triggerBindingStore!.ListAllByActivationAsync(activationId, cancellationToken);
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? fallbackArtifactId;
-        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings) { RequiresProjectionRefresh = true };
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings)
+        {
+            RequiresProjectionRefresh = true,
+            DefinitionId = definitionId
+        };
         foreach (var observer in _triggerObservers)
         {
             await observer.OnTriggersIndexedAsync(snapshot, cancellationToken);
@@ -590,7 +607,7 @@ public sealed partial class WorkflowActivationCoordinator(
             await CaptureAsync(
                 failures,
                 "Observer compensation",
-                () => NotifyTriggerObserversAsync(transition.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+                () => NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, transition.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(
@@ -636,7 +653,7 @@ public sealed partial class WorkflowActivationCoordinator(
                     activationId,
                     $"The deactivation slot transition could not be restored: {restored.Diagnostic}");
         });
-        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(

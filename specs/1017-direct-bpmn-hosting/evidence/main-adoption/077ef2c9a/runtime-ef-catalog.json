@@ -1,0 +1,56 @@
+{
+  "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+    "-c",
+    "Release",
+    "-m:1",
+    "-p:BuildInParallel=false",
+    "-p:UseSharedCompilation=false",
+    "-p:RestoreLockedMode=true",
+    "--nologo",
+    "--logger",
+    "trx;LogFileName=approved-main077-runtime-ef-catalog.trx"
+  ],
+  "exitCode": 0,
+  "seconds": 150.8,
+  "reason": "Upstream worker fixture changes only expected catalog digest/version3 to4; expected worker profile digest remains unchanged. Whole affected project repeats current catalog.",
+  "counters": {
+    "total": "1839",
+    "executed": "1839",
+    "passed": "1839",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "trx": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/TestResults/approved-main077-runtime-ef-catalog.trx",
+  "discovery": {
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 1839,
+    "executedCases": 1839,
+    "runtimeExpandedTheories": {},
+    "allListedCasesAccountedFor": true
+  }
+}

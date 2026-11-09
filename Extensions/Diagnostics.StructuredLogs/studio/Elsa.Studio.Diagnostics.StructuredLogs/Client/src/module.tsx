@@ -1,5 +1,8 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
+import { connectAnonymousLogStream } from "./anonymousLogStream";
 import "./styles.css";
 
 type StructuredLogLevel = "Trace" | "Debug" | "Information" | "Warning" | "Error" | "Critical";
@@ -98,7 +101,7 @@ export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
 
   api.navigation.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     label: "Structured logs",
     path: "/diagnostics/structured-logs",
     order: 860,
@@ -107,14 +110,14 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.routes.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     label: "Structured logs",
     path: "/diagnostics/structured-logs",
     component: StructuredLogsPage
   });
 
   api.panels.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     title: "Structured Logs",
     order: 1_010,
     component: StructuredLogsPanel
@@ -137,7 +140,7 @@ export function StructuredLogsPage() {
   const selectedEntry = state.rows.find(row => row.id === state.selectedEntryId) ?? null;
 
   return (
-    <section className="structured-logs-page">
+    <section className="studio-page structured-logs-page">
       <StructuredLogsHeader state={state} />
       <div className={selectedEntry ? "structured-logs-workbench" : "structured-logs-workbench no-selection"}>
         <StructuredLogRows state={state} />
@@ -154,6 +157,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [detail, setDetail] = useState("Connecting to structured logs.");
+  const [recentFailure, setRecentFailure] = useState<ReturnType<typeof classifyStructuredLogError> | null>(null);
   const [paused, setPaused] = useState(false);
   const [bufferedRows, setBufferedRows] = useState<StructuredLogEntry[]>([]);
   const [queuedCount, setQueuedCount] = useState(0);
@@ -239,7 +243,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 
   useEffect(() => {
     let cancelled = false;
-    let eventSource: EventSource | null = null;
+    let closeStream: (() => void) | undefined;
 
     setRows([]);
     setSelectedEntryId(null);
@@ -247,6 +251,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     setQueuedCount(0);
     setUpstreamDroppedCount(0);
     setLocalDiscardedCount(0);
+    setRecentFailure(null);
     setStatus("connecting");
     setDetail("Loading recent structured logs.");
 
@@ -259,41 +264,45 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
       } catch (error) {
         if (!cancelled) {
           const classified = classifyStructuredLogError(error);
-          setStatus(classified.status);
-          setDetail(classified.message);
+          setRecentFailure(classified);
         }
       }
     }
 
     function connect() {
-      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters));
-
-      eventSource.onopen = () => {
-        if (cancelled)
-          return;
+      const context = moduleApi.backend;
+      const opened = () => {
+        if (cancelled) return;
         setStatus(pausedRef.current ? "paused" : "live");
         setDetail("Live structured log stream connected.");
       };
-
-      eventSource.addEventListener("entry", event => {
-        if (cancelled)
-          return;
-        addEntries([normalizeStructuredLogEntry(parseSseJson<StructuredLogWireEntry>(event))]);
-      });
-
-      eventSource.addEventListener("dropped", event => {
-        if (cancelled)
-          return;
-        const dropped = parseSseJson<DroppedEntriesSignal>(event);
-        setUpstreamDroppedCount(current => current + (dropped.droppedCount ?? dropped.count ?? 0));
-      });
-
-      eventSource.onerror = () => {
-        if (cancelled)
-          return;
+      const received = (event: Event) => {
+        if (cancelled) return;
+        if (event.type === "entry") addEntries([normalizeStructuredLogEntry(parseSseJson<StructuredLogWireEntry>(event))]);
+        else if (event.type === "dropped") {
+          const dropped = parseSseJson<DroppedEntriesSignal>(event);
+          setUpstreamDroppedCount(current => current + (dropped.droppedCount ?? dropped.count ?? 0));
+        }
+      };
+      const failed = () => {
+        if (cancelled) return;
         setStatus("disconnected");
         setDetail("Live stream disconnected. The browser will retry automatically.");
       };
+      const url = createStreamUrl(context, filters);
+      if (context.accessTokenFactory) {
+        const eventSource = new EventSource(url, { withCredentials: true });
+        closeStream = () => eventSource.close();
+        eventSource.onopen = opened;
+        eventSource.addEventListener("entry", received);
+        eventSource.addEventListener("dropped", received);
+        eventSource.onerror = failed;
+      } else if (context.http.requestResponse) {
+        closeStream = connectAnonymousLogStream(init => context.http.requestResponse!(url, init), opened, received, failed);
+      } else {
+        setStatus("unavailable");
+        setDetail("Anonymous live streaming requires a streaming-capable backend transport. Recent logs remain available.");
+      }
     }
 
     void loadRecent().then(() => {
@@ -304,7 +313,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 
     return () => {
       cancelled = true;
-      eventSource?.close();
+      closeStream?.();
     };
   }, [addEntries, filters]);
 
@@ -371,8 +380,8 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     rows,
     selectedEntryId,
     setSelectedEntryId,
-    status,
-    detail,
+    status: recentFailure?.status ?? status,
+    detail: recentFailure?.message ?? detail,
     paused,
     togglePaused,
     queuedCount,
@@ -405,12 +414,7 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
   );
 
   return (
-    <header className="structured-logs-header">
-      <div>
-        <h2>Structured logs</h2>
-        <p>{state.queuedCount > 0 ? `${state.queuedCount} buffered while paused` : state.detail}</p>
-      </div>
-      <div className="structured-logs-tools">
+    <StudioPageHeader className={compactControls ? "studio-page-header--compact" : undefined} headingLevel={2} title={<>Structured logs</>} description={<>{state.queuedCount > 0 ? `${state.queuedCount} buffered while paused` : state.detail}</>} actions={<><div className="structured-logs-tools">
         {!compactControls ? (
           <>
             {levelSelect}
@@ -438,30 +442,29 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         <span>{statusLabel}</span>
         {state.upstreamDroppedCount > 0 ? <span>{state.upstreamDroppedCount} dropped upstream</span> : null}
         {state.localDiscardedCount > 0 ? <span>{state.localDiscardedCount} discarded locally</span> : null}
-        <button type="button" className={state.paused ? "active" : ""} onClick={state.togglePaused} aria-pressed={state.paused}>
+        <StudioButton type="button" className={state.paused ? "active" : ""} onClick={state.togglePaused} aria-pressed={state.paused}>
           {state.paused ? "Resume" : "Pause"}
-        </button>
-        <button type="button" className={state.autoScroll ? "active" : ""} onClick={() => state.setAutoScroll(current => !current)} aria-pressed={state.autoScroll}>
+        </StudioButton>
+        <StudioButton type="button" className={state.autoScroll ? "active" : ""} onClick={() => state.setAutoScroll(current => !current)} aria-pressed={state.autoScroll}>
           Autoscroll
-        </button>
+        </StudioButton>
         {!compactControls ? (
           <>
-            <button type="button" className={state.wrapMessages ? "active" : ""} onClick={() => state.setWrapMessages(current => !current)} aria-pressed={state.wrapMessages}>
+            <StudioButton type="button" className={state.wrapMessages ? "active" : ""} onClick={() => state.setWrapMessages(current => !current)} aria-pressed={state.wrapMessages}>
               Wrap
-            </button>
-            <button type="button" className={state.compact ? "active" : ""} onClick={() => state.setCompact(current => !current)} aria-pressed={state.compact}>
+            </StudioButton>
+            <StudioButton type="button" className={state.compact ? "active" : ""} onClick={() => state.setCompact(current => !current)} aria-pressed={state.compact}>
               Compact
-            </button>
-            <button type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</button>
-            <button type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</button>
-            <button type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</button>
+            </StudioButton>
+            <StudioButton type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</StudioButton>
+            <StudioButton type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</StudioButton>
+            <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</StudioButton>
           </>
         ) : (
-          <button type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</button>
+          <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</StudioButton>
         )}
-        <button type="button" onClick={state.clear}>Clear</button>
-      </div>
-    </header>
+        <StudioButton type="button" onClick={state.clear}>Clear</StudioButton>
+      </div></>} />
   );
 }
 
@@ -485,7 +488,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
       </div>
       {state.rows.length === 0 ? (
         <div className="structured-logs-empty">
-          {state.status === "unavailable" || state.status === "unauthorized" ? state.detail : "No structured logs received yet."}
+          {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
         </div>
       ) : null}
       {state.rows.map(row => (
@@ -626,7 +629,7 @@ export function createStreamUrl(context: StudioEndpointContext, filters: Structu
   const query = createStructuredLogQuery(filters);
   const queryString = query.toString();
   const suffix = queryString ? `?${queryString}` : "";
-  return new URL(`${structuredLogsEndpointPrefix}/stream${suffix}`, context.baseUrl).toString();
+  return new URL(resolveBackendPath(context.baseUrl,`${structuredLogsEndpointPrefix}/stream${suffix}`), context.baseUrl).toString();
 }
 
 export function appendStructuredLogEntries(current: StructuredLogEntry[], entries: StructuredLogEntry[]): AppendStructuredLogResult {

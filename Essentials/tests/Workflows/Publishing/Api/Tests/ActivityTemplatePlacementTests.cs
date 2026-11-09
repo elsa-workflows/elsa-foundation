@@ -15,6 +15,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -22,17 +23,71 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class ActivityTemplatePlacementTests
 {
     [Fact]
-    public async Task Placement_materializes_an_occurrence_overlays_authored_input_and_structure_against_placed_children()
+    public async Task Graph_authored_occurrence_names_override_child_template_names_at_each_placed_identity()
+    {
+        var leaf = Template("leaf-template", "leaf-hash", Node("native-root"));
+        var graph = Template("graph-template", "graph-hash", Node("graph-root"),
+            [new("leaf-definition", "leaf-version", "1.0.0", leaf.TemplateId, leaf.TemplateHash, "authored-step", ActivityInvocationOrigin.Empty)]);
+        var leafPublication = Publication("leaf-definition", "leaf-version", "type.leaf", leaf);
+        var graphPublication = Publication("graph-definition", "graph-version", "type.graph", graph);
+        var leafReference = Reference(leafPublication, ExecutableLayoutSidecar.Empty) with { ActivityPresentation = [new("native-root", "Template default", null)] };
+        var graphReference = Reference(graphPublication, ExecutableLayoutSidecar.Empty) with { ActivityPresentation = [new("authored-step", "Review order", "Authored occurrence"), new("unknown", "Must not leak", null)] };
+        var placer = CreatePlacer(new PublicationStore([graphPublication, leafPublication]), new TemplateReader([graph, leaf]), new SourceReader([graphReference, leafReference]), new Sha256ActivityPlacementHasher());
+        var placed = await placer.PlaceAsync(new(graphPublication, graph, graphReference,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow")]), graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+        var child = Assert.Single(Assert.Single(placed.Root.ChildSlots).Activities);
+        var label = Assert.Single(placed.ActivityPresentation);
+        Assert.Equal(child.ExecutableNodeId, label.ExecutableNodeId);
+        Assert.Equal("Review order", label.DisplayName);
+        Assert.Equal("Authored occurrence", label.Description);
+        Assert.Equal("Template default", Assert.Single(leafReference.ActivityPresentation).DisplayName);
+    }
+
+    [Fact]
+    public async Task Presentation_is_frozen_per_exact_template_and_remapped_for_each_call_without_unknown_identity_fallback()
+    {
+        var template = Template("template", "same-behavior-hash", Node("root", Node("child")));
+        var publication = Publication("definition", "version", "type.reusable", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty) with
+        {
+            ActivityPresentation = [new("child", "Original name", "Original description"), new("unrelated-outer-node", "Must not leak", null)]
+        };
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]), new Sha256ActivityPlacementHasher());
+        async Task<ActivityTemplatePlacement> Place(string call) => await placer.PlaceAsync(new(publication, template, reference,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow"), new(ActivityInvocationOriginSegmentKind.AuthoredNode, call)]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+        var first = await Place("call-a");
+        var second = await Place("call-b");
+        var firstLabel = Assert.Single(first.ActivityPresentation);
+        var secondLabel = Assert.Single(second.ActivityPresentation);
+        Assert.Equal("Original name", firstLabel.DisplayName);
+        Assert.Equal("Original description", secondLabel.Description);
+        Assert.NotEqual(firstLabel.ExecutableNodeId, secondLabel.ExecutableNodeId);
+        Assert.Contains(first.Root.DescendantsAndSelf(), node => node.ExecutableNodeId == firstLabel.ExecutableNodeId && node.AuthoredActivityId == "child");
+        Assert.Contains(second.Root.DescendantsAndSelf(), node => node.ExecutableNodeId == secondLabel.ExecutableNodeId && node.AuthoredActivityId == "child");
+        Assert.Equal("same-behavior-hash", template.TemplateHash);
+        Assert.Equal("Original name", Assert.Single(reference.ActivityPresentation, record => record.ExecutableNodeId == "child").DisplayName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement(bool structureInputs)
     {
         // #1051: source-owned templates have bare roots. The occurrence overlay must restore the graph-authored
         // input and reconcile the compiled structure after placement gives child nodes their final identities.
+        var key = structureInputs ? "Case:a:Condition" : "condition";
         var sequenceOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
-            Json("""[{"referenceKey":"condition","value":{"value":true,"expressionType":"Literal"}}]"""),
+            JsonSerializer.SerializeToElement(new[] { new { referenceKey = key, value = new { value = true, expressionType = "Literal" } } }),
             new ExecutableActivityStructure(
                 "elsa.sequence.structure",
                 "1.0.0",
-                Json("""{"activities":["write"]}""")));
+                Json("""{"activities":["write"]}""")))
+        {
+            InputContracts = structureInputs ? [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(key, "Condition", new("Boolean"), false, false, false, null, ActivityValuePolicy.Default) { IsStructureInput = true }] : null
+        };
         var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
         var graphTemplate = Template(
             "template-graph",
@@ -49,7 +104,10 @@ public sealed class ActivityTemplatePlacementTests
                 "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition()));
-        var writeTemplate = Template("template-write", "hash-write", Node("source-owned-root"));
+        var writeTemplate = Template(
+            "template-write",
+            "hash-write",
+            Node("source-owned-root", ActivityExecutionPlacement.Background));
         var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
         var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
         var writePublication = Publication("definition-write", "version-write", "type.write", writeTemplate);
@@ -76,11 +134,14 @@ public sealed class ActivityTemplatePlacementTests
 
         var sequence = Assert.Single(Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities);
         var condition = Assert.Single(sequence.InputBindings);
-        Assert.Equal("condition", condition.Key);
+        Assert.Equal(key, condition.Key);
+        Assert.Equal(structureInputs, sequence.ActivityContract!.Inputs[key].IsStructureInput);
+        Assert.Equal([key], sequence.ActivityContract.Inputs.Keys);
         Assert.Equal(RuntimeInputBindingSource.Literal, condition.Value.Source);
         Assert.True(condition.Value.LiteralValue!.Value.GetBoolean());
 
         var write = Assert.Single(Assert.Single(sequence.ChildSlots, x => x.Name == "Activities").Activities);
+        Assert.Equal(ActivityExecutionPlacement.Background, write.ExecutionPlacement);
         var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
         var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
         Assert.Equal([write.ExecutableNodeId], orderedChildIds);
@@ -182,7 +243,17 @@ public sealed class ActivityTemplatePlacementTests
             DateTimeOffset.UnixEpoch,
             new Dictionary<string, string>(),
             IncidentStrategyBuiltIns.FaultReference));
-        await references.SaveAsync(fixture.Request.SourceReference with { LayoutSidecar = placement.LayoutSidecar });
+        await references.SaveAsync(fixture.Request.SourceReference with
+        {
+            LayoutSidecar = placement.LayoutSidecar,
+            ActivityPresentation = [new(immediateBoundary.ExecutableNodeId, "Original published name", null), new(deeperInternal.ExecutableNodeId, "Nested private label", null)]
+        });
+        await references.SaveAsync(fixture.Request.SourceReference with
+        {
+            SourceReferenceId = "later-draft-reference",
+            LayoutSidecar = placement.LayoutSidecar,
+            ActivityPresentation = [new(immediateBoundary.ExecutableNodeId, "Later draft name", null)]
+        });
         var hierarchy = new BoundaryHierarchyStore(new(
             "ActivityGraph",
             fixture.Request.Publication.DefinitionId,
@@ -213,6 +284,8 @@ public sealed class ActivityTemplatePlacementTests
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == thenBoundary.ExecutableNodeId);
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == elseBoundary.ExecutableNodeId);
         Assert.DoesNotContain(view.Nodes, x => x.ExecutableNodeId == deeperInternal.ExecutableNodeId);
+        Assert.Equal("Original published name", Assert.Single(view.ActivityPresentation).DisplayName);
+        Assert.Equal(immediateBoundary.ExecutableNodeId, Assert.Single(view.ActivityPresentation).ExecutableNodeId);
     }
 
     [Fact]
@@ -390,6 +463,196 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("target", placed.IntrinsicVariable?.VariableKey);
     }
 
+    [Fact]
+    public async Task Closed_scope_body_references_follow_the_placement_and_the_boundary_is_marked()
+    {
+        // Body node "format" reads body node "compute"'s result and a graph variable by their
+        // template-local identities; both must point at this placement's identities.
+        var (placer, request) = ClosedScopeGraph(scopeModel: "closed");
+
+        var placement = await placer.PlaceAsync(request);
+
+        Assert.Equal("closed", placement.Root.Metadata[RuntimeMetadataKeys.ActivityExecutionScope]);
+        var body = Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities;
+        var compute = Assert.Single(body, x => !x.InputBindings.ContainsKey("total"));
+        var format = Assert.Single(body, x => x.InputBindings.ContainsKey("total"));
+        var result = format.InputBindings["condition"].ActivityResult!;
+        Assert.Equal(compute.ExecutableNodeId, result.ProducerExecutableNodeId);
+        Assert.Equal(compute.ExecutableNodeId, result.ProducerScopeId);
+        Assert.Equal(placement.Root.ExecutableNodeId, format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Theory]
+    [InlineData("""{"referenceKey":"total","declaringScopeId":null}""")]
+    [InlineData("""{"referenceKey":"total","declaringScopeId":""}""")]
+    [InlineData("\"total\"")]
+    public async Task A_closed_scope_variable_read_without_a_named_scope_reads_the_graph_variable(string reference)
+    {
+        // Studio writes a root-scope reference with a null scope; it is the graph's variable, as "workflow" is.
+        var (placer, request) = ClosedScopeGraph(
+            scopeModel: "closed",
+            formatInputs: $$$"""[{"referenceKey":"total","value":{"value":{{{reference}}},"expressionType":"Variable"}}]""");
+
+        var placement = await placer.PlaceAsync(request);
+
+        var format = placement.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.Equal(placement.Root.ExecutableNodeId, format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task Two_placements_of_a_closed_scope_body_get_independent_references()
+    {
+        var (placer, request) = ClosedScopeGraph(scopeModel: "closed");
+        var other = request with
+        {
+            InvocationOrigin = new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version"), new(ActivityInvocationOriginSegmentKind.AuthoredNode, "second")])
+        };
+
+        var first = await placer.PlaceAsync(request);
+        var second = await placer.PlaceAsync(other);
+
+        var firstFormat = first.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        var secondFormat = second.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.NotEqual(firstFormat.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId, secondFormat.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId);
+        Assert.Equal(first.Root.ExecutableNodeId, firstFormat.InputBindings["total"].Variable!.DeclaringScopeId);
+        Assert.Equal(second.Root.ExecutableNodeId, secondFormat.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task A_template_compiled_before_closed_scopes_keeps_its_references_and_is_not_marked()
+    {
+        // Published versions keep their behaviour: no scopeModel, no remap, no marker.
+        var (placer, request) = ClosedScopeGraph(scopeModel: null);
+
+        var placement = await placer.PlaceAsync(request);
+
+        Assert.False(placement.Root.Metadata.ContainsKey(RuntimeMetadataKeys.ActivityExecutionScope));
+        var format = placement.Root.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.Equal("compute", format.InputBindings["condition"].ActivityResult!.ProducerExecutableNodeId);
+        Assert.Equal("workflow", format.InputBindings["total"].Variable!.DeclaringScopeId);
+    }
+
+    [Fact]
+    public async Task The_result_linker_accepts_a_closed_scope_body_result_and_still_refuses_a_legacy_one()
+    {
+        // The original failure: a body ActivityResult kept its template-local producer id, so the workflow publish refused it
+        // with VF-COER-001. A closed-scope body links; a template compiled before closed scopes fails as it did.
+        var linker = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver());
+        var (closedPlacer, closedRequest) = ClosedScopeGraph(scopeModel: "closed");
+        var (legacyPlacer, legacyRequest) = ClosedScopeGraph(scopeModel: null);
+
+        var closed = linker.Link((await closedPlacer.PlaceAsync(closedRequest)).Root);
+        var legacy = await legacyPlacer.PlaceAsync(legacyRequest);
+
+        var format = closed.DescendantsAndSelf().Single(x => x.InputBindings.ContainsKey("total"));
+        Assert.Equal(RuntimeInputBindingSource.ActivityResult, format.InputBindings["condition"].Source);
+        var exception = Assert.ThrowsAny<Exception>(() => linker.Link(legacy.Root));
+        Assert.Contains("VF-COER-001", exception.Message);
+    }
+
+    [Fact]
+    public async Task A_closed_scope_input_pick_reads_the_graph_input_and_a_capture_writes_the_graph_variable()
+    {
+        // Studio picks a graph input as Input {referenceKey}; an authored output capture targets a graph
+        // variable. Both compile against this placement's graph.
+        var (placer, request) = ClosedScopeGraph(
+            scopeModel: "closed",
+            formatInputs: """[{"referenceKey":"total","value":{"value":{"referenceKey":"amount"},"expressionType":"Input"}}]""",
+            computeOutputs: """[{"referenceKey":"result","value":{"value":{"referenceKey":"total","declaringScopeId":"workflow"},"expressionType":"Variable"}}]""");
+
+        var placement = await placer.PlaceAsync(request);
+
+        var body = placement.Root.DescendantsAndSelf().Where(x => x.Metadata.GetValueOrDefault("activity.templateNodeId") == "source-owned-root").ToArray();
+        var format = Assert.Single(body, x => x.InputBindings.TryGetValue("total", out var total) && total.Source == RuntimeInputBindingSource.WorkflowRequest);
+        Assert.Equal("amount", format.InputBindings["total"].WorkflowRequest!.MemberKey);
+        var capture = Assert.Single(Assert.Single(body, x => x.OutputCaptures.Count > 0).OutputCaptures.Values);
+        Assert.Equal(placement.Root.ExecutableNodeId, capture.Metadata[RuntimeMetadataKeys.CaptureTargetScopeId]);
+        Assert.Equal("total", capture.Metadata[RuntimeMetadataKeys.TargetVariableReferenceKey]);
+        Assert.Equal("elsa.json", capture.StorageDriverKey);
+        Assert.Equal("object", capture.Type.Kind);
+    }
+
+    private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(
+        string? scopeModel,
+        string? formatInputs = null,
+        string? computeOutputs = null)
+    {
+        var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json(formatInputs ?? """
+                 [
+                   {"referenceKey":"condition","value":{"value":{"producerNodeId":"compute","projectionKey":"result","producerScopeId":"compute"},"expressionType":"ActivityResult"}},
+                   {"referenceKey":"total","value":{"value":{"referenceKey":"total","declaringScopeId":"workflow"},"expressionType":"Variable"}}
+                 ]
+                 """),
+            null);
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null, computeOutputs is null ? null : Json(computeOutputs));
+        var payload = scopeModel is null
+            ? Json("""{"entryOccurrenceId":"compute"}""")
+            : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}","variables":[{"referenceKey":"total","name":"Total","type":{"alias":"object","collectionKind":"Single"},"storageDriverKey":"elsa.json"}]}""");
+        var graphRoot = new ExecutableNode("graph-boundary", "graph-boundary", "elsa.graph-activity", "1",
+            new RuntimeActivityDescriptor("elsa.graph-activity", "1", payload),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+        var graphTemplate = Template("template-graph", "hash-graph", graphRoot,
+        [
+            new("definition-compute", "version-compute", "1.0.0", "template-compute", "hash-compute", "compute", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, emptyOverlay),
+            new("definition-format", "version-format", "1.0.0", "template-format", "hash-format", "format", ActivityInvocationOrigin.Empty, null, "activity-graph", 1, formatOverlay)
+        ]);
+        var computeTemplate = Template("template-compute", "hash-compute", new ExecutableNode(
+            "source-owned-root", "source-owned-root", "type.compute", "1", new("compute", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition"], ["result"])));
+        var formatTemplate = Template("template-format", "hash-format", new ExecutableNode(
+            "source-owned-root", "source-owned-root", "type.format", "1", new("format", "1", Json("{}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition", "total"], [])));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var computePublication = Publication("definition-compute", "version-compute", "type.compute", computeTemplate);
+        var formatPublication = Publication("definition-format", "version-format", "type.format", formatTemplate);
+        var references = new[]
+        {
+            Reference(graphPublication, ExecutableLayoutSidecar.Empty),
+            Reference(computePublication, ExecutableLayoutSidecar.Empty),
+            Reference(formatPublication, ExecutableLayoutSidecar.Empty)
+        };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, computePublication, formatPublication]),
+            new TemplateReader([graphTemplate, computeTemplate, formatTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher());
+        return (placer, new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>()));
+    }
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithInputs(string[] inputKeys, string[] projectionKeys) => new(
+        "type.local",
+        "1",
+        "local",
+        Json("{}"),
+        inputKeys.Select(key => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+            key,
+            key,
+            new ValueTypeDescriptor("Object"),
+            isRequired: false,
+            isNullable: true,
+            hasDefault: false,
+            defaultValue: null,
+            policy: ActivityValuePolicy.Default)).ToArray(),
+        new ActivityResultContract(
+            new ValueTypeDescriptor("Object"),
+            isRequired: true,
+            policy: ActivityValuePolicy.Default,
+            projections: projectionKeys.Select(key => new ActivityResultProjectionContract(
+                key, "$", new ValueTypeDescriptor("Object"), isRequired: false, ActivityValuePolicy.Default)).ToArray()),
+        [ActivityOutcomes.Done],
+        new ActivityActivationRequirement("type.local", "local"));
+
     private sealed record Fixture(ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request)
     {
         public static Fixture Create(
@@ -490,12 +753,17 @@ public sealed class ActivityTemplatePlacementTests
         references,
         hasher,
         new SequenceOccurrenceStructureService(),
-        new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
+        new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
+        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
 
     private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),
         new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
         children.Length == 0 ? [] : [new ExecutableChildSlot("Activities", children)]);
+
+    private static ExecutableNode Node(string id, ActivityExecutionPlacement placement) => new(
+        id, id, "local", "1", new("local", "1", Json("{}")),
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), placement);
 
     private static ActivityDefinitionVersionPublication Publication(
         string definitionId,

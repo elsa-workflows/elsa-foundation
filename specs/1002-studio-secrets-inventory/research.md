@@ -1,0 +1,9 @@
+# Research: Secrets inventory coverage
+
+- **Decision**: retain current server name/display-name search and local loaded-page facets. **Rationale**: #3069 asks for honest coverage and a supported beyond-cap path; the backend already supports search/paging/facets/filtered count. **Alternative**: wiring global facet queries is feasible but changes filter semantics and overlaps3071; not required here.
+- **Decision**: distinguish displayed/local, loaded and completed-search total. **Rationale**: current “shown · total” and filtered-empty wording can imply a complete shared filter set. A page exactly100 can be complete. **Alternative**: a blanket100-row warning falsely labels complete results.
+- **Decision**: bind new attribution to accepted request generation and submitted query. **Rationale**: typing is not submission, and concurrent loads must not overwrite newer coverage. **Alternative**: deriving result meaning from draft input or a last-finishing response is misleading.
+- **Decision**: preserve loaded scopes rather than provider descriptors as inventory facets. **Rationale**: descriptors are advisory and do not enumerate persisted custom scopes (spec244).
+- **Decision**: real normal-host endpoint+UI proof with representative metadata over100, paired with browser fixture edge states. **Rationale**: a mocked UI cannot establish backend beyond-cap behavior. Existing unchanged API tests need no duplicate proof-by-implementation test.
+
+Source: Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/{SecretsPage.tsx,secretsApi.ts,secretTypes.ts}; Essentials/src/Secrets/Api/SecretsApi.cs, Elsa.Secrets/Services/DefaultSecretManager.cs, Persistence/EntityFrameworkCore/Stores/EfSecretRepository.cs; specs/244-secret-scope-catalog/spec.md. Canonical graph has backend symbols but no matching TSX; current exact source was used without indexing a worktree. All design unknowns are resolved; actual runtime proof remains pending.

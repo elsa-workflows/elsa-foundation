@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-31T14:29:14.110013+00:00",
+  "container": "elsa-perf-20261031",
+  "containerId": "4edd75bec122951e7e6893cac623bca0ca7175cfb881c9b544556c1480c1871d",
+  "volume": "e388339516b423d35bdc562e7b16f93d62dbbd7e047efc9f2d296c34c51ef0fd",
+  "containerAbsent": true,
+  "volumeAbsent": true,
+  "scope": "Only the owned disposable benchmark container and its anonymous volume were removed. Raw measurements and probe sources retained."
+}

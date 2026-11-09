@@ -17,7 +17,7 @@ public interface IActivityDefinitionVersion
     IEnumerable<OutputDefinition> Outputs { get; }
     IEnumerable<ActivityDesignFacet> DesignFacets { get; }
     ActivityExecutionType ExecutionType { get; }
-    string? ReconcilliationHash { get; }
+    string? Hash { get; }
     // SemVerSortKey is NOT here — persistence-only, §2.9.1.
 }
 ```

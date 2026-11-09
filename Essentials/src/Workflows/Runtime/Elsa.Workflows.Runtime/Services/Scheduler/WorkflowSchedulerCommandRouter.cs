@@ -238,7 +238,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         WorkflowExecutionCommandEnvelope envelope,
         CancellationToken cancellationToken)
     {
-        if (activityExecutionStateStore is null || envelope.Command.Kind != WorkflowExecutionCommandKind.ResumeBookmark)
+        if (activityExecutionStateStore is null || envelope.Command.Kind is not (WorkflowExecutionCommandKind.ResumeBookmark or WorkflowExecutionCommandKind.DeliverChildControl))
             return null;
         if (!envelope.Command.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionId, out var activityExecutionId) ||
             string.IsNullOrWhiteSpace(activityExecutionId))

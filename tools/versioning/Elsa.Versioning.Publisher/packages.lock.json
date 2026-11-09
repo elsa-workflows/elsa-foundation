@@ -2,8 +2,14 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
-      "elsa.versioning.calculator": {
+      "elsa.maps.projects": {
         "type": "Project"
+      },
+      "elsa.versioning.calculator": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Maps.Projects": "[1.0.0, )"
+        }
       }
     }
   }

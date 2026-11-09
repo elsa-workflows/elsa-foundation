@@ -2,7 +2,13 @@
 
 **Feature Branch**: `146-javascript-binding-grammar`
 **Created**: 2026-08-05
-**Status**: Draft
+**Status**: Superseded before implementation (2026-10-19)
+
+> Historical proposal only. The owner now requires expressions and statement bodies in the same
+> JavaScript field. [Issue #3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009)
+> and revised [ADR 0083](../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md)
+> replace this host-selected design with deterministic expression-first parsing. The host setting,
+> grammar options and publication stamping specified below are not implemented requirements.
 **Input**: Let a host admit Elsa 3 style JavaScript binding expressions, evaluated with Elsa 3's own Script semantics and selected by deployment configuration, without letting deployment configuration change the behavior of an already-published executable.
 
 Decision of record: [ADR 0083](../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md).

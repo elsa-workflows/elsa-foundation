@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+  </ItemGroup>
+
+</Project>

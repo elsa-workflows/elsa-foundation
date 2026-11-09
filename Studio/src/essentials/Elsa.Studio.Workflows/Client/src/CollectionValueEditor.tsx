@@ -1,4 +1,4 @@
-import { type DragEvent, useState } from "react";
+import { type DragEvent, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import type {
   StudioActivityInputDescriptor,
@@ -11,6 +11,14 @@ import {
   moveCollectionItem,
   toLiteralCollection
 } from "./activityProperties";
+import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
+
+let nextCollectionItemId = 0;
+
+function createCollectionItemId() {
+  nextCollectionItemId += 1;
+  return `collection-item-${nextCollectionItemId}`;
+}
 
 export function CollectionValueEditor({
   input,
@@ -19,6 +27,9 @@ export function CollectionValueEditor({
   editors,
   context,
   disabled,
+  validationScopeKey = "standalone",
+  onValidationChange,
+  onDisclosureFallbackChange,
   onChange
 }: {
   input: StudioActivityInputDescriptor;
@@ -27,14 +38,30 @@ export function CollectionValueEditor({
   editors: StudioActivityPropertyEditorContribution[];
   context: StudioActivityPropertyEditorContext;
   disabled: boolean;
+  validationScopeKey?: string;
+  onValidationChange?(instanceKey: string, hasError: boolean): void;
+  onDisclosureFallbackChange?(instanceKey: string, shouldForceOpen: boolean): void;
   onChange(value: unknown): void;
 }) {
   const items = toLiteralCollection(value);
   const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
-  const collectionEditor = resolveEditor(editors, input, collectionContext)?.component;
+  const collectionEditor = resolveEditor(editors, input, collectionContext);
 
   if (collectionEditor) {
-    return renderEditor(collectionEditor, input, value, disabled, collectionContext, onChange);
+    return (
+      <ReportedPropertyEditor
+        key={`${validationScopeKey}\u001fcollection\u001f${collectionEditor.id}`}
+        editor={collectionEditor}
+        descriptor={input}
+        value={value}
+        disabled={disabled}
+        context={collectionContext}
+        onChange={onChange}
+        validationInstanceKey="collection"
+        onValidationChange={onValidationChange}
+        onDisclosureFallbackChange={onDisclosureFallbackChange}
+      />
+    );
   }
 
   return (
@@ -45,6 +72,9 @@ export function CollectionValueEditor({
       editors={editors}
       context={context}
       disabled={disabled}
+      validationScopeKey={validationScopeKey}
+      onValidationChange={onValidationChange}
+      onDisclosureFallbackChange={onDisclosureFallbackChange}
       onChange={onChange}
     />
   );
@@ -57,6 +87,9 @@ function CollectionRepeater({
   editors,
   context,
   disabled,
+  validationScopeKey = "standalone",
+  onValidationChange,
+  onDisclosureFallbackChange,
   onChange
 }: {
   input: StudioActivityInputDescriptor;
@@ -65,14 +98,31 @@ function CollectionRepeater({
   editors: StudioActivityPropertyEditorContribution[];
   context: StudioActivityPropertyEditorContext;
   disabled: boolean;
+  validationScopeKey?: string;
+  onValidationChange?(instanceKey: string, hasError: boolean): void;
+  onDisclosureFallbackChange?(instanceKey: string, shouldForceOpen: boolean): void;
   onChange(value: unknown): void;
 }) {
   const elementDescriptor = makeCollectionElementDescriptor(input, elementTypeName);
   const elementContext: StudioActivityPropertyEditorContext = { ...context, scope: "element" };
-  const ElementComponent = resolveEditor(editors, elementDescriptor, elementContext)?.component;
+  const elementEditor = resolveEditor(editors, elementDescriptor, elementContext);
+  const itemIds = useRef<string[]>([]);
+  if (itemIds.current.length !== items.length) itemIds.current = items.map(() => createCollectionItemId());
   const label = input.displayName || input.name;
   const replaceAt = (index: number, next: unknown) =>
     onChange(items.map((current, position) => (position === index ? next : current)));
+  const removeAt = (index: number) => {
+    itemIds.current = itemIds.current.filter((_, position) => position !== index);
+    onChange(items.filter((_, position) => position !== index));
+  };
+  const addItem = () => {
+    itemIds.current = [...itemIds.current, createCollectionItemId()];
+    onChange([...items, defaultCollectionItem(elementTypeName)]);
+  };
+  const moveItem = (from: number, to: number) => {
+    itemIds.current = moveCollectionItem(itemIds.current, from, to);
+    onChange(moveCollectionItem(items, from, to));
+  };
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const resetDrag = () => {
@@ -92,7 +142,7 @@ function CollectionRepeater({
   };
   const handleDrop = (index: number) => (event: DragEvent) => {
     event.preventDefault();
-    if (dragIndex !== null && dragIndex !== index) onChange(moveCollectionItem(items, dragIndex, index));
+    if (dragIndex !== null && dragIndex !== index) moveItem(dragIndex, index);
     resetDrag();
   };
 
@@ -104,7 +154,7 @@ function CollectionRepeater({
         <ul className="wf-collection-items">
           {items.map((item, index) => (
             <li
-              key={index}
+              key={itemIds.current[index]}
               className={collectionItemClassName(index, dragIndex, overIndex)}
               onDragOver={handleDragOver(index)}
               onDrop={handleDrop(index)}
@@ -120,7 +170,22 @@ function CollectionRepeater({
                 <GripVertical size={13} aria-hidden="true" />
               </span>
               <div className="wf-collection-item-editor">
-                {renderEditor(ElementComponent, elementDescriptor, item, disabled, elementContext, next => replaceAt(index, next))}
+                {elementEditor ? (
+                  <ReportedPropertyEditor
+                    key={`${validationScopeKey}\u001f${itemIds.current[index]}\u001f${elementEditor.id}`}
+                    editor={elementEditor}
+                    descriptor={elementDescriptor}
+                    value={item}
+                    disabled={disabled}
+                    context={elementContext}
+                    onChange={next => replaceAt(index, next)}
+                    validationInstanceKey={`collection:${itemIds.current[index]}`}
+                    onValidationChange={onValidationChange}
+                    onDisclosureFallbackChange={onDisclosureFallbackChange}
+                  />
+                ) : (
+                  <input type="text" value={item == null ? "" : String(item)} disabled={disabled} onChange={event => replaceAt(index, event.target.value)} />
+                )}
               </div>
               <div className="wf-collection-item-actions">
                 <button
@@ -128,7 +193,7 @@ function CollectionRepeater({
                   className="wf-collection-item-button"
                   aria-label={`Move ${label} item ${index + 1} up`}
                   disabled={disabled || index === 0}
-                  onClick={() => onChange(moveCollectionItem(items, index, index - 1))}
+                  onClick={() => moveItem(index, index - 1)}
                 >
                   <ChevronUp size={13} />
                 </button>
@@ -137,7 +202,7 @@ function CollectionRepeater({
                   className="wf-collection-item-button"
                   aria-label={`Move ${label} item ${index + 1} down`}
                   disabled={disabled || index === items.length - 1}
-                  onClick={() => onChange(moveCollectionItem(items, index, index + 1))}
+                  onClick={() => moveItem(index, index + 1)}
                 >
                   <ChevronDown size={13} />
                 </button>
@@ -146,7 +211,7 @@ function CollectionRepeater({
                   className="wf-collection-item-button danger"
                   aria-label={`Remove ${label} item ${index + 1}`}
                   disabled={disabled}
-                  onClick={() => onChange(items.filter((_, position) => position !== index))}
+                  onClick={() => removeAt(index)}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -159,7 +224,7 @@ function CollectionRepeater({
         type="button"
         className="wf-collection-add"
         disabled={disabled}
-        onClick={() => onChange([...items, defaultCollectionItem(elementTypeName)])}
+        onClick={addItem}
       >
         <Plus size={13} /> Add item
       </button>
@@ -183,25 +248,4 @@ function resolveEditor(
   return [...editors]
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
     .find(editor => editor.supports(input, context));
-}
-
-function renderEditor(
-  EditorComponent: StudioActivityPropertyEditorContribution["component"] | undefined,
-  input: StudioActivityInputDescriptor,
-  value: unknown,
-  disabled: boolean,
-  context: StudioActivityPropertyEditorContext,
-  onChange: (value: unknown) => void
-) {
-  return EditorComponent ? (
-    <EditorComponent
-      descriptor={input}
-      value={value}
-      disabled={disabled}
-      context={context}
-      onChange={onChange}
-    />
-  ) : (
-    <input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />
-  );
 }

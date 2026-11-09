@@ -1,13 +1,17 @@
-.wf-editor-toolbar {
-  flex-wrap: wrap;
+.wf-editor-toolbar.wf-editor-top {
+  position: relative;
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content;
   gap: 8px 16px;
-  padding-block: 8px;
+  align-items: center;
+  padding: 6px 12px;
 }
 
 .wf-editor-identity {
   display: flex;
-  flex: 1 1 240px;
+  flex: 1 1 180px;
   min-width: 0;
+  min-height: 38px;
   align-items: center;
   gap: 8px;
 }
@@ -21,8 +25,20 @@
   min-width: 0;
 }
 
-.wf-editor-heading > strong {
-  display: block;
+.wf-editor-toolbar .wf-editor-identity > svg {
+  margin-top: 0;
+}
+
+.wf-editor-title {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-editor-title > strong {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -30,26 +46,32 @@
 
 .wf-editor-metadata {
   display: flex;
-  min-height: 22px;
+  min-width: 0;
+  min-height: 16px;
   align-items: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 0;
 }
 
-.wf-editor-metadata .wf-chip {
-  padding: 1px 6px;
+.wf-editor-title .wf-chip {
+  flex-shrink: 0;
+  padding: 2px 7px;
   font-size: 11px;
+  line-height: 16px;
 }
 
-/* Always mounted, including before the first save. Status never participates in action sizing. */
+/* A flexible column uses the space between the title and the fixed action group.
+   Its zero minimum keeps feedback text from resizing either neighbour. */
 .wf-editor-save-status {
   display: inline-flex;
-  flex: 0 0 16ch;
-  width: 16ch;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
   min-height: 16px;
   min-width: 0;
   align-items: center;
   gap: 4px;
+  justify-content: flex-end;
   color: var(--studio-success-fg);
   font-size: 11px;
 }
@@ -71,25 +93,37 @@
 .wf-editor-toolbar .wf-editor-actions {
   flex: 0 0 auto;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .wf-editor-toolbar .wf-editor-actions > button {
   white-space: nowrap;
 }
 
-.wf-editor-toolbar .wf-review-button {
-  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
+/* Result details occupy their own row without resizing or recentering primary commands. */
+.wf-editor-toolbar .wf-editor-actions.wf-editor-run-status {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-left: 0;
+  justify-content: flex-start;
 }
 
-.wf-editor-toolbar .wf-run-button {
+.wf-editor-toolbar .wf-publish-actions > button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);
   color: var(--studio-accent-text);
   font-weight: 600;
 }
 
+.wf-editor-toolbar .wf-run-button {
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, var(--studio-border));
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-weight: 600;
+}
+
 .wf-editor-toolbar .wf-run-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+  background: var(--studio-accent-soft);
 }
 
 .wf-editor-toolbar .wf-run-button:disabled {
@@ -161,16 +195,66 @@
   font-size: 12px;
 }
 
+/* Quiet chrome leaves the canvas and primary publish command in focus. */
+.wf-editor-toolbar .wf-editor-identity > .wf-link-button {
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--studio-text-muted);
+}
+
+.wf-editor-toolbar .wf-canvas-tools {
+  gap: 0;
+  padding: 2px;
+  margin-right: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+}
+
+.wf-editor-toolbar .wf-canvas-tools > button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.wf-editor-toolbar .wf-publish-actions > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+}
+
+.wf-toolbar-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Give feedback its own share of the action row before fallback fonts crowd it. */
+@media (max-width: 1100px) {
+  .wf-editor-toolbar.wf-editor-top {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .wf-editor-toolbar .wf-editor-identity {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 600px) {
+  .wf-editor-toolbar.wf-editor-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .wf-editor-toolbar .wf-editor-actions {
-    flex: 1 1 100%;
+    min-width: 0;
     margin-left: 0;
   }
 
-  .wf-editor-toolbar .wf-canvas-tools {
-    flex: 1 1 100%;
-    margin-right: 0;
-    padding-right: 0;
-    border-right: 0;
+  .wf-editor-toolbar .wf-editor-save-status {
+    justify-content: flex-start;
   }
 }

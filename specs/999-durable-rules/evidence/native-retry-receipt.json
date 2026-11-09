@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-22",
+  "baseCommit": "80961880252298c720398c2abb488b58fd4af53b",
+  "scope": "partial native Rules intent and shared bookmark retry checkpoint; T027-T032 remain open",
+  "checks": {
+    "rules-full": {
+      "command": "dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --no-build --no-restore --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-rules-full.log",
+      "sha256": "1271e18a9c6aa0c0588763efd3a403cd1df49b6c5ff173acda4335f1b3045ac7",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:   237, Skipped:     0, Total:   237, Duration: 12 s - Elsa.Rules.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "runtime-restored": {
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --no-restore --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-runtime-restored.log",
+      "sha256": "d6d5b51cc8b5277dbe44e4ef46f95b82ff5cc5f25c9e20f289ea36e2bdd86d34",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:  2540, Skipped:     0, Total:  2540, Duration: 8 s - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "activities-restored": {
+      "command": "dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --no-restore --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-activities-restored.log",
+      "sha256": "2cf6b0e80690fbf815850a81e05afe59be7acf77c96317324f4610767e49d8d9",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:   662, Skipped:     0, Total:   662, Duration: 12 s - Elsa.Activities.Runtime.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "ef-final": {
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore --filter 'FullyQualifiedName~EfSchedulerWorkQueueStoreTests|FullyQualifiedName~EfRuntimeCheckpointSchedulerWorkParticipantTests' --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-ef-final.log",
+      "sha256": "abbb737e0753893290fc11090888479e8826e8079e6fdc7eaa4a866a712968df",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:    17, Skipped:     0, Total:    17, Duration: 4 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "architecture": {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-architecture.log",
+      "sha256": "098df0c8166c06b1b209f07239c35f5ac9926ce80b13d4187131b071df5fa91f",
+      "summary": [
+        "Failed!  - Failed:     5, Passed:   580, Skipped:     0, Total:   585, Duration: 2 m 30 s - Elsa.Architecture.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 1
+    },
+    "architecture-restored": {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-architecture-restored.log",
+      "sha256": "6f6d2556660ff16017ca5af886d6c405b07f225367c470e7b3fcf6d67b058d8d",
+      "summary": [
+        "Passed!  - Failed:     0, Passed:   585, Skipped:     0, Total:   585, Duration: 2 m 35 s - Elsa.Architecture.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "handler-control": {
+      "command": "dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --no-restore --filter 'FullyQualifiedName~Unavailable_resume_keeps_native_work_and_retries_consumed_payload_in_a_fresh_activation' --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-handler-control.log",
+      "sha256": "302b4403e6b8f27d9d5c4edf4205a4fbb78d1269ad0318ceb4b47a61dae29417",
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 594 ms - Elsa.Activities.Runtime.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": true,
+      "exitCode": 1
+    },
+    "coalescing-control": {
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --no-restore --filter 'FullyQualifiedName~Resume_boundary_flushes_coalesced_work_then_durable_deferral_survives_provider_rebuild' --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-coalescing-control.log",
+      "sha256": "759c39d4e69f929daec6ac5a67728beefc252b32ef3bc464fc5e6573599aa6e2",
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 738 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+      ],
+      "expectedFailure": true,
+      "exitCode": 1
+    },
+    "restore-release": {
+      "command": "dotnet restore Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj -p:Configuration=Release",
+      "logPath": "/tmp/3181-native-retry-restore-release.log",
+      "sha256": "40d104602671164ab3958225da3e1c8cabd55f0251d6df6bc911d9d5a24f44ce",
+      "summary": [],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "restore-debug": {
+      "command": "dotnet restore Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj -p:Configuration=Debug -p:BaseIntermediateOutputPath=obj/ef-guard/Debug/",
+      "logPath": "/tmp/3181-native-retry-restore-debug.log",
+      "sha256": "f0fad0b5ed68d2e264e9bac805c97e5561367fdfc94823e778dbb0d66d2a2894",
+      "summary": [],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "maps-all": {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- all",
+      "logPath": "/tmp/3181-native-retry-maps-all.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d",
+      "summary": [],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "maps-check": {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "logPath": "/tmp/3181-native-retry-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "summary": [
+        "Generated solution filters still describe the project graph."
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "workbench-build": {
+      "command": "dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-restore --verbosity minimal",
+      "logPath": "/tmp/3181-native-retry-workbench-build.log",
+      "sha256": "5bc8888056afde6b379224727ab04de060b028eb3087e59279cd38f0dc6f9d99",
+      "summary": [
+        "0 Error(s)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    },
+    "rest": {
+      "command": "pwsh -NoProfile -File /tmp/3181-native-retry-rest.ps1",
+      "logPath": "/tmp/3181-native-retry-rest.log",
+      "sha256": "0dc3d1f0ad5e2d20528c3008e249de0bfa6dddaf14fe39a988126304b23ab906",
+      "summary": [
+        "SUCCESS - sequence completed with 4 activity records and zero incidents; SERVER console should show, in order:",
+        "SUCCESS - suspended at the Event wait, then the stimulus resumed it and the post-wait step ran.",
+        "SUCCESS - 3/3 stimulus-routing cases (no-match no-op; StartOnly starts nothing; ResumeOnly matches the bookmark)"
+      ],
+      "expectedFailure": false,
+      "exitCode": 0
+    }
+  },
+  "sourceSha256": {
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": "6b4359b3a590c12eada2b7f5dcddbe19c863673a8470f4b851890ee7c4b42050",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/RuntimeSchedulerWorkUnavailableException.cs": "33e8cfa120686e9a1fbc4228d67ddacc38f8c1e427e46847cfeb1bc088eac863",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs": "cdea9b5184fe2d2793ea110c51b87a0fa1d8df876c278b58e7bcfae8ba980376",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeSchedulerDrain.cs": "84f2e3455841763eb770520d2cea9bf60dd6c938eae86985f2febff1d863b843",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeSchedulerWorkClaim.cs": "ed62f889d8539bcdda5b10b62739b6f6df31c47a2af03d30fee9742f4ae44d93",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkConsumptionCheckpointService.cs": "bac80251464f0c3bf0eb7fb7b144ee5826ed77a8cdb65b28047f2e1b70a8781a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "161ffc983e2931c3ea339fa3f73579ab892e52466f73445bff1e21ace032c1e5",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs": "3ee62798f23a926a63b037c49f00950fb81286b8c12a7a8a0d5ff6a3ba3e7f9a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "fdc2a8fcb0bbc35333b5fd7514a5084a696c3c55015cf17e27938436cf5ce737",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "e25c9695bfa06a4ecdf0a71b5f758f35dc83b1f4e18b27dfda98d0099b3039b5",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs": "c1e06a078437081df6eb0798171e19aaa2dc8e9a79f0723fecc2485be940b0d2",
+    "Essentials/tests/Activities/Runtime/Tests/TypedTriggerUnavailableResumeTests.cs": "89e160c57fc8a58eb866f406a5a5bf1dd66abcdd668cd871f34c8be2c297ece9",
+    "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "a01770133ff7ac7e2be3ee578d1bb6888bdffb829516a37c2fbc03b5254db9b2",
+    "Essentials/tests/Architecture/Tests/packages.lock.json": "332ab908b57295641fe7056761131b33cad73960620b1062c5a5b7c05d0942e2",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfSchedulerWorkDeferralTests.cs": "aa66f8578360c7ee0a64c402d71a1361b7579a226abf17b756377ce1de555c25",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfSchedulerWorkQueueStoreTests.cs": "64ea22604de09d011dbfdeb5395274cb51c63565833f14fc844ac0b5e06b780c",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs": "42a789acf840b851769f709d9eb0c983915e6781517fafecdb8324598fa5a58e",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerWorkDeferralTests.cs": "47d74b8d5a9583403f3b97ad9af62415910e154b08953a1e5fab87b6046f4a5b",
+    "Extensions/Rules/src/Persistence/Core/IRuleDeliveryProofValidator.cs": "31946fda0f26361012c53ce525d43051a4f5c418f9032d689e5b818e4848ffc7",
+    "Extensions/Rules/src/Persistence/Core/PublicAPI.Unshipped.txt": "ed132e729e2dd4cc198cf3f635aab940b978ebd80b67907693ec5b0f5df64584",
+    "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Delivery.cs": "70011d794ecc50bbb3fc0b0a44ff7fc56db2b9e475992820dd7dbbbbe8edaccd",
+    "Extensions/Rules/src/Workflows/Runtime/Activities/RunRules.cs": "6fd59f39967c0e9f1b13f46c3689a3e27f8957d595afeaa0557da5761b43b4a9",
+    "Extensions/Rules/src/Workflows/Runtime/Services/RulesIntentHandler.cs": "2084bd12e372c6a017d1811e1079a924d18ee4a5663568fd0304c9cd8c5ccc2c",
+    "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/RulesProviderContractTests.cs": "de85dcb538edf99a92c56e40e55d215ce60507363f35e3fe4f9aa19388ad7038",
+    "Extensions/Rules/tests/Tests/RuleDeliveryStoreTests.cs": "fe1ed8cbce9649ba33226fe93053d10c47f0309b0baf06fcf98ca10039ff04a4",
+    "Extensions/Rules/tests/Tests/RulesIntentHandlerTests.cs": "b242cc53acf1cf12f9562b4cfe136e1c40e15b637c6686ac371fe0c9fea683f3",
+    "Extensions/Rules/tests/Tests/RunRulesBoundaryTests.cs": "6c39c4bf4e8c4af6e0213c1a3b81e1c3e2c7e88e029859dac00dc74ae76024a4"
+  },
+  "restHarness": "$ErrorActionPreference = 'Stop'\n$repo = '/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main'\n. \"$repo/e2e-tests/_ElsaCommon.ps1\"\n. \"$repo/e2e-tests/_ServerLifecycle.ps1\"\n$contentRoot = New-ElsaContentRoot -Prefix 'elsa-3181-native-retry'\n$baseUrl = Resolve-ElsaServerBaseUrl\n$success = $false\ntry {\n    Start-OwnedElsaServer -BaseUrl $baseUrl -ContentRoot $contentRoot\n    foreach ($relative in @('Test-SequenceWorkflow.ps1', 'orchestration-controls/Test-SuspendResume.ps1', 'orchestration-controls/Test-StimulusRouting.ps1')) {\n        Write-Host \"Running $relative against owned server $baseUrl\"\n        & pwsh -NoProfile -File \"$repo/e2e-tests/$relative\" -BaseUrl $baseUrl\n        if ($LASTEXITCODE -ne 0) { throw \"$relative exited $LASTEXITCODE\" }\n    }\n    $success = $true\n} finally {\n    Remove-OwnedElsaServer -ContentRoot $contentRoot -KeepContentRoot:(-not $success)\n}\n",
+  "limits": [
+    "No whole Rules native host, process-restart or proof-before-ack acceptance is claimed.",
+    "Delayed deferral applies only to ResumeBookmark with a live unconsumed claim.",
+    "Source-removal controls are restored; ordinary fault and disposal-failure behavior remains.",
+    "Prior package/provider/process receipts qualify only their recorded immutable inputs.",
+    "Physical external effects remain at least once."
+  ]
+}

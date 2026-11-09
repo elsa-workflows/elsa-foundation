@@ -121,7 +121,7 @@
 
     <Error Code="ELSAPV005"
            Condition="'$(ElsaComputedPackageVersion)' == '' or '$(ElsaInputFingerprint)' == ''"
-           Text="$(MSBuildProjectName) is packable, but the computed versions for $(ElsaVersionComputationCommit) give it no version and input fingerprint. The dependency map committed at that commit does not list it as packable under this project name; regenerate the map (dotnet run --project tools/maps/Elsa.Maps.Generator -- all) and compute again." />
+           Text="$(MSBuildProjectName) is packable, but the computed versions for $(ElsaVersionComputationCommit) give it no version and input fingerprint. The dependency map for that commit, which the calculator derives from its tree (spec 259), does not list it as packable under this project name; check that the project sits under a backend root (Essentials/src, Essentials/apps, or Extensions/&lt;capability&gt;/src) and that its IsPackable and PackageId say what you mean, then compute again." />
 
   </Target>
 

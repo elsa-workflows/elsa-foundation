@@ -11,8 +11,8 @@ source-of-truth table.
 
 ## Finding a spec
 
-- **[Spec status map](../docs/maps/spec-status-map.md)** — generated index of every spec with its
-  status and task counts. Start here.
+- **[Spec status map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/spec-status-map.md)** — generated index of every spec with its
+  status and task counts, published on the `generated-maps` branch after every merge (or generate it locally; see the [maps index](../docs/maps/README.md)). Start here.
 - Directory names are `NNN-kebab-case-title`. The number is allocation order, not priority.
 
 ## Reading a spec

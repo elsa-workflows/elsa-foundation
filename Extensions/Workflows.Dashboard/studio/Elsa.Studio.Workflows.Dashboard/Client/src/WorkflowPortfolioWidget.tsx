@@ -1,9 +1,27 @@
 import React from "react";
 import type { StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import type { WorkflowPortfolioSnapshot } from "./workflowDashboardApi";
+import { WorkflowDashboardMetric } from "./WorkflowDashboardMetric";
+import { WorkflowDashboardUnavailable } from "./WorkflowDashboardUnavailable";
+
 export function WorkflowPortfolioWidget({ snapshot }: StudioDashboardWidgetBodyProps<WorkflowPortfolioSnapshot, unknown>) {
   if (!snapshot) return null;
-  if (snapshot.status === "unavailable") return <div className="workflow-dashboard-unavailable" role="status">Portfolio statistics are unavailable{snapshot.errorCode ? ` (${snapshot.errorCode})` : ""}.</div>;
-  return <div className="workflow-portfolio-kpis"><Kpi label="Active" value={snapshot.activeDefinitionCount}/><Kpi label="Published" value={snapshot.publishedDefinitionCount}/><Kpi label="Unpublished drafts" value={snapshot.unpublishedDraftCount}/><Kpi label="Invalid drafts" value={snapshot.invalidDraftCount}/><p>Published, draft, and invalid counters overlap.</p></div>;
+
+  if (snapshot.status === "unavailable") {
+    return <WorkflowDashboardUnavailable title="Portfolio statistics are unavailable." errorCode={snapshot.errorCode} />;
+  }
+
+  return (
+    <div className="workflow-portfolio">
+      <dl className="workflow-dashboard-metrics" aria-label="Workflow definition counts">
+        <WorkflowDashboardMetric label="Active definitions" value={snapshot.activeDefinitionCount} detail="Not deleted" tone="accent" />
+        <WorkflowDashboardMetric label="Published" value={snapshot.publishedDefinitionCount} detail="Available to run" tone="success" />
+        <WorkflowDashboardMetric label="Unpublished drafts" value={snapshot.unpublishedDraftCount} detail="Changes not yet published" tone="warning" />
+        <WorkflowDashboardMetric label="Invalid drafts" value={snapshot.invalidDraftCount} detail="Drafts with validation issues" tone="danger" />
+      </dl>
+      <p className="workflow-dashboard-note" role="note">
+        Counts can overlap: a published workflow can also have an unpublished draft.
+      </p>
+    </div>
+  );
 }
-function Kpi({label,value}:{label:string;value:number}) { return <div><strong>{value}</strong><span>{label}</span></div>; }

@@ -10,4 +10,8 @@
     <InternalsVisibleTo Include="Elsa.Versioning.Calculator.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\maps\Elsa.Maps.Projects\Elsa.Maps.Projects.csproj" />
+  </ItemGroup>
+
 </Project>

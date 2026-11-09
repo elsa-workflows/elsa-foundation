@@ -12,11 +12,18 @@ namespace Elsa.Workflows.Runtime.Services.Bookmarks;
 public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
 {
     private readonly IBookmarkStimulusIndex _bookmarkStimulusIndex;
+    private readonly IWorkflowExecutionStateStore? _executions;
 
     public GlobalBookmarkStimulusLookup(IBookmarkStimulusIndex bookmarkStimulusIndex)
+        : this(bookmarkStimulusIndex, executions: null)
+    {
+    }
+
+    public GlobalBookmarkStimulusLookup(IBookmarkStimulusIndex bookmarkStimulusIndex, IWorkflowExecutionStateStore? executions)
     {
         ArgumentNullException.ThrowIfNull(bookmarkStimulusIndex);
         _bookmarkStimulusIndex = bookmarkStimulusIndex;
+        _executions = executions;
     }
 
     public async ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingAsync(
@@ -37,7 +44,7 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
             .ThenBy(bookmark => bookmark.BookmarkId, StringComparer.Ordinal)
             .ToArray();
 
-        return new GlobalBookmarkStimulusLookupResult(matches);
+        return new GlobalBookmarkStimulusLookupResult(await ExcludeTestRunsAsync(matches, cancellationToken));
     }
 
     public async ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingByTypeAsync(
@@ -62,15 +69,36 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
             .ThenBy(bookmark => bookmark.BookmarkId, StringComparer.Ordinal)
             .ToArray();
 
-        return new GlobalBookmarkStimulusLookupResult(matches);
+        return new GlobalBookmarkStimulusLookupResult(await ExcludeTestRunsAsync(matches, cancellationToken));
     }
 
-    public ValueTask<IReadOnlyCollection<string>> FindWaitingStimulusHashesByTypeAsync(
+    public async ValueTask<IReadOnlyCollection<string>> FindWaitingStimulusHashesByTypeAsync(
         GlobalBookmarkStimulusTypeLookupRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return _bookmarkStimulusIndex.ListWaitingStimulusHashesByTypeAsync(request.StimulusType, request.EvaluatedAt, cancellationToken);
+        // A raw hash projection has no execution classification. Use the same filtered population as route
+        // discovery so an isolated draft wait cannot advertise a production HTTP route.
+        var waiting = await FindWaitingByTypeAsync(request, cancellationToken);
+        return StimulusHashes.DistinctOrdinal(waiting.Matches.Select(bookmark => bookmark.StimulusHash));
+    }
+
+    private async ValueTask<IReadOnlyList<BookmarkState>> ExcludeTestRunsAsync(
+        IReadOnlyList<BookmarkState> bookmarks,
+        CancellationToken cancellationToken)
+    {
+        // The optional dependency preserves direct construction for legacy callers. Normal runtime composition
+        // always supplies the authoritative execution store; caller-authored bookmark metadata is never authority.
+        if (_executions is null || bookmarks.Count == 0)
+            return bookmarks;
+        var isolated = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var executionId in bookmarks.Select(bookmark => bookmark.WorkflowExecutionId).Distinct(StringComparer.Ordinal))
+        {
+            var execution = await _executions.FindAsync(executionId, cancellationToken);
+            if (execution is { RunKind: WorkflowRunKind.TestRun } or { TestScope: not null })
+                isolated.Add(executionId);
+        }
+        return bookmarks.Where(bookmark => !isolated.Contains(bookmark.WorkflowExecutionId)).ToArray();
     }
 
     private static bool Matches(BookmarkState bookmark, GlobalBookmarkStimulusLookupRequest request) =>

@@ -245,7 +245,7 @@ public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatt
     }
 }
 
-public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+public sealed class RequirePermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
 {
     public RequirePermissionAttribute(string permission)
     {
@@ -269,7 +269,7 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpo
 /// permission that individually satisfies the requirement, and the applied convention carries the
 /// full any-mode policy plus the security-disposition metadata the endpoint inventory asserts on.
 /// </summary>
-public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
 {
     public RequireAnyPermissionAttribute(params string[] permissions)
     {
@@ -281,6 +281,25 @@ public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEn
 
     public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
         builder.RequireAnyPermission([.. Permissions]);
+}
+
+/// <summary>
+/// The attribute form of <c>RequireAllPermissions</c> for endpoint classes: the caller must hold every permission, and
+/// the applied convention carries the full all-mode policy plus the security-disposition metadata the endpoint inventory
+/// asserts on.
+/// </summary>
+public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, MinimalEndpoints.IEndpointConventionAttribute
+{
+    public RequireAllPermissionsAttribute(params string[] permissions)
+    {
+        Permissions = permissions;
+        Policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All(permissions));
+    }
+
+    public IReadOnlyList<string> Permissions { get; }
+
+    public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
+        builder.RequireAllPermissions([.. Permissions]);
 }
 
 internal sealed record NormalizedPermissionPrincipalRequirement : IAuthorizationRequirement;
@@ -526,5 +545,22 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
     }
 
     private static bool IsInternalIdentityClaim(string claimType) =>
-        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
+        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission or IdentityClaimTypes.UserId;
+}
+
+/// <summary>
+/// Default for hosts whose identity provider cannot re-read a subject's current grants. It refuses every
+/// request, so deferred work that needs a fresh decision fails closed instead of trusting a saved grant.
+/// </summary>
+public sealed class UnsupportedCurrentSubjectPermissionAuthorizer : ICurrentSubjectPermissionAuthorizer
+{
+    public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(
+        CurrentSubjectPermissionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(CurrentSubjectPermissionResult.Unsupported(
+            "The configured identity provider cannot re-evaluate a subject's current permissions."));
+    }
 }

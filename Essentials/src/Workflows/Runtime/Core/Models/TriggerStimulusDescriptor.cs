@@ -8,6 +8,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class TriggerStimulusDescriptor
 {
+    /// <summary>
+    /// Reserved provider-metadata key for a short, human-readable descriptor that is safe to display to users.
+    /// Values must not contain credentials, submitted request values, or other sensitive configuration. This
+    /// descriptor is informational only and never participates in stimulus identity or routing.
+    /// </summary>
+    public const string SafeDisplayDescriptorMetadataKey = "runtime:trigger:displayDescriptor";
+
     public TriggerStimulusDescriptor(
         string stimulusType,
         string stimulusHash,

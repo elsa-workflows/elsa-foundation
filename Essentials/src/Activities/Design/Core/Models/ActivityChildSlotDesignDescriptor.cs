@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Activities.Design.Core.Models;
 
 /// <summary>
@@ -11,4 +13,11 @@ public sealed record ActivityChildSlotDesignDescriptor(
     string? CollectionProperty = null,
     string? ChildProperty = null,
     string? LabelProperty = null,
-    string? SlotNameTemplate = null);
+    string? SlotNameTemplate = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ItemIdProperty { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConditionProperty { get; init; }
+}

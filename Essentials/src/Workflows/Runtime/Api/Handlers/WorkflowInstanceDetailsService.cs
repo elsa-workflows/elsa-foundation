@@ -15,7 +15,8 @@ public sealed class WorkflowInstanceDetailsService(
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
     IActivityInspectionContextAsync authorization,
-    RuntimePersistenceModeInspector persistenceModeInspector) : IWorkflowInstanceDetailsService
+    RuntimePersistenceModeInspector persistenceModeInspector,
+    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
 {
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
@@ -68,7 +69,12 @@ public sealed class WorkflowInstanceDetailsService(
             outputs,
             persistenceMode.PersistenceMode,
             persistenceMode.InspectionGranularity,
-            activityPage.NextContinuationToken);
+            activityPage.NextContinuationToken,
+            // Spec 260 FR-416: a display hint for Studio. Without an operator-access service the run reads as not
+            // manageable (fail closed).
+            new WorkflowInstancePermissionsView(
+                operatorAccess is not null && await operatorAccess.CanManageAsync(state, cancellationToken),
+                canInspectSensitiveValues));
     }
 }
 

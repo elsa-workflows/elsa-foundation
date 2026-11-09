@@ -108,6 +108,7 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 [JsonDerivedType(typeof(WorkflowRequestExpressionParameterBinding), "WorkflowRequest")]
 [JsonDerivedType(typeof(VariableExpressionParameterBinding), "Variable")]
 [JsonDerivedType(typeof(ActivityResultExpressionParameterBinding), "ActivityResult")]
+[JsonDerivedType(typeof(WorkflowInstanceExpressionParameterBinding), "WorkflowInstance")]
 public abstract record ExpressionParameterBinding;
 
 public sealed record LiteralExpressionParameterBinding : ExpressionParameterBinding
@@ -171,6 +172,31 @@ public sealed record ActivityResultExpressionParameterBinding : ExpressionParame
 
     [JsonPropertyName("isOptional")]
     public bool IsOptional { get; }
+}
+
+/// <summary>
+/// Reads metadata of the running workflow instance as a declared parameter, resolved from committed runtime state:
+/// its correlation ID (null when it has none) or its instance ID. ADR 0045, amendment for issue #2717.
+/// </summary>
+public sealed record WorkflowInstanceExpressionParameterBinding : ExpressionParameterBinding
+{
+    [JsonConstructor]
+    public WorkflowInstanceExpressionParameterBinding(string member)
+    {
+        if (member is not (Members.CorrelationId or Members.InstanceId))
+            throw new ArgumentException($"Workflow instance member '{member}' is not one of '{Members.CorrelationId}' or '{Members.InstanceId}'.", nameof(member));
+        Member = member;
+    }
+
+    [JsonPropertyName("member")]
+    public string Member { get; }
+
+    /// <summary>The instance metadata an expression can read.</summary>
+    public static class Members
+    {
+        public const string CorrelationId = "correlationId";
+        public const string InstanceId = "instanceId";
+    }
 }
 
 public static class ExpressionCapabilityProfiles

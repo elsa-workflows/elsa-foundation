@@ -76,6 +76,30 @@ internal static class RuntimeActivityExecutionProviderSmoke
             var summaryFirst = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow, 1));
             Assert.Equal(3, summaryFirst.TotalCount);
             Assert.NotNull(summaryFirst.NextContinuationToken);
+            var summarySecond = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow, 1, summaryFirst.NextContinuationToken));
+            var summaryThird = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow, 1, summarySecond.NextContinuationToken));
+            Assert.Equal(3, summarySecond.TotalCount);
+            Assert.Equal(3, summaryThird.TotalCount);
+            Assert.NotNull(summarySecond.NextContinuationToken);
+            Assert.Null(summaryThird.NextContinuationToken);
+            Assert.Equal("root", summaryFirst.Items.Single().ActivityExecutionId);
+            Assert.Equal(new[] { "child", "child-b" }, new[]
+            {
+                summarySecond.Items.Single().ActivityExecutionId,
+                summaryThird.Items.Single().ActivityExecutionId
+            }.OrderBy(id => id, StringComparer.Ordinal));
+            var browserPage = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow, 1,
+                parentActivityExecutionId: "root", ancestorActivityExecutionId: "root"));
+            Assert.Equal(2, browserPage.TotalCount);
+            Assert.Equal(2, Assert.Single(browserPage.Items).Position);
+            Assert.Equal("child-b", browserPage.Items[0].Execution.ActivityExecutionId);
+            var browserAnchor = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow, 1,
+                executableNodeId: childProjection.ExecutableNodeId, ancestorActivityExecutionId: "root", anchorActivityExecutionId: "child"));
+            Assert.Equal("child", Assert.Single(browserAnchor.Items).Execution.ActivityExecutionId);
+            Assert.Equal(1, browserAnchor.TotalCount);
+            var absentAnchor = await inspection.BrowseAsync(new ActivityExecutionBrowseQuery(workflow,
+                executableNodeId: childProjection.ExecutableNodeId, anchorActivityExecutionId: "child-b"));
+            Assert.Empty(absentAnchor.Items);
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection));
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(childProjection));
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(siblingProjection));
@@ -100,14 +124,47 @@ internal static class RuntimeActivityExecutionProviderSmoke
                 $"tenant:{scope}"));
             Assert.Single(hierarchySecond!.Items);
 
-            await using var transaction = await context.Database.BeginTransactionAsync();
-            await state.SaveAsync(State(workflow, "rolled-back", 3, null));
-            await transaction.RollbackAsync();
+            var rowsAfterSummaryCursor = await context.ActivityExecutionInspections
+                .Where(row => row.WorkflowExecutionIdHash == EfRelationalIdentity.Hash(workflow) &&
+                              (row.ActivityExecutionIdHash == EfRelationalIdentity.Hash("child") ||
+                               row.ActivityExecutionIdHash == EfRelationalIdentity.Hash("child-b")))
+                .ToArrayAsync();
+            Assert.Equal(2, rowsAfterSummaryCursor.Length);
+            context.ActivityExecutionInspections.RemoveRange(rowsAfterSummaryCursor);
+            await context.SaveChangesAsync();
+            var emptySummaryPage = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow, 1, summaryFirst.NextContinuationToken));
+            Assert.Equal(1, emptySummaryPage.TotalCount);
+            Assert.Empty(emptySummaryPage.Items);
+            Assert.Null(emptySummaryPage.NextContinuationToken);
+
+            await using (var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
+            {
+                await inspection.SaveAsync(Projection(workflow, "rolled-back-inspection", 4, "root", null, false));
+                var transactionPage = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow));
+                Assert.Equal(2, transactionPage.TotalCount);
+                Assert.Contains(transactionPage.Items, item => item.ActivityExecutionId == "rolled-back-inspection");
+                Assert.Same(transaction, context.Database.CurrentTransaction);
+                await state.SaveAsync(State(workflow, "rolled-back-state", 3, null));
+                await transaction.RollbackAsync();
+            }
+
+            await using (var readCommitted = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted))
+            {
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                    await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow)));
+                Assert.Contains("Serializable or Snapshot", exception.Message, StringComparison.Ordinal);
+                Assert.Same(readCommitted, context.Database.CurrentTransaction);
+                await state.SaveAsync(State(workflow, "read-committed-rolled-back", 3, null));
+                await readCommitted.RollbackAsync();
+            }
         }
         await using (var verify = createContext(fixture.ConnectionString))
         {
             var state = new EfActivityExecutionStateStore(verify, new FixedAccessor(scope), codec);
-            Assert.Null(await state.FindAsync(workflow, "rolled-back"));
+            var inspection = new EfActivityExecutionInspectionStore(verify, new FixedAccessor(scope), codec);
+            Assert.Null(await state.FindAsync(workflow, "rolled-back-state"));
+            Assert.Null(await state.FindAsync(workflow, "read-committed-rolled-back"));
+            Assert.Null(await inspection.FindAsync(workflow, "rolled-back-inspection"));
         }
     }
 

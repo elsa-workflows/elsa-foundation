@@ -1,0 +1,1257 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+  "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "stage": "direct",
+  "directProofPassed": true,
+  "fullAcceptancePassed": false,
+  "commands": [
+    {
+      "command": [
+        "dotnet",
+        "--version"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/01-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f57769402c5259afcb4827defd14477a9a204c0c51885d5e8c2e0f0ea3ac9074"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/Rules.PackageProbe.csproj",
+        "--configfile",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/02-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f479c45e478a5883f6d4ec2412b3d944d3cc5afd2048c893b28569b4aca99ea0"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/Rules.PackageProbe.csproj",
+        "--locked-mode",
+        "--configfile",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/03-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "196bd73b2227cd50ded034601cb869c8ac73808f5fd22675b96e61d8a39b9cbe"
+    },
+    {
+      "command": [
+        "dotnet",
+        "publish",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/Rules.PackageProbe.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/04-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0aba42e824563581035902bf2e7f6b215cc9068c22a955da432af0b478df702e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "receipt",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment-receipt-evidence.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/05-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "9d2945083abb2851e47789b356c4bb87f0d050ccc468c3707a92ae6945f27e7d"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/direct.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/direct.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/06-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "2b42acac520578e9261b7fc4e1f2f4123c9ed0c606636d88d7eb97b7e56a1517"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "incompatible",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/incompatible.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/incompatible.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/07-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "23c0d8a89800e4aa32f9d23fe6a22e8ceb789a8f7552e5a31a5b0a69e9ba23f1"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/unavailable.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/unavailable.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/08-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "244150ec80cc8537b9a2b5a9610d2255bd06889489724c47ba608de91204e713"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/restored.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/restored.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/09-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "c9cbf64cc17c343182885266e965ab6dce99decd8adf04bb33a1247a574693da"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/10-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "14561a7ff698aafe66c026a998f85f332632f5ed2de9d7c3321fea1f30a400f1"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/alternate.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/alternate.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/11-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "e4077e78972cea684a04c8bac5f22c91a9f32095e99ab9ec809d90ad560573dc"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/12-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "efd1df0f8adb28a6a3ebb82784a738d14077b1dab54b43d86286a7ae0cb6286a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/control.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/control.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/13-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "1e6df56dc1f1d97c1ccb2ca20d9082d36ae4ddd6f430140206b7118fcdd96471"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/control-restored.db",
+        "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/control-restored.json"
+      ],
+      "cwd": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment",
+      "log": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/14-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "82b5368b902e58bcc656e544902cb9d656aee7d123fefeb9de28738bde873e84"
+    }
+  ],
+  "harness": {
+    "tools/rules/verify-packaged-rules.py": "89f3ece440e0042dac986f71351ec1115702c989a6aad16254d93f433e700493",
+    "tools/rules/package_consumer.py": "6d4926e8e5a80078f7d7389e49909f3b5966f98d519105033fb9b4d83468f108",
+    "tools/rules/PackageProbe/Program.cs": "89c4e0f43f9a8ead04988fcc50d5cb88331a561fce289f0f0c4320133975ca5b"
+  },
+  "reusedPackReceipt": {
+    "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/receipt.json",
+    "sha256": "1f532af730e2cd3e375d67f92644e9d1d2ea483e4391cb0e28b4c8d87a5ad0ef"
+  },
+  "lastPublishCommit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
+  "modules": [
+    "Elsa.Rules.Core",
+    "Elsa.Rules.Persistence.Core",
+    "Elsa.Rules.Runtime",
+    "Elsa.Rules.Persistence.EntityFrameworkCore"
+  ],
+  "pendingNativeModules": [
+    "Elsa.Rules.Workflows.Design",
+    "Elsa.Rules.Workflows.Runtime"
+  ],
+  "closure": [
+    {
+      "id": "Elsa.Rules.Core",
+      "path": "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "path": "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "path": "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "version": "4.0.12-preview"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "version": "4.0.32-preview"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    }
+  ],
+  "packages": [
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.32-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b758cfe4eaea58cf8ca4e5eba74e0d4a0456d1bdabd491dc416f1b4a0a74a215",
+      "archiveSha512": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.EntityFramework.4.0.32-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.12-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:134a1dea7a13f2113395548c38f81c34a89447602210402e4a58d63517b5c52e",
+      "archiveSha512": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Persistence.Schema.4.0.12-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:b94d22e598c763c76493a386e5bc1c639515a38c2002b7111765758f8c50d682",
+      "archiveSha512": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Primitives.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:721701daa7675c54bd688d1f019371330273a74e93b3c0eac6dfd14ab5206202",
+      "archiveSha512": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:3c2d9c7db66b9e28b59fca03596c37f48741ad361a5493061eccb1b561ec2bda",
+      "archiveSha512": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:4d900156f9797a8ee41ba9b9469cc767912a150f3856e6d05c7555829ad50ce9",
+      "archiveSha512": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.EntityFrameworkCore.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:59c3c50cbde216d0fa394b6b75c708763e387126e4ca85e1a9ac20fdde166685",
+      "archiveSha512": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+      "fingerprint": "sha256:1a59a5c06cb4b360bd8c3fefeb85356a64f4b2916293ad8e3d67b00ddc3b721c",
+      "archiveSha512": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+      "path": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Tasks.Core.4.0.14-preview.nupkg"
+    }
+  ],
+  "packPassed": true,
+  "consumerTemplateSha256": "89c4e0f43f9a8ead04988fcc50d5cb88331a561fce289f0f0c4320133975ca5b",
+  "consumerBuildSdkVersion": "10.0.300",
+  "restoredProjectLibraries": 0,
+  "resolvedPackages": {
+    "CShells/0.0.31": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+    "CShells.Abstractions/0.0.31": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
+    "Elsa.Persistence.EntityFramework/4.0.32-preview": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ==",
+    "Elsa.Persistence.Schema/4.0.12-preview": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ==",
+    "Elsa.Primitives/4.0.14-preview": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g==",
+    "Elsa.Rules.Core/4.0.0-branch-agent-codex-3181-durable-rules": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+    "Elsa.Rules.Persistence.Core/4.0.0-branch-agent-codex-3181-durable-rules": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+    "Elsa.Rules.Persistence.EntityFrameworkCore/4.0.0-branch-agent-codex-3181-durable-rules": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw==",
+    "Elsa.Rules.Runtime/4.0.0-branch-agent-codex-3181-durable-rules": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+    "Elsa.Tasks.Core/4.0.14-preview": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q==",
+    "JetBrains.Annotations/2025.2.4": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A==",
+    "Microsoft.Data.Sqlite.Core/10.0.10": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+    "Microsoft.EntityFrameworkCore/10.0.10": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+    "Microsoft.EntityFrameworkCore.Abstractions/10.0.10": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA==",
+    "Microsoft.EntityFrameworkCore.Analyzers/10.0.10": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q==",
+    "Microsoft.EntityFrameworkCore.Relational/10.0.10": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+    "Microsoft.EntityFrameworkCore.Sqlite/10.0.10": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA==",
+    "Microsoft.EntityFrameworkCore.Sqlite.Core/10.0.10": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A==",
+    "Microsoft.Extensions.DependencyModel/10.0.10": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA==",
+    "Newtonsoft.Json/13.0.3": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+    "NuGet.Common/7.9.0": "OWFEzHpwvgzSaHYmWzfbyTm6oBOy/BFSFEDk73zM9jiJaxdopYZ/DrqIQogaM3F+ZGTppBJffmzu5adetEI/YA==",
+    "NuGet.Configuration/7.9.0": "oY9XZp+TWjOmiGmU4R4JWBRY3F4TAVo7tqPr/z7MOsFcEpdYHMryjNSscoLBxUTR3WmFmYgO0Gvu4eRbz6pzOg==",
+    "NuGet.Frameworks/7.9.0": "w2adPmgUafmW9ON1MzDjuHmViN0vtiPV48Dz3OE6px8BiGSqrnWHOjwFEPOEPAZx20J1c7bxp90Hxo9l4xGWtw==",
+    "NuGet.Packaging/7.9.0": "Q2jxuud5kJLV0rUzsC02iC5ts8QsQu9UVyMvF8lULY3TwHL/W/PrnQ9bQFvMR7jJkzF1uilRPI1o+7VOtc2XMg==",
+    "NuGet.Versioning/7.9.0": "r4sZuVpVqwSBLe4qYDrnpScqdyctlRXg0HSF5OoCGkeBc8b+o8BBYHuI/u1RoWYX78PbieijU13TBt71/Xf3lw==",
+    "SQLitePCLRaw.bundle_e_sqlite3/2.1.11": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ==",
+    "SQLitePCLRaw.core/2.1.11": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA==",
+    "SQLitePCLRaw.lib.e_sqlite3/2.1.11": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ==",
+    "SQLitePCLRaw.provider.e_sqlite3/2.1.11": "Y/0ZkR+r0Cg3DQFuCl1RBnv/tmxpIZRU3HUvelPw6MVaKHwYYR8YNvgs0vuNuXCMvlyJ+Fh88U1D4tah1tt6qw==",
+    "System.Security.Cryptography.Pkcs/8.0.1": "CoCRHFym33aUSf/NtWSVSZa99dkd0Hm7OCZUxORBjRB16LNhIEOf8THPqzIYlvKM0nNDAPTRBa1FxEECrgaxxA==",
+    "System.Security.Cryptography.ProtectedData/8.0.0": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+  },
+  "identityRemovalControl": {
+    "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "originalDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "alternateAssetSha256": "3730527a306e607734e6d339919f67cc94cf4a24f0f47f4e13b4b8640de9bafc",
+    "removedGuardAssetSha256": "b3fa22c6f0e15c68d2f1ba4f0fcb3473df3e197623e17a8586ba774c819eb07d",
+    "intendedAssertionFailed": true,
+    "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "restoredDeployedAssetSha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957",
+    "restoredDirectPassed": true
+  },
+  "proofScope": "Four-module clean PackageReference direct execution and identity rejection; native/process/upgrade gates pending.",
+  "harnessUnchanged": true,
+  "packCommands": [
+    {
+      "command": [
+        "git",
+        "clone",
+        "--shared",
+        "--no-checkout",
+        "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/01-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "4c93d83fb22349d846db0dd4faef4921a88e91026fab23dc7c56053880c399e6"
+    },
+    {
+      "command": [
+        "git",
+        "checkout",
+        "--detach",
+        "f923b12a41ab3280c146d2c1f8a45ba0f102caaa"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/02-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "7ae2263e45e842ba921cb8835f455f5a74328808934e4c6dd7f372799ea6e10c"
+    },
+    {
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/versioning/Elsa.Versioning.Calculator",
+        "--",
+        "--repo",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+        "--commit",
+        "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+        "--record-ref",
+        "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+        "--output",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/computation.json",
+        "--pack-properties",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props",
+        "--branch",
+        "agent/codex/3181-durable-rules"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/03-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--",
+        "dependency-map"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/04-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0c478e8b6535893f365f3d4c65de8f6a85f90d59d2f87e9ff4edf59eb4c2abe1"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/rules-pack.slnf",
+        "--locked-mode",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/05-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "27d23c2ff39c82c8256728be6d48761a8bb0ea8b6b1efccf76eee17c2a140980"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/rules-pack.slnf",
+        "-c",
+        "Release",
+        "--no-restore",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/06-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "8013b6d28a2b442bc4d8b5be2be4d1d7e7319e6da317c65e823c6a992feb03ef"
+    },
+    {
+      "command": [
+        "dotnet",
+        "pack",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/rules-pack.slnf",
+        "-c",
+        "Release",
+        "--no-build",
+        "--no-restore",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props",
+        "--output",
+        "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed"
+      ],
+      "cwd": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/source",
+      "log": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/07-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "4784e6c151cce91726f2af13095faa37dd30cc06d9d2b417c0ff802a686ae962"
+    }
+  ],
+  "reviewLimitations": [
+    "Four Rules modules only; two native modules pending.",
+    "Independent PostgreSQL recovery, native continuation and retained-run upgrade not executed.",
+    "Incompatible-pin case deliberately fabricates a changed pin; not a version-B deployment proof.",
+    "Pre-existing dependency audit warnings retained in logs, not suppressed or remediated by this checkpoint."
+  ],
+  "results": {
+    "direct": {
+      "command": "direct",
+      "passed": true,
+      "executionRuntime": {
+        "entryAssembly": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "processPath": "/usr/local/share/dotnet/dotnet",
+        "frameworkDescription": ".NET 10.0.8",
+        "runtimeIdentifier": "osx-arm64",
+        "targetFramework": ".NETCoreApp,Version=v10.0",
+        "osDescription": "macOS 26.6.0",
+        "processArchitecture": "Arm64",
+        "machineName": "Sipkes-MacBook-Air",
+        "processId": 74651,
+        "deploymentProfile": "framework-dependent-file-based"
+      },
+      "databaseEngine": "SQLite",
+      "databaseEngineVersion": "3.49.1",
+      "identityPinHash": "c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed",
+      "databasePath": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/direct.db",
+      "cases": [
+        {
+          "name": "default-budget",
+          "invocationId": "default-budget-6683b4d5df734ef6b496e2d9a3a98d3d",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "resolvedRounds": 7,
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "terminalKind": "Succeeded",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "b939c8e45f714102a382fbb0b0ea8ab2",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "9e249fd9f2b24407a873f8071bffd8d0",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "b4322cbb7f34497e904f0c79e5e66682",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "acceptedAttemptId": "9e189d8281a34f7fb6e830e728569a10",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        },
+        {
+          "name": "explicit-budget",
+          "invocationId": "explicit-budget-d8df9c6368f8491d97d0966a36b57da7",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "requestedRounds": 4,
+          "resolvedRounds": 4,
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "terminalKind": "Succeeded",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "93dd4178d91d40b18b81ee33a6621fc9",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "6411cd0cb58342dcaa0bdd84995073e5",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "f0f8aee074524f1baadd2f82189e4284",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "acceptedAttemptId": "044a57749a904009bca5a66f1d2330e3",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        },
+        {
+          "name": "budget-fault",
+          "invocationId": "budget-fault-a2d7d9972d604fa2808782c75a1fa1e9",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "requestedRounds": 3,
+          "resolvedRounds": 3,
+          "status": "Faulted",
+          "committedRounds": 3,
+          "terminalKind": "Faulted",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "diagnostic": "rules.round-budget-exhausted",
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "574dc79699e34cd69ec763844a6ce759",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "58e9be65292e4a7080ba7661f9c92b12",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "2dcfda5dc41f4db198edfc1995469b70",
+              "acceptedWorkerId": "rules-6476c5984b944028bbb496935bf278f1",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        }
+      ],
+      "packageReferenceOnly": true
+    },
+    "incompatible": {
+      "command": "incompatible",
+      "passed": true,
+      "fabricatedIncompatibility": true,
+      "versionBUpgradeProof": false,
+      "changedPackageId": "Elsa.Rules.Core",
+      "installedVersion": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "changedVersion": "999999.0.0-incompatible",
+      "admission": "Unavailable",
+      "durableLookup": "NotFound",
+      "databasePath": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/incompatible.db"
+    },
+    "unavailable": {
+      "command": "unavailable",
+      "passed": true,
+      "identityAvailable": false,
+      "preparation": "Unavailable",
+      "durableLookup": "NotFound",
+      "databasePath": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/unavailable.db"
+    },
+    "alternate": {
+      "command": "unavailable",
+      "passed": true,
+      "identityAvailable": false,
+      "preparation": "Unavailable",
+      "durableLookup": "NotFound",
+      "databasePath": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/alternate.db"
+    },
+    "control": {
+      "command": "unavailable",
+      "passed": false,
+      "error": "Expected deployed implementation identity to be unavailable."
+    },
+    "control-restored": {
+      "command": "direct",
+      "passed": true,
+      "executionRuntime": {
+        "entryAssembly": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "processPath": "/usr/local/share/dotnet/dotnet",
+        "frameworkDescription": ".NET 10.0.8",
+        "runtimeIdentifier": "osx-arm64",
+        "targetFramework": ".NETCoreApp,Version=v10.0",
+        "osDescription": "macOS 26.6.0",
+        "processArchitecture": "Arm64",
+        "machineName": "Sipkes-MacBook-Air",
+        "processId": 74844,
+        "deploymentProfile": "framework-dependent-file-based"
+      },
+      "databaseEngine": "SQLite",
+      "databaseEngineVersion": "3.49.1",
+      "identityPinHash": "c8d538af34cb9eb160b25a739e138387ec83d37026c585ef9e161836968c21ed",
+      "databasePath": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/control-restored.db",
+      "cases": [
+        {
+          "name": "default-budget",
+          "invocationId": "default-budget-1c3aaf25464d409ea08490f61fa9eb0a",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "resolvedRounds": 7,
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "terminalKind": "Succeeded",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "2740590aebb845afb9d02436fda0858c",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "800aff6fbb9246919c4463cf5491dc16",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "21972bfe096a447589921c9cf5c3daf9",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "acceptedAttemptId": "8cfe1defdb07408d997651bd66a06dda",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        },
+        {
+          "name": "explicit-budget",
+          "invocationId": "explicit-budget-be45f64fbe2e4f6595aec17039424b6f",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "requestedRounds": 4,
+          "resolvedRounds": 4,
+          "status": "Succeeded",
+          "committedRounds": 4,
+          "terminalKind": "Succeeded",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "c766c5af02ad4e86825958a3ab1df958",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "773cd624a03042d9b32023e0649713cc",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "5ae2ee63d8f64c8cac8aa0c31d208b00",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            },
+            {
+              "ordinal": 3,
+              "acceptedAttemptId": "69390b737aac405796e5da75aae84e73",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 8,
+              "consumedModelRevision": 9
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        },
+        {
+          "name": "budget-fault",
+          "invocationId": "budget-fault-0d12ed9a76a54df7b20462510ba7e9c6",
+          "invocationSchemaVersion": 1,
+          "artifactFormatVersion": 1,
+          "resultSchemaVersion": 1,
+          "requestedRounds": 3,
+          "resolvedRounds": 3,
+          "status": "Faulted",
+          "committedRounds": 3,
+          "terminalKind": "Faulted",
+          "terminalFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "diagnostic": "rules.round-budget-exhausted",
+          "historyFacts": [
+            "final",
+            "joined",
+            "left",
+            "right",
+            "seed"
+          ],
+          "rounds": [
+            {
+              "ordinal": 0,
+              "acceptedAttemptId": "cf06fdce388c49d996e56dadc5e1ef16",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 2,
+              "consumedModelRevision": 3
+            },
+            {
+              "ordinal": 1,
+              "acceptedAttemptId": "c23d298fdc914de795001071acbc86e0",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 4,
+              "consumedModelRevision": 5
+            },
+            {
+              "ordinal": 2,
+              "acceptedAttemptId": "202c73084fa046bda2896231fa91694a",
+              "acceptedWorkerId": "rules-2e64d2483c9b4f4eb62c08e027108211",
+              "acceptedModelRevision": 6,
+              "consumedModelRevision": 7
+            }
+          ],
+          "exactAdmissionReplay": "Replay"
+        }
+      ],
+      "packageReferenceOnly": true
+    }
+  },
+  "deploymentReceipt": {
+    "receiptSchemaVersion": 1,
+    "sourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa",
+    "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+    "pin": {
+      "pinSchemaVersion": 1,
+      "packages": [
+        {
+          "id": "Elsa.Rules.Core",
+          "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+          "contentHash": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+          "assets": [
+            {
+              "path": "lib/net10.0/Elsa.Rules.Core.dll",
+              "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+              "sha256": "b69f6c388967f1a26c1d39a3c8d4dfb8c723352538f21c4bea362e53ce4b80a1"
+            }
+          ]
+        },
+        {
+          "id": "Elsa.Rules.Persistence.Core",
+          "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+          "contentHash": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+          "assets": [
+            {
+              "path": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+              "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+              "sha256": "2aa40b45b39a2d333dbeebccea5c4c8d310c29bcc4119e8203a7c75e808d9644"
+            }
+          ]
+        },
+        {
+          "id": "Elsa.Rules.Runtime",
+          "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+          "contentHash": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+          "assets": [
+            {
+              "path": "lib/net10.0/Elsa.Rules.Runtime.dll",
+              "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+              "sha256": "0d72bfb1ec4643914fa9da042e8525bfd97734c144105103b38ea45bf80aa957"
+            }
+          ]
+        }
+      ],
+      "languageId": "elsa.rules.finite-positive",
+      "languageVersion": 1,
+      "receiptSchemaVersion": 1,
+      "stateSchemaVersion": 1
+    },
+    "provenance": {
+      "supportedSchemas": {
+        "artifactFormatVersion": 1,
+        "invocationSchemaVersion": 1,
+        "resultSchemaVersion": 1
+      },
+      "dependencyResolution": {
+        "runtimeTarget": ".NETCoreApp,Version=v10.0",
+        "resolvedLibraries": [
+          {
+            "id": "CShells.Abstractions",
+            "version": "0.0.31",
+            "type": "package",
+            "nuGetContentHash": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g=="
+          },
+          {
+            "id": "CShells",
+            "version": "0.0.31",
+            "type": "package",
+            "nuGetContentHash": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ=="
+          },
+          {
+            "id": "Elsa.Persistence.EntityFramework",
+            "version": "4.0.32-preview",
+            "type": "package",
+            "nuGetContentHash": "hYJXRzBGwePdycGG6dkktsApb+HduafdS2ors2IhQ5yv4AfdqBkT6zydQFnMFca+QwqBxXj2tR8G9x9XgedXFQ=="
+          },
+          {
+            "id": "Elsa.Persistence.Schema",
+            "version": "4.0.12-preview",
+            "type": "package",
+            "nuGetContentHash": "RuBK4Vl9/b59/GX4s+7ntJwogbe/lBJILNorrXFz9V6YC69qBt0Cq79FGWDRFAiQHX69rANsSIU4HyXFAKRgEQ=="
+          },
+          {
+            "id": "Elsa.Primitives",
+            "version": "4.0.14-preview",
+            "type": "package",
+            "nuGetContentHash": "mYjg0S7FZI9N6vLe72XkUJg4rup1SNwDH1sgqfWnv8ywyKnmS9czKwHzaPx2sLKIjR7COOsIqNnIO1r2o43l0g=="
+          },
+          {
+            "id": "Elsa.Rules.Core",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA=="
+          },
+          {
+            "id": "Elsa.Rules.Persistence.Core",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g=="
+          },
+          {
+            "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "D0FdlnT2GBs7VqecJ9PtVCFY1D2W50QUkPt08cMY2UIqaIvxGRJUq/FG7dZ7gjWhkkuNLlzFIg/sHCi127Wlhw=="
+          },
+          {
+            "id": "Elsa.Rules.Runtime",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w=="
+          },
+          {
+            "id": "Elsa.Tasks.Core",
+            "version": "4.0.14-preview",
+            "type": "package",
+            "nuGetContentHash": "Ptx3b7GZEyb3qarIO6CajyMzdG1EqM2/+3PtUWJdxdJip2m6nsxUdbc8VSyC4NrohsDSvmgi7i7vVNKxqGj12Q=="
+          },
+          {
+            "id": "JetBrains.Annotations",
+            "version": "2025.2.4",
+            "type": "package",
+            "nuGetContentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
+          },
+          {
+            "id": "Microsoft.Data.Sqlite.Core",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Abstractions",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Relational",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Sqlite.Core",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore.Sqlite",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA=="
+          },
+          {
+            "id": "Microsoft.EntityFrameworkCore",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA=="
+          },
+          {
+            "id": "Microsoft.Extensions.DependencyModel",
+            "version": "10.0.10",
+            "type": "package",
+            "nuGetContentHash": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA=="
+          },
+          {
+            "id": "Newtonsoft.Json",
+            "version": "13.0.3",
+            "type": "package",
+            "nuGetContentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+          },
+          {
+            "id": "NuGet.Common",
+            "version": "7.9.0",
+            "type": "package",
+            "nuGetContentHash": "OWFEzHpwvgzSaHYmWzfbyTm6oBOy/BFSFEDk73zM9jiJaxdopYZ/DrqIQogaM3F+ZGTppBJffmzu5adetEI/YA=="
+          },
+          {
+            "id": "NuGet.Configuration",
+            "version": "7.9.0",
+            "type": "package",
+            "nuGetContentHash": "oY9XZp+TWjOmiGmU4R4JWBRY3F4TAVo7tqPr/z7MOsFcEpdYHMryjNSscoLBxUTR3WmFmYgO0Gvu4eRbz6pzOg=="
+          },
+          {
+            "id": "NuGet.Frameworks",
+            "version": "7.9.0",
+            "type": "package",
+            "nuGetContentHash": "w2adPmgUafmW9ON1MzDjuHmViN0vtiPV48Dz3OE6px8BiGSqrnWHOjwFEPOEPAZx20J1c7bxp90Hxo9l4xGWtw=="
+          },
+          {
+            "id": "NuGet.Packaging",
+            "version": "7.9.0",
+            "type": "package",
+            "nuGetContentHash": "Q2jxuud5kJLV0rUzsC02iC5ts8QsQu9UVyMvF8lULY3TwHL/W/PrnQ9bQFvMR7jJkzF1uilRPI1o+7VOtc2XMg=="
+          },
+          {
+            "id": "NuGet.Versioning",
+            "version": "7.9.0",
+            "type": "package",
+            "nuGetContentHash": "r4sZuVpVqwSBLe4qYDrnpScqdyctlRXg0HSF5OoCGkeBc8b+o8BBYHuI/u1RoWYX78PbieijU13TBt71/Xf3lw=="
+          },
+          {
+            "id": "Rules.PackageProbe",
+            "version": "1.0.0",
+            "type": "project"
+          },
+          {
+            "id": "SQLitePCLRaw.bundle_e_sqlite3",
+            "version": "2.1.11",
+            "type": "package",
+            "nuGetContentHash": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ=="
+          },
+          {
+            "id": "SQLitePCLRaw.core",
+            "version": "2.1.11",
+            "type": "package",
+            "nuGetContentHash": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA=="
+          },
+          {
+            "id": "SQLitePCLRaw.lib.e_sqlite3",
+            "version": "2.1.11",
+            "type": "package",
+            "nuGetContentHash": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ=="
+          },
+          {
+            "id": "SQLitePCLRaw.provider.e_sqlite3",
+            "version": "2.1.11",
+            "type": "package",
+            "nuGetContentHash": "Y/0ZkR+r0Cg3DQFuCl1RBnv/tmxpIZRU3HUvelPw6MVaKHwYYR8YNvgs0vuNuXCMvlyJ+Fh88U1D4tah1tt6qw=="
+          },
+          {
+            "id": "System.Security.Cryptography.ProtectedData",
+            "version": "8.0.0",
+            "type": "package",
+            "nuGetContentHash": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+          }
+        ],
+        "packages": [
+          {
+            "id": "Elsa.Rules.Core",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+            "selectedRuntimeAssets": [
+              "lib/net10.0/Elsa.Rules.Core.dll"
+            ],
+            "feedArchive": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "restoredCacheArchive": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer-packages/elsa.rules.core/4.0.0-branch-agent-codex-3181-durable-rules/elsa.rules.core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "rawArchiveSha512Base64": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+            "rawArchiveSha512Hex": "dae30f7eacaadfe623d7f795223c4787362329c8c5cf8e820438b1f09fd1c2ce13d551b57431b0dbdb8a1f16b0152957d8ab53bf5aca412cf448d6778984f8c8",
+            "restoredArchiveSha512Base64": "2uMPfqyq3+Yj1/eVIjxHhzYjKcjFz46CBDix8J/Rws4T1VG1dDGw29uKHxawFSlX2KtTv1rKQSz0SNZ3iYT4yA==",
+            "restoredArchiveSha512Hex": "dae30f7eacaadfe623d7f795223c4787362329c8c5cf8e820438b1f09fd1c2ce13d551b57431b0dbdb8a1f16b0152957d8ab53bf5aca412cf448d6778984f8c8",
+            "packageSourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa"
+          },
+          {
+            "id": "Elsa.Rules.Persistence.Core",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+            "selectedRuntimeAssets": [
+              "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+            ],
+            "feedArchive": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Persistence.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "restoredCacheArchive": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer-packages/elsa.rules.persistence.core/4.0.0-branch-agent-codex-3181-durable-rules/elsa.rules.persistence.core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "rawArchiveSha512Base64": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+            "rawArchiveSha512Hex": "67eb74f06f49fb8bf9810319a98a0b705c5787e7aa4fb5f4fbf4206e3dc1deff45017fd2a9a2a4622a0fbffe168a9a9d70d447fb47e7f8553626d3bd383d87e2",
+            "restoredArchiveSha512Base64": "Z+t08G9J+4v5gQMZqYoLcFxXh+eqT7X0+/Qgbj3B3v9FAX/SqaKkYioPv/4WipqdcNRH+0fn+FU2JtO9OD2H4g==",
+            "restoredArchiveSha512Hex": "67eb74f06f49fb8bf9810319a98a0b705c5787e7aa4fb5f4fbf4206e3dc1deff45017fd2a9a2a4622a0fbffe168a9a9d70d447fb47e7f8553626d3bd383d87e2",
+            "packageSourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa"
+          },
+          {
+            "id": "Elsa.Rules.Runtime",
+            "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+            "type": "package",
+            "nuGetContentHash": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+            "selectedRuntimeAssets": [
+              "lib/net10.0/Elsa.Rules.Runtime.dll"
+            ],
+            "feedArchive": "/private/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/feed/Elsa.Rules.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "restoredCacheArchive": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer-packages/elsa.rules.runtime/4.0.0-branch-agent-codex-3181-durable-rules/elsa.rules.runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg",
+            "rawArchiveSha512Base64": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+            "rawArchiveSha512Hex": "bb749da6707fa5f5220d34f62c46efa571211f0db987f96e0ead0afd0f93773b6aa6b5eb9db4abc22848fdca5a1c8534d5b1080bd088656851c33c55a873bddb",
+            "restoredArchiveSha512Base64": "u3SdpnB/pfUiDTT2LEbvpXEhHw25h/luDq0K/Q+TdztqprXrnbSrwihI/cpaHIU01bEIC9CIZWhRwzxVqHO92w==",
+            "restoredArchiveSha512Hex": "bb749da6707fa5f5220d34f62c46efa571211f0db987f96e0ead0afd0f93773b6aa6b5eb9db4abc22848fdca5a1c8534d5b1080bd088656851c33c55a873bddb",
+            "packageSourceCommit": "f923b12a41ab3280c146d2c1f8a45ba0f102caaa"
+          }
+        ]
+      },
+      "receiptGenerationRuntime": {
+        "entryAssembly": "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/deployment/Rules.PackageProbe.dll",
+        "processPath": "/usr/local/share/dotnet/dotnet",
+        "frameworkDescription": ".NET 10.0.8",
+        "runtimeIdentifier": "osx-arm64",
+        "targetFramework": ".NETCoreApp,Version=v10.0",
+        "osDescription": "macOS 26.6.0",
+        "processArchitecture": "Arm64",
+        "machineName": "Sipkes-MacBook-Air",
+        "processId": 74648,
+        "deploymentProfile": "framework-dependent-file-based"
+      },
+      "consumerBuildSdkVersion": "10.0.300",
+      "launchSdkVersion": "10.0.300",
+      "generatedUtc": "2026-10-21T23:33:07.449356+00:00"
+    }
+  },
+  "rawArtifacts": {
+    "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/receipt.json": {
+      "sha256": "a6b66ac61c57c48ea35c93783f03983526eea7ee812bd638c477c8106b4981aa"
+    },
+    "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/obj/project.assets.json": {
+      "sha256": "ae812c8f1f9088fd8bb9a048eafd9a82ed9793898e62b271015605952f61463b"
+    },
+    "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/packages.lock.json": {
+      "sha256": "b0ae99b35c3e4c4953714421de9fa9feb6937765eff491384f0067275f65d638"
+    },
+    "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/Rules.PackageProbe.csproj": {
+      "sha256": "b09fa3ccc5baa67fbc114c95f4ce31a3fa3b84e5315fbb3c9dfc71132fe36198"
+    },
+    "/private/tmp/3181-package-direct-reviewed/run-1c291cf95a7f4a5db1ec402b1e67c3ad/consumer/Program.cs": {
+      "sha256": "89c4e0f43f9a8ead04988fcc50d5cb88331a561fce289f0f0c4320133975ca5b"
+    },
+    "/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/receipt.json": {
+      "sha256": "1f532af730e2cd3e375d67f92644e9d1d2ea483e4391cb0e28b4c8d87a5ad0ef"
+    },
+    "/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/computation.json": {
+      "sha256": "f06da765822bfaef9fa91548a69cccbab0e901874bd94527ff07c7b6b9460065"
+    },
+    "/tmp/3181-packages-reviewed/run-5bfa6f869fe04035892d61add3b75e06/package-versions.props": {
+      "sha256": "f12af484d836a10015770709f4f7ca7dc284990f0f943692f3462bf1b09b0785"
+    }
+  }
+}

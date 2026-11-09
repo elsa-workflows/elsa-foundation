@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -77,7 +79,7 @@ public sealed class BpmnEscalationTests
         var nestedWait = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-nwait");
 
         // Resume the nested wait: the nested process completes and the host routes its normal path — both paths done.
-        var resumed = await fixture.ResumeAsync(nestedWait, JsonSerializer.SerializeToElement(new EventReceived("go")));
+        var resumed = await fixture.ResumeAsync(nestedWait, JsonSerializer.SerializeToElement(new { eventName = "go" }));
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();
         Assert.Single(resumed.States("node-bnd"));
@@ -151,7 +153,7 @@ public sealed class BpmnEscalationTests
 
         // Resuming the trigger raises the escalation; the interrupting boundary tears the nested process (and its
         // still-suspended keeper) down via seam A and routes the boundary path.
-        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new EventReceived("trigger")));
+        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new { eventName = "trigger" }));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();
@@ -159,7 +161,7 @@ public sealed class BpmnEscalationTests
         var nested = resumed.State("node-nested");
         Assert.Equal(ActivityExecutionStatus.Cancelled, nested.Status);
         Assert.Equal("ParentCancelled", nested.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.EscalationHostInterruptedReason, nested.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.escalation.host-interrupted", nested.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         // The nested process's still-suspended keeper child was reclaimed through seam A — no bookmarks remain.
         Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-keep").Status);
         Assert.Empty(await fixture.BookmarksAsync());
@@ -519,7 +521,7 @@ public sealed class BpmnEscalationTests
 
         // Resuming one instance's trigger raises escalation; the interrupting boundary cancels the coordinator, the
         // multi-instance cascade tears every instance down, and the boundary path routes.
-        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new EventReceived("trigger")));
+        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new { eventName = "trigger" }));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();

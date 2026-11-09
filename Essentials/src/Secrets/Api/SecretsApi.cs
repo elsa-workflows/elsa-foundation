@@ -4,11 +4,12 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Secrets.Api.Requests;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Core.Permissions;
 using Microsoft.AspNetCore.Builder;
@@ -125,8 +126,18 @@ public static class SecretsApi
         if (request is null)
             return;
 
-        var result = await Manager(context).CreateAsync(tenantId, request, context.RequestAborted);
-        await Json(result, StatusCodes.Status201Created).ExecuteAsync(context);
+        try
+        {
+            var result = await Manager(context).CreateAsync(tenantId, request, context.RequestAborted);
+            await Json(result, StatusCodes.Status201Created).ExecuteAsync(context);
+        }
+        catch (SecretNameInUseException)
+        {
+            await Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Secret name already in use",
+                detail: "A secret with the same name already exists.").ExecuteAsync(context);
+        }
     }
 
     private static async Task HandleDescriptorsAsync(HttpContext context)
@@ -134,7 +145,8 @@ public static class SecretsApi
         var types = context.RequestServices.GetRequiredService<ISecretTypeRegistry>().List().ToArray();
         var stores = context.RequestServices.GetRequiredService<ISecretStoreRegistry>().List()
             .Select(store => store.Descriptor).ToArray();
-        await Json(new SecretDescriptorsResponse { Types = types, Stores = stores }).ExecuteAsync(context);
+        var scopes = context.RequestServices.GetRequiredService<ISecretScopeRegistry>().List().ToArray();
+        await Json(new SecretDescriptorsResponse { Types = types, Stores = stores, Scopes = scopes }).ExecuteAsync(context);
     }
 
     private static async Task HandlePickerAsync(HttpContext context)

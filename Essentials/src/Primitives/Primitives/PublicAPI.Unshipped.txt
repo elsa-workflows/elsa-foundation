@@ -78,6 +78,9 @@ Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.Epoch.set -> void
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.SnowflakeIdentityGeneratorOptions() -> void
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.get -> long
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.set -> void
+Elsa.Primitives.Models.ActivityExecutionPlacement
+Elsa.Primitives.Models.ActivityExecutionPlacement.Background = 1 -> Elsa.Primitives.Models.ActivityExecutionPlacement
+Elsa.Primitives.Models.ActivityExecutionPlacement.Inline = 0 -> Elsa.Primitives.Models.ActivityExecutionPlacement
 Elsa.Primitives.Models.ClrActivityDescriptor
 Elsa.Primitives.Models.ClrActivityDescriptor.<Clone>$() -> Elsa.Primitives.Models.ClrActivityDescriptor!
 Elsa.Primitives.Models.ClrActivityDescriptor.ClrActivityDescriptor(string! TypeAlias) -> void

@@ -28,4 +28,33 @@ public sealed record WorkflowExecutableResumeTarget(
     /// </summary>
     public static string ComposeScopedId(string executableNodeId, string localResumeTargetId) =>
         $"{executableNodeId}:{localResumeTargetId}";
+
+    /// <summary>
+    /// Finds a global target first, otherwise the unique target with the requested node-local key.
+    /// The caller must verify that a directly addressed target belongs to the expected node.
+    /// </summary>
+    public static WorkflowExecutableResumeTarget? FindForNode(
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string requestedResumeTargetId)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedResumeTargetId);
+
+        if (executable.ResumeTargets.TryGetValue(requestedResumeTargetId, out var direct))
+            return direct;
+
+        var matches = executable.ResumeTargets.Values
+            .Where(target => StringComparer.Ordinal.Equals(target.ExecutableNodeId, executableNodeId))
+            .Where(target => StringComparer.Ordinal.Equals(target.LocalResumeTargetId, requestedResumeTargetId))
+            .ToArray();
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"Local resume target '{requestedResumeTargetId}' is ambiguous for executable node '{executableNodeId}'.")
+        };
+    }
 }

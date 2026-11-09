@@ -8,14 +8,15 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 using PublishWorkflowCommand = Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Publish;
 
 [Post("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish")]
 [RequirePermission(WorkflowPublishingPermissions.Manage)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpointWithResult<PublishWorkflowRequest, PublishedWorkflowView>
+public sealed class Endpoint(IRequestSender sender, NormalizedPrincipalValidator principalValidator)
+    : ApiEndpointWithResult<PublishWorkflowRequest, PublishedWorkflowView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -33,7 +34,7 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpointWithResult<Publ
             new PublishWorkflowCommand(request.VersionId,
                 request.Action is { } action ? PublicationIntentContract.ToModel(action) : null,
                 request.SlotName, request.ExpectedPublicationId, request.PreflightToken,
-                PublicationRequestTenant.Resolve(HttpContext.User)), cancellationToken);
+                PublicationRequestTenant.Resolve(HttpContext.User, principalValidator)), cancellationToken);
         return EndpointResult.Status(
             response.WasCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             response);

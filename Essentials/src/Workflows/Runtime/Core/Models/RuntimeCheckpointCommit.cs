@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -15,12 +16,106 @@ public sealed record RuntimeCheckpointCommit(
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 
+    /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelStateChange? ModelState { get; init; }
+
+    /// <summary>The exact model decision authorizing initial native worker admission, checked in the same transaction.</summary>
+    /// <remarks>A refreshed concurrency condition is excluded from logical replay identity; the native state retains its immutable model-work origin.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
+
+    /// <summary>The observed native parent wait that must remain live when its model child is first admitted.</summary>
+    /// <remarks>A concurrency condition, not source authority. Admission preserves the parent bookmark and its generation.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedModelParentWait { get; init; }
+
+    /// <summary>Only a first model decision may depend on another execution's exact native wait.</summary>
+    public void EnsureModelParentAdmissionShape()
+    {
+        if (ExpectedModelParentWait is not { } expected) return;
+        // A first evaluation may already owe its terminal result to this same live parent wait.
+        if (ModelState is not { ExpectedRevision: null, State.Lifecycle: RuntimeModelLifecycle.Running or RuntimeModelLifecycle.TerminalPendingSettlement } model ||
+            ExpectedFence is null || ExpectedModelExecution is not null || ExpectedBookmarkResume is not null ||
+            expected.WorkflowExecutionId == WorkflowExecutionId || expected.RegistrationCapture is not { } capture ||
+            capture.Scope.PersistenceScope != model.State.Scope || capture.Scope.TenantId != model.State.TenantId ||
+            StateChanges.WorkflowExecution is not null || StateChanges.Bookmarks.Count != 0 || StateChanges.ActivityExecutions.Count != 0)
+            throw new InvalidOperationException("Model child admission requires its initial decision and captured live native parent wait.");
+    }
+
+    /// <summary>Only an initial native worker checkpoint may depend on another execution's live model decision.</summary>
+    public void EnsureModelAdmissionShape()
+    {
+        if (ExpectedModelExecution is not { } expected) return;
+        if (ModelState is not null || ExpectedBookmarkResume is not null || ExpectedFence is null ||
+            Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+            expected.ExecutionId == WorkflowExecutionId || expected.Lifecycle != RuntimeModelLifecycle.Running ||
+            StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert,
+                State.Status: WorkflowExecutionStatus.Running } native ||
+            native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
+            native.State.ParentWorkflowExecutionId is not null ||
+            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != expected.Scope.Value ||
+            native.State.Authority is not { } authority ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(expected.Authority, authority.SystemIdentity,
+                authority.RootInitiator, authority.Metadata))
+            throw new InvalidOperationException("Native worker admission requires its matching initial state, authority and exact live model decision.");
+        if (native.State.ModelWorkOrigin is { } origin && (!origin.MatchesModel(expected) ||
+            origin.WorkerExecutionId != WorkflowExecutionId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, native.State.PinnedExecutable)))
+            throw new InvalidOperationException("The native worker's model invocation differs from its admission condition.");
+    }
+
+    /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
+    public void EnsureModelStateShape()
+    {
+        if (ModelState is not { } model) return;
+        var retainsState = model.ExpectedRevision == model.State.Revision;
+        if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
+            (!retainsState && model.State.UpdatedAt != Checkpoint.OccurredAt) ||
+            model.State.UpdatedAt > Checkpoint.OccurredAt || model.Input.AcceptedAt != Checkpoint.OccurredAt ||
+            ExpectedBookmarkResume is not null || StateChanges.WorkflowExecution is not null ||
+            StateChanges.ActivityExecutions.Count != 0 || StateChanges.ActivityExecutionInspections.Count != 0 ||
+            StateChanges.Bookmarks.Count != 0 || StateChanges.DurableValues.Count != 0 ||
+            StateChanges.Incidents.Count != 0 || StateChanges.ActivityScopeCleanups.Count != 0 ||
+            StateChanges.AlterationJobTerminalChange is not null || !StateChanges.BackgroundActivityWork.IsEmpty)
+            throw new InvalidOperationException("A model decision requires its exact execution, timestamp and fence, without native execution state.");
+    }
+
+    /// <summary>Optional exact physical wait condition, atomically checked with initial trigger consumption.</summary>
+    /// <remarks>This is a write condition, not source authority. Legacy providers refuse it. Null retains the old wire/fingerprint.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
+
+
+    /// <summary>Validate that the exact wait condition belongs to this initial trigger-claim checkpoint.</summary>
+    public void EnsureExactBookmarkResumeShape()
+    {
+        if (ExpectedBookmarkResume is not { } expected) return;
+        var activity = StateChanges.ActivityExecutions.SingleOrDefault(change => change.StateId == expected.ActivityExecutionId);
+        var bookmark = StateChanges.Bookmarks.SingleOrDefault(change => change.StateId == expected.BookmarkId);
+        if (expected.RegistrationCapture is null || expected.WorkflowExecutionId != WorkflowExecutionId ||
+            bookmark is not { Operation: RuntimeStateChangeOperation.Delete } || !expected.Matches(bookmark.State) ||
+            activity is not { Operation: RuntimeStateChangeOperation.Upsert, State.Status: ActivityExecutionStatus.Running } ||
+            activity.State.Execution.WorkflowExecutionId != WorkflowExecutionId ||
+            activity.State.Execution.ActivityExecutionId != expected.ActivityExecutionId || activity.State.Execution.ExecutableNodeId != expected.ExecutableNodeId ||
+            !activity.State.Metadata.TryGetValue(Constants.RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claim) ||
+            activity.State.Attempts?.Any(attempt => attempt.AttemptId == claim && attempt.InvocationId == expected.ActivityExecutionId &&
+                attempt.Reason == ActivityAttemptReason.Resume && attempt.EndedAt is null) != true)
+            throw new InvalidOperationException("Exact bookmark resume requires its captured wait deletion and matching initial activity-attempt claim.");
+    }
+
     /// <summary>
     /// Optional single-writer fence that a durable store must validate in the same atomic decision as the checkpoint
     /// state, post-commit outbox, and idempotency marker. It is intentionally excluded from replay identity: an
     /// equivalent already-committed request remains a replay after ownership changes.
     /// </summary>
     public RuntimeExecutionFence? ExpectedFence { get; init; }
+
+    /// <summary>
+    /// Keeps the scheduler work item that caused this checkpoint available until its handler finishes. This is used by
+    /// activity and bookmark trigger-claim boundaries: claiming an activity attempt is not the same as accepting its decision.
+    /// </summary>
+    public bool RetainSchedulerWork { get; init; }
 }
 
 public sealed class RuntimeCheckpointStateChangeSet
@@ -94,7 +189,8 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
         IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations,
         IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null,
-        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null)
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null,
+        BackgroundActivityWorkCheckpointChanges? backgroundActivityWork = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
@@ -125,6 +221,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
         ConsumedSchedulerWorkItems = NormalizeConsumedSchedulerWorkItems(consumedSchedulerWorkItems);
         AlterationJobTerminalChange = NormalizeAlterationJobTerminalChange(alterationJobTerminalChange);
+        BackgroundActivityWork = backgroundActivityWork ?? BackgroundActivityWorkCheckpointChanges.Empty;
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -154,6 +251,9 @@ public sealed class RuntimeCheckpointStateChangeSet
     /// <summary>Terminal alteration-job evidence committed in the same atomic unit as the workflow mutation.</summary>
     public WorkflowAlterationJobTerminalChange? AlterationJobTerminalChange { get; }
 
+    /// <summary>Admission, acceptance, and cancellation are atomic participants of this checkpoint.</summary>
+    public BackgroundActivityWorkCheckpointChanges BackgroundActivityWork { get; }
+
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
     /// checkpoint committer from <see cref="RuntimeCheckpointCommit.PostCommitIntents"/>; folding them into the
@@ -179,7 +279,28 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
+
+    /// <summary>Returns a copy with the supplied activity projections, preserving every other atomic participant.</summary>
+    public RuntimeCheckpointStateChangeSet WithActivityExecutions(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            activityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
@@ -198,7 +319,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
@@ -217,7 +339,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             workflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
     public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
@@ -236,7 +359,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             consumedSchedulerWorkItems,
-            AlterationJobTerminalChange);
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
 
     /// <summary>Returns a copy with checkpoint-integrated terminal alteration evidence.</summary>
     public RuntimeCheckpointStateChangeSet WithAlterationJobTerminalChange(
@@ -255,7 +379,28 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,
-            alterationJobTerminalChange);
+            alterationJobTerminalChange,
+            BackgroundActivityWork);
+
+    /// <summary>Returns a copy with background-work admission, acceptance, and cancellation participants.</summary>
+    public RuntimeCheckpointStateChangeSet WithBackgroundActivityWork(
+        BackgroundActivityWorkCheckpointChanges backgroundActivityWork) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange,
+            backgroundActivityWork ?? throw new ArgumentNullException(nameof(backgroundActivityWork)));
 
     private static WorkflowAlterationJobTerminalChange? NormalizeAlterationJobTerminalChange(WorkflowAlterationJobTerminalChange? change) =>
         change is null
@@ -342,7 +487,8 @@ public sealed class RuntimePostCommitIntent
         IReadOnlyDictionary<string, string>? metadata = null,
         string? dependsOnWaitRegistrationId = null,
         RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null,
-        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null)
+        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null,
+        DateTimeOffset? notBefore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -368,6 +514,7 @@ public sealed class RuntimePostCommitIntent
         DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
         WaitFailurePolicy = waitFailurePolicy;
         MaterializedSchedulerWorkItem = materializedSchedulerWorkItem;
+        NotBefore = notBefore?.ToUniversalTime();
     }
 
     public string IntentId { get; }
@@ -381,6 +528,17 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    /// <summary>
+    /// The time before which the intent must not be delivered (R-7, spec 261): its outbox item becomes available then
+    /// instead of at the commit. Null, or a time at or before the commit, delivers it after the commit as usual. A
+    /// checkpoint that carries a later one is mandatory and durable in every persistence mode, and neither the
+    /// in-process hop nor a drain's own delivery hands it over early.
+    /// </summary>
+    public DateTimeOffset? NotBefore { get; }
+
+    /// <summary>Whether this intent must wait past <paramref name="committedAt"/>, its checkpoint's time.</summary>
+    public bool IsDelayedPast(DateTimeOffset committedAt) => NotBefore is { } notBefore && notBefore > committedAt;
 
     /// <summary>
     /// Whether <paramref name="other"/> is the same logical intent. Payloads compare as JSON values, not text: an intent
@@ -397,6 +555,7 @@ public sealed class RuntimePostCommitIntent
         StringComparer.Ordinal.Equals(IdempotencyKey, other.IdempotencyKey) &&
         StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
         WaitFailurePolicy == other.WaitFailurePolicy &&
+        NotBefore == other.NotBefore &&
         (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 

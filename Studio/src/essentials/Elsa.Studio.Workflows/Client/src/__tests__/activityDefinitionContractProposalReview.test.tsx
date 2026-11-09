@@ -25,7 +25,7 @@ describe("Activity Definition contract proposal review", () => {
 
     await vi.advanceTimersByTimeAsync(899);
     expect(postJson).not.toHaveBeenCalled();
-    expect(harness.container.textContent).toContain("Waiting briefly for editing to settle");
+    expect(harness.container.textContent).toContain("Suggestions update after your changes are saved");
 
     await vi.advanceTimersByTimeAsync(1);
     await vi.waitFor(() => expect(postJson).toHaveBeenCalledWith(
@@ -33,11 +33,11 @@ describe("Activity Definition contract proposal review", () => {
       exactRequest(3),
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     ));
-    expect(harness.container.textContent).toContain("It never changes the draft until selected changes are applied");
+    expect(harness.container.textContent).toContain("Review suggested inputs, outputs and outcomes before adding them");
 
     harness.render({ draft: exactDraft({ revision: 4, manifestFingerprint: "sha256:implementation-4" }), enabled: false });
     expect(proposalSignal?.aborted).toBe(true);
-    await vi.waitFor(() => expect(harness.container.textContent).toContain("Waiting for autosave"));
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("Suggestions update after your changes are saved"));
     expect(harness.onApplyingChange).not.toHaveBeenCalled();
     await harness.unmount();
   });
@@ -50,8 +50,8 @@ describe("Activity Definition contract proposal review", () => {
     const harness = renderReview({ context: endpoint(postJson), draft: exactDraft() });
 
     await vi.advanceTimersByTimeAsync(900);
-    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input currency"));
-    expect(harness.container.textContent).toContain("Remove input order");
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input Currency"));
+    expect(harness.container.textContent).toContain("Remove input Order");
     expect(harness.container.textContent).toContain("Unsupported provider proposal change");
     expect(harness.container.textContent).not.toContain("opaque-provider-secret");
     expect(harness.container.textContent).toContain("1 of 3 changes selected");
@@ -59,7 +59,10 @@ describe("Activity Definition contract proposal review", () => {
     expect(harness.container.textContent).toContain("Configured Expression default");
     expect(harness.container.textContent).not.toContain("private.default.expression");
 
-    const remove = articleByText(harness.container, "Remove input order");
+    const addition = articleByText(harness.container, "Add input Currency");
+    expect(addition.querySelector("details")?.open).toBe(false);
+    expect(addition.querySelector("details")?.textContent).toContain("Reference key: currency");
+    const remove = articleByText(harness.container, "Remove input Order");
     expect(buttonByText(remove, "Reject").getAttribute("aria-pressed")).toBe("true");
     expect(buttonByText(remove, "Accept").getAttribute("aria-pressed")).toBe("false");
     const unknown = articleByText(harness.container, "Unsupported provider proposal change");
@@ -86,8 +89,8 @@ describe("Activity Definition contract proposal review", () => {
     const harness = renderReview({ context: endpoint(postJson), draft });
 
     await vi.advanceTimersByTimeAsync(900);
-    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input currency"));
-    const addition = articleByText(harness.container, "Add input currency");
+    await vi.waitFor(() => expect(harness.container.textContent).toContain("Add input Currency"));
+    const addition = articleByText(harness.container, "Add input Currency");
     click(buttonByText(addition, "Reject"));
     expect(harness.container.textContent).toContain("0 of 3 changes selected");
     expect((buttonByText(harness.container, "Apply selected changes") as HTMLButtonElement).disabled).toBe(true);
@@ -111,7 +114,7 @@ describe("Activity Definition contract proposal review", () => {
 
     harness.render({ draft: exactDraft({ revision: 4, manifestFingerprint: "sha256:implementation-4" }), enabled: true });
     await vi.waitFor(() => expect(harness.container.textContent).not.toContain("sha256:implementation-3"));
-    expect(harness.container.textContent).toContain("Waiting briefly for editing to settle");
+    expect(harness.container.textContent).toContain("Suggestions update after your changes are saved");
     await vi.advanceTimersByTimeAsync(900);
     await vi.waitFor(() => expect(postJson).toHaveBeenLastCalledWith(
       "/design/activities/drafts/draft-1/contract-proposals",

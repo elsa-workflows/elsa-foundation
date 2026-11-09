@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Elsa3.Mapping.Conversion;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa3.Mapping.ActivityMap.Rewrites;
+using Elsa3.Mapping.Internal;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Services;
@@ -21,7 +23,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, string>? sourceNameOf = null,
         Func<Elsa3Activity, string, bool>? isScriptBody = null,
         IReadOnlySet<string>? containerVariableIds = null,
-        IReadOnlyDictionary<string, string>? memoryAliases = null)
+        IReadOnlyDictionary<string, string>? memoryAliases = null,
+        bool isReusable = false)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -45,6 +48,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         var containerVariables = containerVariableIds ?? new HashSet<string>(StringComparer.Ordinal);
+        var accessors = new AccessorScope(isReusable, ActivityAccessorNames(definition.Root));
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
 
         foreach (var property in properties)
@@ -59,6 +63,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     $"Property '{property.PropertyName}' carries an Elsa 3 memory reference but is not a declared input or output.",
                     "Install a lowering provider for the custom property or remove its memory reference before import.",
                     property.MemoryReferenceId is null ? property.JsonPath : $"{property.JsonPath}.memoryReference",
+                    property.MemoryReferenceId));
+                continue;
+            }
+
+            if (property.InputContract is not null && DropsTypedConversion(property, property.InputContract.Type))
+            {
+                var declared = ReadType(property.Value).Alias;
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.IncompatibleValue,
+                    $"Property '{property.PropertyName}' is a script declared as '{declared}'. Elsa 3 converted its result to '{declared}', but the Elsa 4 member '{property.InputContract.Type.Alias}' takes the value exactly as the script returns it.",
+                    $"Declare the expression's type as Object if the script already returns a {declared}; otherwise convert the value in the script before import.",
+                    $"{property.JsonPath}.typeName",
                     property.MemoryReferenceId));
                 continue;
             }
@@ -81,9 +99,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (property.Expression is not null)
             {
                 if (isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
-                    LowerScript(definition, input, property, outputs, nodeOrder, diagnostics);
+                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 else
-                    LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+                    LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 continue;
             }
 
@@ -255,6 +273,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty property,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
@@ -268,12 +287,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
-        var resultType = ReadType(property.Value);
+        var resultType = ExpressionResultType(property);
         var rewrite = expressionRewriter.Rewrite(
             expression.Type,
             expression.Value,
             resultType,
-            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, ambient));
+            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient));
 
         if (!rewrite.Succeeded)
         {
@@ -391,12 +410,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty property,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
         if (!expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(expression.Value))
         {
-            LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+            LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
             return;
         }
 
@@ -404,7 +424,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             "JavaScript",
             expression.Value,
             new TypeReference("Object"),
-            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, ambient),
+            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script);
         if (!rewrite.Succeeded)
         {
@@ -471,8 +491,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty consumer,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
+        // A graph body is a closed scope: its request inputs are the reusable's own inputs and its root
+        // variables are the reusable's variables, so the same lowering as a workflow's reads the reusable's values.
         switch (ambient.Kind)
         {
             case Elsa3AmbientReferenceKind.WorkflowRequest:
@@ -549,8 +572,83 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return Elsa3ExpressionParameterResolution.Success(
                     new ActivityResultExpressionParameterBinding(producer.ActivityNodeId, producer.StablePropertyKey));
             }
+            case Elsa3AmbientReferenceKind.GeneratedAccessor:
+                return ResolveGeneratedAccessor(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
             default:
                 throw new ArgumentOutOfRangeException(nameof(ambient), ambient.Kind, "Unknown ambient reference kind.");
+        }
+    }
+
+    /// <summary>
+    /// Resolves <c>get{name}()</c> to the declaration Elsa 3 generated it for, in Elsa 3's registration order: an
+    /// activity output accessor shadows everything (and is not lowered), then a workflow input (verbatim name; in a
+    /// reusable run Elsa 3 declares inputs as variables instead), then a variable (Pascal-cased name). Spec 247 R-2.
+    /// </summary>
+    private static Elsa3ExpressionParameterResolution ResolveGeneratedAccessor(
+        Elsa3WorkflowDefinition definition,
+        ActivityProperty consumer,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
+        string name)
+    {
+        Elsa3ExpressionParameterResolution Resolve(Elsa3AmbientReferenceKind kind, string declared) =>
+            ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors, new Elsa3AmbientReference(kind, declared));
+
+        if (accessors.ActivityNames.Any(activity =>
+                name.Length > activity.Length + "From".Length && name.EndsWith($"From{activity}", StringComparison.Ordinal)))
+        {
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                $"JavaScript calls 'get{name}', which Elsa 3 generated for an activity output and which shadows any variable or input of that name.",
+                "Capture the activity output into a variable and read it with get{Variable}() before import."));
+        }
+
+        if (!accessors.IsReusable)
+        {
+            var inputs = definition.Inputs.Where(value => value.Name.Equals(name, StringComparison.Ordinal)).ToArray();
+            if (inputs.Length > 1)
+                return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, name));
+            if (inputs.Length == 1)
+                return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputs[0].Name);
+        }
+
+        var variables = definition.Variables.Where(value => HasAccessor(value.Name, name)).ToArray();
+        var inputVariables = accessors.IsReusable
+            ? definition.Inputs.Where(value => HasAccessor(value.Name, name)).ToArray()
+            : [];
+        if (variables.Length + inputVariables.Length > 1)
+            return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, name));
+        if (variables.Length == 1)
+            return Resolve(Elsa3AmbientReferenceKind.Variable, variables[0].Id);
+        if (inputVariables.Length == 1)
+            return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
+
+        return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+            $"JavaScript calls unknown or unapproved host function 'get{name}'.",
+            "Declare the variable or workflow input it reads, or replace the call with deterministic language syntax, before import."));
+
+        static bool HasAccessor(string declared, string accessor) =>
+            Elsa3JavaScriptNames.IsAccessorName(declared) &&
+            Elsa3JavaScriptNames.Pascalize(declared).Equals(accessor, StringComparison.Ordinal);
+    }
+
+    /// <summary>The Pascal-cased names of the definition's named activities, as Elsa 3 used them in output accessors.</summary>
+    private static IReadOnlyList<string> ActivityAccessorNames(Elsa3Activity? root)
+    {
+        var names = new List<string>();
+        Collect(root);
+        return names;
+
+        void Collect(Elsa3Activity? activity)
+        {
+            if (activity is null)
+                return;
+            if (!string.IsNullOrWhiteSpace(activity.Name))
+                names.Add(Elsa3JavaScriptNames.Pascalize(activity.Name));
+            foreach (var child in activity.Activities ?? [])
+                Collect(child);
         }
     }
 
@@ -719,6 +817,19 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
     }
 
+    /// <summary>
+    /// The result type a lowered expression declares. Publication requires it to equal the member's type verbatim. A JSON
+    /// member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) accepts any expression value, so the expression declares
+    /// the member's own type, for every activity (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's
+    /// <c>JsonElement?</c>). <see cref="DropsTypedConversion"/> has already refused a script with a typed declaration
+    /// there, so no Elsa 3 conversion is lost. A typed member keeps the declared Elsa 3 type, so publication still
+    /// refuses a real mismatch.
+    /// </summary>
+    private static TypeReference ExpressionResultType(ActivityProperty property) =>
+        property.InputContract?.Type is { } member && IsUntyped(member, SimpleName(member.Alias))
+            ? member
+            : ReadType(property.Value);
+
     private static TypeReference ReadType(JsonElement value)
     {
         if (!value.TryGetProperty("typeName", out var typeName) || typeName.ValueKind != JsonValueKind.String)
@@ -734,16 +845,44 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
+    /// The declared Elsa 3 type in the Elsa 4 shape normalization has already put the value in (spec 248 R-4): Elsa 3's
+    /// generic list syntax (<c>List&lt;String&gt;</c>) is a list of its element, and the Elsa 3 names below are what
+    /// their Elsa 4 member holds. <c>HttpStatusCode</c> is an integer because the narrowed contract (R5) turned a status
+    /// name into its number and refused an expression declared as the enum.
+    /// </summary>
+    private static TypeReference ReadNormalizedType(JsonElement value)
+    {
+        if (value.TryGetProperty("typeName", out var typeName) && typeName.ValueKind == JsonValueKind.String &&
+            typeName.GetString() is { } token && token.IndexOf('<') is var open and > 0 && token.EndsWith('>') &&
+            SimpleName(token[..open]) is "List" or "IList" or "ICollection" or "IEnumerable" or "IReadOnlyList" or "IReadOnlyCollection" &&
+            token[(open + 1)..^1] is var element && element.IndexOfAny([',', '<']) < 0)
+            return new TypeReference(SimpleName(element), CollectionKind.List);
+
+        var declared = ReadType(value);
+        return Elsa3TypeShapes.GetValueOrDefault(declared.Alias) ?? declared;
+    }
+
+    private static readonly IReadOnlyDictionary<string, TypeReference> Elsa3TypeShapes = new Dictionary<string, TypeReference>(StringComparer.Ordinal)
+    {
+        ["HttpStatusCode"] = new("Int32"),
+        ["HttpHeaders"] = new("String[]", CollectionKind.Dictionary),
+        ["ObjectDictionary"] = new("Object", CollectionKind.Dictionary),
+    };
+
+    /// <summary>
     /// Whether a value of type <paramref name="value"/> may bind a member of type <paramref name="member"/>. Aliases are
     /// compared by simple name (Elsa 3 writes <c>String</c>, the catalog <c>System.String</c> or
     /// <c>System.Text.Json.JsonElement?</c>). An untyped side (<c>Object</c>, <c>JsonElement</c>, <c>Any</c>) matches
-    /// anything, and a String value may bind a scalar member, which Elsa 4 converts from text (a URI, a number, an enum).
+    /// anything, or any element of the same collection kind, and a String value may bind a scalar member, which Elsa 4
+    /// converts from text (a URI, a number, an enum).
     /// </summary>
     private static bool TypesMatch(TypeReference value, TypeReference member)
     {
         var valueName = SimpleName(value.Alias);
         var memberName = SimpleName(member.Alias);
         if (IsUntyped(value, valueName) || IsUntyped(member, memberName))
+            return true;
+        if ((IsUntypedName(valueName) || IsUntypedName(memberName)) && value.CollectionKind == member.CollectionKind)
             return true;
         if (valueName.Equals("String", StringComparison.OrdinalIgnoreCase) &&
             value.CollectionKind == CollectionKind.Single &&
@@ -759,7 +898,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// </summary>
     private static bool ValueFits(ActivityProperty property, TypeReference member)
     {
-        var declared = ReadType(property.Value);
+        var declared = ReadNormalizedType(property.Value);
         if (property.Expression is null ||
             !property.Expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
             !SimpleName(declared.Alias).Equals("String", StringComparison.OrdinalIgnoreCase) ||
@@ -780,8 +919,31 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         };
     }
 
+    /// <summary>
+    /// Spec 256 FR-013: whether a script bound to a JSON member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) carries a
+    /// typed Elsa 3 declaration. Elsa 3 converted the script's result to that type (<c>Int32</c> turns <c>"5"</c> into
+    /// 5); the JSON member takes the value as the script returns it, so the conversion would be lost silently. An untyped
+    /// declaration, or a collection or dictionary of untyped values, involves no conversion. Literals, variables and
+    /// object values are data, not scripts.
+    /// </summary>
+    private static bool DropsTypedConversion(ActivityProperty property, TypeReference member)
+    {
+        if (property.Expression is not { } expression ||
+            expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Variable", StringComparison.OrdinalIgnoreCase) ||
+            !IsUntyped(member, SimpleName(member.Alias)))
+            return false;
+
+        var declared = SimpleName(ReadNormalizedType(property.Value).Alias);
+        return !IsUntypedName(declared) && declared is not ("IDictionary" or "Dictionary" or "JsonObject" or "JsonArray");
+    }
+
     private static bool IsUntyped(TypeReference type, string simpleName) =>
-        type.CollectionKind == CollectionKind.Single &&
+        type.CollectionKind == CollectionKind.Single && IsUntypedName(simpleName);
+
+    private static bool IsUntypedName(string simpleName) =>
         simpleName is "Object" or "object" or "JsonElement" or "JsonNode" or "Any" or "ExpandoObject";
 
     private static string SimpleName(string alias)
@@ -919,5 +1081,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private sealed record DiagnosticScope(IReadOnlyDictionary<string, string> Metadata, string DefinitionId);
 
     private sealed record ReferenceEdge(Elsa3MemoryOccurrence Producer, Elsa3MemoryOccurrence Consumer);
+
+    /// <summary>What decides which Elsa 3 generated accessors exist: the run mode and the named activities.</summary>
+    private sealed record AccessorScope(bool IsReusable, IReadOnlyList<string> ActivityNames);
 
 }

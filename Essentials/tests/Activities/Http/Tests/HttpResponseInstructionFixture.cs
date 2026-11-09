@@ -8,6 +8,12 @@ namespace Elsa.Activities.Http.Tests;
 
 internal static class HttpResponseInstructionFixture
 {
+    /// <summary>A text response body, as a Literal or a JavaScript string binds it.</summary>
+    internal static JsonElement Text(string value) => JsonSerializer.SerializeToElement(value);
+
+    /// <summary>A structured response body parsed from JSON.</summary>
+    internal static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
     internal static async Task<InMemoryActivityExecutionStateStore> StoreWith(HttpResponseInstruction instruction)
     {
         var now = new DateTimeOffset(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);

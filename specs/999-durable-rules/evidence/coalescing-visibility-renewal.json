@@ -1,0 +1,144 @@
+{
+  "parent": "dab62015bf182039552aadbc432ccaffc21c3bd0",
+  "scope": "Focused renewal-timeout correction after normal main integration. Prior full HTTP/EF/core and source server checks keep their recorded source scope.",
+  "finding": "After two hours elapsed and a three-minute renewal, deferred flush requested 02:03:00 rather than 00:03:00 for its durable claim. This could extend recovery after a crash between claim and release.",
+  "fix": "Retain latest request/renewal timeout alongside each owned overlay claim and use it for the deferred durable claim.",
+  "checks": [
+    {
+      "name": "visibility-renewal-budgets",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~EfCommandBudgetTests",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-budgets.log",
+      "sha256": "f64de3763b1e5e961ea3fe14b4bd42e91c09cc9b0500cd6139e8a7eebb9ac582",
+      "seconds": 30.63,
+      "testSummaries": [
+        {
+          "failed": 0,
+          "passed": 10,
+          "skipped": 0,
+          "total": 10
+        }
+      ]
+    },
+    {
+      "name": "visibility-renewal-rules",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-rules.log",
+      "sha256": "96253d8b86751302459dc17bbc6056bca3e27601b96fb375f41fa99729727597",
+      "seconds": 32.0,
+      "testSummaries": [
+        {
+          "failed": 0,
+          "passed": 278,
+          "skipped": 0,
+          "total": 278
+        }
+      ]
+    },
+    {
+      "name": "visibility-renewal-architecture",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "console;verbosity=minimal"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-architecture.log",
+      "sha256": "0fc49e60fb3e37a4f3afeefdcbe2912370f7e63f061d2f762d5b369f747a5851",
+      "seconds": 154.23,
+      "testSummaries": [
+        {
+          "failed": 0,
+          "passed": 585,
+          "skipped": 0,
+          "total": 585
+        }
+      ]
+    },
+    {
+      "name": "visibility-renewal-maps",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-build",
+        "--",
+        "check"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-maps.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+      "seconds": 0.94,
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-renewal-diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-diff.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 0.09,
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-renewal-red",
+      "exitCode": 1,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-red.log",
+      "sha256": "7dd592528d710977eb4addeae516734113d3fb395a03368eebcb7997152d8362",
+      "testFilter": "FullyQualifiedName~Deferred_flush_preserves_the_latest_renewal_timeout",
+      "testSummaries": []
+    },
+    {
+      "name": "visibility-renewal-runtime-green",
+      "exitCode": 0,
+      "log": "/tmp/rules-pr3192-coalescing-repair/visibility-renewal-runtime-green.log",
+      "sha256": "0f7d3ea3ebac09a7fdb762a0d63284ac41fd50bd571ae6a7d7e559d65f9b43ef",
+      "testFilter": "full Workflow Runtime suite",
+      "testSummaries": [
+        {
+          "failed": 0,
+          "passed": 2560,
+          "skipped": 0,
+          "total": 2560
+        }
+      ]
+    }
+  ],
+  "sourceSha256": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "f5a47d9fe7ec4300f5ca6aba079372964623d571d35d0d3d54b453c5cec09564",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingSchedulerVisibilityTests.cs": "8ca635eea9b113edd285c6411cc7bf7f1832c6aaf957ee07f1750c97f6017ee6",
+    "Essentials/tests/Workflows/Runtime/Tests/QueueWithoutVisibility.cs": "4f7a07f04075d100e69ee5424cc10798ceb3c12918c37273d8fccf2c3eb56d09"
+  },
+  "reviewLimit": "Focused repair validation only; no seventh formal review or clean full-review claim."
+}

@@ -1,0 +1,61 @@
+#nullable enable
+Elsa.Etl.Workflows.Runtime.Activities.RunEtl
+Elsa.Etl.Workflows.Runtime.Activities.RunEtl.Pipeline.get -> string!
+Elsa.Etl.Workflows.Runtime.Activities.RunEtl.Pipeline.set -> void
+Elsa.Etl.Workflows.Runtime.Activities.RunEtl.RunEtl(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Etl.Core.Runtime.IEtlRuntimeStore! runs, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access) -> void
+Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature
+Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature.EtlWorkflowsRuntimeFeature() -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.<Clone>$() -> Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion!
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Deconstruct(out int FormatVersion, out System.Text.Json.JsonElement Invocation, out System.Text.Json.JsonElement Result) -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Equals(Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion? other) -> bool
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.FormatVersion.get -> int
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.FormatVersion.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Invocation.get -> System.Text.Json.JsonElement
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Invocation.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Result.get -> System.Text.Json.JsonElement
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Result.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.RunEtlCompletion(int FormatVersion, System.Text.Json.JsonElement Invocation, System.Text.Json.JsonElement Result) -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.<Clone>$() -> Elsa.Etl.Workflows.Runtime.Models.RunEtlResult!
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.AcceptedRecords.get -> long
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.AcceptedRecords.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.Deconstruct(out string! RunId, out Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out string? DiagnosticCode) -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.DiagnosticCode.get -> string?
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.DiagnosticCode.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.Equals(Elsa.Etl.Workflows.Runtime.Models.RunEtlResult? other) -> bool
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.FilteredRecords.get -> long
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.FilteredRecords.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.Outcome.get -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.Outcome.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.RejectedRecords.get -> long
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.RejectedRecords.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.RunEtlResult(string! RunId, Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, long AcceptedRecords, long RejectedRecords, long FilteredRecords, string? DiagnosticCode) -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.RunId.get -> string!
+Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.RunId.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.<Clone>$() -> Elsa.Etl.Workflows.Runtime.Models.RunEtlState!
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.Deconstruct(out int FormatVersion, out System.Text.Json.JsonElement Invocation) -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.Equals(Elsa.Etl.Workflows.Runtime.Models.RunEtlState? other) -> bool
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.FormatVersion.get -> int
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.FormatVersion.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.Invocation.get -> System.Text.Json.JsonElement
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.Invocation.init -> void
+Elsa.Etl.Workflows.Runtime.Models.RunEtlState.RunEtlState(int FormatVersion, System.Text.Json.JsonElement Invocation) -> void
+const Elsa.Etl.Workflows.Runtime.Activities.RunEtl.ActivityType = "Elsa.Etl.Workflows.Runtime.Activities.RunEtl" -> string!
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.Equals(object? obj) -> bool
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.GetHashCode() -> int
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.ToString() -> string!
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.Equals(object? obj) -> bool
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.GetHashCode() -> int
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.ToString() -> string!
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlState.Equals(object? obj) -> bool
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlState.GetHashCode() -> int
+override Elsa.Etl.Workflows.Runtime.Models.RunEtlState.ToString() -> string!
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.operator !=(Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion? right) -> bool
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion.operator ==(Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion? right) -> bool
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.operator !=(Elsa.Etl.Workflows.Runtime.Models.RunEtlResult? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlResult? right) -> bool
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlResult.operator ==(Elsa.Etl.Workflows.Runtime.Models.RunEtlResult? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlResult? right) -> bool
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlState.operator !=(Elsa.Etl.Workflows.Runtime.Models.RunEtlState? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlState? right) -> bool
+static Elsa.Etl.Workflows.Runtime.Models.RunEtlState.operator ==(Elsa.Etl.Workflows.Runtime.Models.RunEtlState? left, Elsa.Etl.Workflows.Runtime.Models.RunEtlState? right) -> bool
+virtual Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

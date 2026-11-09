@@ -1,5 +1,6 @@
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -67,6 +68,39 @@ public sealed class PublicationPreflightTests
         Assert.Equal("blue", conflict.SlotName);
         Assert.Equal("get:/orders", conflict.StimulusHash);
         Assert.Equal(PublicationTriggerCardinality.Exclusive, conflict.Cardinality);
+    }
+
+    [Fact]
+    public void ConflictDescriptorUsesTheAuthoritativeClaimMetadata()
+    {
+        var candidate = Claim("candidate", "candidate-node", "Http", "get:/orders", PublicationTriggerCardinality.Exclusive,
+            "GET /orders (candidate)");
+        var authoritative = ClaimSet(
+            "publication-blue",
+            "blue",
+            isReplacedPublication: false,
+            Claim("publication-blue", "node-http", "Http", "get:/orders", PublicationTriggerCardinality.Exclusive,
+                "GET /orders"));
+
+        var result = _service.Evaluate([candidate], [authoritative]);
+
+        Assert.Equal("GET /orders", Assert.Single(result.Conflicts).Descriptor);
+    }
+
+    [Fact]
+    public void LegacyConflictDescriptorFallsBackToTheMatchingCandidateMetadata()
+    {
+        var candidate = Claim("candidate", "candidate-node", "Http", "get:/orders", PublicationTriggerCardinality.Exclusive,
+            "GET /orders");
+        var authoritative = ClaimSet(
+            "publication-blue",
+            "blue",
+            isReplacedPublication: false,
+            Claim("publication-blue", "node-http", "Http", "get:/orders", PublicationTriggerCardinality.Exclusive));
+
+        var result = _service.Evaluate([candidate], [authoritative]);
+
+        Assert.Equal("GET /orders", Assert.Single(result.Conflicts).Descriptor);
     }
 
     [Fact]
@@ -140,7 +174,8 @@ public sealed class PublicationPreflightTests
         string executableNodeId,
         string stimulusType,
         string stimulusHash,
-        PublicationTriggerCardinality cardinality) =>
+        PublicationTriggerCardinality cardinality,
+        string? descriptor = null) =>
         new(
             ClaimId: $"{publicationId}:{executableNodeId}:{stimulusType}:{stimulusHash}",
             PublicationId: publicationId,
@@ -149,5 +184,10 @@ public sealed class PublicationPreflightTests
             StimulusType: stimulusType,
             StimulusHash: stimulusHash,
             Cardinality: cardinality,
-            Metadata: new Dictionary<string, string>());
+            Metadata: descriptor is null
+                ? new Dictionary<string, string>()
+                : new Dictionary<string, string>
+                {
+                    [TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey] = descriptor
+                });
 }

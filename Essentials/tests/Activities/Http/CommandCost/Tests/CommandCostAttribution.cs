@@ -14,7 +14,9 @@ internal readonly record struct ElsaFrame(string Name, bool IsInfrastructure, st
 /// <item><c>save-changes</c>: the stack <c>SaveChanges</c> was entered on, for a command EF sent inside it after an
 /// asynchronous hop, such as a batched write after the savepoint round trip.</item>
 /// <item><c>stitched</c>: a stack that lost its callers in an asynchronous hop, completed with the latest whole stack of
-/// the same asynchronous flow that ran through its outermost frame. <see cref="Seam"/> is where the two meet.</item>
+/// the same asynchronous flow that ran through its outermost frame, or, when no whole stack did, the latest stitched
+/// one that did. <see cref="Seam"/> is where the two meet; on a stack stitched onto a stitched one it marks the newer
+/// seam.</item>
 /// <item><c>none</c>: no Elsa caller could be found.</item>
 /// </list>
 /// </summary>
@@ -141,37 +143,51 @@ internal sealed partial record CommandCostAttribution(IReadOnlyList<ElsaFrame> F
 }
 
 /// <summary>
-/// The whole stacks one asynchronous flow has issued commands from, newest last. A store method that awaits real I/O
-/// resumes on a thread-pool stack that holds the store but not its caller; its earlier command, issued before the hop,
-/// carried the whole stack, and that is the one a later command of the same flow is stitched onto. Flows that run
-/// concurrently and share one memory could stitch onto each other's stacks; the runtime drains one execution at a time,
-/// so within one measured run they do not.
+/// The stacks one asynchronous flow has issued commands from, newest last: the whole ones, and the stitched ones as a
+/// fallback. A store method that awaits real I/O resumes on a thread-pool stack that holds the store but not its
+/// caller; its earlier command, issued before the hop, carried the whole stack, and that is the one a later command of
+/// the same flow is stitched onto. Flows that run concurrently and share one memory could stitch onto each other's
+/// stacks; the runtime drains one execution at a time, so within one measured run they do not.
+/// <para>
+/// The stacks stitched so far are kept too, as a fallback. When nested awaits complete one after the other, a later
+/// command can resume on a stack whose outermost frame is a method that only ever ran after a hop, such as a helper the
+/// store awaited, so no whole stack runs through it; the stitched stack of that helper's own command does. A truncated
+/// stack is stitched onto a whole stack when one matches, and onto a stitched one only when none does, so a command a
+/// whole stack attributes keeps that attribution.
+/// </para>
 /// </summary>
 internal sealed class CommandCostFlowMemory
 {
     private const int Capacity = 256;
     private readonly List<CommandCostAttribution> _whole = [];
+    private readonly List<CommandCostAttribution> _stitched = [];
     private readonly Lock _gate = new();
 
-    public void Remember(CommandCostAttribution whole)
+    /// <summary>Remembers a whole stack, or, when its source is <c>stitched</c>, a stitched one.</summary>
+    public void Remember(CommandCostAttribution attribution)
     {
         lock (_gate)
-        {
-            if (_whole.Count == Capacity)
-                _whole.RemoveAt(0);
-            _whole.Add(whole);
-        }
+            Add(attribution.Source == "stitched" ? _stitched : _whole, attribution);
     }
 
     public CommandCostAttribution? Stitch(CommandCostAttribution truncated)
     {
         lock (_gate)
-        {
-            for (var index = _whole.Count - 1; index >= 0; index--)
-                if (truncated.StitchOnto(_whole[index]) is { } stitched)
-                    return stitched;
-        }
+            return StitchOnto(truncated, _whole) ?? StitchOnto(truncated, _stitched);
+    }
 
+    private static void Add(List<CommandCostAttribution> stacks, CommandCostAttribution attribution)
+    {
+        if (stacks.Count == Capacity)
+            stacks.RemoveAt(0);
+        stacks.Add(attribution);
+    }
+
+    private static CommandCostAttribution? StitchOnto(CommandCostAttribution truncated, List<CommandCostAttribution> stacks)
+    {
+        for (var index = stacks.Count - 1; index >= 0; index--)
+            if (truncated.StitchOnto(stacks[index]) is { } stitched)
+                return stitched;
         return null;
     }
 }

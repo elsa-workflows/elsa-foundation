@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "productBaselineCommit": "032d8b90351d32094549b3f4a4413f6f31de4da4",
+  "productionBehaviorChanged": false,
+  "fullAcceptancePassed": false,
+  "completedTasks": [
+    "T032"
+  ],
+  "testSources": {
+    "Extensions/Rules/tests/Tests/RulesPersistedNativeFixture.cs": "52960f83d8219defb10f86be6d3f92ad79900ccf3c5d2fa896d2eeb5067c2cbc",
+    "Extensions/Rules/tests/Tests/RulesPersistedNativeRetryTests.cs": "a68cac307bd97842406ed34cdf5a176f3f118678ce695a0ad1a3a1389177620b",
+    "Extensions/Rules/tests/Tests/RulesPersistedNativeFlowchartTests.cs": "5d69a1f07cf334d23d1e6ab38bc8454f5deb363c9eb368a1be6066a0920759ad"
+  },
+  "baseline": {
+    "command": [
+      "dotnet",
+      "test",
+      "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~RulesPersisted",
+      "--logger",
+      "trx;LogFileName=rules-native-retry-proof-baseline.trx"
+    ],
+    "log": {
+      "path": "/tmp/rules-native-retry-proof-baseline.log",
+      "sha256": "7167389be2e5bb1278bbf1b512128bc66c9c5c5740de9656ce7f02709d293e0a"
+    },
+    "trx": {
+      "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/tests/Tests/TestResults/rules-native-retry-proof-baseline.trx",
+      "sha256": "e000e3aca6e081a25981b31d1737c768e06c22fbb0834da1703748d03632829a"
+    },
+    "counts": {
+      "total": 7,
+      "executed": 7,
+      "passed": 7,
+      "failed": 0,
+      "error": 0,
+      "timeout": 0,
+      "aborted": 0,
+      "inconclusive": 0,
+      "passedButRunAborted": 0,
+      "notRunnable": 0,
+      "notExecuted": 0,
+      "disconnected": 0,
+      "warning": 0,
+      "completed": 0,
+      "inProgress": 0,
+      "pending": 0
+    },
+    "note": "Initial seven-case pass preceded assertion-idiom cleanup; restored full suite uses final test sources."
+  },
+  "proofBeforeAcknowledgementControl": {
+    "schemaVersion": 1,
+    "source": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/src/Workflows/Runtime/Services/RulesNativeDeliveryInspector.cs",
+    "originalSourceSha256": "59f3004caab1d30b57c9cac6b7d41c6b960b286c4bfd180a46d637c9a0a33f50",
+    "removedComparisonSourceSha256": "b0a431c940907c1fae0fb16fa9b6ee8521662cd6a270637b50bb705b16926d3c",
+    "commands": [
+      {
+        "command": [
+          "dotnet",
+          "test",
+          "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+          "--no-restore",
+          "--logger",
+          "trx;LogFileName=rules-native-proof-comparison-removed.trx",
+          "--filter",
+          "FullyQualifiedName~Store_revalidates_real_consumed_completion_before_acknowledging_delivery"
+        ],
+        "exitCode": 1,
+        "log": "/tmp/rules-native-proof-comparison-removed.log",
+        "logSha256": "38eb084090ffad8c025efd6a738d066c497ac3c30b2008f71c0d0d6b0e4dd4cf",
+        "trx": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/tests/Tests/TestResults/rules-native-proof-comparison-removed.trx",
+        "trxSha256": "5bce0eb1b774c66d422111bb9506fc44dc82751d0bf9be7c5276141eb2aa17de",
+        "counts": {
+          "total": 1,
+          "executed": 1,
+          "passed": 0,
+          "failed": 1,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "failures": [
+          {
+            "name": "Elsa.Rules.Tests.RulesPersistedNativeFlowchartTests.Store_revalidates_real_consumed_completion_before_acknowledging_delivery",
+            "message": "Assert.Equal() Failure: Values differ\nExpected: Invalid\nActual:   Acknowledged"
+          }
+        ]
+      },
+      {
+        "command": [
+          "dotnet",
+          "test",
+          "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+          "--no-restore",
+          "--logger",
+          "trx;LogFileName=rules-native-retry-proof-restored-full.trx"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/rules-native-retry-proof-restored-full.log",
+        "logSha256": "fa565808ffe435afb3ed1c18723d83ca94e76ae124de6c40e5af9c20361da052",
+        "trx": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/tests/Tests/TestResults/rules-native-retry-proof-restored-full.trx",
+        "trxSha256": "d445e42e0cc58bad56227e16f8b0947e9ed457a51dd9765c01670ccd45e83e28",
+        "counts": {
+          "total": 276,
+          "executed": 276,
+          "passed": 276,
+          "failed": 0,
+          "error": 0,
+          "timeout": 0,
+          "aborted": 0,
+          "inconclusive": 0,
+          "passedButRunAborted": 0,
+          "notRunnable": 0,
+          "notExecuted": 0,
+          "disconnected": 0,
+          "warning": 0,
+          "completed": 0,
+          "inProgress": 0,
+          "pending": 0
+        },
+        "failures": []
+      }
+    ],
+    "passed": true,
+    "restoredSourceSha256": "59f3004caab1d30b57c9cac6b7d41c6b960b286c4bfd180a46d637c9a0a33f50",
+    "intendedAssertionFailed": true
+  },
+  "testScope": [
+    "Real compiled Sequence with SQLite native/Rules persistence; one forwarded reader Unavailable inside RunRules.ResumeAsync.",
+    "Consumed native trigger and original deferred scheduler work survive; claimability boundary and actual resumption redrive are observed.",
+    "Rules semantic revision and terminal bytes unchanged; full native result equal; following activity has one completed attempt.",
+    "Final Sequence settlement uses parent-terminal proof without redispatch.",
+    "Real persisted Flowchart with held Event sibling keeps parent Running for consumed-child proof revalidation.",
+    "Changed completion facts plus recomputed digest are rejected; original completion restores acknowledgment under same lease/proof."
+  ],
+  "limits": [
+    "Source fixtures use a synthetic semantic pin; package and REST evidence is recorded separately.",
+    "No process restart in this retry test; runtime clock controls scheduler visibility while Rules delivery lease uses database time.",
+    "Controlled completion corruption tests verification; it is not a supported native state-editing operation.",
+    "No claim that post-dispatch proof mismatch blocks an already completed native continuation.",
+    "Retained upgrades and final integrated delivery gates are still pending.",
+    "Earlier full Workbench 61 passed / 1 failed remains unresolved despite isolated pass.",
+    "External effects remain at least once."
+  ],
+  "review": {
+    "rounds": 2,
+    "status": "No actionable findings in final root and cross-review.",
+    "integrationCorrections": [
+      "Used the read-only Rules interface for delivery inspection.",
+      "Compared deserialized canonical terminal bytes, not JsonElement object identity.",
+      "Removed unnecessary short polling around synchronous bookmark dispatch.",
+      "Qualified ActivityTransitionKind and used idiomatic predicate assertions.",
+      "Kept parent-terminal settlement distinct from consumed-child proof and asserted unchanged model revision plus full native result."
+    ]
+  }
+}

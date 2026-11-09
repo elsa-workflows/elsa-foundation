@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Optional Studio package and feature administration with protected package-store access.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Update="README.md" Pack="true" PackagePath="" />
+    <PackageReference Include="CShells.Nuplane" />
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Admin" />
+    <PackageReference Include="Nuplane.Loading" />
+    <PackageReference Include="Nuplane.Sources.Directory" />
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    <ProjectReference Include="../Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
+  </ItemGroup>
+</Project>

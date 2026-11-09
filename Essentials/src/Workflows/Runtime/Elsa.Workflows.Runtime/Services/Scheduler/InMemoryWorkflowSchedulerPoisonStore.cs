@@ -13,6 +13,17 @@ public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoi
     private readonly object _syncRoot = new();
     private readonly Dictionary<PoisonRecordKey, RuntimeSchedulerPoisonRecord> _records = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var key in _records.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _records.Remove(key);
+        }
+    }
+
     public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);

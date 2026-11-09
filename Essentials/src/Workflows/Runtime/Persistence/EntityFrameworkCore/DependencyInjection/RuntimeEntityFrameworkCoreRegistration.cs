@@ -70,6 +70,21 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddRuntimeOperationalStateEntityFrameworkCore(operational);
+            var taskRegistrations = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore)).ToArray();
+            if (taskRegistrations.Length > 1) throw new InvalidOperationException("Multiple user-task journal owners are selected.");
+            var taskRegistration = taskRegistrations.SingleOrDefault();
+            if (taskRegistration is not null && taskRegistration.ImplementationType != typeof(Elsa.Workflows.Runtime.UserTasks.MemoryUserTaskStore) && taskRegistration.ImplementationType != typeof(EfUserTaskStore))
+                throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected user-task journal.");
+            if (taskRegistration?.ImplementationType != typeof(EfUserTaskStore))
+                services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore, EfUserTaskStore>());
+            var taskBoundaries = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary)).ToArray();
+            if (taskBoundaries.Length > 1) throw new InvalidOperationException("Multiple user-task retention owners are selected.");
+            var taskBoundary = taskBoundaries.SingleOrDefault();
+            if (taskBoundary is not null && taskBoundary.ImplementationType != typeof(EfUserTaskPersistenceBoundary))
+                throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected task retention boundary.");
+            if (taskBoundary is null)
+                services.AddSingleton<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary, EfUserTaskPersistenceBoundary>();
+
             services.AddRuntimeArtifactsEntityFrameworkCore(new()
             {
                 Provider = options.Provider,
@@ -152,6 +167,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             });
             services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
             services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+            services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
             services.AddRuntimeCheckpointCommitEntityFrameworkCore();
             // The trigger-binding and recurring-schedule tables carry their own projection state (R29); selecting both
             // withdraws the publication projection-state unit they replace.
@@ -159,6 +175,17 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
             UseEntityFrameworkActivationSwitch(services);
+
+            // Execution deletion is a capability of the complete, transactionally coupled EF family. Individual
+            // EF store registrations intentionally do not advertise that the corresponding run-owned graph can be
+            // purged atomically.
+            // The Runtime default is the coherent in-memory deletion implementation. Replace it only at this
+            // complete provider-composition boundary; individual EF store extensions must not advertise a partial purge.
+            if (services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionDeletionStore))?.ImplementationType != typeof(EfWorkflowExecutionDeletionStore))
+            {
+                services.RemoveAll<IWorkflowExecutionDeletionStore>();
+                services.AddScoped<IWorkflowExecutionDeletionStore, EfWorkflowExecutionDeletionStore>();
+            }
 
             return services;
         }

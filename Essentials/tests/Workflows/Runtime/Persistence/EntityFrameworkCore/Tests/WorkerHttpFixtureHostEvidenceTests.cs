@@ -187,7 +187,7 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
             new DispatchStimulus(
                 bookmark.StimulusType,
                 bookmark.StimulusHash,
-                JsonSerializer.SerializeToElement(new EventReceived("worker-ready")),
+                JsonSerializer.SerializeToElement(new { eventName = "worker-ready" }),
                 Mode: "ResumeOnly"));
         Assert.Equal(HttpStatusCode.OK, stimulusResponse.StatusCode);
         var stimulus = await stimulusResponse.Content.ReadFromJsonAsync<DispatchStimulusResponse>();

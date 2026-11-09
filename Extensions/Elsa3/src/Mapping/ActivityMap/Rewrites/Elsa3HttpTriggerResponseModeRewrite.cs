@@ -124,6 +124,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         var setPlan = new Elsa3NodePlan(setNode, $"{context.Node.JsonPath}{Elsa3ConversionDiagnostics.FormatProperty(property)}", parent)
         {
             Resolved = Elsa3IntrinsicContracts.Resolve(Elsa3IntrinsicContracts.Set, null),
+            SynthesizedFrom = (endpoint, suffix == "query" ? "QueryStringData" : "Headers"),
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.Set,
                 new TypeReference("Object"),

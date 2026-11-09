@@ -46,7 +46,9 @@ internal sealed class SyntheticProject
 /// <remarks>
 /// The model stands in for the maps generator: each <see cref="Commit"/> writes every project file,
 /// <c>VersionLines.props</c>, <c>Directory.Packages.props</c> and <c>docs/maps/dependency-map.json</c> from it, so the
-/// committed map always describes the committed tree unless a test deliberately makes it lie.
+/// committed map always describes the committed tree unless a test deliberately makes it lie. With
+/// <see cref="WriteLockFiles"/> it also writes the <c>packages.lock.json</c> beside each project that the shared
+/// project-graph scan reads, so a commit without the map can have it derived (spec 259).
 /// </remarks>
 internal sealed class SyntheticRepository : IDisposable
 {
@@ -104,6 +106,12 @@ internal sealed class SyntheticRepository : IDisposable
     /// <summary>When false, <see cref="Commit"/> leaves the dependency map as it was, as a stale map would be.</summary>
     public bool RegenerateMap { get; set; } = true;
 
+    /// <summary>
+    /// When true, <see cref="Commit"/> writes each project's NuGet lock file as restore would for the model, so the
+    /// scan can derive the map. Off by default: a lock file is a file its project owns, and so a package input.
+    /// </summary>
+    public bool WriteLockFiles { get; set; }
+
     public SyntheticProject Project(string packageIdOrName) =>
         Projects.Single(project => project.Identity == packageIdOrName || project.Name == packageIdOrName);
 
@@ -158,6 +166,9 @@ internal sealed class SyntheticRepository : IDisposable
     {
         foreach (var project in Projects)
             Write(project.Path, ProjectFile(project));
+        if (WriteLockFiles)
+            foreach (var project in Projects)
+                Write(project.Directory + "packages.lock.json", LockFile(project));
         Write("VersionLines.props", VersionLines());
         Write("Directory.Packages.props", CentralPackages());
         if (RegenerateMap)
@@ -295,6 +306,47 @@ internal sealed class SyntheticRepository : IDisposable
                 </Project>
 
                 """;
+    }
+
+    /// <summary>
+    /// A version 2 lock file for the model: its packages as <c>Direct</c>, its pinned-transitive packages as
+    /// <c>CentralTransitive</c>, reached through its first package or, failing that, its first reference, and every
+    /// project its references reach as <c>Project</c>.
+    /// </summary>
+    private string LockFile(SyntheticProject project)
+    {
+        var byPath = Projects.ToDictionary(other => other.Path);
+        var closure = new SortedSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>(project.References);
+        while (pending.TryPop(out var path))
+            if (closure.Add(path))
+                foreach (var next in byPath[path].References)
+                    pending.Push(next);
+
+        var pinned = project.PinnedTransitive.ToDictionary(id => id, id => PackageVersions[id]);
+        var carrier = project.Packages.FirstOrDefault() ?? (closure.Count > 0 ? byPath[project.References[0]].Identity.ToLowerInvariant() : null);
+        if (pinned.Count > 0 && carrier is null)
+            throw new InvalidOperationException($"{project.Path} reaches pinned packages through nothing it references.");
+
+        var entries = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        foreach (var package in project.Packages)
+            entries[package] = new Dictionary<string, object>
+            {
+                ["type"] = "Direct",
+                ["requested"] = $"[{PackageVersions[package]}, )",
+                ["resolved"] = PackageVersions[package],
+                ["dependencies"] = package == carrier ? pinned : new Dictionary<string, string>()
+            };
+        foreach (var (id, version) in pinned)
+            entries[id] = new Dictionary<string, object> { ["type"] = "CentralTransitive", ["requested"] = $"[{version}, )", ["resolved"] = version };
+        foreach (var path in closure)
+            entries[byPath[path].Identity.ToLowerInvariant()] = new Dictionary<string, object>
+            {
+                ["type"] = "Project",
+                ["dependencies"] = byPath[path].Identity.ToLowerInvariant() == carrier ? pinned : new Dictionary<string, string>()
+            };
+
+        return JsonSerializer.Serialize(new Dictionary<string, object> { ["version"] = 2, ["dependencies"] = new Dictionary<string, object> { ["net10.0"] = entries } }, MapJson) + "\n";
     }
 
     private string DependencyMap()

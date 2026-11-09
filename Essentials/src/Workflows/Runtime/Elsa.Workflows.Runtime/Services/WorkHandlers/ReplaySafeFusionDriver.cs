@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Executions;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Contracts;
@@ -41,6 +42,7 @@ public sealed class ReplaySafeFusionDriver
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly RuntimeSchedulerDispatchDiagnostics? _diagnostics;
     private readonly IReadOnlyCollection<IReplaySafeSuccessorRoutingProbe> _successorRoutingProbes;
+    private readonly DrainControlContext? _drainControls;
     private bool _pumping;
 
     public ReplaySafeFusionDriver(
@@ -61,6 +63,7 @@ public sealed class ReplaySafeFusionDriver
         _startHandler = startHandler;
         _schedulerWorkQueue = schedulerWorkQueue;
         _serviceProvider = serviceProvider;
+        _drainControls = serviceProvider.GetService<DrainControlContext>();
         _coalescingSessionAccessor = coalescingSessionAccessor;
         _diagnostics = diagnostics;
         _successorRoutingProbes = successorRoutingProbes?.ToArray() ?? [];
@@ -83,7 +86,7 @@ public sealed class ReplaySafeFusionDriver
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_options.Enabled)
+        if (!_options.Enabled || node.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return false;
 
         var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
@@ -195,6 +198,8 @@ public sealed class ReplaySafeFusionDriver
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (_drainControls?.ShouldYield(workflowExecutionId) == true)
+                    break;
 
                 // The burst is the pump's whole mandate: a boundary that deactivated the session (suspension, terminal,
                 // cap-degenerate) ends inline dispatch — the drain loop owns everything after it.
@@ -236,6 +241,7 @@ public sealed class ReplaySafeFusionDriver
                 try
                 {
                     var handler = ResolveHandler(workItem);
+                    using var pumpedDispatch = session.BeginPumpedDispatch(workItem);
                     await handler.HandleAsync(workItem, cancellationToken);
                 }
                 catch (OperationCanceledException)
@@ -333,6 +339,10 @@ public sealed class ReplaySafeFusionDriver
                     ? PumpDecision.Fusable
                     : PumpDecision.Fallback;
             }
+
+            case SchedulerCompletionKind.ParentOutcomeEvaluation:
+                // Combined fault/notification outcomes must remain a single discrete durable parent evaluation.
+                return PumpDecision.Fallback;
 
             default:
                 // ContinuationScheduling → Checkpoint is the workflow tail: it commits mandatory (possibly terminal)

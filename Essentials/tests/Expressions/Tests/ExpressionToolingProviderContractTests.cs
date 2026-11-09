@@ -199,15 +199,46 @@ public sealed class ExpressionToolingProviderContractTests
     [Theory]
     [InlineData("return 1;")]
     [InlineData("const value = 1; value")]
-    public async Task JavaScript_validation_rejects_statement_bodies_that_runtime_expression_evaluation_rejects(string source)
+    [InlineData("const value = 1;\nif (value > 0) { return value; }\nreturn 0;")]
+    [InlineData("return { value: 42 };")]
+    [InlineData("{ return 42; }")]
+    public async Task JavaScript_validation_accepts_statement_bodies_like_runtime(string source)
     {
         var provider = new JavaScriptExpressionToolingProvider();
         var scope = CreateScope("JavaScript", []);
 
         var result = await provider.ValidateAsync(new(scope, source), CancellationToken.None);
 
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, result.State);
+        Assert.Empty(result.Payload!.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n\t")]
+    [InlineData("// A comment is not a value.")]
+    [InlineData("/* A comment is not a value. */")]
+    public async Task JavaScript_validation_rejects_missing_bindings(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
         Assert.Equal(ExpressionToolingOutcomeState.Success, result.State);
         Assert.Equal("JavaScript/Syntax", Assert.Single(result.Payload!.Diagnostics).Code);
+    }
+
+    [Fact]
+    public async Task JavaScript_statement_diagnostics_use_authored_line_positions_and_never_execute()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", []);
+        var result = await provider.ValidateAsync(
+            new(scope, "throw new Error('must not execute');\nconst value = ;"), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/Syntax", diagnostic.Code);
+        Assert.Equal(1, diagnostic.Range!.Value.Start.Line);
+        Assert.Equal(14, diagnostic.Range!.Value.Start.Character);
     }
 
     [Fact]

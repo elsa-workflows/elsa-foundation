@@ -1,0 +1,43 @@
+{
+  "id": "workflow-variable-starting-values-v1",
+  "definitionId": "workflow-variable-starting-values",
+  "name": "workflow-variable-starting-values",
+  "description": "Test-owned regular workflow (spec 264): one workflow variable per kind of starting value, each with a value, and one WriteLine.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "text", "name": "text", "typeName": "String", "value": "hello" },
+    { "id": "count", "name": "count", "typeName": "Int32", "value": "5" },
+    { "id": "flag", "name": "flag", "typeName": "Boolean", "value": "true" },
+    { "id": "raw", "name": "raw", "typeName": "Object", "value": "{\"a\":1}" },
+    { "id": "names", "name": "names", "typeName": "String", "isArray": true, "value": "[\"x\",\"y\"]" },
+    { "id": "list", "name": "list", "typeName": "List<String>", "value": "[\"a\",\"b\"]" },
+    { "id": "counts", "name": "counts", "typeName": "List<Int32>", "value": "[1, 2]" },
+    { "id": "order", "name": "order", "typeName": "Acme.Orders.Order, Acme", "value": "{\"id\":1}" },
+    { "id": "dictionary", "name": "dictionary", "typeName": "ObjectDictionary", "value": "{\"a\":1}" },
+    { "id": "headers", "name": "headers", "typeName": "HttpHeaders", "value": "{\"Accept\":[\"application/json\"]}" }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "workflow-variable-starting-values-root", "nodeId": "workflow-variable-starting-values-root", "name": "workflow-variable-starting-values-root", "type": "Elsa.Flowchart", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "write", "nodeId": "write", "name": "write", "type": "Elsa.WriteLine", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "text": { "typeName": "String", "expression": { "type": "Literal", "value": "hi" } }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

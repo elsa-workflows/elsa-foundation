@@ -15,6 +15,22 @@ export interface RuntimeValueEvidenceResolutionScope {
   context: StudioEndpointContext;
   workflowExecutionId: string;
   activityExecutionId: string;
+  preparedValues?: ReadonlyMap<string, PreparedRuntimeValue>;
+}
+
+export type PreparedRuntimeValue = { status: "ready"; payload: unknown } | { status: "failed"; error: string };
+
+export function runtimeValuePayloadKey(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  return JSON.stringify([snapshot.evidenceId?.trim(), snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase()]);
+}
+
+export function canAutomaticallyResolveValue(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  const mode = snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase();
+  const state = (snapshot.captureState ?? snapshot.state)?.replace(/[^a-z]/gi, "").toLowerCase();
+  return !snapshot.isSensitive && !!snapshot.evidenceId?.trim() && !snapshot.failure
+    && (snapshot.accessState ?? snapshot.access)?.toLowerCase() === "resolutionavailable"
+    && (mode === "payload" || mode === "diagnosticsnapshot")
+    && (!state || state === "payloadcaptured" || state === "diagnosticsnapshotcaptured" || (!snapshot.captureState && state === "captured"));
 }
 
 const RuntimeValueEvidenceResolutionContext = createContext<RuntimeValueEvidenceResolutionScope | null>(null);
@@ -52,7 +68,17 @@ type RuntimeValueResolutionState = {
   error?: string;
 };
 
-export function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapshot: ActivityExecutionInspectionValueSnapshot; listItem?: boolean }) {
+export function RuntimeValueEvidenceCard({
+  snapshot,
+  listItem = true,
+  compactObjects = false,
+  showCaptureMode = true
+}: {
+  snapshot: ActivityExecutionInspectionValueSnapshot;
+  listItem?: boolean;
+  compactObjects?: boolean;
+  showCaptureMode?: boolean;
+}) {
   const typeName = runtimeValueTypeLabel(snapshot.type) || "Unknown";
   return (
     <article className="wf-runtime-input" role={listItem ? "listitem" : undefined}>
@@ -61,14 +87,22 @@ export function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapsh
           <strong>{snapshot.name}</strong>
           <small>{typeName}</small>
         </span>
-        <small>{formatCaptureMode(snapshot.captureMode)}</small>
+        {showCaptureMode ? <small className="wf-runtime-capture-mode">{formatCaptureMode(snapshot.captureMode)}</small> : null}
       </header>
-      <RuntimeValueEvidenceContent snapshot={snapshot} />
+      <RuntimeValueEvidenceContent snapshot={snapshot} compactObjects={compactObjects} />
     </article>
   );
 }
 
-export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }: { snapshot: ActivityExecutionInspectionValueSnapshot; presentation?: "card" | "input" }) {
+export function RuntimeValueEvidenceContent({
+  snapshot,
+  presentation = "card",
+  compactObjects = false
+}: {
+  snapshot: ActivityExecutionInspectionValueSnapshot;
+  presentation?: "card" | "input";
+  compactObjects?: boolean;
+}) {
   const scope = useContext(RuntimeValueEvidenceResolutionContext);
   const evidenceId = snapshot.evidenceId?.trim() || null;
   const access = snapshot.accessState ?? snapshot.access;
@@ -82,13 +116,23 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
   const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution && !snapshot.failure;
   const resolutionIdentity = JSON.stringify([runtimeValueContextId(scope?.context), scope?.workflowExecutionId, scope?.activityExecutionId, evidenceId, captureModeKey]);
   const [requestedSensitiveIdentity, setRequestedSensitiveIdentity] = useState<string | null>(null);
-  const [retrySequence, setRetrySequence] = useState(0);
+  const [retryRequest, setRetryRequest] = useState({ identity: resolutionIdentity, sequence: 0 });
   const [resolution, setResolution] = useState<RuntimeValueResolutionState | null>(null);
+  // Forget local reveal, payload and retry state when leaving an occurrence, including A → B → A.
+  if (retryRequest.identity !== resolutionIdentity) {
+    setRetryRequest({ identity: resolutionIdentity, sequence: 0 });
+    setRequestedSensitiveIdentity(null);
+    setResolution(null);
+  }
+  const retrySequence = retryRequest.identity === resolutionIdentity ? retryRequest.sequence : 0;
+  const retryResolution = () => setRetryRequest(previous => ({ identity: resolutionIdentity,
+    sequence: (previous?.identity === resolutionIdentity ? previous.sequence : 0) + 1 }));
   const explicitlyRequested = snapshot.isSensitive && requestedSensitiveIdentity === resolutionIdentity;
   const shouldResolve = canResolve && (!snapshot.isSensitive || explicitlyRequested);
+  const preparedValue = shouldResolve && !snapshot.isSensitive && retrySequence === 0 ? scope?.preparedValues?.get(runtimeValuePayloadKey(snapshot)) : undefined;
 
   useEffect(() => {
-    if (!shouldResolve || !scope || !evidenceId) return;
+    if (!shouldResolve || !scope || !evidenceId || preparedValue) return;
 
     const controller = new AbortController();
     setResolution({ identity: resolutionIdentity, status: "loading" });
@@ -115,14 +159,15 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
     );
 
     return () => controller.abort();
-  }, [evidenceId, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
+  }, [evidenceId, preparedValue, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
 
   const hasInlinePayload = !permissionAllowsResolution && snapshot.payload !== undefined;
   const diagnosticSnapshot = permissionAllowsResolution
     ? null
     : snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" && hasInlinePayload ? snapshot.payload : null);
   const hasPayload = snapshot.captureMode === "Payload" && hasInlinePayload;
-  const currentResolution = resolution?.identity === resolutionIdentity ? resolution : null;
+  const currentResolution: RuntimeValueResolutionState | null = preparedValue ? { identity: resolutionIdentity, ...preparedValue }
+    : resolution?.identity === resolutionIdentity ? resolution : null;
   const protectedAccess = ["redacted", "permissionhidden", "permission-hidden", "resolutionpermissionrequired", "unavailable"].includes(accessKey);
   const canShowSensitiveValue = snapshot.isSensitive && canResolve;
   const invalidResolutionMetadata = permissionAllowsResolution && (!evidenceId || !supportedCaptureMode || !capturedState);
@@ -130,13 +175,14 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
     canResolve &&
     (!snapshot.isSensitive || explicitlyRequested) &&
     !protectedAccess;
+  const expandRoot = presentation === "card" && !compactObjects;
 
   return (
     <>
       <div className="wf-runtime-input-content">
         {resolvedPayload && currentResolution?.status === "ready" ? (
           captureModeKey === "diagnosticsnapshot" && isDiagnosticSnapshotNode(currentResolution.payload)
-            ? <DiagnosticSnapshotTree node={currentResolution.payload} expandRoot={presentation === "card"} />
+            ? <DiagnosticSnapshotTree node={currentResolution.payload} expandRoot={expandRoot} />
             : <>
                 {presentation === "card" ? <small>Captured value</small> : null}
                 <RuntimeInputPayload payload={currentResolution.payload} />
@@ -148,7 +194,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
         ) : snapshot.isSensitive ? (
           <>
             {isProtectedDiagnosticSnapshot(diagnosticSnapshot) && isDiagnosticSnapshotNode(diagnosticSnapshot)
-              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
+              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={expandRoot} />
               : <p title="Runtime value is protected because this input is sensitive.">{presentation === "input" ? "Protected value" : "Runtime value is protected because this input is sensitive."}</p>}
             {canShowSensitiveValue ? (
               <button
@@ -156,7 +202,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
                 disabled={currentResolution?.status === "loading"}
                 onClick={() => {
                   setRequestedSensitiveIdentity(resolutionIdentity);
-                  if (currentResolution?.status === "failed") setRetrySequence(sequence => sequence + 1);
+                  if (currentResolution?.status === "failed") retryResolution();
                 }}
               >
                 {currentResolution?.status === "failed" ? "Retry captured value" : "Show captured value"}
@@ -166,7 +212,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
             {currentResolution?.status === "failed" ? <p role="alert">Could not resolve captured value: {currentResolution.error}</p> : null}
           </>
         ) : isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
-          <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
+          <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={expandRoot} />
         ) : hasPayload ? (
           <RuntimeInputPayload payload={snapshot.payload} />
         ) : (
@@ -178,7 +224,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
         {!snapshot.isSensitive && !protectedAccess && currentResolution?.status === "failed" ? (
           <p role="alert">
             Could not resolve captured value: {currentResolution.error} {" "}
-            <button type="button" onClick={() => setRetrySequence(sequence => sequence + 1)}>Retry</button>
+            <button type="button" onClick={retryResolution}>Retry</button>
           </p>
         ) : null}
       </div>

@@ -3,7 +3,9 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Diagnostics;
@@ -12,6 +14,7 @@ namespace Elsa.Activities.Design.Api.Services;
 
 public sealed class ActivityDefinitionManagementProjectionService(
     IActivityDefinitionManagementProjectionStore store,
+    IActivityProviderRegistry providers,
     IActivityAuthoringContextAsync context,
     IActivityManagementCursorCodec cursorCodec) : IActivityDefinitionManagementProjectionService
 {
@@ -47,7 +50,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 Normalize(request.Search),
                 authority,
                 Normalize(request.ProviderKey)), cancellationToken);
-            return Page(page, binding.Scope, page.Items.Select(x => ToDefinitionView(x, authorization)).ToArray());
+            return Page(page, binding.Scope, page.Items.Select(item => ToDefinitionView(item, authorization)).ToArray());
         }
         catch (ActivityManagementSnapshotExpiredException exception)
         {
@@ -150,7 +153,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
         AuthorizationSnapshot authorization) => new(
         ToIdentity(record),
         new(record.DraftCount, record.VersionCount, ToReference(record.Head), ToReference(record.Recommendation)),
-        DefinitionActions(record.ContentAuthority, authorization.CanManage),
+        DefinitionActions(record, authorization),
         record.UpdatedAt);
 
     private ReusableActivityDraftManagementView ToDraftView(
@@ -178,15 +181,23 @@ public sealed class ActivityDefinitionManagementProjectionService(
         StringComparer.Ordinal.Equals(definition.RecommendedVersionId, version.DefinitionVersionId),
         VersionActions(version, definition.ContentAuthority, authorization));
 
-    private IReadOnlyList<ActivityActionAvailabilityView> DefinitionActions(ActivityContentAuthority authority, bool canManage)
+    private IReadOnlyList<ActivityActionAvailabilityView> DefinitionActions(
+        ActivityDefinitionManagementProjectionRevision definition,
+        AuthorizationSnapshot authorization)
     {
-        var designOwned = authority.Kind == ActivityContentAuthorityKind.Design;
+        var designOwned = definition.ContentAuthority.Kind == ActivityContentAuthorityKind.Design;
+        var recommendation = definition.Recommendation;
+        var hasActiveRecommendation = recommendation?.Lifecycle == ActivityDefinitionVersionLifecycle.Active;
+        var forkTargets = hasActiveRecommendation
+            ? GetForkTargetAvailability(recommendation!.ProviderKey, recommendation.ProviderSchemaVersion, authorization)
+            : default;
         return
         [
-            Action("edit-definition", canManage && designOwned, canManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
-            Action("create-draft", canManage && designOwned, canManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
-            Action("set-recommendation", canManage, ActivityErrorCodes.ActionForbidden),
-            Action("fork-definition", canManage && !designOwned, canManage ? "activity.definition.design-owned" : ActivityErrorCodes.ActionForbidden)
+            Action("edit-definition", authorization.CanManage && designOwned, authorization.CanManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
+            Action("create-draft", authorization.CanManage && designOwned, authorization.CanManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
+            Action("set-recommendation", authorization.CanManage, ActivityErrorCodes.ActionForbidden),
+            Action("fork-definition", authorization.CanManage && !designOwned && hasActiveRecommendation && forkTargets.HasAuthorizedTarget,
+                ForkUnavailableCode(authorization, designOwned, forkTargets, hasActiveRecommendation))
         ];
     }
 
@@ -224,12 +235,13 @@ public sealed class ActivityDefinitionManagementProjectionService(
         var canManage = authorization.CanManage;
         var designOwned = authority.Kind == ActivityContentAuthorityKind.Design;
         var canAuthorProvider = authorization.CanAuthor;
+        var forkTargets = GetForkTargetAvailability(version.ProviderKey, version.ProviderSchemaVersion, authorization);
         return
         [
             Action("clone-draft", canManage && designOwned && canAuthorProvider,
                 !canManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.provider.authoring-forbidden"),
-            Action("fork-definition", canManage && !designOwned,
-                canManage ? "activity.definition.design-owned" : ActivityErrorCodes.ActionForbidden),
+            Action("fork-definition", canManage && !designOwned && forkTargets.HasAuthorizedTarget,
+                ForkUnavailableCode(authorization, designOwned, forkTargets)),
             Action("set-recommendation", canManage && version.Lifecycle == ActivityDefinitionVersionLifecycle.Active,
                 canManage ? "activity.version.lifecycle-ineligible" : ActivityErrorCodes.ActionForbidden),
             Action("retire-version", canManage && version.Lifecycle == ActivityDefinitionVersionLifecycle.Active,
@@ -243,6 +255,47 @@ public sealed class ActivityDefinitionManagementProjectionService(
 
     private static ActivityActionAvailabilityView Action(string action, bool allowed, string unavailableCode) =>
         new(action, allowed, allowed ? null : unavailableCode);
+
+    private static ForkTargetAvailability GetForkTargetAvailability(
+        string sourceProviderKey,
+        string sourceSchemaVersion,
+        AuthorizationSnapshot authorization)
+    {
+        var hasSupportedTarget = false;
+        var hasAuthorizedTarget = false;
+        foreach (var provider in authorization.RegisteredProviders)
+        foreach (var schema in provider.AuthoringCapabilities.ManifestSchemas)
+        {
+            if (!schema.IsAuthorable || !ActivityProviderMigrationCapabilities.SupportsMigrationFrom(
+                    provider.ProviderKey,
+                    schema,
+                    sourceProviderKey,
+                    sourceSchemaVersion))
+                continue;
+
+            hasSupportedTarget = true;
+            hasAuthorizedTarget |= authorization.AuthorableProviderKeys.Contains(provider.ProviderKey);
+        }
+
+        return new(hasSupportedTarget, hasAuthorizedTarget);
+    }
+
+    private static string ForkUnavailableCode(
+        AuthorizationSnapshot authorization,
+        bool designOwned,
+        ForkTargetAvailability targets,
+        bool hasActiveRecommendation = true) =>
+        !authorization.CanManage
+            ? ActivityErrorCodes.ActionForbidden
+            : designOwned
+                ? "activity.definition.design-owned"
+                : !hasActiveRecommendation
+                    ? "activity.version.recommendation-ineligible"
+                    : targets.HasSupportedTarget
+                        ? "activity.provider.authoring-forbidden"
+                        : "activity.provider.migration-unsupported";
+
+    private readonly record struct ForkTargetAvailability(bool HasSupportedTarget, bool HasAuthorizedTarget);
 
     private static ActivityDefinitionIdentityView ToIdentity(ActivityDefinitionManagementProjectionRevision definition) => new(
         definition.DefinitionId,
@@ -328,10 +381,21 @@ public sealed class ActivityDefinitionManagementProjectionService(
         var profile = await context.GetAuthorizationProfileAsync(cancellationToken);
         var canManage = await context.CanManageActivityDefinitionsAsync(cancellationToken);
         var canAuthor = await context.CanAuthorProviderAsync("profile", cancellationToken);
-        return new(profile, canManage, canAuthor);
+        var registeredProviders = providers.Providers.ToArray();
+        var authorableProviderKeys = new HashSet<string>(StringComparer.Ordinal);
+        if (canManage)
+            foreach (var provider in registeredProviders)
+                if (await context.CanAuthorProviderAsync(provider.ProviderKey, cancellationToken))
+                    authorableProviderKeys.Add(provider.ProviderKey);
+        return new(profile, canManage, canAuthor, authorableProviderKeys, registeredProviders);
     }
 
-    private sealed record AuthorizationSnapshot(string Profile, bool CanManage, bool CanAuthor);
+    private sealed record AuthorizationSnapshot(
+        string Profile,
+        bool CanManage,
+        bool CanAuthor,
+        IReadOnlySet<string> AuthorableProviderKeys,
+        IReadOnlyList<IActivityProvider> RegisteredProviders);
 
     private static T? ParseOptional<T>(string? value, string name) where T : struct, Enum
     {

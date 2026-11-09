@@ -285,6 +285,22 @@ describe("in-workflow activity duplicate remapping", () => {
       .toEqual(["write-one", "write-two", "writeone-copy1", "writetwo-copy2"]);
   });
 
+  it("duplicates a Sequence step immediately after its source without copying top-level positions", () => {
+    const source = leafNode("first");
+    const root = sequenceNode("sequence-root", [source, leafNode("last")]);
+    const layout = [{ nodeId: "first", x: 600, y: 80 }];
+    const snapshot = snapshotSelectedActivities({ selectedNodeIds: ["first"], scopeActivities: [source], scopeOwner: root, catalog, layout, presentation: [] });
+    const result = pasteActivitiesIntoDraft({
+      draft: draftOf(root, { layout }), frames: [], snapshot: snapshot!, catalog,
+      allocateId: sequentialIds(), insertAfterNodeId: "first"
+    });
+
+    expect((result!.draft.state.rootActivity!.structure!.payload.activities as ActivityNode[]).map(activity => activity.nodeId))
+      .toEqual(["first", "first-copy1", "last"]);
+    expect(result!.draft.layout).toEqual(layout);
+    expect(result!.draft.activityPresentation).toEqual([{ nodeId: "first-copy1", displayName: "Write Line (copy)", description: undefined }]);
+  });
+
   it("does not write a connections list when pasting into a Sequence", () => {
     const left = leafNode("left");
     const right = leafNode("right");

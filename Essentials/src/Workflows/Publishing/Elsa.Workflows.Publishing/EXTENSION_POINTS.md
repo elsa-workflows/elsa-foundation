@@ -18,6 +18,11 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 
 | Contract | Built-in default | Replace when |
 |---|---|---|
+| `IActivityTemplateCompiler` *(Publishing Core)* | `ActivityTemplateCompiler` (scoped) | Candidate dependency resolution, provider compilation or template admission differs. |
+| `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
+| `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
+| `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
+| `IActivityPublicationVersionPolicy` *(Publishing Core)* | `ActivityPublicationVersions` (scoped) | Release choices differ while respecting the contract compatibility floor. |
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
@@ -44,6 +49,14 @@ accepting the receipt.
 
 ## Contract obligations
 
+### Candidate publication services
+
+These five contracts are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. They are not contribution collections.
+
+The compiler request/result and `ActivityTemplateCandidate` models live in Publishing Core. Draft publication and provider-backed source publication share the evaluator, readiness and catalog projection; draft publication also consumes the release policy. Typed domain source adapters can consume these Core ports without referencing this engine implementation. A provider-backed source publisher may supply an evaluator without the default template compiler.
+
+The evaluator must preserve the validator's refusal even without an error diagnostic, return ordered diagnostics against the candidate's actual subject, and admit only successful compilation with no error diagnostics. The compiler retains exact dependency pins and provider/template admission policy. Readiness reports the selected Runtime consumers/schema versions and durable storage drivers, and binds review to a stable fingerprint. Catalog projection derives activity ports, emitted outcomes and immutable publication metadata from the validated contract and compiled template; it does not create editable source. Release choices must satisfy the existing semantic-version compatibility floor; recommendation and activation remain separate domain commands. Replacements must preserve those obligations and each owning publisher's canonical commit and authorization boundaries.
+
 ### Authority stores
 
 - `IPublicationSlotStore` no longer exists. The definition-keyed ledger is `IWorkflowActivationAuthority` in
@@ -53,9 +66,17 @@ accepting the receipt.
   definition. Publishing requests activation through `IWorkflowActivationCoordinator` and retains only its
   publication record attempt journal; that journal never decides serving.
 - `IPublicationRecordStore` retains publication lifecycle and failure facts and supports conditional status
-  transitions.
+  transitions. `FindByIdsAsync(publicationIds)` resolves exact publication identities in a bounded batch;
+  providers without this lookup may return no records, leaving the published source version unavailable.
+  Override `ListByDefinitionIdsAsync(definitionIds)` and set `SupportsDefinitionIdLookup` to true only when
+  the provider can completely resolve a bounded definition set without scanning the journal. The default
+  capability is false: absent records cannot establish Draft instead of Retired. In-memory storage supports
+  it; EF does not. See the [Design lookup contract](../../Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionpublicationstatelookup-contract--elsaworkflowsdesignpersistencecore)
+  for how these facts enrich definition views.
 - `IPublicationPolicyStore` stores the host policy under a null workflow ID and optional workflow overrides;
-  writes are revision-checked.
+  writes are revision-checked. `FindByDefinitionIdsAsync(definitionIds)` resolves workflow overrides in a
+  bounded batch when `SupportsBatchDefinitionLookup` is true; otherwise readers treat the configured primary
+  slot as unknown. In-memory and EF providers support this capability.
 - `IPublicationProjectionIntentStore` durably transitions idempotent prepare/activate/remove intents. Providers
   must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart. It has
   no writer: its only one, `PublicationProjectionReconciler`, had not been registered since activation moved to the
@@ -150,6 +171,16 @@ A Publishing persistence package that backs the engine's authority state should:
 The supplied EF Core provider (`AddPublishingEntityFrameworkCore(...)`) composes these together with the API
 feature's `IActivityDraftTestRunStore`.
 
+That EF composition also registers `RebuildActivityUsageStartupTask` (`IStartupTask`, scoped,
+`[Order(6)]`). After catalog reconciliation it invokes
+`IActivityDependencyProjectionRebuildCoordinator` in a separate, explicitly privileged scope across
+tenants. Each shell start refreshes the derived usage snapshot from current activity and workflow
+drafts and versions, serialized by a per-shell distributed maintenance lock. Lock and rebuild failures
+are logged without failing shell activation; shutdown cancellation propagates and lock loss cancels the rebuild.
+A failed rebuild preserves the previous snapshot. With no snapshot, the dependency API returns
+`503 activity.dependency.unavailable` with recovery guidance, rather than claiming zero usages.
+Ordinary edits still follow the coordinator's snapshot semantics; this is not a live usage index.
+
 ## Executable compilation fan-in
 
 ### `IExecutableCompilationSource`
@@ -168,6 +199,9 @@ feature's `IActivityDraftTestRunStore`.
   result is exposed.
 - **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned
   child metadata and dependency claims after tenant/liveness/input-contract validation.
+- **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
+  exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
+- **Known implementation:** `DecisionPinSource` *(cross-domain — `Elsa.Decisions.Workflows.Design`)* resolves a permitted published decision once and contributes its exact frozen artifact/profile/semantics metadata. Decision identity is not a child workflow-executable dependency claim.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.
@@ -179,15 +213,34 @@ feature's `IActivityDraftTestRunStore`.
   `ExecutableNodeMetadataCollecting` event, and this engine owns the single active `CollectExecutableNodeMetadata`
   handler. New contributors register the generalized compilation source instead.
 
+## Design-time side-effect profile
+
+### `IActivitySideEffectProfileReader` *(Core — `Elsa.Activities.Runtime.Core`, spec 261 FR-513)*
+
+- **Kind:** Replacement contract with one implementation, `ActivitySideEffectProfileReader`, registered by
+  `WorkflowsPublishingFeature` (`TryAddScoped`).
+- **Usage:** `ReadAsync(activityVersionId)` returns the `SideEffectProfile` the executable compiler would pin for an
+  activity version: a CLR activity's `[ActivitySideEffectProfile]` (`External` when unmarked) and `External` for any
+  other consumer, such as a reusable graph activity; null when the version does not exist or its CLR type is not loaded.
+  The attribute rule lives in one internal helper, `ActivitySideEffectProfiles`, which `ExecutableNodeCompiler` uses too,
+  so a design-time validator and publication cannot disagree.
+- **Consumer:** `CompensationReplaySafeValidator` *(cross-domain — Activities.Compensation)*, which treats a missing
+  reader as "no warning".
+
 ## Activity-template provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
-| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
 
 The Activity Graph implementation and its feature registration are documented in the
 [contributing-feature catalog](../../../Activities/Graph/Design/EXTENSION_POINTS.md).
+
+The provider/compiler/discovery registries are scoped. Contributors that read selected persistence
+access or scoped model metadata must remain in the publication operation; stateless singleton
+contributors remain supported. The specialist registrations are documented in their
+[contributing-feature catalog](../../../../../Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md).
 
 ## Cross-domain seams consumed by the engine
 
@@ -204,3 +257,7 @@ The Activity Graph implementation and its feature registration are documented in
 - Transport surface, transport authorization, and activity-draft seams: [Publishing API catalog](../Api/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../../EXTENSION_POINTS.md).
+
+### Structure-owned occurrence inputs
+
+`ActivityTemplateOccurrenceCompilation.StructureInputs` optionally carries the owning Design handler's input projection from a graph provider to the publishing coordinator. Providers emit effective ordinary/projected argument states and validate their references against that same view. `ActivityTemplateCompiler` lowers declarations/policies against the exact source template into optional `ExecutableActivityTemplateOccurrenceOverlay.InputContracts`; no Design types enter Runtime artifacts. Placement compiles and stamps these same contracts, then applies the existing closed-scope variable/result remapping. Null is omitted for ordinary occurrences, preserving their serialized shape and template hashes. Switch condition overlays also retain their authored case outcomes on the placed contract.

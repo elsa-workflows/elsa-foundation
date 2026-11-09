@@ -45,7 +45,9 @@ public sealed class DefaultRuntimeSecretMask : IRuntimeSecretMask
             {
                 value,
                 JsonEncodedText.Encode(value).ToString(),
-                JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping).ToString()
+                JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping).ToString(),
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(value)),
+                Uri.EscapeDataString(value)
             }
             .Distinct(StringComparer.Ordinal)
             .Select(form => new Replacement(form, marker));

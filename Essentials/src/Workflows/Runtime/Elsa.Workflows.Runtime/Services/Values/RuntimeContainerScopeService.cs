@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -12,7 +13,8 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeContainerScopeService(
     IActivityExecutionStateStore activityExecutionStateStore,
-    IWorkflowExecutionStateStore workflowExecutionStateStore)
+    IWorkflowExecutionStateStore workflowExecutionStateStore,
+    IDurableValueStateStore? durableValueStateStore = null)
 {
     private readonly RuntimeVariableDeclarationProjector _declarations = new();
     private readonly RuntimeLoopIterationFrameFactory _iterations = new();
@@ -23,7 +25,18 @@ public sealed class RuntimeContainerScopeService(
         ActivityExecutionState activityState,
         bool includeCurrentIteration = true,
         bool includeOwnContainer = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<DurableValueState>? durableValues = null) =>
+        await BuildVisibleFramesCoreAsync(workflowExecutionId, activityState, includeCurrentIteration, includeOwnContainer, durableValues, loadClosedScopeValues: false, cancellationToken);
+
+    private async ValueTask<RuntimeVisibleVariableFrames> BuildVisibleFramesCoreAsync(
+        string workflowExecutionId,
+        ActivityExecutionState activityState,
+        bool includeCurrentIteration,
+        bool includeOwnContainer,
+        IReadOnlyCollection<DurableValueState>? durableValues,
+        bool loadClosedScopeValues,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(activityState);
@@ -40,8 +53,6 @@ public sealed class RuntimeContainerScopeService(
         {
             throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has an invalid canonical root variable frame while activity '{activityState.InvocationId}' is still executing.");
         }
-        var ordered = new List<VariableFrameState> { root };
-
         var ancestors = new Stack<ActivityExecutionState>();
         var ancestorId = activityState.ParentActivityExecutionId;
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -56,7 +67,23 @@ public sealed class RuntimeContainerScopeService(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        foreach (var ancestor in ancestors)
+        // Below a closed activity execution scope the boundary's variables are the root, and nothing above
+        // the boundary (the caller's root, containers or iterations, or the boundary's own frames) is visible.
+        var chain = ancestors.ToList();
+        var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
+        var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
+        // The scoped-variable reader seam reads no durable values of its own; it still gets the closed scope's variables.
+        if (loadClosedScopeValues && boundary is not null && durableValues is null)
+        {
+            var store = durableValueStateStore
+                ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' reads scoped variables inside a closed activity execution scope, which requires a durable value state store.");
+            durableValues = await store.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
+        }
+        var ordered = new List<VariableFrameState>
+        {
+            boundary is null ? root : RuntimeClosedScope.CreateFrame(boundary, durableValues)
+        };
+        foreach (var ancestor in chain.Skip(boundaryIndex + 1))
             AddOwnedFrames(ancestor, ordered);
 
         if (includeCurrentIteration && activityState.IterationVariableFrame is { } iteration)
@@ -70,7 +97,44 @@ public sealed class RuntimeContainerScopeService(
         if (includeOwnContainer && activityState.VariableFrame is { } ownContainer)
             AddFrame(ownContainer, VariableFrameKind.Container, activityState.InvocationId, ordered);
 
-        return new RuntimeVisibleVariableFrames(ordered);
+        return boundary is null
+            ? new RuntimeVisibleVariableFrames(ordered)
+            : new RuntimeVisibleVariableFrames(
+                ordered,
+                boundary,
+                durableValues is null
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId));
+    }
+
+    /// <summary>
+    /// The nearest closed activity execution scope above an activity, or null outside every closed scope.
+    /// Looked up only for a node that captures into a graph variable, which writes that boundary's own row.
+    /// </summary>
+    public async ValueTask<ActivityExecutionState?> FindClosedScopeBoundaryAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        ExecutableNode node,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (!node.OutputCaptures.Values.Any(capture => capture.Metadata.ContainsKey(RuntimeMetadataKeys.CaptureTargetScopeId)))
+            return null;
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var state = await activityExecutionStateStore.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        var parentId = state?.ParentActivityExecutionId;
+        while (!string.IsNullOrWhiteSpace(parentId) && visited.Add(parentId))
+        {
+            var parent = await activityExecutionStateStore.FindAsync(workflowExecutionId, parentId, cancellationToken);
+            if (parent is null)
+                return null;
+            if (RuntimeClosedScope.IsClosedBoundary(parent))
+                return parent;
+            parentId = parent.ParentActivityExecutionId;
+        }
+
+        return null;
     }
 
     public async ValueTask<ActivityExecutionState> ActivateOwnedFramesAsync(
@@ -260,7 +324,7 @@ public sealed class RuntimeContainerScopeService(
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         // Frames run root → innermost, so a later (inner) write of a shadowed name overwrites the outer one:
         // innermost scope wins.
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false))
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
             result[name] = Materialize(name, envelope);
         return result;
     }
@@ -277,7 +341,7 @@ public sealed class RuntimeContainerScopeService(
     {
         ArgumentNullException.ThrowIfNull(visibleFrames);
         var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false))
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false, visibleFrames.RootVariableNames))
             result[name] = envelope;
         return result;
     }
@@ -292,10 +356,11 @@ public sealed class RuntimeContainerScopeService(
     /// </summary>
     public static IReadOnlyDictionary<string, ValueEnvelope> ProjectAmbientVisibleVariableEnvelopes(
         WorkflowExecutable executable,
-        IReadOnlyList<VariableFrameState> orderedFrames)
+        IReadOnlyList<VariableFrameState> orderedFrames,
+        IReadOnlyDictionary<string, string>? rootVariableNames = null)
     {
         var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, orderedFrames, lenient: true))
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, orderedFrames, lenient: true, rootVariableNames))
             result[name] = envelope;
         return result;
     }
@@ -303,7 +368,8 @@ public sealed class RuntimeContainerScopeService(
     private static IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
         WorkflowExecutable executable,
         IReadOnlyList<VariableFrameState> orderedFrames,
-        bool lenient)
+        bool lenient,
+        IReadOnlyDictionary<string, string>? rootVariableNames)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(orderedFrames);
@@ -316,6 +382,14 @@ public sealed class RuntimeContainerScopeService(
                 // Iteration-frame keys are the exposed variable names directly (e.g. loopIndex / the item key).
                 foreach (var (key, value) in frame.Values)
                     yield return (key, value);
+                continue;
+            }
+
+            // A closed scope's root frame holds the boundary's variables, named by their rows.
+            if (RuntimeClosedScope.IsClosedScopeFrame(frame))
+            {
+                foreach (var (key, value) in frame.Values)
+                    yield return (rootVariableNames?.GetValueOrDefault(key) ?? key, value);
                 continue;
             }
 
@@ -365,11 +439,13 @@ public sealed class RuntimeContainerScopeService(
         if (activity is not IRuntimeScopedVariableReader)
             return null;
 
-        var visible = await BuildVisibleFramesAsync(
+        var visible = await BuildVisibleFramesCoreAsync(
             activityState.Execution.WorkflowExecutionId,
             activityState,
             includeCurrentIteration: true,
             includeOwnContainer: true,
+            durableValues: null,
+            loadClosedScopeValues: true,
             cancellationToken);
         return ProjectVisibleVariableEnvelopes(executable, visible);
     }
@@ -423,7 +499,23 @@ public sealed class RuntimeContainerScopeService(
 public sealed class RuntimeVisibleVariableFrames
 {
     public RuntimeVisibleVariableFrames(IReadOnlyCollection<VariableFrameState> frames)
+        : this(frames, null, new Dictionary<string, string>(StringComparer.Ordinal))
     {
+    }
+
+    /// <summary>
+    /// A chain rooted at a closed activity execution scope: <paramref name="closedScopeBoundary"/> is the
+    /// boundary whose variables form the root frame, and <paramref name="rootVariableNames"/> maps their reference keys
+    /// to declared names for name-based reads.
+    /// </summary>
+    public RuntimeVisibleVariableFrames(
+        IReadOnlyCollection<VariableFrameState> frames,
+        ActivityExecutionState? closedScopeBoundary,
+        IReadOnlyDictionary<string, string> rootVariableNames)
+    {
+        ArgumentNullException.ThrowIfNull(rootVariableNames);
+        ClosedScopeBoundary = closedScopeBoundary;
+        RootVariableNames = rootVariableNames;
         ArgumentNullException.ThrowIfNull(frames);
         Frames = frames.ToArray();
         if (Frames.Count == 0 || Frames[0].Kind != VariableFrameKind.Root || Frames[0].ParentFrameId is not null)
@@ -437,9 +529,17 @@ public sealed class RuntimeVisibleVariableFrames
         foreach (var frame in Frames)
         foreach (var (key, value) in frame.Values)
             values[new RuntimeVariableValueAddress(frame.ScopeId, key)] = value;
+        if (closedScopeBoundary is not null)
+            RuntimeClosedScope.AliasWorkflowScope(Frames[0], values);
         Values = values;
     }
 
     public IReadOnlyList<VariableFrameState> Frames { get; }
     public IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> Values { get; }
+
+    /// <summary>The nearest closed activity execution scope the chain is rooted at, or null for the workflow root.</summary>
+    public ActivityExecutionState? ClosedScopeBoundary { get; }
+
+    /// <summary>Reference key → name of a closed scope's root variables; empty for the workflow root.</summary>
+    public IReadOnlyDictionary<string, string> RootVariableNames { get; }
 }

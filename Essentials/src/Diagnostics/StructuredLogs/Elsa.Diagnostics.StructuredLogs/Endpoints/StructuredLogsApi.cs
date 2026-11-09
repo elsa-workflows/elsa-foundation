@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -50,7 +50,9 @@ public static class StructuredLogsApi
         api.MapUnboundOperation("GET", options.StreamPath, "Stream",
                 null, StatusCodes.Status200OK, StatusCodes.Status204NoContent,
                 static context => HandleStreamAsync(context))
-            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy);
+            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy)
+            // Native EventSource uses the interactive cookie, without the SDK's Bearer header.
+            .DisableCookieRedirect();
     }
 
     private static async Task HandleRecentAsync(HttpContext context)

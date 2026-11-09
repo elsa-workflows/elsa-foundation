@@ -9,6 +9,30 @@ public sealed class InMemoryWorkflowHoldStateStore : IWorkflowHoldStateStore
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, WorkflowHoldState> _states = new(StringComparer.Ordinal);
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var state in _states.Values
+                         .Where(state => StringComparer.Ordinal.Equals(state.WorkflowExecutionId, workflowExecutionId) ||
+                                         HasWorkflowScopedHold(state, workflowExecutionId))
+                         .ToArray())
+            {
+                if (StringComparer.Ordinal.Equals(state.WorkflowExecutionId, workflowExecutionId))
+                {
+                    _states.Remove(state.ControlPlaneStateId);
+                    continue;
+                }
+
+                _states[state.ControlPlaneStateId] = new WorkflowHoldState(
+                    state.ControlPlaneStateId,
+                    activeHolds: state.ActiveHolds.Where(hold => !StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, workflowExecutionId)).ToArray(),
+                    releasedHolds: state.ReleasedHolds.Where(hold => !StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, workflowExecutionId)).ToArray(),
+                    metadata: state.Metadata);
+            }
+        }
+    }
+
     public ValueTask<WorkflowHoldState> SaveAsync(WorkflowHoldState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

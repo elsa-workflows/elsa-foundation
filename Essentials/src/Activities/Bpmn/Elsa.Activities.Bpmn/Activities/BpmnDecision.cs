@@ -18,6 +18,8 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// deterministically when none is declared), so a misconfigured decision never routes silently.
 /// </remarks>
 [RefusesSecretBinding(nameof(Outcome), SecretBindingRefusalReason.EchoedToOutput)]
+[ActivityPalette(ContainerModes = ["bpmn"], Description = "BPMN Decision is intended for a gateway in a BPMN Process.")]
+[Activity(Icon = "GitBranch")]
 public sealed class BpmnDecision : Activity<BpmnDecisionResult>
 {
     /// <summary>The outcome name to complete with; conditional sequence flows match against it.</summary>

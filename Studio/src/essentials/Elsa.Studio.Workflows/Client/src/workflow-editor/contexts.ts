@@ -1,5 +1,6 @@
 import React from "react";
 import type { ChildSlot } from "../workflowAdapter";
+import type { CollectionSlot } from "../collectionSlots";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";
 
 export interface WorkflowEdgeActions {
@@ -12,6 +13,23 @@ export const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeAction
 
 export const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeAvailabilityLookup | null>(null);
 
+/** Existing editor operations surfaced on the selected authoring node. Run viewers omit this context. */
+export interface WorkflowNodeActions {
+  selectedNodeCount: number;
+  canAddAfter: boolean;
+  addAfter(nodeId: string, portName: string, anchor: { clientX: number; clientY: number }): void;
+  duplicate(nodeId: string): void;
+  delete(nodeId: string): void;
+  setWorkflowStart?(nodeId: string, enabled: boolean): void;
+}
+
+export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);
+
+/** Commits a node's resized width. Provided only by editable flowchart canvases; others render no resize handle. */
+export type WorkflowNodeResize = (nodeId: string, width: number, startWidth: number) => void;
+
+export const WorkflowNodeResizeContext = React.createContext<WorkflowNodeResize | null>(null);
+
 // Slot-badge navigation for canvas nodes. A single context handler (instead of a per-node closure in
 // node data) keeps node data identity stable across drag re-renders, so container nodes don't
 // re-render on every pointer-move while an unrelated node is dragged. A per-node data.onEnterSlot
@@ -19,3 +37,6 @@ export const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeA
 export type WorkflowSlotNavigation = (ownerNodeId: string, ownerLabel: string, slot: ChildSlot) => void;
 
 export const WorkflowSlotNavigationContext = React.createContext<WorkflowSlotNavigation | null>(null);
+
+export type CollectionSlotAction = (ownerNodeId: string, collection: CollectionSlot) => void;
+export const CollectionSlotActionsContext = React.createContext<CollectionSlotAction | null>(null);

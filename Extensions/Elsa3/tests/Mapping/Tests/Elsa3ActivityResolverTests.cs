@@ -92,7 +92,6 @@ public sealed class Elsa3ActivityResolverTests
     }
 
     [Theory]
-    [InlineData("Elsa.FlowFork", Elsa3ActivityDiagnosticCodes.GraphConversionPending)]
     [InlineData("Elsa.StateMachine", Elsa3ActivityDiagnosticCodes.NoCounterpart)]
     [InlineData("Acme.Unknown", Elsa3ActivityDiagnosticCodes.UnmappedType)]
     public async Task Unresolvable_types_fail_with_their_code(string type, string code)
@@ -195,7 +194,6 @@ public sealed class Elsa3ActivityResolverTests
         public static readonly TestMap WriteLine = new(
             new Elsa3ActivityMapEntry("Elsa.WriteLine", new Elsa3ActivityTarget.CatalogActivity(WriteLineKey), [], []),
             new Elsa3ActivityMapEntry("Elsa.Correlate", new Elsa3ActivityTarget.Intrinsic(Elsa3IntrinsicContracts.SetCorrelationId), [], []),
-            new Elsa3ActivityMapEntry("Elsa.FlowFork", new Elsa3ActivityTarget.GraphLevel("fork", "#2705"), [], []),
             new Elsa3ActivityMapEntry("Elsa.StateMachine", new Elsa3ActivityTarget.NoCounterpart("none"), [], []));
 
         public IReadOnlyList<Elsa3ActivityMapEntry> Entries => entries;

@@ -210,31 +210,87 @@ public sealed class EventTriggerStimulusProviderTests
     public async Task Execute_completes_when_the_start_trigger_targeted_this_node()
     {
         var activity = await NewEventActivityAsync(canStartWorkflow: false);
-        var payload = JsonSerializer.SerializeToElement(new EventReceived("order-shipped"));
+        var payload = JsonSerializer.SerializeToElement(new { eventName = "order-shipped" });
 
         var transition = await ((IActivity)activity).ExecuteAsync(
             new ActivityExecutionContext("workflow-1", "event-invocation", "attempt-1", "event-node", CancellationToken.None, payload, "event-node"));
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
         Assert.Equal("order-shipped", completion.Result.EventName);
+        Assert.Equal(payload.GetRawText(), completion.Result.Payload?.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("\"text\"")]
+    [InlineData("[1,2]")]
+    public async Task Execute_completes_a_targeted_start_whatever_the_payload_shape(string payloadJson)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false);
+        var payload = JsonDocument.Parse(payloadJson).RootElement.Clone();
+
+        var transition = await ((IActivity)activity).ExecuteAsync(
+            new ActivityExecutionContext("workflow-1", "event-invocation", "attempt-1", "event-node", CancellationToken.None, payload, "event-node"));
+
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+        Assert.Equal(payloadJson, completion.Result.Payload?.GetRawText());
+    }
+
+    [Fact]
+    public async Task Execute_direct_invocation_completes_without_a_payload()
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: true);
+
+        var transition = await ((IActivity)activity).ExecuteAsync(DirectContext());
+
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+        Assert.Null(completion.Result.Payload);
     }
 
     [Fact]
     public async Task Resume_completes_with_the_committed_event_name()
     {
         var activity = await NewEventActivityAsync(canStartWorkflow: false);
+        var payload = JsonSerializer.SerializeToElement(new { orderId = "1" });
 
         var transition = await ((IStatefulActivity<EventResult, EventWaitState, EventReceived>)activity).ResumeAsync(
             new ActivityResumeContext<EventWaitState, EventReceived>(
                 DirectContext(),
                 new EventWaitState("order-shipped"),
-                new EventReceived("order-shipped"),
+                new EventReceived(payload),
                 registrationId: "registration-1",
                 deliveryId: "delivery-1"));
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
         Assert.Equal("order-shipped", completion.Result.EventName);
+        Assert.Equal(payload.GetRawText(), completion.Result.Payload?.GetRawText());
         Assert.Equal("Done", completion.Outcome);
+    }
+
+    /// <summary>
+    /// #3107: the engine resumes through the untyped request with the stimulus input as the trigger payload. A Publish
+    /// Event without a payload delivers JSON null, and any payload delivers its own shape; both used to fault here.
+    /// </summary>
+    [Theory]
+    [InlineData("null", null)]
+    [InlineData("42", "42")]
+    [InlineData("""{"EventName":"other"}""", """{"EventName":"other"}""")]
+    public async Task Resume_request_accepts_any_delivered_payload(string triggerJson, string? expectedPayload)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false);
+        var request = new ActivityResumeRequest(
+            DirectContext(),
+            new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventWaitState))),
+            JsonSerializer.SerializeToElement(new EventWaitState("order-shipped")),
+            new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventReceived))),
+            JsonDocument.Parse(triggerJson).RootElement.Clone(),
+            registrationId: "registration-1",
+            deliveryId: "delivery-1");
+
+        var transition = await ((IStatefulActivity)activity).ResumeAsync(request);
+
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+        Assert.Equal("order-shipped", completion.Result.EventName);
+        Assert.Equal(expectedPayload, completion.Result.Payload?.GetRawText());
     }
 
     private static async Task<Event> NewEventActivityAsync(bool canStartWorkflow, string? correlationId = null)

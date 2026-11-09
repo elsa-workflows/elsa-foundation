@@ -34,7 +34,7 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.Created, encrypted.StatusCode);
         await AssertSafeAsync(encrypted, valueMarker);
         using var encryptedDocument = JsonDocument.Parse(await encrypted.Content.ReadAsStringAsync());
-        Assert.Equal("lifecycle.encrypted", encryptedDocument.RootElement.GetProperty("name").GetString());
+        Assert.Equal("Lifecycle.Encrypted", encryptedDocument.RootElement.GetProperty("name").GetString());
 
         using var configuration = await host.Client.SendAsync(JsonRequest(
             HttpMethod.Post,
@@ -78,7 +78,7 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
     public async Task Duplicate_create_is_rejected_without_overwriting_existing_metadata()
     {
         await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
-        const string name = "lifecycle-duplicate";
+        const string name = "Lifecycle-Duplicate";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
                    HttpMethod.Post,
@@ -91,13 +91,62 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
             HttpMethod.Post,
             "/secrets",
             "write",
-            JsonSerializer.Serialize(new { name, displayName = "Overwritten", value = "duplicate-marker" })));
-        Assert.True((int)duplicate.StatusCode >= 400);
+            JsonSerializer.Serialize(new { name = $" {name.ToUpperInvariant()} ", displayName = "Overwritten", value = "duplicate-marker" })));
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal("application/problem+json", duplicate.Content.Headers.ContentType?.MediaType);
         await AssertSafeAsync(duplicate, "duplicate-marker");
+        using var conflict = JsonDocument.Parse(await duplicate.Content.ReadAsStringAsync());
+        Assert.Equal("A secret with the same name already exists.", conflict.RootElement.GetProperty("detail").GetString());
+        Assert.DoesNotContain("SecretNameInUseException", await duplicate.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
         using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
         using var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
         Assert.Equal("Original", document.RootElement.GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task Create_takes_a_name_a_deleted_secret_freed_but_not_one_a_revoked_secret_holds()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-recreated";
+
+        string originalId;
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name, displayName = "Original", value = "original-value" }))))
+        {
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+            using var document = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+            originalId = document.RootElement.GetProperty("id").GetString()!;
+        }
+
+        using (var delete = await host.Client.SendAsync(Request(HttpMethod.Delete, $"/secrets/{name}", "delete")))
+            Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        using var recreate = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name, displayName = "Recreated", value = "recreated-value" })));
+        Assert.Equal(HttpStatusCode.Created, recreate.StatusCode);
+
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
+        using (var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Recreated", document.RootElement.GetProperty("displayName").GetString());
+            Assert.NotEqual(originalId, document.RootElement.GetProperty("id").GetString());
+            Assert.Equal(1, document.RootElement.GetProperty("currentVersion").GetInt32());
+        }
+
+        using var overRevoked = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "revoked.secret", value = "replacement-marker" })));
+        Assert.True((int)overRevoked.StatusCode >= 400);
+        await AssertSafeAsync(overRevoked, "replacement-marker");
     }
 
     [Fact]

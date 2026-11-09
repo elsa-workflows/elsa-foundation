@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -111,22 +112,43 @@ public sealed record ExecutableActivityTemplateOccurrenceOverlay
     public ExecutableActivityTemplateOccurrenceOverlay(
         string schemaVersion,
         JsonElement inputBindings,
-        ExecutableActivityStructure? structure)
+        ExecutableActivityStructure? structure,
+        JsonElement? outputBindings = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
         if (!StringComparer.Ordinal.Equals(schemaVersion, SupportedSchemaVersion))
             throw new ArgumentException($"Occurrence overlay schema version '{schemaVersion}' is not supported.", nameof(schemaVersion));
         if (inputBindings.ValueKind != JsonValueKind.Array)
             throw new ArgumentException("An occurrence overlay input binding payload must be an array.", nameof(inputBindings));
+        if (outputBindings is { ValueKind: not JsonValueKind.Array })
+            throw new ArgumentException("An occurrence overlay output binding payload must be an array.", nameof(outputBindings));
 
         SchemaVersion = schemaVersion;
         InputBindings = inputBindings.Clone();
         Structure = structure;
+        OutputBindings = outputBindings?.Clone();
+    }
+
+    private IReadOnlyList<ActivityInputContract>? _inputContracts;
+
+    /// <summary>Effective occurrence inputs when the structure adds or consumes ordinary inputs.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityInputContract>? InputContracts
+    {
+        get => _inputContracts;
+        init => _inputContracts = value is null ? null : Array.AsReadOnly(value.ToArray());
     }
 
     public string SchemaVersion { get; }
     public JsonElement InputBindings { get; }
     public ExecutableActivityStructure? Structure { get; }
+
+    /// <summary>
+    /// Authored output captures of a closed-scope graph body node, opaque to Runtime and compiled by
+    /// Publishing against the graph's variables. Omitted when null, so templates without captures hash as before.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? OutputBindings { get; }
 }
 
 /// <summary>A readable placement path. Its canonical length-framed bytes produce the placement namespace.</summary>
@@ -382,7 +404,10 @@ public sealed record ActivityExecutionLayout(
     string TemplateHash,
     IReadOnlyList<ExecutableActivityLayoutRecord> Nodes,
     IReadOnlyList<ActivityExecutionLayoutConnection> Connections,
-    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries);
+    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public enum ActivityExecutionLayoutSelection
 {

@@ -35,7 +35,9 @@ All routes are relative to the active shell route base.
 | Authoring | `POST /design/workflows/scoped-variables/analyze`, `POST /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options` |
 | Authoring schema | `GET /design/workflows/definitions/submit/schema`, `GET /design/workflows/structures` |
 
-Definition list and detail views expose an optional `publicationState` (`draft`, `published`, `retracted`, `retired`) when the host composes Publishing's `IWorkflowDefinitionPublicationStateLookup`. Design registers a null-object default so NativeEndpoints can resolve the lookup on a design-only host; that default leaves the field unset and clients then fall back to version heuristics. Design versions survive unpublish, so a remaining version is not by itself Published. Retracted is the empty activation slot. Retired without a remaining slot needs a definition-keyed journal read; the EF ledger has no such index yet, so those production rows stay Draft until [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
+Definition list and detail views expose optional `publicationState` (`draft`, `published`, `retracted`, `retired`), `publishedVersionId` and `publishedVersion` when the host composes Publishing's `IWorkflowDefinitionPublicationStateLookup`. Design-only hosts leave publication facts unset; clients should display unavailable publication information rather than infer it from saved versions, which survive unpublish. For publication selection and journal capability rules, see the [lookup contract](EXTENSION_POINTS.md#iworkflowdefinitionpublicationstatelookup-contract--elsaworkflowsdesignpersistencecore). In particular, no-slot definitions remain unresolved on the EF ledger until its definition-keyed journal lookup is implemented in [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
+
+`latestVersion` identifies the latest immutable saved version. A mutable draft has no assigned semantic version until promotion; `draftSourceVersionId` and `draftSourceVersion` identify its saved base when available. Clients can present the draft and its base separately from the currently published version.
 
 Definition reads and authoring analysis require `workflows/design:read`; mutations and direct ingestion require `workflows/design:manage`. The shared wildcard permission remains supported. Authentication and RFC 7807 error handling come from the shared identity and ASP.NET Core endpoint conventions. Context-sensitive option responses are non-cacheable.
 
@@ -43,4 +45,89 @@ The authoring-schema endpoints make the design API a complete headless authoring
 
 ## Extension points
 
+### Optional workflow organization
+
+`WorkflowsDesignApi.WorkflowOrganizationEnabled` is a Boolean setting that defaults to `true`.
+An administrator can change **Workflow organization** in Studio's **Features → Server →
+Workflows Design API → Edit settings**, save the draft, review the single-setting change and Apply.
+The review targets the selected backend. Hosts whose configuration is owned by another source
+must change that source instead. The same setting can be supplied in a shell blueprint:
+
+```json
+"WorkflowsDesignApi": { "WorkflowOrganizationEnabled": false }
+```
+
+Turning it off withdraws folder, placement, tag, organization, saved-view and favorite relations.
+Their endpoints return HTTP 501; active organization predicates on the paged list return HTTP 400.
+The legacy list also refuses organization query keys while disabled, rather than ignoring them.
+Creation with a folder destination is refused before writing. Ordinary paged browsing, search,
+sort, publication filters, authoring, publishing and runtime execution remain available.
+
+The library store and its visibility policy stay registered. Definition/folder resource checks,
+tenant isolation, visibility-bound counts and continuation tokens retain their normal behavior.
+Organization metadata and mutation permission hints are omitted/false while disabled. This is an
+availability control, not an alternative authorization policy.
+
+No folder, tag assignment, saved view, favorite or column preference is deleted or migrated.
+Re-enabling restores them, including after a restart. Each shell generation uses a fixed setting
+snapshot. After a successful reviewed Server Apply, Studio refreshes capabilities for that backend
+and retires the old route/dialog generation. A stale organization-filtered link holds browsing
+until the user explicitly clears unavailable predicates; recovery retains supported ordinary
+filters, backend selection and saved column choices. Clients should discover each operation's
+relation independently. Paged browsing does not depend on organization being enabled. A composed
+library store is still required; enabling the setting does not add storage to an unsupported host.
+
+`workflow-definitions-query` advertises the extended paged query grammar: tag conditions,
+descendants, favorites, sort and publication-state filtering. It remains available when organization
+is disabled, while the disabled organization predicates are still refused. The older
+`workflow-definitions-page` relation alone does not establish support for these options. Studio
+accepts the original `workflow-organization` relation as the compatibility signal on older
+library-capable servers, then checks the specific folder/tag/favorite operation as appropriate.
+
+Workflow library pages enforce visibility before counting and paging. A host that registers any
+`IPermissionResourceHandler` must also register an `IWorkflowLibraryVisibilityPolicy` whose
+server-derived revision and bounded allow/deny definition identities describe the complete workflow
+visibility for the current normalized principal. Without that integration the page returns HTTP 403
+before reading the inventory, including when the handler is registered for another resource domain.
+Tenant/action-only hosts without resource handlers use the unrestricted tenant scope. The read scope
+never comes from a request or saved view; its revision/membership is bound into continuation tokens.
+The visibility policy is an optional single-implementation contract. Multiple registrations fail
+shell startup with a diagnostic rather than selecting the last registration. Definition details and
+organization responses also authorize the definition and every returned folder/ancestor; a denied
+resource produces HTTP 403 without returning its organization metadata. Definition mutations
+preflight that read decision before committing. Replacement details readers can implement
+`AuthorizeReadAsync`; its compatibility default reads the details, while the built-in reader
+checks only organization metadata.
+`IWorkflowDefinitionAuthorizer` in Workflow Design Core exposes the same current per-definition
+read/manage decisions to other participating modules. Its HTTP implementation checks typed native
+resources and tenant-scoped existence; definition GET honors the selected replacement before
+returning details. See the [owner authorization contract](EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
+See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
+
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for persistence ports, structure handlers, and input-option providers. API clients should use the published HTTP contracts rather than implementation services.
+
+
+### Workflow authoring templates
+
+When `IWorkflowTemplateStore` is registered, the workflow-design capability advertises:
+
+| Method | Route | Permission |
+| --- | --- | --- |
+| GET / POST | `/design/workflows/templates` | Read / Manage |
+| GET / PUT | `/design/workflows/templates/{templateId}` | Read / Manage |
+| POST | `/design/workflows/templates/{templateId}/delete` | Manage |
+
+POST creates a custom snapshot; PUT updates it. Mutation bodies carry `operationKey` for atomic
+replay; updates and deletion require `expectedRevision`. A stale revision returns HTTP 409.
+Save bodies contain name, description and content (state, layout, activityPresentation).
+Existing credential-literal admission applies. All reads/writes are tenant-scoped.
+These resources are independent of workflow publication and runtime execution. Built-in recipes
+are read-only client resources; their identifiers cannot be overwritten through these endpoints.
+See [the extension catalog](EXTENSION_POINTS.md#workflow-authoring-templates) for replacement semantics.
+
+
+Custom catalogs support 1000 templates per tenant. Creation uses the host's existing
+`IDistributedLockProvider` to serialize catalog admission and checks capacity inside
+the atomic write; a full catalog returns HTTP 400 before insertion. Replaying the
+last successful create, reading, updating and deleting remain available at capacity.
+The optional API returns HTTP 501 when no template store is configured.

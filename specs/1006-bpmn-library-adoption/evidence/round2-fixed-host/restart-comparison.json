@@ -1,0 +1,41 @@
+{
+  "wholeCheckedCalledWorkflowObservationEqualAcrossColdRestart": true,
+  "cases": [
+    {
+      "kind": "RunningEscalation",
+      "interrupting": false,
+      "parent": "14iDyfpLhxf",
+      "child": "wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b"
+    },
+    {
+      "kind": "RunningEscalation",
+      "interrupting": true,
+      "parent": "14iDyq3se7l",
+      "child": "wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640"
+    },
+    {
+      "kind": "TerminalEscalation",
+      "interrupting": false,
+      "parent": "14iDz6muvxb",
+      "child": "wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f"
+    },
+    {
+      "kind": "TerminalEscalation",
+      "interrupting": true,
+      "parent": "14iDzFGnggS",
+      "child": "wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f"
+    },
+    {
+      "kind": "SignalAndFailure",
+      "interrupting": false,
+      "parent": "14iDzOj7Osi",
+      "child": "wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2"
+    },
+    {
+      "kind": "SignalAndFailure",
+      "interrupting": true,
+      "parent": "14iDzYWOz4n",
+      "child": "wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465"
+    }
+  ]
+}

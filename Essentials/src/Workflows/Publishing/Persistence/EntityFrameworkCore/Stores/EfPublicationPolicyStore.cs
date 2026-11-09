@@ -12,6 +12,10 @@ public sealed class EfPublicationPolicyStore(
     PublishingSnapshotReviewDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IPublicationPolicyStore
 {
+    private const int PolicyIdBatchSize = 200;
+
+    public bool SupportsBatchDefinitionLookup => true;
+
     public async ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -19,6 +23,52 @@ public sealed class EfPublicationPolicyStore(
         var key = EfPublishingStoreSupport.PolicyKey(workflowDefinitionId);
         var row = await FindEntityAsync(tenantId, key, cancellationToken);
         return row is null ? null : ToModel(row);
+    }
+
+    public async ValueTask<IReadOnlyDictionary<string, PublicationPolicy>> FindByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        var requestedIds = workflowDefinitionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (requestedIds.Length == 0)
+            return new Dictionary<string, PublicationPolicy>(StringComparer.Ordinal);
+
+        var requestedIdSet = requestedIds.ToHashSet(StringComparer.Ordinal);
+        var keyHashes = requestedIds
+            .Select(id => EfPublishingStoreSupport.Hash(EfPublishingStoreSupport.PolicyKey(id)))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var tenantId = EfPublishingStoreSupport.TenantValue(accessContextAccessor);
+        var tenantHash = EfPublishingStoreSupport.TenantHash(tenantId);
+        var encodedTenantId = EfPublishingStoreSupport.EncodeNullable(tenantId);
+        var policies = new Dictionary<string, PublicationPolicy>(requestedIds.Length, StringComparer.Ordinal);
+
+        foreach (var hashBatch in keyHashes.Chunk(PolicyIdBatchSize))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var rows = await context.Policies.AsNoTracking()
+                .Where(candidate => candidate.TenantIdHash == tenantHash && hashBatch.Contains(candidate.PolicyKeyHash))
+                .OrderBy(candidate => candidate.Id)
+                .ToArrayAsync(cancellationToken);
+
+            foreach (var row in rows)
+            {
+                if (!StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId))
+                    throw new InvalidOperationException("A publication policy hash candidate did not match its encoded tenant residual.");
+
+                var policy = ToModel(row);
+                if (policy.WorkflowDefinitionId is not { } definitionId || !requestedIdSet.Contains(definitionId))
+                    throw new InvalidOperationException("A publication policy hash candidate did not match a requested definition id.");
+
+                policies.Add(definitionId, policy);
+            }
+        }
+
+        return policies;
     }
 
     public async ValueTask<PublicationPolicyWriteResult> TrySaveAsync(

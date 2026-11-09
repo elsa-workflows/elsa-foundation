@@ -195,6 +195,23 @@ public sealed class EfWorkflowAlterationAndScopeTests
     }
 
     [Fact]
+    public async Task Alteration_plan_keeps_its_per_run_authorized_targets_through_capture_and_seal()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        var plan = WorkflowAlterationPlanState.CreateCapturing("authorized-plan", new("tenant-a", "system", "root"), new("subject", "correlation"),
+            "idem-authorized", "canonical-authorized", new("key", "AES", "cipher"),
+            WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1", "execution-2"]), now, authorizedExecutionIds: ["execution-1"]);
+        await fixture.Store.AdmitAsync(plan);
+        Assert.Equal(["execution-1"], (await fixture.Store.FindPlanAsync(plan.PlanId))!.AuthorizedExecutionIds!);
+
+        await fixture.Store.CaptureAsync(plan.PlanId, 0, [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        var sealedPlan = await fixture.Store.SealAsync(plan.PlanId, 1, now);
+        Assert.Equal(["execution-1"], sealedPlan.AuthorizedExecutionIds!);
+    }
+
+    [Fact]
     public async Task Alteration_missing_plan_queries_fail_closed()
     {
         await using var db = await Database.CreateAsync();

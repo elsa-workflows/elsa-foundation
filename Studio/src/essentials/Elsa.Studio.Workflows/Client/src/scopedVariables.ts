@@ -101,7 +101,7 @@ export function scopedVariableSignature(state: WorkflowDefinitionState | null | 
 }
 
 function declarationSignature(variables: VariableDefinition[] | null | undefined): string {
-  return (variables ?? []).map(variable => `${variable.referenceKey}=${variable.name}`).join(",");
+  return JSON.stringify((variables ?? []).map(variable => [variable.referenceKey, variable.name, variable.type]));
 }
 
 // Builds a per-declaration advisory map (referenceKey → message) for the variables declared in

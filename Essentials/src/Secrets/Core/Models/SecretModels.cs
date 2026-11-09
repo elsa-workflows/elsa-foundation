@@ -80,6 +80,13 @@ public sealed record SecretTypeDescriptor(
     string EditorHint,
     IReadOnlyCollection<string> SupportedStoreNames);
 
+/// <summary>Advisory metadata for a scope that a host or module can suggest when creating a secret.</summary>
+public sealed record SecretScopeDescriptor(
+    string Name,
+    string DisplayName,
+    string? Description = null,
+    string? Source = null);
+
 public sealed class SecretMetadata
 {
     public string Id { get; set; } = "";
@@ -125,6 +132,12 @@ public sealed class RotateSecretRequest
     public string? ConfigurationKey { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public IDictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// When set, rotate only if the secret's current version still matches. A mismatch throws
+    /// <c>SecretVersionConflictException</c>.
+    /// </summary>
+    public int? ExpectedVersion { get; set; }
 }
 
 public sealed class SecretQuery
@@ -157,6 +170,7 @@ public sealed class SecretDescriptorsResponse
 {
     public ICollection<SecretTypeDescriptor> Types { get; set; } = [];
     public ICollection<SecretStoreDescriptor> Stores { get; set; } = [];
+    public ICollection<SecretScopeDescriptor> Scopes { get; set; } = [];
 }
 
 public sealed class SecretPickerRequest

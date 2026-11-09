@@ -16,6 +16,7 @@ public static class RuntimeApiCapabilities
         CapabilityId,
         1,
         [
+            new("runtime-persistence-mode", "runtime/workflows/persistence-mode"),
             new("workflow-executables", "runtime/workflows/executables"),
             new("workflow-executable", "runtime/workflows/executables/{artifactId}", templated: true),
             new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),
@@ -61,6 +62,17 @@ public sealed class RuntimeOperationalCapabilitySource(
     }
 }
 
+/// <summary>Advertises browsing only for inspection providers that implement the bounded collection read.</summary>
+public sealed class RuntimeActivityExecutionBrowsingCapabilitySource(IActivityExecutionInspectionStore? inspectionStore = null) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(inspectionStore?.SupportsExecutionBrowsing == true
+            ? [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("activity-executions", "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.ExecutionBrowsing")]
+            : []);
+}
+
 /// <summary>Advertises alteration routes only when this shell composed both durable plan state and the orchestration service.</summary>
 public sealed class RuntimeAlterationCapabilitySource(IServiceProvider serviceProvider) : IApiCapabilitySource
 {
@@ -82,6 +94,37 @@ public sealed class RuntimeAlterationCapabilitySource(IServiceProvider servicePr
                     new ApiCapabilityLink("workflow-alteration-plan-cancel", "runtime/workflows/alteration-plans/{planId}/cancel", templated: true)
                 ],
                 $"{RuntimeApiCapabilities.SourceFeatureId}.Alterations")];
+        return ValueTask.FromResult(declarations);
+    }
+}
+
+/// <summary>
+/// Advertises the activity state view (spec 260 R-6) only when the shell composed at least one projector, so a client
+/// never follows a link that can only answer <c>NoProjector</c>.
+/// </summary>
+public sealed class RuntimeActivityStateViewCapabilitySource(IServiceProvider services) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = services.GetServices<IActivityStateViewProjector>().Any()
+            ? [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("activity-execution-state-view", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.ActivityStateView")]
+            : [];
+        return ValueTask.FromResult(declarations);
+    }
+}
+
+/// <summary>Deletion requires a cohesive provider capable of atomic, fenced run cleanup.</summary>
+public sealed class RuntimeRunDeletionCapabilitySource(IServiceProvider services) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = services.GetService<IWorkflowExecutionDeletionStore>() is not { IsSupported: true }
+            ? []
+            : [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("workflow-instance-delete", "runtime/workflows/instances/{workflowExecutionId}", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.RunDeletion")];
         return ValueTask.FromResult(declarations);
     }
 }

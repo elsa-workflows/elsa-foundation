@@ -30,6 +30,22 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     public async Task DisposeAsync() => await _fixture.DisposeAsync();
 
     [Fact]
+    public async Task SyncEndpoint_NullBody_IsAnOptionalResultProjection_AndReturnsAnEmptyResponse()
+    {
+        await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
+            artifactId: "artifact-sync-null", path: "sync/null", method: "POST",
+            resultValueId: "sync-null-result", statusCode: 200, body: null, contentType: "text/plain");
+
+        var response = await _fixture.Client.PostAsync($"{BasePath}sync/null",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+        var artifact = await ReadArtifactForSingleRunAsync();
+        Assert.Equal(JsonValueKind.Null, artifact.GetProperty("body").ValueKind);
+    }
+
+    [Fact]
     public async Task SyncEndpoint_WorkflowWritesResponse_SameExchangeReturnsAuthoredResponse_AndRecordsTheDurableArtifact()
     {
         // A sync endpoint whose workflow writes a custom status/body/content-type/header returns THAT
@@ -58,6 +74,32 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
         Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
         Assert.Equal("application/json", artifact.GetProperty("contentType").GetString());
+    }
+
+    [Fact]
+    public async Task SyncEndpoint_StructuredBodyWithoutContentType_IsSentAsJson_AndRecordedAsStructure()
+    {
+        // Spec 256 (#3050): an object body with no content type is sent as JSON with application/json, as in Elsa 3.
+        using var body = JsonDocument.Parse("""{ "Name": "Zoë", "items": [1, 2] }""");
+        await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
+            artifactId: "artifact-sync-structured",
+            path: "sync/structured",
+            method: "POST",
+            resultValueId: "sync-structured-result",
+            statusCode: 200,
+            body: body.RootElement.Clone(),
+            contentType: null);
+
+        var response = await _fixture.Client.PostAsync($"{BasePath}sync/structured",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("""{"Name":"Zoë","items":[1,2]}""", await response.Content.ReadAsStringAsync());
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+
+        var artifact = await ReadArtifactForSingleRunAsync();
+        Assert.Equal(JsonValueKind.Object, artifact.GetProperty("body").ValueKind);
+        Assert.Equal("Zoë", artifact.GetProperty("body").GetProperty("Name").GetString());
     }
 
     [Fact]

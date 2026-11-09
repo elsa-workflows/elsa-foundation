@@ -3,7 +3,7 @@
     JavaScript expression support: pure-ECMAScript features evaluated in a workflow and returned over HTTP.
 .DESCRIPTION
     Foundation-native coverage of the JTest javascript suites (array/object/json/modern-JS). Each case is a
-    JS expression bound to a Sync HttpEndpoint's WriteHttpResponse.Body; the returned body is asserted.
+    JS expression or statement body bound to a Sync HttpEndpoint's WriteHttpResponse.Body; the returned body is asserted.
 
     IMPORTANT (from the engine): Foundation evaluates binding JS in a DETERMINISTIC CLOSED SANDBOX
     (JintPortableJavaScriptEvaluator). It exposes only `args` (declared expression parameters) and strips
@@ -28,8 +28,11 @@ $seq = Invoke-Step "resolve Sequence"         { Get-ActivityVersionId -Ctx $ctx 
 $hep = Invoke-Step "resolve HttpEndpoint"     { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Http.Activities.HttpEndpoint' }
 $whr = Invoke-Step "resolve WriteHttpResponse"{ Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Http.Activities.WriteHttpResponse' }
 
-# Each case: a JS expression that returns a STRING (the HTTP response body), and the expected body.
+# Each case: a JS binding that returns a STRING (the HTTP response body), and the expected body.
 $cases = @(
+    @{ name = "statements.return"; js = "const total = 12 + 30; return String(total);";                  expect = "42" }
+    @{ name = "statements.branch"; js = "const total = 12 + 30; if (total > 0) { return JSON.stringify({total}); } return 'none';"; expect = '{"total":42}' }
+    @{ name = "statements.completion"; js = "const total = 12 + 30; String(total)";                     expect = "42" }
     @{ name = "array.map";        js = "JSON.stringify([1,2,3].map(function(x){return x*2;}))";          expect = "[2,4,6]" }
     @{ name = "array.filter";     js = "JSON.stringify([1,2,3,4].filter(function(x){return x%2===0;}))"; expect = "[2,4]" }
     @{ name = "array.reduce";     js = "String([1,2,3,4].reduce(function(a,b){return a+b;},0))";          expect = "10" }
@@ -67,3 +70,5 @@ foreach ($c in $cases) {
 
 Write-Host ""
 Write-Host ("{0}/{1} JavaScript expression cases passed" -f $pass, $cases.Count) -ForegroundColor $(if ($pass -eq $cases.Count) { "Green" } else { "Yellow" })
+
+if ($pass -ne $cases.Count) { throw "JavaScript binding end-to-end checks failed ($pass/$($cases.Count))." }

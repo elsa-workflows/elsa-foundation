@@ -5,6 +5,9 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Hosting;
+using Elsa.Locking.Core;
+using Elsa.Tasks;
+using Elsa.Tasks.Core;
 using Elsa.Workbench.Boot;
 using Elsa.Workbench.Readiness;
 using Microsoft.Extensions.Configuration;
@@ -151,6 +154,62 @@ public sealed class ShellReadinessTests
         harness.Gate.Release();
         await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
         await harness.Warmup.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task StoppingRealActivationRunCancelsActivationTokenWithoutStoppingShellLifetimeBackgroundTasks()
+    {
+        await using var harness = WarmupHarness.Create(includeBackgroundTaskProbe: true);
+        var backgroundTask = Assert.IsType<BackgroundTaskLifetimeProbe>(harness.BackgroundTaskProbe);
+        var activationTokenCapture = Assert.IsType<ActivationTokenCapture>(harness.ActivationTokenCapture);
+        var observer = new GatedActivationAttemptObserver();
+        var run = harness.ActivationRunner.Start([ServerReadinessFixture.DefaultShellName], observer: observer);
+        Task? stopping = null;
+        IShell? activatedShell = null;
+
+        try
+        {
+            await harness.Gate.WaitUntilEnteredAsync();
+            harness.Gate.Release();
+            var attempt = await observer.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(ShellActivationAttemptOutcome.Succeeded, attempt.Outcome);
+            await backgroundTask.ExecutionStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            activatedShell = Assert.IsAssignableFrom<IShell>(harness.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
+            Assert.Equal(ShellLifecycleState.Active, activatedShell.State);
+
+            var activationToken = await activationTokenCapture.Captured.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(activationToken.IsCancellationRequested);
+
+            stopping = run.StopAsync(CancellationToken.None);
+            await WaitForAsync(() => activationToken.IsCancellationRequested);
+
+            Assert.True(activationToken.IsCancellationRequested);
+            Assert.False(harness.Lifetime.ApplicationStopping.IsCancellationRequested);
+            Assert.False(backgroundTask.ExecutionToken.IsCancellationRequested);
+            Assert.False(backgroundTask.ExecutionEnded.Task.IsCompleted);
+
+            var ticksAtStop = backgroundTask.TickCount;
+            await WaitForAsync(() => backgroundTask.TickCount > ticksAtStop);
+            Assert.False(backgroundTask.ExecutionToken.IsCancellationRequested);
+            Assert.False(backgroundTask.ExecutionEnded.Task.IsCompleted);
+        }
+        finally
+        {
+            observer.Release();
+            stopping ??= run.StopAsync(CancellationToken.None);
+            await stopping.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        var shell = Assert.IsAssignableFrom<IShell>(harness.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
+        Assert.Same(activatedShell, shell);
+        Assert.Equal(ShellLifecycleState.Active, shell.State);
+        var drain = await harness.Registry.DrainAsync(shell).WaitAsync(TimeSpan.FromSeconds(10));
+        await drain.WaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await backgroundTask.ExecutionEnded.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(backgroundTask.StopCalled.Task.IsCompleted);
+        Assert.True(backgroundTask.ExecutionToken.IsCancellationRequested);
+        Assert.False(harness.Lifetime.ApplicationStopping.IsCancellationRequested);
     }
 
     [Fact]
@@ -485,10 +544,13 @@ public sealed class ShellReadinessTests
         Assert.Equal(ShellReadinessStatus.Ready, harness.State.Snapshot.Status);
     }
 
-    private static async Task WaitForStatusAsync(ShellReadinessState state, ShellReadinessStatus expected)
+    private static Task WaitForStatusAsync(ShellReadinessState state, ShellReadinessStatus expected) =>
+        WaitForAsync(() => state.Snapshot.Status == expected);
+
+    private static async Task WaitForAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (state.Snapshot.Status != expected)
+        while (!condition())
             await Task.Delay(10, timeout.Token);
     }
 
@@ -496,6 +558,7 @@ public sealed class ShellReadinessTests
     {
         private readonly ServiceProvider _provider;
         private readonly ServerReadinessFixture.RouteInitializationControl _control;
+        private readonly BackgroundTaskLifetimeControl? _backgroundTaskControl;
         private Exception? _expectedStopFailure;
 
         private WarmupHarness(
@@ -505,7 +568,8 @@ public sealed class ShellReadinessTests
             ShellReadinessState state,
             ServerReadinessFixture.RouteInitializationControl control,
             ServerReadinessFixture.RouteInitializationControl.Gate gate,
-            IRuntimeFeatureCatalog? featureCatalogGate)
+            IRuntimeFeatureCatalog? featureCatalogGate,
+            BackgroundTaskLifetimeControl? backgroundTaskControl)
         {
             _provider = provider;
             _control = control;
@@ -515,6 +579,9 @@ public sealed class ShellReadinessTests
             Gate = gate;
             FeatureCatalogGate = featureCatalogGate;
             Registry = provider.GetRequiredService<IShellRegistry>();
+            _backgroundTaskControl = backgroundTaskControl;
+            BackgroundTaskProbe = backgroundTaskControl?.BackgroundTaskProbe;
+            ActivationTokenCapture = backgroundTaskControl?.ActivationTokenCapture;
         }
 
         public DefaultShellWarmup Warmup { get; }
@@ -522,18 +589,26 @@ public sealed class ShellReadinessTests
         public ShellReadinessState State { get; }
         public ServerReadinessFixture.RouteInitializationControl.Gate Gate { get; }
         public IShellRegistry Registry { get; }
+        public IShellActivationRunner ActivationRunner => _provider.GetRequiredService<IShellActivationRunner>();
         public IRuntimeFeatureCatalog? FeatureCatalogGate { get; }
+        public BackgroundTaskLifetimeProbe? BackgroundTaskProbe { get; }
+        public ActivationTokenCapture? ActivationTokenCapture { get; }
 
         public EagerShellActivationHostedService CreateEagerService() =>
             ActivatorUtilities.CreateInstance<EagerShellActivationHostedService>(_provider);
 
         public void ExpectStopFailure(Exception exception) => _expectedStopFailure = exception;
 
-        public static WarmupHarness Create(bool warmDefaultShell = true, IShellRegistry? registry = null, bool gateFeatureDiscovery = false)
+        public static WarmupHarness Create(
+            bool warmDefaultShell = true,
+            IShellRegistry? registry = null,
+            bool gateFeatureDiscovery = false,
+            bool includeBackgroundTaskProbe = false)
         {
             var lifetime = new ControlledHostApplicationLifetime();
             var state = new ShellReadinessState(TimeProvider.System);
             var control = new ServerReadinessFixture.RouteInitializationControl();
+            var backgroundTaskControl = includeBackgroundTaskProbe ? new BackgroundTaskLifetimeControl() : null;
             var services = new ServiceCollection();
             services.AddLogging();
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -550,14 +625,27 @@ public sealed class ShellReadinessTests
                 DefaultShellName = ServerReadinessFixture.DefaultShellName
             }));
             services.AddSingleton(NullLogger<DefaultShellWarmup>.Instance);
+            var featureAssemblies = includeBackgroundTaskProbe
+                ? new[] { typeof(ServerReadinessFixture.ReadinessProbeFeature).Assembly, typeof(TasksFeature).Assembly }
+                : new[] { typeof(ServerReadinessFixture.ReadinessProbeFeature).Assembly };
             services.AddCShells(shells => shells
-                .WithAssemblies(typeof(ServerReadinessFixture.ReadinessProbeFeature).Assembly)
+                .WithAssemblies(featureAssemblies)
                 .AddShell(ServerReadinessFixture.DefaultShellName, shell =>
+                {
                     shell.WithFeature<ServerReadinessFixture.ReadinessProbeFeature>(feature =>
                     {
                         feature.ControlId = control.Id;
                         feature.ShellName = ServerReadinessFixture.DefaultShellName;
-                    })));
+                    });
+                    if (includeBackgroundTaskProbe)
+                    {
+                        shell.WithFeature<TasksFeature>();
+                        shell.WithFeature<WarmupTaskProbeFeature>(feature =>
+                        {
+                            feature.ControlId = backgroundTaskControl!.Id;
+                        });
+                    }
+                }));
             if (registry is not null)
                 services.AddSingleton(registry);
             services.AddShellActivationRunner();
@@ -576,7 +664,8 @@ public sealed class ShellReadinessTests
                 state,
                 control,
                 control.For(ServerReadinessFixture.DefaultShellName),
-                featureCatalogGate);
+                featureCatalogGate,
+                backgroundTaskControl);
         }
 
         public async ValueTask DisposeAsync()
@@ -596,6 +685,22 @@ public sealed class ShellReadinessTests
                 failures.Add(exception);
             }
 
+            if (_backgroundTaskControl is not null)
+            {
+                foreach (var shell in Registry.GetActiveShells().ToArray())
+                {
+                    try
+                    {
+                        var drain = await Registry.DrainAsync(shell).WaitAsync(TimeSpan.FromSeconds(10));
+                        await drain.WaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                    }
+                    catch (Exception exception)
+                    {
+                        failures.Add(exception);
+                    }
+                }
+            }
+
             try
             {
                 await _provider.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
@@ -606,6 +711,7 @@ public sealed class ShellReadinessTests
             }
             finally
             {
+                _backgroundTaskControl?.Dispose();
                 _control.Dispose();
                 Lifetime.Dispose();
             }
@@ -615,6 +721,136 @@ public sealed class ShellReadinessTests
             if (failures.Count > 1)
                 throw new AggregateException("Warmup harness cleanup failed.", failures);
         }
+    }
+
+    [ShellFeature(name: "WarmupTaskProbe", DisplayName = "Warmup task lifetime probe", Description = "Test-only task registration for shell readiness lifetime coverage.")]
+    public sealed class WarmupTaskProbeFeature : IShellFeature
+    {
+        public string ControlId { get; set; } = null!;
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            var control = BackgroundTaskLifetimeControl.Resolve(ControlId);
+            services.AddSingleton<IDistributedLockProvider>(new UnusedDistributedLockProvider());
+            services.AddSingleton<IBackgroundTask>(control.BackgroundTaskProbe);
+            services.AddSingleton(control.ActivationTokenCapture);
+            services.AddShellInitializer<ActivationTokenCaptureInitializer>(LifecyclePhase.Start, int.MaxValue);
+        }
+    }
+
+    private sealed class BackgroundTaskLifetimeControl : IDisposable
+    {
+        private static readonly ConcurrentDictionary<string, BackgroundTaskLifetimeControl> Instances = new(StringComparer.Ordinal);
+
+        public BackgroundTaskLifetimeControl()
+        {
+            Id = Guid.NewGuid().ToString("n");
+            BackgroundTaskProbe = new BackgroundTaskLifetimeProbe();
+            ActivationTokenCapture = new ActivationTokenCapture(BackgroundTaskProbe);
+            Instances[Id] = this;
+        }
+
+        public string Id { get; }
+        public BackgroundTaskLifetimeProbe BackgroundTaskProbe { get; }
+        public ActivationTokenCapture ActivationTokenCapture { get; }
+
+        public static BackgroundTaskLifetimeControl Resolve(string id) =>
+            Instances.TryGetValue(id, out var control)
+                ? control
+                : throw new InvalidOperationException($"No warmup task probe control is registered for '{id}'.");
+
+        public void Dispose() => Instances.TryRemove(Id, out _);
+    }
+
+    private sealed class ActivationTokenCapture(BackgroundTaskLifetimeProbe backgroundTaskProbe)
+    {
+        public TaskCompletionSource<CancellationToken> Captured { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task CaptureAndWaitForTaskAsync(CancellationToken cancellationToken)
+        {
+            Captured.TrySetResult(cancellationToken);
+            await backgroundTaskProbe.ExecutionStarted.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class ActivationTokenCaptureInitializer(ActivationTokenCapture capture) : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken) => capture.CaptureAndWaitForTaskAsync(cancellationToken);
+    }
+
+    private sealed class GatedActivationAttemptObserver : IShellActivationAttemptObserver
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<ShellActivationAttempt> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Release() => _release.TrySetResult();
+
+        public async ValueTask OnAttemptCompletedAsync(ShellActivationAttempt attempt, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult(attempt);
+            // Keep StopAsync pending until the test observes cancellation and releases this success boundary.
+            await _release.Task;
+        }
+    }
+
+    private sealed class BackgroundTaskLifetimeProbe : IBackgroundTask
+    {
+        private int _tickCount;
+        private readonly TaskCompletionSource _stopRequested = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ExecutionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ExecutionEnded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource StopCalled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken ExecutionToken { get; private set; }
+        public int TickCount => Volatile.Read(ref _tickCount);
+
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task ExecuteAsync(CancellationToken cancellationToken)
+        {
+            ExecutionToken = cancellationToken;
+            ExecutionStarted.TrySetResult();
+            try
+            {
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Interlocked.Increment(ref _tickCount);
+                    var delay = Task.Delay(10, cancellationToken);
+                    if (await Task.WhenAny(delay, _stopRequested.Task) == _stopRequested.Task)
+                        return;
+                    await delay;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Shell teardown cancels the task lifetime after requesting a graceful stop.
+            }
+            finally
+            {
+                ExecutionEnded.TrySetResult();
+            }
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            StopCalled.TrySetResult();
+            _stopRequested.TrySetResult();
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class UnusedDistributedLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The warmup task probe does not acquire distributed locks.");
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The warmup task probe does not acquire distributed locks.");
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The warmup task probe does not acquire distributed locks.");
     }
 
     private sealed class GenerationShell(string name, int generation) : IShell

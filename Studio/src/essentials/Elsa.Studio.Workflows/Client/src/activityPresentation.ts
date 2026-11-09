@@ -3,6 +3,7 @@ import type {
   ActivityPresentationRecord
 } from "./workflowTypes";
 import { getActivityDisplay } from "./activityDisplay";
+import { shortTypeName } from "./workflowFormatting";
 
 export const activityDisplayNameMaxLength = 200;
 export const activityDescriptionMaxLength = 2_000;
@@ -21,8 +22,8 @@ export function normalizeActivityPresentation(
 ): ActivityPresentationRecord[] {
   const normalized = new Map<string, ActivityPresentationRecord>();
   for (const record of records ?? []) {
-    const nodeId = record.nodeId?.trim();
-    if (!nodeId) continue;
+    const nodeId = record.nodeId;
+    if (!nodeId?.trim()) continue;
     const displayName = normalizeActivityPresentationValue(
       record.displayName,
       activityDisplayNameMaxLength
@@ -90,5 +91,5 @@ export function resolveActivityLabel(
 }
 
 function shortActivityType(value: string) {
-  return value.split(".").filter(Boolean).at(-1) ?? value;
+  return shortTypeName(value) ?? value;
 }

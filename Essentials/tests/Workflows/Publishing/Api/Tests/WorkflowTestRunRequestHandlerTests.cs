@@ -1,3 +1,10 @@
+using System.Security.Claims;
+using Elsa.Foundation.Identity;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Primitives.Exceptions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
@@ -23,7 +30,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
@@ -43,6 +53,87 @@ public sealed class WorkflowTestRunRequestHandlerTests
     public WorkflowTestRunRequestHandlerTests() =>
         _testRunStore = CreateTestRunStore(_testScopeStore);
 
+    [Theory]
+    [InlineData("options", null)]
+    [InlineData("options", "tenant-a")]
+    [InlineData("draft", null)]
+    [InlineData("draft", "tenant-a")]
+    [InlineData("version", null)]
+    [InlineData("version", "tenant-a")]
+    public async Task Test_run_compilation_and_source_reference_keep_the_current_tenant(string entryPoint, string? tenantId)
+    {
+        var access = new StubPersistenceAccessContextAccessor(tenantId is null
+            ? PersistenceAccessContext.Global
+            : PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)));
+        var requests = new List<WorkflowExecutableCompileRequest>();
+        var handler = entryPoint == "version"
+            ? Handler(WorkflowVersion(Node("write-one", Text("hello"))), accessContextAccessor: access, onCompile: requests.Add)
+            : DraftSnapshotHandler(accessContextAccessor: access, onCompile: requests.Add);
+
+        if (entryPoint == "options")
+            await handler.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None);
+        else
+        {
+            var result = entryPoint == "version"
+                ? await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None)
+                : await handler.Handle(new StartWorkflowDraftTestRun("definition-1", "snapshot-tenant", DraftState()), CancellationToken.None);
+            Assert.Equal("DispatchAccepted", result.Status);
+            Assert.Equal(tenantId, Assert.Single(await _sourceReferenceStore.ListAllAsync()).TenantId);
+        }
+
+        Assert.Equal(tenantId, Assert.Single(requests).TenantId);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("draft")]
+    public async Task ImmediateHttpTestRunCapturesPersistedSubjectWithoutCapturingGrants(string entryPoint)
+    {
+        using var services = SubjectServices("tenant-a", "user-a");
+        var access = new StubPersistenceAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var dispatcher = new CapturingStartDispatcher(Dispatcher());
+        var handler = entryPoint == "version"
+            ? Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher, accessContextAccessor: access, ambientServices: services)
+            : DraftSnapshotHandler(dispatcher, accessContextAccessor: access, ambientServices: services);
+        if (entryPoint == "version") await handler.StartAsync(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        else await handler.StartDraftAsync(new StartWorkflowDraftTestRun("definition-1", "subject-snapshot", DraftState()), CancellationToken.None);
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(StartWorkflowTestRunRequestHandler.RequestedBy, request.RequestedBy);
+        Assert.Equal(request.RequestedBy, request.Authority.SystemIdentity);
+        Assert.Equal(request.RequestedBy, request.Authority.RootInitiator);
+        Assert.Equal("persisted-user", request.Authority.Metadata["elsa.identity.subject-kind"]);
+        Assert.Equal("user-a", request.Authority.Metadata["elsa.identity.subject-id"]);
+        Assert.Equal(7, request.Authority.Metadata.Count);
+        Assert.Equal("test-run", request.Authority.Metadata["runtime.scope"]);
+    }
+
+    [Theory]
+    [InlineData("tenant-b", "user-a")]
+    [InlineData("tenant-a", " ")]
+    public async Task ImmediateHttpTestRunRefusesMismatchedTenantOrMalformedSubject(string principalTenant, string subject)
+    {
+        using var services = SubjectServices(principalTenant, subject);
+        var access = new StubPersistenceAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var dispatcher = new CapturingStartDispatcher(Dispatcher());
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher, accessContextAccessor: access, ambientServices: services);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => handler.StartAsync(new StartWorkflowTestRun("version-1"), CancellationToken.None));
+        Assert.Empty(dispatcher.Requests);
+    }
+
+    private static ServiceProvider SubjectServices(string tenant, string subject)
+    {
+        var http = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(IdentityClaimTypes.Normalized, "v1"), new Claim(IdentityClaimTypes.TenantId, tenant),
+            new Claim(IdentityClaimTypes.UserId, subject), new Claim(IdentityClaimTypes.Permission, "not-saved"),
+            new Claim(ClaimTypes.NameIdentifier, "not-the-subject")
+        }, "trusted")) };
+        var services = new ServiceCollection();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = http });
+        services.AddSingleton(new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "trusted" } })));
+        return services.BuildServiceProvider();
+    }
+
     [Fact]
     public async Task StartsTransientWorkflowTestRunWithoutListingPublishedExecutable()
     {
@@ -58,6 +149,223 @@ public sealed class WorkflowTestRunRequestHandlerTests
         // expiry are reference facts, no longer segregated by an artifact-level list filter).
         Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
+    }
+
+    [Fact]
+    public async Task DraftTriggerTestRunPreparesExternalActionAndStopCleansItsDriverResource()
+    {
+        var driver = new ExternalTestRunDriver();
+        using var runtime = CreateTestRunRuntime(driver);
+        var extractor = new SingleBindingTriggerExtractor();
+        var handler = DraftSnapshotHandler(
+            triggerBindingExtractor: extractor,
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets,
+            testRunTargetDispatcher: runtime.Dispatcher,
+            testRunTargetCleaner: runtime.Cleaner);
+        var options = await handler.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None);
+        var option = Assert.Single(options.Options);
+        Assert.True(option.IsAvailable);
+        Assert.Equal("fire-now", Assert.Single(option.Modes).ModeId);
+
+        var prepared = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-trigger",
+            State: DraftState(),
+            Start: new WorkflowTestRunStartSelection(
+                WorkflowTestRunStartSelection.Trigger,
+                option.OptionId,
+                "fire-now")), CancellationToken.None);
+
+        Assert.Equal("Prepared", prepared.Status);
+        Assert.Null(prepared.WorkflowExecutionId);
+        Assert.Equal("POST", prepared.DriverAction?.Method);
+        Assert.Equal("test-request", prepared.DriverAction?.Kind);
+        var target = Assert.IsType<TestRunTarget>(await runtime.Targets.FindAsync(prepared.TestRunId));
+        Assert.Equal(TestRunTargetState.Prepared, target.State);
+        Assert.NotNull(target.WorkflowExecutionId);
+        Assert.NotNull(target.IdempotencyKey);
+
+        var refreshed = await handler.GetAsync(prepared.TestRunId, CancellationToken.None);
+        Assert.Equal("Prepared", refreshed?.Status);
+
+        var stopped = await handler.StopAsync(prepared.TestRunId, CancellationToken.None);
+        Assert.Equal("Stopped", stopped?.Status);
+        Assert.Null(stopped?.DriverAction);
+        Assert.Equal(1, driver.StopCalls);
+        Assert.Null(await runtime.Targets.FindAsync(prepared.TestRunId));
+    }
+
+    [Fact]
+    public async Task DraftTriggerTestRunRejectsUnknownOptionBeforeSavingExecutableOrOpeningScope()
+    {
+        var driver = new ExternalTestRunDriver();
+        using var runtime = CreateTestRunRuntime(driver);
+        var handler = DraftSnapshotHandler(
+            triggerBindingExtractor: new SingleBindingTriggerExtractor(),
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets);
+
+        var rejected = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-invalid-trigger",
+            State: DraftState(),
+            Start: new WorkflowTestRunStartSelection(
+                WorkflowTestRunStartSelection.Trigger,
+                "stale-option",
+                "fire-now")), CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("option", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Null(await runtime.Targets.FindAsync(rejected.TestRunId));
+    }
+
+    [Fact]
+    public async Task TestRunInspectionAndStopAreHiddenOutsideTheOwningTenant()
+    {
+        var driver = new ExternalTestRunDriver();
+        using var runtime = CreateTestRunRuntime(driver);
+        var authorized = DraftSnapshotHandler(
+            triggerBindingExtractor: new SingleBindingTriggerExtractor(),
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets,
+            testRunTargetDispatcher: runtime.Dispatcher,
+            testRunTargetCleaner: runtime.Cleaner);
+        var option = Assert.Single((await authorized.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None)).Options);
+        var prepared = await authorized.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-tenant-scope",
+            State: DraftState(),
+            Start: new WorkflowTestRunStartSelection(WorkflowTestRunStartSelection.Trigger, option.OptionId, "fire-now")),
+            CancellationToken.None);
+        var otherTenant = DraftSnapshotHandler(
+            accessContextAccessor: new StubPersistenceAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("other-tenant"))),
+            triggerBindingExtractor: new SingleBindingTriggerExtractor(),
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets,
+            testRunTargetCleaner: runtime.Cleaner);
+
+        Assert.Null(await otherTenant.GetAsync(prepared.TestRunId, CancellationToken.None));
+        Assert.Null(await otherTenant.StopAsync(prepared.TestRunId, CancellationToken.None));
+        Assert.NotNull(await runtime.Targets.FindAsync(prepared.TestRunId));
+        Assert.Equal(0, driver.StopCalls);
+    }
+
+    [Fact]
+    public async Task StopKeepsTargetForRetryWhenDriverCleanupFails()
+    {
+        var driver = new ExternalTestRunDriver { FailStopCalls = 1 };
+        using var runtime = CreateTestRunRuntime(driver);
+        var handler = DraftSnapshotHandler(
+            triggerBindingExtractor: new SingleBindingTriggerExtractor(),
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets,
+            testRunTargetDispatcher: runtime.Dispatcher,
+            testRunTargetCleaner: runtime.Cleaner);
+        var option = Assert.Single((await handler.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None)).Options);
+        var prepared = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-stop-retry",
+            State: DraftState(),
+            Start: new WorkflowTestRunStartSelection(WorkflowTestRunStartSelection.Trigger, option.OptionId, "fire-now")),
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.StopAsync(prepared.TestRunId, CancellationToken.None));
+        var closing = Assert.IsType<WorkflowTestScopeRecord>(await _testScopeStore.FindAsync(prepared.TestRunId));
+        Assert.Equal(WorkflowTestScopeState.Closing, closing.State);
+        Assert.Equal(TestRunTargetState.Stopped, (await runtime.Targets.FindAsync(prepared.TestRunId))?.State);
+
+        var stopped = await handler.StopAsync(prepared.TestRunId, CancellationToken.None);
+
+        Assert.Equal("Stopped", stopped?.Status);
+        Assert.Equal(2, driver.StopCalls);
+        Assert.Null(await runtime.Targets.FindAsync(prepared.TestRunId));
+    }
+
+    [Fact]
+    public async Task TriggerStartRejectsInputsWhenTheExecutableValidatorReportsFindings()
+    {
+        var driver = new ExternalTestRunDriver();
+        using var runtime = CreateTestRunRuntime(driver);
+        var state = new WorkflowDefinitionState(
+            [],
+            Node("write-one", Text("hello")),
+            [WorkflowInput("customerId", new TypeReference("String"), isRequired: false)],
+            [],
+            null);
+        var handler = DraftSnapshotHandler(
+            triggerBindingExtractor: new SingleBindingTriggerExtractor(),
+            triggerDrivers: [driver],
+            testRunTargetStore: runtime.Targets,
+            testRunTargetDispatcher: runtime.Dispatcher,
+            testRunTargetCleaner: runtime.Cleaner,
+            inputValidator: new RejectingInputValidator());
+        var option = Assert.Single((await handler.GetDraftOptionsAsync(
+            new DraftTestRunOptionsRequest("definition-1", "snapshot-input-invalid", state),
+            CancellationToken.None)).Options);
+
+        var rejected = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-input-invalid",
+            State: state,
+            Start: new WorkflowTestRunStartSelection(WorkflowTestRunStartSelection.Trigger, option.OptionId, "fire-now")),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("input validation", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Null(await runtime.Targets.FindAsync(rejected.TestRunId));
+        Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
+    }
+
+    [Fact]
+    public async Task DirectDraftTestRunRejectsMissingRequiredInputsBeforeSavingExecutableOrOpeningScope()
+    {
+        var state = new WorkflowDefinitionState(
+            [],
+            Node("write-one", Text("hello")),
+            [WorkflowInput("customerId", new TypeReference("String"), isRequired: true)],
+            [],
+            null);
+        var handler = DraftSnapshotHandler();
+
+        var rejected = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-direct-required-input",
+            State: state,
+            Start: new WorkflowTestRunStartSelection(WorkflowTestRunStartSelection.Direct)),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("input validation", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("customerId", rejected.Metadata["runtime.inputValidation.findings"], StringComparison.Ordinal);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Empty(await _sourceReferenceStore.ListAllAsync());
+        Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
+    }
+
+    [Fact]
+    public async Task DraftTestRunWithInputContractFailsClosedWhenInputValidatorIsUnavailable()
+    {
+        var state = new WorkflowDefinitionState(
+            [],
+            Node("write-one", Text("hello")),
+            [WorkflowInput("customerId", new TypeReference("String"), isRequired: true)],
+            [],
+            null);
+        var handler = DraftSnapshotHandler(inputValidatorUnavailable: true);
+
+        var rejected = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-input-validator-unavailable",
+            State: state),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("validation is not configured", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
     }
 
     [Fact]
@@ -280,6 +588,30 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("Text", authored.InputKey);
         Assert.Equal("JavaScript", authored.ExpressionType);
         Assert.Equal(authoredJson, authored.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task DraftTestRunFreezesCanvasLayoutOntoItsExpiringReference()
+    {
+        var coordinates = new[]
+        {
+            new WorkflowExecutableLayoutRecord("start-event", 80, 160),
+            new WorkflowExecutableLayoutRecord("write-one", 320, 120, 240, 100,
+                JsonSerializer.SerializeToElement(new { LabelOffset = 12 })),
+            new WorkflowExecutableLayoutRecord("end-event", 720, 160)
+        };
+        var request = new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-layout",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null))
+        {
+            Layout = coordinates
+        };
+        var view = await DraftSnapshotHandler().Handle(request, CancellationToken.None);
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        Assert.Equal(coordinates, reference.Layout);
+        coordinates[0] = coordinates[0] with { X = 999 };
+        Assert.Equal(80, reference.Layout[0].X);
     }
 
     [Fact]
@@ -624,6 +956,20 @@ public sealed class WorkflowTestRunRequestHandlerTests
         return new InMemoryWorkflowTestRunStore(provider.GetRequiredService<IServiceScopeFactory>());
     }
 
+    private TestRunRuntime CreateTestRunRuntime(ITestRunTriggerDriver driver)
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.RemoveAll<IWorkflowTestScopeStore>();
+        services.AddSingleton<IWorkflowTestScopeStore>(_testScopeStore);
+        services.RemoveAll<IWorkflowExecutableStore>();
+        services.AddSingleton<IWorkflowExecutableStore>(_executableStore);
+        services.RemoveAll<IWorkflowStartDispatcher>();
+        services.AddSingleton<IWorkflowStartDispatcher>(Dispatcher());
+        services.AddSingleton<ITestRunTriggerDriver>(driver);
+        return new(services.BuildServiceProvider());
+    }
+
     private static WorkflowTestRunDraftSnapshot DraftSnapshot(string definitionVersionId, DateTimeOffset? expiresAt) =>
         new(
             DefinitionId: "definition-1",
@@ -637,15 +983,18 @@ public sealed class WorkflowTestRunRequestHandlerTests
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
         IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null,
-        IExpressionDraftSemanticValidator? expressionValidator = null)
+        IExpressionDraftSemanticValidator? expressionValidator = null,
+        IPersistenceAccessContextAccessor? accessContextAccessor = null,
+        Action<WorkflowExecutableCompileRequest>? onCompile = null,
+        IServiceProvider? ambientServices = null)
     {
         var versionStore = new FakeVersionStore(workflowVersion);
         return new(
-            TestCompiler.Create(
+            ObserveCompiler(TestCompiler.Create(
                 versionStore,
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
-                TestWellKnownTypeRegistry.Create()),
+                TestWellKnownTypeRegistry.Create()), onCompile),
             _executableStore,
             _sourceReferenceStore,
             new EmptyWorkflowDefinitionVersionLayoutStore(),
@@ -655,20 +1004,34 @@ public sealed class WorkflowTestRunRequestHandlerTests
             TimeProvider.System,
             versionStore,
             new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
+        inputValidator: new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             testScopeStore: _testScopeStore,
-            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid);
+            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid,
+            accessContextAccessor: accessContextAccessor,
+            ambientServices: ambientServices);
     }
 
     private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(
         IWorkflowStartDispatcher? dispatcher = null,
-        IExpressionDraftSemanticValidator? expressionValidator = null)
+        IExpressionDraftSemanticValidator? expressionValidator = null,
+        IWorkflowTriggerBindingExtractor? triggerBindingExtractor = null,
+        IEnumerable<ITestRunTriggerDriver>? triggerDrivers = null,
+        ITestRunTargetStore? testRunTargetStore = null,
+        ITestRunTargetDispatcher? testRunTargetDispatcher = null,
+        ITestRunTargetCleaner? testRunTargetCleaner = null,
+        IWorkflowExecutableInputValidator? inputValidator = null,
+        IPersistenceAccessContextAccessor? accessContextAccessor = null,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+        bool inputValidatorUnavailable = false,
+        Action<WorkflowExecutableCompileRequest>? onCompile = null,
+        IServiceProvider? ambientServices = null)
     {
         return new(
-            TestCompiler.Create(
+            ObserveCompiler(TestCompiler.Create(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
                 _activityStructureService,
-                TestWellKnownTypeRegistry.Create()),
+                TestWellKnownTypeRegistry.Create()), onCompile),
             _executableStore,
             _sourceReferenceStore,
             new EmptyWorkflowDefinitionVersionLayoutStore(),
@@ -678,7 +1041,143 @@ public sealed class WorkflowTestRunRequestHandlerTests
             TimeProvider.System,
             authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
             testScopeStore: _testScopeStore,
-            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid);
+            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid,
+            triggerBindingExtractor: triggerBindingExtractor,
+            triggerDrivers: triggerDrivers,
+            testRunTargetStore: testRunTargetStore,
+            testRunTargetDispatcher: testRunTargetDispatcher,
+            testRunTargetCleaner: testRunTargetCleaner,
+            inputValidator: inputValidatorUnavailable
+                ? null
+                : inputValidator ?? new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
+            accessContextAccessor: accessContextAccessor,
+            partitionAccessor: partitionAccessor,
+            ambientServices: ambientServices);
+    }
+
+    private static IWorkflowExecutableCompiler ObserveCompiler(IWorkflowExecutableCompiler compiler, Action<WorkflowExecutableCompileRequest>? observer) =>
+        observer is null ? compiler : new ObservingCompiler(compiler, observer);
+
+    private sealed class ObservingCompiler(IWorkflowExecutableCompiler inner, Action<WorkflowExecutableCompileRequest> observer) : IWorkflowExecutableCompiler
+    {
+        public ValueTask<WorkflowExecutable> CompileAsync(WorkflowExecutableCompileRequest request, CancellationToken cancellationToken = default)
+        {
+            observer(request);
+            return inner.CompileAsync(request, cancellationToken);
+        }
+    }
+
+    private static WorkflowDefinitionState DraftState() =>
+        new([], Node("write-one", Text("hello")), [], [], null);
+
+    private static DraftTestRunOptionsRequest DraftOptionsRequest() =>
+        new("definition-1", "snapshot-trigger", DraftState());
+
+    private static InputDefinition WorkflowInput(string name, TypeReference type, bool isRequired) =>
+        new(
+            ReferenceKey: $"input-{name}",
+            Name: name,
+            Type: type,
+            StorageDriverType: null,
+            DisplayName: name,
+            Category: null,
+            IsNullable: !isRequired,
+            IsRequired: isRequired,
+            DefaultValue: null,
+            DefaultSyntax: null);
+
+    private sealed class SingleBindingTriggerExtractor : IWorkflowTriggerBindingExtractor
+    {
+        public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable) =>
+            Evaluate(executable).Bindings;
+
+        public WorkflowTriggerPreflightOutcome Evaluate(WorkflowExecutable executable)
+        {
+            var node = executable.RootActivity ?? throw new InvalidOperationException("The test executable has no root node.");
+            var binding = new WorkflowTriggerBinding(
+                WorkflowTriggerBinding.BuildId(executable.Identity.ArtifactId, node.ExecutableNodeId, "test-stimulus"),
+                executable.Identity.ArtifactId,
+                executable.Identity.DefinitionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.ArtifactHash,
+                node.ExecutableNodeId,
+                "test.trigger",
+                "test-stimulus",
+                null,
+                new Dictionary<string, string>(),
+                DateTimeOffset.UtcNow,
+                Cardinality: TriggerCardinality.Exclusive);
+            return new WorkflowTriggerPreflightOutcome(
+                executable.Identity,
+                [new WorkflowTriggerNodePreflightOutcome(
+                    node.ExecutableNodeId,
+                    node.ActivityType,
+                    "test.provider",
+                    WorkflowTriggerPreflightStatus.Registered,
+                    [binding])]);
+        }
+    }
+
+    private sealed class ExternalTestRunDriver : ITestRunTriggerDriver
+    {
+        public string DriverId => "test-driver";
+        public int StopCalls { get; private set; }
+        public int FailStopCalls { get; set; }
+
+        public bool Supports(TestRunTriggerContext context) =>
+            StringComparer.Ordinal.Equals(context.ProviderId, "test.provider");
+
+        public IReadOnlyCollection<TestRunTriggerMode> Describe(TestRunTriggerContext context) =>
+        [
+            new TestRunTriggerMode("fire-now", "Fire now", "Send one test request.", isDefault: true)
+        ];
+
+        public TestRunTriggerValidation Validate(
+            TestRunTriggerContext context,
+            string modeId,
+            JsonElement? data) =>
+            modeId == "fire-now"
+                ? TestRunTriggerValidation.Success()
+                : TestRunTriggerValidation.Failure([new("mode.invalid", "The selected mode is unavailable.")]);
+
+        public ValueTask<TestRunTriggerPreparation> PrepareAsync(
+            TestRunTriggerPrepareContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRunTriggerPreparation.External(
+                new TestRunDriverAction("test-request", $"/test-runs/{context.TestRunId}/fire", "POST")));
+
+        public ValueTask StopAsync(
+            TestRunTriggerStopContext context,
+            CancellationToken cancellationToken = default)
+        {
+            StopCalls++;
+            if (FailStopCalls > 0)
+            {
+                FailStopCalls--;
+                return ValueTask.FromException(new InvalidOperationException("Injected driver cleanup failure."));
+            }
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class StubPersistenceAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class RejectingInputValidator : IWorkflowExecutableInputValidator
+    {
+        public WorkflowExecutableInputValidation Validate(
+            WorkflowExecutableInputContract contract,
+            IEnumerable<KeyValuePair<string, JsonElement>> inputs) =>
+            WorkflowExecutableInputValidation.Failure([
+                new WorkflowExecutableInputValidationFinding("runtime.input.invalid", "An input is invalid.", "customerId")
+            ]);
+
+        public WorkflowExecutableInputValidation ValidateKnownInputs(
+            WorkflowExecutableInputContract contract,
+            IEnumerable<KeyValuePair<string, JsonElement>> inputs) =>
+            Validate(contract, inputs);
     }
 
     private WorkflowStartDispatcher Dispatcher() =>
@@ -780,6 +1279,31 @@ public sealed class WorkflowTestRunRequestHandlerTests
         {
             Requests.Add(request);
             return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
+        }
+    }
+
+    private sealed class TestRunRuntime : IDisposable
+    {
+        private readonly ServiceProvider _provider;
+        private readonly IServiceScope _scope;
+
+        public TestRunRuntime(ServiceProvider provider)
+        {
+            _provider = provider;
+            _scope = provider.CreateScope();
+            Targets = _scope.ServiceProvider.GetRequiredService<ITestRunTargetStore>();
+            Dispatcher = _scope.ServiceProvider.GetRequiredService<ITestRunTargetDispatcher>();
+            Cleaner = _scope.ServiceProvider.GetRequiredService<ITestRunTargetCleaner>();
+        }
+
+        public ITestRunTargetStore Targets { get; }
+        public ITestRunTargetDispatcher Dispatcher { get; }
+        public ITestRunTargetCleaner Cleaner { get; }
+
+        public void Dispose()
+        {
+            _scope.Dispose();
+            _provider.Dispose();
         }
     }
 

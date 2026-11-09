@@ -42,6 +42,24 @@ public sealed class ChildFaultAbsorptionExecutionTests
     }
 
     [Fact]
+    public async Task Absorption_CopiesItsRequestMetadataIntoTheIncidentOutcome()
+    {
+        await using var harness = NewHarness(
+            new FaultAbsorptionDirective { Metadata = new Dictionary<string, string> { ["compensation.forwardOutcome"] = "unknown" } },
+            "actexec-parent", "actexec-f", "actexec-a", "actexec-a-child");
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(FaultAbsorbingParentActivity),
+                WorkflowExecutionHarness.NewFaultingNode("node-f"),
+                StructuralExecutionTestSupport.NewStructuralNode("node-a", typeof(PassthroughStructuralActivity), WorkflowExecutionHarness.NewProbeNode("node-a-child")))));
+
+        run.AssertWorkflowCompleted();
+        var outcome = Assert.Single(await ListIncidentsAsync(harness)).ResolutionOutcome!;
+        Assert.Equal(IncidentResolutionSystemSources.StructuralFaultAbsorption, outcome.SystemSource);
+        Assert.Equal("unknown", Assert.Single(outcome.Metadata, item => item.Key == "compensation.forwardOutcome").Value);
+    }
+
+    [Fact]
     public async Task CompositeChildFault_AbsorbedWithComplete_ReclaimsDescendantsAndResolvesIncident()
     {
         await using var harness = NewHarness(
@@ -261,6 +279,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         public bool FaultInsteadOfContinue { get; init; }
         public bool CompleteOnAbsorb { get; init; }
         public bool AbsorbInCompletionEvaluation { get; init; }
+        public IReadOnlyDictionary<string, string>? Metadata { get; init; }
     }
 
     /// <summary>
@@ -284,7 +303,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         {
             var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
             var incidentId = directive.OverrideIncidentId ?? context.IncidentId!;
-            runtimeContext.RequestChildFaultAbsorption(incidentId, directive.Reason);
+            runtimeContext.RequestChildFaultAbsorption(incidentId, directive.Reason, directive.Metadata);
             if (directive.StageTwice)
                 runtimeContext.RequestChildFaultAbsorption(incidentId, directive.Reason);
             if (directive.FaultInsteadOfContinue)

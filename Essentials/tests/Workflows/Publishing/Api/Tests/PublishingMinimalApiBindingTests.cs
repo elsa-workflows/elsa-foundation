@@ -207,7 +207,7 @@ public sealed class PublishingMinimalApiBindingTests
         Regex.Replace("/" + value.TrimStart('/'), "\\{[^{}]+\\}", "{param}", RegexOptions.CultureInvariant);
 
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
-        ("IncidentStrategies.List" or
+        ("TestRuns.Get" or "TestRuns.Waits" or "TestRuns.Stop" or "IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
         "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or

@@ -37,6 +37,12 @@ retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's 
 publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
 post-commit intent kind through it.
 
+For Workflow Test Runs, this feature also contributes the scoped `Elsa.Event`
+start driver (`event` mode) and active-wait driver (`event` mode). These
+single-Test-Run paths share the event payload contract but remain distinct from
+`PublishEvent`'s production broadcast behavior. See the [Runtime Test Run
+driver guide](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
+
 Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
 pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
 intent shape, and the `StartAndResume` handler pin).

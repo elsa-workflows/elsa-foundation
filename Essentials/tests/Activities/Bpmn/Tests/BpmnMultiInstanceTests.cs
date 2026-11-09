@@ -17,6 +17,8 @@ using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -144,7 +146,7 @@ public sealed class BpmnMultiInstanceTests
         Assert.All(instances, state =>
         {
             Assert.Equal(ActivityExecutionStatus.Cancelled, state.Status);
-            Assert.Equal(BpmnExecutionEngine.BoundaryHostInterruptedReason, state.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+            Assert.Equal("bpmn.boundary.host-interrupted", state.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         });
         Assert.Empty(await fixture.BookmarksAsync());
     }
@@ -199,7 +201,7 @@ public sealed class BpmnMultiInstanceTests
         var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
-        Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.boundary.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]
@@ -321,7 +323,7 @@ public sealed class BpmnMultiInstanceTests
         // back the withheld envelope a variable frame would hold.
         await using var fixture = await BpmnRuntimeFixture.CreateAsync(["actexec-bpmn"]);
         var process = NewCollectionExecutable(fixture, isSequential: true, NewItemCaptureNode(BodyNodeId, "item"), ["a"]).RootActivity;
-        var activity = new BpmnProcessActivity(fixture.Provider.GetRequiredService<BpmnExecutionEngine>());
+        var activity = new BpmnProcessActivity(fixture.Provider.GetRequiredService<Elsa.Activities.Bpmn.Contracts.IBpmnProcessRuntime>());
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,

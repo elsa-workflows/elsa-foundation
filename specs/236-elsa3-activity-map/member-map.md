@@ -36,7 +36,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | `name` | — | R9 |
 | `metadata` (designer position, size, display text) | layout sibling (out of scope) | R9 |
 | `type`, `version` | `ActivityVersionId` via resolution (spec FR-007, FR-008) | R1 |
-| `customProperties.canStartWorkflow` | `CanStartWorkflow` input on HttpEndpoint and Event; Cron and Timer are start-only | R1 where the input exists; on Cron/Timer `true` is required (else R6, mid-flow wait); elsewhere R3 (default false) |
+| `customProperties.canStartWorkflow` | `CanStartWorkflow` input on HttpEndpoint and Event; Cron and Timer are start-only | R1 where the input exists; on Cron/Timer `true` is required (else R6, mid-flow wait). Elsewhere (a non-trigger) R8: Elsa 3 only uses the flag to pick a flowchart's start when no trigger fired (`Flowchart.GetStartActivity`, 3.5.3), so graph conversion reads it for `startNodeId` and it is then dropped (spec 248; was R3, amended 2026-10-19 with the maintainer) |
 | `customProperties.runAsynchronously` | — | R3 (default false) |
 | `customProperties.commitStrategy` | — | R3 (default absent) |
 | output `converter {id, settings}` | `ArgumentState.Conversion` (Auto/None/Json/Xml/Profile) | R5: Auto/None/Json/Xml carried; any other converter id → unconvertible |
@@ -98,7 +98,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
-| WriteLine.Text | `text` | R1 | 39 |
+| WriteLine.Text | `text` | R1; unset or empty → R2 `""` (Elsa 3 writes an empty line; spec 248, amended 2026-10-19) | 39 |
 | ReadLine.Result | `Result` | R1 | 0 |
 | Fault.Code / Category / FaultType / Message | `code` / `category` / `faultType` / `message` | R1 + R2 (emit `"0"`, `"General"`, `"System"` when unset; Message has no Elsa 3 default) | 0 |
 | SetVariable.Variable | `elsa.intrinsic.set@1` `variable` (`VariableReference`) | R7 (declaring scope computed) | 20 |
@@ -147,8 +147,8 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | outcomes `Failed to connect`, `Done` co-firing with status outcomes | `Failed`; single outcome | R8 + **W** | 0 |
 | non-flow .ExpectedStatusCodes[].Activity, UnmatchedStatusCode / FailedToConnect / Timeout ports | — (leaf activity) | R6 when any port holds an activity | 0 |
 | WriteHttpResponse.StatusCode | `StatusCode` (int) | R5 (enum name literal → int) | 71 |
-| WriteHttpResponse.Content | `Body` (string) | R1 rename + R5 (string) | 71 |
-| WriteHttpResponse.ContentType | same | R1 | 71 |
+| WriteHttpResponse.Content | `Body` (JSON value) | R1 rename + R5: a literal, or a variable declared `String`, converts with any content type; a script with a typed declaration (`String`, `Int32`, …) → unconvertible, `VF-IMP-008` (Elsa 3 converted its result to that type; Elsa 4 takes it as returned; spec 256 FR-013, all activities). Any other value converts when `ContentType` is unset, blank, or exactly `application/json` or `text/json` (Elsa 3 sent JSON then, inferring `application/json`; Elsa 4 does the same); another JSON type (letter case, a parameter, `+json`) converts with **W** `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT` (Elsa 3 sent the type name, Elsa 4 the JSON). A non-JSON literal content type (Elsa 3 sent the value's type name), a computed content type, or `Byte[]`/`Stream` content → unconvertible (spec 256, #3050; was R5 string only, amended 2026-10-20 with the maintainer) | 71 |
+| WriteHttpResponse.ContentType | same | R1; an expression with a blank script is dropped (Elsa 3 evaluates it to null and infers the type; Elsa 4 infers it when unset) (spec 256) | 71 |
 | WriteHttpResponse.ResponseHeaders | `Headers` | R1 rename | 71 |
 | DownloadHttpFile, WriteFileHttpResponse | — | R6 | 0 |
 
@@ -166,7 +166,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
 | Event.EventName | `EventName` | R1 | 1 |
-| Event.Result (payload) | `Result` is the event name | R4: captured → unconvertible | 1 (captured → unconvertible) |
+| Event.Result (payload) | `Payload` output (`Result` is the event name) | R1: carried to `Payload` (spec 258, #3107; was R4, amended 2026-10-20 with the maintainer) | 1 (captured → converts) |
 | Event `canStartWorkflow` | `CanStartWorkflow`, default true | R2: emit the Elsa 3 value (default false) | 1 |
 | PublishEvent.EventName, CorrelationId, IsLocalEvent | same | R1 | 1 |
 | PublishEvent.Payload | `JsonElement?` | R5 (JSON) | 1 |
@@ -192,10 +192,28 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 ## Elsa 4 required members with no Elsa 3 source
 
 A converted node must not leave a required Elsa 4 input unbound. These become unconvertible when the Elsa 3 node does
-not supply them: SendHttpRequest.Url, HttpEndpoint.Path, Event.EventName, PublishEvent.EventName, WriteLine.text,
+not supply them: SendHttpRequest.Url, HttpEndpoint.Path, Event.EventName, PublishEvent.EventName,
 Cron.Expression, DispatchWorkflow.WorkflowDefinitionId, RunJavaScript.script (an empty string counts as unbound), and
 every intrinsic input (`variable`+`value`, `name`+`value`, `value`, `outcome`). Timer.Interval and Finish.outcome are
-covered by R2.
+covered by R2, and so is WriteLine.text (`""`, spec 248): a blank R2 default counts as bound.
+
+## Null members (spec 267)
+
+Added by [spec 267](../267-elsa3-null-members/spec.md) (#3200). A JSON `null` member converts to what the Elsa 3
+runtime ran the activity with: a null input property runs with the input's declared default, otherwise with its type's
+default (`false`, `0`, `null`). Every R1 and R5 input records its conversion (`OnNull`); an R2 default flip, and an R5
+rule with an Elsa 3 default, emit that default for a null as for an absent member, except where the rule records its own
+(SendHttpRequest.ContentType, whose R2 default applies only when Content is bound). The coverage test fails on a gap.
+R7 structure members, ports and custom properties keep their own handling, which reads a null as unset.
+
+| Conversion | Members |
+|---|---|
+| Typed null (`Literal` holding null) | RunJavaScript.PossibleOutcomes; Fault.Message; HttpEndpoint.SupportedMethods, Policy, RequestTimeout, RequestSizeLimit; SendHttpRequest / FlowSendHttpRequest.Content; WriteHttpResponse.Content, ContentType; PublishEvent.CorrelationId, Payload; DispatchWorkflow / ExecuteWorkflow.CorrelationId, Input |
+| No binding (Elsa 4's default is Elsa 3's value) | If / While / FlowDecision.Condition; For.Start, End; HttpEndpoint.Authorize; SendHttpRequest / FlowSendHttpRequest.Method; WriteHttpResponse.StatusCode; PublishEvent.IsLocalEvent; DispatchWorkflow.WaitForCompletion |
+| Elsa 3's value | R2: For.OuterBoundInclusive `true` (3.6.3), Delay `00:01:00`, WriteLine `""`, Fault code / category / faultType; R5: Timer `00:01:00`; recorded: FlowSendHttpRequest.ExpectedStatusCodes `[200]`, Correlate.CorrelationId and SetName.Value `""` |
+| `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` | For.Step (ran as 0); ForEach.Items, SendHttpRequest / FlowSendHttpRequest.RequestHeaders, WriteHttpResponse.ResponseHeaders (faulted); SendHttpRequest / FlowSendHttpRequest.ContentType with Content bound (no body sent; a typed null otherwise); Cron.CronExpression (a disabled trigger); RunJavaScript.Script (ran nothing); HttpEndpoint.Path, SendHttpRequest / FlowSendHttpRequest.Url, Event / PublishEvent.EventName, DispatchWorkflow / ExecuteWorkflow.WorkflowDefinitionId, SetOutput.OutputName (required); SetVariable.Value, SetOutput.OutputValue (Elsa 4 cannot publish a null value, #3280) |
+| Unchanged (spec 236's mapping) | ExecuteWorkflow.WaitForCompletion: Elsa 3 ran a null as `false`, but spec 236 maps ExecuteWorkflow to a Dispatch that waits (`true`), with `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` |
+| No binding, by rule | A null output (nothing captures it); a null member of an activity resolved by name (on an alias or a verbatim catalog key, with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT` where the Elsa 4 input declares a default, #3293); R3 removed inputs and R6 restrictions, which already treat null as absent |
 
 ## SetOutput in reusable workflows
 

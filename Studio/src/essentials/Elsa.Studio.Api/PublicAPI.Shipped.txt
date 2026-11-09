@@ -1,0 +1,215 @@
+#nullable enable
+Elsa.Studio.Api.Authorization.StudioBridgeAuthorization
+Elsa.Studio.Api.Authorization.StudioBridgePermissionRequirement
+Elsa.Studio.Api.Authorization.StudioBridgePermissionRequirement.SatisfyingPermissions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Api.Authorization.StudioBridgePermissionRequirement.StudioBridgePermissionRequirement(params string![]! satisfyingPermissions) -> void
+Elsa.Studio.Api.Contracts.IStudioModuleManifestProvider
+Elsa.Studio.Api.Contracts.IStudioModuleManifestProvider.GetModuleRegistry(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Studio.Api.Models.StudioModuleRegistryResponse!>!
+Elsa.Studio.Api.Contracts.IStudioModuleManifestProvider.GetModules(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Studio.Api.Models.StudioModulesResponse!>!
+Elsa.Studio.Api.Extensions.StudioApiServiceCollectionExtensions
+Elsa.Studio.Api.Extensions.StudioBridgeAuthorizationExtensions
+Elsa.Studio.Api.Features.StudioApiFeature
+Elsa.Studio.Api.Features.StudioApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Studio.Api.Features.StudioApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Studio.Api.Features.StudioApiFeature.Options.get -> Elsa.Studio.Api.Options.StudioApiOptions!
+Elsa.Studio.Api.Features.StudioApiFeature.Options.set -> void
+Elsa.Studio.Api.Features.StudioApiFeature.StudioApiFeature() -> void
+Elsa.Studio.Api.Models.StudioBackendManagementRoutes
+Elsa.Studio.Api.Models.StudioBackendManagementStatus
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.<Clone>$() -> Elsa.Studio.Api.Models.StudioBackendManagementStatus!
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.BackendBaseUrl.get -> string?
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.BackendBaseUrl.init -> void
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.CheckedAt.get -> System.DateTimeOffset
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.CheckedAt.init -> void
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Deconstruct(out string! Status, out string! Detail, out string? BackendBaseUrl, out System.DateTimeOffset CheckedAt) -> void
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Detail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Detail.init -> void
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Equals(Elsa.Studio.Api.Models.StudioBackendManagementStatus? other) -> bool
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Status.get -> string!
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.Status.init -> void
+Elsa.Studio.Api.Models.StudioBackendManagementStatus.StudioBackendManagementStatus(string! Status, string! Detail, string? BackendBaseUrl, System.DateTimeOffset CheckedAt) -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface
+Elsa.Studio.Api.Models.StudioBackendReadSurface.<Clone>$() -> Elsa.Studio.Api.Models.StudioBackendReadSurface!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.AvailableDetail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.AvailableDetail.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Deconstruct(out string! Path, out string! Description, out string! UnconfiguredDetail, out string! AvailableDetail, out string! UnauthorizedDetail, out string! UnreachableDetail, out string! UnrecognizedPayloadDetail) -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Description.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Description.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Equals(Elsa.Studio.Api.Models.StudioBackendReadSurface? other) -> bool
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Path.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.Path.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.StudioBackendReadSurface(string! Path, string! Description, string! UnconfiguredDetail, string! AvailableDetail, string! UnauthorizedDetail, string! UnreachableDetail, string! UnrecognizedPayloadDetail) -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnauthorizedDetail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnauthorizedDetail.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnconfiguredDetail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnconfiguredDetail.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnreachableDetail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnreachableDetail.init -> void
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnrecognizedPayloadDetail.get -> string!
+Elsa.Studio.Api.Models.StudioBackendReadSurface.UnrecognizedPayloadDetail.init -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.<Clone>$() -> Elsa.Studio.Api.Models.StudioModuleContributionSummary!
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Deconstruct(out string! Type, out string! Id, out string! Label, out string! Status) -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Equals(Elsa.Studio.Api.Models.StudioModuleContributionSummary? other) -> bool
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Id.get -> string!
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Id.init -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Label.get -> string!
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Label.init -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Status.get -> string!
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Status.init -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.StudioModuleContributionSummary(string! Type, string! Id, string! Label, string! Status) -> void
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Type.get -> string!
+Elsa.Studio.Api.Models.StudioModuleContributionSummary.Type.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.<Clone>$() -> Elsa.Studio.Api.Models.StudioModuleRegistryItem!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Compatibility.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Compatibility.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Contributions.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleContributionSummary!>!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Contributions.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Deconstruct(out string! Id, out string! DisplayName, out string! SourceKind, out string! Scope, out string! Version, out string! RequiredHostVersion, out string! RequiredSdkVersion, out string! Compatibility, out string! Status, out Elsa.Studio.Api.Models.StudioModuleRegistryManifest! Manifest, out System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleContributionSummary!>! Contributions, out System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>! Diagnostics) -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Diagnostics.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Diagnostics.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.DisplayName.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.DisplayName.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Equals(Elsa.Studio.Api.Models.StudioModuleRegistryItem? other) -> bool
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Id.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Id.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Manifest.get -> Elsa.Studio.Api.Models.StudioModuleRegistryManifest!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Manifest.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.RequiredHostVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.RequiredHostVersion.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.RequiredSdkVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.RequiredSdkVersion.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Scope.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Scope.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.SourceKind.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.SourceKind.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Status.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Status.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.StudioModuleRegistryItem(string! Id, string! DisplayName, string! SourceKind, string! Scope, string! Version, string! RequiredHostVersion, string! RequiredSdkVersion, string! Compatibility, string! Status, Elsa.Studio.Api.Models.StudioModuleRegistryManifest! Manifest, System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleContributionSummary!>! Contributions, System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>! Diagnostics) -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Version.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryItem.Version.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.<Clone>$() -> Elsa.Studio.Api.Models.StudioModuleRegistryManifest!
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Capabilities.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Capabilities.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Deconstruct(out string! Entry, out System.Collections.Generic.IReadOnlyCollection<string!>! Styles, out System.Collections.Generic.IReadOnlyCollection<string!>! Capabilities) -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Entry.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Entry.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Equals(Elsa.Studio.Api.Models.StudioModuleRegistryManifest? other) -> bool
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.StudioModuleRegistryManifest(string! Entry, System.Collections.Generic.IReadOnlyCollection<string!>! Styles, System.Collections.Generic.IReadOnlyCollection<string!>! Capabilities) -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Styles.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Styles.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.<Clone>$() -> Elsa.Studio.Api.Models.StudioModuleRegistryResponse!
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Deconstruct(out string! HostVersion, out string! SdkVersion, out System.DateTimeOffset GeneratedAt, out System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleRegistryItem!>! Modules) -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Equals(Elsa.Studio.Api.Models.StudioModuleRegistryResponse? other) -> bool
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.GeneratedAt.get -> System.DateTimeOffset
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.GeneratedAt.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.HostVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.HostVersion.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Modules.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleRegistryItem!>!
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Modules.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.SdkVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.SdkVersion.init -> void
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.StudioModuleRegistryResponse(string! HostVersion, string! SdkVersion, System.DateTimeOffset GeneratedAt, System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Api.Models.StudioModuleRegistryItem!>! Modules) -> void
+Elsa.Studio.Api.Models.StudioModulesResponse
+Elsa.Studio.Api.Models.StudioModulesResponse.<Clone>$() -> Elsa.Studio.Api.Models.StudioModulesResponse!
+Elsa.Studio.Api.Models.StudioModulesResponse.Deconstruct(out string! HostVersion, out string! SdkVersion, out System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleManifest!>! Modules, out System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>! Diagnostics) -> void
+Elsa.Studio.Api.Models.StudioModulesResponse.Diagnostics.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>!
+Elsa.Studio.Api.Models.StudioModulesResponse.Diagnostics.init -> void
+Elsa.Studio.Api.Models.StudioModulesResponse.Equals(Elsa.Studio.Api.Models.StudioModulesResponse? other) -> bool
+Elsa.Studio.Api.Models.StudioModulesResponse.HostVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModulesResponse.HostVersion.init -> void
+Elsa.Studio.Api.Models.StudioModulesResponse.Modules.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleManifest!>!
+Elsa.Studio.Api.Models.StudioModulesResponse.Modules.init -> void
+Elsa.Studio.Api.Models.StudioModulesResponse.SdkVersion.get -> string!
+Elsa.Studio.Api.Models.StudioModulesResponse.SdkVersion.init -> void
+Elsa.Studio.Api.Models.StudioModulesResponse.StudioModulesResponse(string! HostVersion, string! SdkVersion, System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleManifest!>! Modules, System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Core.Models.StudioModuleDiagnostic!>! Diagnostics) -> void
+Elsa.Studio.Api.Options.StudioApiOptions
+Elsa.Studio.Api.Options.StudioApiOptions.DisabledModuleIds.get -> System.Collections.Generic.ISet<string!>!
+Elsa.Studio.Api.Options.StudioApiOptions.HostVersion.get -> string!
+Elsa.Studio.Api.Options.StudioApiOptions.HostVersion.set -> void
+Elsa.Studio.Api.Options.StudioApiOptions.SdkVersion.get -> string!
+Elsa.Studio.Api.Options.StudioApiOptions.SdkVersion.set -> void
+Elsa.Studio.Api.Options.StudioApiOptions.StudioApiOptions() -> void
+Elsa.Studio.Api.Options.StudioBackendManagementOptions
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.<Clone>$() -> Elsa.Studio.Api.Options.StudioBackendManagementOptions!
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.BackendBaseUrl.get -> string?
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.BackendBaseUrl.init -> void
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.ConfigureBackendClient(System.Net.Http.HttpClient! client, System.TimeSpan timeout) -> void
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.Deconstruct(out string? BackendBaseUrl, out string? ManagementApiKey) -> void
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.Equals(Elsa.Studio.Api.Options.StudioBackendManagementOptions? other) -> bool
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.IsConfigured.get -> bool
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.ManagementApiKey.get -> string?
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.ManagementApiKey.init -> void
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.NormalizedBackendBaseUrl.get -> string?
+Elsa.Studio.Api.Options.StudioBackendManagementOptions.StudioBackendManagementOptions(string? BackendBaseUrl, string? ManagementApiKey) -> void
+Elsa.Studio.Api.Services.StudioBackendReadClient
+Elsa.Studio.Api.Services.StudioBackendReadClient.ProbeBackendAsync(Elsa.Studio.Api.Models.StudioBackendReadSurface! surface, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<(Elsa.Studio.Api.Models.StudioBackendManagementStatus! Status, System.Text.Json.JsonElement? Payload)>!
+Elsa.Studio.Api.Services.StudioBackendReadClient.StudioBackendReadClient(System.Net.Http.HttpClient! httpClient, Elsa.Studio.Api.Options.StudioBackendManagementOptions! options, Microsoft.Extensions.Logging.ILogger! logger) -> void
+Elsa.Studio.Api.Services.StudioModuleManifestProvider
+Elsa.Studio.Api.Services.StudioModuleManifestProvider.GetModuleRegistry(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Studio.Api.Models.StudioModuleRegistryResponse!>!
+Elsa.Studio.Api.Services.StudioModuleManifestProvider.GetModules(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Studio.Api.Models.StudioModulesResponse!>!
+Elsa.Studio.Api.Services.StudioModuleManifestProvider.StudioModuleManifestProvider(System.Collections.Generic.IEnumerable<Elsa.Studio.Core.Events.IStudioEventHandler<Elsa.Studio.Core.Events.OnStudioModuleManifestsCollecting!>!>! handlers, CShells.Features.IRuntimeFeatureCatalog! runtimeFeatureCatalog, System.IServiceProvider! serviceProvider, Microsoft.Extensions.Options.IOptions<Elsa.Studio.Api.Options.StudioApiOptions!>! options) -> void
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.PermissionClaimType = "elsa.identity.permission" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.SchemeName = "StudioManagementBridgeAuth" -> string!
+const Elsa.Studio.Api.Extensions.StudioApiServiceCollectionExtensions.ConfigurationSectionName = "Studio:Api" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementRoutes.RouteGroup = "/_elsa/studio/backend-management" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementStatus.Available = "available" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementStatus.Degraded = "degraded" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementStatus.Unauthorized = "unauthorized" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementStatus.Unconfigured = "unconfigured" -> string!
+const Elsa.Studio.Api.Models.StudioBackendManagementStatus.Unreachable = "unreachable" -> string!
+const Elsa.Studio.Api.Options.StudioBackendManagementOptions.BackendBaseUrlConfigurationKey = "Studio:BackendBaseUrl" -> string!
+const Elsa.Studio.Api.Options.StudioBackendManagementOptions.BackendServerBaseUrlConfigurationKey = "Studio:BackendServerBaseUrl" -> string!
+const Elsa.Studio.Api.Options.StudioBackendManagementOptions.ManagementApiKeyConfigurationKey = "Studio:BackendModuleManagementApiKey" -> string!
+const Elsa.Studio.Api.Options.StudioBackendManagementOptions.ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key" -> string!
+override Elsa.Studio.Api.Models.StudioBackendManagementStatus.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioBackendManagementStatus.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioBackendManagementStatus.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioBackendReadSurface.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioBackendReadSurface.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioBackendReadSurface.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioModuleContributionSummary.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioModuleContributionSummary.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioModuleContributionSummary.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioModuleRegistryItem.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioModuleRegistryItem.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioModuleRegistryItem.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioModuleRegistryManifest.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioModuleRegistryManifest.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioModuleRegistryManifest.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioModuleRegistryResponse.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioModuleRegistryResponse.ToString() -> string!
+override Elsa.Studio.Api.Models.StudioModulesResponse.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Models.StudioModulesResponse.GetHashCode() -> int
+override Elsa.Studio.Api.Models.StudioModulesResponse.ToString() -> string!
+override Elsa.Studio.Api.Options.StudioBackendManagementOptions.Equals(object? obj) -> bool
+override Elsa.Studio.Api.Options.StudioBackendManagementOptions.GetHashCode() -> int
+override Elsa.Studio.Api.Options.StudioBackendManagementOptions.ToString() -> string!
+static Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.BuildPermissionPolicy(params string![]! satisfyingPermissions) -> Microsoft.AspNetCore.Authorization.AuthorizationPolicy!
+static Elsa.Studio.Api.Extensions.StudioApiServiceCollectionExtensions.AddElsaStudioApi(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Elsa.Studio.Api.Options.StudioApiOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Studio.Api.Extensions.StudioBridgeAuthorizationExtensions.RequireStudioBridgePermission<TBuilder>(this TBuilder builder, params string![]! satisfyingPermissions) -> TBuilder
+static Elsa.Studio.Api.Models.StudioBackendManagementStatus.operator !=(Elsa.Studio.Api.Models.StudioBackendManagementStatus? left, Elsa.Studio.Api.Models.StudioBackendManagementStatus? right) -> bool
+static Elsa.Studio.Api.Models.StudioBackendManagementStatus.operator ==(Elsa.Studio.Api.Models.StudioBackendManagementStatus? left, Elsa.Studio.Api.Models.StudioBackendManagementStatus? right) -> bool
+static Elsa.Studio.Api.Models.StudioBackendReadSurface.operator !=(Elsa.Studio.Api.Models.StudioBackendReadSurface? left, Elsa.Studio.Api.Models.StudioBackendReadSurface? right) -> bool
+static Elsa.Studio.Api.Models.StudioBackendReadSurface.operator ==(Elsa.Studio.Api.Models.StudioBackendReadSurface? left, Elsa.Studio.Api.Models.StudioBackendReadSurface? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleContributionSummary.operator !=(Elsa.Studio.Api.Models.StudioModuleContributionSummary? left, Elsa.Studio.Api.Models.StudioModuleContributionSummary? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleContributionSummary.operator ==(Elsa.Studio.Api.Models.StudioModuleContributionSummary? left, Elsa.Studio.Api.Models.StudioModuleContributionSummary? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryItem.operator !=(Elsa.Studio.Api.Models.StudioModuleRegistryItem? left, Elsa.Studio.Api.Models.StudioModuleRegistryItem? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryItem.operator ==(Elsa.Studio.Api.Models.StudioModuleRegistryItem? left, Elsa.Studio.Api.Models.StudioModuleRegistryItem? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryManifest.operator !=(Elsa.Studio.Api.Models.StudioModuleRegistryManifest? left, Elsa.Studio.Api.Models.StudioModuleRegistryManifest? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryManifest.operator ==(Elsa.Studio.Api.Models.StudioModuleRegistryManifest? left, Elsa.Studio.Api.Models.StudioModuleRegistryManifest? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryResponse.operator !=(Elsa.Studio.Api.Models.StudioModuleRegistryResponse? left, Elsa.Studio.Api.Models.StudioModuleRegistryResponse? right) -> bool
+static Elsa.Studio.Api.Models.StudioModuleRegistryResponse.operator ==(Elsa.Studio.Api.Models.StudioModuleRegistryResponse? left, Elsa.Studio.Api.Models.StudioModuleRegistryResponse? right) -> bool
+static Elsa.Studio.Api.Models.StudioModulesResponse.operator !=(Elsa.Studio.Api.Models.StudioModulesResponse? left, Elsa.Studio.Api.Models.StudioModulesResponse? right) -> bool
+static Elsa.Studio.Api.Models.StudioModulesResponse.operator ==(Elsa.Studio.Api.Models.StudioModulesResponse? left, Elsa.Studio.Api.Models.StudioModulesResponse? right) -> bool
+static Elsa.Studio.Api.Options.StudioApiOptions.ResolveAssemblyVersion() -> string!
+static Elsa.Studio.Api.Options.StudioApiOptions.ResolveAssemblyVersion(System.Reflection.Assembly! assembly) -> string!
+static Elsa.Studio.Api.Options.StudioBackendManagementOptions.FromConfiguration(Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Elsa.Studio.Api.Options.StudioBackendManagementOptions!
+static Elsa.Studio.Api.Options.StudioBackendManagementOptions.ResolveServerBaseUrl(Microsoft.Extensions.Configuration.IConfiguration! configuration) -> string?
+static Elsa.Studio.Api.Options.StudioBackendManagementOptions.operator !=(Elsa.Studio.Api.Options.StudioBackendManagementOptions? left, Elsa.Studio.Api.Options.StudioBackendManagementOptions? right) -> bool
+static Elsa.Studio.Api.Options.StudioBackendManagementOptions.operator ==(Elsa.Studio.Api.Options.StudioBackendManagementOptions? left, Elsa.Studio.Api.Options.StudioBackendManagementOptions? right) -> bool
+static readonly Elsa.Studio.Api.Options.StudioBackendManagementOptions.ReadRequestTimeout -> System.TimeSpan

@@ -1,10 +1,13 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Middleware;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Pipelines;
@@ -106,9 +109,11 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         var selector = new RuntimeSchedulerPipelineSelector();
 
         var parentCompletion = NewCompleteActivityWorkItem(SchedulerCompletionKind.ParentCompletionEvaluation);
+        var parentOutcome = NewCompleteActivityWorkItem(SchedulerCompletionKind.ParentOutcomeEvaluation);
         var routing = NewCompleteActivityWorkItem(SchedulerCompletionKind.ActivityCompleted);
 
         Assert.Equal(RuntimePipelineKind.Activity, selector.Select(parentCompletion));
+        Assert.Equal(RuntimePipelineKind.Activity, selector.Select(parentOutcome));
         Assert.Equal(RuntimePipelineKind.Workflow, selector.Select(routing));
     }
 
@@ -123,6 +128,30 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
 
         Assert.Equal(RuntimePipelineKind.Workflow, selector.Select(noPayload));
         Assert.Equal(RuntimePipelineKind.Workflow, selector.Select(malformedPayload));
+    }
+
+    [Fact]
+    public async Task Drainer_FaultsUnknownParentOutcomeVersionInsteadOfNoopAcknowledgingIt()
+    {
+        var validWorkItem = NewCompleteActivityWorkItem(SchedulerCompletionKind.ParentOutcomeEvaluation);
+        var malformed = JsonNode.Parse(validWorkItem.Payload!.Value.GetRawText())!.AsObject();
+        malformed[nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome)]![nameof(RuntimeParentOutcome.Version)] = RuntimeParentOutcome.CurrentVersion + 1;
+
+        using var payloadDocument = JsonDocument.Parse(malformed.ToJsonString());
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FakeTimeProvider(Now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(Now));
+        await queue.EnqueueAsync(NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: payloadDocument.RootElement.Clone()));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var delivery = Assert.Single(result.Items);
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, delivery.HandlerName);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, delivery.Status);
     }
 
     [Fact]
@@ -190,6 +219,14 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
 
     private RuntimeSchedulerWorkItem NewCompleteActivityWorkItem(SchedulerCompletionKind completionKind)
     {
+        var isParentEvaluation = completionKind is SchedulerCompletionKind.ParentCompletionEvaluation or SchedulerCompletionKind.ParentOutcomeEvaluation;
+        var parentOutcome = completionKind == SchedulerCompletionKind.ParentOutcomeEvaluation
+            ? new RuntimeParentOutcome(
+                RuntimeParentOutcome.CurrentVersion,
+                new ActivityFault("child-fault", "masked fault message"),
+                "incident-1",
+                [new ActivityChildNotifiedContext("actexec-child", "node-child", "signal")])
+            : null;
         var payload = new RuntimeCompleteActivityCommandPayload(
             pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             executableNodeId: "node-start",
@@ -197,13 +234,15 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
             parentActivityExecutionId: null,
             branchId: null,
             outcomeNames: ["Done"],
-            reason: completionKind == SchedulerCompletionKind.ParentCompletionEvaluation
-                ? RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason
-                : RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason,
+            reason: completionKind switch
+            {
+                SchedulerCompletionKind.ParentCompletionEvaluation => RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+                SchedulerCompletionKind.ParentOutcomeEvaluation => RuntimeCompleteActivityCommandPayload.ParentOutcomeEvaluationReason,
+                _ => RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
+            },
             completionKind: completionKind,
-            completedChildActivityExecutionId: completionKind == SchedulerCompletionKind.ParentCompletionEvaluation
-                ? "actexec-child"
-                : null);
+            completedChildActivityExecutionId: isParentEvaluation ? "actexec-child" : null,
+            parentOutcome: parentOutcome);
 
         return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload));
     }

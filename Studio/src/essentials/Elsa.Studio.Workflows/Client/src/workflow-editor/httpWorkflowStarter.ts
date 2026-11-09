@@ -8,6 +8,7 @@ const starterActivityTypes = [
   "Elsa.Activities.Http.Activities.HttpEndpoint",
   "Elsa.Activities.Http.Activities.WriteHttpResponse"
 ] as const;
+const starterActivityNames = ["Flowchart", "HTTP Endpoint", "Write HTTP Response"] as const;
 
 export function httpStarterActivities(catalog: ActivityCatalogItem[]) {
   return starterActivityTypes.map(type => {
@@ -19,6 +20,24 @@ export function httpStarterActivities(catalog: ActivityCatalogItem[]) {
     if (!versioned.length) return matching[0];
     return versioned.reduce((latest, candidate) => compareSemVer(candidate.version, latest.version) > 0 ? candidate : latest).activity;
   });
+}
+
+export function getHttpStarterAvailabilityReason(catalog: ActivityCatalogItem[]) {
+  const available = httpStarterActivities(catalog);
+  const unavailable = starterActivityTypes.flatMap((type, index) => {
+    if (available[index]) return [];
+
+    const name = starterActivityNames[index];
+    const matches = catalog.filter(activity => activity.activityTypeKey === type);
+    const suppliedReason = matches.find(activity => activity.available === false && activity.availabilityReason?.trim())?.availabilityReason?.trim();
+    if (suppliedReason) return [`${name}: ${suppliedReason}`];
+    if (matches.length > 0) return [`${name} is listed but unavailable in the activity catalog.`];
+    return [`${name} is not present in the activity catalog.`];
+  });
+
+  return unavailable.length > 0
+    ? `The HTTP request and response starter is unavailable. ${unavailable.join(" ")}`
+    : undefined;
 }
 
 export function createHttpStarterState(catalog: ActivityCatalogItem[]) {

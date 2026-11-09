@@ -18,6 +18,19 @@ describe("document syntax support", () => {
     expect(tree.toString()).not.toContain("⚠");
   });
 
+  it.each([
+    ["a top-level return", "return 1;"],
+    ["statements with an explicit return", "const total = args.a + args.b;\nreturn total;"],
+    ["statements with a final completion value", "const total = args.a + args.b;\ntotal"]
+  ])("parses JavaScript %s without syntax errors", async (_description, value) => {
+    const extensions = await loadCodeMirrorLanguageExtensions("javascript");
+    const state = EditorState.create({ doc: value, extensions });
+    const tree = syntaxTree(state);
+
+    expect(tree.length).toBe(value.length);
+    expect(tree.toString()).not.toContain("⚠");
+  });
+
   it("keeps unsupported media bodies as plain text", async () => {
     expect(await loadCodeMirrorLanguageExtensions("plaintext")).toEqual([]);
   });

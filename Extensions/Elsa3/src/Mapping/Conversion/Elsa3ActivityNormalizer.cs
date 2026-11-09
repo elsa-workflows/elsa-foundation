@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -22,7 +23,8 @@ namespace Elsa3.Mapping.Conversion;
 internal sealed class Elsa3ActivityNormalizer(
     Elsa3ActivityResolver resolver,
     IEnumerable<IElsa3NodeRewrite> rewrites,
-    IWellKnownTypeRegistry wellKnownTypeRegistry)
+    IWellKnownTypeRegistry wellKnownTypeRegistry,
+    IObjectConverter objectConverter)
 {
     /// <summary>
     /// The deepest JSON level an activity node may sit at. The state is limited to 64 JSON levels (System.Text.Json's
@@ -38,6 +40,7 @@ internal sealed class Elsa3ActivityNormalizer(
     private const string ParallelTypeKey = "Elsa.Activities.Parallel.Activities.Parallel";
 
     private static readonly JsonSerializerOptions Elsa3JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
     private readonly IReadOnlyDictionary<Elsa3NodeRewriteKind, IElsa3NodeRewrite> _rewrites =
         rewrites.ToDictionary(rewrite => rewrite.Kind);
 
@@ -50,6 +53,8 @@ internal sealed class Elsa3ActivityNormalizer(
         if (clone.Root is null)
             return plan;
 
+        CheckWorkflowVariables(plan);
+
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
 
@@ -58,6 +63,28 @@ internal sealed class Elsa3ActivityNormalizer(
         foreach (var flowchart in plan.Nodes.Values.Reverse().Where(Elsa3FlowchartGraphBuilder.IsFlowchart).ToArray())
             Elsa3FlowchartGraphBuilder.Build(plan, flowchart);
         return plan;
+    }
+
+    /// <summary>
+    /// A workflow variable's starting value converts by Elsa 3's rule or is refused here, before mapping, so a converted
+    /// definition never carries a starting value that fails at publish (spec 264 D-4).
+    /// </summary>
+    private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
+    {
+        var variables = plan.Definition.Variables;
+        for (var index = 0; index < variables.Count; index++)
+        {
+            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var refusal))
+                continue;
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                plan,
+                Elsa3MigrationDiagnosticSeverity.Error,
+                VariableValueUnconvertible,
+                refusal!.Message,
+                refusal.Guidance,
+                $"$.variables[{index}]",
+                new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
+        }
     }
 
     /// <summary>
@@ -187,8 +214,10 @@ internal sealed class Elsa3ActivityNormalizer(
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var boundBy = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (propertyName, value) in properties)
+        foreach (var (propertyName, source) in properties)
         {
+            // Spec 267 (research R-5): a literal holding null converts as a JSON null does.
+            var value = Elsa3TypedValues.IsNullLiteral(source) ? JsonNull : source;
             if (entry is null)
             {
                 BindByName(context, propertyName, value, result, boundBy);
@@ -241,6 +270,19 @@ internal sealed class Elsa3ActivityNormalizer(
         Dictionary<string, JsonElement> result,
         Dictionary<string, string> boundBy)
     {
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            // Spec 267: a null output is captured by nothing, as in Elsa 3; a null input converts to what Elsa 3 ran it
+            // with. A rule without OnNull (an R2 or R5 default) falls through, and ApplyDefaults emits its default.
+            if (rule is { Kind: Elsa3MemberKind.Output, Rule: Elsa3MemberRuleKind.Carry })
+                return;
+            if (rule.OnNull is { } onNull)
+            {
+                ApplyNull(context, rule, onNull, propertyName, result, boundBy);
+                return;
+            }
+        }
+
         var bound = Elsa3TypedValues.IsBound(value);
         var captured = Elsa3TypedValues.IsCaptured(value);
         switch (rule.Rule)
@@ -326,15 +368,22 @@ internal sealed class Elsa3ActivityNormalizer(
             return;
         }
 
+        // Spec 267 (research R-10): a null member gets no binding. Elsa 3 skipped a null workflow-as-activity member, so
+        // the reusable ran with its own default, as the Elsa 4 contract's default applies now.
+        var isNull = value.ValueKind == JsonValueKind.Null;
         if (inputs.Length == 1)
         {
-            Add(context, inputs[0].ReferenceKey, propertyName, value, result, boundBy);
+            if (!isNull)
+                Add(context, inputs[0].ReferenceKey, propertyName, value, result, boundBy);
+            else if (resolved.Source != Elsa3ResolvedSource.Replacement)
+                WarnNullTakesElsa4Default(context, propertyName, inputs[0]);
             return;
         }
 
         if (resolved.FindOutput(propertyName) is { } output)
         {
-            Add(context, output.ReferenceKey, propertyName, value, result, boundBy);
+            if (!isNull)
+                Add(context, output.ReferenceKey, propertyName, value, result, boundBy);
             return;
         }
 
@@ -346,6 +395,76 @@ internal sealed class Elsa3ActivityNormalizer(
             "Rename the property to an Elsa 4 member of the activity, or remove it.",
             propertyName);
     }
+
+    /// <summary>
+    /// #3293: on an alias or a verbatim catalog key, Elsa 3 ran a null member with its own activity class's default, which
+    /// the conversion cannot see. Where the Elsa 4 input declares a default, the two can differ: say which value Elsa 4 runs
+    /// with and how to keep Elsa 3's.
+    /// </summary>
+    private static void WarnNullTakesElsa4Default(Elsa3RewriteContext context, string propertyName, InputDefinition input)
+    {
+        if (input.DefaultValue is not { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } elsa4Default)
+            return;
+
+        var shown = elsa4Default.ValueKind == JsonValueKind.String ? elsa4Default.GetString() : elsa4Default.GetRawText();
+        context.Warning(NullTakesElsa4Default,
+            $"Member '{propertyName}' is null, so Elsa 4 runs input '{input.ReferenceKey}' with its default '{shown}'. Elsa 3 ran it " +
+            $"with the default of its own activity '{context.Activity.Type}', which the conversion cannot see.",
+            $"If Elsa 3 ran '{propertyName}' with another value, set '{propertyName}' to that value in the Elsa 3 workflow and " +
+            $"convert again, or set input '{input.ReferenceKey}' on the converted activity. If '{shown}' is what you want, nothing " +
+            "needs to change.",
+            propertyName);
+    }
+
+    /// <summary>Spec 267: converts a JSON null input to what Elsa 3 ran it with, by the member's recorded conversion.</summary>
+    private static void ApplyNull(
+        Elsa3RewriteContext context,
+        Elsa3MemberRule rule,
+        Elsa3NullConversion onNull,
+        string propertyName,
+        Dictionary<string, JsonElement> result,
+        Dictionary<string, string> boundBy)
+    {
+        var key = rule.Elsa4Key!;
+        var alias = context.Node.Resolved!.FindInput(key)?.Type.Alias ?? "Object";
+        switch (onNull.Rule)
+        {
+            case Elsa3NullRule.NoBinding:
+                return;
+            case Elsa3NullRule.TypedNull:
+                Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
+                return;
+            case Elsa3NullRule.Emit:
+                Add(context, key, propertyName, Elsa3TypedValues.CreateLiteral(alias, LiteralNode(onNull.Value ?? string.Empty)), result, boundBy);
+                context.Node.NullEmits.Add(key);
+                return;
+            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !HasValue(context, other):
+                Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
+                return;
+            case Elsa3NullRule.Refuse:
+                context.Error(NullUnconvertible,
+                    $"Member '{propertyName}' is null. {onNull.Reason}",
+                    $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
+                    propertyName);
+                return;
+        }
+    }
+
+    /// <summary>A JSON array or object stays JSON, so publication and graph conversion read it as a collection; anything else is text.</summary>
+    private static JsonNode? LiteralNode(string value) =>
+        value.TrimStart() is ['[' or '{', ..] ? JsonNode.Parse(value) : JsonValue.Create(value);
+
+    /// <summary>
+    /// Whether Elsa 3 ran the member with a value: anything but null, a literal holding null or an empty string. Unlike
+    /// <see cref="Elsa3TypedValues.IsBound"/>, a literal <c>{}</c>, <c>[]</c> or <c>null</c> text is a value, as Elsa 3
+    /// sent it.
+    /// </summary>
+    private static bool HasValue(Elsa3RewriteContext context, string elsa3Name) =>
+        context.Activity.AdditionalProperties.Any(property =>
+            StringComparer.OrdinalIgnoreCase.Equals(property.Key, elsa3Name) &&
+            property.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined) &&
+            !Elsa3TypedValues.IsNullLiteral(property.Value) &&
+            !(Elsa3TypedValues.TryGetLiteral(property.Value, out var literal) && string.IsNullOrEmpty(literal)));
 
     private static void Add(
         Elsa3RewriteContext context,
@@ -420,7 +539,9 @@ internal sealed class Elsa3ActivityNormalizer(
                 continue;
             if (rule.Kind == Elsa3MemberKind.CustomProperty)
                 continue;
-            if (result.TryGetValue(rule.Elsa4Key, out var existing) && Elsa3TypedValues.IsBound(existing))
+            // A typed null is the conversion of a null member (spec 267); only the member pass writes one.
+            if (result.TryGetValue(rule.Elsa4Key, out var existing) &&
+                (Elsa3TypedValues.IsBound(existing) || Elsa3TypedValues.IsNullLiteral(existing)))
                 continue;
             if (rule.WhenBound is { } other &&
                 !properties.Any(property => StringComparer.OrdinalIgnoreCase.Equals(property.Key, other) && Elsa3TypedValues.IsBound(property.Value)))
@@ -435,9 +556,7 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         var custom = context.Activity.CustomProperties;
         var canStartWorkflow = custom?.CanStartWorkflow ?? false;
-        var rule = entry.Members.FirstOrDefault(member =>
-            member.Kind == Elsa3MemberKind.CustomProperty &&
-            StringComparer.OrdinalIgnoreCase.Equals(member.Elsa3Name, "CanStartWorkflow"));
+        var rule = CanStartWorkflowRule(entry);
         var literal = canStartWorkflow ? "true" : "false";
         switch (rule?.Rule)
         {
@@ -455,13 +574,8 @@ internal sealed class Elsa3ActivityNormalizer(
                         "Use a Delay for a mid-flow wait, or make the activity start the workflow.",
                         "customProperties.canStartWorkflow");
                 break;
-            default:
-                if (canStartWorkflow)
-                    context.Error(RemovedInputBound,
-                        $"Elsa 3 activity '{context.Activity.Type}' is marked canStartWorkflow, which its Elsa 4 activity does not support.",
-                        "Clear canStartWorkflow, or start the workflow with a trigger activity.",
-                        "customProperties.canStartWorkflow");
-                break;
+            // A non-trigger: Elsa 3 only uses the flag to pick a flowchart's start when no trigger fired. Graph
+            // conversion reads it for the start node; the Elsa 4 activity gets nothing.
         }
 
         if (custom?.RunAsynchronously == true)
@@ -470,6 +584,22 @@ internal sealed class Elsa3ActivityNormalizer(
                 "Clear runAsynchronously before converting.",
                 "customProperties.runAsynchronously");
     }
+
+    /// <summary>The entry's <c>customProperties.canStartWorkflow</c> rule; only Elsa 3 triggers declare one.</summary>
+    private static Elsa3MemberRule? CanStartWorkflowRule(Elsa3ActivityMapEntry entry) =>
+        entry.Members.FirstOrDefault(member =>
+            member.Kind == Elsa3MemberKind.CustomProperty &&
+            StringComparer.OrdinalIgnoreCase.Equals(member.Elsa3Name, "CanStartWorkflow"));
+
+    /// <summary>
+    /// Whether the node's map entry says it is not an Elsa 3 trigger, so its <c>canStartWorkflow</c> flag can only pick
+    /// a flowchart's start. A node without an entry (alias, catalog key, replacement) is not known to be a non-trigger.
+    /// </summary>
+    internal static bool IsNonTrigger(Elsa3NodePlan? node) => IsNonTrigger(node?.Resolved?.Entry);
+
+    /// <summary>Whether a map entry is for a non-trigger: it declares no <c>canStartWorkflow</c> rule.</summary>
+    internal static bool IsNonTrigger(Elsa3ActivityMapEntry? entry) =>
+        entry is not null && CanStartWorkflowRule(entry) is null;
 
     private static void ApplyEntryWarnings(Elsa3RewriteContext context, Elsa3ActivityMapEntry entry)
     {
@@ -587,7 +717,7 @@ internal sealed class Elsa3ActivityNormalizer(
             case Elsa3ValueContract.JsonOnly:
                 if (isLiteral)
                     return IsJson(literal) ? value : Outside("must be JSON", "Use a JSON literal.");
-                if (alias is null || alias is "Object" or "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary")
+                if (alias is null || alias is "Object" or "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary" or "ObjectDictionary")
                     return value;
                 return Outside($"must be JSON, but is declared as '{alias}'", "Produce a JSON object in the expression and declare its type as Object.");
             case Elsa3ValueContract.EnumNameToInt:
@@ -622,6 +752,10 @@ internal sealed class Elsa3ActivityNormalizer(
                     return null;
                 }
                 return value;
+            case Elsa3ValueContract.HttpResponseBody:
+                return CheckHttpResponseBody(context, propertyName, value, isLiteral, alias);
+            case Elsa3ValueContract.HttpResponseContentType:
+                return IsBlankExpression(value) ? null : value;
             default:
                 return value;
         }
@@ -632,6 +766,67 @@ internal sealed class Elsa3ActivityNormalizer(
             return null;
         }
     }
+
+    /// <summary>
+    /// Elsa 3 sent text as is and serialized any other value as JSON when the content type was unset (inferred
+    /// <c>application/json</c>) or exactly a type its JSON writer handled; otherwise it sent the value's type name.
+    /// Elsa 4 sends text as is and any other value as JSON, so only the JSON cases convert faithfully. A script with a
+    /// typed declaration (<c>String</c>, <c>Int32</c>, …) passes here and is refused by value-flow lowering (FR-013),
+    /// because Elsa 3 converted its result to that type.
+    /// </summary>
+    private static JsonElement? CheckHttpResponseBody(
+        Elsa3RewriteContext context, string propertyName, JsonElement value, bool isLiteral, string? alias)
+    {
+        if (isLiteral || string.Equals(alias, "String", StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        if (alias is not null && (alias.Equals("Byte[]", StringComparison.OrdinalIgnoreCase) ||
+                                  alias.EndsWith("Stream", StringComparison.OrdinalIgnoreCase)))
+            return Outside($"is binary content ('{alias}'), which Elsa 3 sent as application/octet-stream; Elsa 4 sends text or JSON only",
+                "Return text or a JSON value instead.");
+
+        var contentType = context.Activity.AdditionalProperties
+            .FirstOrDefault(property => property.Key.Equals("contentType", StringComparison.OrdinalIgnoreCase)).Value;
+        if (!Elsa3TypedValues.IsBound(contentType) || IsBlankExpression(contentType))
+            return value;
+        if (Elsa3TypedValues.TryGetLiteral(contentType, out var mediaType))
+        {
+            if (mediaType is "application/json" or "text/json")
+                return value;
+            if (IsJsonMediaType(mediaType))
+            {
+                // Elsa 3 matched its JSON writer by exact string, so it sent the value's type name; Elsa 4 sends the JSON.
+                Warn(context, HttpResponseJsonVariant, propertyName);
+                return value;
+            }
+            return Outside($"is declared as '{alias}', but content type '{mediaType}' is not JSON; Elsa 3 sent the value's type name as text",
+                "Return a string, or set ContentType to application/json.");
+        }
+        return Outside($"is declared as '{alias}', and its content type is computed by an expression; Elsa 3 sent JSON only when the run-time content type was exactly a JSON type",
+            "Set ContentType to the literal application/json, or return a string.");
+
+        JsonElement? Outside(string reason, string guidance)
+        {
+            context.Error(ValueOutsideContract, $"Input '{propertyName}' {reason}.", guidance, propertyName);
+            return null;
+        }
+    }
+
+    /// <summary>A JSON media type, ignoring letter case and parameters: <c>application/json</c>, <c>text/json</c> or a <c>+json</c> type.</summary>
+    private static bool IsJsonMediaType(string? mediaType)
+    {
+        var type = mediaType?.Split(';', 2)[0].Trim() ?? string.Empty;
+        return type.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("text/json", StringComparison.OrdinalIgnoreCase) ||
+               type.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether the property is bound to a non-literal expression whose script is blank (Elsa 3 evaluates it to null).</summary>
+    private static bool IsBlankExpression(JsonElement value) =>
+        Elsa3TypedValues.IsExpression(value) &&
+        Elsa3TypedValues.TryGetExpression(value, out _, out var script) &&
+        script.ValueKind == JsonValueKind.String &&
+        string.IsNullOrWhiteSpace(script.GetString());
 
     private static bool IsJson(string? literal)
     {
@@ -702,7 +897,10 @@ internal sealed class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
-                context.Node.Variables.Add(Elsa3VariableMapper.Map(wellKnownTypeRegistry, variable));
+                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal))
+                    context.Node.Variables.Add(mapped);
+                else
+                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)
@@ -765,13 +963,35 @@ internal sealed class Elsa3ActivityNormalizer(
             return;
         foreach (var input in node.Resolved.Inputs.Where(input => input.IsRequired))
         {
-            if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) && Elsa3TypedValues.IsBound(value))
+            if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) &&
+                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node, input.ReferenceKey, value)))
                 continue;
             context.Error(RequiredInputUnbound,
                 $"Required Elsa 4 input '{input.ReferenceKey}' of '{node.Resolved.ActivityTypeKey ?? node.Resolved.ActivityVersionId}' would stay unbound.",
                 "Bind the Elsa 3 member that feeds this input before converting.",
                 input.ReferenceKey);
         }
+    }
+
+    /// <summary>
+    /// Whether the value is the literal the entry's R2 rule, or a null member's recorded conversion (spec 267), emits for
+    /// the member. A blank value (WriteLine's empty line, a cleared correlation id) is bound although
+    /// <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound. A null conversion counts only where the
+    /// member pass wrote it: an Elsa 3 blank literal is not null, and keeps its own rule (#3281).
+    /// </summary>
+    private static bool IsEmittedDefault(Elsa3NodePlan node, string elsa4Key, JsonElement value)
+    {
+        var rule = node.Resolved?.Entry?.Members.FirstOrDefault(member => member.Kind == Elsa3MemberKind.Input &&
+                                                                          StringComparer.Ordinal.Equals(member.Elsa4Key, elsa4Key));
+        var emitted = rule switch
+        {
+            { OnNull: { Rule: Elsa3NullRule.Emit, Value: { } onNull } } when node.NullEmits.Contains(elsa4Key) => onNull,
+            { Rule: Elsa3MemberRuleKind.DefaultFlip, Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } => elsa3Default.GetString(),
+            _ => null
+        };
+        return emitted is not null &&
+               Elsa3TypedValues.TryGetLiteral(value, out var literal) &&
+               StringComparer.Ordinal.Equals(literal, emitted);
     }
 
     private Elsa3Activity? ReadChild(
@@ -820,6 +1040,7 @@ internal sealed class Elsa3ActivityNormalizer(
         [RequestSizeNoOutcome] = "A request over the size limit has no outcome in Elsa 4; the request is refused.",
         [HttpOutcomeSingle] = "Elsa 4 emits one outcome per response: Done no longer fires together with a status-code outcome, and a non-2xx response goes to Failed.",
         [AuthHeaderUnvalidated] = "Elsa 4 does not validate the Authorization header, as if validation were disabled.",
+        [HttpAuthorizationUseConnection] = "Create an http connection and bind it to Connection. SendHttpRequest.Authorization was removed.",
         [WhilePersistedCondition] = "Elsa 4 re-reads the While condition only from persisted state.",
         [ForZeroStepFaults] = "A For step of 0 faults in Elsa 4.",
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",
@@ -828,5 +1049,6 @@ internal sealed class Elsa3ActivityNormalizer(
         [ScriptOutcomeRouting] = "Elsa 4 routes RunJavaScript by its return value; setOutcomes with several outcomes is refused.",
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
+        [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",
     };
 }

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "native-rules-publication-compiled-runtime",
+  "issue": 3181,
+  "baseCommit": "c8d8c31bd53c9b231e880947d55fd236f0feb960",
+  "capturedAtUtc": "2026-10-22T04:37:13.475803+00:00",
+  "rulesTests": {
+    "passed": 274,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": [
+    {
+      "command": "dotnet restore Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+      "exitCode": 0,
+      "log": "/tmp/rules-compiled-runtime-restore2.log",
+      "sha256": "8ecfda300c491638e51b8e529feb7a1d3bcf9e7d5fa84dce7591cc720eff52e6"
+    },
+    {
+      "command": "dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --no-restore --logger \"trx;LogFileName=rules-compiled-runtime-final-uncached.trx\"",
+      "exitCode": 0,
+      "log": "/tmp/rules-compiled-runtime-final-uncached.log",
+      "sha256": "14f8d1bd44aad8a1c9df5f466dd7a9a9064698bbfa653947360ff77fba1569f6"
+    },
+    {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --logger \"trx;LogFileName=rules-compiled-runtime-architecture.trx\"",
+      "exitCode": 0,
+      "log": "/tmp/rules-compiled-runtime-architecture.log",
+      "sha256": "84aea8092d02ef01fc7fb486a4fcf5d8db38d14a8f7c279015b47bbd05b08deb"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- all",
+      "exitCode": 0,
+      "log": "/tmp/rules-compiled-runtime-maps-generate.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "exitCode": 0,
+      "log": "/tmp/rules-compiled-runtime-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    }
+  ],
+  "remaining": [
+    "Workbench REST and authorization",
+    "six-module package-host proof",
+    "full native unavailable-retry journey",
+    "retained upgrade and admission-disabled rollback"
+  ],
+  "limits": [
+    "Synthetic source-build Rules implementation identity",
+    "Runtime live source reference created by test fixture",
+    "No production code changes or new production removal control in this checkpoint",
+    "No cluster or background-process proof"
+  ],
+  "review": {
+    "rounds": 4,
+    "outcome": "clean within checkpoint scope; final runtime artifact readback also disables the executable cache",
+    "independentReadOnlyReviews": [
+      "unchanged compiled artifact and persisted native outcomes",
+      "publication artifact assertions and checkpoint evidence"
+    ]
+  },
+  "architectureTests": {
+    "passed": 585,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mapsFindings": {
+    "runtimeToDesignSignals": 0,
+    "unlinkedCatalogs": 0,
+    "missingCatalogs": 0,
+    "generatedDocsCommitted": false
+  },
+  "warnings": "Existing package/analyzer/generator warnings remain visible; no check or warning policy changed."
+}

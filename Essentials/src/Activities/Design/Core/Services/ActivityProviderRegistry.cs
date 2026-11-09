@@ -72,8 +72,14 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
         if (schemas.Any(string.IsNullOrWhiteSpace) || schemas.Distinct(StringComparer.Ordinal).Count() != schemas.Length ||
             !provider.SupportedManifestSchemas.SetEquals(schemas))
             throw new ArgumentException("Authoring manifest schemas must exactly match the provider's supported manifest schemas.", nameof(provider));
-        if (capabilities.ManifestSchemas.Any(x => x.MigratableFromSchemaVersions.Any(schema => !provider.SupportedManifestSchemas.Contains(schema))))
-            throw new ArgumentException("Authoring migration sources must reference a supported manifest schema.", nameof(provider));
+        if (capabilities.ManifestSchemas.Any(x =>
+                x.MigratableFromSchemaVersions.Any(schema => !provider.SupportedManifestSchemas.Contains(schema)) ||
+                x.MigratableFrom?.Any(source =>
+                    string.IsNullOrWhiteSpace(source.ProviderKey) ||
+                    string.IsNullOrWhiteSpace(source.SchemaVersion) ||
+                    (StringComparer.Ordinal.Equals(source.ProviderKey, provider.ProviderKey) &&
+                     !provider.SupportedManifestSchemas.Contains(source.SchemaVersion))) == true))
+            throw new ArgumentException("Authoring migration sources must be non-empty, and same-provider sources must reference a supported manifest schema.", nameof(provider));
         var outcomes = capabilities.ContractConstraints.RequiredOutcomes;
         if (outcomes.Any(x => string.IsNullOrWhiteSpace(x.ReferenceKey) || string.IsNullOrWhiteSpace(x.Name)) ||
             outcomes.Select(x => x.ReferenceKey).Distinct(StringComparer.Ordinal).Count() != outcomes.Count)
@@ -103,6 +109,9 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
 
     private sealed class GuardedActivityProvider(IActivityProvider inner) : IActivityProvider
     {
+        private readonly IReadOnlyList<ActivityProviderDiagnosticDescriptor> _diagnosticDescriptors =
+            (inner as IActivityProviderDiagnosticCatalog)?.DiagnosticDescriptors.Take(128).ToArray() ?? [];
+
         public string ProviderKey => inner.ProviderKey;
         public IReadOnlySet<string> SupportedManifestSchemas => inner.SupportedManifestSchemas;
         public ActivityProviderAuthoringCapabilities AuthoringCapabilities => inner.AuthoringCapabilities;
@@ -114,7 +123,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             try
             {
                 var result = await inner.ProposeContractAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {
@@ -131,7 +140,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             {
                 return ActivityProviderDiagnosticSanitizer.Sanitize(
                     await inner.ValidateAsync(manifest, contract, cancellationToken),
-                    ProviderKey);
+                    ProviderKey, _diagnosticDescriptors);
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {
@@ -146,7 +155,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             try
             {
                 var result = await inner.MigrateAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {

@@ -52,6 +52,7 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
                 ServiceDescriptor.Scoped<IPostCommitOutboxLookupStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
                 ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
                 ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimCompletionStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
+                ServiceDescriptor.Scoped<IStimulusDeliveryStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
                 ServiceDescriptor.Scoped<IWorkflowDispatchRedriveStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>())
             };
             foreach (var descriptor in contracts)

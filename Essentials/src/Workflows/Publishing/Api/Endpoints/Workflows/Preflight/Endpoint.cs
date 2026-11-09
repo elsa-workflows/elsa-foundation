@@ -4,12 +4,13 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Preflight;
 
@@ -18,7 +19,8 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Preflight;
 public sealed class Endpoint(
     TimeProvider timeProvider,
     IWorkflowExecutableCompiler compiler,
-    WorkflowPublicationPreflightReader preflightReader) : ApiEndpoint<PreflightWorkflowPublication, PublicationPreflightView>
+    WorkflowPublicationPreflightReader preflightReader,
+    NormalizedPrincipalValidator principalValidator) : ApiEndpoint<PreflightWorkflowPublication, PublicationPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -40,7 +42,8 @@ public sealed class Endpoint(
                 now,
                 ExpiresAt: null,
                 "artifact-",
-                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
+                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
+                TenantId: PublicationRequestTenant.Resolve(HttpContext.User, principalValidator)),
             cancellationToken);
         var plan = await preflightReader.EvaluateAsync(
             executable,

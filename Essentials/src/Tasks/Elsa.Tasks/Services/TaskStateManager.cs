@@ -93,21 +93,20 @@ internal sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancell
 
     private async ValueTask DisposeBackgroundRunningTasks()
     {
+        var backgroundTasks = Task.WhenAll(RunningBackgroundTasks);
         try
         {
-            await Task.WhenAll(RunningBackgroundTasks);
+            await backgroundTasks;
         }
         catch (OperationCanceledException)
         {
             // Expected when cancellation is requested.
         }
-        catch (AggregateException e)
+        catch (Exception e) when (!e.IsFatal() &&
+                                  (backgroundTasks.Exception is null || backgroundTasks.Exception.Flatten().InnerExceptions.All(exception => !exception.IsFatal())))
         {
-            logger.LogError(e, "One or more background tasks failed while stopping tenant tasks");
-        }
-        catch (InvalidOperationException e)
-        {
-            logger.LogError(e, "Background task collection was in an invalid state while stopping tenant tasks");
+            // Await unwraps worker faults; log them without skipping lifetime cancellation and recurring cleanup.
+            logger.LogError(backgroundTasks.Exception ?? e, "One or more background tasks failed while stopping tenant tasks");
         }
 
         RunningBackgroundTasks.Clear();

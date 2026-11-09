@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Dashboard;
 
@@ -35,7 +36,8 @@ public sealed class WorkflowPortfolioService(
             },
             async (draft, token) =>
             {
-                if ((await eventPublisher.TryDeriveValidationErrorsAsync(draft, token)).Count > 0)
+                if ((await eventPublisher.TryDeriveValidationErrorsAsync(draft, token))
+                    .Any(error => !string.Equals(error.Severity, ValidationSeverities.Warning, StringComparison.Ordinal)))
                     Interlocked.Increment(ref invalid);
             });
 

@@ -560,21 +560,30 @@ public sealed class CandidateProcessTests
         fixture.AssertClosed();
     }
 
-    [Fact]
-    public async Task Failure_to_terminate_overrides_cancellation_and_disposes_the_handle()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Failure_to_terminate_overrides_timeout_or_cancellation_and_disposes_the_handle(bool timeout)
     {
         using var fixture = new ProcessFixture();
         fixture.Block("wait");
         fixture.Handle.OnKill = () => throw new IOException("private-process-canary");
         using var cancellation = new CancellationTokenSource();
-        var pending = fixture.Runner.RunAsync(Host, fixture.Request, cancellationToken: cancellation.Token);
-        await fixture.AwaitLaunchOrCompletion(pending);
-        cancellation.Cancel();
+        var pending = fixture.Runner.RunAsync(Host, fixture.Request, timeoutSeconds: 1,
+            cancellationToken: cancellation.Token);
+        await fixture.AwaitStageOrCompletion(pending);
+        Assert.True(fixture.StageEntered.Task.IsCompletedSuccessfully);
+        if (timeout)
+            fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+        else
+            cancellation.Cancel();
         await Task.WhenAny(pending, fixture.Clock.CleanupTimerCreated.Task).WaitAsync(TimeSpan.FromSeconds(30));
         fixture.Clock.Advance(TimeSpan.FromSeconds(5));
         var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending.WaitAsync(TimeSpan.FromSeconds(30)));
         Assert.Equal("candidate-cleanup-failed", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
         Assert.DoesNotContain("private-process-canary", refusal.Message);
+        Assert.Equal(1, fixture.Handle.KillCount);
         Assert.Equal(1, fixture.Handle.DisposeCount);
         Assert.False(fixture.Handle.Input.CanWrite);
         Assert.False(fixture.Handle.Output.CanRead);
@@ -1224,7 +1233,6 @@ public sealed class CandidateProcessTests
         public int StartCount { get; private set; }
         public Action? OnStart { get; set; }
         public TaskCompletionSource StageEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ProcessFixture()
         {
@@ -1241,13 +1249,9 @@ public sealed class CandidateProcessTests
                 StartInfo = info;
                 StartCount++;
                 OnStart?.Invoke();
-                started.TrySetResult();
                 return Handle;
             }, WorkerAssembly, Clock);
         }
-
-        public async Task AwaitLaunchOrCompletion(Task pending) =>
-            await Task.WhenAny(pending, started.Task).WaitAsync(TimeSpan.FromSeconds(30));
 
         public async Task AwaitStageOrCompletion(Task pending) =>
             await Task.WhenAny(pending, StageEntered.Task).WaitAsync(TimeSpan.FromSeconds(30));

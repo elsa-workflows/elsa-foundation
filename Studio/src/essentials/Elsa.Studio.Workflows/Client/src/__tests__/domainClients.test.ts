@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import {
+  createDefinition,
   createWorkflowFolder,
   deleteEmptyWorkflowFolder,
   getWorkflowFolderMutationSupport,
@@ -22,6 +23,44 @@ import { parseWorkflowRunInputs } from "../workflowRunInputs";
 import type { WorkflowInput } from "../workflowTypes";
 
 afterEach(clearApiCapabilityCache);
+
+describe("workflow organization availability", () => {
+  it.each([{ publicationState: "published" }, { sort: "modified" as const }])("does not trust an older paged host to honor unsupported query options: %j", async options => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? pagedDefinitionCapabilities : { items: [{ id: "unpublished", publicationState: "draft" }] });
+    await expect(listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, ...options })).rejects.toThrow();
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+  it("refuses unsupported folder placement before creating a workflow", async () => {
+    const getJson = vi.fn(async () => pagedDefinitionCapabilities);
+    const postJson = vi.fn(async () => ({}));
+    await expect(createDefinition(createContext({ getJson, postJson }), { name: "Invoice", folderId: "finance" })).rejects.toThrow();
+    expect(postJson).not.toHaveBeenCalled();
+  });
+  it("keeps ordinary paged sort and publication filters when organization is disabled", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links, { rel: "workflow-definitions-query", href: "design/workflows/definition-pages" }] }] } : { items: [] });
+    await listDefinitions(createContext({ getJson }), { search: "invoice", page: 1, pageSize: 25, sort: "modified", publicationState: "published" });
+    const url = new URL(String(getJson.mock.lastCall?.[0]), "https://backend.test");
+    expect(url.pathname).toBe("/design/workflows/definition-pages");
+    expect(url.searchParams.get("sort")).toBe("modified");
+    expect(url.searchParams.get("publicationState")).toBe("published");
+  });
+
+  it("uses the independently advertised query endpoint for extended options", async () => {
+    const capabilities = { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links,
+      { rel: "workflow-definitions-query", href: "custom/extended-query" }] }] };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+    await listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, publicationState: "published" });
+    expect(getJson).toHaveBeenLastCalledWith("/custom/extended-query?state=active&pageSize=25&publicationState=published");
+  });
+
+  it.each([{ folderId: "finance" }, { unfiled: true }, { includeDescendants: true }, { favoritesOnly: true },
+    { tagFilters: [{ tagId: "critical", operator: "exists" as const }] }])("refuses unsupported predicates before any workflow query: %j", async predicate => {
+    const getJson = vi.fn(async () => pagedDefinitionCapabilities);
+    await expect(listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, ...predicate })).rejects.toThrow();
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(getJson).toHaveBeenCalledWith("/capabilities");
+  });
+});
 
 const capabilities = {
   capabilities: [
@@ -72,6 +111,18 @@ const pagedDefinitionCapabilities = {
 };
 
 describe("canonical domain clients", () => {
+  it.each([
+    { name: "paged", discovery: pagedDefinitionCapabilities, path: "/design/workflows/definition-pages?state=active&pageSize=10" },
+    { name: "legacy", discovery: capabilities, path: "/design/workflows/definitions?state=active" }
+  ])("forwards cancellation to the advertised $name definition list", async ({ discovery, path }) => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? discovery : { items: [] });
+    const controller = new AbortController();
+
+    await listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 10 }, controller.signal);
+
+    expect(getJson).toHaveBeenLastCalledWith(path, { signal: controller.signal });
+  });
+
   it("discovers incident strategies only through the advertised publishing relation", async () => {
     const response = {
       items: [{
@@ -115,6 +166,29 @@ describe("canonical domain clients", () => {
     expect(result.definitions.map(item => item.id)).toEqual(["definition-6", "definition-7", "definition-8", "definition-9", "definition-10"]);
     expect(result).toMatchObject({ page: 2, pageSize: 5, totalCount: 12 });
     expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&searchTerm=Definition");
+  });
+
+  it("returns the full unpaged Design response for one-shot name enrichment", async () => {
+    const items = Array.from({ length: 140 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Definition ${index + 1}`,
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items });
+
+    const result = await listDefinitions(createContext({ getJson }), {
+      search: "",
+      state: "all",
+      page: 1,
+      pageSize: 100,
+      includeAllWhenUnpaged: true
+    });
+
+    expect(result.definitions).toHaveLength(140);
+    expect(result.definitions[139].id).toBe("definition-140");
+    expect(getJson).toHaveBeenCalledTimes(2);
   });
 
   it("sends searchTerm so the Design list binder can filter, not the client-only search alias", async () => {
@@ -229,7 +303,7 @@ describe("canonical domain clients", () => {
 
   it("sends direct-folder and Unfiled selectors only through the paged relation", async () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities"
-      ? pagedDefinitionCapabilities
+      ? { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links, { rel: "workflow-folders", href: "design/workflows/folders" }] }] }
       : { items: [], nextContinuationToken: null });
     const context = createContext({ getJson });
 
@@ -276,7 +350,7 @@ describe("canonical domain clients", () => {
     const deleteJson = vi.fn(async () => ({}));
     const context = createContext({ getJson, postJson, deleteJson });
 
-    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true });
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true, deleteContents: false });
     await renameWorkflowFolder(context, "folder/a", "Operations");
     await moveWorkflowFolder(context, "folder/a", null);
     await deleteEmptyWorkflowFolder(context, "folder/a");
@@ -291,7 +365,7 @@ describe("canonical domain clients", () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
     const context = createContext({ getJson });
 
-    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false });
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false, deleteContents: false });
     expect(getJson).toHaveBeenCalledTimes(1);
   });
 

@@ -1,0 +1,126 @@
+{
+  "passed": true,
+  "schemaVersion": 1,
+  "startedAt": "2026-10-22T06:13:26.899645+00:00",
+  "completedAt": "2026-10-22T06:13:48.344395+00:00",
+  "scope": "Additive Rules feature/schema installation in one SQLite database; same package-backed host binaries.",
+  "workflowExecutionId": "14YXmXywIPa",
+  "artifactId": "artifact-6d5c0ced1560",
+  "sourceReferenceId": "activation-ref:publication-14YXmWPCAuv",
+  "processIds": [
+    99164,
+    99264,
+    99433
+  ],
+  "workbenchAssemblySha256": "230d32b574cf56151e19a0b224370f1b2e4862f3ab0ab31a691eb29233f90cb2",
+  "deploymentReceiptSha256": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861",
+  "beforeSnapshot": "/tmp/rules-native-installation-corrected/native-before-rules.json",
+  "beforeSnapshotSha256": "bd56f5e2cbfd38d0da8148c0a4a90a8eba567b76dc5ca28808a4bad5d47f09c3",
+  "afterSnapshot": "/tmp/rules-native-installation-corrected/native-after-rules.json",
+  "afterSnapshotSha256": "60f8f89e7a26e4be403c594dc686aebb7ed215a50251505aa0e1fa0032eab0f1",
+  "preservedNativeStateAndSchema": true,
+  "nativeStateSha256": "d8449ecff5ff8e4dd4749f1c20ddb569a8d8bad010805146b7c2c8c883a93e99",
+  "addedSchemaObjects": [
+    "IX___ElsaDatabaseIdentity_RulesRuntime_SchemaVersion",
+    "IX___ElsaSchemaFinalization_RulesRuntime_SchemaVersion",
+    "IX_elsa_rules_runtime_facts_SchemaVersion",
+    "IX_elsa_rules_runtime_receipts_ReceiptId64",
+    "IX_elsa_rules_runtime_receipts_SchemaVersion",
+    "IX_elsa_rules_runtime_runs_SchemaVersion",
+    "__EFMigrationsHistory_RulesRuntime",
+    "__ElsaDatabaseIdentity_RulesRuntime",
+    "__ElsaSchemaFinalization_RulesRuntime",
+    "elsa_rules_runtime_facts",
+    "elsa_rules_runtime_receipts",
+    "elsa_rules_runtime_runs"
+  ],
+  "finalStatus": "Completed",
+  "retainedVariable": "retained-d6e75b1d88774dfeb91e6a7ce12e035b",
+  "followingActivityCount": 1,
+  "resumedCount": 1,
+  "duplicateResumedCount": 0,
+  "productSourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+  "qualificationReceipt": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/receipt.json",
+  "harnessSha256": {
+    "e2e-tests/rules/Test-NativeRulesInstallation.ps1": "3979977d6dc83613dcbee668003b0ed474c7cec40fb925939f8eb50084774341",
+    "e2e-tests/rules/_RulesCommon.ps1": "de8e62ef3943da5e0eea7dd2eca8e0cdd3f223179c4194aee04ab11e7fb529dd",
+    "e2e-tests/rules/Test-DurableRules.ps1": "a5facd599b257dd862892d755b391646baa477a14447a5af93671d0be194e7ee",
+    "tools/rules/native_upgrade_snapshot.py": "63beee02d8f4f8a9d0c8e22c4631d8009d8235f352dbfe3a57a82a04e138b723",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/durability/_DurabilityCommon.ps1": "4f897ac422defe7dfd1ad4f37de0296fe94a6e848ce0f718e2c08c49c4f757d6"
+  },
+  "nativeStateRowCounts": {
+    "elsa_runtime_workflow_execution_state": 1,
+    "elsa_runtime_activity_execution_state": 3,
+    "elsa_runtime_bookmark_state": 1,
+    "elsa_runtime_durable_value_state": 0,
+    "elsa_runtime_workflow_executable": 1
+  },
+  "preservedSchemaObjectCount": 394,
+  "log": {
+    "path": "/tmp/rules-native-installation-corrected.log",
+    "sha256": "98db60b9193d95b3de7d882c4efb750edb89a28d0ed65479588e0c552b2e6e2d"
+  },
+  "firstAttempt": {
+    "path": "/tmp/rules-native-installation-first/run.log",
+    "sha256": "2aa52aece516a25020e024e4d287500314158646534c63f7b827d84c26119477",
+    "passed": false,
+    "reason": "Probe incorrectly required separate durable-value rows; actual variable lives in persisted activity state. No runtime change."
+  },
+  "regressionRest": {
+    "path": "/tmp/rules-native-installation-regression-rest.json",
+    "sha256": "44e8a8a71f2c243cf5a24cc3d53e1840a25b44589b85a2d025fe2481a1e701b1",
+    "passed": true,
+    "scenarios": 4,
+    "terminalRestartReadback": {
+      "PreviousProcessId": 1542,
+      "ReconnectedProcessId": 2354,
+      "WorkbenchAssemblyPath": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+      "SequenceStatus": "Completed",
+      "SequenceNativeResult": {
+        "Kind": "Succeeded",
+        "CommittedRounds": 2,
+        "ResultSchemaVersion": 1,
+        "ResultFacts": [
+          "derived",
+          "seed"
+        ],
+        "DiagnosticCode": null,
+        "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+        "IsRedacted": false,
+        "OutputType": null
+      },
+      "FlowchartStatus": "Completed",
+      "FlowchartNativeResult": {
+        "Kind": "Succeeded",
+        "CommittedRounds": 2,
+        "ResultSchemaVersion": 1,
+        "ResultFacts": [
+          "derived",
+          "seed"
+        ],
+        "DiagnosticCode": null,
+        "FinalFactsSha256": "0432e7409a4f5287b577250b34ffa58eba7925a79b43f2e1a2e540ea7e0b9b2f",
+        "IsRedacted": false,
+        "OutputType": null
+      }
+    }
+  },
+  "fullAcceptancePassed": false,
+  "limits": [
+    "Same qualified binaries; proves feature/schema installation, not prior binary release upgrade.",
+    "SQLite additive coexistence only; separate provider contract matrix is prior evidence.",
+    "T025 is covered separately by retained-upgrade-checkpoint.md; this receipt is native installation evidence only.",
+    "Earlier full Workbench suite 61/1 and isolated 1/1 remain recorded with SQLite lock cause unproven.",
+    "External effects remain at least once."
+  ],
+  "integrationToolingSha256": {
+    "tools/rules/verify-packaged-rules.py": "850d66be0601356b74130b197de40965d6144611da595297e0ae3f03c81eb6b7"
+  },
+  "postExecutionFormatting": {
+    "path": "e2e-tests/rules/_RulesCommon.ps1",
+    "change": "Removed one trailing blank line only; harnessSha256 preserves the actually executed bytes.",
+    "currentSha256": "9c51f937eb6fc3581eb98e96ca42b234af1aa598fa7340f561eb9119fc92581e"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "workflow-variable-captures-event-v1",
+  "definitionId": "workflow-variable-captures-event",
+  "name": "workflow-variable-captures-event",
+  "description": "Test-owned regular workflow (#3122): declares the workflow variable 'approval' with no starting value, waits mid-flow for the event 'order.approved' and captures the Event's result into the variable.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "approval", "name": "approval", "typeName": "Object" },
+    { "id": "unused", "name": "unused", "typeName": "String" }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "workflow-variable-captures-event-root", "nodeId": "workflow-variable-captures-event-root", "name": "workflow-variable-captures-event-root", "type": "Elsa.Flowchart", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "wait", "nodeId": "wait", "name": "wait", "type": "Elsa.Event", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "eventName": { "typeName": "String", "expression": { "type": "Literal", "value": "order.approved" } },
+        "result": { "typeName": "Object", "memoryReference": { "id": "approval" } }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

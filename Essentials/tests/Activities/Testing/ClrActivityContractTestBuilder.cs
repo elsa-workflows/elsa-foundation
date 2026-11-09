@@ -77,7 +77,8 @@ public static class ClrActivityContractTestBuilder
             new ActivityActivationRequirement(descriptorType, alias),
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-                ?? SideEffectProfile.External);
+                ?? SideEffectProfile.External,
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
     public static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(

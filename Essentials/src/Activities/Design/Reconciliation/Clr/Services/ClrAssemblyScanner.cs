@@ -43,6 +43,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
     private static readonly string RequiredMemberAttributeFullName = typeof(RequiredMemberAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
+    private static readonly string ActivityConnectionAttributeFullName = typeof(ActivityConnectionAttribute).FullName!;
     private static readonly string OutputAttributeFullName = typeof(OutputAttribute).FullName!;
     private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
@@ -153,6 +154,18 @@ public sealed class ClrAssemblyScanner(
             if (isCredential)
                 EnsureCredentialCanBeBound(type, property, key, metadata);
 
+            var connectionAttribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityConnectionAttributeFullName);
+            var connectionType = connectionAttribute is null
+                ? null
+                : ReadNamedStringArgument(connectionAttribute, nameof(ActivityConnectionAttribute.ConnectionType));
+            var uiHint = metadata.UiHint;
+            var defaultSyntax = metadata.DefaultSyntax;
+            if (connectionType is { Length: > 0 })
+            {
+                uiHint ??= "connection-picker";
+                defaultSyntax ??= "Connection";
+            }
+
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
@@ -163,17 +176,18 @@ public sealed class ClrAssemblyScanner(
                 IsNullable: IsNullable(property),
                 Description: metadata.Description,
                 Order: metadata.Order,
-                UiHint: metadata.UiHint,
+                UiHint: uiHint,
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax,
+                DefaultSyntax: defaultSyntax,
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
                 IsSensitive: isSensitive ? true : null,
                 IsCredential: isCredential ? true : null,
                 // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
                 // is refreshed in place by reconciliation instead of raising a hash mismatch.
-                Tier: metadata.Tier));
+                Tier: metadata.Tier,
+                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -251,6 +265,20 @@ public sealed class ClrAssemblyScanner(
                 BuildInitialPayload(mode, slots));
 
             facets.Add(new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions)));
+        }
+
+        var paletteAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(ActivityPaletteAttribute).FullName);
+        if (paletteAttribute is not null)
+        {
+            var payload = new
+            {
+                ContainerModes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ContainerModes)),
+                SlotIds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.SlotIds)),
+                AncestorActivityTypes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.AncestorActivityTypes)),
+                ResourceKinds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ResourceKinds)),
+                Description = ReadNamedStringArgument(paletteAttribute, nameof(ActivityPaletteAttribute.Description))
+            };
+            facets.Add(new ActivityDesignFacet("elsa.activity-palette", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions)));
         }
 
         var outcomesFacet = BuildOutcomesFacet(type);
@@ -386,7 +414,11 @@ public sealed class ClrAssemblyScanner(
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.CollectionProperty)),
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ChildProperty)),
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.LabelProperty)),
-            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.SlotNameTemplate)));
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.SlotNameTemplate)))
+        {
+            ItemIdProperty = ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ItemIdProperty)),
+            ConditionProperty = ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ConditionProperty))
+        };
 
     private static IReadOnlyDictionary<string, object?> BuildInitialPayload(
         string mode,
@@ -492,7 +524,19 @@ public sealed class ClrAssemblyScanner(
     // and the runtime registry skips it too, so cataloging it would offer an activity that always fails to activate.
     private static bool IsActivityType(Type type) =>
         type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
-        && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
+        && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName)
+        && IsDiscoverable(type);
+
+    private static bool IsDiscoverable(Type type)
+    {
+        for (Type? current = type; current is not null; current = current.BaseType)
+        {
+            var attribute = current.GetCustomAttributesData().FirstOrDefault(x => x.AttributeType.FullName == ActivityAttributeFullName);
+            if (attribute is not null)
+                return attribute.NamedArguments.FirstOrDefault(x => x.MemberName == nameof(ActivityAttribute.IsDiscoverable)).TypedValue.Value is not false;
+        }
+        return true;
+    }
 
     private static Type? FindTypedActivityResult(Type activityType)
     {

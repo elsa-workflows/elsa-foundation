@@ -7,6 +7,23 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IBookmarkStateStore
 {
+    /// <summary>Reads the current physical replacement generation with its state; legacy stores refuse.</summary>
+    /// <remarks>This observation is not admission, source authority or permission to consume a wait. Providers must
+    /// read committed physical state; the EF implementation requires a clean context with no local, enlisted or
+    /// ambient transaction and preserves pending caller changes when refusing that precondition.</remarks>
+    /// <exception cref="NotSupportedException">The provider cannot observe exact physical generations.</exception>
+    /// <exception cref="ArgumentException">An identity is blank or exceeds provider storage bounds.</exception>
+    /// <exception cref="InvalidOperationException">Committed observation preconditions are unavailable, or a
+    /// provider-specific contextual persistence exception reports a failed read with its original cause.</exception>
+    /// <exception cref="InvalidDataException">Stored identity, projection or content is contradictory.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<BookmarkStateObservation?> ObserveAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<BookmarkStateObservation?>(new NotSupportedException("Exact bookmark observations are unavailable."));
+    }
+
     /// <summary>
     /// Inserts or replaces state for the bookmark key.
     /// </summary>

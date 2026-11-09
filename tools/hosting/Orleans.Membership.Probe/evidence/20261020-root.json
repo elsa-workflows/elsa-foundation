@@ -1,0 +1,234 @@
+{
+  "issue": 3098,
+  "kind": "non-production selected-membership/report-boundary probe",
+  "builtBeforeCommit": true,
+  "baseCommit": "33c33214f16ca8c157d2af99ab31faecb90cb9a9",
+  "sourceFileSha256": {
+    "Directory.Packages.props": "1ee1f311a6fbffdca8cbec1512341433f99c134e2f3630e37a5a232d994b7b36",
+    "tools/hosting/Orleans.Membership.Probe/Program.cs": "0c017450ffd477fd459ad14af782dc0b341485c67057713593d84a65e7bb4e02",
+    "tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj": "ae57f375a5f07d88f4c062e45aeb031fbe78ee24e5d5c20c2755f4908013fa12",
+    "tools/hosting/Orleans.Membership.Probe/packages.lock.json": "967d5b2d1cbc3a0b0b95931b4d01f1722c866bf39db6088a51375e1e7e73a633"
+  },
+  "binarySha256": "1c6d408e27a22150478e4434bc31c9f63be72d3dce4490d256e7d624228f47ca",
+  "orleansSourcePin": "d114d7522a53b8cce4c6b97d44293e5c7273d766",
+  "dockerImageObserved": {
+    "tag": "postgres:16-alpine",
+    "id": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+    "repoDigests": [
+      "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
+    ]
+  },
+  "runs": [
+    {
+      "name": "baseline",
+      "expectedExit": 0,
+      "receipt": {
+        "Candidate": "A: PostgreSQL ADO.NET clustering plus same-database report facet",
+        "Provider": "Orleans.Clustering.AdoNet / Npgsql",
+        "OrleansVersion": "10.4.0",
+        "PostgreSqlVersion": "16.15",
+        "MainScriptSha256": "623c15320e640cdd3e84d0668dcae481312f2631ac4977bf2eb8cf22e05deb8b",
+        "ClusteringScriptSha256": "39dff7cbb72a390223cd48a9bc7d4a90252092dcba5677318bd510cc9fc1af08",
+        "Mutation": "none",
+        "ActiveMembershipEntries": 2,
+        "AllMemberProjectionCount": 3,
+        "InitialSilos": [
+          {
+            "Name": "probe-silo-a",
+            "Address": "127.0.0.1:57779@151476006",
+            "Generation": 151476006
+          },
+          {
+            "Name": "probe-silo-b",
+            "Address": "127.0.0.1:57780@151476007",
+            "Generation": 151476007
+          }
+        ],
+        "RejoinedSilo": {
+          "Name": "probe-silo-a",
+          "Address": "127.0.0.1:57779@151476008",
+          "Generation": 151476008
+        },
+        "FreshReadSawRevision": 2,
+        "HeldReadSawRevision": 1,
+        "FreshReadCapabilityCount": 0,
+        "HeldReadCapabilityCount": 1,
+        "IncarnationIsolation": true,
+        "ContainerCleanupCompleted": true,
+        "Assertions": [
+          "two-active-silos",
+          "both-hosts-same-membership-table",
+          "missing-report-unknown",
+          "repeatable-read-held-at-revision-one",
+          "fresh-read-revision-two-and-capability-removal",
+          "stale-cas-rejected",
+          "same-name-rejoin-new-generation",
+          "new-incarnation-report-unknown",
+          "new-report-visible-from-silo-b",
+          "late-old-key-isolated",
+          "unsupported-schema-unknown",
+          "report-read-failed-closed"
+        ],
+        "Outcome": "passed",
+        "FailureReason": null,
+        "Detail": null
+      },
+      "receiptSha256": "2a1ae74f0dbc370e7b475d5d6d4c5aca4d84b20a871d8c7632ebec352026a915"
+    },
+    {
+      "name": "stale-read",
+      "expectedExit": 1,
+      "receipt": {
+        "Candidate": "A: PostgreSQL ADO.NET clustering plus same-database report facet",
+        "Provider": "Orleans.Clustering.AdoNet / Npgsql",
+        "OrleansVersion": "10.4.0",
+        "PostgreSqlVersion": "16.15",
+        "MainScriptSha256": "623c15320e640cdd3e84d0668dcae481312f2631ac4977bf2eb8cf22e05deb8b",
+        "ClusteringScriptSha256": "39dff7cbb72a390223cd48a9bc7d4a90252092dcba5677318bd510cc9fc1af08",
+        "Mutation": "hide-report-read",
+        "ActiveMembershipEntries": 2,
+        "AllMemberProjectionCount": null,
+        "InitialSilos": [
+          {
+            "Name": "probe-silo-a",
+            "Address": "127.0.0.1:57788@151476011",
+            "Generation": 151476011
+          },
+          {
+            "Name": "probe-silo-b",
+            "Address": "127.0.0.1:57789@151476012",
+            "Generation": 151476012
+          }
+        ],
+        "RejoinedSilo": null,
+        "FreshReadSawRevision": null,
+        "HeldReadSawRevision": null,
+        "FreshReadCapabilityCount": null,
+        "HeldReadCapabilityCount": null,
+        "IncarnationIsolation": null,
+        "ContainerCleanupCompleted": true,
+        "Assertions": [],
+        "Outcome": "failed",
+        "FailureReason": "fresh-report-visible",
+        "Detail": "ProbeFailure: later independent projections did not observe revision 2 and the removed capability"
+      },
+      "receiptSha256": "ab98c543e1cd1e144db25382275a5a090431cd8c4b06fcc85477279b6f6df94d"
+    },
+    {
+      "name": "incarnation",
+      "expectedExit": 1,
+      "receipt": {
+        "Candidate": "A: PostgreSQL ADO.NET clustering plus same-database report facet",
+        "Provider": "Orleans.Clustering.AdoNet / Npgsql",
+        "OrleansVersion": "10.4.0",
+        "PostgreSqlVersion": "16.15",
+        "MainScriptSha256": "623c15320e640cdd3e84d0668dcae481312f2631ac4977bf2eb8cf22e05deb8b",
+        "ClusteringScriptSha256": "39dff7cbb72a390223cd48a9bc7d4a90252092dcba5677318bd510cc9fc1af08",
+        "Mutation": "ignore-incarnation",
+        "ActiveMembershipEntries": 2,
+        "AllMemberProjectionCount": null,
+        "InitialSilos": [
+          {
+            "Name": "probe-silo-a",
+            "Address": "127.0.0.1:57797@151476016",
+            "Generation": 151476016
+          },
+          {
+            "Name": "probe-silo-b",
+            "Address": "127.0.0.1:57798@151476017",
+            "Generation": 151476017
+          }
+        ],
+        "RejoinedSilo": {
+          "Name": "probe-silo-a",
+          "Address": "127.0.0.1:57797@151476018",
+          "Generation": 151476018
+        },
+        "FreshReadSawRevision": 2,
+        "HeldReadSawRevision": 1,
+        "FreshReadCapabilityCount": 0,
+        "HeldReadCapabilityCount": 1,
+        "IncarnationIsolation": null,
+        "ContainerCleanupCompleted": true,
+        "Assertions": [],
+        "Outcome": "failed",
+        "FailureReason": "new-incarnation-report-unknown",
+        "Detail": "ProbeFailure: new incarnation inherited the old incarnation report"
+      },
+      "receiptSha256": "39a782168b33a6fb56df88bcc570fb7b1d6b4bc1c1abb8f85ac69f67b5dbd43f"
+    },
+    {
+      "name": "restored",
+      "expectedExit": 0,
+      "receipt": {
+        "Candidate": "A: PostgreSQL ADO.NET clustering plus same-database report facet",
+        "Provider": "Orleans.Clustering.AdoNet / Npgsql",
+        "OrleansVersion": "10.4.0",
+        "PostgreSqlVersion": "16.15",
+        "MainScriptSha256": "623c15320e640cdd3e84d0668dcae481312f2631ac4977bf2eb8cf22e05deb8b",
+        "ClusteringScriptSha256": "39dff7cbb72a390223cd48a9bc7d4a90252092dcba5677318bd510cc9fc1af08",
+        "Mutation": "none",
+        "ActiveMembershipEntries": 2,
+        "AllMemberProjectionCount": 3,
+        "InitialSilos": [
+          {
+            "Name": "probe-silo-a",
+            "Address": "127.0.0.1:57812@151476022",
+            "Generation": 151476022
+          },
+          {
+            "Name": "probe-silo-b",
+            "Address": "127.0.0.1:57813@151476023",
+            "Generation": 151476023
+          }
+        ],
+        "RejoinedSilo": {
+          "Name": "probe-silo-a",
+          "Address": "127.0.0.1:57812@151476024",
+          "Generation": 151476024
+        },
+        "FreshReadSawRevision": 2,
+        "HeldReadSawRevision": 1,
+        "FreshReadCapabilityCount": 0,
+        "HeldReadCapabilityCount": 1,
+        "IncarnationIsolation": true,
+        "ContainerCleanupCompleted": true,
+        "Assertions": [
+          "two-active-silos",
+          "both-hosts-same-membership-table",
+          "missing-report-unknown",
+          "repeatable-read-held-at-revision-one",
+          "fresh-read-revision-two-and-capability-removal",
+          "stale-cas-rejected",
+          "same-name-rejoin-new-generation",
+          "new-incarnation-report-unknown",
+          "new-report-visible-from-silo-b",
+          "late-old-key-isolated",
+          "unsupported-schema-unknown",
+          "report-read-failed-closed"
+        ],
+        "Outcome": "passed",
+        "FailureReason": null,
+        "Detail": null
+      },
+      "receiptSha256": "92ea8fefe071c2c99925b3448624d1465d4919bbe1a8a884f2d9419fdc32b663"
+    }
+  ],
+  "commands": {
+    "restore": "dotnet restore tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj --locked-mode",
+    "build": "dotnet build tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj -c Release --no-restore",
+    "run": "dotnet run --project tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj -c Release --no-build --no-restore -- --output <owned-output-dir>/receipt.json",
+    "mutations": [
+      "--mutation hide-report-read",
+      "--mutation ignore-incarnation"
+    ]
+  },
+  "limits": [
+    "Two silo hosts share one OS process; this is not separate-process/native-workflow recovery.",
+    "Raw Orleans status and probe report projection are not an Elsa FleetView or capability query implementation.",
+    "Stable-host admission serialized with heartbeat renewal, local lapse/expiry policy, shutdown and full provider conformance remain unproved production gates.",
+    "Old-generation writes here are issued by the probe driver to test key isolation, not by a stale live Elsa execution owner.",
+    "No production actor/membership provider registration, release, deployment or exactly-once external-effects claim."
+  ],
+  "verification": "Root reran baseline, both negative controls and restored baseline independently; counts are not additive."
+}

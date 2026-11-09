@@ -113,6 +113,30 @@ public sealed class GlobalBookmarkStimulusLookupTests
         Assert.Equal(["bk-a", "bk-expired"], matches.Select(match => match.BookmarkId).OrderBy(id => id, StringComparer.Ordinal));
     }
 
+    [Fact]
+    public async Task GlobalIngress_ExcludesTestExecutions_InHashAndTypeLookup()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var executions = new Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore();
+        var identity = new WorkflowExecutableIdentity("artifact", "definition", "version", "1.0.0", "hash");
+        foreach (var (id, kind) in new[] { ("production", WorkflowRunKind.PublishedRun), ("test", WorkflowRunKind.TestRun) })
+        {
+            await store.SaveAsync(Bookmark("bookmark-" + id, executionId: id));
+            await executions.SaveAsync(new WorkflowExecutionState(id, identity, WorkflowExecutionStatus.Suspended, null,
+                _now, _now, _now, null, null, null, null, new Dictionary<string, string>()) { RunKind = kind });
+        }
+        var lookup = new GlobalBookmarkStimulusLookup(store, executions);
+
+        var byHash = await lookup.FindWaitingAsync(Request());
+        var byType = await lookup.FindWaitingByTypeAsync(new GlobalBookmarkStimulusTypeLookupRequest("Event", _now));
+
+        Assert.Equal(["production"], byHash.WorkflowExecutionIds);
+        Assert.Equal(["production"], byType.WorkflowExecutionIds);
+        // Exact execution lookup remains available to a scoped test driver.
+        var scoped = await new BookmarkStimulusLookup(store).FindAsync(new("test", "Event", "sha256:event:hello", _now));
+        Assert.Equal(BookmarkStimulusLookupStatus.Found, scoped.Status);
+    }
+
     private GlobalBookmarkStimulusLookupRequest Request(string? correlationId = null) =>
         new("Event", "sha256:event:hello", _now, correlationId);
 

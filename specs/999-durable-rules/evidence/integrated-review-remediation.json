@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "baseHead": "6557ace50173b491d3a8ffde1ec61de752d7ff36",
+  "apiTracking": {
+    "package": "Elsa.Workflows.Runtime.Core",
+    "compilerGeneratedEntries": 8867,
+    "shippedEntries": 0,
+    "classification": "Elsa 4 unreleased preview; follow existing empty-shipped/unshipped-surface convention",
+    "initialMissingApiBuildExitCode": 1,
+    "restoredApiBuildExitCode": 0
+  },
+  "artifacts": {
+    "apiGenerationDiagnostics": {
+      "path": "/tmp/rules-runtime-core-api.sarif",
+      "sha256": "17db69b1c2389c6c4519c0a89bc27b53d4be2582e131e1254e0b3b4f82887a6d"
+    },
+    "apiGenerationLog": {
+      "path": "/tmp/rules-runtime-core-api-generate.log",
+      "sha256": "8ae82637b7d9fb2fd7e4cfd92be0824ea0508ee116f96766f5550a483e482070"
+    },
+    "apiBuildLog": {
+      "path": "/tmp/rules-runtime-core-api-verify.log",
+      "sha256": "0b3bb810fb66997b21c5a4977fce4c5332063863881623f06741481de1348b81"
+    },
+    "architectureLog": {
+      "path": "/tmp/rules-pr3192-architecture.log",
+      "sha256": "037a7fd5b21eefde47e07d907b0465639e512835fadf09fd6fed9d345f7dea70"
+    },
+    "architectureTrx": {
+      "path": "/tmp/rules-pr3192-architecture/rules-review-architecture.trx",
+      "sha256": "399908abe4663e94b1e616f4b90b26f9f233aec9af55c9e2deb315045fb1378e"
+    }
+  },
+  "architectureCounters": {
+    "total": "585",
+    "executed": "585",
+    "passed": "585",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "generatedFilterCheck": {
+    "command": "dotnet run --project tools/maps/Elsa.Maps.Generator --no-restore -- check",
+    "exitCode": 0,
+    "log": "/tmp/rules-pr3192-filters.log",
+    "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+  }
+}

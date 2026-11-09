@@ -3,6 +3,7 @@ import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { getInputPropertyName, readWrappedInputValue } from "./activityProperties";
 import { isMaskedInput, readSecretReference } from "./maskedInput";
 import { describeInferredSource } from "./conversionSource";
+import { isHttpEndpointType } from "./workflow-editor/httpTestRequest";
 
 /**
  * A per-instance one-liner for a canvas node: a preview of the activity's most meaningful authored
@@ -28,12 +29,16 @@ export function formatActivitySummary(activity: ActivityNode, catalogItem: Activ
 }
 
 /**
- * The activity's primary input, mirroring the property panel's ordering (`groupInputs`): browsable
+ * HTTP endpoints summarize their route rather than the start-workflow setting. Other activities
+ * use the primary input, mirroring the property panel's ordering (`groupInputs`): browsable
  * inputs sorted by an explicit `order`, falling back to catalog delivery order, ties keeping the
  * original index (never alphabetical) so the author-intended first field stays first.
  */
 function pickHeadlineInput(catalogItem: ActivityCatalogItem): StudioActivityInputDescriptor | undefined {
   const inputs = (catalogItem.inputs ?? []) as StudioActivityInputDescriptor[];
+  if (isHttpEndpointType(catalogItem.activityTypeKey)) {
+    return inputs.find(input => input.isBrowsable !== false && getInputPropertyName(input).toLowerCase() === "path");
+  }
   return inputs
     .map((input, index) => ({ input, index }))
     .filter(entry => entry.input.isBrowsable !== false)

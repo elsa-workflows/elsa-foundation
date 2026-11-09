@@ -34,4 +34,13 @@ JSON output contains `plan` (the existing safe composition-plan projection) and 
 | Unreadable/drifted input, host/package/capability unavailable, invalid/oversized response, process failure/timeout | 3 | No preview; fixed safe refusal. |
 | User cancellation | 2 | No preview; candidate-inspection-cancelled after owned child cleanup. |
 
+Refusal precedence after dispatch: an inspection timeout reports `candidate-inspection-timeout`
+only when owned worker cleanup succeeds. Cleanup has a separate five-second deadline. If
+termination, stream disposal or exchange-task quiescence cannot be established within it,
+`candidate-cleanup-failed` takes precedence over the timeout (and over cancellation or a
+returned host response), with exit 3 and no preview. A loaded runner can therefore report
+either refusal for a timed-out inspection; it must never report successful cleanup
+without proving it. The final captured-input recheck described above still takes precedence
+over either nonfatal refusal when an input changed. Fatal trust exceptions still propagate.
+
 New operation codes: candidate-trust-required; candidate-selection-conflict (reason enum: unknown, unavailable, requested-extra, requested-missing, expanded-extra, required-disabled, case-collision); candidate-capture-invalid; candidate-request-invalid; candidate-request-too-large; candidate-capability-unavailable; candidate-response-invalid; candidate-response-too-large; candidate-inspection-timeout; candidate-inspection-cancelled; candidate-host-unavailable; candidate-closure-changed; candidate-package-unavailable; candidate-inspection-failed; candidate-cleanup-failed. `candidate-closure-changed` is a pre-host outer refusal for observed installed metadata drift, with no preview (exit3). Existing safe bridge/composition refusal codes are retained for input/build/drift errors. Existing EF refusal codes are enumerated in the worker contract. No raw strings from a peer error become user messages.

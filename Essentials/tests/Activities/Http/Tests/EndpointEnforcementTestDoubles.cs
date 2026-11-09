@@ -21,7 +21,11 @@ internal sealed class BehaviourStimulusRouter : IStimulusRouter
     /// <summary>The requests routed through this fake, in call order.</summary>
     public List<StimulusDispatchRequest> Requests { get; } = new();
 
-    /// <summary>Delays (honouring the cancellation token) longer than the endpoint timeout, so the linked CTS trips.</summary>
+    /// <summary>
+    /// Delays (honouring the cancellation token) so the linked CTS trips. After the delay this returns an empty
+    /// routing result, which the middleware maps to 404 — so a delay that can finish before the timeout is a race,
+    /// not a timeout proof. Prefer <see cref="Timeout.InfiniteTimeSpan"/> when the assertion is 408.
+    /// </summary>
     public static BehaviourStimulusRouter Delaying(TimeSpan delay) =>
         new(async (_, cancellationToken) =>
         {

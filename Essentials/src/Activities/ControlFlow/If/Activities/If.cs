@@ -23,6 +23,7 @@ namespace Elsa.Activities.If.Activities;
 /// An unbound <see cref="Condition"/> resolves to <c>false</c> (the default of <c>bool</c>), so an
 /// <c>If</c> with no condition wired up runs the <c>Else</c> branch and emits <see cref="ActivityOutcomes.False"/>.
 /// </remarks>
+[Activity(Icon = "GitBranch")]
 [ActivityStructure("elsa.if.structure", "1.0.0")]
 [ActivityOutcome(ActivityOutcomes.True)]
 [ActivityOutcome(ActivityOutcomes.False)]

@@ -18,6 +18,37 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
 {
     private readonly DateTimeOffset _now = new(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Running, null, WorkflowExecutionStatus.Running)]
+    [InlineData(ActivityExecutionStatus.Running, "unrelated-work", WorkflowExecutionStatus.Running)]
+    [InlineData(ActivityExecutionStatus.Running, "outcome-work", WorkflowExecutionStatus.Faulted)]
+    [InlineData(ActivityExecutionStatus.Faulted, null, WorkflowExecutionStatus.Faulted)]
+    [InlineData(ActivityExecutionStatus.Completed, null, WorkflowExecutionStatus.Faulted)]
+    public async Task OnDrainedAsync_CombinedOutcomeWaitsForItsExactParentDecision(
+        ActivityExecutionStatus parentStatus, string? processedWorkItemId, WorkflowExecutionStatus expectedStatus)
+    {
+        var harness = new Harness(_now);
+        await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveActivity("actexec-parent", parentStatus);
+        var child = await harness.SaveActivity("actexec-1", ActivityExecutionStatus.Faulted, "actexec-parent");
+        if (processedWorkItemId is not null)
+            await harness.ActivityStore.SaveAsync(child with
+            {
+                Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = processedWorkItemId }
+            });
+        await harness.SaveBlockingIncident(metadata: new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.ParentOutcomeWorkItemId] = "outcome-work"
+        });
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
+
+        Assert.Equal(expectedStatus, (await harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
+        Assert.Equal(ActivityExecutionStatus.Faulted, (await harness.ActivityStore.FindAsync("wfexec-1", "actexec-1"))!.Status);
+        if (expectedStatus == WorkflowExecutionStatus.Running)
+            Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
     [Fact]
     public async Task OnDrainedAsync_WithBlockingIncidentOnRunningWorkflow_CommitsFaultedStatus()
     {
@@ -256,7 +287,9 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 AggregateFaultCount: status == ActivityExecutionStatus.Faulted ? 1 : 0,
                 Metadata: new Dictionary<string, string>()));
 
-        public ValueTask<bool> SaveBlockingIncident(IncidentResolutionOutcome? resolutionOutcome = null) =>
+        public ValueTask<bool> SaveBlockingIncident(
+            IncidentResolutionOutcome? resolutionOutcome = null,
+            IReadOnlyDictionary<string, string>? metadata = null) =>
             IncidentStore.TryAddAsync(new IncidentState(
                 incidentId: "incident-1",
                 workflowExecutionId: "wfexec-1",
@@ -268,7 +301,8 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 failureType: "System.InvalidOperationException",
                 message: "boom",
                 createdAt: _now,
-                resolvedAt: null));
+                resolvedAt: null,
+                metadata: metadata));
 
         private WorkflowExecutionCommandEnvelope NewEnvelope()
         {

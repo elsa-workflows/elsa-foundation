@@ -28,6 +28,16 @@ public interface IDurableTimerStore
     /// </summary>
     bool SupportsClaimTransitions => false;
 
+    /// <summary>
+    /// Returns the earliest eligible instant in the current persistence scope, accounting for both due
+    /// time and claim/retry visibility. Returns null for an empty store, an unsupported query or bounded
+    /// discovery that cannot establish a deadline. Legacy
+    /// providers keep periodic recovery through this default implementation. The built-in pump uses this
+    /// acceleration only with claim-capable stores whose visibility owns retry eligibility.
+    /// </summary>
+    ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<DateTimeOffset?>(null);
+
     /// <summary>Upserts a timer (existing wins) and returns the stored timer.</summary>
     ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default);
 

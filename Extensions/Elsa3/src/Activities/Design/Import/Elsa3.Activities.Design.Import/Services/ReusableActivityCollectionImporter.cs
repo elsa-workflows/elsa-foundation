@@ -29,12 +29,19 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// never the value. As everywhere the rule runs, a binding is matched to its input by reference key, and a node whose
 /// activity version the catalog does not hold is not judged.
 /// </para>
+/// <para>
+/// After the commit, <paramref name="publishPhase"/> publishes the imported reusable versions (spec 246). When
+/// <paramref name="requirePublishing"/> is set, as the import feature sets it for a host, an apply that selects a reusable
+/// version without a phase is refused before anything is written; otherwise (unit tests of the mapping) it commits only.
+/// </para>
 /// </remarks>
 public sealed class ReusableActivityCollectionImporter(
     IReusableActivityCollectionAnalyzer analyzer,
     IReusableActivityImportMaterializer materializer,
     IReusableActivityImportCommand command,
-    ICredentialLiteralValidator credentialLiterals) : IReusableActivityCollectionImporter
+    ICredentialLiteralValidator credentialLiterals,
+    ReusableActivityImportPublishPhase? publishPhase = null,
+    bool requirePublishing = false) : IReusableActivityCollectionImporter
 {
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
@@ -123,6 +130,13 @@ public sealed class ReusableActivityCollectionImporter(
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
         await AdmitAsync(mutation, cancellationToken);
+        // After the conversion and admission findings, which the engineer must see first; before anything is written.
+        if (requirePublishing && publishPhase is null && mutation.Activities.Count > 0)
+            throw Validation(
+                "This host cannot publish imported reusable activities.",
+                ReusableActivityImportDiagnosticCodes.PublishingUnavailable,
+                plan.CollectionId,
+                guidance: "Enable the Elsa3ImportActivitiesPublishing feature; it needs WorkflowsPublishingApi.");
         if (request.AccessScope is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.AccessScope.UserId);
@@ -145,7 +159,14 @@ public sealed class ReusableActivityCollectionImporter(
             };
         }
         var committed = await command.CommitAsync(mutation, cancellationToken);
-        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, committed.Receipt, mutation.Warnings);
+        var receipt = committed.Receipt;
+        if (publishPhase is not null && mutation.Activities.Count > 0)
+        {
+            // Publishing follows the commit and is resumable: a replayed commit publishes what is still missing.
+            var publications = await publishPhase.PublishAsync(mutation.Activities, receipt?.ReceiptId ?? mutation.PlanId, cancellationToken);
+            receipt = receipt is null ? null : receipt with { Publications = publications };
+        }
+        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, receipt, mutation.Warnings);
     }
 
     /// <summary>
@@ -164,7 +185,7 @@ public sealed class ReusableActivityCollectionImporter(
             Location: $"Elsa 3 workflow '{workflow.SourceDefinitionId}' version '{workflow.SourceVersionId}'"));
         var activityRoots = mutation.Activities.Select(activity => (
             Root: activity.Body.RootActivity,
-            Location: $"the reusable activity imported from Elsa 3 workflow version '{activity.Version.SourceId}'"));
+            Location: $"the reusable activity imported from Elsa 3 workflow version '{activity.Version.SourceVersionId}'"));
         var nodes = workflowRoots.Concat(activityRoots)
             .Where(root => root.Root is not null)
             .SelectMany(root => Elsa3ImportedActivityNodes.Walk(root.Root!).Select(node => (Node: node, root.Location)));
@@ -184,13 +205,14 @@ public sealed class ReusableActivityCollectionImporter(
         string message,
         string code,
         string subject,
-        IReadOnlyDictionary<string, string>? metadata = null) =>
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? guidance = null) =>
         new(message,
         [new Elsa3MigrationDiagnostic(
             Elsa3MigrationDiagnosticSeverity.Error,
             code,
             message,
-            guidance: "Re-analyze the collection and apply a reviewed dependency-closed selection.",
+            guidance: guidance ?? "Re-analyze the collection and apply a reviewed dependency-closed selection.",
             metadata: new Dictionary<string, string>(metadata ?? new Dictionary<string, string>(), StringComparer.Ordinal)
             {
                 ["CollectionId"] = subject

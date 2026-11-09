@@ -104,6 +104,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
                         .HasColumnType("character varying(256)")
                         .UseCollation("C");
 
+                    b.Property<string>("Tombstone")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -154,7 +159,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
                         .HasColumnType("text")
                         .UseCollation("C");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantId", "NormalizedName", "Tombstone");
 
                     b.HasIndex("SchemaVersion");
 

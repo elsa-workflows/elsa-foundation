@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "346ddee63940db2d1f0e135684c5d695122dec29",
+  "baseMainCommit": "5d1df7097db3a731330735a94c2b6a5fb7f9a476",
+  "fullAcceptancePassed": false,
+  "runs": [
+    {
+      "name": "rules",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-rules.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 44.9,
+      "log": {
+        "path": "/tmp/rules-final-compatibility/rules.log",
+        "sha256": "8dda7793c46e7a94e8f105ac4df6b09ec5d3304604bdcb2a84026ff92a657168"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/tests/Tests/TestResults/rules-final-rules.trx",
+        "sha256": "2b469a279bf0debcd187f443e5db3a02e973369ae32fcad3f8bc99ee182d8b39"
+      },
+      "counts": {
+        "total": 276,
+        "executed": 276,
+        "passed": 276,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "etl",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-etl.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 236.0,
+      "log": {
+        "path": "/tmp/rules-final-compatibility/etl.log",
+        "sha256": "115726e3bf4b12fa6b53aedeafd4a5beca3d2edeb3b3a1a6486bef74058a3920"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Etl/tests/Tests/TestResults/rules-final-etl.trx",
+        "sha256": "80d51cc7fa57cb259d6874a09c72d7bb45b9874b6c6a4ab38fa1710c5bdef55c"
+      },
+      "counts": {
+        "total": 1009,
+        "executed": 1009,
+        "passed": 1009,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "activities",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-activities.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 29.9,
+      "log": {
+        "path": "/tmp/rules-final-compatibility/activities.log",
+        "sha256": "082c9d5eb875fcb581fb97461beb840845c543cc7e5d1c6fed85b85d7184acfa"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Activities/Runtime/Tests/TestResults/rules-final-activities.trx",
+        "sha256": "fa091d4937022ed4d6b04cea64b5cb09a65a91c233f4dc8c6852e163bfafe5d0"
+      },
+      "counts": {
+        "total": 662,
+        "executed": 662,
+        "passed": 662,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-runtime.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 23.4,
+      "log": {
+        "path": "/tmp/rules-final-compatibility/runtime.log",
+        "sha256": "c1edd51560ee7232a290803a07e1a8e1bcc91c7e0e2e9989fd4c87d6b59455d5"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Workflows/Runtime/Tests/TestResults/rules-final-runtime.trx",
+        "sha256": "7318a09ebfae465fb169a5788e17603dd6934ad9b533bc5fc5dde4d15ae1744c"
+      },
+      "counts": {
+        "total": 2540,
+        "executed": 2540,
+        "passed": 2540,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "runtime-ef",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-runtime-ef.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 162.0,
+      "log": {
+        "path": "/tmp/rules-final-compatibility/runtime-ef.log",
+        "sha256": "6c32bc042cec85816eea163045b59955ea92db846b111f7a20754c7206f95da1"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/TestResults/rules-final-runtime-ef.trx",
+        "sha256": "39db8f8a61a647b81fc2e2e2340a2e4c4e28e6b24fd00ceeaf761cfd55e85fdb"
+      },
+      "counts": {
+        "total": 1003,
+        "executed": 1003,
+        "passed": 1003,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "rules-complete",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-rules-complete.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 27.7,
+      "startLoad": "8:56  up 22 days, 20:22, 2 users, load averages: 10.59 36.06 35.62",
+      "log": {
+        "path": "/tmp/rules-final-compatibility/rules-complete.log",
+        "sha256": "b6b27adf3220072177e0f23732d735d5652f9ca5cf3447189fe124dc18001b1f"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Extensions/Rules/tests/Tests/TestResults/rules-final-rules-complete.trx",
+        "sha256": "11e17b7ad7b5d37d9c8ed0c69eb9390271c241b229b404dee186b59e55d5881b"
+      },
+      "counts": {
+        "total": 278,
+        "executed": 278,
+        "passed": 278,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    {
+      "name": "architecture",
+      "log": {
+        "path": "/tmp/rules-final-compatibility/architecture.log",
+        "sha256": "58c87c081630b8dd6d36c3cdb41dbdc2380d1d078559639cd05bd9a317708b73"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Architecture/Tests/TestResults/rules-final-architecture.trx",
+        "sha256": "dcfc227d4fde641c5e5209701be8b28814d9440b0c038e5acfe53bb2c5f689a0"
+      },
+      "counts": {
+        "total": 585,
+        "executed": 585,
+        "passed": 585,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "reproductionCommand": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-architecture.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "commandNote": "Command shown for reproduction; the retained log/TRX proves the actual completed run, but its exact invocation was not captured in the adjacent command receipts."
+    },
+    {
+      "name": "workbench",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=rules-final-workbench.trx",
+        "--verbosity",
+        "minimal"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1502.1,
+      "startLoad": "8:57  up 22 days, 20:23, 2 users, load averages: 10.68 34.06 34.91",
+      "log": {
+        "path": "/tmp/rules-final-compatibility/workbench.log",
+        "sha256": "0bdd8403277f889465edea86aadd5db13780ba1240d0feb3a3d5469dd2733de5"
+      },
+      "trx": {
+        "path": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/Essentials/tests/Workbench/Tests/TestResults/rules-final-workbench.trx",
+        "sha256": "1c7f70035b39243debe325add7acfaa3a0607a12f73c60d879d495fb30c1a1bb"
+      },
+      "counts": {
+        "total": 62,
+        "executed": 62,
+        "passed": 62,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    }
+  ],
+  "otherChecks": [
+    {
+      "name": "generated solution filters",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "check"
+      ],
+      "log": {
+        "path": "/tmp/rules-final-compatibility/solution-filters.log",
+        "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+      },
+      "result": "passed"
+    },
+    {
+      "name": "Workbench application build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "--no-restore",
+        "--verbosity",
+        "minimal"
+      ],
+      "log": {
+        "path": "/tmp/rules-final-compatibility/workbench-build.log",
+        "sha256": "203de7291d563fe9905ae712fc106352ad1d1c6b4d6e03f0536cb8e53005d8fd"
+      },
+      "result": "passed, zero errors, 85 warnings"
+    }
+  ],
+  "pending": [
+    "Final integrated self-review, exact-head CI and resulting-main gates."
+  ],
+  "limits": [
+    "Architecture rebuilt after Workbench application; source-built checks do not replace package/process/provider evidence.",
+    "Main integration added only Studio/spec changes; tests are local source evidence, not hosted exact-head CI.",
+    "Historical Workbench timeout has no proven causal explanation; test-only acquire diagnostics and retained failure root added.",
+    "No skipped test is counted as passed; scheduled provider job skips are separate from executed local provider evidence."
+  ],
+  "relatedNativePackageEvidence": "native-package-final-receipt.json"
+}

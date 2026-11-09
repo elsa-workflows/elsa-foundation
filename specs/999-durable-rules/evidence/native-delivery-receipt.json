@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-22T01:50:55.673999+00:00",
+  "issue": 3181,
+  "baseCommit": "8ba20da9547bdaff25bf58f4cd6edbbc68e72156",
+  "worktree": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main",
+  "scope": "Native Rules delivery executor, inspector and independent store proof validation; no hosting or persisted native composite claim.",
+  "checks": [
+    {
+      "command": "dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --no-restore --logger console;verbosity=normal",
+      "exitCode": 0,
+      "passed": 258,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/3181-native-delivery-rules-final.log",
+      "sha256": "c5b203e67b7b2bb07536f38e47db0a82ea2cb97a39d2dc8f3b101f4b2f6c095b"
+    },
+    {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --logger console;verbosity=normal",
+      "exitCode": 0,
+      "passed": 585,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/3181-native-delivery-architecture-final.log",
+      "sha256": "1cc580afdffd8c8db41b99c994d135b043e34e047155ee6ac43c5a87a07cfddf"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- all",
+      "exitCode": 0,
+      "passed": null,
+      "failed": null,
+      "skipped": null,
+      "log": "/tmp/3181-native-delivery-maps-generate.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "exitCode": 0,
+      "passed": null,
+      "failed": null,
+      "skipped": null,
+      "log": "/tmp/3181-native-delivery-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    }
+  ],
+  "control": {
+    "scope": "Remove only canonical successful terminal comparison",
+    "expectedFailed": 2,
+    "intendedAssertions": [
+      "Direct altered result must not produce proof",
+      "Altered result must not acknowledge actual SQLite delivery"
+    ],
+    "log": "/tmp/3181-native-delivery-control.log",
+    "sha256": "b52c3adc42ef23c1446b339aedc1524305c774e2a586edd631adcc6691ecad64",
+    "restoredByteForByte": true,
+    "followedByIntactRulesSuite": 258
+  },
+  "initialArchitecture": {
+    "passed": 583,
+    "failed": 2,
+    "cause": [
+      "New evidence target was not staged",
+      "Comment-only source edit followed assembly build"
+    ],
+    "log": "/tmp/3181-native-delivery-architecture-initial.log",
+    "sha256": "3e9cc0bedee85a089101e43c7ec2826b18ae38fe2eaaf58ef068916fcc3446c0",
+    "resolvedBy": "Stage intended files, rebuild then repeat unchanged full architecture suite"
+  },
+  "sourceSha256": {
+    "Extensions/Rules/src/Workflows/Runtime/Services/RulesNativeDeliveryExecution.cs": "86722e0ba8c7c78c30b3ea2870fdf1c2908bf29f21f8c039cdf0becc924c197d",
+    "Extensions/Rules/src/Workflows/Runtime/Services/RulesNativeDeliveryInspector.cs": "b90c706bcf588e6b617b8c92507121f97a0966e45881fb9ab4e39c902318be29",
+    "Extensions/Rules/src/Workflows/Runtime/Services/RulesNativeDeliveryProofValidator.cs": "99cd9bbadc3f1314cfbc418e61ed9f7ca5f9d015e6067e677ec514f62cb8eb60",
+    "Extensions/Rules/tests/Tests/RulesNativeDeliveryExecutionTests.cs": "0c237fc0de307515cb6d2703daed82dd5532892f64e1b122d23a3b11e28b1c3b",
+    "Extensions/Rules/tests/Tests/RulesNativeDeliveryProofTests.cs": "9a56404d7c65d62e9a03f1e4d5ac69b84fecdfae97fead41bbe15954acee7f93"
+  },
+  "review": {
+    "rounds": 3,
+    "outcome": "Clean for the bounded component scope after fixes and verification",
+    "independentReview": "Read-only final pass found no concrete defect in supported normal path"
+  },
+  "remaining": [
+    "Delivery worker hosting and feature registration",
+    "Actual catalog publication and persisted Sequence/Flowchart acceptance",
+    "Native REST/package-host proof-before-ack gate",
+    "Six-module package and upgrade qualification"
+  ],
+  "wholeLeafComplete": false
+}

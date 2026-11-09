@@ -20,10 +20,21 @@ public static class WorkflowDefinitionPublicationStateFormatting
 
     public static WorkflowDefinitionView WithPublicationState(
         this WorkflowDefinitionView view,
-        IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>? states)
+        IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary>? summaries,
+        IReadOnlyDictionary<string, string>? versionsById = null)
     {
-        if (states is null || !states.TryGetValue(view.Id, out var state))
+        if (summaries is null || !summaries.TryGetValue(view.Id, out var summary))
             return view;
-        return view with { PublicationState = ToWire(state) };
+        var publishedVersion = summary.PublishedVersionId is { } versionId &&
+                              versionsById is not null &&
+                              versionsById.TryGetValue(versionId, out var version)
+            ? version
+            : null;
+        return view with
+        {
+            PublicationState = ToWire(summary.State),
+            PublishedVersionId = summary.PublishedVersionId,
+            PublishedVersion = publishedVersion
+        };
     }
 }

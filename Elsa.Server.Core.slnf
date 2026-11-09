@@ -2,6 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
       "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
@@ -18,7 +19,8 @@
       "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
       "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj",
       "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
-      "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj",
+      "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj",
+      "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj",
       "Essentials/src/Attention/Core/Elsa.Attention.Core.csproj",
       "Essentials/src/Caching/Core/Elsa.Caching.Core.csproj",
       "Essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj",
@@ -39,6 +41,7 @@
       "Essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj",
       "Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj",
       "Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
+      "Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj",
       "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
       "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",

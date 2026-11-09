@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The one scan of the repository's project graph (spec 149 FR-001, spec 259 FR-006): project files, central pins,
+    version lines and lock files, read through IRepositoryTree. The maps generator reads it from the working tree;
+    the versioning calculator reads it from each commit's git objects.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Elsa.Maps.Projects</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

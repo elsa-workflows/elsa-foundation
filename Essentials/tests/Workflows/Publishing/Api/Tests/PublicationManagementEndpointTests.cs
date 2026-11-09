@@ -133,6 +133,29 @@ public sealed class PublicationManagementEndpointTests
         Assert.Equal(PublicationTriggerCardinalityView.Exclusive, change.Cardinality);
     }
 
+    [Fact]
+    public void Trigger_conflict_view_adds_a_descriptor_without_changing_its_stable_key()
+    {
+        var conflict = new PublicationTriggerConflict(
+            "publication-1",
+            "blue",
+            "Http",
+            "get:/orders",
+            PublicationTriggerCardinality.Exclusive,
+            "claim-1")
+        {
+            Descriptor = "GET /orders"
+        };
+
+        var view = PublicationTriggerConflictView.From(conflict);
+        var json = JsonSerializer.Serialize(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("http:get:/orders", view.Key);
+        Assert.Equal("GET /orders", view.Descriptor);
+        Assert.Contains("\"key\":\"http:get:/orders\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"descriptor\":\"GET /orders\"", json, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(PublicationActionView.Replace, "replace")]
     [InlineData(PublicationActionView.SideBySide, "sideBySide")]

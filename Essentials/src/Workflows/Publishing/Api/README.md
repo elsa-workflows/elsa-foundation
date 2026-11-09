@@ -40,6 +40,10 @@ requires this durable store and the cross-domain commit command to share one tra
 an Applied receipt, immutable activity version, definition head, executable template, Source
 Reference, layout, and dependency edges become visible together or not at all.
 
+## Cross-domain contributions
+
+- **`IActivitySourceVersionPublisher`** *(Core contract — `Elsa.Activities.Design.Core`)* — `SourceOwnedActivityVersionPublisher`, registered with `TryAddScoped`, closes each source-owned catalog version the activity reconciler contributes into its immutable publication and Runtime template, or refuses it per version with its diagnostics. Catalog: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md); the provider-backed path is described in [this feature's catalog](EXTENSION_POINTS.md).
+
 ## Publication lifecycle
 
 The management flow is capability-oriented but the authority transition is one coordinated Publishing
@@ -80,6 +84,16 @@ unpublished, or already publishing-owned. `canActivate` is false when there are 
 `targetSlotOwner`; `conflicts` itself stays trigger-only. Publish refuses such a slot with the same `409` a refused
 activation returned (the `slot_owner_conflict` failure, its detail naming the owner), but before it writes an executable,
 source reference, or publication record: ownership transfer is an operator action (ADR 0043).
+
+Trigger conflicts retain their stable `key` and optionally include a readable `descriptor`, such as
+`GET /orders/{id}`. Display the descriptor when present and retain the key for correlation. Providers supply only
+safe display text; routing metadata such as authorization policy is not exposed. Declaring two channels does not
+isolate their HTTP routes: simultaneous exclusive claims still need distinct route surfaces.
+
+When [activation channel configuration](../../Runtime/Elsa.Workflows.Runtime/README.md#activation-channels)
+disables ad-hoc channels, both workflow preflight routes and publication reject an undeclared channel with
+`400` and `errorCode: channel_not_declared` before publication writes. Read declarations and creation policy from
+the Runtime activation-slot list response; a previously existing undeclared slot remains visible.
 
 ## HTTP endpoint surface
 

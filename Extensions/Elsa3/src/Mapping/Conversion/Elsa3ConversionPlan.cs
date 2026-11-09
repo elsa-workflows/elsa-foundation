@@ -74,11 +74,20 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     /// <summary>The intrinsic contract when the node becomes an engine intrinsic.</summary>
     public AuthoredWorkflowIntrinsic? Intrinsic { get; set; }
 
+    /// <summary>
+    /// For a node conversion synthesized (an HttpEndpoint projection, plan D-12): the Elsa 3 node and output that caused
+    /// it, so a diagnostic names what the engineer can change.
+    /// </summary>
+    public (Elsa3Activity Node, string Output)? SynthesizedFrom { get; init; }
+
     /// <summary>Elsa 3 output properties that are loop variables in Elsa 4 (For.CurrentValue → <c>index</c>, …).</summary>
     public Dictionary<string, string> LoopVariables { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The Elsa 3 property name each renamed Elsa 4 key came from, for diagnostics after normalization.</summary>
     public Dictionary<string, string> SourceNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The Elsa 4 keys a null member was bound to Elsa 3's value for (spec 267), which count as bound when blank.</summary>
+    public HashSet<string> NullEmits { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The Elsa 4 key of the node's script body, rewritten in script mode, when the node runs a script.</summary>
     public string? ScriptProperty { get; set; }

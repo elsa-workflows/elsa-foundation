@@ -51,6 +51,22 @@ public sealed class WorkflowMigrationQuiescenceTests
     }
 
     [Fact]
+    public async Task ProbeAsync_RejectsAnAdmittedBackgroundInvocationWhileItIsRunning()
+    {
+        var activities = new InMemoryActivityExecutionStateStore();
+        await activities.SaveAsync(Activity("background-activity", ActivityExecutionStatus.Running) with
+        {
+            SubStatus = "BackgroundPending"
+        });
+        var probe = NewProbe(new InMemoryExecutionLivenessStateStore(), activities);
+
+        var result = await probe.ProbeAsync("workflow", null);
+
+        Assert.False(result.IsQuiescent);
+        Assert.Contains(result.Findings, finding => finding.Code == "ActiveActivityExecution");
+    }
+
+    [Fact]
     public async Task ProbeAsync_TraversesActivityPagesAndRejectsQueuedOrClaimedDurableWork()
     {
         var activities = new InMemoryActivityExecutionStateStore();

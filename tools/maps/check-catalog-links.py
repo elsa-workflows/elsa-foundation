@@ -8,12 +8,18 @@ ignored. A leading '/' resolves against the repository root, the way GitHub rend
 tracked file or a directory holding one, matched case-sensitively, so a link that only works on a
 case-insensitive disk or to an untracked local file is reported too.
 
-The Architecture suite's CatalogLinkGuardTests enforces the same rule for EXTENSION_POINTS.md files.
+The Architecture suite's CatalogLinkGuardTests enforces the same rule over the same files: without --all-readmes this
+script checks exactly the set Every_relative_link_in_a_catalog_or_module_readme_resolves checks. CI's documentation-only
+fast path runs it in that mode in place of the .NET build (spec 257). The guard's other test, that the root index links
+every source catalog, can only break through a catalog change, and a catalog change always gets the full run.
+
+Paths are git paths, so they are joined and normalised with posixpath on every platform.
 
 Usage: python3 tools/maps/check-catalog-links.py [--all-readmes]
 Exits 1 when any link is broken.
 """
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -56,8 +62,8 @@ def broken_links(root, relative_path, tracked_paths):
         path = re.split(r"[#?]", target, maxsplit=1)[0]
         if not path:
             continue
-        base = "" if path.startswith("/") else os.path.dirname(relative_path)
-        resolved = os.path.normpath(os.path.join(base, path.lstrip("/")))
+        base = "" if path.startswith("/") else posixpath.dirname(relative_path)
+        resolved = posixpath.normpath(posixpath.join(base, path.lstrip("/")))
         if resolved.startswith("..") or resolved not in tracked_paths:
             yield number, target
 
@@ -71,7 +77,7 @@ def main():
     all_files = tracked(root, [])
     tracked_paths = set(all_files)
     for path in all_files:
-        while path := os.path.dirname(path):
+        while path := posixpath.dirname(path):
             tracked_paths.add(path)
     files = tracked(root, pathspecs)
     failures = [(path, number, target) for path in files for number, target in broken_links(root, path, tracked_paths)]

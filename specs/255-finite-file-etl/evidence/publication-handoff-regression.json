@@ -1,0 +1,10 @@
+{
+  "source": "Extensions/Etl/src/Runtime/Execution/EtlExecution.cs",
+  "fixedSha256": "1471bd610654957c24ff4d91205b533e5182f8c7a96a30c5eb6e12bd5ef6e6e7",
+  "mutatedSha256": "f4b2b29d7d448e1eca1745ef11357c85b996d8bd67e9c16f560455f02314dffe",
+  "mutation": "Bypass composed preparer and batch processor in actual EtlExecution with fresh default file publishers.",
+  "result": "Both actual process midpoint cases failed explicitly when acceptance was reached before their required staged-write barrier; no timeout was used as the failure oracle.",
+  "exitCode": 1,
+  "restoredByteExactly": true,
+  "restorationValidation": "Affected ETL suite: 291 passed, zero failed/skipped after byte-exact restoration."
+}

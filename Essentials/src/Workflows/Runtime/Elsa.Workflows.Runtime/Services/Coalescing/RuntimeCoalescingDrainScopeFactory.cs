@@ -1,4 +1,4 @@
-using Elsa.Primitives.Identity;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -27,7 +27,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
 
-        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode);
+        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)
@@ -42,6 +42,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider) : IRuntimeCoalescingDrainScope
     {
+        private RuntimeCheckpointCommit? preparedFlush;
         public RuntimeCoalescingSession Session => session;
 
         public async ValueTask FlushAtQuiescenceAsync(CancellationToken cancellationToken = default)
@@ -54,7 +55,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // durable queue with the overlay consumption and end the segment; no folded commit is required — unless an
             // earlier cap flush left durably persisted outbox items whose overlay outcome still has to be written back,
             // in which case the (empty-state) flush commit below carries that reconciliation.
-            if (!session.HasBufferedChanges && !session.RequiresDurableOutboxReconciliation)
+            if (preparedFlush is null && !session.HasBufferedChanges && !session.RequiresDurableOutboxReconciliation)
             {
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
                 session.ClearBuffer();
@@ -62,7 +63,10 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 return;
             }
 
-            var flushCommit = BuildFlushCommit();
+            // An uncertain outcome must retry exactly the same identity/timestamp/envelope. A fresh synthetic commit
+            // would mint another canonical source after a peer may already have delivered the first one.
+            var flushCommit = preparedFlush ??= BuildFlushCommit();
+            session.PrepareQuiescenceFlush(flushCommit.CommitId);
 
             // Routed through the committer so ownership fencing gates the single durable write. The coalescing
             // commit-store decorator recognises the CoalescedFlush marker, applies the folded state to the durable
@@ -87,7 +91,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
             var now = timeProvider.GetUtcNow();
             var checkpoint = new RuntimeCheckpoint(
-                CheckpointId: ShortIdentityGenerator.Generate(now),
+                CheckpointId: RuntimeExecutionIdGenerator.NewId(now),
                 Name: RuntimeCoalescingMetadataKeys.FlushCheckpointName,
                 WorkflowExecutionId: session.WorkflowExecutionId,
                 OccurredAt: now,
@@ -98,7 +102,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 });
 
             return new RuntimeCheckpointCommit(
-                CommitId: ShortIdentityGenerator.Generate(now),
+                CommitId: RuntimeExecutionIdGenerator.NewId(now),
                 Checkpoint: checkpoint,
                 StateChanges: foldedState,
                 PostCommitIntents: remainingIntents,

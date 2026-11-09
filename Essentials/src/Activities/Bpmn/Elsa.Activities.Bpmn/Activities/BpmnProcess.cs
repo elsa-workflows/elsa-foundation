@@ -1,4 +1,6 @@
 using Elsa.Activities.Bpmn.Exceptions;
+using Elsa.Activities.Bpmn.Core;
+using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -6,6 +8,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -24,15 +27,17 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// replace this rule in the events tier. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Workflow")]
 [TriggerActivity]
-[ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
-[ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
+[ActivityStructure(BpmnActivityIdentities.StructureKind, BpmnActivityIdentities.StructureSchemaVersion, Mode = "bpmn", SupportsScopedVariables = true)]
+[ActivityChildSlot(BpmnActivityIdentities.ActivitiesSlotName, "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
-public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader
+[ActivityChildControlConsumer(BpmnControlProtocol.Key, BpmnControlProtocol.Version)]
+public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildOutcomeHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader, IRuntimeActivityChildControlConsumer
 {
-    public const string ActivitiesSlotName = "Bpmn.Activities";
-    public const string StructureKind = "elsa.bpmn.structure";
-    public const string StructureSchemaVersion = "1.0.0";
+    public const string ActivitiesSlotName = BpmnActivityIdentities.ActivitiesSlotName;
+    public const string StructureKind = BpmnActivityIdentities.StructureKind;
+    public const string StructureSchemaVersion = BpmnActivityIdentities.StructureSchemaVersion;
 
     /// <summary>
     /// Whether this process may be started from an event-defined start element's stimulus. Defaults to
@@ -41,7 +46,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
     /// trigger provider skips it. Root position is not recoverable from the published node alone, so this is the
     /// opt-out; a none-start process is unaffected either way (it starts on direct invocation).
     /// </summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), DefaultValue = "true")]
+    [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow event-defined start events to start new workflow instances. When off, this process can still run inside an existing workflow.", DefaultValue = "true")]
     public bool CanStartWorkflow { get; set; } = true;
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) => executionEngine.StartAsync(context);
@@ -51,7 +56,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return executionEngine.OnChildCompletedAsync(runtimeContext, context);
+        return executionEngine.CompleteAsync(runtimeContext, context);
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
@@ -59,7 +64,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return executionEngine.OnChildFaultedAsync(runtimeContext, context);
+        return executionEngine.FaultAsync(runtimeContext, context);
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
@@ -67,14 +72,20 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(notification);
 
-        return executionEngine.OnChildNotifiedAsync(context, notification);
+        return executionEngine.SignalAsync(context, notification);
     }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
+        executionEngine.OutcomeAsync(RequireRuntimeContext(context.ParentContext), context);
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context) =>
+        executionEngine.ControlAsync(context.ParentContext, context);
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
     {
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new BpmnExecutionException("BpmnProcess requires an Elsa runtime activity execution context.");
+        throw new BpmnHostException("BpmnProcess requires an Elsa runtime activity execution context.");
     }
 }

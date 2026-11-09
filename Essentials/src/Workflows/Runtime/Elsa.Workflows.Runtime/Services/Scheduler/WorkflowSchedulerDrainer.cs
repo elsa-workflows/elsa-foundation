@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
@@ -44,6 +45,15 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
+    internal DrainControlContext? DrainControls { private get; init; }
+    internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
+
+    /// <summary>
+    /// Whether something re-drives work released with a future visibility: an <c>IWorkflowDispatchDurabilityEvidence</c>
+    /// naming <c>Resumption</c>, the same signal the router uses before parking shed work (#1320). Without it a
+    /// <c>RetryAfter</c> is poisoned rather than released to wait for a sweep nobody runs.
+    /// </summary>
+    internal bool HasResumptionRedriver { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
@@ -127,6 +137,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _admissionLoadSignal = admissionLoadSignal;
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
+        if (_claimOptions.UnavailableRetryDelay <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work unavailable retry delay must be greater than zero.");
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -151,10 +163,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // would re-load and deserialize the state document needlessly on durable providers. (#293)
         var stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
 
+        var yielded = false;
         while (remaining > 0 && !stoppedOnTerminalStatus)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (DrainControls?.ShouldYield(request.WorkflowExecutionId) == true)
+            {
+                yielded = true;
+                break;
+            }
             var delivery = await AcquireNextAsync(request.WorkflowExecutionId, cancellationToken);
             if (delivery is null)
                 break;
@@ -163,7 +181,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // A null decision here means this command kind has no pause boundary (the gate maps only StartActivity,
             // InvokeActivity, and GeneratedEvent), not that pausing is unavailable — the gate is required by
             // construction, so "no gate" is not a state this can be in. (#1277 R1)
-            var pauseDecision = await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
+            var pauseDecision = ModelProtocols?.IsSelectedModel(request.WorkflowExecutionId) == true
+                ? null : await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
             if (pauseDecision is { CanAdvance: false })
             {
                 await ReleaseAsync(delivery, cancellationToken);
@@ -180,7 +199,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             results.Add(result);
             remaining--;
 
-            if (result.Status == RuntimeSchedulerWorkItemResultStatus.Faulted)
+            if (result.Status is RuntimeSchedulerWorkItemResultStatus.Faulted or RuntimeSchedulerWorkItemResultStatus.Deferred)
                 break;
 
             // The dispatched item may have committed a terminal status (e.g. the Finish path). Re-check so the
@@ -192,7 +211,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // all-completed drain; flag it as the stop reason.
         var stopReason = stoppedOnTerminalStatus
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
-            : (RuntimeSchedulerDrainStopReason?)null;
+            : yielded ? RuntimeSchedulerDrainStopReason.Yielded : (RuntimeSchedulerDrainStopReason?)null;
 
         // Outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
         if (activity is not null)
@@ -212,6 +231,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
+        if (ModelProtocols?.IsSelectedModel(workflowExecutionId) == true) return false;
         // The terminal-status guard reads the state store injected by construction — no AsyncLocal
         // service-location in the drain path. The store is required, so there is no null fallback.
         var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
@@ -251,6 +271,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
             : null;
 
+        // #3275, #3683: the positive evidence a delayed release needs, that this dispatch sent no non-retaining checkpoint
+        // to the store, for a RetryAfter and for temporarily unavailable work alike. Open only where such a release is
+        // possible: a claimed item of a kind that supports it.
+        using var dispatchFrame = claim is not null && RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind)
+            ? RuntimeSchedulerDispatchFrame.Open(workItem.WorkflowExecutionId)
+            : null;
+        var handlerReturned = false;
+
         // The dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
         // tracing is inactive.
@@ -268,10 +296,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             await DispatchWithClaimRenewalAsync(
                 renewal,
-                dispatchCancellationToken => _pipelineDispatcher is not null
+                dispatchCancellationToken => _pipelineDispatcher is not null && ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) != true
                     ? _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, dispatchCancellationToken)
                     : handler.HandleAsync(workItem, dispatchCancellationToken),
                 cancellationToken);
+            handlerReturned = true;
 
             // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
             // inside its unit-of-work, so the separate acknowledgement is redundant and skipped;
@@ -313,6 +342,46 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // node neither acknowledges it nor records it as poison, which would leave the new owner nothing to run.
             throw;
         }
+        catch (RuntimeSchedulerWorkUnavailableException exception) when (
+            dispatchFrame is not { NonRetainingCheckpointAttempted: true } || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
+        {
+            // #3683: only work that sent no non-retaining checkpoint to the store is deferred here. One that did has an
+            // effect that is durable, or will be at the coalescing segment's flush, without its commit having consumed the
+            // item (an active segment consumes nothing, and a commit through a scope of its own holds no claim), so a
+            // release would run it again over that effect. It falls through to the handler-fault arm below instead. A
+            // commit the store refused with this same exception, rolled back, is no attempt (the committer withdraws it),
+            // so a refused native worker admission is still deferred and retried here.
+
+            // Supported work preserves its retry delay through a durable claim or a visibility-aware overlay
+            // whose drain flush persists the release. Unsupported work/provider pairs retain their source.
+            if (!CanReleaseWithDelay(workItem, renewal))
+                throw;
+
+            var activeClaim = renewal!;
+            var visibleAt = _timeProvider.GetUtcNow().Add(_claimOptions.UnavailableRetryDelay);
+            var release = await _schedulerWorkQueue.ReleaseClaimAsync(activeClaim.Current, visibleAt, cancellationToken);
+            if (!release.Succeeded)
+                throw NewClaimLost(activeClaim.Current, "release after temporary unavailability", release.Status);
+
+            if (activity is not null)
+                activity.SetTag(WorkflowEngineTelemetry.OutcomeTag, "deferred");
+
+            return new RuntimeSchedulerWorkItemResult(
+                workItemId: workItem.WorkItemId,
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                commandKind: workItem.CommandKind,
+                status: RuntimeSchedulerWorkItemResultStatus.Deferred,
+                handlerName: handler?.Name ?? nameof(WorkflowSchedulerDrainer),
+                startedAt: startedAt,
+                completedAt: _timeProvider.GetUtcNow(),
+                error: exception.SafeSummary);
+        }
+        catch (Exception) when (ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) == true)
+        {
+            // A model driver failure leaves its accepted input owed. Native poison/incident policy cannot decide
+            // the outcome of a different semantic engine or acknowledge an unavailable decision.
+            throw;
+        }
         catch (Exception exception)
         {
             var faultInfo = _faultCapturePolicy.Capture(exception);
@@ -327,9 +396,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 activity.SetStatus(ActivityStatusCode.Error, faultInfo.ExceptionType);
             }
 
-            // Ack-delete BEFORE poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
-            // drainer stays alive and records the item to the poison store. The source item must therefore be removed
-            // from the durable queue here, before HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
+            // Ack-delete before poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
+            // drainer stays alive and records the item to the poison store. Only the retry decision is read first. The
+            // source item must therefore be removed from the durable queue here, before HandleHandlerCrashAsync records
+            // poison / honors a RetryNow re-enqueue;
             // otherwise the still-queued source item would be re-driven by the sweep AND re-enqueued by RetryNow, and a
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
@@ -339,10 +409,40 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
             // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
             // recording entirely. Skip the ack but still record poison and return the Faulted result.
-            if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+            //
+            // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
+            // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
+            // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
+            // re-drives it. The release needs positive evidence that running the item again repeats no checkpoint: the
+            // handler itself threw, rather than the acknowledgement after it returned, and the dispatch frame saw no
+            // non-retaining checkpoint go to the store. A checkpoint that went may be durable whether or not the call
+            // returned, a coalescing segment may hold it for its flush, and a handler may commit through a scope of
+            // its own, so none of that is inferred after the fact. A release the queue refuses falls back to the
+            // acknowledgement; everything not released is poisoned. A claim that was lost (an inactive coalescing
+            // segment whose durable copy is gone or held under another owner's live claim, say) refuses that
+            // acknowledgement too, so the drain throws claim-lost and records nothing. A delay that ends past the last
+            // representable time is poisoned as well: no queue can persist it, and releasing it anyway would park the
+            // step for good.
+            //
+            // Temporary unavailability lands here too once the dispatch has sent a non-retaining checkpoint to the store
+            // that the store did not refuse as unavailable (#3683). It cannot be deferred without repeating that
+            // checkpoint, and acknowledging it with no record would silently drop a step that did not finish. In an
+            // active coalescing segment the acknowledgement goes through the overlay, so the drain's flush still commits
+            // the effect and removes the durable copy.
+            var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
+            DateTimeOffset? releasedUntil = null;
+            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned && HasResumptionRedriver &&
+                dispatchFrame is { NonRetainingCheckpointAttempted: false } && delay <= DateTimeOffset.MaxValue - retry.Now &&
+                !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
+            {
+                var visibleAt = retry.Now + delay;
+                if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
+                    releasedUntil = visibleAt;
+            }
+            if (releasedUntil is null && _consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
-            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, cancellationToken);
+            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, retry, releasedUntil, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -357,42 +457,79 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
     }
 
-    // A dispatched handler threw. The work item has already been ack-deleted from the durable queue by the caller (the
-    // fault branch acks before invoking this method), so without this it would be dropped: no retry, no record, no
-    // incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the default (Noop → DoNotRetry) parks
-    // it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the queue's public contract; RetryAfter
-    // records a NextRetryAt for the durable resumption pump (RuntimeResumptionPumpTask; see
-    // docs/runtime-durable-resumption.md) to re-drive and does NOT re-enqueue here, since immediate re-enqueue would
-    // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
-    // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
-    // entirely in the fault path — it does not change claim/pause/dispatch ordering.
+    private async ValueTask<RetryDecisionContext> DecideRetryAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeFaultInfo faultInfo,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
+        RuntimeDomainRetryDecision? decision;
+        string? policyFailure = null;
+        try
+        {
+            decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                activityExecutionId: null,
+                failureType: faultInfo.ExceptionType,
+                failureCount: existing?.FailureCount ?? 0,
+                requestedAt: now));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A policy that cannot decide must not leave the item claimed to loop on every lapse: it is poisoned, and
+            // so surfaces as an incident. The record names the policy failure so it is not mistaken for DoNotRetry.
+            decision = null;
+            policyFailure = exception.GetType().FullName ?? exception.GetType().Name;
+        }
+        return new(now, existing, decision, policyFailure);
+    }
+
+    private readonly record struct RetryDecisionContext(
+        DateTimeOffset Now,
+        RuntimeSchedulerPoisonRecord? Existing,
+        RuntimeDomainRetryDecision? Decision,
+        string? PolicyFailure);
+
+    // One delayed-release rule for temporarily unavailable work and for an honored RetryAfter.
+    private bool CanReleaseWithDelay(RuntimeSchedulerWorkItem workItem, ClaimRenewalState? renewal) =>
+        RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) &&
+        renewal is not null && _consumedWorkClaimAccessor?.WasConsumedDurably != true &&
+        (_schedulerWorkQueue is not IRuntimeSchedulerWorkDeferralCapability capability || capability.CanDefer(renewal.Current));
+
+    // A dispatched handler threw. The caller has already removed the source item from the durable queue, or, for an
+    // honored RetryAfter, released it with the policy's delay, so without this record a removed item would be dropped:
+    // no retry, no record, no incident. The default policy (Noop → DoNotRetry) parks it as Poisoned (safe, no loop).
+    // RetryNow re-enqueues immediately through the queue's public contract; because the source item was ack-deleted
+    // first, that is the *only* requeue, so poison delivery stays bounded. RetryAfter is RetryScheduled only when the
+    // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
+    // resumption sweep re-drives it once claimable. A RetryAfter that was not released (no resumption sweep composed, a
+    // kind without delayed release, a legacy provider, a fault after the handler returned, a dispatch that sent a
+    // non-retaining checkpoint to the store, a refused release, a delay past the last representable time, or a
+    // checkpoint-rule fault) is Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing
+    // performs (#3275). A policy that throws counts as no decision. This lives entirely in the fault path — it does not
+    // change claim/pause/dispatch ordering.
     //
     // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
     // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
     // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
     //
-    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — the caller has already ack-deleted
-    // the item, so returning early would drop it silently. The store is required by construction instead.
+    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — unless it released a scheduled
+    // retry, the caller has already ack-deleted the item, so returning early would drop it silently. The store is
+    // required by construction instead.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
         Exception exception,
         RuntimeFaultInfo faultInfo,
         RuntimeFaultInfo? innerFaultInfo,
+        RetryDecisionContext retry,
+        DateTimeOffset? releasedUntil,
         CancellationToken cancellationToken)
     {
-        var now = _timeProvider.GetUtcNow();
-        var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
-        var priorFailureCount = existing?.FailureCount ?? 0;
-        var failureCount = priorFailureCount + 1;
+        var (now, existing, decision, policyFailure) = retry;
+        var failureCount = (existing?.FailureCount ?? 0) + 1;
         var firstFailedAt = existing?.FirstFailedAt ?? now;
-
-        var decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
-            workflowExecutionId: workItem.WorkflowExecutionId,
-            activityExecutionId: null,
-            failureType: faultInfo.ExceptionType,
-            failureCount: priorFailureCount,
-            requestedAt: now));
 
         var disposition = RuntimeSchedulerPoisonDisposition.Poisoned;
         DateTimeOffset? nextRetryAt = null;
@@ -404,10 +541,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
                 nextRetryAt = now;
                 break;
-            case RuntimeDomainRetryMode.RetryAfter:
+            case RuntimeDomainRetryMode.RetryAfter when releasedUntil is { } retryAt:
                 disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
-                nextRetryAt = now + (decision.Delay ?? TimeSpan.Zero);
+                nextRetryAt = retryAt;
                 break;
+            case RuntimeDomainRetryMode.RetryAfter:
             case RuntimeDomainRetryMode.DoNotRetry:
             case RuntimeDomainRetryMode.Fault:
             case null:
@@ -416,6 +554,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
 
         var metadata = BuildPoisonMetadata(workItem, existing, decision, exception);
+        if (policyFailure is not null)
+        {
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = "PolicyFailed";
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason] = policyFailure;
+        }
         await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
             workflowExecutionId: workItem.WorkflowExecutionId,
             workItemId: workItem.WorkItemId,
@@ -480,6 +623,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             or WorkflowExecutionCommandKind.StartActivity
             or WorkflowExecutionCommandKind.InvokeActivity
             or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.DeliverChildControl
+            or WorkflowExecutionCommandKind.DeliverInterventionDecision
             or WorkflowExecutionCommandKind.RetryActivityBoundary
             or WorkflowExecutionCommandKind.CancelActivityScope;
 
@@ -509,21 +654,45 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        if (_schedulerWorkQueue.SupportsClaimTransitions && _schedulerWorkQueue.SupportsClaimValidation)
         {
             var claim = await _schedulerWorkQueue.ClaimAsync(
                 new RuntimeSchedulerWorkClaimRequest(
                     workflowExecutionId,
                     _claimOwnerId,
                     _timeProvider.GetUtcNow(),
-                    _claimOptions.VisibilityTimeout),
+                    _claimOptions.VisibilityTimeout) { ValidateBeforeClaim = ValidateProtocolBeforeClaimAsync },
                 cancellationToken);
             return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
         }
 
+        // Legacy providers cannot run operation-local validation on their claim path. Validate the observed
+        // head under the execution's single-writer lease before entering their unchanged claim/dequeue path.
         var page = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
         var item = page.Items.FirstOrDefault();
+        if (item is not null)
+            await ValidateProtocolBeforeClaimAsync(item, cancellationToken);
+        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        {
+            var claim = await _schedulerWorkQueue.ClaimAsync(new(workflowExecutionId, _claimOwnerId,
+                _timeProvider.GetUtcNow(), _claimOptions.VisibilityTimeout), cancellationToken);
+            return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
+        }
         return item is null ? null : new SchedulerWorkDelivery(item, null);
+    }
+
+    private async ValueTask ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+        {
+            await ModelProtocols.SelectAsync(item, cancellationToken);
+            return;
+        }
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind) ||
+            ModelProtocols?.IsSelectedModel(item.WorkflowExecutionId) == true)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.protocol-unavailable",
+                "Scheduler work requires a verified execution protocol that this host has not selected.");
     }
 
     // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes
@@ -730,6 +899,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private IWorkflowSchedulerWorkHandler FindHandler(RuntimeSchedulerWorkItem workItem)
     {
+        if (workItem.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+            return new ModelProtocolWorkHandler(ModelProtocols);
         foreach (var handler in _customHandlers)
         {
             if (handler.CanHandle(workItem))

@@ -1,4 +1,5 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { clearBackendCapabilityCache, getBackendCapabilities, invalidateBackendCapabilities } from "@elsa-workflows/studio-sdk";
 import { assertSafePathSegments } from "./pathSegments";
 
 export const capabilityIds = {
@@ -8,7 +9,12 @@ export const capabilityIds = {
   expressionTooling: "expressions.tooling.v1",
   publishing: "elsa.api.publishing",
   runtime: "elsa.api.runtime",
-  workflowHttpEndpoints: "elsa.http.workflow-endpoints"
+  workflowHttpEndpoints: "elsa.http.workflow-endpoints",
+  bpmnCatalog: "elsa.api.bpmn-catalog",
+  bpmnInspection: "elsa.api.bpmn-inspection",
+  bpmnRuntime: "elsa.api.bpmn-runtime",
+  bpmnClaims: "elsa.api.bpmn-claims",
+  bpmnPublishing: "elsa.api.bpmn-publishing"
 } as const;
 
 export type ApiCapabilityId = typeof capabilityIds[keyof typeof capabilityIds];
@@ -20,7 +26,12 @@ const supportedContractVersions: Record<ApiCapabilityId, string> = {
   [capabilityIds.expressionTooling]: "1",
   [capabilityIds.publishing]: "1",
   [capabilityIds.runtime]: "1",
-  [capabilityIds.workflowHttpEndpoints]: "1"
+  [capabilityIds.workflowHttpEndpoints]: "1",
+  [capabilityIds.bpmnCatalog]: "1",
+  [capabilityIds.bpmnInspection]: "1",
+  [capabilityIds.bpmnRuntime]: "1",
+  [capabilityIds.bpmnClaims]: "1",
+  [capabilityIds.bpmnPublishing]: "1"
 };
 
 export interface ApiCapabilityLink {
@@ -33,6 +44,8 @@ export interface ApiCapability {
   id: ApiCapabilityId | string;
   contractVersion: string;
   links: ApiCapabilityLink[];
+  status?: "dormant";
+  reason?: string;
 }
 
 export interface ApiCapabilityDocument {
@@ -62,27 +75,9 @@ export class ApiCapabilityVersionMismatchError extends Error {
   }
 }
 
-const documentsByShell = new Map<string, Promise<ApiCapabilityDocument>>();
-
-function shellKey(context: StudioEndpointContext) {
-  return context.baseUrl?.replace(/\/+$/, "") ?? "";
-}
-
 /** Loads the authenticated, permission-neutral shell capability document once. */
 export function getApiCapabilities(context: StudioEndpointContext): Promise<ApiCapabilityDocument> {
-  const key = shellKey(context);
-  const cached = documentsByShell.get(key);
-  if (cached) return cached;
-
-  const basePath = capabilityBasePath(context);
-  const request = context.http.getJson<ApiCapabilityDocument>(`${basePath}capabilities`)
-    .then(document => ({ capabilities: Array.isArray(document?.capabilities) ? document.capabilities : [] }))
-    .catch(error => {
-      documentsByShell.delete(key);
-      throw error;
-    });
-  documentsByShell.set(key, request);
-  return request;
+  return getBackendCapabilities(context);
 }
 
 export async function getApiCapability(
@@ -95,7 +90,7 @@ export async function getApiCapability(
 
 export async function hasApiCapability(context: StudioEndpointContext, capabilityId: ApiCapabilityId) {
   const capability = await getApiCapability(context, capabilityId);
-  return capability?.contractVersion === supportedContractVersions[capabilityId];
+  return capability?.contractVersion === supportedContractVersions[capabilityId] && capability.status !== "dormant";
 }
 
 export async function hasCapabilityLink(
@@ -104,7 +99,7 @@ export async function hasCapabilityLink(
   relation: string
 ) {
   const capability = await getApiCapability(context, capabilityId);
-  if (!capability || capability.contractVersion !== supportedContractVersions[capabilityId]) return false;
+  if (!capability || capability.contractVersion !== supportedContractVersions[capabilityId] || capability.status === "dormant") return false;
   return capability.links.some(link => link.rel === relation);
 }
 
@@ -128,6 +123,7 @@ export async function resolveCapabilityHref(
 ) {
   const capability = await getApiCapability(context, capabilityId);
   if (!capability) throw new ApiCapabilityUnavailableError(capabilityId);
+  if (capability.status === "dormant") throw new Error(capability.reason ?? `API capability '${capabilityId}' is dormant.`);
 
   const expectedVersion = supportedContractVersions[capabilityId];
   if (capability.contractVersion !== expectedVersion) {
@@ -196,7 +192,12 @@ function shellBaseUrl(context: StudioEndpointContext): URL {
   return base;
 }
 
-/** Test seam; production callers should rely on automatic error eviction. */
+/** Drop one backend's cached document after an explicit refresh action. */
+export function invalidateApiCapabilityCache(context: StudioEndpointContext) {
+  invalidateBackendCapabilities(context);
+}
+
+/** Test seam for isolating cached capability documents between tests. */
 export function clearApiCapabilityCache() {
-  documentsByShell.clear();
+  clearBackendCapabilityCache();
 }

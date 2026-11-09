@@ -19,6 +19,39 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     private static readonly ValueTypeDescriptor StringType = new("String");
     private readonly RuntimeInputBindingResolver _resolver = new();
 
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public void Direct_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
+            activityResult: new("producer", "customer-id", "scope:root"));
+        var resolved = _resolver.Resolve(binding, NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)));
+        Assert.Equal(expected, resolved.Envelope!.InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public async Task Expression_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            expression: new("Test", "value", parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new ActivityResultExpressionParameterBinding("producer", "customer-id")
+            }));
+        var materializer = new RuntimeActivityInputMaterializer(_resolver, new TestTypeRegistry(), new EchoParameterPortableExpressionEvaluator("value"));
+        var snapshot = await materializer.MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId,
+            NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)), DateTimeOffset.UnixEpoch);
+        Assert.Equal(expected, snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+    }
+
     [Fact]
     public void Resolve_reads_a_pinned_workflow_request_member()
     {
@@ -339,6 +372,41 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         Assert.Equal("Grace", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
         Assert.Equal("parameter", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("tags")[0].GetString());
+    }
+
+    [Theory]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "order-42", "\"order-42\"")]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, null, "null")]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "order-42", "\"workflow-1\"")]
+    public async Task Materialization_binds_workflow_instance_metadata_from_the_resolution_context(string member, string? correlationId, string expected)
+    {
+        // Spec 247: instance metadata is a declared parameter, read from the context the materializer builds from
+        // committed state. An instance without a correlation id binds JSON null.
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "Test",
+                "instance",
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["instance"] = new WorkflowInstanceExpressionParameterBinding(member)
+                }));
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new WrapParameterPortableExpressionEvaluator("instance"));
+        var context = new RuntimeInputBindingResolutionContext("workflow-1", "consumer", correlationId: correlationId);
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(expected, snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("value").GetRawText());
     }
 
     [Fact]
@@ -821,6 +889,13 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromResult(request.ParameterValues[parameterName].Clone());
+    }
+
+    /// <summary>Returns <c>{ value: parameter }</c>, so a null parameter value is still a present input.</summary>
+    private sealed class WrapParameterPortableExpressionEvaluator(string parameterName) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(new { value = request.ParameterValues[parameterName] }));
     }
 
     private sealed class TestTypeRegistry : IWellKnownTypeRegistry

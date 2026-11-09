@@ -23,12 +23,11 @@ import {
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
-  createBpmnShapeNode,
   nextBpmnPlacementPosition,
   syncBpmnCanvasToScope,
   type BpmnNodeData
 } from "../bpmn/bpmnAdapter";
-import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
+import type { GraphPaletteElement } from "../graph-authoring/graphPaletteElements";
 import { createNodeId } from "./editorHelpers";
 import type { WorkflowEdge, WorkflowErrorInput } from "./editorTypes";
 import { forgetRemovedNodes, type WorkflowDraftRecipe } from "./workflowDocument";
@@ -38,6 +37,7 @@ import { observeReusableActivity } from "../reusableActivityObservability";
 import {
   useGraphCanvasInteractions,
   type GraphCanvasCommitOptions,
+  type GraphCanvasInteractionsResult,
   type GraphCanvasMode,
   type GraphCanvasPlacement,
   type GraphCanvasStamp
@@ -65,6 +65,9 @@ interface WorkflowCanvasParams {
   isUnsupportedDesigner: boolean;
   isBpmnDesigner: boolean;
   canAddActivitiesToCanvas: boolean;
+  readOnly?: boolean;
+  isOfferedActivity?(activity: ActivityCatalogItem): boolean;
+  elements?: readonly GraphPaletteElement[];
   selectedNodeId: string | null;
   // Document mutations (from useWorkflowDocument). The canvas never touches the reducer directly.
   editDraft(recipe: WorkflowDraftRecipe): void;
@@ -75,6 +78,16 @@ interface WorkflowCanvasParams {
   // Transient status/error messaging owned by WorkflowEditor.
   setStatus(value: string): void;
   setError(value: WorkflowErrorInput): void;
+}
+
+/**
+ * Named so library declaration emit can reference `@xyflow/react` types instead of inferring a
+ * non-portable `@xyflow/system` path (TS2742).
+ */
+export interface WorkflowCanvasResult extends Omit<GraphCanvasInteractionsResult, "accessibleNodes" | "accessibleEdges"> {
+  nodes: Node<WorkflowNodeData>[];
+  edges: WorkflowEdge[];
+  addActivity(activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null;
 }
 
 // Owns the React Flow mirror (nodes/edges) of the current scope for a WorkflowDraft, plus everything
@@ -93,7 +106,10 @@ export function useWorkflowCanvas({
   catalogByVersion,
   isUnsupportedDesigner,
   isBpmnDesigner,
+  isOfferedActivity,
+  elements,
   canAddActivitiesToCanvas,
+  readOnly = false,
   selectedNodeId,
   editDraft,
   editDraftAndSelect,
@@ -101,11 +117,13 @@ export function useWorkflowCanvas({
   resetToRoot,
   setStatus,
   setError
-}: WorkflowCanvasParams) {
+}: WorkflowCanvasParams): WorkflowCanvasResult {
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
-  const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
-  const mode: GraphCanvasMode = isUnsupportedDesigner
+  const scopeViewportKey = useMemo(
+    () => `${draft?.definitionId ?? ""}:${scopeOwner?.nodeId ?? ""}:${scopeOwner?.activityVersionId ?? ""}:${getScopeViewportKey(frames)}`,
+    [draft?.definitionId, frames, scopeOwner?.nodeId, scopeOwner?.activityVersionId]);
+  const mode: GraphCanvasMode = isUnsupportedDesigner || readOnly
     ? "unsupported"
     : scope?.slot.mode === "bpmn"
       ? "bpmn"
@@ -161,7 +179,7 @@ export function useWorkflowCanvas({
     nextEdges: WorkflowEdge[],
     options?: GraphCanvasCommitOptions
   ) => {
-    if (isUnsupportedDesigner) return;
+    if (isUnsupportedDesigner || readOnly) return;
 
     editDraft(({ draft: current, frames: currentFrames }) => {
       if (!current) return null;
@@ -169,7 +187,7 @@ export function useWorkflowCanvas({
       // Prune the departed nodes' side tables before upserting the survivors' positions: updateLayout
       // only ever upserts, so a deleted node's record would otherwise outlive it in the saved draft.
       const forgotten = forgetRemovedNodes(current, options?.removedNodeIds ?? []);
-      const nextLayout = updateLayout(forgotten.layout, nextNodes);
+      const nextLayout = mode === "sequence" ? forgotten.layout : updateLayout(forgotten.layout, nextNodes);
       const nextPresentation = forgotten.activityPresentation;
       const rootActivity = current.state.rootActivity;
       if (!rootActivity) return { ...current, layout: nextLayout, activityPresentation: nextPresentation };
@@ -198,7 +216,7 @@ export function useWorkflowCanvas({
         }
       };
     });
-  }, [catalogByVersion, isUnsupportedDesigner, editDraft]);
+  }, [catalogByVersion, isUnsupportedDesigner, editDraft, mode, readOnly]);
 
   const observeReusablePlacement = useCallback((activity: ActivityCatalogItem) => {
     if (!activity.activityDefinitionVersionId) return;
@@ -234,6 +252,7 @@ export function useWorkflowCanvas({
   // Returns the created ActivityNode when it became the root or landed in the current scope's slot (so
   // callers can restore focus or chain navigation); null for wrapping and rejected/stale outcomes.
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
+    if (readOnly || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return null;
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
       return null;
     }
@@ -322,7 +341,7 @@ export function useWorkflowCanvas({
 
     observeReusablePlacement(activity);
     return next;
-  }, [addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, observeReusablePlacement, resetToRoot, pinLayout, setError, setStatus]);
+  }, [readOnly, isOfferedActivity, addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, observeReusablePlacement, resetToRoot, pinLayout, setError, setStatus]);
 
   const resolveRemovedActivityNodeIds = useCallback((deletedNodes: Node<WorkflowNodeData>[]) =>
     collectRemovedGraphNodeIds(
@@ -343,6 +362,8 @@ export function useWorkflowCanvas({
     catalogByVersion,
     select,
     commitCanvas,
+    isOfferedActivity,
+    elements,
     placeActivity: addActivity,
     createPlacement: isBpmnDesigner ? createPlacement : undefined,
     createEdge: isBpmnDesigner
@@ -355,22 +376,12 @@ export function useWorkflowCanvas({
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
 
-  // Stamps a pure BPMN shape (event/gateway/unbound task) from the shape palette onto the canvas.
-  // Shapes carry no ActivityNode, which is why this goes through the placement-free canvas stamp.
-  const addBpmnShape = useCallback((shape: BpmnShapeDescriptor, position?: XYPosition) => {
-    if (!isBpmnDesigner) return;
-    stampCanvasNode(
-      createBpmnShapeNode(shape, position ?? nextBpmnPlacementPosition(nodes.length)) as unknown as Node<WorkflowNodeData>
-    );
-  }, [isBpmnDesigner, nodes.length, stampCanvasNode]);
-
   const { accessibleNodes, accessibleEdges, ...rest } = interactions;
 
   return {
     ...rest,
     nodes: accessibleNodes,
     edges: accessibleEdges,
-    addActivity,
-    addBpmnShape
+    addActivity
   };
 }

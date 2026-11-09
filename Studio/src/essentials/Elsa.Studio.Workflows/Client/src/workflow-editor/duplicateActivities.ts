@@ -171,6 +171,7 @@ export function planActivityDuplicate(options: {
     const source = layoutBySource.get(from);
     if (!source) return [];
     const isTopLevel = topLevelIds.has(from);
+    if (scope.slot.mode === "sequence" && isTopLevel) return [];
     return [{
       ...source,
       nodeId: to,
@@ -198,14 +199,20 @@ export function applyActivityDuplicatePlan(
   draft: WorkflowDraft,
   frames: ScopeFrame[],
   plan: ActivityDuplicatePlan,
-  catalog: ActivityCatalogLookup
+  catalog: ActivityCatalogLookup,
+  insertAfterNodeId?: string
 ): WorkflowDraft | null {
   const rootActivity = draft.state.rootActivity;
   if (!rootActivity || plan.activities.length === 0) return null;
   const scope = resolveScope(rootActivity, frames, catalog);
   if (!scope || scope.slot.cardinality !== "many") return null;
 
-  let nextOwner = replaceSlotActivities(scope.owner, scope.slot, [...scope.slot.activities, ...plan.activities]);
+  const afterIndex = scope.slot.mode === "sequence" && insertAfterNodeId
+    ? scope.slot.activities.findIndex(activity => activity.nodeId === insertAfterNodeId)
+    : -1;
+  const insertIndex = afterIndex >= 0 ? afterIndex + 1 : scope.slot.activities.length;
+  const nextActivities = [...scope.slot.activities.slice(0, insertIndex), ...plan.activities, ...scope.slot.activities.slice(insertIndex)];
+  let nextOwner = replaceSlotActivities(scope.owner, scope.slot, nextActivities);
   if (plan.siblingConnections.length > 0 && nextOwner.structure?.kind === flowchartStructureKind) {
     const connections = [...readFlowchartConnections(nextOwner), ...plan.siblingConnections];
     nextOwner = {
@@ -240,10 +247,11 @@ export function pasteActivitiesIntoDraft(options: {
   catalog: ActivityCatalogLookup;
   allocateId?: (prefix: string, usedIds: Set<string>) => string;
   offset?: { x: number; y: number };
+  insertAfterNodeId?: string;
 }) {
   const plan = planActivityDuplicate(options);
   if (!plan) return null;
-  const nextDraft = applyActivityDuplicatePlan(options.draft, options.frames, plan, options.catalog);
+  const nextDraft = applyActivityDuplicatePlan(options.draft, options.frames, plan, options.catalog, options.insertAfterNodeId);
   return nextDraft ? { draft: nextDraft, selectedNodeIds: plan.selectedNodeIds, idMap: plan.idMap } : null;
 }
 
@@ -288,6 +296,7 @@ function rewriteStructurePayload(
     next.activities = next.activities.map(item => (isActivityNode(item) ? rewriteActivityIds(item, idMap) : item));
   }
   if (isActivityNode(next.body)) next.body = rewriteActivityIds(next.body, idMap);
+  else if (Array.isArray(next.body)) next.body = next.body.map(item => isActivityNode(item) ? rewriteActivityIds(item, idMap) : item);
   if (Array.isArray(next.connections)) {
     next.connections = next.connections.map(item =>
       isRecord(item) ? rewriteConnection(item, idMap) : item);
@@ -390,6 +399,7 @@ function readNestedActivities(activity: ActivityNode): ActivityNode[] {
   const nested: ActivityNode[] = [];
   if (Array.isArray(payload.activities)) nested.push(...payload.activities.filter(isActivityNode));
   if (isActivityNode(payload.body)) nested.push(payload.body);
+  else if (Array.isArray(payload.body)) nested.push(...payload.body.filter(isActivityNode));
   for (const [key, value] of Object.entries(payload)) {
     if (key === "activities" || key === "body") continue;
     if (isActivityNode(value)) nested.push(value);

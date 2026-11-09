@@ -130,6 +130,25 @@ public sealed class RuntimeSecretMaskTests
     }
 
     [Fact]
+    public void A_value_is_masked_in_its_base64_form()
+    {
+        _mask.Register(Execution, ReferenceName, _value);
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(_value));
+
+        Assert.Equal($"Basic {Marker}", _mask.Mask(Execution, $"Basic {encoded}"));
+    }
+
+    [Fact]
+    public void A_value_is_masked_in_its_url_escaped_form()
+    {
+        var value = $"{_value}+/=?";
+        _mask.Register(Execution, ReferenceName, value);
+        var escaped = Uri.EscapeDataString(value);
+
+        Assert.Equal($"api_key={Marker}", _mask.Mask(Execution, $"api_key={escaped}"));
+    }
+
+    [Fact]
     public void The_longest_value_wins_where_two_registered_values_overlap()
     {
         // Registered shortest first, so registration order cannot be what decides.

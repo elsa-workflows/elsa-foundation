@@ -29,6 +29,17 @@ public sealed class ActivityAuthoringCatalogTests
     private const string DeclaredActivityTypeKey = "Acme.Activities.CallService";
 
     [Fact]
+    public async Task Catalog_wire_preserves_dynamic_outcome_facets_needed_for_connected_authored_actions()
+    {
+        var definition = new ActivityDefinition { Id = "task-definition", ActivityTypeKey = "Acme.UserTask" };
+        var payload = JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), dynamicOutcomes = new { kind = "valuePerItem", source = "Actions", unmatched = "Unmatched" } });
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id) { Id = "task-version", ConsumerKey = "elsa.clr-activity", DesignFacets = [new("elsa.outcomes", "1", payload)] };
+        var view = await CatalogReaderFixture.ListAsync([definition], [version]);
+        var wire = JsonSerializer.SerializeToElement(view, typeof(ActivityAuthoringCatalogView), ActivitiesDesignWire.Context);
+        Assert.Equal("Actions", wire.GetProperty("activities")[0].GetProperty("designFacets")[0].GetProperty("payload").GetProperty("dynamicOutcomes").GetProperty("source").GetString());
+    }
+
+    [Fact]
     public void Activity_design_owns_one_secured_canonical_authoring_catalog()
     {
         var endpoint = FindCatalogEndpoint();
@@ -85,13 +96,13 @@ public sealed class ActivityAuthoringCatalogTests
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier");
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier", "ConnectionType");
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsSensitive")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsCredential")!.PropertyType);
         Assert.Equal(typeof(string), Nullable.GetUnderlyingType(inputDescriptor.GetProperty("Tier")!.PropertyType) ?? inputDescriptor.GetProperty("Tier")!.PropertyType);
         var inputConstructor = inputDescriptor.GetConstructors().Single();
-        Assert.Equal(18, inputConstructor.GetParameters().Length);
+        Assert.Equal(19, inputConstructor.GetParameters().Length);
         var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
             StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
         Assert.False(nullability.HasDefaultValue);
@@ -100,7 +111,7 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.True(tier.HasDefaultValue);
         Assert.Null(tier.DefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 18);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 19);
         var outputDescriptor = CollectionElementType(descriptor.GetProperty("Outputs")!.PropertyType);
         AssertProperties(outputDescriptor, "Name", "ReferenceKey", "Type", "CollectionKind");
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);

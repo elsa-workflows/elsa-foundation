@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
+import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionContractEditor } from "../ActivityDefinitionContractEditor";
 import type { ActivityAuthoringCapabilities, ActivityContract } from "../activityDefinitionTypes";
 
@@ -15,6 +16,163 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionContractEditor", () => {
+  it.each([
+    { readOnly: false, stored: "elsa.json", active: ["elsa.json"], disabled: false },
+    { readOnly: true, stored: "elsa.json", active: ["elsa.json"], disabled: true },
+    { readOnly: false, stored: "retired.driver", active: ["elsa.json"], disabled: false },
+    { readOnly: false, stored: "retired.driver", active: [], disabled: true }
+  ])("keeps the saved driver visible and authorizes available choices: %j", ({ readOnly, stored, active, disabled }) => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    const catalog = capabilities();
+    catalog.storageDriverKeys = active;
+    const contract = contractWithDefault("hello");
+    contract.inputs[0].storageDriverKey = stored;
+    flushSync(() => root.render(<ActivityDefinitionContractEditor contract={contract} capabilities={catalog}
+      expressions={[]} providerRequiredOutcomes={[]} baselineUnavailable={false}
+      readOnly={readOnly} capabilitiesUnavailable={false} onChange={() => undefined}
+      onLocalValidityChange={() => undefined} />));
+    click(buttonByText(container, "Advanced"));
+    const driver = controlByLabel<HTMLSelectElement>(container, "Durable storage driver");
+    expect(driver.value).toBe(stored);
+    expect(driver.disabled).toBe(disabled);
+    expect([...driver.options].map(option => option.value)).toEqual([...new Set([stored, ...active])]);
+    expect(driver.parentElement?.textContent).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
+    if (!active.includes(stored)) expect(driver.selectedOptions[0].disabled).toBe(true);
+  });
+
+  it("keeps an unsafe JSON default visible with a precision error and disables Apply", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    const catalog = capabilities();
+    catalog.types[0] = { ...catalog.types[0], alias: "System.Text.Json.JsonElement", displayName: "JSON", defaultEditor: "json" };
+    const contract = contractWithDefault({ Id: 1 });
+    contract.inputs[0].type.alias = "System.Text.Json.JsonElement";
+    let committed = false;
+    flushSync(() => root.render(<ActivityDefinitionContractEditor contract={contract} capabilities={catalog}
+      expressions={[]} providerRequiredOutcomes={[]} sourceVersionId={null} baselineUnavailable={false}
+      readOnly={false} capabilitiesUnavailable={false} onChange={() => { committed = true; }}
+      onLocalValidityChange={() => undefined} />));
+    const source = '{"Id":9007199254740993}';
+    change(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)"), source);
+    expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe(source);
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("losing precision");
+    expect((buttonByText(container, "Apply default") as HTMLButtonElement).disabled).toBe(true);
+    expect(committed).toBe(false);
+  });
+
+  it("separates member settings and preserves staged defaults across tabs and advanced edits", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    let committed: ActivityContract | undefined;
+    const advancedCapabilities = capabilities();
+    advancedCapabilities.storageDriverKeys.push("elsa.memory");
+    advancedCapabilities.types[0].compatibleStorageDriverKeys.push("elsa.memory");
+
+    function Harness() {
+      const [contract, setContract] = React.useState(() => contractWithDefault("hello"));
+      const onChange = (next: ActivityContract) => {
+        committed = next;
+        setContract(next);
+      };
+      return <ActivityDefinitionContractEditor
+        contract={contract}
+        capabilities={advancedCapabilities}
+        expressions={[{ type: "JavaScript", displayName: "JavaScript", editingMode: "text" } satisfies StudioExpressionDescriptor]}
+        providerRequiredOutcomes={[]}
+        sourceVersionId={null}
+        baselineUnavailable={false}
+        readOnly={false}
+        capabilitiesUnavailable={false}
+        onChange={onChange}
+        onLocalValidityChange={() => undefined}
+      />;
+    }
+
+    flushSync(() => root.render(<Harness />));
+    const input = container.querySelector<HTMLElement>("[data-contract-kind='input'][data-contract-selected='true']")!;
+    expect(input.hidden).toBe(false);
+    const basicFields = input.querySelector<HTMLElement>(".ad-contract-fields")!;
+    const basicLabels = [...basicFields.querySelectorAll(":scope label > span, :scope .ad-readonly-fact > span")].map(label => label.textContent?.trim());
+    expect(basicLabels).toEqual(expect.arrayContaining(["Name", "Type", "Required", "Default"]));
+    expect(basicLabels).not.toContain("Capability type");
+    expect([...basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")!.options].map(option => ({ text: option.textContent, value: option.value }))).toEqual([
+      { text: "No default", value: "none" },
+      { text: "Value", value: "literal" },
+      { text: "Null", value: "null" },
+      { text: "Expression", value: "expression" }
+    ]);
+
+    const advanced = input.querySelectorAll<HTMLElement>("[role='tabpanel']")[2];
+    expect(advanced.hidden).toBe(true);
+    expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeNull();
+    expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeTruthy();
+    expect(input.textContent).not.toContain("CLR type names");
+    expect(input.textContent).not.toContain("Type alias");
+    expect(container.textContent).not.toContain("exact-revision draft queue");
+    const schemaDetails = container.querySelector<HTMLDetailsElement>("details[data-contract-schema]")!;
+    expect(schemaDetails.open).toBe(false);
+    expect(schemaDetails.textContent).toContain("Schema version");
+    expect(container.querySelector(".ad-badge[data-contract-schema]")).toBeNull();
+    expect(basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")?.options).toHaveLength(4);
+
+    const originalSource = controlByLabel<HTMLInputElement>(input, "Value");
+    changeInput(originalSource, "pending default");
+    click(buttonByText(input, "Presentation"));
+    expect(basicFields.closest<HTMLElement>("[role='tabpanel']")!.hidden).toBe(true);
+    changeInput(controlByLabel<HTMLInputElement>(input, "Display name"), "Friendly value");
+    changeInput(controlByLabel<HTMLInputElement>(input, "Category"), "Customer");
+    expect(input.querySelector("datalist option")?.getAttribute("value")).toBe("Customer");
+    click(buttonByText(input, "Advanced"));
+    expect(advanced.hidden).toBe(false);
+    changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Durable storage driver"), "elsa.memory");
+    const keyInput = advanced.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
+    changeInput(keyInput, "custom_reference");
+    click(buttonByText(advanced, "Apply key"));
+
+    click(buttonByText(input, "General"));
+    expect(controlByLabel<HTMLInputElement>(input, "Value")).toBe(originalSource);
+    expect(originalSource.value).toBe("pending default");
+    expect(committed?.inputs[0]).toMatchObject({
+      referenceKey: "custom_reference",
+      displayName: "Friendly value",
+      storageDriverKey: "elsa.memory"
+    });
+  });
+
+  it("keeps the warning for a stored type missing from the current capability catalog", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    const unavailableCapabilities = capabilities();
+    unavailableCapabilities.types = [];
+
+    flushSync(() => root.render(<ActivityDefinitionContractEditor
+      contract={contractWithDefault("hello")}
+      capabilities={unavailableCapabilities}
+      expressions={[]}
+      providerRequiredOutcomes={[]}
+      sourceVersionId={null}
+      baselineUnavailable={false}
+      readOnly={false}
+      capabilitiesUnavailable={false}
+      onChange={() => undefined}
+      onLocalValidityChange={() => undefined}
+    />));
+
+    expect(container.querySelector("[data-contract-kind='input'] [role='alert']")?.textContent).toContain("Stored type alias String is not an authorable capability selection");
+  });
+
   it("resynchronizes a clean default candidate but preserves an active staged edit across upstream replacement", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -46,14 +204,14 @@ describe("ActivityDefinitionContractEditor", () => {
     }
 
     flushSync(() => root.render(<Harness />));
-    expect(controlByLabel<HTMLTextAreaElement>(container, "Literal JSON value").value).toBe("1");
+    expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe("1");
 
     click(buttonByText(container, "Replace upstream default"));
-    await waitFor(() => expect(controlByLabel<HTMLTextAreaElement>(container, "Literal JSON value").value).toBe("2"));
+    await waitFor(() => expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe("2"));
 
-    change(controlByLabel<HTMLTextAreaElement>(container, "Literal JSON value"), "3");
+    change(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)"), "3");
     click(buttonByText(container, "Reset upstream default"));
-    await waitFor(() => expect(controlByLabel<HTMLTextAreaElement>(container, "Literal JSON value").value).toBe("3"));
+    await waitFor(() => expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe("3"));
     expect(controlByLabel<HTMLSelectElement>(container, "Default").value).toBe("literal");
   });
 });
@@ -105,7 +263,7 @@ function capabilities(): ActivityAuthoringCapabilities {
 }
 
 function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent === text);
+  const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent === text || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
 }
@@ -122,13 +280,29 @@ function change(element: HTMLTextAreaElement, value: string) {
   });
 }
 
-function controlByLabel<T extends HTMLTextAreaElement | HTMLSelectElement>(container: HTMLElement, text: string) {
+function controlByLabel<T extends HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(container: HTMLElement, text: string) {
   const label = [...container.querySelectorAll("label")].find(candidate =>
     [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
   );
-  const control = label?.querySelector("textarea, select");
+  const control = label?.querySelector("input, textarea, select");
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
+}
+
+function changeInput(element: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function changeSelect(element: HTMLSelectElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 async function waitFor(assertion: () => void) {

@@ -39,7 +39,7 @@ public abstract class SecretsDbContext : DbContext
     /// </summary>
     private static readonly string[] OrdinallyComparedColumns =
     [
-        "TenantId", "NormalizedName", "Status",
+        "TenantId", "NormalizedName", "Tombstone", "Status",
         "TypeNameLookupKey", "StoreNameLookupKey", "ScopeLookupKey",
         "NameSearchKey", "DisplayNameSearchKey"
     ];

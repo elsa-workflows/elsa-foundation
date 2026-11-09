@@ -1,28 +1,28 @@
 import React from "react";
-import { flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { WorkflowPortfolioWidget } from "../WorkflowPortfolioWidget";
-import { loadPortfolio, type WorkflowPortfolioSnapshot } from "../workflowDashboardApi";
+import { loadPortfolio } from "../workflowDashboardApi";
+import { apiFixture, portfolioSnapshot, render } from "./testSupport";
 
 describe("Workflow Portfolio widget", () => {
-  it("loads the independent definitions resource", async () => {
-    const snapshot: WorkflowPortfolioSnapshot = { status: "ready", generatedAt: "2026-07-13T10:00:00Z", activeDefinitionCount: 42, publishedDefinitionCount: 30, unpublishedDraftCount: 14, invalidDraftCount: 3 };
-    const getJson = vi.fn(async (_url: string) => snapshot);
-    await expect(loadPortfolio({ backend: { http: { getJson } } } as any, new AbortController().signal)).resolves.toEqual(snapshot);
-    expect(getJson.mock.calls[0][0]).toBe("/_elsa/workflows/dashboard/definitions");
+  it("loads the independent definitions resource with cancellation", async () => {
+    const snapshot = portfolioSnapshot();
+    const { api, getJson } = apiFixture(snapshot);
+    const signal = new AbortController().signal;
+    await expect(loadPortfolio(api, signal)).resolves.toEqual(snapshot);
+    expect(getJson).toHaveBeenCalledWith("/_elsa/workflows/dashboard/definitions", { signal });
   });
 
-  it("renders overlapping counters", () => {
-    const view = render(<WorkflowPortfolioWidget settings={undefined} size="small" snapshot={{ status: "ready", generatedAt: "", activeDefinitionCount: 10, publishedDefinitionCount: 8, unpublishedDraftCount: 4, invalidDraftCount: 2 }} />);
-    expect(view.textContent).toContain("counters overlap");
+  it("renders independent overlapping counters instead of an invented distribution", () => {
+    const view = render(<WorkflowPortfolioWidget settings={undefined} size="small" snapshot={portfolioSnapshot()} />);
+    expect(view.textContent).toMatch(/overlap/i);
     expect(view.textContent).toContain("Invalid drafts");
+    expect(view.textContent).toContain("42");
   });
 
-  it("renders a safe unavailable state", () => {
+  it("renders an unavailable state rather than zero definitions", () => {
     const view = render(<WorkflowPortfolioWidget settings={undefined} size="small" snapshot={{ status: "unavailable", generatedAt: "", errorCode: "PROVIDER_UNSUPPORTED" }} />);
-    expect(view.textContent).toBe("Portfolio statistics are unavailable (PROVIDER_UNSUPPORTED).");
+    expect(view.textContent).toMatch(/unavailable/i);
+    expect(view.querySelector("[data-metric]")).toBeNull();
   });
 });
-
-function render(node: React.ReactNode) { const container = document.createElement("div"); const root = createRoot(container); flushSync(() => root.render(node)); return container; }

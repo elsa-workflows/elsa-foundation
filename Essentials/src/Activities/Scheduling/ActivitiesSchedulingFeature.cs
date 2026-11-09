@@ -33,6 +33,12 @@ public sealed class ActivitiesSchedulingFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddEnumerable(new[]
+        {
+            ServiceDescriptor.Scoped<ITestRunTriggerDriver, TimerTestRunDriver>(),
+            ServiceDescriptor.Scoped<ITestRunTriggerDriver, CronTestRunDriver>()
+        });
+
         // Timer/Cron each contribute the trigger-index stimulus and the recurring schedule for their nodes.
         services.TryAddEnumerable(new[]
         {

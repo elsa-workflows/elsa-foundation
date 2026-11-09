@@ -2354,6 +2354,201 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/events",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunEventView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/events"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunDeliverEvent"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/stop",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/stop"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsStopWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}/waits",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunWaitsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/waits"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunWaits"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/drafts/test-run-options",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.DraftTestRunOptionsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/drafts/test-run-options"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsDraftOptions"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: POST /publishing/workflows/drafts/test-runs",
       "methods": [
         "POST"
@@ -2740,6 +2935,435 @@
         "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRestorePublicationSlotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-forms",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListUserTaskForms"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-task-forms",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsCreateUserTaskForm"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-forms/{id}/versions/{version}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/versions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetUserTaskFormVersion"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-identity",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-identity"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ.VVNFUi1UQVNLUzpNQU5BR0U.VVNFUi1UQVNLUzpSRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsUserTaskIdentity"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-targets",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.AssignmentTargets",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-targets"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLUzpNQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsUserTaskAssignmentTargets"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-tasks",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskPageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLUzpNQU5BR0U.VVNFUi1UQVNLUzpSRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListUserTasks"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-tasks/{id}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLUzpNQU5BR0U.VVNFUi1UQVNLUzpSRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetUserTask"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-tasks/{id}/claim",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks/{param}/claim"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLUzpBQ1Q"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsClaimUserTask"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-tasks/{id}/complete",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks/{param}/complete"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLUzpBQ1Q"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsCompleteUserTask"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-tasks/{id}/reassign",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks/{param}/reassign"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLUzpNQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsReassignUserTask"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-tasks/{id}/release",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-tasks/{param}/release"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLUzpBQ1Q"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsReleaseUserTask"
     },
     {
       "authoringModel": "Minimal API",
@@ -3487,6 +4111,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: DELETE runtime/workflows/instances/{workflowExecutionId}",
+      "methods": [
+        "DELETE"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDeletionView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDeleteInstance"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}",
       "methods": [
         "GET"
@@ -3520,6 +4183,45 @@
         "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetInstance"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionBrowsePageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsBrowseActivityExecutions"
     },
     {
       "authoringModel": "Minimal API",
@@ -3643,6 +4345,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityStateView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/state-view"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityStateView"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
       "methods": [
         "GET"
@@ -3715,6 +4456,45 @@
         "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListIncidents"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/persistence-mode",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Coalescing.RuntimePersistenceModeProjection",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/persistence-mode"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetRuntimePersistenceMode"
     },
     {
       "authoringModel": "Minimal API",

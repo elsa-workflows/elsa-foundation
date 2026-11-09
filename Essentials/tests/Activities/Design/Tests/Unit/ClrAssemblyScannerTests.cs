@@ -35,6 +35,16 @@ public sealed class ClrAssemblyScannerTests
         new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), logger);
 
     [Fact]
+    public void ImplementationOnlyActivity_IsExcludedWhileOrdinaryActivityRemainsDiscoverable()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ImplementationOnlyFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        Assert.DoesNotContain(models, x => x.ActivityTypeKey == typeof(ImplementationOnlyFixtureActivity).FullName);
+        Assert.DoesNotContain(models, x => x.ActivityTypeKey == typeof(ImplementationOnlyDerivedFixtureActivity).FullName);
+        Assert.Contains(models, x => x.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
+    }
+
+    [Fact]
     public void ActivityAssembly_IsDiscovered_WithResolvedVersions()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
@@ -98,7 +108,8 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" }
+        // Approved UX wording change: Start new workflows plus its help text.
+        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" }
     };
 
     [Theory]
@@ -716,6 +727,20 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("BaseOutcome", portNames);
     }
 
+    [Fact]
+    public void PaletteHints_AreReadWithoutExecutingAttributeConstructors()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(PaletteFixtureActivity).Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(PaletteFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == "elsa.activity-palette");
+        Assert.Equal("1", facet.SchemaVersion);
+        Assert.Equal("bpmn", facet.Payload.GetProperty("containerModes")[0].GetString());
+        Assert.Equal("Bpmn.Activities", facet.Payload.GetProperty("slotIds")[0].GetString());
+        Assert.Equal("Acme.Owner", facet.Payload.GetProperty("ancestorActivityTypes")[0].GetString());
+        Assert.Equal("activity-definition-graph", facet.Payload.GetProperty("resourceKinds")[0].GetString());
+        Assert.Equal("Use in a BPMN scope.", facet.Payload.GetProperty("description").GetString());
+    }
+
     [Theory]
     [InlineData(typeof(LucideIconFixtureActivity), "Rocket")]
     [InlineData(typeof(KebabLucideIconFixtureActivity), "git-branch")]
@@ -785,11 +810,14 @@ public sealed class ClrAssemblyScannerTests
     {
         // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
         // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
-        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets stay excluded.
-        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
+        // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
+        // their snapshots with their owning changes. Icon facets are present
+        // on the descriptors but excluded from descriptor hashes.
+        // Approved UX wording change: Start new workflows plus its help text.
+        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "3198C060D839A973424ED9347FB5468B13B2849B9D8FCCDE597C1D34FCE87DF9" }
+        { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }
     };
 
     [Theory]
@@ -799,7 +827,8 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
 
-        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+        // Icons remain available as presentation metadata; the descriptor hash deliberately ignores them.
+        Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
         Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
     }
@@ -816,7 +845,8 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
-        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Authorization)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
+        Assert.False(sendInputs[nameof(SendHttpRequest.Connection)].IsRequired);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
 
@@ -889,29 +919,22 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
+    public void SendHttpRequest_DeclaresConnectionAsAnHttpActivityConnection_AndNoCredentialInput()
     {
-        // The one built-in credential input. A credential is also sensitive, accepts
-        // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)
             .Single(model => model.ActivityTypeKey == typeof(SendHttpRequest).FullName)
             .Inputs;
 
-        var authorization = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Authorization));
-        Assert.Equal("String", authorization.Type.Alias);
-        Assert.True(authorization.IsSensitive);
-        Assert.True(authorization.IsCredential);
-        Assert.Null(authorization.DefaultValue);
-        Assert.Null(authorization.DefaultSyntax);
-
-        var others = inputs.Where(input => input.Name != nameof(SendHttpRequest.Authorization)).ToList();
-        Assert.NotEmpty(others);
-        Assert.All(others, input =>
-        {
-            Assert.Null(input.IsSensitive);
-            Assert.Null(input.IsCredential);
-        });
+        var connection = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Connection));
+        Assert.Equal(typeof(ConnectionReference).FullName, connection.Type.Alias);
+        Assert.Equal("http", connection.ConnectionType);
+        Assert.Equal("connection-picker", connection.UiHint);
+        Assert.Equal("Connection", connection.DefaultSyntax);
+        Assert.Null(connection.IsCredential);
+        Assert.Null(connection.IsSensitive);
+        Assert.DoesNotContain(inputs, input => input.Name == "Authorization");
+        Assert.All(inputs, input => Assert.Null(input.IsCredential));
     }
 
     [Fact]

@@ -27,6 +27,10 @@ public interface IActivityStructureHandler
     /// </summary>
     Type? AuthoredPayloadType => null;
 
+    /// <summary>
+    /// Projects child slots and any structure-owned invocation outcome declarations. Generic publishing
+    /// consumes the outcome projections without inspecting this handler's authored payload.
+    /// </summary>
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
@@ -35,7 +39,17 @@ public interface IActivityStructureHandler
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
 
+    /// <summary>Projects typed inputs consumed conditionally by this structure before activity activation.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
+
+    /// <summary>
+    /// The direct children of <paramref name="activity"/> whose results this structure guarantees are committed
+    /// before the direct child <paramref name="childNodeId"/> runs, most relevant first. Expression authoring offers
+    /// their results to that child. <see langword="null"/> (the default) promises no order, so nothing is offered.
+    /// </summary>
+    IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 

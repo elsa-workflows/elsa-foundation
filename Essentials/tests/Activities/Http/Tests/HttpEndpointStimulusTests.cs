@@ -1,5 +1,6 @@
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -67,6 +68,23 @@ public sealed class HttpEndpointStimulusTests
             var method = descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey];
             Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", method), descriptor.StimulusHash);
         }
+    }
+
+    [Fact]
+    public void Describe_EmitsASafeDisplayDescriptorWithoutRoutingOptions()
+    {
+        var descriptor = Assert.Single(HttpEndpointStimulus.Describe(
+            "/Orders/{Id}",
+            ["get"],
+            new HttpEndpointStimulusOptions(
+                Authorize: true,
+                Policy: "internal-policy",
+                RequestTimeout: TimeSpan.FromSeconds(30),
+                RequestSizeLimit: 1024,
+                ResponseMode: ResponseMode.Sync)));
+
+        Assert.Equal("GET /orders/{id}", descriptor.Metadata[TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey]);
+        Assert.DoesNotContain("internal-policy", descriptor.Metadata[TriggerStimulusDescriptor.SafeDisplayDescriptorMetadataKey], StringComparison.Ordinal);
     }
 
     [Fact]

@@ -63,3 +63,23 @@
 **Rationale**: Large flows can have many symbols, and contextual metadata can itself be sensitive. The UI needs deliberate degradation rather than an accidental oversized payload or privacy leak.
 
 **Alternatives considered**: Cache full contexts in a shared server cache (rejected: privacy/invalidation); emit raw module docs (rejected: unsafe markup); log failed source for diagnosis (rejected: source disclosure).
+
+## D9 — Tooling metadata comes from the effective runtime profile
+
+**Decision**: JavaScript globals/grammar and Liquid filters/tags are exposed through immutable metadata sources owned by their runtime modules. Tooling providers consume those sources; they do not construct unrelated default catalogs and never receive runtime values or evaluation contexts.
+
+**Rationale**: A provider can only be authoritative when it describes the same grammar and callable surface the configured runtime executes. Sharing metadata also makes parity directly testable without coupling authoring to runtime evaluation.
+
+**Alternatives considered**: Keep fresh default Fluid catalogs in tooling (rejected: host drift); duplicate curated lists (rejected: two authorities); inspect a live evaluation context (rejected: violates the design/runtime and no-value boundary).
+
+## D10 — Richer diagnostics require proof, not guesses
+
+**Decision**: Providers may diagnose unknown members, callables or arguments only when the bounded authoring context and runtime-owned metadata prove the mismatch. Dynamic or incomplete shapes remain unknown and continue to be editable.
+
+**Rationale**: Elsa values are frequently dynamic. False errors would make tooling less trustworthy and could incorrectly gate consequential actions.
+
+## D11 — Real-host producer-consumer proof complements contract tests
+
+**Decision**: Add one persisted-draft integration journey through normal capability discovery, authorization, context assembly, provider routing and response serialization for JavaScript and Liquid. Keep focused unit/contract tests for edge cases, but do not treat injected endpoint fixtures as composition proof.
+
+**Rationale**: The baseline tests verify individual seams. Studio #546 demonstrated that module discovery can still fail when all component tests pass, so the production-like composition boundary requires its own evidence.

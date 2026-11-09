@@ -75,6 +75,10 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
             .ToArray();
         if (blockingIncidents.Length == 0)
             return;
+        // A failed outbox dispatch can leave the local queue empty before the parent has decided the fault.
+        // Hold the whole batch: a bubbling ancestor outcome may still absorb an earlier descendant incident.
+        if (await PendingParentOutcome.ExistsAsync(blockingIncidents, _activityExecutionStateStore, cancellationToken))
+            return;
         // A missing stable consumer/schema is a deployment compatibility incident. Keep the run recoverable
         // while it waits for deployment correction; ordinary activity faults still terminalize the workflow.
         if (blockingIncidents.All(x => StringComparer.Ordinal.Equals(

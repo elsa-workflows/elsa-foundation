@@ -565,7 +565,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         new(plan.PlanId, plan.AuthorityScope, plan.SubmittedBy, plan.IdempotencyKeyHash, plan.CanonicalRequestHash, plan.ProtectedPayload, plan.Target, status ?? plan.Status, plan.CreatedAt,
             changeCaptureCursor ? captureCursor : plan.CaptureCursor, capturedSoFar ?? plan.CapturedSoFar, targetCount ?? plan.TargetCount, succeededJobCount ?? plan.SucceededJobCount, failedJobCount ?? plan.FailedJobCount, cancelledJobCount ?? plan.CancelledJobCount,
             sealedAt ?? plan.SealedAt, startedAt ?? plan.StartedAt, completedAt ?? plan.CompletedAt, cancellationRequestedAt ?? plan.CancellationRequestedAt, safeFailure ?? plan.SafeFailure, revision ?? plan.Revision,
-            plan.AlterationDescriptors);
+            plan.AlterationDescriptors, plan.AuthorizedExecutionIds);
 
     private static WorkflowAlterationJobState CopyJob(WorkflowAlterationJobState job, WorkflowAlterationJobStatus? status = null, WorkflowAlterationJobClaim? claim = null, int? attemptCount = null, IReadOnlyList<WorkflowAlterationOutcome>? outcomes = null, string? checkpointCommitId = null, WorkflowAlterationSafeFailure? safeFailure = null, DateTimeOffset? startedAt = null, DateTimeOffset? completedAt = null, long? revision = null) =>
         new(job.JobId, job.PlanId, job.WorkflowExecutionId, job.TenantPartition, job.CaptureOrdinal, status ?? job.Status, claim, attemptCount ?? job.AttemptCount, (outcomes ?? job.Outcomes).ToArray(), checkpointCommitId ?? job.CheckpointCommitId, safeFailure ?? job.SafeFailure, job.CreatedAt, startedAt ?? job.StartedAt, completedAt ?? job.CompletedAt, revision ?? job.Revision, job.CapturedConcurrency);

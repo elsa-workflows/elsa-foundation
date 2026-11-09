@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "fullAcceptancePassed": false,
+  "completedTasks": [
+    "T025",
+    "T026"
+  ],
+  "verification": {
+    "baselineConsumer": {
+      "path": "/private/tmp/rules-upgrade-baseline-runtime-final/run-99cc5a258fb142e7b2a56278622d6556/receipt.json",
+      "sha256": "425d1f9734442aeb7398e60505ff2e35af9b6c6486c3942cec97263f4169c82e",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+      "directProofPassed": true,
+      "harnessUnchanged": true,
+      "consumerModuleRoots": [
+        "Elsa.Rules.Core",
+        "Elsa.Rules.Persistence.Core",
+        "Elsa.Rules.Runtime",
+        "Elsa.Rules.Persistence.EntityFrameworkCore"
+      ],
+      "restoredProjectLibraries": 0,
+      "identityRemovalControl": {
+        "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+        "originalDeployedAssetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "alternateAssetSha256": "8be63e2447052114cfe9f284a1f635c4cb4ac67f5652e3d083becbabccae3593",
+        "removedGuardAssetSha256": "c1ffb4d858d5dfa4c337ed9791728643b5258688f9d6622cad9d79629965ba84",
+        "intendedAssertionFailed": true,
+        "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+        "restoredDeployedAssetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "restoredDirectPassed": true
+      }
+    },
+    "successorConsumer": {
+      "path": "/private/tmp/rules-upgrade-successor-runtime/run-9a0252c186404fb98d1054765b1d47e6/receipt.json",
+      "sha256": "3bfcc7d77d81329733cf926dd5c41663fc655e6bfb5f02d0d7a69891493140a0",
+      "sourceCommit": "6f8a6f9d5c81794f1cf67b34143cb923f5c3e4a9",
+      "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+      "directProofPassed": true,
+      "harnessUnchanged": true,
+      "consumerModuleRoots": [
+        "Elsa.Rules.Core",
+        "Elsa.Rules.Persistence.Core",
+        "Elsa.Rules.Runtime",
+        "Elsa.Rules.Persistence.EntityFrameworkCore"
+      ],
+      "restoredProjectLibraries": 0,
+      "identityRemovalControl": {
+        "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+        "originalDeployedAssetSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+        "alternateAssetSha256": "19e6253a87d28993698a566c292962997ee9cafe13e856c91c23f25bb49b58c2",
+        "removedGuardAssetSha256": "db2ca9381ef703165b164ecff240190cb8e5cec4c9a0001d0e81116f1a0b1072",
+        "intendedAssertionFailed": true,
+        "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+        "restoredDeployedAssetSha256": "d4ecf4d9c37c73418a84aab8b47907ea92fdbcc6276ba29e582df3b77db00ebc",
+        "restoredDirectPassed": true
+      }
+    },
+    "upgradeCoordinator": {
+      "path": "/tmp/rules-retained-upgrade-final/receipt.json",
+      "sha256": "cd54936e0a0d98332ab112b139902293a05f75198a0f0e05b45a52b1b2cdb6ed"
+    },
+    "upgradeCommands": {
+      "path": "/private/tmp/rules-retained-upgrade-final/upgrade/run-074b8b46562441e58cb9ba87a87172ae/receipt.json",
+      "sha256": "0fd2e972e61b8593fbcddc0af22bc7a9b57e8cb272e1fe437c7e11c8f20a0de9"
+    },
+    "deploymentFileCounts": {
+      "baseline": 58,
+      "successor": 58
+    },
+    "deploymentFilesUnchanged": true,
+    "deploymentHashCoverage": "All regular files recursively, including Rules assemblies, deployment receipt, runtime dependencies and probe; relative path sets detect additions and removals."
+  },
+  "firstAttempts": [
+    {
+      "path": "/tmp/rules-upgrade-baseline-runtime.log",
+      "sha256": "f20a2f55355579433f35f81f1955a78b84b2949aa6662f6c40a7f95fe3df0ec9",
+      "reason": "Four-root preparatory consumer was incorrectly held to six-root closure assertion; corrected selection only.",
+      "passed": false
+    },
+    {
+      "path": "/tmp/rules-upgrade-baseline-runtime-corrected.log",
+      "sha256": "6061f8f228d9a7e8c1092c8454fa89ecb3d04d69b89e620708a3cae30c27df7f",
+      "reason": "C# probe tried to serialize StableFinal as RunSnapshot; corrected probe compilation.",
+      "passed": false
+    },
+    {
+      "path": "/tmp/rules-retained-upgrade-first/receipt.json",
+      "sha256": "b5f01dfa2fc16891da46c712184e019cc984f4b3c2a0d6fb68e3db267b0a8bd9",
+      "reason": "Successful B admission probe used public DTO field names; coordinator compared them directly with differently named canonical receipt fields. Explicit mapping fixed the comparison.",
+      "passed": false
+    }
+  ],
+  "review": {
+    "roundsThisContinuation": 4,
+    "findingsAddressed": [
+      "Remove nonempty separate durable-value row assumption; variable is inline in activity state.",
+      "Use four-root closure validation for the new runtime consumer stage.",
+      "Capture a full RunSnapshot rather than pass StableFinal to its serializer.",
+      "Require original-pin eligibility control before declaring successor work ineligible.",
+      "Compare canonical receipt and public runtime DTO pin fields explicitly.",
+      "Hash coordinator and deployment files across execution, and exclude installation script from source-only e2e loop.",
+      "Extend final deployment snapshot from three probe files to every deployed file and compare relative path sets as well as hashes; rerun actual A/B/A witness."
+    ],
+    "finalOutcome": "Clean after root review and targeted read-only native and package evidence reviews."
+  },
+  "nativeInstallationEvidence": {
+    "path": "native-installation-checkpoint-receipt.json",
+    "sha256": "49d7ef61093bc11a5dcfd839b49ab16749eb155a39f2012f6f39761b7ca81f35"
+  },
+  "limits": [
+    "Same-machine PostgreSQL package replacement plus separate SQLite native additive installation; not a distributed multi-machine qualification.",
+    "Local actual packages from immutable A26c645ba/B6f8a6f9; same calculated version and finite-language semantics, distinct source provenance and selected assets. No package publication or schema-version-changing migration.",
+    "Earlier full Workbench 61/1 versus isolated 1/1 remains unresolved; the SQLite lock owner/cause is unproven.",
+    "Final native acceptance audit, documentation, integrated compatibility/review/CI/merge gates remain open.",
+    "External effects remain at least once."
+  ]
+}

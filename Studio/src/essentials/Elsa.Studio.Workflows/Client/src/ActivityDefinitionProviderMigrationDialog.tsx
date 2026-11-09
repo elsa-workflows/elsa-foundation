@@ -26,7 +26,7 @@ export function ActivityDefinitionProviderMigrationDialog({
 }) {
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const choices = useMemo(
-    () => migrationProviderChoices(capabilitiesQuery.data, activityEditors, draft.provider.schemaVersion)
+    () => migrationProviderChoices(capabilitiesQuery.data, activityEditors, draft.provider.providerKey, draft.provider.schemaVersion)
       .filter(item => item.providerKey !== draft.provider.providerKey || item.schemaVersion !== draft.provider.schemaVersion),
     [activityEditors, capabilitiesQuery.data, draft.provider.providerKey, draft.provider.schemaVersion]
   );

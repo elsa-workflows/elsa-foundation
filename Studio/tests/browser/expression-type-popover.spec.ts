@@ -6,8 +6,9 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(`/?theme=${theme}`);
 
     const inspector = page.getByRole("complementary", { name: "Activity inspector" });
-    const trigger = page.getByRole("button", { name: "Path expression syntax" });
+    const trigger = page.getByRole("button", { name: /^Path expression syntax:/ });
     await expect(inspector).toBeVisible();
+    expect((await trigger.boundingBox())!.width).toBeLessThanOrEqual(40);
     await trigger.click();
 
     const listbox = page.getByRole("listbox", { name: "Path expression syntax" });
@@ -31,12 +32,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(variable).toBeDisabled();
     await expect(variable).toContainText("requires an inline editor Contribution");
     await listbox.getByRole("option", { name: "Liquid", exact: true }).click();
-    await expect(trigger).toHaveText("Liquid");
+    await expect(trigger).toHaveAttribute("title", "Liquid");
     await expectTransitionFocus(page);
 
     await trigger.click();
     await listbox.getByRole("option", { name: "JavaScript", exact: true }).click();
-    await expect(trigger).toHaveText("JavaScript");
+    await expect(trigger).toHaveAttribute("title", "JavaScript");
     await expectTransitionFocus(page);
 
     await trigger.press("ArrowDown");
@@ -54,7 +55,7 @@ test("scrolling the anchor out of view closes without fighting inspector scroll 
   await page.goto("/?theme=light&mode=scroll");
 
   const inspector = page.getByRole("complementary", { name: "Activity inspector" });
-  const trigger = page.getByRole("button", { name: "Path expression syntax" });
+  const trigger = page.getByRole("button", { name: /^Path expression syntax:/ });
   const listbox = page.getByRole("listbox", { name: "Path expression syntax" });
   await trigger.click();
   await expect(listbox.getByRole("option", { name: "Literal", exact: true })).toBeFocused();

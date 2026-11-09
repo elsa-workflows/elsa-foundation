@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@elsa-workflows/studio-sdk";
 import { homeLayoutPermissions } from "./hostControl";
 import { useHomeDialogFocus } from "./useHomeDialogFocus";
+import { HomeTaskGroup } from "./HomeTaskGroup";
 import {
   HomeLayoutStore,
   createHomeLayoutScope,
@@ -60,6 +62,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
   const [getStartedSnapshot, setGetStartedSnapshot] = useState<GetStartedSnapshot | null>(null);
+  const widgetSettings = useMemo(() => {
+    const contributions = new Map(available.map(widget => [widget.id, widget]));
+    return new Map((document?.value.widgets ?? []).flatMap(entry => {
+      const widget = contributions.get(entry.id);
+      return widget ? [[entry.id, resolveWidgetSettings(widget.settings?.defaults, entry.options)] as const] : [];
+    }));
+  }, [available, document]);
 
   useEffect(() => {
     let live = true;
@@ -105,7 +114,11 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     button?.focus();
   }, [moveFocus]);
 
-  if (!document) return <section className="dashboard-page home-page"><div role="status">Loading Home…</div></section>;
+  if (!document) return <section className="studio-page dashboard-page home-page">
+    <StudioPageHeader headingLevel={2} title={<>Home</>} description={<>What to know and do next.</>} />
+    <HomeTaskGroup api={api} />
+    <div role="status">Loading Home layout…</div>
+  </section>;
 
   const known = new Map(available.map(widget => [widget.id, widget]));
   const update = (mutate: (value: HomeLayoutDocument["value"]) => HomeLayoutDocument["value"]) => {
@@ -121,9 +134,14 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     update(value => ({ widgets: value.widgets.map(entry => entry.id === id ? { ...entry, ...patch } : entry) }));
   const move = (id: string, delta: -1 | 1) => update(value => {
     const widgets = [...value.widgets];
-    const from = widgets.findIndex(entry => entry.id === id);
-    const to = Math.max(0, Math.min(widgets.length - 1, from + delta));
-    if (from >= 0 && from !== to) widgets.splice(to, 0, widgets.splice(from, 1)[0]);
+    const visibleIndexes = widgets.flatMap((entry, index) => entry.visible && known.has(entry.id) ? [index] : []);
+    const fromIndex = widgets.findIndex(entry => entry.id === id);
+    const from = visibleIndexes.indexOf(fromIndex);
+    const to = Math.max(0, Math.min(visibleIndexes.length - 1, from + delta));
+    if (from >= 0 && from !== to) {
+      const toIndex = visibleIndexes[to];
+      [widgets[fromIndex], widgets[toIndex]] = [widgets[toIndex], widgets[fromIndex]];
+    }
     const title = known.get(id)?.title ?? id;
     const visibleAfter = widgets.filter(entry => entry.visible && known.has(entry.id));
     const position = visibleAfter.findIndex(entry => entry.id === id) + 1;
@@ -168,28 +186,23 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   });
 
   return (
-    <section ref={pageRef} className={`dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
-      <header className="dashboard-page-header">
-        <div>
-          <h2>Home</h2>
-          <p>{editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."}</p>
-        </div>
-        <div>
+    <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
+      <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
           <label>Refresh <select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
-          <button type="button" onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={15} /> Refresh all</button>
+          <StudioButton type="button" onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={15} /> Refresh all</StudioButton>
           {editing ? (
             <>
-              <button type="button" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}><Plus size={15} /> Add widget</button>
-              <button type="button" onClick={reset}>Reset to default</button>
-              {canSaveDefault && !store.anonymous ? <button type="button" onClick={saveDefault}>Save as server default</button> : null}
-              <button type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</button>
+              <StudioButton type="button" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}><Plus size={15} /> Add widget</StudioButton>
+              <StudioButton type="button" onClick={reset}>Reset to default</StudioButton>
+              {canSaveDefault && !store.anonymous ? <StudioButton type="button" onClick={saveDefault}>Save as server default</StudioButton> : null}
+              <StudioButton type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</StudioButton>
             </>
-          ) : <button type="button" onClick={() => setEditing(true)}>Edit home</button>}
-        </div>
-      </header>
+          ) : <StudioButton type="button" onClick={() => setEditing(true)}>Edit home</StudioButton>}
+        </>} />
+      <HomeTaskGroup api={api} />
       <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}
       <div className="dashboard-grid">
@@ -201,7 +214,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               api={api}
               widget={widget}
               size={entry.size}
-              settings={entry.options ?? widget.settings?.defaults}
+              settings={widgetSettings.get(entry.id)}
               refreshIntervalMs={refreshIntervalMs}
               globalRefreshVersion={refreshVersion}
               active={active}
@@ -293,6 +306,15 @@ function AddWidgetGroup({
       </ul>
     </section>
   );
+}
+
+function resolveWidgetSettings(defaults: unknown, options?: Record<string, unknown>): unknown {
+  if (!isSettingsRecord(defaults)) return options ?? defaults;
+  return { ...defaults, ...(options ?? {}) };
+}
+
+function isSettingsRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export { HomePage as DashboardPage };

@@ -1,5 +1,7 @@
 # Feature Specification: Single Diff-Based Draft Update Command
 
+> **Shared revision amendment (4 November 2026, #3790):** Workflow editing keeps its existing whole-draft last-writer-wins request, distributed lock, validation and separate layout semantics. The storage slice stages shared source CAS against the revision actually read; it does not add a client expected-revision contract or reactivate the retired per-diff event path. See [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [delivery placement/boundary](../1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+
 > Supersession note (2026-06-11): references to workflow-level `Activities` and
 > `ActivityConnections` are superseded by
 > [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Draft

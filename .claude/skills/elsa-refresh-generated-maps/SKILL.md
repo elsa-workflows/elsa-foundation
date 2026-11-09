@@ -1,8 +1,8 @@
 ---
 name: "elsa-refresh-generated-maps"
-description: "Refresh or plan refreshes for generated Elsa maps. Use when map inputs changed, map freshness is uncertain, extension-point catalogs changed, project/package references changed, specs changed, or another skill needs current navigation facts."
+description: "Get current generated Elsa maps and the dependency-map dataset by generating them locally or reading the generated-maps branch. Use when another skill needs current navigation facts, map inputs changed, or the generated-maps check is red."
 argument-hint: "Map layer or freshness concern"
-compatibility: "Requires elsa-foundation map scripts"
+compatibility: "Requires the elsa-foundation map generator or access to the generated-maps branch"
 metadata:
   author: "elsa-foundation"
   source: "docs/skills/catalog.md#refresh-generated-maps"
@@ -19,10 +19,8 @@ $ARGUMENTS
 ## Outline
 
 1. Read `docs/skills/catalog.md#refresh-generated-maps` and `docs/contributing/generated-maps.md`.
-2. Establish freshness with `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` when the user explicitly requests a refresh. That is the authoritative signal; `docs/maps/manifest.json` summarizes coverage but does not report staleness.
-3. Choose the narrowest map generator that matches the changed inputs.
-4. Prefer PowerShell scripts on Windows and Bash scripts where appropriate.
-5. Run map generators only when the user explicitly requests a refresh (or explicitly authorizes it as part of an approved task).
+2. The documentation maps are not committed to `main`. For the latest merge, read the `generated-maps` branch: browse, raw-URL and `git fetch origin generated-maps` routes are in `docs/maps/README.md`.
+3. For the current working tree, generate locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, or the narrowest layer that fits. The outputs are git-ignored; there is nothing to stage.
+4. The dependency-map dataset is not committed either; the versioning calculator derives it per commit. `-- check` guards the committed solution filters: when it is red, run `-- solution-filters` and commit them.
+5. Review the generated findings reports before relying on a map; stop and tell the user if they show drift that makes the work unsafe.
 6. Record findings in reports; do not hand-edit generated map facts.
-
-If a map refresh is follow-through for an approved change, run it. Otherwise return the proposed refresh command(s) first.

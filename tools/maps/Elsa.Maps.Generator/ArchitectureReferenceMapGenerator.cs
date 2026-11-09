@@ -155,11 +155,14 @@ public static class ArchitectureReferenceMapGenerator
     }
 
     /// <summary>
-    /// Reads a summary bullet out of a previously generated map, mirroring the shell version's
-    /// cross-layer read. Reports "not generated" when the map has not been produced yet.
+    /// Reads a summary bullet out of a map this run already generated, mirroring the shell version's
+    /// cross-layer read. It reads through <see cref="MarkdownTable.Resolve"/>, so under a redirect it sees the
+    /// redirected output rather than a copy left in the working tree. Reports "not generated" when the map
+    /// has not been produced yet.
     /// </summary>
     private static string ReadSummary(string path, string prefix)
     {
+        path = MarkdownTable.Resolve(path);
         if (!File.Exists(path)) return "not generated";
 
         var line = File.ReadLines(path).FirstOrDefault(candidate => candidate.StartsWith(prefix, StringComparison.Ordinal));

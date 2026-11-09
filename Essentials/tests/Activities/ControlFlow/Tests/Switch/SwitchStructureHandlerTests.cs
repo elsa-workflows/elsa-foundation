@@ -19,7 +19,8 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         var services = new ServiceCollection();
         new ActivitiesControlFlowFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
-        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), h => h.Kind == SwitchActivity.StructureKind);
+        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), h =>
+            h.Kind == SwitchActivity.StructureKind && h.SchemaVersion == SwitchActivity.StructureSchemaVersion);
     }
 
     public void Dispose() => _provider.Dispose();
@@ -30,6 +31,76 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal(SwitchActivity.StructureKind, _handler.Kind);
         Assert.Equal(SwitchActivity.StructureSchemaVersion, _handler.SchemaVersion);
     }
+
+    [Fact]
+    public void Projects_boolean_arguments_with_owner_derived_keys_and_retains_unbound_predicates()
+    {
+        var node = PredicateNode("a");
+        var projection = _handler.ProjectInputs(node);
+        Assert.Equal(["Value"], projection.ConsumedInputKeys);
+        var input = Assert.Single(projection.Inputs);
+        Assert.Equal(SwitchActivity.ConditionInputKey("a"), input.ReferenceKey);
+        Assert.Equal("Boolean", input.Definition!.Type.Alias);
+        Assert.NotNull(input.State);
+        Assert.False(Assert.IsType<bool>(input.State.Value.Value));
+        var compiled = _handler.CompileExecutableStructure(node);
+        Assert.Equal(input.ReferenceKey, compiled.Payload.GetProperty("cases")[0].GetProperty("conditionInputKey").GetString());
+    }
+
+    [Theory]
+    [InlineData("Literal", false)]
+    [InlineData("JavaScript", false)]
+    [InlineData("JavaScript", true)]
+    [InlineData("Liquid", true)]
+    public void Empty_editor_values_lower_to_false_without_reusing_a_previous_conversion(string syntax, bool portable)
+    {
+        var value = portable ? JsonSerializer.SerializeToElement(new { language = syntax, source = "", resultType = new { alias = "Boolean" }, parameters = new { }, options = new { }, capabilityProfile = "binding-pure-v1" })
+            : JsonSerializer.SerializeToElement("");
+        var condition = new ArgumentState("foreign", new(value, syntax), null, null, null, null,
+            new(AuthoredValueConversionMode.Profile, new("unused-profile", "1")));
+        var node = NewNode() with { Structure = new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new { cases = new[] { new { caseId = "clear", match = "Approved", condition } } }, new JsonSerializerOptions(JsonSerializerDefaults.Web))) };
+        var original = node.Structure!.Payload.GetRawText();
+        var input = Assert.Single(_handler.ProjectInputs(node).Inputs);
+        Assert.False(Assert.IsType<bool>(input.State!.Value.Value));
+        Assert.Null(input.State.Conversion);
+        Assert.Equal(original, node.Structure.Payload.GetRawText());
+    }
+
+    [Fact]
+    public void Replacing_children_preserves_condition_identity_and_forward_compatible_members()
+    {
+        var node = PredicateNode("a");
+        var replaced = _handler.ReplaceChildren(node, [new(SwitchActivity.CaseSlotName("Approved"), [NewBranchNode("child")])]);
+        var payload = replaced.Structure!.Payload;
+        Assert.Equal("a", payload.GetProperty("cases")[0].GetProperty("caseId").GetString());
+        Assert.Equal("kept", payload.GetProperty("cases")[0].GetProperty("future").GetString());
+        Assert.Equal("keep", payload.GetProperty("future").GetString());
+        Assert.Equal(node.Structure!.Payload.GetProperty("cases")[0].GetProperty("condition").GetRawText(), payload.GetProperty("cases")[0].GetProperty("condition").GetRawText());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Refuses_empty_case_identity(string id) => Assert.Throws<ArgumentException>(() => _handler.CompileExecutableStructure(PredicateNode(id)));
+
+    [Fact]
+    public void Legacy_handler_keeps_literal_matching_and_refuses_predicates()
+    {
+        var legacy = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), h => h.Kind == SwitchActivity.StructureKind && h.SchemaVersion == SwitchActivity.LegacyStructureSchemaVersion);
+        var predicate = PredicateNode("a") with { Structure = new ActivityNodeStructure(SwitchActivity.StructureKind, SwitchActivity.LegacyStructureSchemaVersion, PredicateNode("a").Structure!.Payload) };
+        Assert.Throws<ArgumentException>(() => legacy.CompileExecutableStructure(predicate));
+        Assert.Empty(legacy.ProjectInputs(predicate).Inputs);
+    }
+
+    private static ActivityNode PredicateNode(string id) => NewNode() with
+    {
+        Structure = new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new
+        {
+            cases = new[] { new { caseId = id, match = "Approved", activity = (object?)null, condition = new { referenceKey = "ignored" }, future = "kept" } },
+            @default = (object?)null, future = "keep"
+        }))
+    };
 
     [Fact]
     public void SupportsScopedVariables_IsFalse()
@@ -139,7 +210,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
     {
         var payload = JsonSerializer.SerializeToElement(new
         {
-            cases = matches.Select(match => new { match }).ToArray()
+            cases = matches.Select((match, index) => new { match, caseId = $"case-{index}" }).ToArray()
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         return NewNode() with

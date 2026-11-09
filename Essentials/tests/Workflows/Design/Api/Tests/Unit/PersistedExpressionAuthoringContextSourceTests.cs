@@ -131,6 +131,29 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
     }
 
     [Fact]
+    public async Task A_structure_offers_the_results_it_guarantees_first_in_its_own_order()
+    {
+        // A compensation-like container: its handler is guaranteed the results of "second" then "first"; the
+        // container promises nothing to "first".
+        var first = new ActivityNode("first", "activity", [new("text", new(null), null, null, null, null)], []);
+        var second = new ActivityNode("second", "activity", [], []);
+        var handler = new ActivityNode("handler", "activity", [new("text", new(null), null, null, null, null)], []);
+        var root = new ActivityNode("root", "container", [], [], new ActivityNodeStructure("test.ranked", "1", JsonSerializer.SerializeToElement(new { })));
+        var structure = new RankedStructureService(root, [first, second, handler], new Dictionary<string, string[]> { ["handler"] = ["second", "first"] });
+        var source = SourceFor(root, structure);
+
+        var handlerContext = await source.TryResolveAsync(
+            new(ExpressionToolingContractVersion.V1, "draft", "handler", "text", "JavaScript", "document"), new(true, "author-1"), CancellationToken.None);
+        var firstContext = await source.TryResolveAsync(
+            new(ExpressionToolingContractVersion.V1, "draft", "first", "text", "JavaScript", "document"), new(true, "author-1"), CancellationToken.None);
+
+        Assert.Equal(
+            ["activity-result:second:result", "activity-result:first:result"],
+            handlerContext!.RootSymbols.Where(symbol => symbol.Kind == ExpressionSymbolKind.ActivityResult).Select(symbol => symbol.SymbolId));
+        Assert.DoesNotContain(firstContext!.RootSymbols, symbol => symbol.Kind == ExpressionSymbolKind.ActivityResult);
+    }
+
+    [Fact]
     public async Task Context_service_pages_after_host_policy_filtering()
     {
         var target = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
@@ -299,6 +322,62 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         Array.Sort(samples);
         var p95 = samples[(int)Math.Ceiling(samples.Length * 0.95) - 1];
         Assert.True(p95 < 250, $"Expected warm context p95 < 250 ms, measured {p95:F2} ms.");
+    }
+
+    [Fact]
+    public async Task Resolves_projected_boolean_condition_and_declines_consumed_unused_value()
+    {
+        var node = new ActivityNode("target", "activity", [new("Value", new("old", "JavaScript"), null, null, null, null)], []);
+        var structure = new RankedStructureService(node, [], new Dictionary<string, string[]>())
+        {
+            InputProjection = new([
+                new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
+                    new("foreign-key", new("true", "JavaScript"), null, null, null, null))], ["Value"])
+        };
+        var source = SourceFor(node, structure);
+        var request = new ResolveExpressionAuthoringContextRequest(ExpressionToolingContractVersion.V1, "draft", "target", "Case:a:Condition", "JavaScript", "revision");
+        var context = await source.TryResolveAsync(request, new(true, "author"), CancellationToken.None);
+        Assert.NotNull(context);
+        Assert.Equal("Boolean", context.Document.ExpectedResultType);
+        Assert.Equal("Boolean", context.ExpectedResultType);
+        Assert.Null(await source.TryResolveAsync(request with { PropertyKey = "Value" }, new(true, "author"), CancellationToken.None));
+        Assert.Null(await source.TryResolveAsync(request with { PropertyKey = "Case:deleted:Condition" }, new(true, "author"), CancellationToken.None));
+    }
+
+    private static PersistedExpressionAuthoringContextSource SourceFor(ActivityNode root, IActivityStructureService structure)
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft",
+            WorkflowDefinitionId = "workflow",
+            State = new WorkflowDefinitionState([], root, [], [], null),
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        var activityVersion = new ActivityDefinitionVersion("1.0.0", "activity-definition")
+        {
+            Id = "activity",
+            Inputs = [new InputDefinition("text", "text", new TypeReference("String"), null, "Text", null, false)],
+            Outputs = [new OutputDefinition("result", "result", new TypeReference("Int32"), null, "Result", null, false)]
+        };
+        return new PersistedExpressionAuthoringContextSource(
+            [new SingleDraftStore(draft)],
+            structure,
+            new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            new SingleActivityVersionStore(activityVersion));
+    }
+
+    private sealed class RankedStructureService(ActivityNode root, ActivityNode[] children, IReadOnlyDictionary<string, string[]> completedBefore) : IActivityStructureService
+    {
+        public ActivityStructureInputProjection InputProjection { get; init; } = ActivityStructureInputProjection.Empty;
+        public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => InputProjection;
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
+            activity.NodeId == root.NodeId ? [new("Children", children)] : [];
+        public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
+            activity.NodeId == root.NodeId && completedBefore.TryGetValue(childNodeId, out var ids) ? ids : null;
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => throw new NotSupportedException();
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => throw new NotSupportedException();
     }
 
     private static VariableDefinition Variable(string name) => new($"{name}-key", name, new("String"), null, null);

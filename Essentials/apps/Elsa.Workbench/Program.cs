@@ -17,8 +17,8 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
+using Elsa.Agent;
 using Elsa.Agent.Api;
-using Elsa.Agent.Core;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.Workflows;
 using Elsa.Api.AspNetCore;
@@ -51,6 +51,10 @@ using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
+using Elsa.Connections.Api.Features;
+using Elsa.Connections.Design.Features;
+using Elsa.Connections.Features;
+using Elsa.Connections.Workflows.Features;
 using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -78,7 +82,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -189,7 +193,8 @@ builder.Services.AddCors(options =>
         // CORS-safelisted response headers, so without exposing it a cross-origin Studio cannot read the
         // download name the executable-artifact export sets on the wire -- it silently falls back to
         // rebuilding the name, leaving the server not actually the authority on a name it owns (#1794).
-        .WithExposedHeaders("Content-Disposition"));
+        // Retry-After is not safelisted either: the Agent API's retryable refusals carry it (#3441).
+        .WithExposedHeaders("Content-Disposition", "Retry-After"));
 });
 
 builder.Services.AddNuplaneAdmin();
@@ -290,12 +295,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ApiCapabilitiesFeature).Assembly,
             typeof(ExpressionsApiFeature).Assembly,
 
-            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // JavaScript and Liquid expression + activity feature assemblies. Listing them here makes their features
             // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Expressions.Liquid.LiquidExpressionsFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
@@ -336,6 +342,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
 
             // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
             // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
@@ -350,7 +359,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationAgentAbstractionsFeature).Assembly,
             typeof(FoundationAgentApiFeature).Assembly,
             typeof(FoundationWorkflowsAgentFeature).Assembly,
+            // Runtime-side Weaver workflow contributions (spec 1193 slice F): Executable context and the read-only Executable tool.
+            typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
+            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
+            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
 
             // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
@@ -382,6 +395,46 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ModularityApiFeature).Assembly,
             typeof(ModularityAttentionFeature).Assembly,
             typeof(SecretsAttentionFeature).Assembly,
+            typeof(ConnectionsFeature).Assembly,
+            typeof(Elsa.Decisions.DecisionsFeature).Assembly,
+            typeof(Elsa.Decisions.Design.DecisionsDesignFeature).Assembly,
+            typeof(Elsa.Decisions.Api.DecisionsApiFeature).Assembly,
+            typeof(Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature).Assembly,
+            typeof(ConnectionsApiFeature).Assembly,
+            // Available for durable local/model connections when explicitly selected in the shell.
+            typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
+            typeof(ConnectionsDesignFeature).Assembly,
+            typeof(ConnectionsWorkflowsFeature).Assembly,
+            // The generic human review wait for user-defined agents and its decision API.
+            typeof(Elsa.Agent.Specialists.Review.SpecialistsReviewFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature).Assembly,
+            // User-defined agents: authoring, the editor's model reads and the model connection types.
+            typeof(Elsa.Agent.Specialists.Design.SpecialistsDesignFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Anthropic.AnthropicSpecialistsFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.AzureOpenAI.AzureOpenAISpecialistsFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.OpenAI.OpenAISpecialistsFeature).Assembly,
+            // The specialist runtime, its durable turn journal and its evidence reads.
+            typeof(Elsa.Agent.Specialists.SpecialistsRuntimeFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Inspection.Api.SpecialistsInspectionApiFeature).Assembly,
+            // Opt-in finite ETL authoring, native execution and independent runtime inspection.
+            typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
+            typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,
+            typeof(Elsa.Etl.Runtime.EtlRuntimeFeature).Assembly,
+            typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature).Assembly,
+            typeof(Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Etl.Workflows.Runtime.EtlWorkflowsRuntimeFeature).Assembly,
+            // Opt-in durable Rules. Package qualification references these same host assemblies from NuGet;
+            // the configured deployment receipt must still match the active package graph and loaded assets.
+            typeof(Elsa.Rules.Runtime.RulesRuntimeFeature).Assembly,
+            typeof(Elsa.Rules.Persistence.EntityFrameworkCore.RulesRuntimeEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Design.RulesWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Rules.Workflows.Runtime.RulesWorkflowsRuntimeFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

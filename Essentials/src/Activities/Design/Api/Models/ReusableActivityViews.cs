@@ -240,7 +240,13 @@ public sealed record ActivityProviderManifestView(
 public sealed record ActivityProviderManifestSchemaCapabilityView(
     string SchemaVersion,
     bool IsAuthorable,
-    IReadOnlyList<string> MigratableFromSchemaVersions);
+    IReadOnlyList<string> MigratableFromSchemaVersions)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityProviderManifestSourceView>? MigratableFrom { get; init; }
+}
+
+public sealed record ActivityProviderManifestSourceView(string ProviderKey, string SchemaVersion);
 
 public sealed record ActivityProviderAuthoringCapabilityView(
     string ProviderKey,
@@ -332,7 +338,10 @@ public sealed record ReusableActivityDraftView(
     ActivityDraftValidationView? Validation,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    string? PresentationLabel = null);
+    string? PresentationLabel = null)
+{
+    public IReadOnlyList<ActivityNodePresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public sealed record ReusableActivityVersionSummaryView(
     string VersionId,
@@ -360,7 +369,10 @@ public sealed record ReusableActivityVersionView(
     ActivityProviderManifestView Provider,
     ActivityPublishedTemplateView Template,
     ActivityDefinitionVersionLifecycle Lifecycle,
-    DateTimeOffset PublishedAt);
+    DateTimeOffset PublishedAt)
+{
+    public IReadOnlyList<ActivityNodePresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public sealed record ReusableActivityVersionLifecycleView(
     string VersionId,

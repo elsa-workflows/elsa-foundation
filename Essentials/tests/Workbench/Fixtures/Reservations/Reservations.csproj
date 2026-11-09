@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Elsa.Workbench.Tests.Reservations</AssemblyName>
+    <PackageId>Elsa.Workbench.Tests.Reservations</PackageId>
+    <Description>Test-only reservation participant for the owned Workbench compensation recovery witness.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <ProjectReference Include="../../../../src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

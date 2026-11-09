@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, vi } from "vitest";
+import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -42,7 +43,8 @@ export async function renderRegisteredRoute(
   path = "/workflows/definitions",
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
-  capabilities = capabilityDocument()
+  capabilities = capabilityDocument(),
+  historyState: unknown = {}
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -58,7 +60,7 @@ export async function renderRegisteredRoute(
     if (url.includes("/design/activities/definitions/picker")) return response(recommendedActivityPicker());
     return fetchWithoutCapabilities(input, init);
   }));
-  window.history.replaceState({}, "", path);
+  window.history.replaceState(historyState, "", path);
   const api = testApi();
   configureApi?.(api);
   register(api);
@@ -92,9 +94,10 @@ export async function renderRegisteredRoute(
     return <Component navigate={navigate} />;
   }
 
-  flushSync(() => {
+  const rerender = () => flushSync(() => {
     root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
+  rerender();
 
   const unmount = async () => {
     if (!mountedRouteHosts.delete(unmount)) return;
@@ -104,7 +107,7 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, unmount };
+  return { api, container, rerender, unmount };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
@@ -117,6 +120,7 @@ function routeMatchesPath(routePath: string, path: string) {
 export function testApi(): ElsaStudioModuleApi {
   const navigation = registry();
   const routes = registry();
+  const agent = createAgentRegistry();
   return {
     backend: {
       baseUrl: "https://server.example/",
@@ -130,24 +134,20 @@ export function testApi(): ElsaStudioModuleApi {
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),
+    workflowTestStimulusEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
-    ai: (() => {
-      const resultListeners = new Set<(result: unknown) => void>();
-      return {
-        promptActions: registry(),
-        providerAvailability: { get: () => true, set: vi.fn(), subscribe: (listener: (available: boolean) => void) => { listener(true); return () => {}; } },
-        dispatchPrompt: vi.fn(),
-        onPrompt: vi.fn(() => () => {}),
-        publishPromptResult: (result: unknown) => { for (const listener of resultListeners) listener(result); },
-        onPromptResult: (listener: (result: unknown) => void) => { resultListeners.add(listener); return () => resultListeners.delete(listener); }
-      };
-    })(),
+    agent,
+    ai: agent,
     dialogs: {
       confirm: vi.fn(async () => true),
       prompt: vi.fn(async () => null),
       alert: vi.fn(async () => {})
+    },
+    notifications: {
+      notify: vi.fn(() => ({ id: "notification-1", update: vi.fn(), dismiss: vi.fn() })),
+      track: vi.fn(async (work: Promise<unknown>) => work)
     }
   } as unknown as ElsaStudioModuleApi;
 }
@@ -319,6 +319,7 @@ export function capabilityDocument() {
           { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true },
           { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
           { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
+          { rel: "workflow-draft-test-run-options", href: "publishing/workflows/drafts/test-run-options" },
           { rel: "workflow-test-runs", href: "publishing/workflows/{versionId}/test-runs", templated: true },
           { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
         ]

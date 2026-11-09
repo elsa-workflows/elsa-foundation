@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefCallback } from "react";
 import type { StudioGraphAuthoringResourceKind } from "@elsa-workflows/studio-sdk";
 
 export interface GraphAuthoringWorkspaceProps {
   resourceKind: StudioGraphAuthoringResourceKind;
   className?: string;
   style?: CSSProperties;
+  containerRef?: RefCallback<HTMLDivElement>;
   palette: ReactNode;
   paletteResizeHandle?: ReactNode;
   canvas: ReactNode;
@@ -25,6 +26,7 @@ export function GraphAuthoringWorkspace({
   resourceKind,
   className,
   style,
+  containerRef,
   palette,
   paletteResizeHandle,
   canvas,
@@ -33,6 +35,7 @@ export function GraphAuthoringWorkspace({
 }: GraphAuthoringWorkspaceProps) {
   return (
     <div
+      ref={containerRef}
       className={["graph-authoring-workspace", "wf-tokens", className].filter(Boolean).join(" ")}
       style={style}
       data-graph-authoring-resource={resourceKind}

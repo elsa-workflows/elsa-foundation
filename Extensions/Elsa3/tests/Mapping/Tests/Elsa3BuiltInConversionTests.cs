@@ -75,6 +75,22 @@ public sealed class Elsa3BuiltInConversionTests
         Assert.Equal("result", reference.GetProperty("projectionKey").GetString());
     }
 
+    /// <summary>Elsa 3's Event Result is the event payload; Elsa 4 hands it on as the Payload output (#3107).</summary>
+    [Fact]
+    public async Task A_captured_event_result_is_read_from_the_elsa4_payload_output()
+    {
+        var wait = Activity("wait", "Elsa.Event", ("eventName", Literal("order.approved")), ("result", Captured("approval")));
+        var write = Activity("write", "Elsa.WriteLine", ("text", Captured("approval")));
+
+        var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", wait, write));
+
+        var text = Input(Node(state, "write"), "text");
+        Assert.Equal("ActivityResult", text.Value.ExpressionType);
+        var reference = Assert.IsType<JsonElement>(text.Value.Value);
+        Assert.Equal("wait", reference.GetProperty("producerNodeId").GetString());
+        Assert.Equal("Payload", reference.GetProperty("projectionKey").GetString());
+    }
+
     [Fact]
     public async Task The_highest_valid_semver_version_is_referenced_whatever_the_elsa3_version()
     {

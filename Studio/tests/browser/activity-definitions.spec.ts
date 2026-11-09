@@ -1,4 +1,62 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+for (const theme of ["light", "dark"]) {
+  for (const viewport of [
+    { width: 1440, long: false, description: true },
+    { width: 1440, long: false, description: false },
+    { width: 360, long: true, description: true }
+  ]) {
+    test(`Activity Definition header stays compact and aligned (${theme}, ${viewport.width}, description=${viewport.description})`, async ({ page }, testInfo) => {
+      await mockActivityDefinitions(page);
+      const detail = definition();
+      if (viewport.long) detail.definition.displayName = "Invoice processing rules for international accounts and regional policy groups";
+      if (!viewport.description) detail.definition.description = "";
+      await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ json: detail }));
+      await page.route(/\/design\/activities\/definitions\/definition-1\/drafts\?.*/, route => route.fulfill({
+        json: pageOf([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }])
+      }));
+      await page.setViewportSize({ width: viewport.width, height: 900 });
+      await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
+      const header = page.locator(".ad-definition-header");
+      await expect(header.getByRole("heading", { name: detail.definition.displayName })).toBeVisible();
+      await expect(header.getByRole("button", { name: "Edit draft", exact: true })).toBeEnabled();
+      await expect(header.locator(".ad-kicker")).toHaveCount(0);
+      const geometry = await page.evaluate(() => {
+        const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+        const header = bounds(".ad-definition-header"), heading = bounds("#activity-definition-title"),
+          actions = bounds(".ad-definition-header .ad-header-actions"), tabs = bounds(".ad-tabs");
+        return { height: header.height, gap: tabs.top - header.bottom, titleCenter: heading.top + heading.height / 2,
+          actionCenter: actions.top + actions.height / 2, actionsTop: actions.top, headingBottom: heading.bottom,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      });
+      expect(geometry.overflow).toBeLessThanOrEqual(0);
+      expect(geometry.gap).toBeGreaterThanOrEqual(0);
+      expect(geometry.gap).toBeLessThanOrEqual(8);
+      if (viewport.width > 760) {
+        expect(geometry.height).toBeLessThan(120);
+        expect(Math.abs(geometry.titleCenter - geometry.actionCenter)).toBeLessThanOrEqual(6);
+      } else {
+        expect(geometry.actionsTop).toBeGreaterThan(geometry.headingBottom);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`header-${theme}-${viewport.width}.png`) });
+      await page.getByText("Advanced", { exact: true }).click();
+      await expect(page.getByText("Finance", { exact: true })).toBeVisible();
+      const back = header.getByRole("button", { name: "Activity Definitions", exact: true });
+      await back.focus();
+      await back.press("Enter");
+      await expect(page.getByRole("heading", { name: "Activity definitions", exact: true })).toBeVisible();
+    });
+  }
+
+  test(`Activity Definition header preserves source-owned read-only controls (${theme})`, async ({ page }) => {
+    await mockActivityDraftManagement(page, { sourceOwned: true });
+    await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
+    const header = page.locator(".ad-definition-header");
+    await expect(header.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    await expect(header.locator(".ad-primary-action")).toHaveCount(0);
+    await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
+  });
+}
 
 test("Activity Definitions supports keyboard collection-to-workbench navigation and exact draft URLs", async ({ page }) => {
   await mockActivityDefinitions(page);
@@ -9,7 +67,9 @@ test("Activity Definitions supports keyboard collection-to-workbench navigation 
   await row.focus();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByText("Stable Activity Definition")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await openAdvancedDetails(page);
+  await expect(page.getByText("Finance", { exact: true })).toBeVisible();
   await expect(page.getByText("Contoso.InvoiceEvaluator")).toBeVisible();
   const overview = page.getByRole("tab", { name: "Overview" });
   await overview.focus();
@@ -29,6 +89,166 @@ test("Activity Definitions stays usable without viewport overflow at 360, 768, a
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   }
+});
+
+test("Activity Definitions restores each collection origin through real browser Back and Forward history", async ({ page }) => {
+  const firstCursor = "opaque/first + cursor";
+  const secondCursor = "opaque/second + cursor";
+  const requests: Record<string, string>[] = [];
+  await mockActivityDefinitions(page, async route => {
+    const parameters = new URL(route.request().url()).searchParams;
+    const request = Object.fromEntries(parameters.entries());
+    requests.push(request);
+    const search = parameters.get("search") ?? "";
+    const continuation = !parameters.has("cursor")
+      ? search === "first-origin" ? firstCursor : search === "second-origin" ? secondCursor : null
+      : null;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...collectionPage(), totalCount: 4, hasMore: continuation !== null, continuation })
+    });
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/?mode=activity-definitions");
+  const search = page.getByRole("searchbox", { name: "Search" });
+  await search.fill("first-origin");
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.limit === "25")).toBe(true);
+  await page.getByText("Advanced filters", { exact: true }).click();
+  await page.getByLabel("Rows per page").selectOption("50");
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.limit === "50")).toBe(true);
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect.poll(() => requests.some(request => request.search === "first-origin" && request.cursor === firstCursor)).toBe(true);
+
+  await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  const firstAppReturn = requests.length;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(firstAppReturn).some(request => request.search === "first-origin" &&
+    request.limit === "50" && request.cursor === firstCursor)).toBe(true);
+  await expect(page).not.toHaveURL(/cursor=/);
+
+  await search.fill("second-origin");
+  await expect.poll(() => requests.some(request => request.search === "second-origin" && request.limit === "50")).toBe(true);
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect.poll(() => requests.some(request => request.search === "second-origin" && request.cursor === secondCursor)).toBe(true);
+  await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+
+  let requestStart = requests.length;
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
+    request.limit === "50" && request.cursor === secondCursor)).toBe(true);
+
+  requestStart = requests.length;
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("first-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
+    request.limit === "50" && request.cursor === firstCursor)).toBe(true);
+
+  requestStart = requests.length;
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
+    request.limit === "50" && request.cursor === secondCursor)).toBe(true);
+
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
+});
+
+test("Activity Definition long identities remain copyable within the 390px popover bounds", async ({ page }, testInfo) => {
+  const longDefinition = structuredClone(definition());
+  longDefinition.definition.definitionId = `definition-${"identity-segment-".repeat(9)}`;
+  longDefinition.definition.activityTypeKey = `Contoso.${"LongActivityTypeSegment".repeat(5)}`;
+  longDefinition.definition.headVersionId = `head-${"immutable-version-".repeat(8)}`;
+  longDefinition.definition.recommendedVersionId = `recommended-${"immutable-version-".repeat(8)}`;
+  longDefinition.definition.displayName = "Invoice processing rules for international accounts and regional policy groups";
+  longDefinition.definition.description = "A long description used to check that the list row and disclosed identity fields stay inside the narrow viewport.";
+  await mockActivityDefinitions(page, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf([longDefinition]))
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?mode=activity-definitions");
+  await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const row = page.getByRole("row", { name: `Open Activity Definition ${longDefinition.definition.displayName}`, exact: true });
+  const rowHeight = (await row.boundingBox())!.height;
+  const copyDefinitionId = row.getByRole("button", { name: "Copy Definition ID", exact: true });
+  await copyDefinitionId.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.definitionId);
+
+  const disclosure = row.getByRole("button", { name: `Identifiers for ${longDefinition.definition.displayName}`, exact: true });
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: `Activity Definition identifiers for ${longDefinition.definition.displayName}`, exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(disclosure).toBeFocused();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Space");
+  await expect(dialog).toBeVisible();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+
+  const copyActivityType = dialog.getByRole("button", { name: "Copy Activity Type Key", exact: true });
+  await copyActivityType.focus();
+  await page.keyboard.press("Space");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(longDefinition.definition.activityTypeKey);
+  await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
+
+  const measurements = await page.locator(".wf-definition-identifiers-popover, .wf-list-identity-details, .wf-list-identity-details .studio-copyable-identifier")
+    .evaluateAll(elements => elements.map(element => {
+      const bounds = element.getBoundingClientRect();
+      return { className: element.className, left: bounds.left, right: bounds.right, width: bounds.width };
+    }));
+  expect(measurements.length).toBeGreaterThanOrEqual(5);
+  for (const measurement of measurements) {
+    expect(measurement.left, `${measurement.className} left edge`).toBeGreaterThanOrEqual(-1);
+    expect(measurement.right, `${measurement.className} right edge`).toBeLessThanOrEqual(391);
+    expect(measurement.width, `${measurement.className} width`).toBeLessThanOrEqual(390);
+  }
+  const identityFields = await dialog.locator(".wf-list-identity-details").evaluate(details => {
+    const detailsBounds = details.getBoundingClientRect();
+    return Array.from(details.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
+      const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
+      const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
+      const bounds = field.getBoundingClientRect();
+      return { labelTop: label.top, labelBottom: label.bottom, valueTop: value.top, left: bounds.left, right: bounds.right, detailsLeft: detailsBounds.left, detailsRight: detailsBounds.right };
+    });
+  });
+  expect(identityFields.length).toBeGreaterThanOrEqual(3);
+  for (const field of identityFields) {
+    expect(field.labelTop, JSON.stringify(field)).toBeLessThan(field.valueTop);
+    expect(field.labelBottom).toBeLessThanOrEqual(field.valueTop);
+    expect(field.left).toBeGreaterThanOrEqual(field.detailsLeft - 1);
+    expect(field.right).toBeLessThanOrEqual(field.detailsRight + 1);
+  }
+  expect((await row.boundingBox())!.height).toBe(rowHeight);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: testInfo.outputPath("activity-identities-390px.png"), fullPage: true });
 });
 
 test("Activity Definitions retains confirmed rows when refresh fails and keeps errors private", async ({ page }) => {
@@ -84,13 +304,41 @@ test("source-owned Activity Definition history stays exact and offers no denied 
   await mockActivityDraftManagement(page, { sourceOwned: true });
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
 
-  await expect(page.getByText("Source-owned and read-only")).toBeVisible();
+  await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  const technicalDetails = page.locator("details.ad-technical-details").first();
+  await expect(technicalDetails.locator("summary")).toHaveText("Technical details");
+  await expect(page.getByText("contoso.catalog", { exact: true })).not.toBeVisible();
+  await technicalDetails.locator("summary").click();
   await expect(page.getByText("contoso.catalog")).toBeVisible();
   await expect(page.getByText("invoice-source")).toBeVisible();
   await expect(page.getByLabel("Selected exact version")).toContainText("elsa.activity-graph");
-  await expect(page.getByText("Immutable public contract")).toBeVisible();
+  await expect(page.getByText("Inputs, outputs & outcomes")).toBeVisible();
   await expect(page.getByRole("button", { name: /Fork/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Create draft from/ })).toHaveCount(0);
+});
+
+test("source-owned Activity Definition overview shows the recommended contract without draft management", async ({ page }) => {
+  await mockActivityDraftManagement(page, { sourceOwned: true });
+  await page.goto("/workflows/activity-definitions?definition=definition-1");
+
+  await expect(page.locator(".ad-source-overview")).toContainText("Finance");
+  await expect(page.getByText("Inputs, outputs & outcomes")).toBeVisible();
+  await expect(page.getByText("Done", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Fork recommended version" })).toHaveCount(0);
+});
+
+test("source-owned Usage starts with inbound evidence for the recommended version", async ({ page }) => {
+  const state = await mockActivityDependencyExplorer(page, { sourceOwned: true });
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=relationships");
+
+  await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Version" })).toHaveValue("version-1");
+  await expect(page.getByRole("radio", { name: "Used by" })).toBeChecked();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+  expect(state.requestedUrls[0]).toContain("/versions/version-1/dependencies?direction=inbound");
 });
 
 test("source-owned Activity Definition fork reviews and applies only the recommended active version", async ({ page }) => {
@@ -125,9 +373,10 @@ test("unsupported fork conversion and atomic collision preserve the source witho
   const unsupported = await mockActivityFork(page, "unsupported");
   await page.goto("/workflows/activity-definitions?definition=definition-1");
   await page.getByRole("button", { name: "Fork recommended version" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
+  const unsupportedDialog = page.getByRole("dialog", { name: "Fork recommended activity version" });
+  await unsupportedDialog.getByRole("button", { name: "Create fork preview" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("exact provider conversion is unsupported");
+  await expect(unsupportedDialog.getByRole("alert")).toContainText("exact provider conversion is unsupported");
   await expect(page).toHaveURL(/definition=definition-1/);
   expect(unsupported.applyRequests).toHaveLength(0);
 
@@ -138,7 +387,7 @@ test("unsupported fork conversion and atomic collision preserve the source witho
   await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
   await page.getByRole("dialog", { name: "Review activity fork" }).getByRole("button", { name: "Apply reviewed fork" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("reserved target identity is no longer available");
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("reserved target identity is no longer available");
   await expect(page).toHaveURL(/definition=definition-1/);
   expect(collision.applyRequests).toHaveLength(1);
 });
@@ -200,7 +449,7 @@ test("Activity Definition Test Run preserves exact input presence and opens focu
   await page.reload();
   await page.setViewportSize({ width: 360, height: 900 });
   // The reload resets the collapsed graph-designer lifecycle section that holds the draft label.
-  await openDraftDetails(page);
+  await openAdvancedDetails(page);
   await page.evaluate(() => {
     const observations: unknown[] = [];
     window.addEventListener("elsa:activity-definitions:observation", event => {
@@ -428,12 +677,14 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   const state = await mockActivityDependencyExplorer(page);
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=relationships");
 
-  const root = page.getByRole("combobox", { name: "Exact version root" });
+  const root = page.getByRole("combobox", { name: "Version" });
   await root.selectOption("version-1");
+  const scanDetails = page.locator("details.ad-scan-details");
+  await scanDetails.locator("summary").click();
   await expect(page.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(page.getByText("occurrence-a")).toBeVisible();
   await expect(page.getByText("occurrence-b")).toBeVisible();
-  await page.getByRole("button", { name: "Review exact path" }).first().click();
+  await page.getByRole("button", { name: "View path" }).first().click();
   await expect(page.getByText("Complete cycle path")).toBeVisible();
   await expect(page.locator(".ad-dependency-path")).toHaveCount(1);
 
@@ -442,41 +693,98 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   await expect(page.getByText("3 visible rows · 2 server pages")).toBeVisible();
 
   await page.getByRole("radio", { name: "Used by" }).check();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await expect(page.getByText("DerivedProjection")).toBeAttached();
+  const scanSummary = scanDetails.locator("summary");
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
   await expect(page.getByText("DerivedProjection")).toBeVisible();
   await expect(page.getByText("7/18/2026")).toBeVisible();
   await expect(page.getByText("workflow-use-a")).toBeVisible();
+  await scanSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", false);
+  await page.keyboard.press("Enter");
+  await expect(scanDetails).toHaveJSProperty("open", true);
+  await expect(page.getByText("DerivedProjection")).toBeVisible();
 
   state.nextFailure = 409;
-  await page.getByRole("radio", { name: "Transitive" }).check();
+  await page.locator("details.ad-dependency-advanced summary").click();
+  await page.getByRole("radio", { name: "Include indirect" }).check();
   await expect(page.getByText("transitive-confirmed")).toBeVisible();
   await page.getByRole("button", { name: "Load next page" }).click();
-  await expect(page.getByText("stale completed snapshot")).toBeVisible();
+  await expect(page.locator(".ad-stale-warning")).toContainText("next page did not match this version, filters, or snapshot");
   await expect(page.getByText("transitive-confirmed")).toBeVisible();
   await expect(page.getByText("hidden-owner-from-conflict")).toHaveCount(0);
-  await page.getByRole("button", { name: "Restart from latest" }).click();
+  await page.getByRole("button", { name: "Restart scan" }).click();
   await expect(page.getByText("transitive-restarted")).toBeVisible();
 
   state.nextFailure = 410;
   await page.getByRole("button", { name: "Load next page" }).click();
-  await expect(page.getByText("no longer retains this projection watermark")).toBeVisible();
+  await expect(page.locator(".ad-stale-warning")).toContainText("The snapshot is no longer available");
   await expect(page.getByText("transitive-restarted")).toBeVisible();
 
   state.privateRootStatus = 403;
   await root.selectOption("version-2");
-  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  await expect(page.locator(".ad-inline-error")).toContainText("No identities or counts are shown");
   await expect(page.getByText("hidden-private-owner")).toHaveCount(0);
   state.privateRootStatus = 404;
   await root.selectOption("version-3");
-  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  await expect(page.locator(".ad-inline-error")).toContainText("No identities or counts are shown");
   expect(state.requestedUrls.some(url => url.includes("direction=inbound") && url.includes("transitive=true"))).toBe(true);
 });
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [1440, 360]) {
+    test(`Activity member settings retain edits and align controls (${theme}, ${width})`, async ({ page }, info) => {
+      await mockActivityDefinitionAuthoring(page);
+      await page.setViewportSize({ width, height: 1000 });
+      await createBrowserActivity(page, theme);
+      await page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first().locator("summary").click();
+      await page.getByRole("tab", { name: "Inputs (0)", exact: true }).click();
+      await page.getByRole("button", { name: "Add input", exact: true }).click();
+      await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Topic");
+      await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+      const member = page.locator("[data-contract-kind='input'][data-contract-selected='true']");
+      await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
+      await member.getByRole("textbox", { name: "Value", exact: true }).fill("A pending topic");
+      await page.screenshot({ path: info.outputPath("general.png"), fullPage: true });
+      const general = member.getByRole("tab", { name: "General", exact: true });
+      await general.focus();
+      await general.press("ArrowRight");
+      await expect(member.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+      const displayName = member.getByRole("textbox", { name: /^Display name/ });
+      const category = member.getByRole("combobox", { name: /^Category/ });
+      await displayName.fill("Writing topic");
+      await category.fill("Writing");
+      const a = (await displayName.boundingBox())!, b = (await category.boundingBox())!;
+      expect(a.height).toBe(b.height);
+      if (width > 760) expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: info.outputPath("presentation.png"), fullPage: true });
+      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+      await key.fill("writing-topic");
+      const apply = member.getByRole("button", { name: "Apply key", exact: true });
+      expect((await apply.boundingBox())!.x).toBeGreaterThan((await key.boundingBox())!.x);
+      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+      await apply.click();
+      await expect(apply).toBeDisabled();
+      await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
+      await general.click();
+      await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
+      await member.getByRole("button", { name: "Apply default", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}
 
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await expect(page.getByText("No Activity Definitions yet")).toBeVisible();
+  await expect(page.getByText("No designed activities yet")).toBeVisible();
 
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
   await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
@@ -485,48 +793,54 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
-  await page.getByRole("tab", { name: "Public Interface" }).click();
-  await page.getByRole("textbox", { name: "Member name" }).fill("Customer note");
-  await page.getByRole("button", { name: "Add input" }).click();
-  const contractInput = page.getByRole("group", { name: "Input 1: Customer note" });
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
+  await page.getByRole("button", { name: "Add input", exact: true }).click();
+  await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
+  await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+  const contractInput = page.getByRole("region", { name: "Customer note", exact: true });
   await expect(contractInput).toBeVisible();
-  await contractInput.getByRole("checkbox", { name: /Allows null/ }).check();
-  await contractInput.getByRole("combobox", { name: "Default" }).selectOption("literal");
-  await contractInput.getByRole("textbox", { name: "Literal JSON value" }).fill("null");
-  await contractInput.getByRole("button", { name: "Apply default" }).click();
+  // Each edit below is an explicit saved boundary. Browser interactions can exceed the
+  // debounce window on a loaded runner, so separate changes must not assume one PUT.
   await expectSavedRevision(page, 2);
+  await contractInput.getByText("Advanced", { exact: true }).click();
+  await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
+  await expectSavedRevision(page, 3);
+  await contractInput.getByRole("tab", { name: "General", exact: true }).click();
+  await contractInput.getByRole("combobox", { name: /^Default/ }).selectOption("null");
+  await contractInput.getByRole("button", { name: "Apply default" }).click();
+  await expectSavedRevision(page, 4);
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   await addPaletteActivity(page, "Write line");
-  await expectSavedRevision(page, 3);
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expectSavedRevision(page, 5);
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await addPaletteActivity(page, "Delay");
-  await expectSavedRevision(page, 4);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expectSavedRevision(page, 6);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
 
   await page.reload();
-  await expectSavedRevision(page, 4);
-  await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Literal JSON value" })).toHaveValue("null");
+  await expectSavedRevision(page, 6);
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
+  await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
-  await selectGraphNode(page, "Write line");
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
+  await selectSequenceStep(page, "Write line");
   page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
 
   state.conflictNextSave = true;
-  await selectGraphNode(page, "Delay");
-  await page.getByRole("button", { name: "Move activity left" }).click();
+  await selectSequenceStep(page, "Delay");
+  await page.getByRole("button", { name: "Move activity up" }).click();
   await expect(page.getByText("Local work preserved")).toBeVisible();
-  await expect(page.getByText(/server draft advanced to revision 5/i)).toBeVisible();
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expect(page.getByText(/server draft advanced to revision 7/i)).toBeVisible();
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
   await expect(page).toHaveURL(/draft=activity-draft-recovery/);
   await expectSavedRevision(page, 1);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   expect(state.conflictCopyPayload).toMatchObject({ rootActivity: { activityVersionId: "sequence-v1", structure: { payload: { activities: [
     { activityVersionId: "delay-v1" },
     { activityVersionId: "write-line-v1" }
@@ -538,15 +852,19 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByText("Add input currency")).toBeVisible();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
+  const suggestions = page.locator("details.ad-interface-suggestions");
+  await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
+  await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
+  await page.locator("details.ad-interface-suggestions > summary").click();
+  await expect(page.getByText("Add input Currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
   expect(state.proposalApplies).toBe(0);
   expect(state.draft.revision).toBe(1);
 
   await page.getByRole("button", { name: "Apply selected changes" }).click();
   await expectSavedRevision(page, 2);
-  await expect(page.locator("[data-contract-kind='input'][data-contract-reference-key='currency']")).toBeVisible();
+  await expect(page.locator("button[data-member-kind='input'][data-member-reference-key='currency']")).toBeVisible();
   expect(state.proposalApplies).toBe(1);
   expect(state.lastProposalApply).toEqual({
     expectedRevision: 1,
@@ -561,10 +879,11 @@ test("Activity Definition provider contract proposals require review and apply a
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
   await page.getByRole("button", { name: "Create definition" }).click();
   await expectSavedRevision(page, 1);
+  await openAdvancedDetails(page);
 
   state.validationMode = "invalid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
@@ -575,7 +894,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Public Interface" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 
@@ -598,7 +917,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
 
@@ -621,6 +940,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByText(/backend rejected validation/)).toBeVisible();
   await expect(page.getByText(/server draft advanced to revision 2/i)).toBeVisible();
+  await page.getByText("About validation and Test Run", { exact: true }).click();
   await expect(page.getByText(/Runtime rejection is reported by the Test Run experience/)).toBeVisible();
 });
 
@@ -636,6 +956,7 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
   state.catalogBlocked = true;
   await page.reload();
   state.validationMode = "invalid";
+  await openAdvancedDetails(page);
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
   await expect(page.locator("[data-graph-root-location]")).toBeFocused();
@@ -643,21 +964,107 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
   state.releaseCatalog();
 });
 
+for (const theme of ["light", "dark"]) {
+  for (const width of [320, 768, 1024, 1440]) {
+    test(`keeps activity authoring actions stationary through publication status changes at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      const state = await mockActivityDefinitionAuthoring(page);
+      await page.setViewportSize({ width, height: 900 });
+      await createBrowserActivity(page, theme);
+      await expect(page.locator(".ad-draft-heading h1")).toHaveCSS("font-size", "16px");
+      await page.locator("details.ad-authoring-advanced > summary").click();
+      const toolbar = page.locator(".ad-authoring-toolbar-actions");
+      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];
+      const initial = await Promise.all(actions.map(action => action.boundingBox()));
+      expect(initial.every(Boolean)).toBe(true);
+      const observations = [];
+      let releaseSave!: () => void;
+      const savePending = new Promise<void>(resolve => { releaseSave = resolve; });
+      const savePath = "**/design/activities/drafts/activity-draft-browser";
+      const failSave = async (route: Route) => {
+        if (route.request().method() !== "PUT") return route.fallback();
+        await savePending;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ title: "Save unavailable" }) });
+      };
+      await page.route(savePath, failSave);
+      await openAdvancedDetails(page);
+      await page.getByRole("textbox", { name: /Draft label/ }).fill("Geometry draft");
+      await page.locator("details.ad-authoring-advanced > summary").click();
+      await expect(page.locator(".ad-save-chip")).toHaveText(/Saving( queued)?/);
+      observations.push({ state: "queued-or-saving", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await expect(page.locator(".ad-save-chip")).toHaveText("Saving");
+      observations.push({ state: "saving", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      releaseSave();
+      await expect(page.locator(".ad-save-chip")).toHaveText("Save failed");
+      observations.push({ state: "save-failed", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.unroute(savePath, failSave);
+      await actions[2].click();
+      await expectSavedRevision(page, 2);
+      observations.push({ state: "saved", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+
+      const preflightPath = /\/design\/activities\/drafts\/[^/]+\/publication-preflight$/;
+      let releaseFailure!: () => void;
+      const failurePending = new Promise<void>(resolve => { releaseFailure = resolve; });
+      const failPreflight = async (route: Route) => {
+        await failurePending;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ title: "Preflight unavailable" }) });
+      };
+      await page.route(preflightPath, failPreflight);
+      await actions[0].click();
+      const dialog = page.getByRole("dialog", { name: "Review & publish" });
+      await expect(dialog).toBeVisible();
+      observations.push({ state: "preparing", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      releaseFailure();
+      await expect(dialog.getByRole("alert")).toContainText("Publication preflight could not be confirmed");
+      await dialog.getByRole("button", { name: "Close publication review" }).click();
+      await expect(toolbar.getByRole("status")).toBeVisible();
+      observations.push({ state: "failed", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.unroute(preflightPath, failPreflight);
+      await actions[0].click();
+      await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Close publication review" }).click();
+      await expect(actions[0]).toHaveText("Continue publication review");
+      await expect(toolbar.getByRole("status")).toBeVisible();
+      observations.push({ state: "review", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.screenshot({ path: testInfo.outputPath("activity-authoring-toolbar.png"), fullPage: true });
+      await testInfo.attach("activity-publication-geometry", { body: JSON.stringify({ initial, observations }), contentType: "application/json" });
+      expect(state.publicationWrites).toBe(0);
+      for (const action of actions) await expect(action).toBeVisible();
+      for (const { boxes } of observations) for (let index = 0; index < boxes.length; index++) {
+        expect(boxes[index]).not.toBeNull();
+        expect(boxes[index]!.x).toBeGreaterThanOrEqual(0);
+        expect(boxes[index]!.x + boxes[index]!.width).toBeLessThanOrEqual(width);
+        expect(Math.abs(boxes[index]!.x - initial[index]!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(boxes[index]!.y - initial[index]!.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+}
+
 test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
+  const changesRegion = page.getByRole("region", { name: "Changes", exact: true });
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
-  await expect(page.getByText("First publication · no published baseline exists")).toBeVisible();
+  await page.getByRole("button", { name: "Review & publish" }).click();
+  await expect(page.getByText("First publication", { exact: true })).toBeVisible();
+  await expect(page.getByText("No published baseline exists", { exact: true })).toBeVisible();
+  await expect(changesRegion).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
+  await page.getByText("Review initial activity contents", { exact: true }).click();
+  await expect(changesRegion).toBeVisible();
+  await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
-  await expect(page.getByText("first published version became recommended automatically", { exact: false })).toBeVisible();
+  await expect(page.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  await expect(page.getByRole("button", { name: "Reopen preflight" })).toBeDisabled();
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await publicationDialog.getByText("Publication review details", { exact: true }).click();
+  await expect(publicationDialog.getByRole("button", { name: "Published 2.0.0" })).toBeDisabled();
   await page.goto("/workflows/activity-definitions?definition=activity-def-browser&section=versions&version=published-version-1");
   await expect(page.getByRole("button", { name: "Create draft from this exact version" })).toBeEnabled();
   await page.getByRole("button", { name: "Create draft from this exact version" }).click();
@@ -666,16 +1073,16 @@ test("Activity Definition publication keeps first and later recommendation seman
   await cloneDialog.getByRole("button", { name: "Clone exact version" }).click();
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser-follow-up/);
   await expectSavedRevision(page, 1);
-  await openDraftDetails(page);
   expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(changesRegion).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
   await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
   await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
-  await expect(page.getByText("existing recommended version was not moved", { exact: false })).toBeVisible();
+  await expect(page.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
   expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
   expect(state.publicationWrites).toBe(2);
@@ -690,9 +1097,9 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
@@ -732,79 +1139,196 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.getByText("One Run · workflow-execution-1")).toBeVisible();
   expect(journey.dispatchWrites).toBe(1);
   const runDetails = page.getByRole("complementary", { name: "Run details" });
-  await expect(runDetails).toContainText("Boundary lifecycle");
-  await expect(runDetails).toContainText("Descendant aggregate");
-  await expect(runDetails).toContainText("Pinned historical layout");
-  await expect(runDetails).toContainText("workflow-source-1");
-  await expect(runDetails).toContainText("invoice-write");
-  await expect(runDetails.getByText("Boundary lifecycle")).toHaveCount(1);
+  const overview = runDetails.locator(".wf-activity-overview");
+  await expect(overview).toContainText("Published browser activity");
+  await expect(overview).toContainText("Completed");
+  await expect(runDetails.getByRole("heading", { name: "Inputs" })).toBeVisible();
+  await expect(runDetails.getByRole("heading", { name: "Outputs" })).toBeVisible();
+  await expect(runDetails.getByRole("heading", { name: "Outcomes" })).toBeVisible();
+  const boundaryDetails = runDetails.locator(".wf-activity-boundary-details > details");
+  await expect(boundaryDetails).toBeVisible();
+  await expect(boundaryDetails).not.toHaveAttribute("open");
+  await expect(runDetails.getByRole("region", { name: "Activity internals" })).toHaveCount(0);
+  expect(journey.boundaryLayoutReads).toBe(0);
+  expect(journey.descendantReads).toBe(0);
+  await boundaryDetails.locator("summary").click();
+  const internals = runDetails.getByRole("region", { name: "Activity internals" });
+  await expect(internals).toBeVisible();
+  await expect(internals.getByRole("tablist", { name: "Activity details" })).toBeVisible();
+  await expect(internals.getByRole("tab", { name: "Steps" })).toHaveAttribute("aria-selected", "true");
+  await expect(internals.getByRole("tab", { name: "Definition" })).toHaveAttribute("aria-selected", "false");
+  await expect(internals.getByRole("link", { name: "View activity definition" })).toBeVisible();
+  const technical = internals.locator("details.wf-boundary-technical");
+  await expect(technical).toBeVisible();
+  await expect(technical).not.toHaveAttribute("open");
+  await expect(technical.getByText("Definition ID", { exact: true })).toBeHidden();
+  await expect(technical.getByText("activity-def-browser", { exact: true })).toBeHidden();
+  await expect.poll(() => journey.boundaryLayoutReads).toBe(1);
+  await expect.poll(() => journey.descendantReads).toBe(1);
+  await expect(internals.getByRole("tree", { name: "Activity steps" })).toBeVisible();
+  await expect(internals.getByRole("button", { name: "Refresh activity steps" })).toContainText("Refresh");
+  const announcement = internals.locator(".wf-boundary-announcement");
+  await expect(announcement).toHaveAttribute("aria-live", "polite");
+  const announcementStyle = await announcement.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      width: style.width,
+      height: style.height,
+      overflow: style.overflow,
+      clipPath: style.clipPath
+    };
+  });
+  expect(announcementStyle).toEqual({ width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)" });
+  expect(await internals.evaluate(element => getComputedStyle(element).position)).toBe("relative");
+  const announcementDocumentHeightDelta = await announcement.evaluate(element => {
+    const root = document.documentElement;
+    const documentHeight = root.scrollHeight;
+    const originalDisplay = element.style.display;
+    element.style.display = "none";
+    const heightWithoutAnnouncement = root.scrollHeight;
+    element.style.display = originalDisplay;
+    return documentHeight - heightWithoutAnnouncement;
+  });
+  expect(announcementDocumentHeightDelta).toBe(0);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Write Line" })).toHaveCount(2);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "descendant-execution-1" })).toHaveCount(0);
+  await expect(internals.getByText("Saved activity layout", { exact: true })).toHaveCount(0);
 
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  const descendant = runDetails.getByRole("treeitem", { name: /descendant-execution-1/ });
-  await expect(descendant).toBeVisible();
-  await descendant.focus();
-  await page.keyboard.press("Enter");
-  await expect(runDetails).toContainText("Canonical execution descendant-execution-1");
-  await expect(runDetails).toContainText("Cancelling is nonterminal");
-  await expect(runDetails).toContainText("bookmark-attempt-2");
-  await expect(runDetails).toContainText("incident-attempt-2");
-  await expect(runDetails.getByText("Captured", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Redacted", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Not captured", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Capture failed", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Payload reference", { exact: true })).toBeVisible();
-  await expect(runDetails.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
-  await runDetails.getByRole("button", { name: /Previous attempt.*faulted-execution-1/ }).click();
-  await expect(runDetails).toContainText("Canonical execution faulted-execution-1");
-  await expect(runDetails).toContainText("incident-attempt-1");
-  await expect(runDetails).toContainText("Original fault remains inspectable");
-  const historicalLoop = runDetails.getByRole("treeitem", { name: /loop-execution-1/ });
-  await expect(historicalLoop).toContainText("iteration loop-7");
-  await expect(historicalLoop).toContainText("Contoso.RemovedActivity");
+  const longLabel = "Long Unusually Long Activity Name With Many Words And Compound Segments";
+  const longRow = internals.getByRole("treeitem").filter({ hasText: longLabel });
+  await expect(longRow).toContainText("1234567890");
+  await expect(longRow).toContainText("987654321");
+  await internals.evaluate(element => {
+    const inspector = element as HTMLElement;
+    inspector.style.width = "320px";
+    inspector.style.maxWidth = "320px";
+    inspector.style.boxSizing = "border-box";
+  });
+  const rowGeometry = await internals.evaluate(element => {
+    const inspector = element as HTMLElement;
+    const viewport = inspector.querySelector<HTMLElement>(".wf-boundary-hierarchy-viewport")!;
+    const spacer = viewport.querySelector<HTMLElement>(".wf-boundary-hierarchy-spacer")!;
+    const rows = [...spacer.querySelectorAll<HTMLElement>(".wf-boundary-hierarchy-row")];
+    return {
+      inspectorWidth: inspector.getBoundingClientRect().width,
+      spacerHeight: Number.parseFloat(spacer.style.height),
+      viewportHeight: viewport.getBoundingClientRect().height,
+      rowHeights: rows.map(row => row.getBoundingClientRect().height),
+      rowTops: rows.map(row => row.getBoundingClientRect().top),
+      overlappingRows: rows.filter(row => {
+        const identity = row.querySelector(".wf-boundary-hierarchy-identity")!.getBoundingClientRect();
+        const state = row.querySelector(".wf-boundary-hierarchy-state")!.getBoundingClientRect();
+        return identity.right > state.left + 1;
+      }).length
+    };
+  });
+  expect(rowGeometry.inspectorWidth).toBe(320);
+  expect(rowGeometry.spacerHeight).toBe(rowGeometry.rowHeights.length * 88);
+  expect(rowGeometry.rowHeights.every(height => height === 88)).toBe(true);
+  expect(rowGeometry.rowTops.slice(1).every((top, index) => top - rowGeometry.rowTops[index]! === 88)).toBe(true);
+  expect(rowGeometry.overlappingRows).toBe(0);
+  await longRow.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeFocused();
+
+  await internals.getByRole("tab", { name: "Definition" }).click();
+  await expect(internals).toContainText("Saved activity layout");
+  await expect(internals).toContainText("workflow-source-1");
+  await internals.getByRole("tab", { name: "Steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(technical).toContainText("activity-def-browser");
+  await expect(technical).toContainText("published-version-1");
+  await expect(technical).toContainText("Descendant aggregate");
+
+  const descendant = internals.getByRole("treeitem").filter({ hasText: "Cancelling" });
+  await expect(descendant).toContainText("Write Line");
+  await descendant.click();
+  const selectedStep = internals.getByRole("region", { name: "Selected activity step" });
+  await expect(selectedStep).toContainText("Write Line");
+  await expect(selectedStep).toContainText("Cancellation is still finishing.");
+  await expect(selectedStep).toContainText("Cancellation cleanup is still running.");
+  await expect(selectedStep).not.toContainText("descendant-execution-1");
+  await expect(selectedStep).toContainText("Captured");
+  await expect(selectedStep).toContainText("Redacted");
+  await expect(selectedStep).toContainText("Not captured");
+  await expect(selectedStep).toContainText("Capture failed");
+  await expect(selectedStep).toContainText("Payload reference");
+  await expect(selectedStep.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
+  await expect(technical).not.toHaveAttribute("open");
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(technical).toContainText("descendant-execution-1");
+  await expect(technical).toContainText("bookmark-attempt-2");
+  await expect(technical).toContainText("incident-attempt-2");
+
+  await technical.getByRole("button", { name: /Previous attempt/ }).click();
+  const faultedStep = internals.getByRole("region", { name: "Selected activity step" });
+  await expect(faultedStep).toContainText("Write Line");
+  await expect(faultedStep).toContainText("Original fault remains inspectable after retry.");
+  await expect(faultedStep).toContainText("Faulted");
+  await expect(faultedStep.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
+
+  const historicalLoop = internals.getByRole("treeitem").filter({ hasText: "Removed Activity" });
+  await expect(historicalLoop).toBeVisible();
   await historicalLoop.click();
-  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
-  await runDetails.getByRole("tab", { name: "Pinned structure" }).click();
-  await expect(runDetails).toContainText("Pinned historical layout");
-  await expect(runDetails).toContainText("workflow-source-1");
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
+  await expect(internals.getByRole("alert")).toContainText("Selected step detail is unavailable");
 
-  const nestedBoundary = runDetails.getByRole("treeitem", { name: /nested-boundary-execution-1/ });
-  await nestedBoundary.getByRole("button", { name: "Open boundary" }).click();
-  await expect(runDetails).toContainText("Execution nested-boundary-execution-1");
-  await expect(runDetails).toContainText("nested-source-reference");
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 6");
-  await expect(runDetails.getByRole("treeitem", { name: /nested-child-execution-1/ })).toBeVisible();
+  const nestedBoundary = internals.getByRole("treeitem").filter({ hasText: "Nested Evaluator" });
+  await nestedBoundary.getByRole("button", { name: "View steps" }).click();
+  const path = internals.getByRole("navigation", { name: "Activity boundary path" });
+  await expect(path).toContainText("Published browser activity");
+  await expect(path).toContainText("Nested Evaluator");
+  await expect(path).not.toContainText("boundary-execution-1");
+  await expect(path).not.toContainText("nested-boundary-execution-1");
+  await expect(path).toContainText("Completed");
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Write Line" })).toBeVisible();
+  await expectBoundarySnapshotSequence(internals, 6);
+  const singleRowViewport = await internals.evaluate(element => {
+    const viewport = element.querySelector<HTMLElement>(".wf-boundary-hierarchy-viewport")!;
+    return {
+      rowCount: viewport.querySelectorAll(".wf-boundary-hierarchy-row").length,
+      clientHeight: viewport.clientHeight,
+      scrollHeight: viewport.scrollHeight
+    };
+  });
+  expect(singleRowViewport.rowCount).toBe(1);
+  expect(singleRowViewport.clientHeight).toBe(88);
+  expect(singleRowViewport.scrollHeight).toBeLessThanOrEqual(singleRowViewport.clientHeight);
 
-  await runDetails.getByRole("button", { name: /InvoiceEvaluator.*Execution boundary-execution-1/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
-  await expect(runDetails).toContainText("Contoso.RemovedActivity");
+  await path.getByRole("button", { name: "Published browser activity" }).click();
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeVisible();
 
-  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
-  await expect(runDetails).toContainText("Loaded evidence is stale");
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  await expect(runDetails).toContainText("loop-execution-1");
-  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
-  await expect(runDetails).toContainText("Committed through sequence 6");
+  await internals.getByRole("button", { name: "Load more steps" }).click();
+  await expect(internals).toContainText("out of date");
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeVisible();
+  await internals.getByRole("button", { name: "Refresh steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 6);
 
-  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
-  await expect(runDetails).toContainText("Loaded evidence is stale");
-  await expect(runDetails).toContainText("Committed through sequence 6");
-  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
-  await expect(runDetails).toContainText("Committed through sequence 7");
+  await internals.getByRole("button", { name: "Load more steps" }).click();
+  await expect(internals).toContainText("out of date");
+  await expectBoundarySnapshotSequence(internals, 6);
+  await internals.getByRole("button", { name: "Refresh steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 7);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+async function expectBoundarySnapshotSequence(scope: import("@playwright/test").Locator, sequence: number) {
+  const technical = scope.locator("details.wf-boundary-technical");
+  if (await technical.getAttribute("open") === null) await technical.locator("summary").click();
+  await expect(
+    technical.locator("dt").filter({ hasText: "Snapshot through sequence" }).locator("xpath=following-sibling::dd[1]")
+  ).toHaveText(String(sequence));
+}
 
 test("Activity Definition publication reconciles an ambiguous response without duplicate writes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   state.publishMode = "ambiguous";
   await createBrowserActivity(page);
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Minimum valid version: 1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
@@ -817,15 +1341,15 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   await createBrowserActivity(page);
   state.preflightMode = "invalid";
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
-  await expect(page.getByText("Publication blocked")).toBeVisible();
+  await page.getByRole("button", { name: "Review & publish" }).click();
+  await expect(page.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
   expect(state.publicationWrites).toBe(0);
 
   state.preflightMode = "valid";
   state.publishMode = "stale";
-  await page.getByRole("button", { name: "Reopen preflight" }).click();
-  await expect(page.getByText("Ready to publish")).toBeVisible();
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
   expect(state.publicationWrites).toBe(1);
@@ -1117,7 +1641,7 @@ async function mockActivityVersionLifecycle(page: Page) {
   return state;
 }
 
-async function mockActivityDependencyExplorer(page: Page) {
+async function mockActivityDependencyExplorer(page: Page, options: { sourceOwned?: boolean } = {}) {
   const state = {
     nextFailure: null as 409 | 410 | null,
     privateRootStatus: null as 403 | 404 | null,
@@ -1203,15 +1727,24 @@ async function mockActivityDependencyExplorer(page: Page) {
       { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
     ] }] })
   }));
+  const managementDefinition = options.sourceOwned
+    ? {
+        ...definition(),
+        definition: {
+          ...definition().definition,
+          contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+        }
+      }
+    : definition();
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({
-      ...definition(),
+      ...managementDefinition,
       lifecycle: {
-        ...definition().lifecycle,
+        ...managementDefinition.lifecycle,
         versionCount: 3,
-        head: { ...definition().lifecycle.head, versionId: "version-3", version: "3.0.0" }
+        head: { ...managementDefinition.lifecycle.head, versionId: "version-3", version: "3.0.0" }
       }
     })
   }));
@@ -1219,6 +1752,11 @@ async function mockActivityDependencyExplorer(page: Page) {
     status: 200,
     contentType: "application/json",
     body: JSON.stringify(pageOf(versions))
+  }));
+  await page.route("**/design/activities/versions/version-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(sourceVersionDetail(options.sourceOwned))
   }));
   await page.route(/\/design\/activities\/versions\/(version-[123])\/dependencies\?.*/, async route => {
     const url = route.request().url();
@@ -1304,12 +1842,14 @@ async function mockActivityFork(page: Page, outcome: "success" | "unsupported" |
       { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
       { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
       { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+      { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
       { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
       { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
       { rel: "activity-definition-fork-status", href: "design/activities/forks/{idempotencyKey}", templated: true }
     ] }] })
   }));
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(source) }));
+  await page.route("**/design/activities/versions/version-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sourceVersionDetail(true)) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserAuthoringCapabilities()) }));
   await page.route("**/design/activities/definitions/definition-1/fork-previews", async route => {
     previewRequests.push(route.request().postDataJSON());
@@ -1749,13 +2289,18 @@ async function mockReusableBoundaryJourney(page: Page) {
     draftWrites: number;
     draftReads: number;
     submittedRoot: unknown;
+    boundaryLayoutReads: number;
+    descendantReads: number;
+    boundarySnapshotReads: number;
   } = {
     dispatchWrites: 0,
     draftWrites: 0,
     draftReads: 0,
-    submittedRoot: null
+    submittedRoot: null,
+    boundaryLayoutReads: 0,
+    descendantReads: 0,
+    boundarySnapshotReads: 0
   };
-  let boundarySnapshotReads = 0;
   let workflowDraft = {
     id: "workflow-draft-1",
     definitionId: "workflow-definition-1",
@@ -1908,6 +2453,7 @@ async function mockReusableBoundaryJourney(page: Page) {
     body: JSON.stringify(nestedBoundaryInspection())
   }));
   await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/boundary-execution-1\/descendants\?/, route => {
+    state.descendantReads += 1;
     const url = new URL(route.request().url());
     const cursor = url.searchParams.get("cursor");
     expect(url.searchParams.get("limit")).toBe("100");
@@ -1933,8 +2479,8 @@ async function mockReusableBoundaryJourney(page: Page) {
       });
     }
 
-    boundarySnapshotReads += 1;
-    const watermark = boundarySnapshotReads === 1 ? 5 : boundarySnapshotReads === 2 ? 6 : 7;
+    state.boundarySnapshotReads += 1;
+    const watermark = state.boundarySnapshotReads === 1 ? 5 : state.boundarySnapshotReads === 2 ? 6 : 7;
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -1974,6 +2520,16 @@ async function mockReusableBoundaryJourney(page: Page) {
             incidentCount: 1
           },
           {
+            ...hierarchyBrowserItem(
+              "long-activity-execution-1",
+              "long-node",
+              "Elsa.Activities.Test.LongUnusuallyLongActivityNameWithManyWordsAndCompoundSegments",
+              4
+            ),
+            bookmarkCount: 1234567890,
+            incidentCount: 987654321
+          },
+          {
             ...hierarchyBrowserItem("loop-execution-1", "removed-loop", "Contoso.RemovedActivity", 4),
             iterationId: "loop-7"
           },
@@ -1990,34 +2546,37 @@ async function mockReusableBoundaryJourney(page: Page) {
       })
     });
   });
-  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({
-      workflowExecutionId: "workflow-execution-1",
-      activityExecutionId: "boundary-execution-1",
-      artifactId: "workflow-artifact-1",
-      sourceReferenceId: "workflow-source-1",
-      selection: "ExecutedReference",
-      boundaryOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
-      templateHash: "sha256:invoice-v2",
-      nodes: [{
-        templateNodeId: "template-write",
-        authoredActivityId: "write",
-        executableNodeId: "invoice-write",
-        x: 120,
-        y: 80,
-        hasPinnedGeometry: true
-      }],
-      connections: [],
-      nestedBoundaries: [{
-        activityExecutionId: "nested-boundary-execution-1",
-        executableNodeId: "nested-boundary",
-        templateHash: "sha256:nested-v1",
-        layoutAvailable: true
-      }]
-    })
-  }));
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => {
+    state.boundaryLayoutReads += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        workflowExecutionId: "workflow-execution-1",
+        activityExecutionId: "boundary-execution-1",
+        artifactId: "workflow-artifact-1",
+        sourceReferenceId: "workflow-source-1",
+        selection: "ExecutedReference",
+        boundaryOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
+        templateHash: "sha256:invoice-v2",
+        nodes: [{
+          templateNodeId: "template-write",
+          authoredActivityId: "write",
+          executableNodeId: "invoice-write",
+          x: 120,
+          y: 80,
+          hasPinnedGeometry: true
+        }],
+        connections: [],
+        nestedBoundaries: [{
+          activityExecutionId: "nested-boundary-execution-1",
+          executableNodeId: "nested-boundary",
+          templateHash: "sha256:nested-v1",
+          layoutAvailable: true
+        }]
+      })
+    });
+  });
   await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/nested-boundary-execution-1\/descendants\?limit=100&include=outcomes%2Cbookmarks%2Cincidents$/, route => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -2181,7 +2740,7 @@ function descendantInspection() {
       incidentId: "incident-attempt-2",
       severity: "Warning",
       status: "Observed",
-      resolutionAction: "Cleanup",
+      resolutionOutcome: { actionKind: "Cleanup", metadata: {} },
       failureType: "Cancellation",
       message: "Cancellation cleanup is still running.",
       createdAt: "2026-07-17T10:00:02Z",
@@ -2240,7 +2799,7 @@ function faultedAttemptInspection() {
       incidentId: "incident-attempt-1",
       severity: "Error",
       status: "Blocking",
-      resolutionAction: "Retry",
+      resolutionOutcome: { actionKind: "Retry", metadata: {} },
       failureType: "Fault",
       message: "Original fault remains inspectable after retry.",
       createdAt: "2026-07-17T10:00:01Z",
@@ -2441,33 +3000,35 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
   };
 }
 
-async function createBrowserActivity(page: Page) {
-  await page.goto("/?mode=activity-definitions");
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+async function createBrowserActivity(page: Page, theme = "light") {
+  await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();
   await expectSavedRevision(page, 1, 15_000);
-  await openDraftDetails(page);
+  await openAdvancedDetails(page);
 }
 
-// #482 made "Draft details & publication" collapse by default in the graph designer view, hiding the
-// lifecycle and publication controls. Tests that drive those controls open the section first; before
-// that change it was always expanded.
-async function openDraftDetails(page: Page) {
-  const details = page.locator("details.ad-draft-lifecycle");
+async function openAdvancedDetails(page: Page) {
+  const details = page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first();
+  await expect(details).toBeVisible();
   if (await details.evaluate(element => (element as HTMLDetailsElement).open)) return;
   await details.locator("summary").click();
   await expect(details).toHaveJSProperty("open", true);
 }
 
-// The draft header chip and the "Draft details & publication" status block both render the same
-// "Saved revision N" copy, so a bare getByText is a strict-mode violation. The chip is the canonical
-// always-visible save signal, so assert against it directly.
 async function expectSavedRevision(page: Page, revision: number, timeout = 15_000) {
-  // Autosave is a real round-trip through the mocked API, so the chip settles well after the action
-  // that triggered it; the default expect timeout is too tight under a loaded parallel run.
-  await expect(page.locator(".ad-save-chip")).toHaveText(`Saved revision ${revision}`, { timeout });
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout });
+  const details = page.locator("details.ad-authoring-advanced");
+  const wasOpen = await details.evaluate(element => (element as HTMLDetailsElement).open);
+  if (!wasOpen) await openAdvancedDetails(page);
+  const savedRevision = page.locator(".ad-authoring-identity dt").filter({ hasText: "Saved revision" }).locator("..").locator("dd");
+  await expect(savedRevision).toHaveText(String(revision), { timeout });
+  if (!wasOpen) {
+    await details.locator("summary").click();
+    await expect(details).toHaveJSProperty("open", false);
+  }
 }
 
 async function selectSequenceComposition(page: Page) {
@@ -2479,8 +3040,8 @@ async function addPaletteActivity(page: Page, name: string) {
   await page.getByRole("treeitem").filter({ hasText: name }).click();
 }
 
-async function selectGraphNode(page: Page, name: string) {
-  await page.locator(".react-flow__node").filter({ hasText: name }).dispatchEvent("click");
+async function selectSequenceStep(page: Page, name: string) {
+  await page.locator(".wf-sequence-step").filter({ hasText: name }).click();
 }
 
 function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
@@ -2488,7 +3049,26 @@ function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
 }
 
 function authoringDraft(draftId: string, revision: number, payload: unknown) {
-  return { draftId, definitionId: "activity-def-browser", tenantId: "browser-tenant", revision, sourceVersionId: null, status: "active", contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] }, provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload }, layout: [], validation: null, createdAt: "2026-07-17T10:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null };
+  return {
+    draftId,
+    definitionId: "activity-def-browser",
+    tenantId: "browser-tenant",
+    revision,
+    sourceVersionId: null as string | null,
+    status: "active",
+    contract: {
+      contractSchemaVersion: "1",
+      inputs: [] as ReturnType<typeof browserContractInput>[],
+      outputs: [] as unknown[],
+      outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
+    },
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload },
+    layout: [] as unknown[],
+    validation: null,
+    createdAt: "2026-07-17T10:00:00Z",
+    updatedAt: "2026-07-17T10:00:00Z",
+    presentationLabel: null as string | null
+  };
 }
 
 function browserContractInput() {
@@ -2504,7 +3084,7 @@ function browserContractInput() {
     type: { alias: "String", collectionKind: "Single" },
     isRequired: false,
     isNullable: true,
-    default: null,
+    default: null as { syntax: string; value: string } | null,
     storageDriverKey: "elsa.json",
     durability: "Required"
   };
@@ -2559,3 +3139,72 @@ function browserActivityTestRun(
 
 function initialGraphPayload() { return { rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null }, variables: [], outputMappings: [] }; }
 function catalogActivity(activityVersionId: string, displayName: string) { return { activityVersionId, activityTypeKey: `Elsa.${displayName.replaceAll(" ", "")}`, version: "1.0.0", category: "Primitives", displayName, description: null, executionType: "sync", inputs: [], outputs: [], designFacets: [], available: true, authoringTemplate: { nodeId: "template", activityVersionId, inputs: [], outputs: [], structure: null } }; }
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
+  test(`compact Activity Definitions disclose details without expanding the row (${theme}, ${width})`, async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await mockActivityDefinitions(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator", exact: true });
+    const bounds = (await row.boundingBox())!;
+    expect(bounds.height).toBeLessThanOrEqual(64);
+    await expect(row.getByText("Finance", { exact: true })).toHaveCount(0);
+    await expect(row.getByText("Evaluates invoice policy.", { exact: true })).toHaveCount(0);
+    await row.getByRole("button", { name: "Copy Definition ID", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("definition-1");
+    const trigger = row.getByRole("button", { name: "Identifiers for Invoice evaluator", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Activity Definition identifiers for Invoice evaluator", exact: true });
+    await expect(dialog).toContainText("Category: Finance");
+    await expect(dialog).toContainText("Evaluates invoice policy.");
+    await expect(dialog).toContainText("Contoso.InvoiceEvaluator");
+    expect((await row.boundingBox())!.height).toBe(bounds.height);
+    await page.screenshot({ path: `/tmp/clean-activities-${theme}-${width}.png` });
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+    await expect(page).not.toHaveURL(/definition=/);
+  });
+}
+
+test("published state stays inside its column regardless of stylesheet order", async ({ page }) => {
+  const current = definition();
+  await mockActivityDefinitions(page, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([{
+    ...current, definition: { ...current.definition, recommendedVersionId: null }, lifecycle: { ...current.lifecycle, recommendation: null }
+  }])) }));
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/?mode=activity-definitions");
+  const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator", exact: true });
+  await expect(row).toBeVisible();
+  // Lazy routes can load shared styles in either order; the compact table must work in both.
+  await page.evaluate(() => {
+    const style = document.querySelector('style[data-vite-dev-id$="/cleanListTables.css"]');
+    if (!style) throw new Error("Compact table stylesheet was not loaded");
+    document.head.appendChild(style);
+  });
+  await row.locator('[data-label="Updated"]').scrollIntoViewIfNeeded();
+  const state = row.locator('[data-label="State"]');
+  const stateBox = (await state.boundingBox())!;
+  const updatedBox = (await row.locator('[data-label="Updated"]').boundingBox())!;
+  const noteBox = (await state.getByText("No recommended version", { exact: true }).boundingBox())!;
+  expect(noteBox.x + noteBox.width).toBeLessThanOrEqual(stateBox.x + stateBox.width + 1);
+  expect(noteBox.x + noteBox.width).toBeLessThan(updatedBox.x);
+  expect((await row.boundingBox())!.height).toBeLessThanOrEqual(64);
+});
+
+for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
+  test(`Activity collection disclosure controls match adjacent controls at ${width}px ${theme}`, async ({ page }, testInfo) => {
+    await mockActivityDefinitions(page, route => route.fulfill({ json: pageOf([]) }));
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const tools = page.locator(".ad-tools-disclosure > summary");
+    const advanced = page.locator(".ad-advanced-filters > summary");
+    expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);
+    expect((await advanced.boundingBox())!.height).toBe((await page.getByRole("searchbox", { name: "Search", exact: true }).locator("..").boundingBox())!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("activity-collection.png"), fullPage: true });
+  });
+}

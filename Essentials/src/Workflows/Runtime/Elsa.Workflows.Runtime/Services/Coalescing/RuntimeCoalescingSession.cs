@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
@@ -28,7 +29,15 @@ public sealed class RuntimeCoalescingSession
     private readonly List<string> _activeFusedScheduleAnchorOrder = [];
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
+    // Overlay claims whose durable copy this drain lost; every later transition through them is refused as stale.
+    private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _lostOverlayClaims =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, DateTimeOffset?> _durableVisibility = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PendingRelease> _pendingReleases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _durablyConsumedWorkItemIds = new(StringComparer.Ordinal);
+    private readonly TimeProvider _timeProvider;
     private bool _queueSeeded;
+    private bool _durableSchedulerClaimBoundaryRequested;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
     private readonly HashSet<string> _segmentActivityIds = new(StringComparer.Ordinal);
@@ -39,12 +48,16 @@ public sealed class RuntimeCoalescingSession
     private readonly HashSet<string> _activityTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
+    private RuntimeCoalescingOrderedView<ActivityExecutionState>? _orderedActivities;
+    private Dictionary<string, RuntimeCoalescingOrderedView<ActivityExecutionState>>? _activitiesByParent;
+    private RuntimeCoalescingOrderedView<DurableValueState>? _orderedDurableValues;
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyPersistedOutboxIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _immediateSchedulerOutboxIds = new(StringComparer.Ordinal);
     private bool _mayReceiveDurableSchedulerDeliveries;
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
     private readonly RuntimeCoalescingDurableValuePageMemo? _durableValuePageMemo;
@@ -63,6 +76,17 @@ public sealed class RuntimeCoalescingSession
         PersistenceModeOptions options,
         IRuntimePostCommitOutboxStore? innerOutboxStore = null,
         ResolvedPersistenceMode? mode = null)
+        : this(workflowExecutionId, innerQueue, options, innerOutboxStore, mode, TimeProvider.System)
+    {
+    }
+
+    internal RuntimeCoalescingSession(
+        string workflowExecutionId,
+        IWorkflowSchedulerWorkQueue innerQueue,
+        PersistenceModeOptions options,
+        IRuntimePostCommitOutboxStore? innerOutboxStore,
+        ResolvedPersistenceMode? mode,
+        TimeProvider timeProvider)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(innerQueue);
@@ -77,6 +101,7 @@ public sealed class RuntimeCoalescingSession
 
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
+        _timeProvider = timeProvider;
         _innerOutboxStore = innerOutboxStore;
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
@@ -96,6 +121,10 @@ public sealed class RuntimeCoalescingSession
     }
 
     public string WorkflowExecutionId { get; }
+
+    // The overlay records a delay only when its flush can persist that delay on the same item, wherever it then sits.
+    internal bool SupportsDeferredOverlayRelease =>
+        _innerQueue.SupportsClaimTransitions && _innerQueue is IWorkflowSchedulerWorkVisibilityReader and IWorkflowSchedulerWorkDeferral;
 
     /// <summary>The run's mode.</summary>
     public PersistenceMode Mode { get; }
@@ -125,6 +154,23 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
+    internal string? PreparedQuiescenceFlushCommitId { get; private set; }
+
+    internal void PrepareQuiescenceFlush(string commitId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        if (PreparedQuiescenceFlushCommitId is { } prepared && prepared != commitId)
+            throw new InvalidOperationException("Resolve the prepared quiescence flush before preparing another.");
+        PreparedQuiescenceFlushCommitId = commitId;
+    }
+
+    internal void EnsurePreparedFlushAllows(RuntimeCheckpointCommit commit)
+    {
+        if (!AppliesTo(commit.WorkflowExecutionId) || PreparedQuiescenceFlushCommitId is not { } prepared) return;
+        if (commit.CommitId != prepared || !commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
+            throw new InvalidOperationException("Resolve or abort the prepared quiescence flush before another checkpoint decision.");
+    }
+
     /// <summary>How many distinct activity executions the current segment's buffered checkpoints touched.</summary>
     public int ActivityCount => _segmentActivityIds.Count;
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
@@ -132,6 +178,7 @@ public sealed class RuntimeCoalescingSession
     public void Deactivate()
     {
         IsActive = false;
+        PreparedQuiescenceFlushCommitId = null;
         DisableDurableValuePageReuse();
     }
 
@@ -149,7 +196,18 @@ public sealed class RuntimeCoalescingSession
     public bool OwnsOverlayClaim(RuntimeSchedulerWorkClaim claim)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        return _overlayClaims.ContainsKey(claim);
+        return _overlayClaims.ContainsKey(claim) || _lostOverlayClaims.ContainsKey(claim);
+    }
+
+    /// <summary>Requests a checkpoint flush before the next durable scheduler claim is acquired.</summary>
+    internal void RequestDurableSchedulerClaimBoundary() => _durableSchedulerClaimBoundaryRequested = true;
+
+    /// <summary>Consumes the one-shot request made when the overlay FIFO head requires a durable claim.</summary>
+    internal bool ConsumeDurableSchedulerClaimBoundaryRequest()
+    {
+        var requested = _durableSchedulerClaimBoundaryRequested;
+        _durableSchedulerClaimBoundaryRequested = false;
+        return requested;
     }
 
     // ---- Buffering -------------------------------------------------------------------------------------------------
@@ -249,8 +307,9 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// Records that a mid-drain flush durably persisted these outbox items while the session stays active. Their
-    /// authoritative lifecycle continues in the overlay; <see cref="ReconcileDurablyPersistedOutboxAsync"/> writes the
-    /// overlay outcome back to the durable store at the next flush so no durable <c>Pending</c> residue survives the
+    /// scheduler continuation lifecycle continues in the overlay; external delivery uses durable claims directly.
+    /// <see cref="ReconcileDurablyPersistedOutboxAsync"/> writes completed overlay outcomes at the next flush so no
+    /// durable <c>Pending</c> residue survives the
     /// drain and gets redelivered as a duplicate by a later sweep.
     /// </summary>
     public void MarkOutboxDurablyPersisted(IEnumerable<RuntimeStateChange<RuntimePostCommitOutboxItem>> changes)
@@ -266,6 +325,10 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Whether a mid-drain flush already durably persisted this outbox item.</summary>
     public bool IsOutboxDurablyPersisted(string outboxItemId) => _durablyPersistedOutboxIds.Contains(outboxItemId);
+
+    internal IReadOnlyCollection<string> DurablyPersistedOutboxKinds() =>
+        _outboxOrder.Where(_durablyPersistedOutboxIds.Contains)
+            .Select(id => _outboxItems[id].Intent.Kind).Distinct(StringComparer.Ordinal).ToArray();
 
     internal void RegisterFusedScheduleAnchor(RuntimeSchedulerWorkItem workItem)
     {
@@ -289,7 +352,7 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// Persists original fused Schedule items before a continuing checkpoint can advance durable runtime state.
-    /// Registration itself is memory-only; this method is called only at cap-fold and continuing attempt boundaries.
+    /// Registration itself is memory-only; every continuing boundary calls this before its physical commit.
     /// </summary>
     internal async ValueTask EnsureActiveFusedScheduleAnchorsAsync(CancellationToken cancellationToken)
     {
@@ -376,6 +439,16 @@ public sealed class RuntimeCoalescingSession
 
     private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
     {
+        // Only the session-owned delta is indexed. Durable pages still pass through their existing
+        // read/authorization path, and every overlay mutation (including cap flushes) drops the view.
+        if (changes.ActivityExecutions.Count > 0)
+        {
+            _orderedActivities = null;
+            _activitiesByParent = null;
+        }
+        if (changes.DurableValues.Count > 0)
+            _orderedDurableValues = null;
+
         if (changes.WorkflowExecution is { } workflowExecutionChange)
             _workflowExecution = workflowExecutionChange.State;
 
@@ -514,6 +587,23 @@ public sealed class RuntimeCoalescingSession
     /// <summary>Returns a stable snapshot of activity upserts currently visible through this session.</summary>
     public IReadOnlyCollection<ActivityExecutionState> GetActivityUpserts() => _activityUpserts.Values.ToArray();
 
+    internal ActivityExecutionState? NextActivityUpsert(string? after) =>
+        (_orderedActivities ??= new(_activityUpserts.Values, static state => state.Execution.ActivityExecutionId)).Next(after);
+
+    internal ActivityExecutionState? NextActivityUpsertByParent(string parentId, string? after)
+    {
+        _activitiesByParent ??= _activityUpserts.Values
+            .Where(state => state.ParentActivityExecutionId is not null)
+            .GroupBy(state => state.ParentActivityExecutionId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => new RuntimeCoalescingOrderedView<ActivityExecutionState>(group, static state => state.Execution.ActivityExecutionId),
+                StringComparer.Ordinal);
+        return _activitiesByParent.GetValueOrDefault(parentId)?.Next(after);
+    }
+
+    internal DurableValueState? NextDurableValueUpsert(string? after) =>
+        (_orderedDurableValues ??= new(_durableValueUpserts.Values, static state => state.DurableValueId)).Next(after);
+
     /// <summary>Returns a stable snapshot of activity identities deleted by this session.</summary>
     public IReadOnlyCollection<string> GetActivityTombstones() => _activityTombstones.ToArray();
 
@@ -581,6 +671,22 @@ public sealed class RuntimeCoalescingSession
             .ToArray();
     }
 
+    // Only the successful committer can establish that this overlay item came from a declared immediate
+    // continuation. Its RecordedAt/AvailableAt remain unchanged for durable replay identity. A wall-clock rollback
+    // must not turn this drain's own non-delayed continuation into a timer and end the drain before its first step.
+    internal void RecordImmediateSchedulerIntents(RuntimeCheckpointCommit commit)
+    {
+        foreach (var intent in commit.PostCommitIntents)
+        {
+            if (intent.Kind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork || intent.NotBefore is not null)
+                continue;
+            var id = RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent);
+            if (_outboxItems.TryGetValue(id, out var item) && item.Status == RuntimePostCommitOutboxStatus.Pending &&
+                item.DeliveryAttemptCount == 0 && item.Intent.IsEquivalentTo(intent))
+                _immediateSchedulerOutboxIds.Add(id);
+        }
+    }
+
     private bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {
         if (item.Status is not (RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.FailedRetryable))
@@ -596,8 +702,21 @@ public sealed class RuntimeCoalescingSession
         if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, query.IntentKind))
             return false;
 
-        return (item.AvailableAt ?? DateTimeOffset.MinValue) <= query.Now;
+        return IsOwnedImmediateSchedulerIntent(item) ||
+               (item.AvailableAt ?? DateTimeOffset.MinValue) <= query.Now;
     }
+
+    private bool IsOwnedImmediateSchedulerIntent(RuntimePostCommitOutboxItem item) =>
+        item.Status == RuntimePostCommitOutboxStatus.Pending && item.DeliveryAttemptCount == 0 &&
+        _immediateSchedulerOutboxIds.Contains(item.OutboxItemId);
+
+    private RuntimePostCommitOutboxClaimRequest OverlayClaimRequest(RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxClaimRequest request) =>
+        IsOwnedImmediateSchedulerIntent(item) && item.AvailableAt is { } at && at > request.Now
+            // Evaluate only this proven non-delayed, session-owned item at its own commit timestamp. Keep the
+            // canonical item and the shared fence transition intact; explicit delays/retries never use this clock.
+            ? new(request.OwnerId, at, request.VisibilityTimeout, request.Limit, request.WorkflowExecutionId, request.IntentKind)
+            : request;
 
     public bool OwnsOutboxItem(string outboxItemId) => _outboxItems.ContainsKey(outboxItemId);
 
@@ -607,14 +726,18 @@ public sealed class RuntimeCoalescingSession
         return _outboxItems.TryGetValue(outboxItemId, out item);
     }
 
-    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request)
+    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request) =>
+        ClaimOutbox(request, _ => true);
+
+    internal IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request,
+        Func<RuntimePostCommitOutboxItem, bool> admitsOverlay)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         // Same stable causal ordering as GetDeliverableOutbox: same-tick items claim in recording order.
         var claimable = _outboxOrder
             .Select(id => _outboxItems[id])
-            .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+            .Where(item => admitsOverlay(item) && RuntimePostCommitOutboxClaimTransitions.CanClaim(item, OverlayClaimRequest(item, request)))
             .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.RecordedAt)
             .Take(request.Limit)
@@ -622,7 +745,7 @@ public sealed class RuntimeCoalescingSession
         var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
         for (var index = 0; index < claimable.Length; index++)
         {
-            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], OverlayClaimRequest(claimable[index], request));
             _outboxItems[claim.OutboxItemId] = claim.Item;
             claims[index] = claim;
         }
@@ -655,6 +778,8 @@ public sealed class RuntimeCoalescingSession
         if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
 
+        _immediateSchedulerOutboxIds.Remove(result.OutboxItemId);
+
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
         var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
                      existing.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
@@ -675,7 +800,11 @@ public sealed class RuntimeCoalescingSession
             deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
             metadata: existing.Metadata,
-            deliveryFencingToken: existing.DeliveryFencingToken);
+            deliveryFencingToken: existing.DeliveryFencingToken,
+                deliveryVisibleAfter: null,
+                stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
+                stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
+                recipientSnapshot: existing.RecipientSnapshot);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)
@@ -687,6 +816,7 @@ public sealed class RuntimeCoalescingSession
             throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found in the coalescing session.");
 
         _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        _immediateSchedulerOutboxIds.Remove(claim.OutboxItemId);
     }
 
     /// <summary>
@@ -724,6 +854,7 @@ public sealed class RuntimeCoalescingSession
         }
 
         _outboxItems[completion.Claim.OutboxItemId] = resolution.OutboxItem;
+        _immediateSchedulerOutboxIds.Remove(completion.Claim.OutboxItemId);
         if (resolution.WorkflowDispatch is { } workflowDispatch)
             _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
         if (resolution.FollowUpOutboxItem is { } followUpOutboxItem)
@@ -736,15 +867,37 @@ public sealed class RuntimeCoalescingSession
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// When the overlay was filled from the durable queue, or <see langword="null"/> before then. Work another deliverer
+    /// queued durably after this time may be missing from the overlay (#3661).
+    /// </summary>
+    internal DateTimeOffset? QueueSeededAt { get; private set; }
+
     /// <summary>Copies the durable inner queue's current items for this workflow execution into the overlay once.</summary>
     public async ValueTask EnsureQueueSeededAsync(CancellationToken cancellationToken)
     {
         if (_queueSeeded)
             return;
 
+        // Taken before the read: a delivery that finished earlier queued its work before it, so the read shows that work.
+        QueueSeededAt = _timeProvider.GetUtcNow();
         _durableWorkItemIds.Clear();
-        var innerItems = await _innerQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
-        foreach (var item in innerItems)
+        if (SupportsDeferredOverlayRelease)
+        {
+            var reader = (IWorkflowSchedulerWorkVisibilityReader)_innerQueue;
+            foreach (var entry in await ReadVisibilityAsync(reader, cancellationToken))
+            {
+                await SeedAsync(entry.Item);
+                _durableVisibility.Add(entry.Item.WorkItemId, entry.VisibleAfter);
+            }
+        }
+        else
+        {
+            foreach (var item in await _innerQueue.ListAllAsync(WorkflowExecutionId, cancellationToken))
+                await SeedAsync(item);
+        }
+
+        async ValueTask SeedAsync(RuntimeSchedulerWorkItem item)
         {
             await _overlayQueue.EnqueueAsync(item, cancellationToken);
             _durableWorkItemIds.Add(item.WorkItemId);
@@ -779,6 +932,13 @@ public sealed class RuntimeCoalescingSession
         CancellationToken cancellationToken)
     {
         await EnsureQueueSeededAsync(cancellationToken);
+        // Item-only queue pages omit active-claim and retry visibility. Preserve it from the same provider read
+        // that seeded the overlay; a new drain must not turn a delayed durable resume into immediately runnable work.
+        var heads = await _overlayQueue.ListNextWorkItemsAsync([WorkflowExecutionId], cancellationToken);
+        var head = heads.GetValueOrDefault(WorkflowExecutionId);
+        if (head is not null && IsDurablyHidden(head.WorkItemId, request.Now))
+            return null;
+
         var claim = await _overlayQueue.ClaimAsync(request, cancellationToken);
         if (claim is not null)
             _overlayClaims.TryAdd(claim, 0);
@@ -791,6 +951,8 @@ public sealed class RuntimeCoalescingSession
         TimeSpan visibilityTimeout,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         if (result.Claim is not null)
@@ -802,8 +964,19 @@ public sealed class RuntimeCoalescingSession
         RuntimeSchedulerWorkClaim claim,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
+        if (result.Succeeded && !IsActive && _durableWorkItemIds.Contains(claim.Item.WorkItemId))
+        {
+            // The final decision already passed the execution fence. A retaining boundary may have ended
+            // coalescing before that decision, so no later active flush will acknowledge this durable copy.
+            // As in AdvanceInnerQueueAsync, clean only its exact accepted identity, never a sibling/head.
+            await _innerQueue.DeleteAsync(WorkflowExecutionId, claim.Item.WorkItemId, cancellationToken);
+            _durableWorkItemIds.Remove(claim.Item.WorkItemId);
+            _durablyConsumedWorkItemIds.Add(claim.Item.WorkItemId);
+        }
         return result;
     }
 
@@ -812,9 +985,71 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
+        if (_lostOverlayClaims.ContainsKey(claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+        var deferred = SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind);
+        if (deferred && _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        // A handler can cross a durable boundary before its release. If that deactivated the overlay, its source must
+        // still exist and no later flush persists the release, so persist it now, before the overlay drops the claim.
+        // A durable copy that is gone, or that another owner holds under a live claim, means this drain lost the item:
+        // the claim is lost, as on a durable queue. Fence the overlay claim too, so a fallback acknowledgement through
+        // it is refused rather than deleting the durable copy out from under its holder, and nothing is recorded.
+        if (deferred && !IsActive && _overlayClaims.ContainsKey(claim))
+        {
+            if (await TryPersistReleaseAsync(new PendingRelease(claim, visibleAt), cancellationToken) is not null)
+            {
+                _lostOverlayClaims.TryAdd(claim, 0);
+                _overlayClaims.TryRemove(claim, out _);
+                return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+            }
+            var released = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+            _overlayClaims.TryRemove(claim, out _);
+            return released;
+        }
+
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
-        _overlayClaims.TryRemove(claim, out _);
+        var owned = _overlayClaims.TryRemove(claim, out _);
+        if (result.Succeeded && owned && deferred)
+            _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt);
         return result;
+    }
+
+    private RuntimeSchedulerWorkItem? _pumpedWorkItem;
+    private bool _pumpedEffectCommitted;
+
+    internal PumpedDispatchScope BeginPumpedDispatch(RuntimeSchedulerWorkItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!AppliesTo(item.WorkflowExecutionId))
+            throw new InvalidOperationException("An inline dispatch must belong to its active folding session.");
+        var scope = new PumpedDispatchScope(this, _pumpedWorkItem, _pumpedEffectCommitted);
+        _pumpedWorkItem = item;
+        _pumpedEffectCommitted = false;
+        return scope;
+    }
+
+    internal void RecordCommittedPumpedEffect(RuntimeCheckpointCommit commit)
+    {
+        if (_pumpedWorkItem is not { CommandKind: WorkflowExecutionCommandKind.CompleteActivity } current ||
+            commit.ExpectedFence is null || commit.RetainSchedulerWork ||
+            commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed ||
+            commit.WorkflowExecutionId != WorkflowExecutionId ||
+            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.SchedulerWorkItemId, out var sourceId) || sourceId != current.WorkItemId ||
+            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.CommandId, out var commandId) || commandId != current.CommandId)
+            return;
+        _pumpedEffectCommitted = true;
+    }
+
+    // A typed value scope avoids an allocation for each inline scheduler dispatch.
+    internal readonly struct PumpedDispatchScope(RuntimeCoalescingSession owner, RuntimeSchedulerWorkItem? previous, bool previousCommitted) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._pumpedWorkItem = previous;
+            owner._pumpedEffectCommitted = previousCommitted;
+        }
     }
 
     // ---- Inline fused pump ---------------------------------------------------------------------------
@@ -825,7 +1060,8 @@ public sealed class RuntimeCoalescingSession
     /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
     /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
     /// and then removes it with <see cref="ConsumePumpedOverlayItemAsync"/>. An item still in dispatch at a mid-drain
-    /// flush counts as remaining continuation (the durable crash backstop) exactly like any unclaimed overlay item.
+    /// flush remains a recovery backstop until its exact non-retaining outcome has committed. An item whose durable delay
+    /// has not ended stops the pump, as it would stop the drain loop's claim: nothing at or behind it runs inline early.
     /// </summary>
     public async ValueTask<RuntimeSchedulerWorkItem?> PeekNextPumpableOverlayItemAsync(CancellationToken cancellationToken)
     {
@@ -833,8 +1069,14 @@ public sealed class RuntimeCoalescingSession
         var inFlight = _overlayClaims.Keys
             .Select(claim => claim.Item.WorkItemId)
             .ToHashSet(StringComparer.Ordinal);
-        return await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        // A flush delays a released item by identity, so its delay can sit behind work another writer queued first (#3690).
+        var next = await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+        return next is not null && IsDurablyHidden(next.WorkItemId, _timeProvider.GetUtcNow()) ? null : next;
     }
+
+    // The visibility the seeding provider read reported; the overlay's item-only pages omit it.
+    private bool IsDurablyHidden(string workItemId, DateTimeOffset now) =>
+        _durableVisibility.TryGetValue(workItemId, out var visibleAfter) && visibleAfter > now;
 
     /// <summary>
     /// Removes an inline-pumped item from the overlay after its dispatch completed. Flush accounting
@@ -857,10 +1099,11 @@ public sealed class RuntimeCoalescingSession
     public RuntimeCheckpointStateChangeSet FoldBufferedStateChangesWith(RuntimeCheckpointStateChangeSet trailing)
     {
         ArgumentNullException.ThrowIfNull(trailing);
-        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]));
+        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]), trailing.WorkflowDispatches);
     }
 
-    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded)
+    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded,
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>? trailing = null)
     {
         if (_workflowDispatchUpserts.Count == 0)
             return folded;
@@ -874,6 +1117,11 @@ public sealed class RuntimeCoalescingSession
                 record,
                 new Dictionary<string, string>());
         }
+
+        // A trailing checkpoint is later than both the buffered checkpoints and their delivery overlay.
+        if (trailing is not null)
+            foreach (var change in trailing)
+                merged[change.StateId] = change;
 
         return folded.WithWorkflowDispatches(merged.Values.ToArray());
     }
@@ -894,6 +1142,9 @@ public sealed class RuntimeCoalescingSession
     {
         _bufferedChangeSets.Clear();
         _segmentActivityIds.Clear();
+        // These records have committed. Later delivery may advance them through another scope, so a new
+        // segment must not reapply the preceding segment's snapshot over the authoritative durable lifecycle.
+        _workflowDispatchUpserts.Clear();
     }
 
     /// <summary>
@@ -924,7 +1175,7 @@ public sealed class RuntimeCoalescingSession
             return;
 
         IReadOnlyCollection<RuntimeSchedulerWorkItem> remaining =
-            await _overlayQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
+            (await ReadVisibilityAsync(_overlayQueue, cancellationToken)).Select(entry => entry.Item).ToArray();
 
         if (consumeInFlightClaims && _overlayClaims.Count > 0)
         {
@@ -933,6 +1184,12 @@ public sealed class RuntimeCoalescingSession
                 StringComparer.Ordinal);
             remaining = remaining.Where(item => !inFlight.Contains(item.WorkItemId)).ToArray();
         }
+
+        // A pumped completion is unclaimed, but its exact non-retaining outcome may already be durable.
+        // Persisting that same in-flight item again adds a redundant crash backstop beside its committed continuation.
+        // Attempt claims and unmatched/nested checkpoints cannot establish this acknowledgement.
+        if (_pumpedEffectCommitted && _pumpedWorkItem is { } accepted)
+            remaining = remaining.Where(item => item.WorkItemId != accepted.WorkItemId).ToArray();
 
         var remainingIds = new HashSet<string>(remaining.Select(item => item.WorkItemId), StringComparer.Ordinal);
         if (preserveActiveFusedScheduleAnchors)
@@ -973,8 +1230,63 @@ public sealed class RuntimeCoalescingSession
             // idempotent; unlike Dequeue, either result leaves every other queued identity untouched.
             await _innerQueue.DeleteAsync(WorkflowExecutionId, workItemId, cancellationToken);
             _durableWorkItemIds.Remove(workItemId);
+            _durablyConsumedWorkItemIds.Add(workItemId);
+        }
+
+        await PersistPendingReleasesAsync(cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<RuntimeSchedulerWorkVisibility>> ReadVisibilityAsync(
+        IWorkflowSchedulerWorkVisibilityReader reader,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<RuntimeSchedulerWorkVisibility>();
+        string? continuation = null;
+        do
+        {
+            var page = await reader.ListWithVisibilityAsync(
+                new RuntimeSchedulerWorkQuery(WorkflowExecutionId, continuationToken: continuation), cancellationToken);
+            entries.AddRange(page.Items);
+            continuation = page.NextContinuationToken;
+        } while (continuation is not null);
+        return entries;
+    }
+
+    private async ValueTask PersistPendingReleasesAsync(CancellationToken cancellationToken)
+    {
+        foreach (var (workItemId, pending) in _pendingReleases.ToArray())
+        {
+            // A refusal means this drain lost the item: its durable copy is gone or held under another owner's live
+            // claim. The flush fails as it does when any other tracked work goes missing, although its commit may have
+            // landed; whoever holds the durable copy decides when the item runs (#3700).
+            if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
+                throw new InvalidOperationException(failure);
+            _pendingReleases.Remove(workItemId);
         }
     }
+
+    // Returns null once the release is durable, else why it was refused.
+    private async ValueTask<string?> TryPersistReleaseAsync(PendingRelease pending, CancellationToken cancellationToken)
+    {
+        // The execution lease still owns this drain, but not the durable head: another writer can enqueue durably while
+        // the overlay holds the segment, ahead of a continuation the flush persists only now (#3690). Delay the released
+        // item by its identity, never by position, so no other queued item receives its delay. FIFO still decides what
+        // runs: work ahead of it runs first, and once it is the head nothing behind it overtakes it before it is due.
+        // SupportsDeferredOverlayRelease keeps a queue without the capability from recording a release to persist.
+        if (_innerQueue is not IWorkflowSchedulerWorkDeferral deferral)
+        {
+            throw new InvalidOperationException(
+                $"The durable scheduler queue does not implement {nameof(IWorkflowSchedulerWorkDeferral)}, so it cannot persist a deferred release.");
+        }
+
+        var deferred = await deferral.DeferAsync(
+            WorkflowExecutionId, pending.Claim.Item.WorkItemId, _timeProvider.GetUtcNow(), pending.VisibleAt, cancellationToken);
+        return deferred
+            ? null
+            : "The deferred scheduler work is no longer queued durably, or another owner holds its durable claim.";
+    }
+
+    private sealed record PendingRelease(RuntimeSchedulerWorkClaim Claim, DateTimeOffset VisibleAt);
 
     private HashSet<string> CreateDurableWorkItemIdSet()
     {

@@ -13,6 +13,22 @@ afterEach(() => {
 });
 
 describe("secret picker", () => {
+  it("matches existing references case-insensitively and preserves stored spelling when selected", async () => {
+    const onChange = vi.fn();
+    const response = pickerResponse();
+    response.items[0].name = "Payments.Api";
+    const { container } = render({
+      value: { name: "PAYMENTS.API", typeName: "text", scope: "tenant-a" },
+      onChange,
+      postJson: vi.fn(async () => response)
+    });
+    await waitFor(() => container.querySelector("select")?.value === "secret-1");
+    expect(container.textContent).not.toContain("Unavailable");
+    expect(onChange).not.toHaveBeenCalled();
+    container.querySelector("select")!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onChange).toHaveBeenCalledWith({ name: "Payments.Api", typeName: "text", scope: "tenant-a" });
+  });
+
   it("renders allowlisted metadata and serializes only an opaque Secret Reference", async () => {
     const onChange = vi.fn();
     const { container } = render({ onChange, initialFocus: true });
@@ -35,6 +51,37 @@ describe("secret picker", () => {
       typeName: "text",
       scope: "tenant-a"
     });
+  });
+
+  it("filters active metadata without regard to casing and preserves legacy entries without status", async () => {
+    const secret = pickerResponse().items[0];
+    const activeItems = ["Active", "active", "ACTIVE"].map((status, index) => ({
+      ...secret,
+      id: `secret-active-${index}`,
+      name: `active-${index}`,
+      displayName: `Active ${index}`,
+      status
+    }));
+    const unavailableItems = ["Inactive", "inactive", "INACTIVE", "Revoked", "revoked", "REVOKED"]
+      .map((status, index) => ({
+        ...secret,
+        id: `secret-unavailable-${index}`,
+        name: `unavailable-${index}`,
+        displayName: `Unavailable ${index}`,
+        status
+      }));
+    const { status: _status, ...legacySecret } = secret;
+    const legacyItem = { ...legacySecret, id: "secret-legacy", name: "legacy", displayName: "Legacy" };
+    const { container } = render({
+      postJson: vi.fn(async () => ({ items: [...activeItems, ...unavailableItems, legacyItem] }))
+    });
+
+    await waitFor(() => !container.querySelector("select")?.disabled);
+
+    const options = Array.from(container.querySelector("select")!.options)
+      .map(option => option.value)
+      .filter(Boolean);
+    expect(options).toEqual(["secret-active-0", "secret-active-1", "secret-active-2", "secret-legacy"]);
   });
 
   it("latches a focus request until asynchronous metadata makes the picker usable", async () => {

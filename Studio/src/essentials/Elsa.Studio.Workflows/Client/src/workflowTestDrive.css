@@ -1,0 +1,192 @@
+.wf-test-drive-panel {
+  display: grid;
+  gap: .85rem;
+  min-width: 0;
+  padding: 1rem;
+  color: var(--studio-text);
+}
+
+.wf-test-drive-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.wf-test-drive-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.wf-test-drive-heading p,
+.wf-test-drive-environment,
+.wf-test-drive-description,
+.wf-test-drive-schedule p {
+  margin: .25rem 0 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  line-height: 1.45;
+}
+
+.wf-test-drive-panel > form {
+  display: grid;
+  gap: .85rem;
+}
+
+.wf-test-drive-panel button {
+  min-height: 2.25rem;
+  padding: 0 .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wf-test-drive-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wf-test-drive-actions button {
+  border-color: color-mix(in srgb, var(--studio-accent) 50%, var(--studio-border));
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+  font-weight: 650;
+}
+
+.wf-test-drive-panel button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.wf-test-drive-stale,
+.wf-test-drive-error {
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 45%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 8%, var(--studio-surface));
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+  padding: .55rem .7rem;
+}
+
+.wf-test-drive-panel .wf-test-drive-error {
+  color: var(--studio-warning);
+}
+
+.wf-test-drive-diagnostics {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+  padding: .55rem .7rem .55rem 1.8rem;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 38%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 6%, var(--studio-surface));
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+}
+
+.wf-test-drive-stimulus,
+.wf-test-drive-http,
+.wf-test-drive-event,
+.wf-test-drive-schedule {
+  display: grid;
+  gap: .7rem;
+  min-width: 0;
+}
+
+.wf-test-drive-inputs {
+  min-width: 0;
+  margin: 0;
+  padding: .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+}
+
+.wf-test-drive-inputs legend {
+  padding-inline: .3rem;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+}
+
+.wf-test-drive-event dl,
+.wf-test-drive-schedule dl,
+.wf-test-drive-exchange dl {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+}
+
+.wf-test-drive-event dl > div,
+.wf-test-drive-schedule dl > div,
+.wf-test-drive-exchange dl > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(0, 1fr);
+  gap: .5rem;
+}
+
+.wf-test-drive-event dt,
+.wf-test-drive-schedule dt,
+.wf-test-drive-exchange dt {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.wf-test-drive-event dd,
+.wf-test-drive-schedule dd,
+.wf-test-drive-exchange dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-test-drive-schedule ol {
+  margin: .35rem 0 0;
+  padding-left: 1.4rem;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.wf-test-drive-exchange {
+  display: grid;
+  gap: .5rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  padding: .75rem;
+}
+
+.wf-test-drive-exchange header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+}
+
+.wf-test-drive-exchange header span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.wf-test-drive-exchange header [data-ok="false"] {
+  color: var(--studio-warning);
+}
+
+.wf-test-drive-exchange p {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.wf-test-drive-exchange pre {
+  max-height: 18rem;
+  overflow: auto;
+  margin: .5rem 0 0;
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+  padding: .6rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: .8rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}

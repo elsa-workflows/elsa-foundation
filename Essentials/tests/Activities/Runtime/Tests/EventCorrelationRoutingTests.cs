@@ -57,7 +57,7 @@ public sealed class EventCorrelationRoutingTests
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
             EventStimulus.Hash(EventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(EventName)),
+            input: JsonSerializer.SerializeToElement(new { eventName = EventName }),
             mode: StimulusRoutingMode.ResumeOnly,
             correlationId: "order-7",
             payloadType: new ValueTypeDescriptor(
@@ -108,7 +108,7 @@ public sealed class EventCorrelationRoutingTests
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
             EventStimulus.Hash(EventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(EventName)),
+            input: JsonSerializer.SerializeToElement(new { eventName = EventName }),
             mode: StimulusRoutingMode.ResumeOnly,
             payloadType: new ValueTypeDescriptor(
                 TypeAliasConvention.CanonicalAlias(typeof(EventReceived)),

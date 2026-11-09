@@ -131,9 +131,9 @@ function toolingStatus(context: StudioExpressionEditorProps["context"]) {
   if (authoringState === "supported-empty") return "No Liquid symbols are available in this context.";
   const state = authoringState === "ready" ? context.validation?.state : authoringState;
   if (!state || state === "ready" || state === "supported-empty") return undefined;
-  if (state === "unauthorized") return "Liquid code intelligence is unavailable for your permissions.";
-  if (state === "incompatible") return "Liquid code intelligence is incompatible with this Studio version.";
-  return "Liquid code intelligence is unavailable. Syntax highlighting remains active.";
+  if (state === "unauthorized") return "Liquid IntelliSense is unavailable for your permissions.";
+  if (state === "incompatible") return "Liquid IntelliSense requires a compatible server tooling version.";
+  return "Liquid IntelliSense is unavailable. Syntax highlighting remains active.";
 }
 
 function formatValue(value: unknown) {

@@ -1,3 +1,4 @@
+using Elsa3.Activities.Design.Import.Services;
 using System.Text.Json;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -75,19 +76,20 @@ public sealed class Elsa3CollectionLoweringTests : IAsyncDisposable
     [Fact]
     public async Task A_reusable_workflow_with_an_output_is_a_schema_two_activity_whose_wrapper_exposes_the_output()
     {
+        // The body declares the output without setting it: SetOutput would be refused (spec 246 D-7).
         var reusable = ReusableActivityImportFixtures.Workflow(
             "child", "child-v1", 1, reusable: true,
-            Sequence("root", Activity("set", "Elsa.SetOutput", ("outputName", Literal("CustomOutput")), ("outputValue", Literal("42")))));
+            Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("x")))));
         reusable.Outputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomOutput", Type = "String" }];
 
         await ApplyAsync(reusable);
 
         var mutation = _command.Mutation!;
         var activity = Assert.Single(mutation.Activities);
-        Assert.Equal("2", activity.Version.ProviderSchemaVersion);
-        var mapping = Assert.Single(activity.Version.DescriptorPayload.GetProperty("outputMappings").EnumerateArray());
-        Assert.Equal("CustomOutput", mapping.GetProperty("outputReferenceKey").GetString());
-        Assert.Equal("done", Assert.Single(activity.Version.DescriptorPayload.GetProperty("outcomeMappings").EnumerateArray()).GetProperty("boundaryOutcomeReferenceKey").GetString());
+        Assert.Equal("2", ReusableActivityImportDrafts.Draft(activity.Version, null).State.Provider.SchemaVersion);
+        var outcomeMapping = Assert.Single(activity.Version.GraphManifest.GetProperty("outcomeMappings").EnumerateArray());
+        Assert.Equal("Done", outcomeMapping.GetProperty("sourceOutcomeReferenceKey").GetString());
+        Assert.Equal("done", outcomeMapping.GetProperty("boundaryOutcomeReferenceKey").GetString());
 
         var wrapper = Assert.Single(mutation.Workflows).Version.State;
         Assert.Equal(_catalog.VersionIdOf("Elsa.Activities.Sequence.Activities.Sequence"), wrapper.RootActivity!.ActivityVersionId);
@@ -95,6 +97,20 @@ public sealed class Elsa3CollectionLoweringTests : IAsyncDisposable
         Assert.Equal(activity.Version.Id, children[0].GetProperty("activityVersionId").GetString());
         Assert.Equal("elsa.intrinsic.set-output@1", children[1].GetProperty("activityVersionId").GetString());
         Assert.Equal("CustomOutput", Assert.Single(wrapper.Outputs).ReferenceKey);
+    }
+
+    [Fact]
+    public async Task A_reusable_that_sets_its_output_is_refused_before_anything_is_written()
+    {
+        var reusable = ReusableActivityImportFixtures.Workflow(
+            "child", "child-v1", 1, reusable: true,
+            Sequence("root", Activity("set", "Elsa.SetOutput", ("outputName", Literal("CustomOutput")), ("outputValue", Literal("42")))));
+        reusable.Outputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomOutput", Type = "String" }];
+
+        var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(reusable));
+
+        Assert.Contains(refusal.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported);
+        Assert.Null(_command.Mutation);
     }
 
     [Fact]

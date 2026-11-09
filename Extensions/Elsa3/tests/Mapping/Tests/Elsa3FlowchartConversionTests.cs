@@ -148,6 +148,7 @@ public sealed class Elsa3FlowchartConversionTests
             ["Done", "fail", "succeed"],
             result.Value.BoundaryOutcomes.Select(outcome => outcome.Name).Order(StringComparer.Ordinal));
         Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+        GraphProviderProof.AssertCompiled(await GraphProviderProof.CompileAsync(catalog, result.Value));
     }
 
     [Fact]

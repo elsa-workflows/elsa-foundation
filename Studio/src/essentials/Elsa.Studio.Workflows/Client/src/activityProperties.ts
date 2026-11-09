@@ -3,6 +3,7 @@ import type {
   StudioExpressionDescriptor
 } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "./workflowTypes";
+import { isJsonTypeName } from "./jsonType";
 
 export interface ActivityExpression {
   type: string;
@@ -21,6 +22,34 @@ export interface WrappedActivityInputValue {
 
 /** The expression syntax whose value is a Secret Reference. */
 export const secretSyntax = "Secret";
+
+export interface PortableExpressionDefinitionValue extends Record<string, unknown> {
+  language: string;
+  source: string;
+  resultType: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+  options: Record<string, unknown>;
+  capabilityProfile: string;
+}
+
+/** Reads a canonical portable-expression value only when its language matches the authored syntax. */
+export function readPortableExpressionDefinition(
+  value: unknown,
+  expressionType: string
+): PortableExpressionDefinitionValue | null {
+  if (!isObjectRecord(value) ||
+      typeof value.language !== "string" ||
+      typeof value.source !== "string" ||
+      !isObjectRecord(value.resultType) ||
+      !isObjectRecord(value.parameters) ||
+      !isObjectRecord(value.options) ||
+      typeof value.capabilityProfile !== "string" ||
+      expressionType.toLowerCase() !== value.language.toLowerCase()) {
+    return null;
+  }
+
+  return value as PortableExpressionDefinitionValue;
+}
 
 /**
  * Whether the input is secret-only: the activity declares that it accepts only a Secret Reference (the
@@ -151,7 +180,7 @@ function isPrimitiveValue(value: unknown): boolean {
   return ["string", "number", "boolean", "bigint"].includes(typeof value);
 }
 
-function isStringType(typeName: string): boolean {
+export function isStringType(typeName: string): boolean {
   const normalized = typeName.split(",", 1)[0]?.trim().toLowerCase();
   return normalized === "system.string" || normalized === "string";
 }
@@ -463,6 +492,10 @@ function isWrappedInputValue(value: unknown): value is WrappedActivityInputValue
     typeof (expression as Record<string, unknown>).type === "string";
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // --- friendly type-name formatting (type badge) ----------------------------
 //
 // Render a .NET type name as a short, friendly label. Backend type names can be assembly-qualified and
@@ -480,6 +513,7 @@ function parseClrTypeName(text: string): string {
   if (!text) return "";
   const core = stripAssemblyQualifier(text);
   if (!core) return "";
+  if (isJsonTypeName(core)) return core.endsWith("?") ? "JSON?" : "JSON";
 
   // Trailing "[]" pairs are always array markers — a generic's brackets are never empty — so a greedy
   // match of them at the very end is safe even when the base type is itself generic (List`1[…][]).

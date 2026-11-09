@@ -54,6 +54,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new Elsa.Events.EventsFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
             .WithFeature(services => new DispatchWorkflowRuntimeFeature().ConfigureServices(services))

@@ -1,0 +1,123 @@
+{
+  "researchArtifactBaseline": "4b464e1637483e89a11f632f2c99c5779cb4e0de",
+  "htmlSha256": "2c686416a343f3bb12cb41eaeccb408fb9108d82bddfcf69a2a85b5b657d184a",
+  "playwright": "1.62.1",
+  "date": "2026-10-19T17:28:20.466Z",
+  "checks": [
+    {
+      "name": "Cold direct-file load in offline reduced-motion context",
+      "detail": {
+        "url": "file://<report-bundle>/presentation/index.html",
+        "online": false,
+        "reducedMotion": true
+      }
+    },
+    {
+      "name": "Five model lenses and all nine responsibility drill-downs",
+      "detail": "Correct model heading, nested composition, selected state, breadcrumb context, proposed status and scoped source link"
+    },
+    {
+      "name": "Zoom and bounds",
+      "detail": "CSS zoom agrees; 75%/175% limits disable controls; reset returns 100%"
+    },
+    {
+      "name": "Breadcrumb navigation",
+      "detail": "Current model and detail follow every drill-down; keyboard return restores Native/kernel overview, zoom and scroll"
+    },
+    {
+      "name": "Keyboard entry and view activation",
+      "detail": "Tab follows skip link, program, Architecture, Recovery; Enter selects Recovery"
+    },
+    {
+      "name": "All six scenario paths",
+      "detail": "Every transition, final disabled state, previous and restart verified offline"
+    },
+    {
+      "name": "Evidence boundaries",
+      "detail": "Simulation label, non-production caveat and 17 October baseline remain visible"
+    },
+    {
+      "name": "Responsive width 320",
+      "detail": {
+        "viewport": 320,
+        "body": 320,
+        "diagramClient": 244,
+        "diagramScroll": 662
+      }
+    },
+    {
+      "name": "Responsive width 768",
+      "detail": {
+        "viewport": 768,
+        "body": 768,
+        "diagramClient": 692,
+        "diagramScroll": 692
+      }
+    },
+    {
+      "name": "Responsive width 1024",
+      "detail": {
+        "viewport": 1024,
+        "body": 1024,
+        "diagramClient": 591,
+        "diagramScroll": 662
+      }
+    },
+    {
+      "name": "Responsive width 1440",
+      "detail": {
+        "viewport": 1440,
+        "body": 1440,
+        "diagramClient": 868,
+        "diagramScroll": 868
+      }
+    },
+    {
+      "name": "Emulated reduced-motion behavior",
+      "detail": "All computed animation, transition and smooth scroll states disabled"
+    },
+    {
+      "name": "Named region and keyboard diagram panning",
+      "detail": {
+        "accessibleName": "Scrollable architecture diagram",
+        "scrollLeft": 40
+      }
+    },
+    {
+      "name": "Bundled local report targets",
+      "detail": "All relative report targets exist; all rendered experiment links use the pinned research revision; GitHub evidence explicitly requires connection"
+    },
+    {
+      "name": "Local report navigation offline",
+      "detail": [
+        "file://<report-bundle>/architecture-recommendation.md",
+        "file://<report-bundle>/acceptance-audit.md",
+        "file://<report-bundle>/original-requirements-and-prior-art.md"
+      ]
+    },
+    {
+      "name": "No network dependencies or console errors",
+      "detail": {
+        "httpRequests": 0,
+        "consoleWarningsOrErrors": 0
+      }
+    },
+    {
+      "name": "No-JavaScript fallback",
+      "detail": "Native diagram and explicit static overview visible"
+    }
+  ],
+  "console": [],
+  "requests": [
+    "file://<report-bundle>/presentation/index.html",
+    "file://<report-bundle>/presentation/index.html",
+    "file://<report-bundle>/architecture-recommendation.md",
+    "file://<report-bundle>/acceptance-audit.md",
+    "file://<report-bundle>/original-requirements-and-prior-art.md"
+  ],
+  "screenshots": [
+    "offline-agent.png"
+  ],
+  "browser": "155.0.8059.82",
+  "status": "passed"
+}

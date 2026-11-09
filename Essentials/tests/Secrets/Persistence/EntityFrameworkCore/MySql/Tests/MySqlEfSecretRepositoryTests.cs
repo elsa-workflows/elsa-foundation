@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -95,9 +96,29 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
         Assert.Equal("First writer", (await repository.FindAsync("tenant-a", "payments.api"))!.DisplayName);
     }
 
+    [SkippableFact]
+    public async Task A_deleted_name_is_free_while_the_key_admits_one_row_holding_the_name_on_mysql()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var context = CreateMigratingContext(connectionString);
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsMySqlDbContext.ExpectedProviderName);
+        await using var bypass = CreateMigratingContext(connectionString);
+
+        await SecretNameReuseScenario.RunAsync(context, bypass);
+    }
+
     private static SecretsMySqlDbContext CreateContext(string connectionString) =>
         new(new DbContextOptionsBuilder<SecretsMySqlDbContext>()
             .UseMySQL(connectionString)
+            .Options);
+
+    /// <summary>A context that applies the module's own MySQL migration chain, into its own history table.</summary>
+    private static SecretsMySqlDbContext CreateMigratingContext(string connectionString) =>
+        new(new DbContextOptionsBuilder<SecretsMySqlDbContext>()
+            .UseMySQL(connectionString, mySql => mySql
+                .MigrationsAssembly(typeof(SecretsMySqlDbContext).Assembly.GetName().Name)
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
             .Options);
 
     private static Secret Secret(string tenant, string name, string value, string? scope = null) => new()

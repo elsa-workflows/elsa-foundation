@@ -38,6 +38,8 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         if (definition.Options.EnumerateObject().Any())
             throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
 
+        var prepared = PreparedJavaScript.Binding(definition.Source);
+
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
         IsolatedJintEngine.SetReadOnlyVariables(engine, request.AmbientVariables, featureOptions.Value);
@@ -45,7 +47,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         JsValue result;
         try
         {
-            result = engine.Evaluate($"\"use strict\"; ({definition.Source})");
+            result = engine.Evaluate(prepared);
         }
         catch (JavaScriptException exception)
         {
@@ -67,7 +69,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         }
 
         if (result.IsUndefined())
-            throw new InvalidOperationException("A portable JavaScript expression cannot return undefined.");
+            throw new InvalidOperationException("A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
 
         return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }

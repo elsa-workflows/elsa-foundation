@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -29,11 +30,14 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, _bookmarkStateStore, null, null, null, null, _inspectionStore);
     }
 
-    [Fact]
-    public async Task HandleAsync_CommitsBookmarkCreatedAndSuspendsActivity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HandleAsync_CommitsBookmarkCreatedAndSuspendsActivity(bool typed)
     {
         await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
+        var initialState = typed ? NewTypedSuspendedState() : NewRunningState();
+        await _activityStateStore.SaveAsync(initialState);
         var handler = NewHandler();
 
         await handler.HandleAsync(NewCreateBookmarkWorkItem());
@@ -57,6 +61,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Equal(["bookmark-1"], state.BookmarkIds);
         Assert.Equal("bookmark-1", state.Metadata["runtime.bookmarkId"]);
         Assert.Equal("resume-target:delivery", state.Metadata["runtime.resumeTargetId"]);
+        AssertPrivateStateMatches(initialState.PrivateState, state.PrivateState);
+        Assert.Equal(initialState.TriggerRegistrations, state.TriggerRegistrations);
 
         var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
@@ -69,10 +75,17 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         var activityChange = Assert.Single(write.Commit.StateChanges.ActivityExecutions);
         Assert.Equal(RuntimeStateChangeOperation.Upsert, activityChange.Operation);
         Assert.Equal(ActivityExecutionStatus.Suspended, activityChange.State.Status);
+        AssertPrivateStateMatches(initialState.PrivateState, activityChange.State.PrivateState);
+        Assert.Equal(initialState.TriggerRegistrations, activityChange.State.TriggerRegistrations);
 
         var bookmarkChange = Assert.Single(write.Commit.StateChanges.Bookmarks);
         Assert.Equal(RuntimeStateChangeOperation.Upsert, bookmarkChange.Operation);
         Assert.Equal("bookmark-1", bookmarkChange.State.BookmarkId);
+        Assert.Equal("wfexec-1", bookmarkChange.State.WorkflowExecutionId);
+        Assert.Equal("actexec-1", bookmarkChange.State.ActivityExecutionId);
+        Assert.Equal("resume-target:delivery", bookmarkChange.State.ResumeTargetId);
+        Assert.Equal("delivery-status", bookmarkChange.State.StimulusType);
+        Assert.Equal("sha256:delivery-status:order-123", bookmarkChange.State.StimulusHash);
 
         var inspectionChange = Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
         Assert.Equal(RuntimeStateChangeOperation.Upsert, inspectionChange.Operation);
@@ -224,6 +237,32 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.Empty(state.TriggerRegistrations!);
+        Assert.Empty(state.BookmarkIds);
+        Assert.Empty(_checkpointWriter.ListCommits());
+    }
+
+    [Fact]
+    public async Task HandleAsync_DelayedTypedCreationAfterCancellationDoesNotCreateBookmarkOrCommit()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        var cancelledState = NewTypedSuspendedState() with
+        {
+            Status = ActivityExecutionStatus.Cancelled,
+            SubStatus = "WorkflowCancellation",
+            CompletedAt = _now
+        };
+        await _activityStateStore.SaveAsync(cancelledState);
+
+        await NewHandler().HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, state.Status);
+        Assert.Equal("WorkflowCancellation", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        AssertPrivateStateMatches(cancelledState.PrivateState!, state.PrivateState!);
+        Assert.Equal(cancelledState.TriggerRegistrations, state.TriggerRegistrations);
         Assert.Empty(state.BookmarkIds);
         Assert.Empty(_checkpointWriter.ListCommits());
     }
@@ -495,6 +534,51 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             FaultCount: 0,
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
+
+    private ActivityExecutionState NewTypedSuspendedState()
+    {
+        var privateState = new ActivityPrivateState(
+            "actexec-1",
+            1,
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("test/etl-invocation-state", schemaVersion: 1),
+                JsonSerializer.SerializeToElement(new { RunId = "run-42", SourceSnapshotHash = "sha256:source" }),
+                ValueProtectionPolicy.InstanceInline),
+            "actexec-1:attempt:1",
+            _now.AddMinutes(-1));
+        var registration = new ActivityTriggerRegistration(
+            "bookmark-1",
+            "actexec-1",
+            "resume-target:delivery",
+            new ValueTypeDescriptor("test/etl-completion", schemaVersion: 1),
+            "delivery-status",
+            "sha256:delivery-status:order-123",
+            ActivityTriggerDeduplicationPolicy.Once);
+
+        return NewRunningState() with
+        {
+            Status = ActivityExecutionStatus.Suspended,
+            SubStatus = "TriggerWaiting",
+            PrivateState = privateState,
+            TriggerRegistrations = [registration]
+        };
+    }
+
+    private static void AssertPrivateStateMatches(ActivityPrivateState? expected, ActivityPrivateState? actual)
+    {
+        if (expected is null)
+        {
+            Assert.Null(actual);
+            return;
+        }
+
+        Assert.NotNull(actual);
+        Assert.Equal(expected.InvocationId, actual.InvocationId);
+        Assert.Equal(expected.StateVersion, actual.StateVersion);
+        Assert.Equal(expected.ProducedByAttemptId, actual.ProducedByAttemptId);
+        Assert.Equal(expected.Value.Type, actual.Value.Type);
+        Assert.True(JsonElement.DeepEquals(expected.Value.InlineValue!.Value, actual.Value.InlineValue!.Value));
+    }
 
     private ActivityExecutionInspectionValueSnapshot NewInputSnapshot() =>
         new(

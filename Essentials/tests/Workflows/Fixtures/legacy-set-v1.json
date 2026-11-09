@@ -1,0 +1,165 @@
+{
+  "identity": {
+    "artifactId": "artifact-7d70c113a0f4",
+    "definitionId": "definition-legacy-set",
+    "definitionVersionId": "version-legacy-set",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:7d70c113a0f4fd8857721b9cfafbb4e19b7f400700475ff8904de6a203f92edf"
+  },
+  "rootActivity": {
+    "executableNodeId": "set-counter",
+    "authoredActivityId": "set-counter",
+    "activityType": "elsa.intrinsic.set",
+    "activityTypeVersion": "1.0.0",
+    "descriptorType": "intrinsic",
+    "descriptorSchemaVersion": "1",
+    "descriptorPayload": {
+      "kind": "Set",
+      "schemaVersion": "1.0.0"
+    },
+    "inputBindings": {
+      "value": {
+        "inputName": "value",
+        "inputKey": "value",
+        "targetType": {
+          "alias": "Elsa.Any",
+          "collectionKind": "Single",
+          "schema": null,
+          "schemaVersion": null
+        },
+        "effectivePolicy": {
+          "lifecycle": "Instance",
+          "storage": "Inline",
+          "isSensitive": false,
+          "requiresEncryption": false,
+          "redactionMode": null,
+          "retentionPolicy": null,
+          "metadata": {}
+        },
+        "source": "Expression",
+        "literal": null,
+        "workflowRequest": null,
+        "variable": null,
+        "activityResult": null,
+        "literalValue": null,
+        "expression": {
+          "language": "JavaScript",
+          "expression": "7",
+          "resultType": {
+            "kind": "alias",
+            "id": "Elsa.Any",
+            "schema": null
+          },
+          "metadata": {},
+          "parameters": {},
+          "parameterConversionPlans": {},
+          "options": {},
+          "capabilityProfile": "binding-pure-v1"
+        },
+        "metadata": {
+          "referenceKey": "value"
+        }
+      }
+    },
+    "outputCaptures": {},
+    "metadata": {
+      "authoredNodeId": "set-counter",
+      "executionType": "Action"
+    },
+    "childSlots": [],
+    "structure": null,
+    "activityContract": null,
+    "intrinsicKind": "Set",
+    "intrinsicVariable": {
+      "variableKey": "counter",
+      "declaringScopeId": "workflow"
+    }
+  },
+  "resumeTargets": {},
+  "inputContract": {
+    "version": 1,
+    "inputs": []
+  },
+  "dependencies": [],
+  "persistenceMode": null,
+  "workflowVariables": [
+    {
+      "variableKey": "counter",
+      "name": "Counter",
+      "type": {
+        "alias": "Int32",
+        "collectionKind": "Single",
+        "schema": null,
+        "schemaVersion": null
+      },
+      "policy": {
+        "lifecycle": "Instance",
+        "storage": "Inline",
+        "isSensitive": false,
+        "requiresEncryption": false,
+        "redactionMode": null,
+        "retentionPolicy": null,
+        "metadata": {}
+      },
+      "initialBinding": {
+        "inputName": "counter",
+        "inputKey": "counter",
+        "targetType": {
+          "alias": "Int32",
+          "collectionKind": "Single",
+          "schema": null,
+          "schemaVersion": null
+        },
+        "effectivePolicy": {
+          "lifecycle": "Instance",
+          "storage": "Inline",
+          "isSensitive": false,
+          "requiresEncryption": false,
+          "redactionMode": null,
+          "retentionPolicy": null,
+          "metadata": {}
+        },
+        "source": "Literal",
+        "literal": {
+          "type": {
+            "alias": "Int32",
+            "collectionKind": "Single",
+            "schema": null,
+            "schemaVersion": null
+          },
+          "presence": "Present",
+          "inlineValue": 0,
+          "externalReference": null,
+          "policy": {
+            "lifecycle": "Instance",
+            "storage": "Inline",
+            "isSensitive": false,
+            "requiresEncryption": false,
+            "redactionMode": null,
+            "retentionPolicy": null,
+            "metadata": {}
+          }
+        },
+        "workflowRequest": null,
+        "variable": null,
+        "activityResult": null,
+        "literalValue": 0,
+        "expression": null,
+        "metadata": {}
+      }
+    }
+  ],
+  "incidentStrategy": {
+    "alias": "Fault",
+    "version": "1"
+  },
+  "createdAt": "2026-10-25T04:00:00+00:00",
+  "compatibilityMetadata": {},
+  "runtimeRequirements": [
+    {
+      "consumerKey": "intrinsic",
+      "schemaVersion": "1"
+    }
+  ],
+  "storageDriverRequirements": []
+}

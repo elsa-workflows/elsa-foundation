@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "86fcc34a37129746a600c9459aef4ac3dc8b6af0",
+  "sourceState": "Final helper/test changes plus documentation were uncommitted during these focused runs; file digests below bind the final restored source.",
+  "sources": [
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingScenario.cs",
+      "sha256": "86248405f4823ca45b78400795fa47b7070bb44ca1e924fc43b1742b0f5a3f9b"
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingScenarioTests.cs",
+      "sha256": "07b2982553af89ad54a358b01e73748229abd1446ba5d6b1d43c4fa1f8e24c70"
+    }
+  ],
+  "stages": [
+    {
+      "stage": "red",
+      "trxSha256": "2628f3b36b89249d04a461b07272d88d1dcbd2c2de4c9586d5ee6a16bfc63393",
+      "trxBytes": 4731,
+      "passed": 0,
+      "failed": 1,
+      "notExecuted": 0,
+      "failureMessages": [
+        "Assert.Contains() Failure: Sub-string not found\nString:    \"Response status code does not indicate su\"\u00b7\u00b7\u00b7\nNot found: \"upstream rejected the workflow lookup\""
+      ]
+    },
+    {
+      "stage": "green",
+      "trxSha256": "5f03e301a83527ea62c33eeee570203c5512b3138e17331bf54bde0f1262b6f5",
+      "trxBytes": 4617,
+      "passed": 2,
+      "failed": 0,
+      "notExecuted": 0,
+      "failureMessages": []
+    },
+    {
+      "stage": "mutation",
+      "trxSha256": "d6146859ac14b67b99960f597b025e33163b856bd615f36a1f27e64ec56ee3fd",
+      "trxBytes": 4821,
+      "passed": 0,
+      "failed": 1,
+      "notExecuted": 0,
+      "failureMessages": [
+        "Assert.Contains() Failure: Sub-string not found\nString:    \"GET /runtime/workflows/instances/executio\"\u00b7\u00b7\u00b7\nNot found: \"upstream rejected the workflow lookup\""
+      ]
+    },
+    {
+      "stage": "restored",
+      "trxSha256": "33e14cca1995f4c176f7dc2d2d5d3b091a582c639681a5b38c9adb457557a128",
+      "trxBytes": 4617,
+      "passed": 2,
+      "failed": 0,
+      "notExecuted": 0,
+      "failureMessages": []
+    }
+  ],
+  "limits": [
+    "The initial baseline invokes the previous GetFromJsonAsync seam directly; the actual-helper adverse/restored control supplies the final test proof.",
+    "These focused cases prove diagnostic content and successful parsing, not integrated process recovery.",
+    "No retry, ignored HTTP400 or timing change is introduced."
+  ]
+}

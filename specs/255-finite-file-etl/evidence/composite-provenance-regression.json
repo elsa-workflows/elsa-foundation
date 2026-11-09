@@ -1,0 +1,20 @@
+{
+  "source": "Essentials/src/Activities/Compensation/Activities/CompensationScope.cs",
+  "restoredSha256": "dbdd2f563a73b0da08489374b5219cbcf3d6ced201d572e82e45b703127d1550",
+  "changedSha256": "43e06e7a3ebdfe6cff6b445be57b32a35fe5cc28de60d6e58004b081ac98984c",
+  "change": "Read callback command metadata instead of committed child scheduling metadata in CompensationScope completion/fault routing.",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj",
+    "--configuration",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~CompensationScopeRepeatDeliveryTests",
+    "--logger",
+    "console;verbosity=normal"
+  ],
+  "changedExitCode": 1,
+  "restoredExitCode": 0
+}

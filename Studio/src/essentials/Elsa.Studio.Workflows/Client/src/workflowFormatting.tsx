@@ -1,5 +1,7 @@
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
+import type { IncidentResolutionOutcomeSummary } from "./workflowTypes";
+
 export function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -26,7 +28,14 @@ export function formatDuration(start?: string | null, end?: string | null) {
 }
 
 export function shortTypeName(key: string | null | undefined) {
-  return key?.split(".").filter(Boolean).at(-1);
+  if (!key) return undefined;
+
+  // Executable graph placeholders carry a type key and version in one token. Strip the
+  // placeholder prefix/version before applying the normal CLR type-key formatter.
+  const typeKey = key.startsWith("executable-missing:")
+    ? key.slice("executable-missing:".length).replace(/@[^@]*$/, "")
+    : key;
+  return typeKey.split(".").filter(Boolean).at(-1);
 }
 
 /**
@@ -44,7 +53,7 @@ export function truncate(text: string, max = 40) {
  * Splits an activity-definition version string into a compact label and its full exact form.
  * CLR activities carry a behavioral-hash build suffix (e.g. `1.0.0+892535311ec5…`); the short form
  * drops that suffix so version chips stay compact and never crowd out the activity name, while the
- * full string is preserved for tooltips / aria labels so the exact version is still discoverable.
+ * full string is preserved for accessible names and for tooltips when short labels collide.
  */
 export function formatActivityVersion(version: string): { short: string; full: string; hasHash: boolean } {
   const full = version.trim();
@@ -92,4 +101,10 @@ export function formatActivityDefinitionDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
   return date.toLocaleDateString();
+}
+
+/** Names an incident's resolution action and who applied it, e.g. "WaitForIntervention (StructuralIntervention)". */
+export function resolutionOutcomeLabel(outcome: IncidentResolutionOutcomeSummary) {
+  const source = outcome.strategy ? `${outcome.strategy.alias}/${outcome.strategy.version}` : outcome.systemSource;
+  return source ? `${outcome.actionKind} (${source})` : outcome.actionKind;
 }

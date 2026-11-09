@@ -26,6 +26,19 @@ describe("JavaScript expression editor module", () => {
     expect(contribution.sourceRenderer?.expanded).toBe(JavaScriptSourceRenderer);
   });
 
+  it.each(["unavailable", "unauthorized", "incompatible"] as const)("uses IntelliSense wording for %s tooling", state => {
+    const editor = findStudioCodeEditor(<JavaScriptInlineEditor
+      descriptor={descriptor()}
+      syntax="JavaScript"
+      value=""
+      context={{ ...context("JavaScript"), authoringContext: { state, contractVersion: 1, expressionType: "JavaScript" } }}
+      onChange={vi.fn()}
+    />);
+
+    expect(editor.props.status).toContain("JavaScript IntelliSense");
+    expect(editor.props.status).not.toContain("this Studio version");
+  });
+
   it("renders authorized authored JavaScript without evaluating it", () => {
     const rendered = JavaScriptSourceRenderer({
       context: {
@@ -101,6 +114,27 @@ describe("JavaScript expression editor module", () => {
     expect(onExpandedChange).toHaveBeenCalledWith("return 4;");
   });
 
+  it("explains expression and statement-body input in the expanded editor", () => {
+    const expanded = JavaScriptExpandedEditor({
+      descriptor: descriptor(),
+      syntax: "JavaScript",
+      value: "",
+      context: context("JavaScript"),
+      onChange: vi.fn()
+    }) as React.ReactElement<{ children: React.ReactNode }>;
+    const children = React.Children.toArray(expanded.props.children);
+
+    expect(children).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "p",
+        props: expect.objectContaining({
+          className: "js-expression-help",
+          children: "Use an expression, or write statements and return a value."
+        })
+      })
+    ]));
+  });
+
   it("owns JavaScript globals and resolves getter-call members through the neutral shared traversal", async () => {
     const authoringContext = {
       workflowInputs: [{ id: "input:customer", name: "customer", kind: "value" as const, shapeId: "shape:customer" }],
@@ -171,6 +205,7 @@ describe("JavaScript expression editor module", () => {
 
 interface StudioCodeEditorElementProps {
   ariaLabel: string;
+  status?: string;
   document: {
     uri: string;
     language: string;

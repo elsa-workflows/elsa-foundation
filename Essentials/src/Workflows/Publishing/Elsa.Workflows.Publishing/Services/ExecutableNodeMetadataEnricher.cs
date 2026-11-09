@@ -70,6 +70,7 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
             node.InputBindings,
             node.OutputCaptures,
             metadata[node.ExecutableNodeId],
+            node.ExecutionPlacement,
             node.ChildSlots.Select(slot => new ExecutableChildSlot(
                 slot.Name,
                 slot.Activities.Select(child => Rebuild(child, metadata)).ToArray(),

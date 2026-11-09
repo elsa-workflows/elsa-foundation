@@ -25,16 +25,19 @@ public sealed record DraftValidationErrorView(
     string? Member,
     string Severity)
 {
-    /// <summary>
-    /// All validators emit compile errors — the internal model carries no severity axis, so
-    /// every error projects as <c>Error</c>. Kept explicit so a future severity dimension is additive.
-    /// </summary>
+    /// <summary>Blocking findings. Warnings use <see cref="WarningSeverity"/>.</summary>
     public const string ErrorSeverity = "Error";
+
+    /// <summary>Non-blocking findings such as NeedsAuthorization.</summary>
+    public const string WarningSeverity = "Warning";
 
     public static DraftValidationErrorView From(ValidationError error)
     {
         var (nodeId, member) = SplitPath(error.Path);
-        return new(error.Type, error.Message, nodeId, member, ErrorSeverity);
+        var severity = string.Equals(error.Severity, WarningSeverity, StringComparison.Ordinal)
+            ? WarningSeverity
+            : ErrorSeverity;
+        return new(error.Type, error.Message, nodeId, member, severity);
     }
 
     /// <summary>

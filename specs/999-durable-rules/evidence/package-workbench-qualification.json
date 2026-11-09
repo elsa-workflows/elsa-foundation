@@ -1,0 +1,981 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+  "publishStateCommit": "eb3e12531b0cbd594374df1e49df0fadef9a50f3",
+  "stage": "workbench",
+  "workbenchPackageHostPassed": true,
+  "nativeRestProofPassed": true,
+  "directProofPassed": true,
+  "processBoundaryProofPassed": false,
+  "processProofPassed": false,
+  "fullAcceptancePassed": false,
+  "commands": [
+    {
+      "command": [
+        "dotnet",
+        "--version"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/01-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f57769402c5259afcb4827defd14477a9a204c0c51885d5e8c2e0f0ea3ac9074"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer/Rules.PackageProbe.csproj",
+        "--configfile",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/02-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "82aaf8593d8384e1da6f02ae8722b26d575881f5a535b376665ed86f792a22b3"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer/Rules.PackageProbe.csproj",
+        "--locked-mode",
+        "--configfile",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer/NuGet.Config"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/03-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "f8d86056b3f4311b780b2756eacf66f35dc6873a91be9a450d134b188cef1b63"
+    },
+    {
+      "command": [
+        "dotnet",
+        "publish",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer/Rules.PackageProbe.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/consumer",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/04-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "aa9352f9d91e99a4d53c1f4dc891eeb9a5d1bfecb8dc81fb15ce5443fba9e008"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "receipt",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment-receipt-evidence.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/05-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "96b0824b7b75617dd47305845d652587e1077ea199131c9fc728c60b1e4f671a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/direct.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/direct.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/06-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "ce25ecb6205725d4c0801ddc8958006fc2e3a083a6f93fa97888067ac558b798"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "incompatible",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/incompatible.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/incompatible.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/07-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "7e841ecc1eaf166064da7f0135a02d9bc6f9698fb40574306a949ef31cf9989f"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/unavailable.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/unavailable.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/08-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0b06c437dbdf5dfc6631d938333e652340e640f1df6fc3c8add7b641de033c0e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/restored.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/restored.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/09-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0f7b8ebea431f424794ced24e0ca2544a00c6100353c2e0dc3124a99b713556a"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/package-versions.props"
+      ],
+      "cwd": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/10-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "525d772d0f41255ade1af4995e0ceecdf656937f8e3cda5a5bcef5b960002deb"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/alternate.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/alternate.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/11-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "85d541bdeab004d0d20a78814966ec01614fbb58e6eeb524a7e8f697ea34496d"
+    },
+    {
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--no-dependencies",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/package-versions.props"
+      ],
+      "cwd": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/12-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "10cb0013d8db65b9dff33939d765e09a9e095fb5a69246ecfcc87ff639697b07"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "unavailable",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/control.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/control.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/13-command.log",
+      "exitCode": 1,
+      "expectedFailure": true,
+      "logSha256": "ffeaef27d477134c86566702b0d187f00f7abdfebb39c7c3845c4dd97fe6ba4e"
+    },
+    {
+      "command": [
+        "dotnet",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment/Rules.PackageProbe.dll",
+        "direct",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/control-restored.db",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/control-restored.json"
+      ],
+      "cwd": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/deployment",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/14-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "a4f1d9a118fcba00d91a6a501cfbe5fe67587ac5434b2cd892e706bcfa068a98"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Essentials/apps/RulesPackageWorkbench-fbm9hd61/Elsa.Workbench.csproj",
+        "--configfile",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/NuGet.Config",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/package-versions.props"
+      ],
+      "cwd": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/15-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "086eb9595bf016da51b8f7fd8c3c0fa5179dd95556ce19c0959bcae49fe0dad7"
+    },
+    {
+      "command": [
+        "dotnet",
+        "restore",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Essentials/apps/RulesPackageWorkbench-fbm9hd61/Elsa.Workbench.csproj",
+        "--locked-mode",
+        "--configfile",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/NuGet.Config",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/package-versions.props"
+      ],
+      "cwd": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/16-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "9d91d8e01a2e47067fc8fbf751d1fcba0d6ec4314365810c177c2af001055fcb"
+    },
+    {
+      "command": [
+        "dotnet",
+        "publish",
+        "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Essentials/apps/RulesPackageWorkbench-fbm9hd61/Elsa.Workbench.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment",
+        "-p:CustomBeforeDirectoryBuildProps=/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/package-versions.props"
+      ],
+      "cwd": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/17-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "c13f4f6783f3d2815b1151d123f3f5e115c7188a20767a216a7393ed332303d3"
+    },
+    {
+      "command": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main/e2e-tests/rules/Test-DurableRules.ps1",
+        "-AssemblyPath",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/Elsa.Workbench.dll",
+        "-DeploymentReceiptPath",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json",
+        "-EvidencePath",
+        "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-rest.json"
+      ],
+      "cwd": "/Users/sipke/.codex/worktrees/unified-presentation-qa/elsa-foundation-main",
+      "log": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/18-command.log",
+      "exitCode": 0,
+      "expectedFailure": false,
+      "logSha256": "0d014e1cf9e304bf6d37dd1df6ce118ec54675027d43bf37e8c5e33e978abf1a"
+    }
+  ],
+  "harness": {
+    "tools/rules/verify-packaged-rules.py": "7bd702dfec74d808847ecd688488dbb142ac26617753894a6b18689940e9ed4a",
+    "tools/rules/package_consumer.py": "6048ddb2b8939c00f0af7cf4eeb3ace039cb8675d7d12291886fdc3c4e1d7646",
+    "tools/rules/package_process.py": "3078659a369cba732775a559b4cc6ff7d0e02cbc24d7daa29791e1e7f689f8e4",
+    "tools/rules/package_adversarial.py": "411ea8d9a7f5bfaf279339e5807d6532b86ee8a76a16aba19e23544365ffc832",
+    "tools/rules/package_workbench.py": "323297bea0d0c1173882cab478b47f301cc25e250936b3092ef9d598d31f4984",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/rules/Test-DurableRules.ps1": "36aa75f07f24a5b201597ce7301085a9f87396077cc4337d6a6343c47c0690ee",
+    "tools/rules/PackageProbe/PersistenceControlProbe.cs": "3639099ede1dfa1d20533e4c34e7b75f456c0e79db35de9d1fdeed73d157f9e4",
+    "tools/rules/PackageProbe/ProcessProbe.cs": "0d1d523cc94f94d59bb04fbd4c9d4cfa877d02a7b775191d58b535c12335627a",
+    "tools/rules/PackageProbe/Program.cs": "61e2d856357eb47797b9666400dd2ea76712c54cb802841fef0e285fe7a7d8af",
+    "tools/rules/PackageProbe/StaleProcessProbe.cs": "6650165ef27ccddc241f44a5aaccd270e98e0f9567afaab95a239f5c9c471b52"
+  },
+  "reusedPackReceipt": {
+    "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/receipt.json",
+    "sha256": "c2798681181f3bdbb960563e93013bf11aaae55b8b96b4f145607ebeddd072f1"
+  },
+  "lastPublishCommit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
+  "modules": [
+    "Elsa.Rules.Core",
+    "Elsa.Rules.Persistence.Core",
+    "Elsa.Rules.Runtime",
+    "Elsa.Rules.Persistence.EntityFrameworkCore",
+    "Elsa.Rules.Workflows.Design",
+    "Elsa.Rules.Workflows.Runtime"
+  ],
+  "pendingNativeModules": [],
+  "closure": [
+    {
+      "id": "Elsa.Rules.Core",
+      "path": "Extensions/Rules/src/Core/Elsa.Rules.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "path": "Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "path": "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "path": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "version": "4.0.12-preview"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "version": "4.0.32-preview"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Pipelines.Core",
+      "path": "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Events.Core",
+      "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Expressions.Core",
+      "path": "Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Activities.Runtime.Core",
+      "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
+      "version": "4.0.23-preview"
+    },
+    {
+      "id": "Elsa.Activities.Design.Core",
+      "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
+      "version": "4.0.11-preview"
+    },
+    {
+      "id": "Elsa.Mediator.Core",
+      "path": "Essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Core",
+      "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+      "version": "4.0.12-preview"
+    },
+    {
+      "id": "Elsa.Serialization.Core",
+      "path": "Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj",
+      "version": "4.0.14-preview"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Core",
+      "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+      "version": "4.0.51-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Core",
+      "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj",
+      "version": "4.0.15-preview"
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Runtime",
+      "path": "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Design",
+      "path": "Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules"
+    }
+  ],
+  "packages": [
+    {
+      "id": "Elsa.Activities.Design.Core",
+      "version": "4.0.11-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:76edc3d5f882126754c69d0d9030ac7029446afe62ce0cf15c67c17daed3a072",
+      "archiveSha512": "fVkAZlnG9mrqBMFMB3YvxH8ivpuPe/JjkRKDl7LMB/eBwPbBruF1XpQWfUiqsC8euvAJYJGA+iyOrTa16wERTg==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Activities.Design.Core.4.0.11-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Activities.Runtime.Core",
+      "version": "4.0.23-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:a219d09f6f9a60d14d36a16313d5d2631a22ddbf92043ca61cfc528ce2c76424",
+      "archiveSha512": "6ztCRtmPCSZJRnUYzt8uqI644UAMCg+aujzASg5PhsfprUtyYxaKiN0Ht3Gfi2jbsn6avK6VY/aHptXlo+YMSw==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Activities.Runtime.Core.4.0.23-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Events.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:5cfdcfeaf6982741b7c5224c57b86f9ce5dfd594e3c86a14aac9bfe1579a891d",
+      "archiveSha512": "IwQyWBEYJoPPq8OvNrSQP5ASexclil/CnHOyHq27zBGmdi7zZcCpXskiqPuDyo0A6D7aIQyEQy4RO3aL3mkqCA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Events.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Expressions.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:e6e3c4ffe7d96aa5d458242abd55e2dabea5ddc095b8646b027875a61e23da59",
+      "archiveSha512": "FtctgeqVR/oj89utJUds/OleMLjhByuKI4/H0EgUS9y1JqG6olcGMtz11e3aq7zHXQg2GOrIAkdyhwO/nzrzHA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Expressions.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Mediator.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:681df39364539ea1d674aa9a07d75a990520b1c68441b095df3b687feed88474",
+      "archiveSha512": "t11mZRUhc6qqm368pBezkRuWgi6Ieop4MPjVN66mpTPlzAQT73QbCrcBfweI5tlnX/KzoeBWl/8+fmDOBxFHVA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Mediator.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.32-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:b758cfe4eaea58cf8ca4e5eba74e0d4a0456d1bdabd491dc416f1b4a0a74a215",
+      "archiveSha512": "Ot7WACk0g+2RKrKJUmKx3wKwnAZ675D7yDj2KyGFMe+4q5RCH7ni9xpnHn9vUQPc55aWiS1aj0PcJEPkKDy+QQ==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Persistence.EntityFramework.4.0.32-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.12-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:134a1dea7a13f2113395548c38f81c34a89447602210402e4a58d63517b5c52e",
+      "archiveSha512": "obAmV0X9Zj0HXc0SXbepnMzY+5934/pKYE4Bgj6RV2VSebwhmuld604yjJrDw+/T9+jY/wbfjDoxzGs3tVoPvg==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Persistence.Schema.4.0.12-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Pipelines.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:e81981866f5addccd70f4d2975b25e19b3257b43f9f58ec0c6a8e249e1688d7b",
+      "archiveSha512": "zPK/zCQDMvCGGsCPZJHPHtN3H81Gi9qX61f0sI9hCgirr1evs6lGyiEKbb31vArfS8pJ8PGLUWrxnwPozFT+EA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Pipelines.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:b94d22e598c763c76493a386e5bc1c639515a38c2002b7111765758f8c50d682",
+      "archiveSha512": "mQaEExmvvCvYGWaAZGM58mhZlp4+29Lex7poZHdYPROHTMOXaB90Gha1ugsPmYQjMtaZiluX+DdBmU59Nlv2Vw==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Primitives.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:27eda3b6a0085920d6e93ccc88e792558229234677f952d47d13e04f4fbbdfab",
+      "archiveSha512": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:ddfedf611e7a4c4beba8bd93c6d1572f93a314f0834f0654fb99e96990d17a83",
+      "archiveSha512": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Persistence.Core.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:6c728b65d75388329377f4911f3041ac2b0ea202c5f8e1816c11f3c59942d8d6",
+      "archiveSha512": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Persistence.EntityFrameworkCore.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:08389dc78caf0af0992281ae4704228e8967966bafc0e821c70c83b97e344b46",
+      "archiveSha512": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Design",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:54b57df40bb49f3583aa9bc578c27106172c307c1b8f4235a3d02109c6b49aa1",
+      "archiveSha512": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Workflows.Design.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:a41abe15bdaf2e9c975c74da148c07a83c0a4db248fd1a19574aff1757d6e725",
+      "archiveSha512": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Rules.Workflows.Runtime.4.0.0-branch-agent-codex-3181-durable-rules.nupkg"
+    },
+    {
+      "id": "Elsa.Serialization.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:c492ea69ec6496fed37e81e6d4f5e31c1e9f8e2ecaa3c825e8e8cfb92db2d618",
+      "archiveSha512": "dna0hle7TYUpo2ecy1rN27omItLRveCq1DeQB9+M7ryIend4cU0WrM+V5UOWtlC+cFHtBXnvAx0SKXGfvMXTCw==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Serialization.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.14-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:1a59a5c06cb4b360bd8c3fefeb85356a64f4b2916293ad8e3d67b00ddc3b721c",
+      "archiveSha512": "rvyXr61n05mnFwkdPelay+tEPda5Gs8RBELqAPrD4ynvryPVOE/1MwzhAR1D7ehgoBJAQcXhzElDk6oBm0W4DA==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Tasks.Core.4.0.14-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Workflows.Design.Core",
+      "version": "4.0.12-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:6489f49eecde48a07d7d041eee6c4e2a24aef3a3f54539ebff36f00d2b7c6c4f",
+      "archiveSha512": "TR+aSVCPgri24l5Gbm7UXYTOKQYOzRpWXCP7C3YeNM+gwvf/+TqsuzKXjx8BaD43KNk1BkhdidqeAn80O2VJTQ==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Workflows.Design.Core.4.0.12-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Core",
+      "version": "4.0.15-preview",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:b29ccf032c2698e2bcbb75d03bd3f1c9933d687e477d256a460413f7b6545a39",
+      "archiveSha512": "dDqUef+hbtgwZwaUWkM4Vx/pVlrBJSUjipR5rPL6pZqRdIoM1Ht3C9ZaFrEB1FZeCwZ1iaX8n2WS6IY466JhAg==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Workflows.Publishing.Core.4.0.15-preview.nupkg"
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.51-branch-agent-codex-3181-durable-rules",
+      "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+      "fingerprint": "sha256:9b73fe9f179305e4e3450d746c54db1b262b6dc832a170756124e9b01380b47e",
+      "archiveSha512": "4i2DrE2QH+rY8qroD7qhpNlDJidknBIZBifwjxQCZPId/tNf870UftveaplDK9US771PrSxaEYrrEJzyMusJGg==",
+      "path": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/feed/Elsa.Workflows.Runtime.Core.4.0.51-branch-agent-codex-3181-durable-rules.nupkg"
+    }
+  ],
+  "packPassed": true,
+  "consumerTemplateSha256": "61e2d856357eb47797b9666400dd2ea76712c54cb802841fef0e285fe7a7d8af",
+  "consumerBuildSdkVersion": "10.0.300",
+  "restoredProjectLibraries": 0,
+  "resolvedPackages": {
+    "CShells/0.0.31": "0BzVoyFzBjhs6GeyFkOlsNC/0708/M0eS86d3nuQ/iSCUAcd/qcCbbVCE/0cY+1Awyu/awYkHIjIPRT1PQ8mgQ==",
+    "CShells.Abstractions/0.0.31": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
+    "Elsa.Activities.Design.Core/4.0.11-preview": "fVkAZlnG9mrqBMFMB3YvxH8ivpuPe/JjkRKDl7LMB/eBwPbBruF1XpQWfUiqsC8euvAJYJGA+iyOrTa16wERTg==",
+    "Elsa.Activities.Runtime.Core/4.0.23-preview": "6ztCRtmPCSZJRnUYzt8uqI644UAMCg+aujzASg5PhsfprUtyYxaKiN0Ht3Gfi2jbsn6avK6VY/aHptXlo+YMSw==",
+    "Elsa.Events.Core/4.0.14-preview": "IwQyWBEYJoPPq8OvNrSQP5ASexclil/CnHOyHq27zBGmdi7zZcCpXskiqPuDyo0A6D7aIQyEQy4RO3aL3mkqCA==",
+    "Elsa.Expressions.Core/4.0.14-preview": "FtctgeqVR/oj89utJUds/OleMLjhByuKI4/H0EgUS9y1JqG6olcGMtz11e3aq7zHXQg2GOrIAkdyhwO/nzrzHA==",
+    "Elsa.Mediator.Core/4.0.14-preview": "t11mZRUhc6qqm368pBezkRuWgi6Ieop4MPjVN66mpTPlzAQT73QbCrcBfweI5tlnX/KzoeBWl/8+fmDOBxFHVA==",
+    "Elsa.Persistence.EntityFramework/4.0.32-preview": "Ot7WACk0g+2RKrKJUmKx3wKwnAZ675D7yDj2KyGFMe+4q5RCH7ni9xpnHn9vUQPc55aWiS1aj0PcJEPkKDy+QQ==",
+    "Elsa.Persistence.Schema/4.0.12-preview": "obAmV0X9Zj0HXc0SXbepnMzY+5934/pKYE4Bgj6RV2VSebwhmuld604yjJrDw+/T9+jY/wbfjDoxzGs3tVoPvg==",
+    "Elsa.Pipelines.Core/4.0.14-preview": "zPK/zCQDMvCGGsCPZJHPHtN3H81Gi9qX61f0sI9hCgirr1evs6lGyiEKbb31vArfS8pJ8PGLUWrxnwPozFT+EA==",
+    "Elsa.Primitives/4.0.14-preview": "mQaEExmvvCvYGWaAZGM58mhZlp4+29Lex7poZHdYPROHTMOXaB90Gha1ugsPmYQjMtaZiluX+DdBmU59Nlv2Vw==",
+    "Elsa.Rules.Core/4.0.0-branch-agent-codex-3181-durable-rules": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+    "Elsa.Rules.Persistence.Core/4.0.0-branch-agent-codex-3181-durable-rules": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+    "Elsa.Rules.Persistence.EntityFrameworkCore/4.0.0-branch-agent-codex-3181-durable-rules": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+    "Elsa.Rules.Runtime/4.0.0-branch-agent-codex-3181-durable-rules": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+    "Elsa.Rules.Workflows.Design/4.0.0-branch-agent-codex-3181-durable-rules": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+    "Elsa.Rules.Workflows.Runtime/4.0.0-branch-agent-codex-3181-durable-rules": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+    "Elsa.Serialization.Core/4.0.14-preview": "dna0hle7TYUpo2ecy1rN27omItLRveCq1DeQB9+M7ryIend4cU0WrM+V5UOWtlC+cFHtBXnvAx0SKXGfvMXTCw==",
+    "Elsa.Tasks.Core/4.0.14-preview": "rvyXr61n05mnFwkdPelay+tEPda5Gs8RBELqAPrD4ynvryPVOE/1MwzhAR1D7ehgoBJAQcXhzElDk6oBm0W4DA==",
+    "Elsa.Workflows.Design.Core/4.0.12-preview": "TR+aSVCPgri24l5Gbm7UXYTOKQYOzRpWXCP7C3YeNM+gwvf/+TqsuzKXjx8BaD43KNk1BkhdidqeAn80O2VJTQ==",
+    "Elsa.Workflows.Publishing.Core/4.0.15-preview": "dDqUef+hbtgwZwaUWkM4Vx/pVlrBJSUjipR5rPL6pZqRdIoM1Ht3C9ZaFrEB1FZeCwZ1iaX8n2WS6IY466JhAg==",
+    "Elsa.Workflows.Runtime.Core/4.0.51-branch-agent-codex-3181-durable-rules": "4i2DrE2QH+rY8qroD7qhpNlDJidknBIZBifwjxQCZPId/tNf870UftveaplDK9US771PrSxaEYrrEJzyMusJGg==",
+    "JetBrains.Annotations/2025.2.4": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A==",
+    "Microsoft.Data.Sqlite.Core/10.0.10": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+    "Microsoft.EntityFrameworkCore/10.0.10": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+    "Microsoft.EntityFrameworkCore.Abstractions/10.0.10": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA==",
+    "Microsoft.EntityFrameworkCore.Analyzers/10.0.10": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q==",
+    "Microsoft.EntityFrameworkCore.Relational/10.0.10": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+    "Microsoft.EntityFrameworkCore.Sqlite/10.0.10": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA==",
+    "Microsoft.EntityFrameworkCore.Sqlite.Core/10.0.10": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A==",
+    "Microsoft.Extensions.DependencyModel/10.0.10": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA==",
+    "Newtonsoft.Json/13.0.3": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+    "Npgsql/10.0.0": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA==",
+    "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": "E2+uSWxSB8LdsUVwPaqRWOcGOP92biry2JEwc0KJMdLJF+aZdczeIdEXVwEyv4nSVMQJH0o8tLhyAMiR6VF0lw==",
+    "NuGet.Common/7.9.0": "OWFEzHpwvgzSaHYmWzfbyTm6oBOy/BFSFEDk73zM9jiJaxdopYZ/DrqIQogaM3F+ZGTppBJffmzu5adetEI/YA==",
+    "NuGet.Configuration/7.9.0": "oY9XZp+TWjOmiGmU4R4JWBRY3F4TAVo7tqPr/z7MOsFcEpdYHMryjNSscoLBxUTR3WmFmYgO0Gvu4eRbz6pzOg==",
+    "NuGet.Frameworks/7.9.0": "w2adPmgUafmW9ON1MzDjuHmViN0vtiPV48Dz3OE6px8BiGSqrnWHOjwFEPOEPAZx20J1c7bxp90Hxo9l4xGWtw==",
+    "NuGet.Packaging/7.9.0": "Q2jxuud5kJLV0rUzsC02iC5ts8QsQu9UVyMvF8lULY3TwHL/W/PrnQ9bQFvMR7jJkzF1uilRPI1o+7VOtc2XMg==",
+    "NuGet.Versioning/7.9.0": "r4sZuVpVqwSBLe4qYDrnpScqdyctlRXg0HSF5OoCGkeBc8b+o8BBYHuI/u1RoWYX78PbieijU13TBt71/Xf3lw==",
+    "SQLitePCLRaw.bundle_e_sqlite3/2.1.11": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ==",
+    "SQLitePCLRaw.core/2.1.11": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA==",
+    "SQLitePCLRaw.lib.e_sqlite3/2.1.11": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ==",
+    "SQLitePCLRaw.provider.e_sqlite3/2.1.11": "Y/0ZkR+r0Cg3DQFuCl1RBnv/tmxpIZRU3HUvelPw6MVaKHwYYR8YNvgs0vuNuXCMvlyJ+Fh88U1D4tah1tt6qw==",
+    "System.Security.Cryptography.Pkcs/8.0.1": "CoCRHFym33aUSf/NtWSVSZa99dkd0Hm7OCZUxORBjRB16LNhIEOf8THPqzIYlvKM0nNDAPTRBa1FxEECrgaxxA==",
+    "System.Security.Cryptography.ProtectedData/8.0.0": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+  },
+  "identityRemovalControl": {
+    "originalSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "originalDeployedAssetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+    "alternateAssetSha256": "8be63e2447052114cfe9f284a1f635c4cb4ac67f5652e3d083becbabccae3593",
+    "removedGuardAssetSha256": "c1ffb4d858d5dfa4c337ed9791728643b5258688f9d6622cad9d79629965ba84",
+    "intendedAssertionFailed": true,
+    "restoredSourceSha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "restoredDeployedAssetSha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+    "restoredDirectPassed": true
+  },
+  "consumerModuleRoots": [
+    "Elsa.Rules.Core",
+    "Elsa.Rules.Persistence.Core",
+    "Elsa.Rules.Runtime",
+    "Elsa.Rules.Persistence.EntityFrameworkCore",
+    "Elsa.Rules.Workflows.Design",
+    "Elsa.Rules.Workflows.Runtime"
+  ],
+  "consumerModuleRootVersions": {
+    "Elsa.Rules.Core": "4.0.0-branch-agent-codex-3181-durable-rules",
+    "Elsa.Rules.Persistence.Core": "4.0.0-branch-agent-codex-3181-durable-rules",
+    "Elsa.Rules.Runtime": "4.0.0-branch-agent-codex-3181-durable-rules",
+    "Elsa.Rules.Persistence.EntityFrameworkCore": "4.0.0-branch-agent-codex-3181-durable-rules",
+    "Elsa.Rules.Workflows.Design": "4.0.0-branch-agent-codex-3181-durable-rules",
+    "Elsa.Rules.Workflows.Runtime": "4.0.0-branch-agent-codex-3181-durable-rules"
+  },
+  "consumerResolvedPackedClosure": [
+    {
+      "id": "Elsa.Activities.Design.Core",
+      "version": "4.0.11-preview",
+      "archiveSha512": "fVkAZlnG9mrqBMFMB3YvxH8ivpuPe/JjkRKDl7LMB/eBwPbBruF1XpQWfUiqsC8euvAJYJGA+iyOrTa16wERTg=="
+    },
+    {
+      "id": "Elsa.Activities.Runtime.Core",
+      "version": "4.0.23-preview",
+      "archiveSha512": "6ztCRtmPCSZJRnUYzt8uqI644UAMCg+aujzASg5PhsfprUtyYxaKiN0Ht3Gfi2jbsn6avK6VY/aHptXlo+YMSw=="
+    },
+    {
+      "id": "Elsa.Events.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "IwQyWBEYJoPPq8OvNrSQP5ASexclil/CnHOyHq27zBGmdi7zZcCpXskiqPuDyo0A6D7aIQyEQy4RO3aL3mkqCA=="
+    },
+    {
+      "id": "Elsa.Expressions.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "FtctgeqVR/oj89utJUds/OleMLjhByuKI4/H0EgUS9y1JqG6olcGMtz11e3aq7zHXQg2GOrIAkdyhwO/nzrzHA=="
+    },
+    {
+      "id": "Elsa.Mediator.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "t11mZRUhc6qqm368pBezkRuWgi6Ieop4MPjVN66mpTPlzAQT73QbCrcBfweI5tlnX/KzoeBWl/8+fmDOBxFHVA=="
+    },
+    {
+      "id": "Elsa.Persistence.EntityFramework",
+      "version": "4.0.32-preview",
+      "archiveSha512": "Ot7WACk0g+2RKrKJUmKx3wKwnAZ675D7yDj2KyGFMe+4q5RCH7ni9xpnHn9vUQPc55aWiS1aj0PcJEPkKDy+QQ=="
+    },
+    {
+      "id": "Elsa.Persistence.Schema",
+      "version": "4.0.12-preview",
+      "archiveSha512": "obAmV0X9Zj0HXc0SXbepnMzY+5934/pKYE4Bgj6RV2VSebwhmuld604yjJrDw+/T9+jY/wbfjDoxzGs3tVoPvg=="
+    },
+    {
+      "id": "Elsa.Pipelines.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "zPK/zCQDMvCGGsCPZJHPHtN3H81Gi9qX61f0sI9hCgirr1evs6lGyiEKbb31vArfS8pJ8PGLUWrxnwPozFT+EA=="
+    },
+    {
+      "id": "Elsa.Primitives",
+      "version": "4.0.14-preview",
+      "archiveSha512": "mQaEExmvvCvYGWaAZGM58mhZlp4+29Lex7poZHdYPROHTMOXaB90Gha1ugsPmYQjMtaZiluX+DdBmU59Nlv2Vw=="
+    },
+    {
+      "id": "Elsa.Rules.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag=="
+    },
+    {
+      "id": "Elsa.Rules.Persistence.Core",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ=="
+    },
+    {
+      "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA=="
+    },
+    {
+      "id": "Elsa.Rules.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA=="
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Design",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig=="
+    },
+    {
+      "id": "Elsa.Rules.Workflows.Runtime",
+      "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A=="
+    },
+    {
+      "id": "Elsa.Serialization.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "dna0hle7TYUpo2ecy1rN27omItLRveCq1DeQB9+M7ryIend4cU0WrM+V5UOWtlC+cFHtBXnvAx0SKXGfvMXTCw=="
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "version": "4.0.14-preview",
+      "archiveSha512": "rvyXr61n05mnFwkdPelay+tEPda5Gs8RBELqAPrD4ynvryPVOE/1MwzhAR1D7ehgoBJAQcXhzElDk6oBm0W4DA=="
+    },
+    {
+      "id": "Elsa.Workflows.Design.Core",
+      "version": "4.0.12-preview",
+      "archiveSha512": "TR+aSVCPgri24l5Gbm7UXYTOKQYOzRpWXCP7C3YeNM+gwvf/+TqsuzKXjx8BaD43KNk1BkhdidqeAn80O2VJTQ=="
+    },
+    {
+      "id": "Elsa.Workflows.Publishing.Core",
+      "version": "4.0.15-preview",
+      "archiveSha512": "dDqUef+hbtgwZwaUWkM4Vx/pVlrBJSUjipR5rPL6pZqRdIoM1Ht3C9ZaFrEB1FZeCwZ1iaX8n2WS6IY466JhAg=="
+    },
+    {
+      "id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.51-branch-agent-codex-3181-durable-rules",
+      "archiveSha512": "4i2DrE2QH+rY8qroD7qhpNlDJidknBIZBifwjxQCZPId/tNf870UftveaplDK9US771PrSxaEYrrEJzyMusJGg=="
+    }
+  ],
+  "consumerPackageReferenceRestorePassed": true,
+  "proofScope": "Six-module clean package consumer and actual package-backed Workbench REST journeys; retained-run upgrades and full leaf acceptance remain pending.",
+  "sourceCleanAfterWorkbenchBuild": true,
+  "workbenchPackageHost": {
+    "passed": true,
+    "proofScope": "Published Workbench package host resolves all six Rules modules from the computed local feed; selected module assets and the three-package semantic identity receipt match PackageProbe. Native Rules execution in Workbench is not covered.",
+    "nativeExecutionPassed": false,
+    "sourceCommit": "26c645ba4691ac0634ae3232f9bd3868f1f72ecd",
+    "workbenchSourceProject": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+    "buildInputProjectPath": "/private/tmp/rules-six-module-process-corrected/run-0c2d2afb6c37454385f0cbcefbe14d5e/source/Essentials/apps/RulesPackageWorkbench-fbm9hd61/Elsa.Workbench.csproj",
+    "workbenchSourceSha256": {
+      "project": "2d781c77d37210929bde59abb8c43e4b1be49e1f4c410b2a94f01e7792502150",
+      "program": "0ffbc849682eaaec9e2336a2a41a777300c28d380c9dd5b5f3660d9b77b9cc2f"
+    },
+    "qualificationProjectSha256": "10fa675a63cd5a268af054286d02d995b92105f64190831d87ce77dd8b27aea6",
+    "retainedQualificationProject": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/qualification-project.csproj",
+    "qualificationProgramSha256": "0ffbc849682eaaec9e2336a2a41a777300c28d380c9dd5b5f3660d9b77b9cc2f",
+    "replacedProjectReferences": [
+      "Elsa.Rules.Persistence.EntityFrameworkCore",
+      "Elsa.Rules.Runtime",
+      "Elsa.Rules.Workflows.Design",
+      "Elsa.Rules.Workflows.Runtime"
+    ],
+    "moduleVersions": {
+      "Elsa.Rules.Core": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "Elsa.Rules.Persistence.Core": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "Elsa.Rules.Runtime": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "Elsa.Rules.Persistence.EntityFrameworkCore": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "Elsa.Rules.Workflows.Design": "4.0.0-branch-agent-codex-3181-durable-rules",
+      "Elsa.Rules.Workflows.Runtime": "4.0.0-branch-agent-codex-3181-durable-rules"
+    },
+    "sourceProjectLibraryCount": 140,
+    "projectAssetsRulesModules": [
+      {
+        "id": "Elsa.Rules.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+        "archiveSha512": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Core.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Core.dll",
+        "assemblySha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd",
+        "deployedAssemblySha256": null
+      },
+      {
+        "id": "Elsa.Rules.Persistence.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+        "archiveSha512": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+        "assemblySha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255",
+        "deployedAssemblySha256": null
+      },
+      {
+        "id": "Elsa.Rules.Runtime",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+        "archiveSha512": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Runtime.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Runtime.dll",
+        "assemblySha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "deployedAssemblySha256": null
+      },
+      {
+        "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+        "archiveSha512": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll",
+        "assemblySha256": "8938685de4edd197ca76f8e55ad2730783d94c79b48d62ad343fd45d958d709b",
+        "deployedAssemblySha256": null
+      },
+      {
+        "id": "Elsa.Rules.Workflows.Design",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+        "archiveSha512": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Workflows.Design.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Workflows.Design.dll",
+        "assemblySha256": "bbdef0c2d28b545a729f2f4a817dd045aa046097e8615bbd4f5a3b03372b2024",
+        "deployedAssemblySha256": null
+      },
+      {
+        "id": "Elsa.Rules.Workflows.Runtime",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+        "archiveSha512": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Workflows.Runtime.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Workflows.Runtime.dll",
+        "assemblySha256": "6f4596a01630115100a62bed4b265c5b885250d5a9918e39d9b17b4c58662a1c",
+        "deployedAssemblySha256": null
+      }
+    ],
+    "publishedRulesModules": [
+      {
+        "id": "Elsa.Rules.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+        "archiveSha512": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Core.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Core.dll",
+        "assemblySha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd",
+        "deployedAssemblySha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+      },
+      {
+        "id": "Elsa.Rules.Persistence.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+        "archiveSha512": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Persistence.Core.dll",
+        "assemblySha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255",
+        "deployedAssemblySha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+      },
+      {
+        "id": "Elsa.Rules.Runtime",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+        "archiveSha512": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Runtime.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Runtime.dll",
+        "assemblySha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b",
+        "deployedAssemblySha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+      },
+      {
+        "id": "Elsa.Rules.Persistence.EntityFrameworkCore",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+        "archiveSha512": "ysxygLAF0D7OE1nMHpTJCmzIp+SdZ8T73YAY4k/Wub28uoj3RIiXgxw1XHSQOmsbon5EJZGWe3Vzhfzen5pNUA==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll",
+        "assemblySha256": "8938685de4edd197ca76f8e55ad2730783d94c79b48d62ad343fd45d958d709b",
+        "deployedAssemblySha256": "8938685de4edd197ca76f8e55ad2730783d94c79b48d62ad343fd45d958d709b"
+      },
+      {
+        "id": "Elsa.Rules.Workflows.Design",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+        "archiveSha512": "v/2weOVQXwuDeVpBHqL6KULu9Y0j7qLOLRb+dlasDvKjTjaRdK5wBuilUcMP1TXNcPikI8+8OWtqqEitfpTKig==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Workflows.Design.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Workflows.Design.dll",
+        "assemblySha256": "bbdef0c2d28b545a729f2f4a817dd045aa046097e8615bbd4f5a3b03372b2024",
+        "deployedAssemblySha256": "bbdef0c2d28b545a729f2f4a817dd045aa046097e8615bbd4f5a3b03372b2024"
+      },
+      {
+        "id": "Elsa.Rules.Workflows.Runtime",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+        "archiveSha512": "0qiRJkZMHubK1bEi8E4NK9k09QK/nH8+5GHchFGQYMGiz3GIHtZXEUOqw7zFXeMqYRV6vfOD9hRPcJKwXIRr1A==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Workflows.Runtime.dll"
+        ],
+        "assemblyAsset": "lib/net10.0/Elsa.Rules.Workflows.Runtime.dll",
+        "assemblySha256": "6f4596a01630115100a62bed4b265c5b885250d5a9918e39d9b17b4c58662a1c",
+        "deployedAssemblySha256": "6f4596a01630115100a62bed4b265c5b885250d5a9918e39d9b17b4c58662a1c"
+      }
+    ],
+    "semanticReceiptPackages": [
+      {
+        "id": "Elsa.Rules.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "ZDlOpz1D8ZarEmVMQ9rGcK5iEW1P/j+JVdy6epfsM+8/e1d+ETXhX3Pe8wavZmK7K/JHUZz/aB902aPN6y+8Ag==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Core.dll"
+        ],
+        "assembly": "Elsa.Rules.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "assemblySha256": "1a2940d02fc187302ad7d79216ea92459e5ab43366e0db2420cea5fde27650bd"
+      },
+      {
+        "id": "Elsa.Rules.Persistence.Core",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "TXFKK0SepUyOP0BLMO12GKyJXZ4V5TNUpA6X5egOjTlGEAnPPHPF6+ZfiGpgnxpyJydkpyTU7CKpGurSGP+PkQ==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Persistence.Core.dll"
+        ],
+        "assembly": "Elsa.Rules.Persistence.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "assemblySha256": "c149ad996657c4bb49886bb6fb62d923b2d3c42608b9b8f43026d19826bfa255"
+      },
+      {
+        "id": "Elsa.Rules.Runtime",
+        "version": "4.0.0-branch-agent-codex-3181-durable-rules",
+        "contentHash": "mxx7s4JzH10fYL/7azdzBEOAIx/ntS10FG4hXXzy1475sA5RpV+b8+0f97g5IkgV+W9lU+5U75D82a5ezdvVEA==",
+        "selectedRuntimeAssets": [
+          "lib/net10.0/Elsa.Rules.Runtime.dll"
+        ],
+        "assembly": "Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "assemblySha256": "68ede24989228f7a9146958665ab79b04ad28aba92e7a703f7579d37a9ba5c6b"
+      }
+    ],
+    "deploymentReceipt": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/deployment/elsa.rules.deployment-receipt.json",
+    "deploymentReceiptSha256": "6520f8f45024feca141856a8eed3b68ad933c91af9dd30ffd5791516bb8ac861",
+    "rulesPackageReferencesPropsSha256": "7e8a835f44aa0011abbdf46b37b25541612d2d1ee44be3fc5871d7167e7bb0bb",
+    "nuGetConfigSha256": "0bad7ba928950856efc8ac11151db1875519f656b76e1cc385787534a68023ea",
+    "nuGetLockFileSha256": "5b4841a3a779e61268c6440ef8a665bd845e62b8a1a22fa39030904119ba5fe4",
+    "manifestPath": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-package-host/workbench-package-host.json",
+    "manifestSha256": "c07af582a9293bc4dc29ad8cb33fa857dc03b60a4ead36062240cd5a43515c29"
+  },
+  "nativeRestEvidence": {
+    "path": "/private/tmp/rules-six-module-workbench-cleanup-final/run-ae0c49a9aeae49d6a494ddd56a73a0e3/workbench-rest.json",
+    "sha256": "d0ddfb8907377fbcce36e1b9d3206bc41bdaca4e442d294731d45233a18cb69c"
+  },
+  "harnessUnchanged": true
+}

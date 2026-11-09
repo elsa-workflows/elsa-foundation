@@ -15,6 +15,8 @@ public sealed class EfActivityExecutionStateStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
     private const string ContinuationPurpose = "elsa-runtime-activity-execution-state-page-v1";
 
     public async ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)

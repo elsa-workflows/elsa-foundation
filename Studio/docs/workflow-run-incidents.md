@@ -22,4 +22,12 @@ An input can have a recorded evaluation failure, a recorded successful evaluatio
 
 Runtime summaries are paged. Studio loads a bounded batch of exact activity associations for active incidents and offers **Load more affected activities** when additional associations remain. Until those are loaded, the canvas shows that affected activities are still being resolved. Hosts that do not expose exact activity inspection show an unavailable-evidence state. Selecting an older incident can request its exact activity inspection separately.
 
+## Choosing a next step
+
+Incident details show a short **Next step** before the technical message, metadata, and stack trace. The guidance keeps the selected incident tied to the current run and distinguishes active blocking, active non-blocking, and historical incidents. When the exact compensation journal reports an automatic retry and its due time, Studio tells the operator to wait rather than offer a duplicate retry. Missing, partial, or unavailable evidence does not prove that a retry or handler is absent.
+
+The existing run actions remain the only recovery controls. Their server-advertised capability, run-management check, target, confirmation, and pending-action handling continue to govern whether they appear. A followed action for another incident is called out as belonging to that incident; a known canceled requester is not offered as actionable.
+
+The dialog may show **Review workflow definition** after a read of the exact definition ID pinned by the open run succeeds and the returned definition ID matches. This confirms that the definition can be inspected; it does not establish permission to edit or publish. A failed, denied, unsupported, or mismatched read stays unconfirmed without assigning a cause. The run continues to use its pinned executable; definition edits affect future executions. The exact definition ID remains copyable when its route is unavailable.
+
 The BPMN run canvas uses the pinned executable’s compact element/flow topology and exact child bindings. Layout and activity labels stay separate from execution evidence. Older hosts that omit BPMN topology cannot supply a complete BPMN canvas; Studio does not invent activity associations from names or identifiers.

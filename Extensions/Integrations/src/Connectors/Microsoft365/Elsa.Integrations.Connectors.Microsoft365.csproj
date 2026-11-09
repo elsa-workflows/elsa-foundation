@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Microsoft 365 (Graph v1.0) connector activities for Elsa Integrations. Authenticates through the foundation http connection (oauth2). Activities only: no host endpoints, hosted services, or EF contexts.</Description>
+    <PackageTags>elsa;integrations;microsoft365;graph;connector</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Sdk\Elsa.Integrations.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Integrations.Connectors.Microsoft365.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -19,6 +19,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </remarks>
 [RefusesSecretBinding("Duration", SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityOutcome("Done")]
+[Activity(Icon = "Hourglass")]
 public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider) :
     StatefulActivity<ActivityUnit, DelayState, DurableTimerElapsed>
 {

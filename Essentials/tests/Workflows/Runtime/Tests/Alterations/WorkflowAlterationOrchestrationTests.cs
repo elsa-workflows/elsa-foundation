@@ -86,7 +86,7 @@ public sealed class WorkflowAlterationOrchestrationTests
     }
 
     [Fact]
-    public async Task Capture_IsolatesTargetsByExecutionAuthorityWithinTheSameTenant()
+    public async Task QueryCapture_IsolatesTargetsByExecutionAuthorityWithinTheSameTenant()
     {
         var store = new InMemoryWorkflowAlterationStore();
         var executions = new InMemoryWorkflowExecutionStateStore();
@@ -100,21 +100,130 @@ public sealed class WorkflowAlterationOrchestrationTests
             NewSubmission(WorkflowAlterationTargetSelector.ForQuery(new WorkflowAlterationQuerySelector(matchAllAuthorized: true))),
             new WorkflowAlterationOperatorProvenance("operator", null),
             "authority-query");
-        var explicitPlan = await service.SubmitAsync(
-            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-other"])),
-            new WorkflowAlterationOperatorProvenance("operator", null),
-            "authority-explicit");
         var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now));
 
         await capture.CaptureNextAsync(queryPlan.Plan.PlanId, 10);
-        await capture.CaptureNextAsync(explicitPlan.Plan.PlanId, 10);
 
         var queryJob = Assert.Single((await store.PageJobsAsync(queryPlan.Plan.PlanId, 10)).Items);
-        var inaccessibleJob = Assert.Single((await store.PageJobsAsync(explicitPlan.Plan.PlanId, 10)).Items);
         Assert.Equal("execution-authorized", queryJob.WorkflowExecutionId);
         Assert.Equal("operator", queryJob.CapturedConcurrency!.Authority!.RootInitiator);
-        Assert.Equal(WorkflowAlterationJobStatus.Failed, inaccessibleJob.Status);
-        Assert.Equal("TargetNotFound", inaccessibleJob.SafeFailure!.Code);
+    }
+
+    // Spec 260 FR-406 (owner decision OD16): an explicit target names one run of the caller's tenant, whatever started it.
+    [Theory]
+    [InlineData("http-endpoint")]
+    [InlineData("workflow-designer-test-run")]
+    [InlineData("runtime.timer")]
+    public async Task ExplicitCapture_TakesAnyRunOfTheTenantAndCapturesItsAuthority(string rootInitiator)
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(NewExecution("execution-other") with
+        {
+            Authority = new WorkflowExecutionAuthoritySnapshot("system", rootInitiator)
+        });
+        var service = NewPlanService(store);
+        var explicitPlan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-other"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            $"authority-explicit-{rootInitiator}");
+
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now)).CaptureNextAsync(explicitPlan.Plan.PlanId, 10);
+
+        var job = Assert.Single((await store.PageJobsAsync(explicitPlan.Plan.PlanId, 10)).Items);
+        Assert.Equal(WorkflowAlterationJobStatus.Pending, job.Status);
+        Assert.Null(job.SafeFailure);
+        Assert.Equal("execution-other", job.WorkflowExecutionId);
+        Assert.Equal(rootInitiator, job.CapturedConcurrency!.Authority!.RootInitiator);
+    }
+
+    [Fact]
+    public async Task ExplicitCapture_RefusesARunOfAnotherTenantOrAMissingRun()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(NewExecution("execution-foreign") with { TenantId = "tenant-b" });
+        var service = NewPlanService(store);
+        var plan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-foreign", "execution-missing"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "explicit-foreign");
+
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now)).CaptureNextAsync(plan.Plan.PlanId, 10);
+
+        var jobs = (await store.PageJobsAsync(plan.Plan.PlanId, 10)).Items;
+        Assert.Equal(2, jobs.Count);
+        Assert.All(jobs, job =>
+        {
+            Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
+            Assert.Equal("TargetNotFound", job.SafeFailure!.Code);
+        });
+    }
+
+    // Spec 260 FR-406: a run left out of the per-run authorized set is never read and fails like a missing run.
+    [Fact]
+    public async Task ExplicitCapture_TreatsARunOutsideTheAuthorizedSetAsMissingWithoutReadingIt()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new CountingExecutionStore();
+        await executions.SaveAsync(NewExecution("execution-allowed"));
+        await executions.SaveAsync(NewExecution("execution-refused"));
+        var service = NewPlanService(store);
+        var plan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-allowed", "execution-refused"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "explicit-per-run-authorization",
+            authorizedExecutionIds: ["execution-allowed"]);
+
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now)).CaptureNextAsync(plan.Plan.PlanId, 10);
+
+        var jobs = (await store.PageJobsAsync(plan.Plan.PlanId, 10)).Items.ToDictionary(job => job.WorkflowExecutionId);
+        Assert.Equal(WorkflowAlterationJobStatus.Pending, jobs["execution-allowed"].Status);
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, jobs["execution-refused"].Status);
+        Assert.Equal("TargetNotFound", jobs["execution-refused"].SafeFailure!.Code);
+        Assert.Null(jobs["execution-refused"].CapturedConcurrency);
+        Assert.DoesNotContain("execution-refused", executions.Reads);
+    }
+
+    [Fact]
+    public void PlanState_AcceptsOnlyExplicitTargetsAsAuthorizedExecutionIds()
+    {
+        var scope = new WorkflowAlterationAuthorityScope("tenant-a", "system", "root");
+        var provenance = new WorkflowAlterationOperatorProvenance("operator", null);
+        var payload = new ProtectedWorkflowAlterationPayload("key", "AES", "cipher");
+        Assert.Throws<ArgumentException>(() => WorkflowAlterationPlanState.CreateCapturing(
+            "plan", scope, provenance, "idem", "hash", payload,
+            WorkflowAlterationTargetSelector.ForExecutionIds(["execution-a"]), Now, authorizedExecutionIds: ["execution-b"]));
+        Assert.Throws<ArgumentException>(() => WorkflowAlterationPlanState.CreateCapturing(
+            "plan", scope, provenance, "idem", "hash", payload,
+            WorkflowAlterationTargetSelector.ForQuery(new WorkflowAlterationQuerySelector(matchAllAuthorized: true)), Now, authorizedExecutionIds: []));
+        var withoutPerRunAuthorization = WorkflowAlterationPlanState.CreateCapturing(
+            "plan", scope, provenance, "idem", "hash", payload,
+            WorkflowAlterationTargetSelector.ForExecutionIds(["execution-a"]), Now);
+        Assert.Null(withoutPerRunAuthorization.AuthorizedExecutionIds);
+    }
+
+    [Fact]
+    public async Task ExplicitCapture_AnAuthorityChangeAfterCaptureFailsTheConcurrencyCheck()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        var captured = NewExecution("execution-other") with { Authority = new WorkflowExecutionAuthoritySnapshot("system", "http-endpoint") };
+        await executions.SaveAsync(captured);
+        var service = NewPlanService(store);
+        var plan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-other"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "explicit-authority-change");
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now)).CaptureNextAsync(plan.Plan.PlanId, 10);
+        var job = Assert.Single((await store.PageJobsAsync(plan.Plan.PlanId, 10)).Items);
+
+        var unchanged = WorkflowAlterationCapturedConcurrencyValidator.ValidateAuthority(job, captured);
+        var changed = WorkflowAlterationCapturedConcurrencyValidator.ValidateAuthority(
+            job, captured with { Authority = new WorkflowExecutionAuthoritySnapshot("system", "runtime.timer") });
+
+        Assert.Null(unchanged);
+        Assert.Equal("ExecutionAuthorityConflict", changed!.Code);
     }
 
     [Fact]
@@ -398,6 +507,22 @@ public sealed class WorkflowAlterationOrchestrationTests
     private static WorkflowAlterationJobState NewRunningJob(string jobId, string executionId) =>
         new(jobId, "plan-1", executionId, "tenant-a", 0, WorkflowAlterationJobStatus.Running,
             new WorkflowAlterationJobClaim("worker-1", "claim-1", Now.AddMinutes(1)), 1, [], null, null, Now, Now, null, 0);
+
+    private sealed class CountingExecutionStore : IWorkflowExecutionStateStore
+    {
+        private readonly InMemoryWorkflowExecutionStateStore _inner = new();
+        public List<string> Reads { get; } = [];
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => _inner.SaveAsync(state, cancellationToken);
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            Reads.Add(workflowExecutionId);
+            return _inner.FindAsync(workflowExecutionId, cancellationToken);
+        }
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => _inner.ListAsync(cancellationToken);
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => _inner.QueryPageAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => _inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
 
     private sealed class TestPayloadProtector : IWorkflowAlterationPayloadProtector
     {

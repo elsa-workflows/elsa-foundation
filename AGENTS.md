@@ -29,7 +29,8 @@ Use the narrowest source that answers the task.
 | Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
-| Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
+| Human-led planning: initiatives, their coordinator and approvers, ADR agreement, the initiative branch and its pre-merge gate, the initiative board | `docs/contributing/initiatives.md` |
+| Repo navigation, extension points, dependency/test maps | [docs/maps/README.md](docs/maps/README.md) (the generated maps are published on the [`generated-maps` branch](https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps)) and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
@@ -51,7 +52,7 @@ Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 - Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
 - Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
 - File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
-- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
+- Respect the program and issue limits in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): active programs are exactly the Active rows of the [program-goal registry](docs/program-goals/README.md#registry), each authorized by an owner amendment in [ADR 0080 D0](docs/adr/0080-elsa-4-simplification-decisions.md#d0--focus), and there are at most 20 `ready-for-agent` issues. Each authorization applies only to its named scope. At the cap, extend the existing parent instead of filing more.
 - Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 
 ## Builds on a shared machine
@@ -63,9 +64,13 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 - Check `uptime` before trusting a timing-shaped failure. The load average counts runnable tasks, so compare it with the core count, and rerun at lower load before calling the failure real.
 - A process started as a background job of a non-interactive shell ignores SIGINT. Stop such a process with SIGTERM; a SIGINT that has no effect there does not mean the process hangs on Ctrl+C.
 
+## Studio delivery acceptance
+
+For visible UI or interaction changes, follow [Studio UX acceptance](docs/contributing/studio-ux-acceptance.md): define the user goal/reference/states before coding, verify the composed host, retain current-commit downloadable visual evidence, and include independent UX acceptance in the existing review loop. A green test summary without inspected experience is incomplete acceptance. Keep failed/not-run states visible and fix/retest before claiming the feature done.
+
 ## Program bookkeeping
 
-Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. An initiative proposal (a PR whose base is an `initiative/*` branch, or the branch of a proposal stacked on one) is the exception: the initiative's coordinator merges it after the [pre-merge gate](docs/contributing/initiatives.md#the-pre-merge-gate). See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
@@ -73,7 +78,7 @@ Comment on the program issue at every state transition. Every PR carries this re
 
 ## Refresh generated maps
 
-`dotnet run --project tools/maps/Elsa.Maps.Generator -- check` is the only authoritative freshness answer, and `-- all` refreshes every map. Refreshing is a deliberate act; afterwards stage every changed map by explicit path, `docs/maps/manifest.json` included. See [Generated maps](docs/contributing/generated-maps.md).
+The documentation maps are not committed to `main`. Generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` (same paths, git-ignored), or read the set CI publishes after each merge: browse <https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps>, fetch raw files from `https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/generated-maps/docs/maps/<file>`, or run `git fetch origin generated-maps` and `git show origin/generated-maps:docs/maps/<file>`. The dependency-map dataset, `docs/maps/dependency-map.json`, is not committed either: the versioning calculator derives it from each commit's own tree (spec 259), and it is published with the maps. `-- check` guards the committed solution filters; commit them only when they change. See [Generated maps](docs/contributing/generated-maps.md).
 
 ## Personal operating preferences
 
@@ -85,6 +90,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 |---|---|
 | Feature development | [Speckit flow](docs/skills/catalog.md#speckit-flow-guide) and [task path](docs/contributing/task-paths.md#feature-development) |
 | Architecture development | [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or [Work Unit Planner](docs/skills/catalog.md#work-unit-planner) |
+| Work on or linked to an issue of type Initiative | [Initiative Coordination](docs/skills/catalog.md#initiative-coordination) and [initiatives](docs/contributing/initiatives.md) |
 | Codebase verification | [Verify Codebase Against Constitution](docs/skills/catalog.md#verify-codebase-against-constitution) |
 | Backend e2e tests | [Backend e2e tests](docs/contributing/task-paths.md#backend-e2e-tests) and [e2e-tests/README.md](e2e-tests/README.md) |
 | Constitution review of a change | [Review checklist](docs/contributing/review-checklist.md) |
@@ -94,10 +100,16 @@ Maintainers publish organization-repository branches and contributors use fork P
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.2, after #2578 and #2591); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
+Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.3, after #2578, #2591 and spec 257); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
 New work moves toward this rule: constitution for gates and governance, glossary for meanings, skills for executable workflows, maps and catalogs for navigation and generated facts, reports for current findings and unfinished work.
 
 [org-agents]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md
 [org-agents-ibl]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite
 [org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules
+
+<!-- SPECKIT START -->
+For additional context about technologies, project structure, shell commands, contracts, and
+validation scenarios for the active work unit, read
+`specs/1005-studio-ux-qualification/plan.md`.
+<!-- SPECKIT END -->

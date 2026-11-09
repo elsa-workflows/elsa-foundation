@@ -65,6 +65,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | Helper | Role |
 |---|---|
 | `EfMigrationsHistory.TableName(module)` | `__EFMigrationsHistory_<Module>` so two modules in one database do not share history |
+| `EfMigrationIncludesAttribute` / `EfMigrationsHistory.EnsureAdded(builder)` | Recognize a declared cumulative migration as including its retained baseline during forward upgrade, without changing physical history. The common provider binding installs the internal history decorator before pooled options freeze; custom context integrations call `EnsureAdded` at that same boundary. Fresh databases still apply the retained chain. |
 | `EfProviderGuard.Ensure` | Refuse apply when `Database.ProviderName` does not match the derived context |
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending), chosen by the operator through `EfMigrateOptions` |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock; on SQLite through `EfSqliteMigrationLock`) or fail closed |

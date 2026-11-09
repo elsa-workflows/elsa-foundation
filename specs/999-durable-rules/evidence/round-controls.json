@@ -1,0 +1,42 @@
+[
+  {
+    "control": "fixed-point-precedence",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 5 s - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "restored_sha256": "cd89a6655fc2d73be15418b35a42cc853aea5d79fd9289b9e2035a04df6041cb",
+    "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Rounds.cs",
+    "log": "3181-rounds-control-fixed-point-precedence.log"
+  },
+  {
+    "control": "complete-step-validation",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     5, Passed:     0, Skipped:     0, Total:     5, Duration: 3 s - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "restored_sha256": "e129c85b10b38efe517501113f1b75739425cba35804296add1fa42d9fdc48b7",
+    "path": "Extensions/Rules/src/Runtime/RuleRoundEvaluator.cs",
+    "log": "3181-rounds-control-complete-step-validation.log"
+  },
+  {
+    "control": "expiry-rollback",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 3 s - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "restored_sha256": "75e8943c1b7d3abf44fdc7983f3928d62a82466d0a75f797299b1d0c923b1bb8",
+    "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.cs",
+    "log": "3181-rounds-control-expiry-rollback.log"
+  },
+  {
+    "control": "consistent-read",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     3, Passed:     0, Skipped:     0, Total:     3, Duration: 3 s - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "restored_sha256": "cd89a6655fc2d73be15418b35a42cc853aea5d79fd9289b9e2035a04df6041cb",
+    "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Rounds.cs",
+    "log": "3181-rounds-control-consistent-read.log"
+  }
+]

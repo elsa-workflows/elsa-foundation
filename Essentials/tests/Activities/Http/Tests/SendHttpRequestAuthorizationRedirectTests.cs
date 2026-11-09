@@ -62,7 +62,7 @@ public sealed class SendHttpRequestAuthorizationRedirectTests : IAsyncDisposable
     {
         var run = await _harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
             url: new Uri(_origin.BaseAddress, StartPath),
-            authorization: _authorizationValue)));
+            requestHeaders: new Dictionary<string, string> { ["Authorization"] = _authorizationValue })));
 
         run.AssertOutcomes(NodeId, "Done");
         // The original request carried the value, so its absence on the target is the client's doing.

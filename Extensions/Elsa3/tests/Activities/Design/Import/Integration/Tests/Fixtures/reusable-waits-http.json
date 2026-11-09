@@ -1,0 +1,129 @@
+{
+  "id": "waits-http-v1",
+  "definitionId": "waits-http",
+  "name": "waits-http",
+  "description": "Test-owned reusable flowchart: waits mid-flow for a POST to orders/approve, then completes with Approved.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [
+    "Approved"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "waits-http-root",
+    "nodeId": "waits-http-root",
+    "name": "waits-http-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "wait",
+        "nodeId": "wait",
+        "name": "wait",
+        "type": "Elsa.HttpEndpoint",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "path": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "orders/approve"
+          }
+        },
+        "supportedMethods": {
+          "typeName": "List<String>",
+          "expression": {
+            "type": "Object",
+            "value": "[\"POST\"]"
+          }
+        }
+      },
+      {
+        "id": "approved",
+        "nodeId": "approved",
+        "name": "approved",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Approved"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "wait",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "approved",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

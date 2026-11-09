@@ -13,8 +13,9 @@
 
   <ItemGroup>
     <PackageVersion Include="Acornima" Version="1.6.1" />
-    <PackageVersion Include="Bpmn.Interchange" Version="0.1.1-preview.19" />
-    <PackageVersion Include="Bpmn.Model" Version="0.1.1-preview.19" />
+    <PackageVersion Include="Bpmn.Interchange" Version="0.5.0" />
+    <PackageVersion Include="Bpmn.Model" Version="0.5.0" />
+    <PackageVersion Include="Bpmn.Semantics" Version="0.5.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
@@ -35,8 +36,12 @@
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
+    <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageVersion Include="OpenAI" Version="2.14.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.27.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
     <PackageVersion Include="Jint" Version="4.9.1" />
     <!--
       The Microsoft.AspNetCore.* pins below at 2.3.x are NOT stale, and must not be "bumped" to match
@@ -68,21 +73,21 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <!--
       Test-only. Supplies Microsoft.Extensions.Time.Testing.FakeTimeProvider, the TimeProvider double every
@@ -102,6 +107,9 @@
       the graph resolves 2.0.0, which carries a high-severity advisory (GHSA-v5pm-xwqc-g5wc).
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+    <!-- Isolated tools/hosting Orleans composition probe; no shipping runtime dependency. -->
+    <PackageVersion Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.4.0" />
+    <PackageVersion Include="Microsoft.Orleans.Server" Version="10.4.0" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MySql.Data" Version="26.7.0" />
     <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />
@@ -110,12 +118,13 @@
       three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
       Testing companions are only meaningful against the same build of it.
     -->
-    <PackageVersion Include="NativeEndpoints" Version="1.0.0-preview.6" />
-    <PackageVersion Include="NativeEndpoints.OpenApi" Version="1.0.0-preview.6" />
-    <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.6" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints" Version="1.0.0" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints.OpenApi" Version="1.0.0" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints.Testing" Version="1.0.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.0" />
     <PackageVersion Include="Nuplane" Version="0.0.12" />
     <PackageVersion Include="Nuplane.Admin" Version="0.0.12" />
     <PackageVersion Include="Nuplane.Loading" Version="0.0.12" />
@@ -138,6 +147,7 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />

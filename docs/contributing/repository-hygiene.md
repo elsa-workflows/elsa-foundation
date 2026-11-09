@@ -1,8 +1,8 @@
 # Repository hygiene
 
-Branches and issues stay legible only if they have a lifecycle that ends. This page is the policy; two
-workflows can enforce most of it and a weekly report shows the rest. Scheduled cleanup depends on
-the [enforcement setting](#enforcement); in report-only mode, the workflows report proposed actions.
+Branches and issues stay legible only if they have a lifecycle that ends. This page is the policy; one maintenance
+workflow can enforce most of it and a weekly report shows the rest. Scheduled cleanup depends on
+the [enforcement setting](#enforcement); in report-only mode, the maintenance jobs report proposed actions.
 
 ## Branches
 
@@ -31,7 +31,9 @@ A branch lives as long as its pull request.
 
   Branches deleted on merge are not restored; their work is in `main`.
 
-- **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
+- **Never swept:** `main`, `publish-state`, `generated-maps`, `release/*`, `rc/*`, `initiative/*` (an
+  [initiative's integration branch](initiatives.md#the-initiative-branch), which lives until it lands) and any
+  protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
 - Agents name branches `agent/<worker>/<issue>-<slug>`, per
   [Issue Bus Lite][org-agents-work]. The sweep does not
@@ -53,14 +55,13 @@ An open issue is a commitment someone can act on, not a log entry.
 - **Progress goes on the existing record.** Checkpoints, receipts and gate evidence belong in PR
   comments or on the issue being worked, not in new issues. Do not file tracking, sweep or checkpoint
   issues. The standing `repo-hygiene`, `ux-qa-ledger` and `product-scout-ledger` issues are the only exceptions.
-- **Work-in-progress caps:** at most 2 active `type:program` issues and at most 20 `ready-for-agent`
-  issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
-  new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
+- **Work-in-progress caps:** at most 20 `ready-for-agent` issues. Active programs are exactly the rows of
+  the Active table in the [program-goal registry](../program-goals/README.md#registry); the
+  [19 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the former
+  two-program cap. A program becomes active only through an owner amendment to ADR 0080 D0 that names it
+  and states its sequencing. A program labelled `status:parked` stays open and gets no new child issues
+  until it is reactivated. At the `ready-for-agent` cap, add scope to the existing parent instead of
   filing more.
-  The [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
-  exceptions for existing consolidation #2501 and website/docs #2495. Keep those programs active under
-  their existing queues; do not re-park them solely to meet the cap. This does not raise the general cap
-  or authorize more programs, cleanup or changes to enforcement settings.
 - **Stale intake closes.** An issue labelled `needs-triage` or `needs-info` with no activity for 30 days
   is labelled `stale` and closes as not planned 14 days later. Programs, epics, `security`, `bug` and
   `keep-open` issues are exempt.
@@ -78,7 +79,7 @@ An open issue is a commitment someone can act on, not a log entry.
 ## Ownership and cadence
 
 - **Owner:** the repository maintainer (currently Sipke).
-- **Weekly:** the [Repository hygiene](../../.github/workflows/repo-hygiene.yml) workflow runs every
+- **Weekly:** the [Repository maintenance](../../.github/workflows/repo-hygiene.yml) workflow runs every
   Monday and comments its report on the open issue labelled `repo-hygiene`. The owner spends 15 minutes
   on what it flags: re-triage or close idle issues, and keep the program and ready caps.
 - **Targets:** fewer than 100 open issues; branches roughly equal to open PRs plus exempt branches;
@@ -86,10 +87,10 @@ An open issue is a commitment someone can act on, not a log entry.
 
 ## Enforcement
 
-Both workflows start in report-only mode: the sweep reports what it would delete and the
-[stale workflow](../../.github/workflows/stale.yml) runs in debug-only mode. After reviewing the first
+Both maintenance jobs start in report-only mode: the sweep reports what it would delete and the
+[stale job](../../.github/workflows/repo-hygiene.yml) runs in debug-only mode. After reviewing the first
 report, set the repository variable `HYGIENE_ENFORCE` to `true` to enforce both. A one-off cleanup can
-run the Repository hygiene workflow manually with mode `enforce`.
+run the Repository maintenance workflow manually with task `hygiene` and mode `enforce`.
 
 Run the sweep locally in report mode, which changes nothing:
 

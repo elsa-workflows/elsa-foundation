@@ -101,7 +101,7 @@ public sealed class ActivityExecutionInspectionOutcomeTests
             resumeTargetId: scopedResumeTargetId,
             stimulusType: EventStimulus.StimulusType,
             stimulusHash: EventStimulus.Hash(EventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(EventName)));
+            input: JsonSerializer.SerializeToElement(new { eventName = EventName }));
 
         await AssertProjectedOutcomeAsync(harness, run, LeafNodeId, ActivityOutcomes.Done);
         if (nested)

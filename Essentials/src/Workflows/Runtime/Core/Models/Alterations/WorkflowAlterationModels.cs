@@ -267,7 +267,8 @@ public sealed record WorkflowAlterationPlanState
         DateTimeOffset? cancellationRequestedAt = null,
         WorkflowAlterationSafeFailure? safeFailure = null,
         long revision = 0,
-        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null)
+        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null,
+        IReadOnlyList<string>? authorizedExecutionIds = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentNullException.ThrowIfNull(authorityScope);
@@ -305,6 +306,7 @@ public sealed record WorkflowAlterationPlanState
         SafeFailure = safeFailure;
         Revision = revision;
         AlterationDescriptors = alterationDescriptors?.ToArray() ?? [];
+        AuthorizedExecutionIds = NormalizeAuthorizedExecutionIds(authorizedExecutionIds, target);
     }
 
     public string PlanId { get; }
@@ -330,6 +332,14 @@ public sealed record WorkflowAlterationPlanState
     public long Revision { get; }
     /// <summary>Payload-free registry descriptors persisted at admission for safe read projections.</summary>
     public IReadOnlyList<WorkflowAlterationDescriptor> AlterationDescriptors { get; }
+    /// <summary>
+    /// The explicit execution IDs the submitting operator was authorized, run by run, to manage when the plan was
+    /// admitted, or <see langword="null"/> when the plan was admitted without per-run authorization (query targets and
+    /// trusted in-process callers). Capture records every other explicit target as <c>TargetNotFound</c> without
+    /// reading the run, so a refused run looks exactly like a missing one, as it does for run deletion. Never projected
+    /// to readers.
+    /// </summary>
+    public IReadOnlyList<string>? AuthorizedExecutionIds { get; }
 
     public static WorkflowAlterationPlanState CreateCapturing(
         string planId,
@@ -340,8 +350,21 @@ public sealed record WorkflowAlterationPlanState
         ProtectedWorkflowAlterationPayload protectedPayload,
         WorkflowAlterationTargetSelector target,
         DateTimeOffset createdAt,
-        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null) =>
-        new(planId, authorityScope, submittedBy, idempotencyKeyHash, canonicalRequestHash, protectedPayload, target, WorkflowAlterationPlanStatus.CapturingTargets, createdAt, alterationDescriptors: alterationDescriptors);
+        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null,
+        IReadOnlyCollection<string>? authorizedExecutionIds = null) =>
+        new(planId, authorityScope, submittedBy, idempotencyKeyHash, canonicalRequestHash, protectedPayload, target, WorkflowAlterationPlanStatus.CapturingTargets, createdAt, alterationDescriptors: alterationDescriptors, authorizedExecutionIds: authorizedExecutionIds?.ToArray());
+
+    private static IReadOnlyList<string>? NormalizeAuthorizedExecutionIds(IReadOnlyList<string>? ids, WorkflowAlterationTargetSelector target)
+    {
+        if (ids is null)
+            return null;
+        if (target.Query is not null)
+            throw new ArgumentException("Only explicit targets carry per-run authorization.", nameof(ids));
+        var normalized = ids.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (normalized.Any(id => !target.ExecutionIds.Contains(id, StringComparer.Ordinal)))
+            throw new ArgumentException("Authorized execution IDs must be explicit targets of the plan.", nameof(ids));
+        return normalized;
+    }
 }
 
 /// <summary>Immutable optimistic facts captured for one target before job execution.</summary>

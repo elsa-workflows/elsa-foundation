@@ -1,3 +1,4 @@
+using Elsa.Activities.Testing;
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Scheduling;
@@ -19,7 +20,10 @@ public sealed class BpmnMessageTests
 {
     private static ValueTask<BpmnRuntimeFixture> CreateFixtureAsync(params string[] activityExecutionIds) =>
         BpmnRuntimeFixture.CreateAsync(activityExecutionIds, services =>
-            new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services));
+        {
+            new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
+            NativeStimulusDeliveryTestServices.Configure(services);
+        });
 
     [Fact]
     public async Task MessageThrow_RoutesOnwardImmediately_AndSendLandsPostCommit()
@@ -137,7 +141,7 @@ public sealed class BpmnMessageTests
         Assert.Equal(EventStimulus.StimulusType, bookmark.StimulusType);
         Assert.Equal(EventStimulus.Hash("order-approved"), bookmark.StimulusHash);
 
-        var resumed = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new EventReceived("order-approved")));
+        var resumed = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "order-approved" }));
 
         resumed.AssertCompleted("node-wait");
         resumed.AssertRan("node-after");

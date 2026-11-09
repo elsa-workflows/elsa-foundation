@@ -90,13 +90,9 @@ public sealed class WorkflowExecutableInspector(
             ? null
             : ordered.FirstOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId));
         var requestedReferencePinnedByExecution = requested is not null &&
-            requested.Scope == WorkflowExecutableReferenceScope.TestRun &&
-            executions.Any(execution =>
-                StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId) &&
-                StringComparer.Ordinal.Equals(execution.PinnedSource?.SourceReferenceId, requested.SourceReferenceId));
+            IsPinnedByExecution(requested, artifactId, executions);
         if (sourceReferenceId is not null &&
-            (requested is null || requested.DeletedAt is not null ||
-             requested.IsExpired(now) && !requestedReferencePinnedByExecution))
+            (requested is null || !IsInspectableReference(requested, now, requestedReferencePinnedByExecution)))
             throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), sourceReferenceId);
         var chosen = requested
             ?? ordered.FirstOrDefault(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now))
@@ -149,6 +145,17 @@ public sealed class WorkflowExecutableInspector(
         if (executable is null || reference is null || !StringComparer.Ordinal.Equals(reference.ArtifactId, artifactId))
             return null;
 
+        var now = _timeProvider.GetUtcNow();
+        var pinnedByExecution = false;
+        if (!reference.IsLive(now))
+        {
+            var executions = await executionStore.ListAsync(cancellationToken);
+            pinnedByExecution = IsPinnedByExecution(reference, artifactId, executions);
+        }
+
+        if (!IsInspectableReference(reference, now, pinnedByExecution))
+            return null;
+
         var authoredInputs = reference.AuthoredInputs.Select(input =>
         {
             var redacted = RedactsAuthoredInput(executable, input);
@@ -174,6 +181,29 @@ public sealed class WorkflowExecutableInspector(
             authoredInputs,
             compiledInputs);
     }
+
+    private static bool IsPinnedByExecution(
+        WorkflowExecutableSourceReference reference,
+        string artifactId,
+        IEnumerable<WorkflowExecutionState> executions) =>
+        executions.Any(execution =>
+            StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId) &&
+            StringComparer.Ordinal.Equals(execution.PinnedSource?.SourceReferenceId, reference.SourceReferenceId));
+
+    private static bool IsInspectableReference(
+        WorkflowExecutableSourceReference reference,
+        DateTimeOffset now,
+        bool pinnedByExecution) =>
+        reference.Scope switch
+        {
+            // A replaced publication remains useful provenance for a retained execution that pins this exact row.
+            WorkflowExecutableReferenceScope.Published =>
+                pinnedByExecution || (reference.DeletedAt is null && !reference.IsExpired(now)),
+            // Test-run references have a deliberately stricter lifecycle: expiry may be retained, retirement may not.
+            WorkflowExecutableReferenceScope.TestRun =>
+                reference.DeletedAt is null && (!reference.IsExpired(now) || pinnedByExecution),
+            _ => false
+        };
 
     public async ValueTask<ExecutableProvenanceView?> GetProvenanceAsync(string artifactId, CancellationToken cancellationToken = default)
     {

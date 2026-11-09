@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
@@ -53,6 +54,35 @@ public sealed class ActivityAuthoringCapabilityFingerprintTests
             view.SnapshotFingerprint);
     }
 
+    [Fact]
+    public async Task Snapshot_exposes_exact_cross_provider_migration_sources()
+    {
+        var provider = new Provider(
+            "allowed.provider",
+            "Target",
+            new HashSet<ActivityProviderManifestSource>
+            {
+                new("source.provider", "7")
+            });
+        var reader = new ActivityAuthoringCapabilitiesReader(
+            new ActivityProviderRegistry([provider]),
+            new Catalog([]),
+            new DefaultActivityTypeKeyPolicy(),
+            new Context());
+        var legacyReader = new ActivityAuthoringCapabilitiesReader(
+            new ActivityProviderRegistry([new Provider("allowed.provider", "Target")]),
+            new Catalog([]),
+            new DefaultActivityTypeKeyPolicy(),
+            new Context());
+
+        var view = await reader.GetAsync(new GetActivityAuthoringCapabilities(), default);
+        var legacyView = await legacyReader.GetAsync(new GetActivityAuthoringCapabilities(), default);
+        var schema = Assert.Single(Assert.Single(view.Providers).ManifestSchemas);
+
+        Assert.Equal(new[] { new ActivityProviderManifestSourceView("source.provider", "7") }, schema.MigratableFrom);
+        Assert.NotEqual(legacyView.SnapshotFingerprint, view.SnapshotFingerprint);
+    }
+
     private sealed class Catalog(IReadOnlyCollection<ActivityContractTypeCapability> types)
         : IActivityContractCapabilityCatalog
     {
@@ -69,13 +99,16 @@ public sealed class ActivityAuthoringCapabilityFingerprintTests
         public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 
-    private sealed class Provider(string key, string displayName) : IActivityProvider
+    private sealed class Provider(
+        string key,
+        string displayName,
+        IReadOnlySet<ActivityProviderManifestSource>? migratableFrom = null) : IActivityProvider
     {
         public string ProviderKey => key;
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
         public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
             displayName,
-            [new("1", true, new HashSet<string> { "1" })],
+            [new("1", true, new HashSet<string> { "1" }) { MigratableFrom = migratableFrom }],
             new([new("done", "Done", true)]));
 
         public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>

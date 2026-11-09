@@ -112,11 +112,6 @@ internal sealed class Elsa3ActivityResolver(
                 {
                     Outcomes = Elsa3ActivityOutcomes.None
                 });
-            case Elsa3ActivityTarget.GraphLevel graph:
-                return Elsa3Resolution.Failed(
-                    Elsa3ActivityDiagnosticCodes.GraphConversionPending,
-                    $"Elsa 3 activity type '{entry.Elsa3TypeName}' needs graph conversion: {graph.Reason}",
-                    $"Graph conversion is tracked by {graph.OwningIssue}; its children are still converted node by node.");
             case Elsa3ActivityTarget.NoCounterpart none:
                 return Elsa3Resolution.Failed(
                     Elsa3ActivityDiagnosticCodes.NoCounterpart,

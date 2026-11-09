@@ -53,7 +53,7 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
                     workflowExecutionId: second.ExecutionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = EventName })));
 
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
         }

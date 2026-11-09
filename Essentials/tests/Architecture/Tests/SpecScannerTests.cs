@@ -1,4 +1,5 @@
 using Elsa.Maps.Generator;
+using Elsa.Maps.Projects;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

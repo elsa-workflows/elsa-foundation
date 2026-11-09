@@ -15,7 +15,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
@@ -35,6 +35,7 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionDetailsView> HandleAsync(UpdateDefinitionMetadata command, CancellationToken cancellationToken)
     {
+        await reader.AuthorizeReadAsync(command.DefinitionId, cancellationToken);
         var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
         if (command.Name is not null)
         {

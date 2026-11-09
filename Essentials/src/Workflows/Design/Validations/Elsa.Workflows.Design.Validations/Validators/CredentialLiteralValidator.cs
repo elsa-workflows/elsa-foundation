@@ -51,11 +51,20 @@ public sealed class CredentialLiteralValidator(
     async ValueTask<IEnumerable<ValidationError>> IDraftValidator.Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken) =>
         await Validate(draft.State, cancellationToken);
 
-    private static IEnumerable<ValidationError> Refusals(ActivityNode node, IActivityDefinitionVersion? version) =>
-        (version?.Inputs ?? [])
-            .Where(input => input.IsCredential == true)
-            .Where(input => node.Inputs.Any(state =>
-                StringComparer.Ordinal.Equals(state.ReferenceKey, input.ReferenceKey) &&
-                !CredentialInputBinding.IsAccepted(isCredential: true, state)))
-            .Select(input => CredentialLiteralFinding.For(node.NodeId, input.ReferenceKey, input.Name));
+    private static IEnumerable<ValidationError> Refusals(ActivityNode node, IActivityDefinitionVersion? version)
+    {
+        foreach (var input in version?.Inputs ?? [])
+        {
+            var state = node.Inputs.FirstOrDefault(candidate =>
+                StringComparer.Ordinal.Equals(candidate.ReferenceKey, input.ReferenceKey));
+            if (state is null)
+                continue;
+
+            if (input.IsCredential == true && !CredentialInputBinding.IsAccepted(isCredential: true, state))
+                yield return CredentialLiteralFinding.For(node.NodeId, input.ReferenceKey, input.Name);
+
+            if (!string.IsNullOrWhiteSpace(input.ConnectionType) && !ConnectionInputBinding.IsAccepted(state))
+                yield return ConnectionLiteralFinding.For(node.NodeId, input.ReferenceKey, input.Name);
+        }
+    }
 }

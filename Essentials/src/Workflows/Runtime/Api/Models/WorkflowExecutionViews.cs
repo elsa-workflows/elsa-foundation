@@ -100,7 +100,8 @@ public sealed record WorkflowInstanceDetailsView(
     IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
     string PersistenceMode,
     string InspectionGranularity,
-    string? ActivityNextContinuationToken = null);
+    string? ActivityNextContinuationToken = null,
+    WorkflowInstancePermissionsView? Permissions = null);
 
 /// <summary>
 /// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a

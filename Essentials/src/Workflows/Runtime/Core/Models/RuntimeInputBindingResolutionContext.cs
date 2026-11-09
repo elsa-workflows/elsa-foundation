@@ -12,7 +12,8 @@ public sealed class RuntimeInputBindingResolutionContext
         WorkflowExecutable? executable = null,
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
         IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
-        IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null)
+        IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null,
+        string? correlationId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -25,6 +26,7 @@ public sealed class RuntimeInputBindingResolutionContext
         WorkflowInputEnvelopes = SnapshotEnvelopes(workflowInputEnvelopes);
         VariableEnvelopes = SnapshotEnvelopes(variableEnvelopes);
         VisibleVariablesByName = SnapshotEnvelopes(visibleVariablesByName);
+        CorrelationId = correlationId;
     }
 
     public string WorkflowExecutionId { get; }
@@ -43,6 +45,12 @@ public sealed class RuntimeInputBindingResolutionContext
     /// statically declared <c>Variable</c> parameter bindings. Empty when the producer supplies no projection.
     /// </summary>
     public IReadOnlyDictionary<string, ValueEnvelope> VisibleVariablesByName { get; }
+
+    /// <summary>
+    /// The instance's correlation ID as committed in its identity durable values, read by a
+    /// <c>WorkflowInstance</c> expression parameter binding. Null when the instance has none.
+    /// </summary>
+    public string? CorrelationId { get; }
 
     private static IReadOnlyDictionary<string, ValueEnvelope> SnapshotEnvelopes(
         IReadOnlyDictionary<string, ValueEnvelope>? values) =>

@@ -1,0 +1,55 @@
+{
+  "cuts": [
+    {
+      "cut": "notice",
+      "heldSourceFencingToken": 1,
+      "recoveredSourceFencingToken": 2,
+      "heldRecordedDeliveryAttemptCount": 0,
+      "recoveredRecordedDeliveryAttemptCount": 1,
+      "completeObservedFactsEqual": true,
+      "sourceIntentEqual": true,
+      "factsSha256": "5d8ae4dee8afc5887da711a35e67606356da8cd7d478d862fa744ec1635e4e7b",
+      "deliveredAt": "2026-10-27T22:11:35.476342+00:00",
+      "originalClaimDeadline": "2026-10-27T22:10:59.220887+00:00"
+    },
+    {
+      "cut": "terminal",
+      "heldSourceFencingToken": 1,
+      "recoveredSourceFencingToken": 2,
+      "heldRecordedDeliveryAttemptCount": 0,
+      "recoveredRecordedDeliveryAttemptCount": 1,
+      "completeObservedFactsEqual": true,
+      "sourceIntentEqual": true,
+      "factsSha256": "76684dc9f0c6d665cd203e280eb7ca5b929869a29b0735ef36eb0805c6e28ba6",
+      "deliveredAt": "2026-10-27T22:16:25.657153+00:00",
+      "originalClaimDeadline": "2026-10-27T22:16:24.836952+00:00"
+    }
+  ],
+  "comparisonScope": "Complete checked recipient Facts model, including named workflows/all activities/dispatch/incidents/physical waits/other-source projections; target source delivery projection changes and its complete Intent is compared separately. Not every SQLite/module row or raw EF source revision.",
+  "factsFieldExclusions": [],
+  "originalWarningPhysicalObservationPreservedAcrossBothCuts": true,
+  "warningObservation": {
+    "scope": {
+      "value": "default"
+    },
+    "state": {
+      "bookmarkId": "14hweETmpD9:attempt:1:trigger:1",
+      "workflowExecutionId": "14hwZ286OyC",
+      "activityExecutionId": "14hweETmpD9",
+      "executableNodeId": "node-warning",
+      "resumeTargetId": "node-warning:resume-target:event",
+      "stimulusType": "Event",
+      "stimulusHash": "sha256:14add179e508882194534f1398cddb8ac72d4f073d271027c4f7da5f9583ab32",
+      "payload": null,
+      "metadata": {
+        "runtime.correlationId": "14hwZ286OyC",
+        "runtime.schedulerWorkItemId": "9ba02971580a0ecb:create-bookmark:14hweETmpD9:attempt:1:trigger:1",
+        "runtime.commandId": "9ba02971580a0ecb:create-bookmark:14hweETmpD9:attempt:1:trigger:1",
+        "runtime.reason": "ActivitySuspended"
+      },
+      "createdAt": "2026-10-27T22:09:59.261374+00:00",
+      "expiresAt": null
+    },
+    "generation": 4046990127303331444
+  }
+}

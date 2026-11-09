@@ -61,12 +61,12 @@ public sealed class BpmnProcessTriggerStimulusProvider : IActivityTriggerStimulu
     /// </summary>
     internal static IReadOnlyList<BpmnElement> ReadEventDefinedStartElements(ExecutableNode node)
     {
-        BpmnGraph graph;
+        global::Bpmn.Semantics.BpmnGraph graph;
         try
         {
-            graph = BpmnGraph.From(node);
+            graph = BpmnGraphAdapter.Build(node);
         }
-        catch (BpmnExecutionException exception)
+        catch (BpmnHostException exception)
         {
             throw new ArgumentException(
                 $"BPMN process node '{node.ExecutableNodeId}' has an invalid structure: {exception.Message}", exception);
@@ -74,7 +74,9 @@ public sealed class BpmnProcessTriggerStimulusProvider : IActivityTriggerStimulu
 
         // An escalation/error start is an event-subprocess body start seeded via the scheduled-start hint,
         // not an externally-triggered start — only timer/message/signal starts register a publish-time start trigger.
-        return graph.StartEvents.Where(BpmnElementFamilies.IsExternalStartTrigger).ToArray();
+        return graph.StartEvents.Where(element => element.EventDefinitions.Any(definition =>
+                definition.Type is BpmnEventDefinitionTypes.Message or BpmnEventDefinitionTypes.Signal or BpmnEventDefinitionTypes.Timer))
+            .Select(BpmnGraphAdapter.AuthoredElement).ToArray();
     }
 }
 

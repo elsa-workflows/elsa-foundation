@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-22T02:15:09.072976+00:00",
+  "issue": 3181,
+  "baseCommit": "9c42e53bc74dfd08142adda8eac459e55ba9fc95",
+  "scope": "Rules delivery feature and internal shared lifecycle; actual host and direct background-task interface, shell CLR discovery and registered publication enrichment. No complete workflow publication or persisted native journey claim.",
+  "checks": [
+    {
+      "command": "dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --no-restore --logger trx;LogFileName=rules-hosting-final.trx",
+      "exitCode": 0,
+      "passed": 262,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/rules-hosting-final.log",
+      "sha256": "053bd257d99875e8d13531f21d9aedbeaa05a98f5434fa8d68715af7be07faac"
+    },
+    {
+      "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore --logger trx;LogFileName=rules-hosting-architecture.trx",
+      "exitCode": 0,
+      "passed": 585,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/rules-hosting-architecture.log",
+      "sha256": "9980f7edfc726adc4e36ba913d77ecd9a397a9490e555ce47fce788956cc747f"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- all",
+      "exitCode": 0,
+      "passed": null,
+      "failed": null,
+      "skipped": null,
+      "log": "/tmp/rules-hosting-maps-generate.log",
+      "sha256": "7d064c50c1916c048e7fe2d72a2dd4d2dacd6033d45ace418552da2c01f8fe2d"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "exitCode": 0,
+      "passed": null,
+      "failed": null,
+      "skipped": null,
+      "log": "/tmp/rules-hosting-maps-check.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    }
+  ],
+  "control": {
+    "scope": "Make direct IBackgroundTask startup wait for root ApplicationStarted",
+    "failed": 1,
+    "passed": 1,
+    "skipped": 0,
+    "intendedFailure": "Tasks-first delivery cannot progress without a root startup signal",
+    "log": "/tmp/rules-hosting-control.log",
+    "logSha256": "a49b9c6c13b9544ba78ae84f012e11b871bbfa71500b6a24e848c60a4bcb0c32",
+    "restoredByteForByte": true,
+    "restoredSourceSha256": "9d3444ad35d2fa4c4afa1b1d50f0a0b6b5823558c17efd71e1f9f127f9bd911e",
+    "intactRulesSuitePassed": 262
+  },
+  "review": {
+    "rounds": 3,
+    "final": "No actionable findings after three bounded root review rounds including final independent read-only review; intact affected suites and repository gates passed."
+  },
+  "remaining": [
+    "Complete workflow publication",
+    "Persisted Sequence and Flowchart",
+    "Native REST and package-host journeys",
+    "Retained native and Rules upgrade/rollback",
+    "Whole-leaf integrated PR and main gates"
+  ],
+  "restore": {
+    "command": "dotnet restore Elsa.Server.slnx",
+    "exitCode": 0,
+    "log": "/tmp/rules-hosting-solution-restore.log",
+    "sha256": "df9ba01bd99b7f39b17e16d6ae63d82233a36af9a048f1d179b99e3d1e944073"
+  },
+  "mapFindings": {
+    "runtimeToDesignSignals": 0,
+    "sourceCatalogsMissingFromRoot": 0,
+    "rootCatalogsMissingOnDisk": 0,
+    "generatedDocumentationCommitted": false
+  },
+  "warnings": "Package/analyzer warnings and generator-hint name conflicts from same-domain internal access remain visible and unsuppressed.",
+  "sourceSha256": {
+    "Extensions/Rules/src/Runtime/RulesBackgroundWorker.cs": "9d3444ad35d2fa4c4afa1b1d50f0a0b6b5823558c17efd71e1f9f127f9bd911e",
+    "Extensions/Rules/src/Runtime/RulesRuntimeWorker.cs": "1e4c3376421abe324c2ffdc2f3590b31a4ddc139f88de260ced2a08a41d24626",
+    "Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs": "86f64afdde9cd9037ee1462babac14cdce405094aae95229109d4f099e90ac75",
+    "Extensions/Rules/src/Workflows/Runtime/Services/RulesNativeDeliveryWorker.cs": "cfd0a391ac211a278c971166a31ad8011491dcaa2a0972e8acfe18b41dae6110",
+    "Extensions/Rules/tests/Tests/RulesNativeHostingTests.cs": "4823f725c10d3ec92a7b85749970e44a5c07e4931e495a77d2ec795e5eecab5f",
+    "Extensions/Rules/tests/Tests/RulesWorkflowsPublicationEnricherTests.cs": "a6cde90b12dab47bff7f89199d51922ea2e5dd5d19e97d7cb7af2bec2e3a3d45",
+    "Extensions/Rules/tests/Tests/RulesWorkflowsRuntimeCatalogTests.cs": "caa84fed0e7a6f4c5da7fa9a323c69abbb331bf375669d1ed14ee590c7a6bb3f"
+  }
+}

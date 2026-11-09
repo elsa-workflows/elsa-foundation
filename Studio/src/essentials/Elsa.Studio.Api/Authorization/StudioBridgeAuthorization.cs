@@ -10,6 +10,21 @@ namespace Elsa.Studio.Api.Authorization;
 /// </summary>
 public static class StudioBridgeAuthorization
 {
+    /// <summary>The coarse Studio user-session policy.</summary>
+    public const string PolicyName = "StudioManagementBridge";
+
+    /// <summary>Reads Studio/backend module management; manage also satisfies read.</summary>
+    public const string ModuleManagementReadPolicyName = "StudioManagementBridge:ModuleManagement.Read";
+
+    /// <summary>Changes Studio/backend module management.</summary>
+    public const string ModuleManagementManagePolicyName = "StudioManagementBridge:ModuleManagement.Manage";
+
+    /// <summary>The module-management read permission key.</summary>
+    public const string ModuleManagementReadPermission = "module-management:read";
+
+    /// <summary>The module-management manage permission key.</summary>
+    public const string ModuleManagementManagePermission = "module-management:manage";
+
     /// <summary>The authentication scheme backing the host's bearer-introspection gate.</summary>
     public const string SchemeName = "StudioManagementBridgeAuth";
 
@@ -19,6 +34,9 @@ public static class StudioBridgeAuthorization
     /// projects each permission from the backend session onto a claim of this type.
     /// </summary>
     public const string PermissionClaimType = "elsa.identity.permission";
+
+    /// <summary>The verified tenant projected by Studio's stable host identity bridge.</summary>
+    public const string TenantClaimType = "elsa.studio.tenant";
 
     /// <summary>
     /// Builds a host-control permission policy: the bridge's bearer-introspection scheme, an authenticated user, and a

@@ -11,6 +11,7 @@ import {
 } from "../workflowAdapter";
 import {
   buildBpmnCanvas,
+  bindBpmnDecision,
   createBpmnBoundNode,
   collectOwnedNodeIds,
   collectRemovedGraphNodeIds,
@@ -91,6 +92,49 @@ const diamondFlows = [
 ];
 
 describe("bpmn designer mode plumbing", () => {
+  it("attaches a decision without replacing gateway identity, flows or retained fields", () => {
+    const owner = bpmnOwner([{ elementId: "gate", elementType: "inclusiveGateway", name: "Price", retained: { vendor: true } }],
+      [{ flowId: "high", sourceRef: "gate", targetRef: "end", conditionOutcome: "High" }]);
+    const decision = activityNode("decision");
+    const updated = bindBpmnDecision(owner, "gate", decision);
+    expect(updated.structure!.payload.elements).toEqual([
+      { elementId: "gate", elementType: "inclusiveGateway", name: "Price", retained: { vendor: true }, childNodeId: "decision" }
+    ]);
+    expect(updated.structure!.payload.sequenceFlows).toBe(owner.structure!.payload.sequenceFlows);
+    expect(updated.structure!.payload.activities).toEqual([decision]);
+    expect(owner.structure!.payload.activities).toEqual([]);
+    expect(bindBpmnDecision(updated, "gate", activityNode("replacement"))).toBe(updated);
+  });
+
+  it.each(["parallelGateway", "task", "startEvent"])("does not attach a decision to %s", elementType => {
+    const owner = bpmnOwner([{ elementId: "shape", elementType }], []);
+    expect(bindBpmnDecision(owner, "shape", activityNode("decision"))).toBe(owner);
+  });
+
+  it("places a BPMN Decision as a bound exclusive gateway", () => {
+    const decision = catalogItem({ activityTypeKey: "Elsa.Activities.Bpmn.Activities.BpmnDecision", displayName: "BPMN Decision" });
+    const node = createBpmnBoundNode(decision, activityNode("decision"), { x: 80, y: 90 });
+    expect(node.data.element).toMatchObject({ elementType: "exclusiveGateway", childNodeId: "decision" });
+    expect(node.position).toEqual({ x: 80, y: 90 });
+  });
+
+  it("keeps a third-party activity with the same short name as an ordinary task", () => {
+    const thirdParty = catalogItem({ activityTypeKey: "Acme.Activities.BpmnDecision" });
+    expect(createBpmnBoundNode(thirdParty, activityNode("custom"), { x: 0, y: 0 }).data.element.elementType).toBe("task");
+  });
+
+  it.each([
+    { loopCharacteristics: { kind: "standard" } },
+    { isForCompensation: true },
+    { compensationHandlerElementId: "handler" },
+    { boundary: true }
+  ])("refuses gateway conversion while task-only semantics remain: %j", settings => {
+    const { boundary, ...taskSettings } = settings;
+    const task = { elementId: "task", elementType: "task", childNodeId: "decision", ...taskSettings };
+    const owner = bpmnOwner([task, ...(boundary ? [{ elementId: "boundary", elementType: "boundaryEvent", attachedToRef: "task" }] : [])], []);
+    expect(updateBpmnElement(owner, "task", { elementType: "exclusiveGateway" })).toBe(owner);
+  });
+
   it("resolves the bpmn designer support from the structure kind", () => {
     expect(getActivityDesignerSupport(bpmnOwner([], []))).toBe("bpmn");
   });

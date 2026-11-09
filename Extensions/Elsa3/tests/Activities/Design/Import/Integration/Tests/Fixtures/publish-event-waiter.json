@@ -1,0 +1,32 @@
+{
+  "id": "publish-event-waiter-v1",
+  "definitionId": "publish-event-waiter",
+  "name": "publish-event-waiter",
+  "description": "Test-owned regular workflow: waits mid-flow for the event 'order.approved'. The Event hands the payload on as its Payload output.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "publish-event-waiter-root", "nodeId": "publish-event-waiter-root", "name": "publish-event-waiter-root", "type": "Elsa.Flowchart", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "wait", "nodeId": "wait", "name": "wait", "type": "Elsa.Event", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "eventName": { "typeName": "String", "expression": { "type": "Literal", "value": "order.approved" } }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

@@ -25,6 +25,19 @@ describe("Liquid expression editor module", () => {
     expect(contribution.sourceRenderer?.expanded).toBe(LiquidSourceRenderer);
   });
 
+  it.each(["unavailable", "unauthorized", "incompatible"] as const)("uses IntelliSense wording for %s tooling", state => {
+    const editor = findStudioCodeEditor(<LiquidInlineEditor
+      descriptor={descriptor()}
+      syntax="Liquid"
+      value=""
+      context={{ ...context("Liquid"), authoringContext: { state, contractVersion: 1, expressionType: "Liquid" } }}
+      onChange={vi.fn()}
+    />);
+
+    expect(editor.props.status).toContain("Liquid IntelliSense");
+    expect(editor.props.status).not.toContain("this Studio version");
+  });
+
   it("renders authorized authored Liquid without evaluating it", () => {
     const rendered = LiquidSourceRenderer({
       context: {
@@ -115,6 +128,7 @@ interface StudioCodeEditorElementProps {
     language: string;
     displayName: string;
   };
+  status?: string;
   readOnly?: boolean;
   theme?: string;
   profile?: string;

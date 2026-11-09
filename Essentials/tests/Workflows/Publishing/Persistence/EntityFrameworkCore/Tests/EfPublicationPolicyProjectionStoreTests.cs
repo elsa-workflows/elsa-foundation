@@ -47,6 +47,30 @@ public sealed class EfPublicationPolicyProjectionStoreTests
     }
 
     [Fact]
+    public async Task Batch_policy_lookup_is_exact_and_tenant_scoped()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var context = database.Context())
+        {
+            await database.Policies(context, "tenant-a").TrySaveAsync(Policy("orders", "production"), 0);
+            await database.Policies(context, "tenant-a").TrySaveAsync(Policy("payments", "stable"), 0);
+            await database.Policies(context, "tenant-a").TrySaveAsync(Policy(null, "host-slot"), 0);
+            await database.Policies(context, "tenant-b").TrySaveAsync(Policy("orders", "foreign-production"), 0);
+        }
+
+        await using var restarted = database.Context();
+        var store = database.Policies(restarted, "tenant-a");
+        var policies = await store.FindByDefinitionIdsAsync(["payments", "missing", "orders", "orders"]);
+
+        Assert.True(store.SupportsBatchDefinitionLookup);
+        Assert.Equal(2, policies.Count);
+        Assert.Equal("production", policies["orders"].DefaultSlotName);
+        Assert.Equal("stable", policies["payments"].DefaultSlotName);
+        Assert.All(policies.Values, policy => Assert.NotNull(policy.WorkflowDefinitionId));
+        Assert.Empty(await database.Policies(restarted, "tenant-b").FindByDefinitionIdsAsync(["payments", "missing"]));
+    }
+
+    [Fact]
     public async Task Policy_update_race_returns_a_truthful_winner_without_corrupting_the_row()
     {
         await using var database = await Database.CreateAsync();
@@ -138,6 +162,7 @@ public sealed class EfPublicationPolicyProjectionStoreTests
         policyRow.PolicyKey = EfRelationalIdentity.Encode("workflow:9:not-the-key");
         await context.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => policyStore.FindAsync("definition").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => policyStore.FindByDefinitionIdsAsync(["definition"]).AsTask());
 
         var intentStore = database.Intents(context, "tenant-a");
         var intent = Intent("intent", "publication");

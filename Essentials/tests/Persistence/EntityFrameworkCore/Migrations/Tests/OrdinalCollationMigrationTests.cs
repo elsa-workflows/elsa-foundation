@@ -23,8 +23,8 @@ public sealed class OrdinalCollationMigrationTests
     /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
     private static readonly string[] CollatingModules =
     [
-        "ActivitiesDesign", "ClusterMembership", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
+        "ActivitiesDesign", "Agent", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
     ];
 
     /// <summary>
@@ -43,10 +43,26 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionId"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionIdIdentityHash"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "SemVerSortKey"),
+        // The owner list filters on actor and tenant, then orders by update time and session id for its cursor;
+        // the record store compares owner token and fence, and keys and digests are matched exactly.
+        ("Agent", "elsa_agent_sessions", "SessionId"),
+        ("Agent", "elsa_agent_sessions", "TenantId"),
+        ("Agent", "elsa_agent_sessions", "ActorId"),
+        ("Agent", "elsa_agent_sessions", "Workspace"),
+        ("Agent", "elsa_agent_sessions", "OwnerToken"),
+        ("Agent", "elsa_agent_proposals", "ProposalId"),
+        ("Agent", "elsa_agent_call_keys", "KeyHash"),
+        ("Agent", "elsa_agent_disclosure_snapshots", "Digest"),
+        ("Agent", "elsa_agent_audit_owners", "TenantId"),
         // Host ids compare ordinally; a linguistic default would let two differing only in case
         // share one current incarnation.
         ("ClusterMembership", "elsa_cluster_members", "HostId"),
         ("ClusterMembership", "elsa_cluster_members", "CurrentHostId"),
+        ("Connections", "elsa_connections", "TenantLookupKey"),
+        ("Connections", "elsa_connections", "NormalizedName"),
+        ("Connections", "elsa_connection_secret_references", "TenantLookupKey"),
+        ("Connections", "elsa_connection_secret_references", "NormalizedName"),
+        ("Connections", "elsa_connection_secret_references", "SecretLookupHash"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "TenantKey"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "HandleHash"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentHash"),
@@ -59,7 +75,17 @@ public sealed class OrdinalCollationMigrationTests
         ("PublishingSnapshotReview", "elsa_publication_records", "PublicationIdHash"),
         ("PublishingSnapshotReview", "elsa_publication_snapshot_reviews", "PreflightToken"),
         ("Secrets", "elsa_secrets", "NormalizedName"),
+        // Part of the key and of the projection audit's keyset cursor, beside the name.
+        ("Secrets", "elsa_secrets", "Tombstone"),
         ("Secrets", "elsa_secrets", "ScopeLookupKey"),
+        ("Specialists", "elsa_specialist_turns", "ScopeKey"),
+        ("Specialists", "elsa_specialist_turns", "Handle"),
+        ("Specialists", "elsa_specialist_turns", "OperationKey"),
+        ("Specialists", "elsa_specialist_turns", "SchemaVersion"),
+        ("Specialists", "elsa_specialist_turns", "Fence"),
+        ("Specialists", "elsa_specialist_conversations", "ScopeKey"),
+        ("Specialists", "elsa_specialist_conversations", "Id"),
+        ("Specialists", "elsa_specialist_conversations", "SchemaVersion"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")
     ];
@@ -74,7 +100,13 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SearchText"),
         ("ActivitiesDesign", "elsa_activity_definitions", "Description"),
         ("ActivitiesDesign", "elsa_activity_definitions", "DisplayName"),
+        ("Agent", "elsa_agent_sessions", "Payload"),
+        ("Agent", "elsa_agent_sessions", "Title"),
+        ("Agent", "elsa_agent_disclosure_snapshots", "Canonical"),
+        ("Agent", "elsa_agent_call_keys", "Key"),
         ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
+        ("Specialists", "elsa_specialist_turns", "Payload"),
+        ("Specialists", "elsa_specialist_conversations", "Payload"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),

@@ -122,6 +122,49 @@ public sealed class EfWorkflowHoldStateStore(
         StringComparer.Ordinal.Equals(state.WorkflowExecutionId, workflowExecutionId) ||
         state.ActiveHolds.Concat(state.ReleasedHolds).Any(hold => StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, workflowExecutionId));
 
+    internal static async ValueTask RemoveWorkflowExecutionHoldsAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        string? lastOrderKey = null;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var query = context.WorkflowHoldStates.Where(row =>
+                row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey && row.WorkflowExecutionId == null);
+            if (lastOrderKey is not null)
+                query = query.Where(row => string.Compare(row.ControlPlaneStateIdOrderKey, lastOrderKey) > 0);
+
+            var rows = await query.OrderBy(row => row.ControlPlaneStateIdOrderKey)
+                .Take(ProviderPageSize + 1).ToArrayAsync(cancellationToken);
+            var hasMore = rows.Length > ProviderPageSize;
+            if (hasMore)
+                rows = rows[..ProviderPageSize];
+
+            foreach (var row in rows)
+            {
+                var state = Read(row, scope);
+                var active = state.ActiveHolds.Where(hold => !StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, workflowExecutionId)).ToArray();
+                var released = state.ReleasedHolds.Where(hold => !StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, workflowExecutionId)).ToArray();
+                if (active.Length == state.ActiveHolds.Count && released.Length == state.ReleasedHolds.Count)
+                    continue;
+
+                var replacement = new WorkflowHoldState(state.ControlPlaneStateId, activeHolds: active, releasedHolds: released, metadata: state.Metadata);
+                Copy(row, replacement, scope, checked(row.Revision + 1));
+            }
+
+            if (rows.Any(row => context.Entry(row).State == EntityState.Modified))
+                await context.SaveChangesAsync(cancellationToken);
+            if (!hasMore)
+                return;
+            lastOrderKey = rows[^1].ControlPlaneStateIdOrderKey;
+        }
+    }
+
     private async Task<WorkflowHoldStateEntity?> LoadAsync(string scope, string controlPlaneStateId, bool tracking, CancellationToken cancellationToken)
     {
         var encodedScope = EfRuntimeOperationalStoreSupport.Encode(scope);

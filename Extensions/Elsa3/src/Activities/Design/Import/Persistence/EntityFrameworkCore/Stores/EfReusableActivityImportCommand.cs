@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
@@ -31,7 +32,9 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// either every row of the import is durable or none is.
 /// </summary>
 /// <remarks>
-/// Every Design identity is preflighted inside the transaction before the first write. Identical resources
+/// Imported reusable activity versions are not written here: the commit creates each new activity definition with its
+/// authoring state (no head) and the draft of its first version, and the import's publish phase publishes the versions
+/// afterwards (spec 246 D-1). Every Design identity is preflighted inside the transaction before the first write. Identical resources
 /// are reused, which makes a reviewed plan safe to reapply; an identity bound to different content or to no
 /// import provenance fails before any write. A write conflict retries the whole unit from durable state; a
 /// commit whose outcome is unknown is reconciled from the durable receipt and never reported as applied
@@ -48,7 +51,6 @@ public sealed class EfReusableActivityImportCommand(
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
-    private const string AuthoringOperationKind = "elsa3.import.activity-authoring.v1";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
@@ -190,15 +192,8 @@ public sealed class EfReusableActivityImportCommand(
         var authoringRows = await LoadAuthoringStatesAsync(activities, plan.Authoring.Select(authoring => authoring.DefinitionId), tenantId, cancellationToken);
         var workflowVersionRows = await LoadWorkflowVersionsAsync(workflowVersions, plan.WorkflowVersions.Select(version => version.Id), cancellationToken);
 
-        // The authoring comparison reads the current and proposed head versions. The current head is only known once
-        // the authoring rows are loaded, so both sets join the plan's own version ids in one activity-version read.
-        var versionRows = await LoadActivityVersionsAsync(
-            activities,
-            plan.Versions.Select(version => version.Id)
-                .Concat(authoringRows.Values.Select(row => row.HeadVersionId).Where(id => id is not null).Select(id => id!))
-                .Concat(plan.Authoring.Select(authoring => authoring.HeadVersionId).Where(id => id is not null).Select(id => id!)),
-            tenantId,
-            cancellationToken);
+        // A catalog row under a plan version id exists only once that version is published (spec 246 FR-004).
+        var versionRows = await LoadActivityVersionsAsync(activities, plan.Versions.Select(version => version.Id), tenantId, cancellationToken);
 
         var existingBindings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in plan.Bindings)
@@ -243,38 +238,33 @@ public sealed class EfReusableActivityImportCommand(
             EnsureDefinitionBinding(WorkflowDefinitionKind, definition.Id, plan, existingBindings, scoped);
         }
 
+        // The commit writes no version. A version that is not yet published is reported as created by this apply,
+        // which its publish phase publishes; a published one must belong to the definition the plan names, and
+        // whether it is the same version is the publish phase's call.
         foreach (var version in plan.Versions)
         {
             if (versionRows.GetValueOrDefault(version.Id) is not { } existing)
             {
-                preflight.NewVersions.Add(version);
                 preflight.Created.Add((ActivityVersionKind, version.Id));
                 continue;
             }
 
-            if (!SameActivityVersion(existing, version))
+            if (!StringComparer.Ordinal.Equals(existing.DefinitionId, version.DefinitionId))
                 throw Collision($"Elsa 3 import identity '{ActivityVersionKind}/{version.Id}' is already bound to different content.", scoped);
         }
 
-        // A new definition is created together with its first new version; versions that already exist without
-        // the definition that owns them are orphans, and adopting them would bind provenance to unowned rows.
-        foreach (var definition in preflight.NewDefinitions)
-        {
-            if (!preflight.NewVersions.Any(version => StringComparer.Ordinal.Equals(version.DefinitionId, definition.Id)))
-                throw Collision($"Elsa 3 activity definition identity '{definition.Id}' has immutable versions without the definition that owns them.", scoped);
-        }
-
+        // A new definition is created with its authoring state; an existing one keeps the authoring state it has,
+        // which must be this import's.
         foreach (var authoring in plan.Authoring)
         {
-            if (authoringRows.GetValueOrDefault(authoring.DefinitionId) is not { } existing)
+            if (authoringRows.GetValueOrDefault(authoring.DefinitionId) is { } existing)
             {
-                preflight.NewAuthoring.Add(authoring);
+                EnsureAuthoringCompatible(existing, authoring, scoped);
                 continue;
             }
 
-            var update = ResolveAuthoringUpdate(existing, authoring, plan, versionRows);
-            if (update is not null)
-                preflight.AuthoringUpdates.Add(update);
+            if (!preflight.NewDefinitions.Any(definition => StringComparer.Ordinal.Equals(definition.Id, authoring.DefinitionId)))
+                throw Collision($"Elsa 3 activity definition identity '{authoring.DefinitionId}' has no authoring state.", scoped);
         }
 
         foreach (var version in plan.WorkflowVersions)
@@ -335,158 +325,38 @@ public sealed class EfReusableActivityImportCommand(
                 entry.State == EntityState.Unchanged && StringComparer.Ordinal.Equals(entry.Entity.Id, version.Id)), WorkflowVersionKind, version.Id);
         }
 
-        // Activities Design rows through the lane's own add commands and atomic writer.
+        // Activities Design rows through the lane's own create command and atomic writer: each new definition with
+        // its authoring state and the draft of its first imported version, as Studio creates a definition.
         var activityWriter = new EfDesignAtomicWrite(activities, accessContextAccessor, shared.BeginOperationAsync);
         var projections = new EfActivityManagementProjectionWriter(activities, accessContextAccessor);
         var activityStores = new EfActivityDesignStores(activities, accessContextAccessor, activityWriter, projections);
-        var createdDefinitions = new Dictionary<string, ActivityDefinition>(StringComparer.Ordinal);
-        var firstVersions = new HashSet<string>(StringComparer.Ordinal);
         foreach (var definition in preflight.NewDefinitions)
         {
-            var first = preflight.NewVersions
-                .Where(version => StringComparer.Ordinal.Equals(version.DefinitionId, definition.Id))
-                .OrderBy(version => version.SemVerSortKey, StringComparer.Ordinal)
-                .ThenBy(version => version.Id, StringComparer.Ordinal)
-                .First();
+            var candidate = plan.ActivityFor(definition.Id);
             var row = CloneActivityDefinition(definition);
-            var version = CloneActivityVersion(first);
-            await activityStores.Execute(OperationKey(commitAttemptId, ActivityDefinitionKind, definition.Id), row, version, cancellationToken);
-            EnsureWritten(activities.Entry(row).State == EntityState.Unchanged && activities.Entry(version).State == EntityState.Unchanged, ActivityDefinitionKind, definition.Id);
-            createdDefinitions[definition.Id] = row;
-            firstVersions.Add(first.Id);
+            var authoring = CloneAuthoring(candidate.Authoring);
+            var draft = ReusableActivityImportDrafts.Draft(candidate.Version, headVersionId: null);
+            var layout = ReusableActivityImportDrafts.Layout(candidate.Version);
+            await activityStores.ExecuteAsync(new CreateActivityDefinitionRequest(row, authoring, draft, layout), cancellationToken);
+            EnsureWritten(
+                activities.Entry(row).State == EntityState.Unchanged &&
+                activities.Entry(authoring).State == EntityState.Unchanged &&
+                activities.Entry(draft).State == EntityState.Unchanged,
+                ActivityDefinitionKind,
+                definition.Id);
         }
-        foreach (var version in preflight.NewVersions.Where(version => !firstVersions.Contains(version.Id)))
-        {
-            var row = CloneActivityVersion(version);
-            await activityStores.Execute(OperationKey(commitAttemptId, ActivityVersionKind, version.Id), row, cancellationToken);
-            EnsureWritten(activities.Entry(row).State == EntityState.Unchanged, ActivityVersionKind, version.Id);
-        }
-
-        if (preflight.NewAuthoring.Count > 0 || preflight.AuthoringUpdates.Count > 0)
-            await WriteAuthoringAndProjectionAsync(activities, activityWriter, projections, plan, preflight, createdDefinitions, tenantId, commitAttemptId, cancellationToken);
     }
 
-    /// <summary>
-    /// Authoring rows and the management projection checkpoint, as one Activities Design atomic operation.
-    /// The projection covers newly created definitions and definitions whose head advanced.
-    /// </summary>
-    private async Task WriteAuthoringAndProjectionAsync(
-        ActivitiesDesignDbContext activities,
-        EfDesignAtomicWrite activityWriter,
-        EfActivityManagementProjectionWriter projections,
-        ImportPlan plan,
-        Preflight preflight,
-        IReadOnlyDictionary<string, ActivityDefinition> createdDefinitions,
-        string tenantId,
-        string commitAttemptId,
-        CancellationToken cancellationToken)
-    {
-        var projectionDefinitionIds = preflight.NewDefinitions.Select(definition => definition.Id)
-            .Concat(preflight.AuthoringUpdates.Select(update => update.DefinitionId))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        var material = new
-        {
-            Created = preflight.NewAuthoring.Select(authoring => new { authoring.Id, authoring.DefinitionId, authoring.HeadVersionId }).ToArray(),
-            Advanced = preflight.AuthoringUpdates.Select(update => new { update.Id, update.DefinitionId, update.ExpectedHeadVersionId, update.HeadVersionId }).ToArray(),
-            Projected = projectionDefinitionIds
-        };
-        var result = await EfDesignAtomicCommand.ExecuteAsync(
-            activityWriter,
-            OperationKey(commitAttemptId, "activityDefinitionAuthoringState", "*"),
-            AuthoringOperationKind,
-            material,
-            ["activityDefinitionAuthoringState", "activityDefinitionManagementProjection"],
-            async (context, token) =>
-            {
-                var authoringByDefinition = new Dictionary<string, ActivityDefinitionAuthoringState>(StringComparer.Ordinal);
-                foreach (var authoring in preflight.NewAuthoring)
-                {
-                    var row = CloneAuthoring(authoring);
-                    context.Db.ActivityDefinitionAuthoringStates.Add(row);
-                    authoringByDefinition[row.DefinitionId] = row;
-                }
-
-                foreach (var update in preflight.AuthoringUpdates)
-                {
-                    var row = await LoadTrackedAuthoringAsync(context.Db, update.DefinitionId, tenantId, token);
-                    if (row is null ||
-                        !StringComparer.Ordinal.Equals(row.Id, update.Id) ||
-                        !StringComparer.Ordinal.Equals(row.HeadVersionId, update.ExpectedHeadVersionId))
-                        throw new DbUpdateConcurrencyException($"Activity authoring '{update.Id}' changed after the import preflight.");
-                    row.HeadVersionId = update.HeadVersionId;
-                    row.LastModifiedAt = update.LastModifiedAt;
-                    authoringByDefinition[row.DefinitionId] = row;
-                }
-
-                if (projectionDefinitionIds.Length == 0)
-                {
-                    await context.SaveChangesAsync(token);
-                    return new AuthoringResult(0);
-                }
-
-                var changes = projectionDefinitionIds.Select(definitionId =>
-                {
-                    var candidate = plan.ActivityFor(definitionId);
-                    var definition = preflight.PersistedDefinitions.GetValueOrDefault(definitionId)
-                                     ?? createdDefinitions.GetValueOrDefault(definitionId)
-                                     ?? throw new InvalidOperationException($"Activity definition '{definitionId}' was not written before its projection.");
-                    var authoring = authoringByDefinition.GetValueOrDefault(definitionId) ?? CloneAuthoring(candidate.Authoring);
-                    return (Change: new EfActivityManagementDefinitionChange(definition, authoring), ChangedAt: Max(candidate.Authoring.LastModifiedAt, (preflight.PersistedDefinitions.GetValueOrDefault(definitionId) ?? candidate.Definition).LastModifiedAt));
-                }).ToArray();
-                var sequence = await projections.WriteInCurrentTransactionAsync(
-                    new EfActivityManagementProjectionMutation(changes.Max(change => change.ChangedAt), changes.Select(change => change.Change).ToArray(), [], []),
-                    token);
-                return new AuthoringResult(sequence);
-            },
-            cancellationToken: cancellationToken,
-            tenantId: tenantId);
-        // A fresh operation key per attempt means the only legitimate outcome is a commit inside this
-        // transaction; a replay here would mean the authoring rows were never written.
-        if (result.Status != EfDesignAtomicWriteStatus.Committed)
-            throw new InvalidOperationException($"The Elsa 3 import authoring operation reported {result.Status} instead of a commit.");
-    }
-
-    /// <summary>
-    /// Decides whether one authoring row moves its head version. The head versions it compares come from the
-    /// activity-version batch the preflight already loaded, so this makes no read of its own; a head version that is
-    /// neither persisted nor carried by the plan is the same collision it always was.
-    /// </summary>
-    private static AuthoringUpdate? ResolveAuthoringUpdate(
+    private static void EnsureAuthoringCompatible(
         ActivityDefinitionAuthoringState current,
         ActivityDefinitionAuthoringState next,
-        ImportPlan plan,
-        Dictionary<string, ActivityDefinitionVersion> versions)
+        bool scoped)
     {
         if (!StringComparer.Ordinal.Equals(current.Id, next.Id) ||
             !StringComparer.Ordinal.Equals(current.DefinitionId, next.DefinitionId) ||
             current.ContentAuthority != next.ContentAuthority ||
             !StringComparer.Ordinal.Equals(current.TenantId, next.TenantId))
-            throw new ReusableActivityImportCollisionException(
-                $"Elsa 3 activity authoring identity '{next.Id}' is already owned by a different resource.");
-
-        if (next.HeadVersionId is null || StringComparer.Ordinal.Equals(current.HeadVersionId, next.HeadVersionId))
-            return null;
-        if (current.HeadVersionId is not null)
-        {
-            var currentHead = versions.GetValueOrDefault(current.HeadVersionId)
-                              ?? throw new ReusableActivityImportCollisionException(
-                                  $"Elsa 3 activity authoring identity '{next.Id}' refers to missing head version '{current.HeadVersionId}'.");
-            var nextHead = versions.GetValueOrDefault(next.HeadVersionId)
-                           ?? plan.Versions.FirstOrDefault(version => StringComparer.Ordinal.Equals(version.Id, next.HeadVersionId))
-                           ?? throw new ReusableActivityImportCollisionException(
-                               $"Elsa 3 activity authoring identity '{next.Id}' refers to a head version that is not available for comparison.");
-            if (StringComparer.Ordinal.Compare(currentHead.SemVerSortKey, nextHead.SemVerSortKey) >= 0)
-                return null;
-        }
-
-        return new AuthoringUpdate(
-            current.Id,
-            current.DefinitionId,
-            current.HeadVersionId,
-            next.HeadVersionId,
-            next.LastModifiedAt > current.LastModifiedAt ? next.LastModifiedAt : current.LastModifiedAt);
+            throw Collision($"Elsa 3 activity authoring identity '{next.Id}' is already owned by a different resource.", scoped);
     }
 
     private async Task<ReusableActivityImportCommitResult> ReconcileUncertainCommitAsync(
@@ -588,7 +458,7 @@ public sealed class EfReusableActivityImportCommand(
         {
             activities = mutation.Activities.Select(activity => new ImportedActivity(
                     WithTenant(CloneActivityDefinition(activity.Definition), tenantId),
-                    WithTenant(CloneActivityVersion(activity.Version), tenantId),
+                    WithTenant(activity.Version, tenantId),
                     WithTenant(CloneAuthoring(activity.AuthoringState), tenantId)))
                 .ToArray();
             workflowDefinitions = mutation.Workflows
@@ -618,7 +488,7 @@ public sealed class EfReusableActivityImportCommand(
         return new ImportPlan(
             activities,
             Coalesce(activities.Select(activity => (activity.Definition, ActivityDefinitionMaterial(activity.Definition))), ActivityDefinitionKind, scoped),
-            Coalesce(activities.Select(activity => (activity.Version, ActivityVersionMaterial(activity.Version))), ActivityVersionKind, scoped),
+            CoalesceVersions(activities.Select(activity => activity.Version), scoped),
             Coalesce(activities.Select(activity => (activity.Authoring, AuthoringMaterial(activity.Authoring))), "activityDefinitionAuthoringState", scoped),
             Coalesce(workflowDefinitions, WorkflowDefinitionKind, scoped),
             coalescedVersions,
@@ -634,6 +504,29 @@ public sealed class EfReusableActivityImportCommand(
         accessContextAccessor.Current.EnsureTenantScope(entity.TenantId);
         entity.TenantId ??= tenantId;
         return entity;
+    }
+
+    private ImportedReusableActivityVersion WithTenant(ImportedReusableActivityVersion version, string tenantId)
+    {
+        accessContextAccessor.Current.EnsureTenantScope(version.TenantId);
+        var clone = version with { };
+        clone.TenantId = version.TenantId ?? tenantId;
+        return clone;
+    }
+
+    private static IReadOnlyList<ImportedReusableActivityVersion> CoalesceVersions(
+        IEnumerable<ImportedReusableActivityVersion> candidates,
+        bool scoped)
+    {
+        var result = new List<ImportedReusableActivityVersion>();
+        foreach (var group in candidates.GroupBy(candidate => candidate.Id, StringComparer.Ordinal))
+        {
+            var first = group.First();
+            if (group.Skip(1).Any(candidate => !JsonNode.DeepEquals(ActivityVersionMaterial(first), ActivityVersionMaterial(candidate))))
+                throw Collision($"Elsa 3 import mutation binds '{ActivityVersionKind}/{first.Id}' to multiple contents.", scoped);
+            result.Add(first);
+        }
+        return result.OrderBy(version => version.Id, StringComparer.Ordinal).ToArray();
     }
 
     private static IReadOnlyList<TEntity> Coalesce<TEntity>(
@@ -674,12 +567,10 @@ public sealed class EfReusableActivityImportCommand(
         definition.Description, definition.CreatedAt, definition.LastModifiedAt
     }, Json);
 
-    private static JsonNode? ActivityVersionMaterial(ActivityDefinitionVersion version) => JsonSerializer.SerializeToNode(new
+    private static JsonNode? ActivityVersionMaterial(ImportedReusableActivityVersion version) => JsonSerializer.SerializeToNode(new
     {
-        version.Id, version.TenantId, version.DefinitionId, version.Version, version.ProviderKey, version.ProviderSchemaVersion,
-        version.ConsumerKey, version.ConsumerSchemaVersion, DescriptorPayload = PayloadNode(version.DescriptorPayload),
-        version.Inputs, version.Outputs, version.DesignFacets, version.ExecutionType, version.SourceKind, version.SourceId,
-        version.Hash, version.CreatedAt, version.LastModifiedAt
+        version.Id, version.TenantId, version.DefinitionId, version.Version, version.SourceVersionId, version.Contract,
+        GraphManifest = PayloadNode(version.GraphManifest), version.DependsOn, version.CreatedAt
     }, Json);
 
     private static JsonNode? AuthoringMaterial(ActivityDefinitionAuthoringState authoring) => JsonSerializer.SerializeToNode(new
@@ -758,26 +649,6 @@ public sealed class EfReusableActivityImportCommand(
         StringComparer.Ordinal.Equals(current.TenantId, next.TenantId) &&
         current.CreatedAt == next.CreatedAt;
 
-    private static bool SameActivityVersion(ActivityDefinitionVersion current, ActivityDefinitionVersion next) =>
-        StringComparer.Ordinal.Equals(current.Id, next.Id) &&
-        StringComparer.Ordinal.Equals(current.TenantId, next.TenantId) &&
-        StringComparer.Ordinal.Equals(current.DefinitionId, next.DefinitionId) &&
-        StringComparer.Ordinal.Equals(current.Version, next.Version) &&
-        StringComparer.Ordinal.Equals(current.SemVerSortKey, next.SemVerSortKey) &&
-        StringComparer.Ordinal.Equals(current.ProviderKey, next.ProviderKey) &&
-        StringComparer.Ordinal.Equals(current.ProviderSchemaVersion, next.ProviderSchemaVersion) &&
-        StringComparer.Ordinal.Equals(current.ConsumerKey, next.ConsumerKey) &&
-        StringComparer.Ordinal.Equals(current.ConsumerSchemaVersion, next.ConsumerSchemaVersion) &&
-        current.ExecutionType == next.ExecutionType &&
-        StringComparer.Ordinal.Equals(current.SourceKind, next.SourceKind) &&
-        StringComparer.Ordinal.Equals(current.SourceId, next.SourceId) &&
-        StringComparer.Ordinal.Equals(current.Hash, next.Hash) &&
-        JsonEquals(current.DescriptorPayloadSource, PayloadNode(next.DescriptorPayload)?.ToJsonString()) &&
-        JsonEquals(current.InputsSource, JsonSerializer.Serialize(next.Inputs ?? [], Json)) &&
-        JsonEquals(current.OutputsSource, JsonSerializer.Serialize(next.Outputs ?? [], Json)) &&
-        JsonEquals(current.DesignFacetsSource, JsonSerializer.Serialize(next.DesignFacets ?? [], Json)) &&
-        SameInstant(current.CreatedAt, next.CreatedAt);
-
     private static bool SameWorkflowVersion(WorkflowDefinitionVersion current, WorkflowDefinitionVersion next, string nextStateJson) =>
         StringComparer.Ordinal.Equals(current.Id, next.Id) &&
         StringComparer.Ordinal.Equals(current.TenantId, next.TenantId) &&
@@ -810,9 +681,6 @@ public sealed class EfReusableActivityImportCommand(
             throw new ReusableActivityImportPersistenceException("compare document content", "JSON", exception);
         }
     }
-
-    private static Task<ActivityDefinitionAuthoringState?> LoadTrackedAuthoringAsync(ActivitiesDesignDbContext db, string definitionId, string tenantId, CancellationToken cancellationToken) =>
-        FindScopedAsync(db.ActivityDefinitionAuthoringStates, "DefinitionId", definitionId, row => row.DefinitionId, tenantId, "activityDefinitionAuthoringState", cancellationToken);
 
     private static Task<Dictionary<string, ActivityDefinition>> LoadActivityDefinitionsAsync(ActivitiesDesignDbContext db, IEnumerable<string> ids, string tenantId, CancellationToken cancellationToken) =>
         FindScopedManyAsync(db.ActivityDefinitions.AsNoTracking(), "Id", ids, row => row.Id, tenantId, ActivityDefinitionKind, cancellationToken);
@@ -1094,15 +962,6 @@ public sealed class EfReusableActivityImportCommand(
         LastModifiedAt = source.LastModifiedAt
     };
 
-    private static ActivityDefinitionVersion CloneActivityVersion(ActivityDefinitionVersion source)
-    {
-        var clone = ActivityDefinitionVersion.From(source);
-        clone.TenantId = source.TenantId;
-        clone.CreatedAt = source.CreatedAt;
-        clone.LastModifiedAt = source.LastModifiedAt;
-        return clone;
-    }
-
     private static ActivityDefinitionAuthoringState CloneAuthoring(ActivityDefinitionAuthoringState source) => new()
     {
         Id = source.Id,
@@ -1144,19 +1003,20 @@ public sealed class EfReusableActivityImportCommand(
 
     private sealed record ImportedActivity(
         ActivityDefinition Definition,
-        ActivityDefinitionVersion Version,
+        ImportedReusableActivityVersion Version,
         ActivityDefinitionAuthoringState Authoring);
 
     private sealed record ImportPlan(
         IReadOnlyList<ImportedActivity> Activities,
         IReadOnlyList<ActivityDefinition> Definitions,
-        IReadOnlyList<ActivityDefinitionVersion> Versions,
+        IReadOnlyList<ImportedReusableActivityVersion> Versions,
         IReadOnlyList<ActivityDefinitionAuthoringState> Authoring,
         IReadOnlyList<WorkflowDefinition> WorkflowDefinitions,
         IReadOnlyList<WorkflowDefinitionVersion> WorkflowVersions,
         IReadOnlyDictionary<string, string> WorkflowStateJson,
         IReadOnlyList<ReusableActivityImportDefinitionBinding> Bindings)
     {
+        /// <summary>The definition's lowest selected version: activities are in publish order, ascending per definition.</summary>
         public ImportedActivity ActivityFor(string definitionId) =>
             Activities.First(activity => StringComparer.Ordinal.Equals(activity.Definition.Id, definitionId));
     }
@@ -1167,23 +1027,11 @@ public sealed class EfReusableActivityImportCommand(
         public List<ReusableActivityImportDefinitionBinding> NewBindings { get; } = [];
         public List<ActivityDefinition> NewDefinitions { get; } = [];
         public Dictionary<string, ActivityDefinition> PersistedDefinitions { get; } = new(StringComparer.Ordinal);
-        public List<ActivityDefinitionVersion> NewVersions { get; } = [];
-        public List<ActivityDefinitionAuthoringState> NewAuthoring { get; } = [];
-        public List<AuthoringUpdate> AuthoringUpdates { get; } = [];
         public List<WorkflowDefinition> NewWorkflowDefinitions { get; } = [];
         public List<WorkflowDefinitionVersion> NewWorkflowVersions { get; } = [];
 
         public bool HasWrites =>
-            NewBindings.Count > 0 || NewDefinitions.Count > 0 || NewVersions.Count > 0 || NewAuthoring.Count > 0 ||
-            AuthoringUpdates.Count > 0 || NewWorkflowDefinitions.Count > 0 || NewWorkflowVersions.Count > 0;
+            NewBindings.Count > 0 || NewDefinitions.Count > 0 || NewWorkflowDefinitions.Count > 0 || NewWorkflowVersions.Count > 0;
     }
 
-    private sealed record AuthoringUpdate(
-        string Id,
-        string DefinitionId,
-        string? ExpectedHeadVersionId,
-        string HeadVersionId,
-        DateTimeOffset LastModifiedAt);
-
-    private sealed record AuthoringResult(long ProjectionSequence);
 }

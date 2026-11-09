@@ -27,6 +27,7 @@ compiler validates and pins the selected alias/version into each executable.
 | `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
 | `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Publishing EF Core package replaces this default. |
 | `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
+| `IActivitySourceVersionPublisher` *(Design Core contract, cross-domain contribution)* | `SourceOwnedActivityVersionPublisher` (scoped) | A host closes source-owned catalog versions into publications another way. Content whose provider key a registered `IActivityTemplateProviderCompiler` owns is judged as a Studio draft is: `IActivityDraftValidator`, the template compiler (which runs the provider's own gates, such as a model capability check), and storage and runtime readiness. The validator, compiler and readiness name the version with the subject kind `ActivitySourceVersion`; diagnostics the provider itself reports are sanitized as in Studio and name the provider instead, so they are keyed by version id where they are recorded. A refused version is not written and comes back as `ActivitySourceVersionPublicationResult.Refused` with its diagnostics; so does content with activity dependencies, which a source-owned commit cannot record. Content whose provider key no registered compiler owns (such as `elsa.clr-activity`, from CLR scanning or a JSON entry) keeps the single-node root from `ExecutableNodeCompiler.CompileSourceOwnedRoot`. |
 
 Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`.
 
@@ -50,6 +51,25 @@ feature. A replacement must supply the same tenant/scope facts the activity-draf
 - `IActivityDraftTestRunCancellationPolicy` evaluates the durable receipt together with current Runtime Evidence.
   Replacements must distinguish whether cancellation is advertised from whether it is currently allowed. A
   denied or already-terminal request must not enqueue a Runtime command.
+- Template preparation qualifies the exact selected executable/reference stores through the
+  [template writer capability](../../Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iexecutableactivitytemplatestore-core--elsaworkflowsruntimecore)
+  before atomic admission; a mixed composition creates no hidden root. Immutable material remains content-addressed,
+  while each durable Test Run owns a stable expiring template reference derived from its run identity and template
+  hash. Preparation uses the persisted winning reference; it cannot borrow a prior run's expiry/layout or restore
+  retirement. Legacy hash-only references are left intact, and already-prepared receipts retain their existing
+  artifact/source identities on resume.
+- Wrapper preparation also preflights the selected source writer's executable-root capability before template
+  writes. After immutable material save it reads and validates the actual winner's full payload/provenance,
+  allowing independent producer attribution and creation time only. Each invocation uses a distinct renewable
+  root-lease identity; the source provider atomically validates its current full-closure grants and returns the
+  persisted source winner with fixed receipt expiry. The original 20-argument constructor remains (built-in
+  coordinator/default lease options); DI uses the additive selected-coordinator constructor. New wrapper IO,
+  database, JSON, contextual provider/coordination and unrequested cancellation failures carry a catchable
+  Publishing Core `ActivityDraftTestRunStorageException` with Test Run ID and the complete original cause
+  (including aggregate failures); requested cancellation propagates. Native and SQLite service controls qualify
+  material/source/receipt preparation and retry, including fresh contexts, committed source acknowledgement loss
+  and ordinary zero-grace GC. Their compiler is fixed and dispatch/execution-state ports do not execute a workflow;
+  qualified default cohort GC, old-writer exclusion and actual upgraded-host/Studio proof remain unfinished.
 - Dispatch, retry, and cancellation use stable Runtime idempotency keys. An ambiguous acknowledgement may be
   retried, but must resolve to the same Test Run and workflow execution identity.
 - Status projection may expose safe codes and diagnostics, immutable artifact/source identities, and the eventual

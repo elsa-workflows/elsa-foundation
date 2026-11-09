@@ -138,7 +138,7 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
   const linted = new Set(result.results.map(result => rel(result.source)));
   const onDisk = [...walk(moduleSourceRoots, name => name.endsWith(".css"))]
     .map(rel)
-    .filter(path => /\/Client\/src\//.test(path) && !path.startsWith("Studio/src/apps/Elsa.Studio.Web/"));
+    .filter(path => /\/Client\/src\//.test(path) && !path.startsWith("Studio/src/essentials/Elsa.Studio.Hosting/"));
 
   for (const css of onDisk)
     if (!linted.has(css)) fail("lint:css", `${css} is module CSS but is not covered by lint:css`);

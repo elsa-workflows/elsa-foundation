@@ -136,12 +136,17 @@ public sealed record PublicationTriggerConflictView(
     string PublicationId,
     string SlotName)
 {
+    public string? Descriptor { get; init; }
+
     public static PublicationTriggerConflictView From(PublicationTriggerConflict conflict) =>
         new(
             PublicationContract.TriggerKey(conflict.StimulusType, conflict.StimulusHash),
             PublicationContract.ToView(conflict.Cardinality),
             conflict.PublicationId,
-            conflict.SlotName);
+            conflict.SlotName)
+        {
+            Descriptor = conflict.Descriptor
+        };
 }
 
 public static class PublicationContract

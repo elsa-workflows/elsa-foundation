@@ -47,6 +47,7 @@ namespace Elsa.Activities.For.Activities;
 [RefusesSecretBinding(nameof(Start), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(End), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(Step), SecretBindingRefusalReason.PersistedByActivity)]
+[Activity(Icon = "Repeat1")]
 [ActivityStructure("elsa.for.structure", "1.0.0")]
 [ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

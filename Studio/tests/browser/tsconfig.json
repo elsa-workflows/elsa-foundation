@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // Included by root `pnpm typecheck` (`tsc --noEmit -p tests/browser/tsconfig.json`).
+  // Specs only: fixture TSX pulls the app graph and is compiled by Vite, not this project.
+  // Paths match tests/browser/vite.config.ts. Keep automatic `@types` empty so installing
+  // nothing here can leak Node globals into packages.
+  // React types come from the Studio-root `@types/react` and `@types/react-dom` devDependencies
+  // via typeRoots, not a leaf package's node_modules/@types layout.
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": [],
+    "typeRoots": ["./typings", "../../node_modules/@types"],
+    "paths": {
+      "@elsa-workflows/studio-sdk": ["src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"],
+      "@elsa-workflows/studio-ui": ["src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"],
+      "@xyflow/react": ["src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react"]
+    }
+  },
+  "include": ["./**/*.spec.ts", "./playwright*.ts", "./typings/**/*.d.ts"]
+}

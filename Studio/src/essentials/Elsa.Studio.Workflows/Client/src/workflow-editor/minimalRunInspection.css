@@ -1,0 +1,11 @@
+/* Specialist run inspection inherits the public minimal roles without restyling its behavior. */
+html[data-workspace-style="minimal"] :is(.wf-instance-canvas-shell, .wf-instance-inspector) { border-radius: var(--studio-radius-md); background: var(--studio-surface); }
+html[data-workspace-style="minimal"] :is(.wf-instance-canvas-shell > header, .wf-instance-inspector > header) { padding: 16px 20px; }
+html[data-workspace-style="minimal"] .wf-instance-inspector h3 { font-size: 20px; font-weight: 600; }
+html[data-workspace-style="minimal"] .wf-instance-section { padding: 20px; }
+html[data-workspace-style="minimal"] .wf-instance-section + .wf-instance-section { border-top: 1px var(--studio-section-boundary-style) var(--studio-border); }
+html[data-workspace-style="minimal"] .wf-instance-meta { font-size: var(--studio-body-size); }
+html[data-workspace-style="minimal"] .wf-instance-canvas { background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .wf-node-runtime:not(.faulted):not(.wf-node-unavailable):not(.wf-node-ghost) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-node-runtime.selected:not(.faulted):not(.wf-node-unavailable):not(.wf-node-ghost) { border-color: var(--studio-selection-mark); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-node-runtime .wf-status-badge:is([data-status="completed"], [data-status="running"]) { color: var(--studio-text-muted); background: transparent; }

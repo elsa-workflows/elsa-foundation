@@ -17,6 +17,12 @@ public sealed class SchedulerWorkHandlerHelpersTests
 {
     private static readonly DateTimeOffset Now = new(2026, 6, 11, 18, 0, 0, TimeSpan.Zero);
 
+    private static readonly Func<WorkflowExecutable, string, string, WorkflowExecutableResumeTarget?>[] ResumeTargetResolvers =
+    [
+        WorkflowExecutableResumeTarget.FindForNode,
+        SchedulerWorkHandlerHelpers.FindResumeTargetForNode
+    ];
+
     private static readonly WorkflowExecutableIdentity Pinned =
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
@@ -70,6 +76,92 @@ public sealed class SchedulerWorkHandlerHelpersTests
             "ResumeBookmark scheduler work item 'work-1' references executable node 'node-missing', " +
             "which is missing from executable artifact 'artifact-1@1.0.0/sha256:test (definition-1/version-1)'.",
             exception.Message);
+    }
+
+    // --- Resume target resolution (Core contract and compatibility forwarding helper) ---
+
+    [Fact]
+    public void FindResumeTargetForNode_PrefersDirectGlobalIdAndLeavesOwnershipCheckToCaller()
+    {
+        const string requestedId = "after";
+        var direct = NewResumeTarget(requestedId, "node-other", "foreign-local");
+        var local = NewResumeTarget("resume-opaque-node-1", "node-1", requestedId);
+        var executable = NewExecutable("node-1", new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            [requestedId] = direct,
+            [local.ResumeTargetId] = local
+        });
+
+        foreach (var resolve in ResumeTargetResolvers)
+        {
+            var result = resolve(executable, "node-1", requestedId);
+
+            Assert.Equal(direct, result);
+            Assert.Equal("node-other", result!.ExecutableNodeId);
+        }
+    }
+
+    [Fact]
+    public void FindResumeTargetForNode_ResolvesUniqueNodeLocalKeyToOpaqueGlobalId()
+    {
+        const string localKey = "after";
+        var otherNode = NewResumeTarget("resume-opaque-other", "node-other", localKey);
+        var expected = NewResumeTarget("resume-opaque-node-1", "node-1", localKey);
+        var executable = NewExecutable("node-1", new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            [otherNode.ResumeTargetId] = otherNode,
+            [expected.ResumeTargetId] = expected
+        });
+
+        foreach (var resolve in ResumeTargetResolvers)
+        {
+            var result = resolve(executable, "node-1", localKey);
+
+            Assert.Equal(expected, result);
+            Assert.Equal("resume-opaque-node-1", result!.ResumeTargetId);
+        }
+    }
+
+    [Fact]
+    public void FindResumeTargetForNode_ReturnsNullWhenTargetIsMissing()
+    {
+        var executable = NewExecutable("node-1");
+
+        foreach (var resolve in ResumeTargetResolvers)
+            Assert.Null(resolve(executable, "node-1", "missing"));
+    }
+
+    [Fact]
+    public void FindResumeTargetForNode_ThrowsWhenNodeLocalKeyIsAmbiguous()
+    {
+        const string localKey = "after";
+        var first = NewResumeTarget("resume-opaque-first", "node-1", localKey);
+        var second = NewResumeTarget("resume-opaque-second", "node-1", localKey);
+        var executable = NewExecutable("node-1", new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            [first.ResumeTargetId] = first,
+            [second.ResumeTargetId] = second
+        });
+
+        foreach (var resolve in ResumeTargetResolvers)
+            Assert.Equal("Local resume target 'after' is ambiguous for executable node 'node-1'.",
+                Assert.Throws<InvalidOperationException>(() => resolve(executable, "node-1", localKey)).Message);
+    }
+
+    [Fact]
+    public void FindResumeTargetForNode_ValidatesArguments()
+    {
+        foreach (var resolve in ResumeTargetResolvers)
+        {
+            var nullExecutable = Assert.ThrowsAny<ArgumentException>(() => resolve(null!, "node-1", "after"));
+            Assert.Equal("executable", nullExecutable.ParamName);
+
+            var blankNode = Assert.ThrowsAny<ArgumentException>(() => resolve(NewExecutable("node-1"), " ", "after"));
+            Assert.Equal("executableNodeId", blankNode.ParamName);
+
+            var blankKey = Assert.ThrowsAny<ArgumentException>(() => resolve(NewExecutable("node-1"), "node-1", ""));
+            Assert.Equal("requestedResumeTargetId", blankKey.ParamName);
+        }
     }
 
     // --- item 1: DeserializePayload ---
@@ -253,7 +345,12 @@ public sealed class SchedulerWorkHandlerHelpersTests
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
 
-    private static WorkflowExecutable NewExecutable(string nodeId)
+    private static WorkflowExecutableResumeTarget NewResumeTarget(string id, string nodeId, string localId) =>
+        new(id, nodeId, "ResumeAsync", new Dictionary<string, string>(), localId);
+
+    private static WorkflowExecutable NewExecutable(
+        string nodeId,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>? resumeTargets = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new WorkflowExecutable(
@@ -266,7 +363,7 @@ public sealed class SchedulerWorkHandlerHelpersTests
                 descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
                 metadata: new Dictionary<string, string>()),
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            resumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);

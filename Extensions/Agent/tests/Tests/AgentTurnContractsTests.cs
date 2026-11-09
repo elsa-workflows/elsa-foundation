@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
+using Elsa.Agent.Services;
 
 namespace Elsa.Agent.Tests;
 
@@ -69,35 +70,71 @@ public sealed class AgentTurnContractsTests
     }
 
     [Fact]
-    public void Tool_registry_exposes_descriptors_and_finds_by_name_case_insensitively()
+    public async Task Tool_registry_exposes_descriptors_and_finds_by_name_case_insensitively()
     {
-        var registry = new DefaultAgentToolRegistry([new StubTool("read-workflow"), new StubTool("add-activity")]);
+        var registry = new DefaultAgentToolRegistry(new AgentTestToolsPublisher(new StubTool("read-workflow"), new StubTool("add-activity")));
 
-        Assert.Equal(2, registry.Descriptors.Count);
-        Assert.NotNull(registry.Find("READ-WORKFLOW"));
-        Assert.Null(registry.Find("missing"));
-        Assert.Null(registry.Find(""));
+        Assert.Equal(2, (await registry.ListAsync()).Count);
+        Assert.NotNull(await registry.FindAsync("READ-WORKFLOW"));
+        Assert.Null(await registry.FindAsync("missing"));
+        Assert.Null(await registry.FindAsync(""));
     }
 
     [Fact]
-    public void Tool_registry_rejects_tools_sharing_a_name()
+    public async Task Tool_registry_rejects_tools_sharing_a_name()
     {
         // Issue #414 item 6: duplicate names now fail fast (previously the first registration silently won).
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            new DefaultAgentToolRegistry([new StubTool("read-workflow"), new StubTool("read-workflow")]));
+        var ex = await Assert.ThrowsAsync<AgentContributionException>(() =>
+            new DefaultAgentToolRegistry(new AgentTestToolsPublisher(new StubTool("read-workflow"), new StubTool("read-workflow"))).ListAsync());
 
         Assert.Contains("read-workflow", ex.Message);
         Assert.Contains("Duplicate agent tool name", ex.Message);
     }
 
     [Fact]
-    public void Tool_registry_rejects_names_harnesses_cannot_accept()
+    public async Task Tool_registry_rejects_names_harnesses_cannot_accept()
     {
         // Dotted names are rejected by GitHub Copilot + Anthropic; fail fast at registration.
-        var ex = Assert.Throws<InvalidOperationException>(() => new DefaultAgentToolRegistry([new StubTool("workflow.read_graph")]));
+        var ex = await Assert.ThrowsAsync<AgentContributionException>(() => new DefaultAgentToolRegistry(new AgentTestToolsPublisher(new StubTool("workflow.read_graph"))).ListAsync());
 
         Assert.Contains("workflow.read_graph", ex.Message);
         Assert.Contains("^[a-zA-Z0-9_-]+$", ex.Message);
+    }
+
+    [Fact]
+    public void Cancellation_and_unregister_are_bound_to_the_owning_session()
+    {
+        var registry = new AgentTurnRegistry();
+        var token = registry.Register("session-a", "turn-a");
+        try
+        {
+            Assert.True(registry.IsActive("session-a"));
+            Assert.False(registry.Cancel("session-b", "turn-a"));
+            registry.Unregister("session-b", "turn-a");
+            Assert.False(token.IsCancellationRequested);
+            Assert.True(registry.IsActive("session-a"));
+            Assert.True(registry.Cancel("session-a", "turn-a"));
+            Assert.True(token.IsCancellationRequested);
+        }
+        finally { registry.Unregister("session-a", "turn-a"); }
+        Assert.False(registry.IsActive("session-a"));
+    }
+
+    [Fact]
+    public void A_session_has_one_foreground_turn_and_a_stale_turn_cannot_cancel_its_successor()
+    {
+        var registry = new AgentTurnRegistry();
+        registry.Register("session-a", "turn-a");
+        Assert.Throws<AgentContributionException>(() => registry.Register("session-a", "another-turn"));
+        registry.Unregister("session-a", "turn-a");
+        var successor = registry.Register("session-a", "turn-b");
+        try
+        {
+            Assert.False(registry.Cancel("session-a", "turn-a"));
+            Assert.False(successor.IsCancellationRequested);
+            Assert.True(registry.IsActive("session-a"));
+        }
+        finally { registry.Unregister("session-a", "turn-b"); }
     }
 
     private sealed class StubTool(string name) : IAgentTool
@@ -110,9 +147,12 @@ public sealed class AgentTurnContractsTests
             AgentRisk.ReadOnly,
             "{}",
             [],
-            []);
+            []) { ModuleId = "test.module" };
 
-        public Task<AgentResult<AgentToolResult>> InvokeAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor)));
+
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
             => Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "ok")));
     }
 }

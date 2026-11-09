@@ -332,7 +332,8 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role, "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker:admin"));
+            new Claim(IdentityClaimTypes.Permission, "worker:admin"),
+            new Claim(IdentityClaimTypes.UserId, "user-forged"));
 
         using var response = await host.SendBearerAsync(token);
 
@@ -342,6 +343,7 @@ public sealed class OidcBearerNormalizationTests
         Assert.Equal("1", Header(response, "X-Normalized-Count"));
         Assert.Equal("worker.execute", Header(response, "X-Permissions"));
         Assert.Equal("0", Header(response, "X-Roles-Count"));
+        Assert.Equal("0", Header(response, "X-User-Id-Count"));
         Assert.Equal(Tenant, mappings.LastTenant);
         Assert.Equal(Provider, mappings.LastProvider);
     }
@@ -1719,6 +1721,7 @@ public sealed class OidcBearerNormalizationTests
             context.Response.Headers["X-Provider"] = identity.FindFirst(IdentityClaimTypes.Provider)?.Value ?? string.Empty;
             context.Response.Headers["X-Permissions"] = string.Join(",", identity.FindAll(IdentityClaimTypes.Permission).Select(claim => claim.Value));
             context.Response.Headers["X-Roles-Count"] = identity.FindAll(IdentityClaimTypes.Role).Count().ToString();
+            context.Response.Headers["X-User-Id-Count"] = identity.FindAll(IdentityClaimTypes.UserId).Count().ToString();
             context.Response.Headers["X-External-Canary-Count"] = identity.FindAll("external-canary").Count().ToString();
             return context.Response.WriteAsync("ok");
         }

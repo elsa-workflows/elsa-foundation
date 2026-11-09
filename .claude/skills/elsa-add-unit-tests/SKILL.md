@@ -24,5 +24,6 @@ $ARGUMENTS
 4. Inspect nearby tests and existing test project references before proposing new test structure.
 5. Plan focused tests for the paths that carry risk, including exception-boundary coverage where applicable. No coverage quota; never assert on markdown, documentation or source text.
 6. If implementation was already approved and tests are direct follow-through, add the tests; otherwise return the plan first.
+7. A new test project needs an entry in `tools/ci/test-tiers.json` (`docs/contributing/merging.md#ci-tiers`). It is integration tier if it reaches Testcontainers, or if it launches a child host (a Workbench host, a worker, a probe or the CLI) and takes 2 minutes or more; otherwise it is PR tier. Check with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 
 Do not use future integration tests as a substitute for required unit tests.

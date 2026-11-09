@@ -1,0 +1,9 @@
+# Published API shape after round 5 corrections
+
+Actual right-hand products from **04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2** pass [twelve directional comparisons](all-comparisons.json) over eight released packages, with parameter-name rules enabled, no unresolved references and no suppressions. The two new BPMN Core/API packages have no prior publish-state entry.
+
+The ten earlier baseline inputs remain hash-identical to the [round 4 audit](../../../round-4/qualification/api-binary/README.md). Two further comparisons use newly released BPMN 4.0.16-preview and Publishing 4.0.37-preview. Their public URLs, package hashes and embedded repository commits are in [latest-downloads.json](latest-downloads.json). Both embedded commits match the refreshed publish-state `3eb565c1cee0465ab05ae8c973f54f4f516113c2`, whose last published main is d2f99623. The 34 additionally resolved baseline compile references are hash-bound in [latest-reference-map.json](latest-reference-map.json).
+
+Reproduction installs Microsoft.DotNet.ApiCompat.Tool 10.0.403 into a fresh private directory, downloads and verifies the recorded public packages, restores the archived baseline project/configuration/lock inputs and builds the declared source. Run the recorded commands with fresh paths and the installed .NET/ASP.NET 10 reference assemblies. The logs are compressed without changing their decoded bytes; the latest two nuspecs are retained. No local compiled DLL, package cache or temporary path is a required committed input. Earlier baseline closure/download receipts remain in their source-bound bundle.
+
+This audit proves public binary API shape. It does not prove release-package identity, host recovery, version-magnitude compliance or permission to retain shared 4.0. No pack, publish or version reservation occurred. The unanswered Framework §4.2 / Elsa §E5 owner card and T042 remain open.

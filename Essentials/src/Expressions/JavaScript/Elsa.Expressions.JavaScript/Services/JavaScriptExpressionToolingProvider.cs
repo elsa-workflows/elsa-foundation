@@ -177,10 +177,8 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
     {
         try
         {
-            // Runtime evaluates the authored source as a parenthesized strict-mode expression.
-            // Parse in the same grammar so the consequential-operation gate cannot approve a
-            // statement body that Jint will reject (or reject a valid anonymous expression).
-            new Parser().ParseExpression(source, strict: true);
+            // Share grammar selection with runtime without evaluating authored code.
+            JavaScriptBindingSyntax.IsExpression(source);
             return [];
         }
         catch (ParseErrorException exception)

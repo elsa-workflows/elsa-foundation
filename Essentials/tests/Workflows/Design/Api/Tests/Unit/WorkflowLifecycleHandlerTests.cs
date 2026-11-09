@@ -189,6 +189,23 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.False(versions.WasMutated);
     }
 
+    // Spec 261 FR-515: a warning never blocks promotion, so the preflight Studio's publication review reads must not
+    // block on one either. Before the fix a replay-safe compensation warning made the review unpublishable.
+    [Fact]
+    public async Task Promotion_preflight_is_ready_with_warnings_only_and_does_not_list_them()
+    {
+        var (_, draft, versions, _) = CreatePreflight("1.0.0", identityExists: false);
+        var drafts = new MutableDraftStore(draft, []);
+        var publisher = new RecordingInlineEventPublisher(
+            new ValidationError("scope/steps/0", "CompensationScope/ReplaySafeStep", "Charge is marked safe to repeat.") { Severity = ValidationSeverities.Warning });
+
+        var result = await new PreflightEndpoint(drafts, versions, publisher).HandleAsync(new PreflightDraftPromotion("draft-1", null), CancellationToken.None);
+
+        Assert.True(result.IsReady);
+        Assert.DoesNotContain(result.Issues, issue => issue.Code == "draft-validation");
+        Assert.Equal(1, publisher.PublishCalls);
+    }
+
     [Fact]
     public async Task Synthetic_draft_id_is_used_as_the_store_key_and_does_not_fall_back_to_definition_lookup()
     {

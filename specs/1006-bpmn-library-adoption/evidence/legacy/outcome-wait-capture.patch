@@ -1,0 +1,205 @@
+diff --git a/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
+--- a/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
++++ b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs
+@@ -51,6 +51,11 @@
+             {
+                 var executable = Build(writer, scenario);
+                 await writer.RunAsync(executable);
++                if (scenario == "listener-rearm-outcome")
++                {
++                    var initial = Assert.Single(await writer.BookmarksAsync(), bookmark => bookmark.ExecutableNodeId == "node-listener");
++                    await writer.ResumeAsync(initial, JsonSerializer.SerializeToElement(new { outcome = "complete" }));
++                }
+                 if (scenario is "resolved-race" or "listener-rearm")
+                     await ResumeNodeAsync(writer, scenario == "resolved-race" ? "node-winner" : "node-listener");
+                 Assert.True(capture.Captured, $"Actual legacy boundary was not reached: {scenario}.");
+@@ -66,8 +71,16 @@
+                 if (scenario == "listener-rearm")
+                     await ResumeNodeAsync(reader, "node-listener");
+ 
+-                if (scenario != "deferred-fault")
++                if (scenario.EndsWith("-outcome", StringComparison.Ordinal))
+                 {
++                    var node = scenario == "parallel-mi-outcome" ? "node-work" : "node-listener";
++                    var waiting = (await reader.BookmarksAsync()).Where(bookmark => bookmark.ExecutableNodeId == node)
++                        .OrderBy(bookmark => bookmark.ActivityExecutionId, StringComparer.Ordinal).ToArray();
++                    Assert.Equal(scenario == "parallel-mi-outcome" ? 3 : 1, waiting.Length);
++                    await reader.ResumeAsync(waiting[0], JsonSerializer.SerializeToElement(new { outcome = "fault" }));
++                }
++                if (scenario != "deferred-fault" && !scenario.EndsWith("-outcome", StringComparison.Ordinal))
++                {
+                     var node = scenario == "parallel-mi" ? "node-work" : scenario == "listener-rearm" ? "node-hold" : "node-final";
+                     var waiting = (await reader.BookmarksAsync()).Where(bookmark => bookmark.ExecutableNodeId == node).ToArray();
+                     Assert.Equal(scenario == "parallel-mi" ? 3 : 1, waiting.Length);
+@@ -79,8 +92,19 @@
+                     .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+                 var incidents = await reader.Provider.GetRequiredService<IIncidentStateStore>()
+                     .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+-                Assert.True(state!.Status == (scenario == "deferred-fault" ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed),
++                Assert.True(state!.Status == (scenario == "deferred-fault" || scenario.EndsWith("-outcome", StringComparison.Ordinal) ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed),
+                     JsonSerializer.Serialize(incidents.Select(incident => new { incident.FailureType, incident.Message }), Web));
++                if (scenario.EndsWith("-outcome", StringComparison.Ordinal))
++                {
++                    var all = await reader.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
++                    var fault = Assert.Single(all, child => child.Fault?.Code == "LEGACY-OUTCOME-FAULT" && child.Execution.ExecutableNodeId != F.ProcessNodeId);
++                    Assert.Equal(ActivityExecutionStatus.Faulted, fault.Status);
++                    Assert.Equal("node-" + (scenario == "parallel-mi-outcome" ? "work" : "listener"), fault.Execution.ExecutableNodeId);
++                    Assert.Equal(scenario == "parallel-mi-outcome", fault.IterationId is not null);
++                    capture.OldControlFacts = new { workflow = state.Status, fault = fault.Fault, child = fault.InvocationId,
++                        iteration = fault.IterationId, activities = all.Select(child => new { child.InvocationId, child.ParentActivityExecutionId,
++                            child.Execution.ExecutableNodeId, child.Status, child.IterationId, child.Fault }), incidents };
++                }
+                 if (scenario == "deferred-fault")
+                 {
+                     var parent = Assert.Single(await reader.Provider.GetRequiredService<IActivityExecutionStateStore>()
+@@ -97,6 +121,12 @@
+         }
+     }
+ 
++    [Theory]
++    [InlineData("parallel-mi-outcome")]
++    [InlineData("listener-rearm-outcome")]
++    public Task Actual_legacy_outcome_wait_checkpoint_reopens_in_a_fresh_old_host_control(string scenario) =>
++        Actual_legacy_checkpoint_reopens_in_a_fresh_old_host_control(scenario);
++
+     [Fact]
+     public async Task Capture_rejects_loser_completion_enqueued_after_first_winner_cancellation()
+     {
+@@ -157,6 +187,26 @@
+ 
+     private static WorkflowExecutable Build(F fixture, string scenario)
+     {
++        if (scenario.EndsWith("-outcome", StringComparison.Ordinal))
++        {
++            var ordinary = Build(fixture, scenario == "parallel-mi-outcome" ? "parallel-mi" : "listener-rearm");
++            var nodeId = scenario == "parallel-mi-outcome" ? "node-work" : "node-listener";
++            var originalRoot = ordinary.RootActivity;
++            var type = typeof(LegacyCheckpointOutcomeWaitActivity);
++            var contract = ClrActivityContractTestBuilder.BuildContract(type);
++            var replacement = new ExecutableNode(nodeId, "authored-" + nodeId, type.FullName!, "1.0.0",
++                contract.DescriptorKind, contract.DescriptorPayload, new Dictionary<string, RuntimeInputBinding>(),
++                new Dictionary<string, string>(), activityContract: contract);
++            var root = new ExecutableNode(originalRoot.ExecutableNodeId, originalRoot.AuthoredActivityId,
++                originalRoot.ActivityType, originalRoot.ActivityTypeVersion, originalRoot.DescriptorType,
++                originalRoot.DescriptorPayload, originalRoot.InputBindings, originalRoot.Metadata,
++                originalRoot.ChildSlots.Select(slot => new ExecutableChildSlot(slot.Name,
++                    slot.Activities.Select(child => child.ExecutableNodeId == nodeId ? replacement : child).ToArray(), slot.OperatorSchedulingCapability)).ToArray(),
++                originalRoot.Structure, originalRoot.ActivityContract);
++            var targets = ordinary.ResumeTargets.Values.Where(target => target.ExecutableNodeId != nodeId)
++                .Append(F.NodeResumeTarget(nodeId, LegacyCheckpointOutcomeWaitActivity.ResumeTargetId)).ToDictionary(target => target.ResumeTargetId, StringComparer.Ordinal);
++            return new WorkflowExecutable(ordinary.Identity, root, targets, ordinary.CreatedAt, ordinary.CompatibilityMetadata, ordinary.IncidentStrategy);
++        }
+         if (scenario == "parallel-mi")
+             return fixture.NewExecutable([F.EventWaitNode("node-work", "continue")],
+                 [F.StartEvent(), F.MultiInstanceTask("work", "node-work", 3, false), F.EndEvent()],
+@@ -197,6 +247,10 @@
+             return;
+         var source = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_SOURCE");
+         Assert.True(source is { Length: 40 } && source.All(Uri.IsHexDigit), "Exact capture source revision is required.");
++        var patchFile = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_PATCH_FILE");
++        var patchDigest = Environment.GetEnvironmentVariable("ELSA_BPMN_CAPTURE_PATCH_SHA256");
++        Assert.True(File.Exists(patchFile), "The portable capture overlay must exist.");
++        Assert.Equal(patchDigest, Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(patchFile!))));
+         Directory.CreateDirectory(destination);
+         var path = Path.Combine(destination, scenario + ".sqlite.gz");
+         await using (var input = File.OpenRead(backup))
+@@ -206,13 +260,13 @@
+         await using var metadata = new FileStream(Path.Combine(destination, scenario + ".json"), FileMode.CreateNew);
+         await JsonSerializer.SerializeAsync(metadata, new
+         {
+-            scenario, captureSourceRevision = source, runtimeBaselineRevision = "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
++            scenario, captureSourceRevision = source, capturePatchSha256 = patchDigest, runtimeBaselineRevision = "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+             modelPackage = "0.1.1-preview.19", interchangePackage = "0.1.1-preview.19",
+             stateAlias = "Elsa.Bpmn.ExecutionState", stateVersion = 1,
+             databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(backup))),
+             compressedSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))),
+             oldHostControl = "fresh provider over a separate exact database copy passed",
+-            capture.Facts
++            capture.Facts, capture.OldControlFacts
+         }, Web);
+     }
+ 
+@@ -261,6 +315,7 @@
+         public bool Ready { get; set; }
+         public bool Captured { get; private set; }
+         public object? Facts { get; private set; }
++        public object? OldControlFacts { get; set; }
+         public int? LoserQueuedObservation { get; private set; }
+         public int? FirstCancellationObservation { get; private set; }
+         public bool SawLateLoserInsertion { get; private set; }
+@@ -307,6 +362,8 @@
+             {
+                 "resolved-race" => canceledLoser && loser?.Status == ActivityExecutionStatus.Cancelled && bookmarks.Any(bookmark => bookmark.ExecutableNodeId == "node-final"),
+                 "queued-loser" => canceledLoser && loser?.Status == ActivityExecutionStatus.Completed && queuedLoser && queuedBeforeCancellation,
++                "parallel-mi-outcome" => state.ActiveChildren.Count == 3 && bookmarks.Count(bookmark => bookmark.ExecutableNodeId == "node-work") == 3,
++                "listener-rearm-outcome" => states.Count(child => child.Execution.ExecutableNodeId == "node-listener") == 2 && bookmarks.Any(bookmark => bookmark.ExecutableNodeId == "node-listener"),
+                 "parallel-mi" => state.ActiveChildren.Count == 3 && bookmarks.Count(bookmark => bookmark.ExecutableNodeId == "node-work") == 3,
+                 "listener-rearm" => states.Count(child => child.Execution.ExecutableNodeId == "node-listener") == 2 && bookmarks.Any(bookmark => bookmark.ExecutableNodeId == "node-listener"),
+                 "deferred-fault" => state.PendingFault is not null,
+@@ -314,6 +371,35 @@
+             };
+             if (!match)
+                 return;
++            if (scenario.EndsWith("-outcome", StringComparison.Ordinal))
++            {
++                var node = scenario == "parallel-mi-outcome" ? "node-work" : "node-listener";
++                var history = states.Where(child => child.ParentActivityExecutionId == parent.InvocationId && child.Execution.ExecutableNodeId == node).ToArray();
++                var current = history.Where(child => child.Status == ActivityExecutionStatus.Suspended).ToArray();
++                Assert.Equal(scenario == "parallel-mi-outcome" ? 3 : 1, current.Length);
++                Assert.Equal(current.Length, current.Select(child => child.InvocationId).Distinct().Count());
++                Assert.Equal(current.Length, current.Select(child => child.Provenance.ExecutionPathId).Distinct().Count());
++                foreach (var child in current)
++                {
++                    Assert.False(string.IsNullOrWhiteSpace(child.Provenance.ExecutionPathId));
++                    Assert.Single(bookmarks, bookmark => bookmark.ActivityExecutionId == child.InvocationId && bookmark.ExecutableNodeId == node);
++                    Assert.Single(state.ActiveChildren, work => work.TokenId == child.Provenance.ExecutionPathId && work.NodeId == node && work.IterationId == child.IterationId);
++                    Assert.Single(state.Tokens, token => token.TokenId == child.Provenance.ExecutionPathId);
++                }
++                if (scenario == "parallel-mi-outcome")
++                {
++                    Assert.Equal(3, history.Length);
++                    Assert.All(current, child => Assert.False(string.IsNullOrWhiteSpace(child.IterationId)));
++                    Assert.Equal(3, current.Select(child => child.IterationId).Distinct().Count());
++                }
++                else
++                {
++                    Assert.Equal(2, history.Length);
++                    Assert.All(history, child => Assert.Null(child.IterationId));
++                    var prior = Assert.Single(history, child => child.Status == ActivityExecutionStatus.Completed);
++                    Assert.NotEqual(prior.InvocationId, Assert.Single(current).InvocationId);
++                }
++            }
+             Assert.Equal(1, parent.PrivateState!.StateVersion);
+             Facts = new
+             {
+diff --git a/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs
+new file mode 100644
+--- /dev/null
++++ b/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs
+@@ -0,0 +1,26 @@
++using Elsa.Activities.Runtime.Core.Attributes;
++using Elsa.Activities.Runtime.Core.Models;
++
++namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
++
++/// <summary>Test-only real CLR leaf, byte-identical in the old capture and upgraded consumer.</summary>
++public sealed class LegacyCheckpointOutcomeWaitActivity : StatefulTriggerActivity<ActivityUnit, LegacyCheckpointOutcomeWaitState, LegacyCheckpointOutcomeTrigger>
++{
++    public const string ResumeTargetId = "resume-target:legacy-outcome";
++    protected override ValueTask<ActivityTransition<ActivityUnit, LegacyCheckpointOutcomeWaitState>> ExecuteAsync(ActivityStartContext<LegacyCheckpointOutcomeTrigger> context) =>
++        ValueTask.FromResult(Suspend(new LegacyCheckpointOutcomeWaitState("legacy-outcome"),
++            [new ActivityTriggerRegistration<LegacyCheckpointOutcomeTrigger>(ResumeTargetId, "test.legacy-outcome", "test.legacy-outcome")]));
++
++    [ResumeTarget(ResumeTargetId)]
++    protected override ValueTask<ActivityTransition<ActivityUnit, LegacyCheckpointOutcomeWaitState>> ResumeAsync(ActivityResumeContext<LegacyCheckpointOutcomeWaitState, LegacyCheckpointOutcomeTrigger> context) =>
++        ValueTask.FromResult(context.Trigger.Outcome switch
++        {
++            "complete" => Complete(new ActivityUnit()),
++            "fault" => Fault(new ActivityFault("LEGACY-OUTCOME-FAULT", "Actual legacy outcome wait faulted.")),
++            "cancel" => Cancel("Actual legacy outcome wait canceled."),
++            _ => throw new InvalidOperationException("Unsupported test outcome.")
++        });
++}
++
++public sealed record LegacyCheckpointOutcomeWaitState(string Name);
++public sealed record LegacyCheckpointOutcomeTrigger([property: System.Text.Json.Serialization.JsonPropertyName("outcome")] string Outcome);

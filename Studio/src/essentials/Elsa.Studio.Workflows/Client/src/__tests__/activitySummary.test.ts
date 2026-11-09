@@ -81,6 +81,42 @@ describe("formatActivitySummary", () => {
   });
 });
 
+describe("HTTP endpoint summaries", () => {
+  const pathInput = { name: "Path", referenceKey: "Path", typeName: "System.String", order: 10 };
+  const startInput = { name: "CanStartWorkflow", referenceKey: "CanStartWorkflow", typeName: "System.Boolean", order: 0 };
+  const endpointCatalog = (inputs: unknown[] = [startInput, pathInput]) => ({
+    ...catalog(inputs), activityTypeKey: "Elsa.Activities.Http.Activities.HttpEndpoint"
+  });
+
+  it.each(["expanded", "wire"])("shows Path instead of CanStartWorkflow on a %s node", shape => {
+    const activity = shape === "expanded"
+      ? node({ CanStartWorkflow: wrapped("Literal", true), Path: wrapped("Literal", "echo-header-337468") })
+      : node({ inputs: [
+        { referenceKey: "CanStartWorkflow", value: { value: true, expressionType: "Literal" } },
+        { referenceKey: "Path", value: { value: "echo-header-337468", expressionType: "Literal" } }
+      ] });
+    expect(formatActivitySummary(activity, endpointCatalog())).toBe('"echo-header-337468"');
+  });
+
+  it("keeps expression formatting for the path", () => {
+    expect(formatActivitySummary(node({ Path: wrapped("JavaScript", "routePath") }), endpointCatalog())).toBe("routePath");
+  });
+
+  it.each([undefined, "", "  "])("does not substitute the boolean when Path is %s", path => {
+    expect(formatActivitySummary(node({ CanStartWorkflow: true, Path: path }), endpointCatalog())).toBeUndefined();
+  });
+
+  it("does not substitute another input when the path descriptor is absent or hidden", () => {
+    const activity = node({ CanStartWorkflow: true, Path: "hidden" });
+    expect(formatActivitySummary(activity, endpointCatalog([startInput]))).toBeUndefined();
+    expect(formatActivitySummary(activity, endpointCatalog([startInput, { ...pathInput, isBrowsable: false }]))).toBeUndefined();
+  });
+
+  it("retains declared input order for other activities", () => {
+    expect(formatActivitySummary(node({ CanStartWorkflow: true, Path: "route" }), catalog([startInput, pathInput]))).toBe("true");
+  });
+});
+
 describe("formatActivitySummary for masked and secret-only inputs", () => {
   const storedValue = "stored-value-words";
   const sensitiveInput = { ...textInput, isSensitive: true };

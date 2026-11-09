@@ -10,14 +10,19 @@ import { registerCoreHomeWidgets } from "../widgets/registerCoreHomeWidgets";
 import { stubApi } from "./testSupport";
 
 describe("Home default landing", () => {
-  it("ships Get started, quick actions, recent lists, attention, and gated Tasks", () => {
+  it("ships workflow health and portfolio before the core Home widgets", () => {
     expect(builtInHomeLayout.widgets.map(entry => entry.id)).toEqual([
       "home.get-started",
+      "workflows.run-health",
+      "workflows.portfolio",
       "home.quick-actions",
-      "home.recent-workflows",
-      "home.recent-runs",
       "home.needs-attention",
+      "home.recent-runs",
+      "home.recent-workflows",
       "home.tasks"
+    ]);
+    expect(builtInHomeLayout.widgets.map(entry => entry.size)).toEqual([
+      "full", "full", "medium", "medium", "medium", "medium", "medium", "medium"
     ]);
   });
 
@@ -69,6 +74,11 @@ describe("Home default landing", () => {
     expect(host.textContent).toContain("Create a workflow");
     expect(host.textContent).toContain("Documentation");
     expect(host.textContent).toContain("New to Elsa?");
+    expect(homeDocsLinks.map(link => link.href)).toEqual([
+      "https://v4.elsaworkflows.io/essentials/quickstart",
+      "https://v4.elsaworkflows.io/essentials/first-workflow",
+      "https://v4.elsaworkflows.io/studio"
+    ]);
     for (const link of homeDocsLinks) {
       expect(host.querySelector(`a[href="${link.href}"]`)).not.toBeNull();
     }
@@ -89,7 +99,7 @@ describe("Home default landing", () => {
     expect(host.textContent).toContain("No workflows yet");
     expect(host.textContent).toContain("Orders");
     expect(host.textContent).toContain("Completed");
-    expect(host.querySelector('[data-tone="success"]')?.textContent).toBe("Completed");
+    expect(host.querySelector('.home-record-trailing [data-tone="success"]')?.textContent).toBe("Completed");
     expect(host.textContent).toContain("Assigned work lives in Tasks.");
     expect(host.textContent).toContain("Open tasks");
     host.unmount();

@@ -5,6 +5,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly baseUrl: string;
     readonly headers?: HeadersInit;
     readonly http: {
+      requestResponse?(url: string, init?: RequestInit & {timeoutMs?: number}): Promise<Response>;
       getJson<T>(url: string, init?: RequestInit): Promise<T>;
     };
     /**
@@ -49,4 +50,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
     readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   }
+
+  export type StudioHostId = "server" | "studio";
+  export const defaultStudioHostId: StudioHostId;
 }

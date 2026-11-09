@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "spec": "1190-etl-jsonl-input",
+  "sourceRevision": "724bb5c00c8b8690840be345d5efce43c4426592",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "011d6bc5b64ea30028a070e04d6f1e31d0df3686f4d3d0a3a323ca11f7ad3b0d",
+  "cases": {
+    "clean": {
+      "definition": "jsonl-clean-67b1d401",
+      "selection": "etl1:jsonl-clean-67b1d401:1:dc2f128deda172077c32caea4d2b2d7613e636919c4058d8950dcff0d6d350ad",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 4,
+        "acceptedRecords": 4,
+        "rejectedRecords": 0,
+        "filteredRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "terminalDiagnostic": null,
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 0
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": "2402c1181004017116264cd41263bc173b0abf2bca893e9e47d88661d04ae5fa",
+        "snapshotSha256": "2402c1181004017116264cd41263bc173b0abf2bca893e9e47d88661d04ae5fa",
+        "snapshotByteLength": 94
+      },
+      "partitions": [
+        {
+          "ordinal": 0,
+          "file": {
+            "startOrdinal": 1,
+            "endOrdinalExclusive": 3,
+            "nextOrdinal": 3
+          },
+          "claimed": false
+        },
+        {
+          "ordinal": 1,
+          "file": {
+            "startOrdinal": 3,
+            "endOrdinalExclusive": 5,
+            "nextOrdinal": 5
+          },
+          "claimed": true
+        }
+      ],
+      "mainRecords": [
+        {
+          "id": 1,
+          "name": "Ada"
+        },
+        {
+          "id": 2,
+          "name": "Bram"
+        },
+        {
+          "id": 3,
+          "name": "Cleo"
+        },
+        {
+          "id": 4,
+          "name": "Dee"
+        }
+      ],
+      "errorCodes": [],
+      "hostPathInInspection": false
+    },
+    "dirty": {
+      "definition": "jsonl-dirty-4a101478",
+      "selection": "etl1:jsonl-dirty-4a101478:1:948b8f415e815c16588e183653b58a092a1a8cbfa4624c0a46ccdc2d9d313ef2",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-business-error",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "businessError",
+        "sourceRecordCount": 7,
+        "acceptedRecords": 2,
+        "rejectedRecords": 5,
+        "filteredRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "terminalDiagnostic": {
+        "code": "etl.rows-rejected",
+        "recordOrdinal": null,
+        "field": null
+      },
+      "connector": {
+        "sourceKind": "jsonl",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 3
+      },
+      "sourceInput": {
+        "bindingRevision": "v1",
+        "expectedSha256": "1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb",
+        "snapshotSha256": "1fb8fb63d5685c9712bc5392d32220de81e8b4ab7e1d725e5be0b0620a4290cb",
+        "snapshotByteLength": 119
+      },
+      "partitions": [
+        {
+          "ordinal": 0,
+          "file": {
+            "startOrdinal": 1,
+            "endOrdinalExclusive": 5,
+            "nextOrdinal": 5
+          },
+          "claimed": false
+        },
+        {
+          "ordinal": 1,
+          "file": {
+            "startOrdinal": 5,
+            "endOrdinalExclusive": 8,
+            "nextOrdinal": 8
+          },
+          "claimed": true
+        }
+      ],
+      "mainRecords": [
+        {
+          "id": 1,
+          "name": "Ada"
+        },
+        {
+          "id": 7,
+          "name": "Eve"
+        }
+      ],
+      "errorCodes": [
+        "{\"code\": \"etl.invalid-value\", \"field\": \"id\", \"recordOrdinal\": 4}",
+        "{\"code\": \"etl.jsonl.record-invalid\", \"recordOrdinal\": 2}",
+        "{\"code\": \"etl.jsonl.record-invalid\", \"recordOrdinal\": 6}",
+        "{\"code\": \"etl.jsonl.record-not-object\", \"recordOrdinal\": 3}",
+        "{\"code\": \"etl.required-value-missing\", \"field\": \"id\", \"recordOrdinal\": 5}"
+      ],
+      "hostPathInInspection": false
+    }
+  },
+  "catalogSources": [
+    [
+      "clean-source",
+      "csv"
+    ],
+    [
+      "dirty-source",
+      "csv"
+    ]
+  ],
+  "checks": {
+    "catalogListsSourceFilesAsCsv": true,
+    "cleanWorkflowCompletedThroughDone": true,
+    "cleanRunSucceededWithAllRecords": true,
+    "cleanInspectionShowsJsonlAndTwoFinishedRanges": true,
+    "dirtyWorkflowTookBusinessErrorPort": true,
+    "dirtyRunRoutedEachBadLine": true,
+    "noAccountingLeft": true,
+    "noHostPathInInspection": true
+  },
+  "passed": true
+}

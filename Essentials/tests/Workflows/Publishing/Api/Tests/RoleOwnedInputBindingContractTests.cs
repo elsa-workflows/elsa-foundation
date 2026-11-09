@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -251,6 +252,33 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
         Assert.Equal("customer-id", Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerId"]).MemberKey);
         Assert.Equal("elsa3-import", expression.Metadata["origin"]);
+    }
+
+    [Fact]
+    public void Compiler_ReadsPortableExpressionDefinitionSerializedByCanonicalPayloadSerializer()
+    {
+        var input = new InputDefinition(
+            ReferenceKey: "total",
+            Name: "Total",
+            Type: new TypeReference("Int32"),
+            StorageDriverType: null,
+            DisplayName: "Total",
+            Category: null,
+            IsNullable: false);
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "args.subtotal + args.shipping",
+            new TypeReference("Int32"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var payload = SerializationServices.PayloadSerializer().SerializeToElement(definition);
+
+        var binding = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())
+            .Compile("node-calculate", input, new ArgumentValue(payload, "JavaScript"));
+
+        Assert.Equal("alias", binding.Expression!.ResultType!.Kind);
+        Assert.Equal("Int32", binding.Expression.ResultType.Id);
     }
 
     [Fact]

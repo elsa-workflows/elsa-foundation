@@ -70,6 +70,7 @@ public sealed class DomainManagementApiCompositionTests
         "elsa.api.expressions",
         "elsa.api.publishing",
         "elsa.api.runtime",
+        "elsa.api.structured-logs",
         "elsa.api.workflow-design"
     ];
 
@@ -132,6 +133,11 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export", "GET"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs", "POST"),
         new("/publishing/workflows/drafts/test-runs", "POST"),
+        new("/publishing/workflows/drafts/test-run-options", "POST"),
+        new("/publishing/workflow-test-runs/{testRunId}", "GET"),
+        new("/publishing/workflow-test-runs/{testRunId}/stop", "POST"),
+        new("/publishing/workflow-test-runs/{testRunId}/waits", "GET"),
+        new("/publishing/workflow-test-runs/{testRunId}/events", "POST"),
         new("/publishing/preflight", "POST"),
         new("/design/activities/drafts/{draftId}/publication-preflight", "POST"),
         new("/design/activities/drafts/{draftId}/publish", "POST"),

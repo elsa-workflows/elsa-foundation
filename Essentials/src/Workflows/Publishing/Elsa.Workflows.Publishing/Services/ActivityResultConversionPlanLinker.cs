@@ -33,19 +33,20 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             .ToArray();
 
         return new ExecutableNode(
-            node.ExecutableNodeId,
-            node.AuthoredActivityId,
-            node.ActivityType,
-            node.ActivityTypeVersion,
-            node.Descriptor,
-            inputBindings,
-            node.OutputCaptures,
-            node.Metadata,
-            childSlots,
-            node.Structure,
-            node.ActivityContract,
-            node.IntrinsicKind,
-            node.IntrinsicVariable);
+            executableNodeId: node.ExecutableNodeId,
+            authoredActivityId: node.AuthoredActivityId,
+            activityType: node.ActivityType,
+            activityTypeVersion: node.ActivityTypeVersion,
+            descriptor: node.Descriptor,
+            inputBindings: inputBindings,
+            outputCaptures: node.OutputCaptures,
+            metadata: node.Metadata,
+            executionPlacement: node.ExecutionPlacement,
+            childSlots: childSlots,
+            structure: node.Structure,
+            activityContract: node.ActivityContract,
+            intrinsicKind: node.IntrinsicKind,
+            intrinsicVariable: node.IntrinsicVariable);
     }
 
     private RuntimeInputBinding LinkBinding(

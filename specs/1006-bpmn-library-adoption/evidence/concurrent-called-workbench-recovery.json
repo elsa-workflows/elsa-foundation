@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 actual concurrent same-binding Workbench increment; complete T045 remains open",
+  "sourceParentCommit": "f0411e2fedb80eba38f3bee9451e16ef7d6992c0",
+  "hostBuildSourceCommit": "f0411e2fedb80eba38f3bee9451e16ef7d6992c0",
+  "hostSourceRevisionIdExplicit": "f0411e2fe",
+  "sourceRevisionPrefixResolvesToFullCommit": true,
+  "productionSourceUnchangedDuringBuildAndPositiveRuns": true,
+  "standardHostRecoveryProbeAbsent": true,
+  "releasedPackageBinariesMatchCache": true,
+  "persistenceMode": "Balanced",
+  "actualCases": {
+    "boundaryPolicies": 2,
+    "simultaneousCallsPerPolicy": 2,
+    "sameValidCallElementAndBinding": true,
+    "nullIterationIds": true,
+    "distinctChildWorkflowsPerPolicy": 2,
+    "selectedActualSemanticActiveWorkIndex": 1,
+    "normalProcessRestart": 1,
+    "allFourActualApiAndCheckedPhasesPassed": true
+  },
+  "perCaseComparisons": [
+    {
+      "parentWorkflowExecutionId": "14htic2wNbr",
+      "interrupting": false,
+      "selectedSemanticTokenId": "token:9",
+      "otherSemanticTokenId": "token:7",
+      "wholeOtherPreparedToSelectedEqual": true,
+      "otherProjectionSha256": "a1ef7823e8dc1a94cd175a09ac0f26d5869468b7586b382bed2908d01991ef0a",
+      "wholeFinishedSelectedStableWhileOtherHandles": true,
+      "selectedFinishedProjectionSha256": "c44079b79b24aa782016f4eeb8a85d5c89863907a02bcb3ba4cf9cf8a7781d3b"
+    },
+    {
+      "parentWorkflowExecutionId": "14htijJE7Bt",
+      "interrupting": true,
+      "selectedSemanticTokenId": "token:9",
+      "otherSemanticTokenId": "token:7",
+      "wholeOtherPreparedToSelectedEqual": true,
+      "otherProjectionSha256": "ddd8a139db95701b7406cf787e8f3a3f9a0fd1b9198f01066e7557f0aa9fb05c",
+      "wholeFinishedSelectedStableWhileOtherHandles": true,
+      "selectedFinishedProjectionSha256": "9fb104526f7148422244a5725dc4af7ad36416b38dc91e3da3bc1c2df36a7271"
+    }
+  ],
+  "wholeTwoCaseSelectedRecoveredEqual": true,
+  "wholeRecoveredFactsSha256": "fd2ba881ad8a6bfda715f63cf274926e6dc14fb78f9d46d0e3cf3ddf68d254ab",
+  "comparisonFieldExclusions": [],
+  "comparisonScope": "Within Selected/Other: complete call/dispatch/child/all child activity+incident/keyed-start/control-source/physical-wait records. Shared parent global state compared in full across restart; it naturally advances while either branch executes.",
+  "wholeModuleSnapshots": 5,
+  "identityAndTokensExcluded": true,
+  "qualifiedOwnedProcessesExited": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "353494c9a929b48950ce5df489b9278da40e71697c8c39bb829bdcf376656324",
+    "e2e-tests/bpmn/test_opted_called_snapshot_reader.py": "b4f7181cffa60875828a0ac1af0f27f293b60d0379f7aab8a4274e2d973c440f",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "f267cdacd1fde40460daf8ca69e1e8b703f3982b30d79f90a2f0b9f31d7a131c",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/stimuli/_StimuliCommon.ps1": "7afd5ef449e274237db35bc27c787af8d5e4f5e3e236b5a8e7acad9987ec21b7",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "cd561dde6dd7ad9562a33ad16085b65b87d42eeced265d9d33b8633d3cd89735",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "7db5bdb5fd4fdf3a2d2d573c0ee12c6d77d4605b818232b9b431826cd3a82e75",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "864eb4fccd05cde4588e4c3544f4e7afe6e44273c95e2871a8a1295a078eb947",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/Program.cs": "935ff425bce142597d82d59c763fca41ac386564c67f42dcad49b3f56891c568",
+    "Essentials/apps/Elsa.Workbench/appsettings.json": "20ab11c707acf9b8c2c3305a972e1493da6747da45a1c5532bd65d63b54495b0",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnControlProtocol.cs": "955e3c3161e34345dcdf63aca43d9addc5e588cc657c79ce7084ba50c10bc60d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationExecutor.cs": "bdcbfce6f2692d083a1c19e0def64fc544e835902f0ff7b8fddaa4c385fd0d80",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs": "2141d1a62ad804fa83f10739a47d474011b1834e3a81fa1c49f46c0ed93e73c3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs": "099324a417801eaa57badd3a7897a7ea4576ca3f6f6c61b7c50963da70be0fb3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancelIntentFactory.cs": "100c7344d3f33988b163eef3c3f8dd323d5d2b6ed33a7ec6296992b6637d823e",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "f94b5634281f4a4995313fd5b92105fdcc4e4d5007b4d8f423343fddca6bf586",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs": "3dc8474a8342f58f6f781803d3ec75f3265ae7b4c8a42faa31bf874f4096aa75",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs": "f99988de7f05486c1a07ec5fa6768331f4b25232c12cb1862f962a40e663a5f3",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs": "62315f089834167ec4e3fa97780365796ef06132ffb4e4fc4c1951282292accd",
+    "Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs": "7e19747b75b8daf2ee5f79720820936902aba72ff8c77a2d80ea2b39db853572",
+    "Essentials/src/Activities/Primitives/Activities/Event.cs": "3efe57fdf22dbb7395d302c7e9c56c97a4ef57b6fa168d253561e17d0258ee3c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "e2e-tests/bpmn/Test-BpmnConcurrentCalledHost.ps1": "79c5de9cc95c986d1fa32192bf499cf32f89f3a28373f2724f2cd9246f621ab3",
+    "e2e-tests/bpmn/_CalledControlCommon.ps1": "9f13b5cbcb2a6a41ea0a97722428f793bc2888412ceef6a992fb86dcde8e27a5",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Concurrent.cs": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs": "912696fb5307e74d894773c4b841c72ab4f24ab8546acc3be34e96b2fc0daca8",
+    "Essentials/tests/Tasks/Tests/TaskScheduleTests.cs": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench-recovery.md": "7b1580cf31d3d3773007b911e888afacdc398450f6dbf1f5e42f48ef345b309a",
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/README.md": "67fb3044d1927de432512384ebf9467267a19d62ca2bbc276dddd97cbcfd397f"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/README.md": {
+      "sha256": "67fb3044d1927de432512384ebf9467267a19d62ca2bbc276dddd97cbcfd397f",
+      "bytes": 6401
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/compatibility-controls-coded.json": {
+      "sha256": "bf2c12cd54e63cf0a05cfec6418a535641185e9fb1783754d88587ea82f9420a",
+      "bytes": 1849
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/compatibility-controls-escalation-finished.json": {
+      "sha256": "64084d24b7f0002123005504c8ca08b8fa7b4f800b452bb91f9dbf6e76a755eb",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/compatibility-controls-escalation-parked.json": {
+      "sha256": "123a5a53fd8fb593fc2b3daaaa52197e159573064bd36a2e5dfabfee26a59b53",
+      "bytes": 1861
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/compatibility-controls-escalation-recovered.json": {
+      "sha256": "5872f4ddfe6e1dbe7cd623ea05d2232a71fdb78b716bcbb67a08e625307c7e7b",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/compatibility-controls-legacy.json": {
+      "sha256": "7e0311d5526a65c237d696acd937570ea611fa46524f65f0711ea824a6982f84",
+      "bytes": 1535
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/controls-finished.json": {
+      "sha256": "7fe59dd316f2c3b9feddf423ed8f5b30290c4c7133878095c9ca0d279f8817f3",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/controls-prepared.json": {
+      "sha256": "be5810ceae03d72692fee46c3ab8af6ff5cb37918f533ad356d86ee8c04d47db",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/controls-recovered.json": {
+      "sha256": "eeb76af24d27ee47d909f46bdb32ff6f06542f8155e056021a4d8192ce664610",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/controls-selected.json": {
+      "sha256": "a698f39bc1c9819c462022a446bb10361d13afb4368aa9f28ca15414e23cdece",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/design.json": {
+      "sha256": "a3a1f34d306bd7725c8e70cc65c54c1d3230d1f6e07e3a6b23a2c72ab44c6ad1",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/design.sqlite.gz": {
+      "sha256": "a73cb3fab55e5cf77775c67937f511f0694011a2812cfa0f62e27d53895d4579",
+      "bytes": 111622
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-api.json": {
+      "sha256": "4cc77515c3f55e1accef0903ec44528f71fc000bf9bee25284d55170dde87292",
+      "bytes": 59713
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-checked.json": {
+      "sha256": "0b07c42b7cc3cfaa2e28c281c1be7bd27b0f73a16a2cd07aa420b6c2fa06a497",
+      "bytes": 266358
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-runtime.json": {
+      "sha256": "8610c548a973af18ed6e4f5905d2ee54877848b379c9737528bc2c04f253aced",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-runtime.sqlite.gz": {
+      "sha256": "f55afcc37b591894d2c968a27583a38bfd0624a669cd3f7df663b544f6cee18b",
+      "bytes": 377225
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/helper-extraction.json": {
+      "sha256": "35259e39e1c3d7f99786e75e1bf78c9759b4d6490d85c61f9fd2e5201cdbf481",
+      "bytes": 625
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/historical-evidence-inventory.json": {
+      "sha256": "c5ce439ffc8aae37dc89ac48413d4ae909638d2f25d09b12e94e96e81a492051",
+      "bytes": 46935
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/host-binaries.json": {
+      "sha256": "ee06edb214ef1e068be6a91d59b05aac1760af44f234ab2051e2aea57c0fc3b7",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepare-api.json": {
+      "sha256": "d08e973a2b85f73e8f0fb51a9ecd684b04916b9cfe855400283495f7c75a8850",
+      "bytes": 38853
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepared-checked.json": {
+      "sha256": "2b5dc91c1180e3c8f8793bcc0fdbffd7903779770aba69b8e3e75ccba42d4242",
+      "bytes": 151479
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepared-runtime.json": {
+      "sha256": "30326873b016d3623b25f661a311973368ef98e7d3f25e8df03b498b1ffde085",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepared-runtime.sqlite.gz": {
+      "sha256": "c91948ebe002ec0516ae95830225d8cb412e2196e7e6847c749f491b47d28385",
+      "bytes": 233479
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/process-restart.json": {
+      "sha256": "0d8aa62b1a8f549be8da7f9c61a568dd6d3714dae12d5866013e5a99e303ed4c",
+      "bytes": 473
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/reader-binaries.json": {
+      "sha256": "8c28d47660b207310d1f0cf236c2c21342baf31d79db11160c8775747b7b11d5",
+      "bytes": 6306
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-api.json": {
+      "sha256": "6c994eb8c1f3757f49e8a7595c1baec0dfde6d67470088ae24e4b666e23ee3d5",
+      "bytes": 48764
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-checked.json": {
+      "sha256": "ad28e0e453402fa558cdadc0ff2e830171a08a940e3a92656dfef7e69c9e0771",
+      "bytes": 213903
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-runtime.json": {
+      "sha256": "7707a7857bd1785b8d81d00e1bd51e11ffccc7027ce4fb01beef3764afa1b27d",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-runtime.sqlite.gz": {
+      "sha256": "cbbb4b5aa7995b5122732c2f41a2057d99f44680d4a08bf15b89dda0ca60656d",
+      "bytes": 308364
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/released-package-binaries.json": {
+      "sha256": "5f395d2290b6c739ed41fb07fd2ee06a9660d9d92e2a02390b1fb1c352db6e63",
+      "bytes": 787
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-api.json": {
+      "sha256": "f432f5b736aaa27571c021d62a181111f5c5be8bc8f041e34acdbcd3d3d04fd0",
+      "bytes": 50852
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-checked.json": {
+      "sha256": "c1937040fe6deaefcc205f3c8c300450773f71f35e895315c7469d601ba79c8b",
+      "bytes": 213903
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-runtime.json": {
+      "sha256": "fc5cbd8146bcf3a2ca20ea93839abcbf7e9c75d182d757bcfd84d2c0ea7f95bc",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-runtime.sqlite.gz": {
+      "sha256": "968948df0f6fa5a19fffb49b0dfe0cb6aeb0fef9d26770642b179a38aeb05014",
+      "bytes": 308291
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selector-mutation.json": {
+      "sha256": "115ab7c1299353570a081d24217b1bd82888494283382b8e326f6741b8296ff3",
+      "bytes": 603
+    }
+  },
+  "readerControls": {
+    "newConcurrentPhases": 4,
+    "controlsPerPhase": 6,
+    "newTotal": 24,
+    "priorFixtureCompatibilityTotal": 29,
+    "total": 53,
+    "postMutationRestoredPreparedControlsPassed": true
+  },
+  "observationSelectorMutation": {
+    "name": "observation-selector-returns-first-semantic-token",
+    "sourceSha256": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "sourceRestored": true,
+    "scope": "Read-only observation-tool mutation; no positive host or production adapter receives the wrong selection.",
+    "compileSucceeded": true,
+    "firstSemanticSelectionReturned": true,
+    "independentSecondTokenControlFailedAsExpected": true,
+    "buildLogSha256": "6a968685dea902be0b85ee205637a83e811243ef096018745abb86f380db1e5d",
+    "controlLogSha256": "52c0fdf9b73973d1585a7e180a3ac5985bca75af42543ab2c907659814704286"
+  },
+  "excludedAttempts": [
+    "Earlier standard2a42 concurrent attempt left a due unclaimed notification after its finite pump timer became unarmed. Failed host run stays unqualified; exact live elapsed sentinel collision remains an inference, separately proven by deterministic actual-Timer tests.",
+    "First new private host lacked its shell blueprint and next attempt observed startup still pending; neither created qualified concurrent cases.",
+    "Earlier superseded selected snapshot from failed old-host attempt is excluded."
+  ],
+  "historicalDatabaseCapturesUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy/deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "compressedSha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "databaseSha256": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "databaseSha256": "d507c063aabd7b38c57f3e8d62c0b9c9b02c807ee0614b48df67aa6314c8d469"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "compressedSha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "databaseSha256": "f8d863e2a90c8a90d78e149d265346e25157dfc42b870d37b7222ba7be5aa087"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.sqlite.gz": {
+      "compressedSha256": "01a1f61c6970bdbb9cffe25deaf1451b99ae053b0f3d2d8d61a4e993003a7626",
+      "databaseSha256": "4bb165f9325cf092377056a13227bae1240750ba11927e4e06cf5a95f6b61a8f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "b4ca2421b3fcbfddafcc2ef4679945ee19f09c7766310bac4da75e7cab93e454",
+      "databaseSha256": "de000465e0b78cfa777d12507b73ab6da09ccea5a2b4d22fd81eb46ef4232673"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "ef0cdf0a0b289630bc0d578977c946925451d59989b657892eb3ac5551cd55c6",
+      "databaseSha256": "7e4d5d42e7716e6289359d0cd00a1b06f9a838ff6253c15966c6a3e43921ba7d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.sqlite.gz": {
+      "compressedSha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+      "databaseSha256": "1720cc78c20c7bf03a98c291475f8fd0a5845be514c80344942734b427509640"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "8116c2433f7e97ca3ead5c6b71429dc6dd5a862b293320fb15f92e3b56dc0b6d",
+      "databaseSha256": "b6c802751da8fc4562e3980737ba2a402f9c2b4d7c7020233becbf57159033d0"
+    }
+  },
+  "allPriorEvidenceInventory": "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/historical-evidence-inventory.json",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "helperFunctionBodiesExact": true,
+  "onlySharedHelperTrailingSeparatorNormalized": true,
+  "productionSourceChangedInThisIncrement": false,
+  "rootDependenciesChanged": false,
+  "duplicateSemanticWriterDeleted": false,
+  "inheritedNotRerun": [
+    "Whole Tasks71 from169072000",
+    "Whole EF1710/class32 and previous Runtime/Activities/Studio.NET/architecture source-bound receipts",
+    "Studio integration2644/Chromium36/typecheck/budgets fromf0411e2fe, fixtures not liveBpmnStudio"
+  ],
+  "reviews": {
+    "type": "three independent clean bounded source/artifact audits; no fullPR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "scopeLimits": [
+    "Two actual concurrent Balanced public-host policies and one normal process restart.",
+    "No actual adapter callback-entry count, ACK-loss, simultaneous SQL-claim or other-engine/cluster qualification.",
+    "No final current Studio or production acceptance; prior fixture reader checks do not restamp historical host runs."
+  ],
+  "remainingGates": [
+    "Actual host acknowledgment-loss delivery and complete T045 reconciliation",
+    "T029 ordinary bound-task compensation and final actual current Studio",
+    "T032 deletion after remaining proof; T033/T034/T035 guards/baseline/docs",
+    "T036/T037/T038 final qualification/fullPR/green required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent2898/2907/program production acceptance;Orleans/task-runner follow-up deferred"
+  ]
+}

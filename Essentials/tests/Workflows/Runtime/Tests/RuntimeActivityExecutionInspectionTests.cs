@@ -19,6 +19,116 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeActivityExecutionInspectionTests
 {
     [Fact]
+    public async Task Browsing_keeps_nested_parallel_and_reusable_parent_contexts_separate()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        long sequence = 0;
+        async Task Save(string id, string node, string? parent, string? iteration = null, string? branch = null)
+        {
+            sequence++;
+            var value = Projection("wf", id, "authored", sequence);
+            await store.SaveAsync(value with { ExecutableNodeId = node, ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(sequence),
+                Provenance = value.Provenance with { ParentActivityExecutionId = parent, IterationId = iteration, BranchId = branch } });
+        }
+        await Save("owner", "owner-node", null);
+        await Save("pass-a", "body", "owner", "outer-a");
+        await Save("pass-b", "body", "owner", "outer-b");
+        await Save("inner-a", "inner-loop", "pass-a");
+        await Save("inner-b", "inner-loop", "pass-b");
+        await Save("branch-a", "branch", "inner-a", "same-local-iteration");
+        await Save("branch-b", "branch", "inner-b", "same-local-iteration");
+        await Save("left", "leaf", "branch-a", branch: "left");
+        await Save("right", "leaf", "branch-a", branch: "right");
+        await Save("other", "leaf", "branch-b");
+        await Save("call-a", "reusable", "pass-a");
+        await Save("call-b", "reusable", "pass-b");
+        await Save("internal-a", "template-leaf", "call-a");
+        await Save("internal-b", "template-leaf", "call-b");
+        var parallel = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "leaf", ancestorActivityExecutionId: "pass-a"));
+        Assert.Equal(new[] { "left", "right" }, parallel.Items.Select(x => x.Execution.ActivityExecutionId));
+        var other = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "leaf", parentActivityExecutionId: "branch-b"));
+        Assert.Equal("other", Assert.Single(other.Items).Execution.ActivityExecutionId);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", parentActivityExecutionId: "branch-a", ancestorActivityExecutionId: "pass-b"))).Items);
+        var reusable = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "template-leaf", ancestorActivityExecutionId: "call-a"));
+        Assert.Equal("internal-a", Assert.Single(reusable.Items).Execution.ActivityExecutionId);
+        var iterations = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "branch"));
+        Assert.Equal(new long?[] { 1, 1 }, iterations.Items.Select(x => x.IterationPosition));
+    }
+
+    [Fact]
+    public async Task Browsing_iteration_order_uses_the_actual_first_attempt_tuple()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        async Task Save(string id, long sequence, int time, string iteration)
+        {
+            var value = Projection("wf", id, "authored", sequence);
+            await store.SaveAsync(value with { ExecutableNodeId = "body", ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(time),
+                Provenance = value.Provenance with { IterationId = iteration, ParentActivityExecutionId = "loop" } });
+        }
+        await Save("z", 100, 100, "a");
+        await Save("m", 50, 100, "b");
+        await Save("a", 1, 200, "a");
+        var result = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "body"));
+        Assert.Equal(new[] { "m", "z", "a" }, result.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Equal(new long?[] { 1, 2, 2 }, result.Items.Select(x => x.IterationPosition));
+    }
+
+    [Fact]
+    public async Task Browsing_uses_scheduling_chronology_and_counts_distinct_iterations_across_retries()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        async Task Save(string id, long sequence, int time, string iteration)
+        {
+            var value = Projection("wf", id, "authored", sequence);
+            await store.SaveAsync(value with { ExecutableNodeId = "body", ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(time),
+                Provenance = value.Provenance with { IterationId = iteration, ParentActivityExecutionId = "loop" } });
+        }
+        await Save("first", 900, 1, "iteration-a");
+        await Save("retry", 100, 2, "iteration-a");
+        await Save("second", 200, 3, "iteration-b");
+        var result = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "body"));
+        Assert.Equal(new[] { "first", "retry", "second" }, result.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Equal(new long?[] { 1, 1, 2 }, result.Items.Select(x => x.IterationPosition));
+        Assert.Equal(new long[] { 1, 2, 3 }, result.Items.Select(x => x.Position));
+        Assert.Equal("second", Assert.Single((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 1, executableNodeId: "body"))).Items).Execution.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task Browsing_filters_before_paging_and_preserves_exact_parent_occurrences()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        async Task Save(string id, long sequence, string node, string? parent = null)
+        {
+            var value = Projection("wf", id, "authored", sequence);
+            await store.SaveAsync(value with { ExecutableNodeId = node,
+                Provenance = value.Provenance with { ParentActivityExecutionId = parent } });
+        }
+        await Save("loop", 1, "loop-node");
+        for (var i = 1; i <= 12; i++)
+        {
+            await Save($"body-{i:D2}", 2 * i, "body", "loop");
+            await Save($"write-{i:D2}", 2 * i + 1, "write", $"body-{i:D2}");
+        }
+        var latest = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 3, executableNodeId: "write", ancestorActivityExecutionId: "loop"));
+        Assert.Equal(12, latest.TotalCount);
+        Assert.Equal(new long[] { 10, 11, 12 }, latest.Items.Select(x => x.Position));
+        Assert.Equal("write-09", latest.Items[0].PreviousActivityExecutionId);
+        Assert.Null(latest.Items[^1].NextActivityExecutionId);
+        var anchored = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 3, executableNodeId: "write", ancestorActivityExecutionId: "loop", anchorActivityExecutionId: "write-04"));
+        Assert.Equal("write-04", anchored.Items[0].Execution.ActivityExecutionId);
+        Assert.Equal(4, anchored.Items[0].Position);
+        var scoped = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "write", ancestorActivityExecutionId: "body-04"));
+        Assert.Equal("write-04", Assert.Single(scoped.Items).Execution.ActivityExecutionId);
+        Assert.Equal(1, scoped.TotalCount);
+        var children = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", parentActivityExecutionId: "loop"));
+        Assert.Equal(12, children.TotalCount);
+        Assert.All(children.Items, x => Assert.Equal("body", x.Execution.ExecutableNodeId));
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", ancestorActivityExecutionId: "missing"))).Items);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "write", anchorActivityExecutionId: "loop"))).Items);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("other"))).Items);
+    }
+
+    [Fact]
     public async Task InMemoryStore_Lists_Summaries_In_Deterministic_Execution_Order()
     {
         var store = new InMemoryActivityExecutionInspectionStore();

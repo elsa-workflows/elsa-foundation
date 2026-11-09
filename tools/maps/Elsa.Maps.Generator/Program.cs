@@ -8,7 +8,13 @@ using Elsa.Maps.Generator;
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select | ef-suites-self-test
-//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test
+//   test-tiers-check | test-tiers-self-test | test-tiers-rebalance <trx-dir> [--write]
+//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test | project-graph-self-test
+//   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
+//
+// No map is committed. The documentation maps and dependency-map.json are generated locally with "all" and published
+// by CI with "publish" (specs 257 and 259); the versioning calculator derives the dependency map from each commit's tree.
+// "check" checks the one committed generated output left, the solution filters.
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
 // the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
@@ -56,6 +62,25 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["test-tiers-check"], StringComparer.Ordinal))
+        return TestTierCheck.Run(repo);
+
+    if (layers.Length is 2 or 3 && string.Equals(layers[0], "test-tiers-rebalance", StringComparison.Ordinal))
+    {
+        if (layers.Length == 3 && layers[2] != "--write")
+        {
+            Console.Error.WriteLine("Usage: test-tiers-rebalance <trx-dir> [--write]");
+            return 2;
+        }
+        return TestTierRebalance.Run(repo, layers[1], write: layers.Length == 3);
+    }
+
+    if (layers.SequenceEqual(["test-tiers-self-test"], StringComparer.Ordinal))
+    {
+        TestTierCheckContractTests.Run();
+        return 0;
+    }
+
     if (layers.SequenceEqual(["project-facts-self-test"], StringComparer.Ordinal))
     {
         ProjectFactsContractTests.Run();
@@ -68,9 +93,35 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["project-graph-self-test"], StringComparer.Ordinal))
+    {
+        ProjectGraphContractTests.Run();
+        return 0;
+    }
+
     if (layers.SequenceEqual(["repo-layout-self-test"], StringComparer.Ordinal))
     {
         RepoLayoutContractTests.Run();
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["publish-self-test"], StringComparer.Ordinal))
+    {
+        MapSetPublisherContractTests.Run();
+        return 0;
+    }
+
+    if (layers.Length > 0 && string.Equals(layers[0], "publish", StringComparison.Ordinal))
+    {
+        if (layers.Length != 6 || layers[2] != "--source-commit" || layers[4] != "--repo-url")
+        {
+            Console.Error.WriteLine("Usage: publish <out-dir> --source-commit <sha> --repo-url <url>");
+            return 2;
+        }
+
+        Console.WriteLine($"Published maps for {layers[3]} into {layers[1]}:");
+        foreach (var path in MapSetPublisher.Publish(repo, layers[1], layers[3], layers[5]))
+            Console.WriteLine($" - {path}");
         return 0;
     }
 
@@ -80,9 +131,8 @@ try
         return 0;
     }
 
-    // Freshness check: regenerates into a scratch directory and compares the bytes with what is
-    // committed. Writes nothing into the repository, so it is safe to run in CI while generation
-    // itself stays manually initiated.
+    // Freshness check of the committed generated output, the solution filters: regenerates them into a scratch
+    // directory and compares the bytes with what is committed. Writes nothing into the repository.
     if (layers.Contains("check", StringComparer.Ordinal))
     {
         if (layers.Length > 1)
@@ -95,7 +145,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, test-tiers-check, test-tiers-self-test, test-tiers-rebalance <trx-dir> [--write], project-facts-self-test, feature-facts-self-test, repo-layout-self-test, project-graph-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

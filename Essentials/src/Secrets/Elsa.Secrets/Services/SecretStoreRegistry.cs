@@ -1,4 +1,5 @@
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 
 namespace Elsa.Secrets.Services;
 
@@ -13,7 +14,7 @@ public sealed class SecretStoreRegistry(IEnumerable<ISecretStore> stores) : ISec
         if (TryGet(name, out var store))
             return store!;
 
-        throw new InvalidOperationException("Secret store not found.");
+        throw new SecretStoreConfigurationException("Secret store not found.");
     }
 
     public bool TryGet(string name, out ISecretStore? store) => _stores.TryGetValue(name, out store);

@@ -125,8 +125,17 @@ public sealed class InMemoryWorkflowTestRunStore(IServiceScopeFactory scopeFacto
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var scopeStore = scope.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>();
+
+        if (scope.ServiceProvider.GetService<IWorkflowTestScopeCleaner>() is { } scopeCleaner)
+        {
+            await scopeCleaner.CloseAsync(testRunId, WorkflowTestScopeCloseReason.Expired, observedAt, cancellationToken);
+            return;
+        }
+
         await scopeStore.CloseAsync(
             new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.Expired, observedAt),
             cancellationToken);
+        if (scope.ServiceProvider.GetService<ITestRunTargetCleaner>() is { } targetCleaner)
+            await targetCleaner.StopAsync(testRunId, cancellationToken);
     }
 }

@@ -97,8 +97,26 @@ public sealed class CliTests : SyntheticHistory
     [InlineData("--record", "RECORD", "--force-reason", "a reason")]
     [InlineData("--record", "RECORD", "--force-advance", "Elsa.Taks", "--force-reason", "a reason")]
     [InlineData("--record", "RECORD", "--force-advance", ",", "--force-reason", "a reason")]
+    [InlineData("--record", "RECORD", "--dataset", "bogus")]
+    [InlineData("--record", "RECORD", "--dataset")]
     public void The_cli_exits_2_on_invalid_input(params string[] arguments) =>
         Assert.Equal(2, Run(["--repo", Repo.Root, .. arguments.Select(argument => argument == "RECORD" ? recordFile : argument)]));
+
+    /// <summary>
+    /// <c>--dataset committed</c> reads only a committed dependency map (spec 259), so a commit without one is invalid
+    /// input. This history's projects use the pre-consolidation layout the scan does not read, so deriving fails too.
+    /// </summary>
+    [Fact]
+    public void The_cli_exits_2_when_the_named_dataset_source_cannot_serve_the_commit()
+    {
+        Repo.Delete("docs/maps/dependency-map.json");
+        Repo.RegenerateMap = false;
+        var commit = Repo.Commit("no committed map");
+
+        Assert.Equal(2, Run("--repo", Repo.Root, "--record", recordFile, "--commit", commit, "--dataset", "committed"));
+        Assert.Equal(2, Run("--repo", Repo.Root, "--record", recordFile, "--commit", commit, "--dataset", "derived"));
+        Assert.Equal(0, Run("--repo", Repo.Root, "--record", recordFile, "--commit", Baseline, "--output", outputFile, "--dataset", "committed"));
+    }
 
     private static int Run(params string[] arguments) =>
         (int)typeof(VersionCalculator).Assembly.EntryPoint!.Invoke(null, [arguments])!;

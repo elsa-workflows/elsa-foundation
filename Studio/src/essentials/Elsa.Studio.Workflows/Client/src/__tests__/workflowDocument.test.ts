@@ -150,6 +150,57 @@ describe("workflowDocumentReducer", () => {
     expect(workflowDocumentReducer(empty, { type: "testRunCleared" })).toBe(empty);
   });
 
+  it("refreshes the run view while retaining the captured draft, inputs, and action exchange", () => {
+    const withEvidence: WorkflowTestRunState = {
+      ...testRun,
+      startLabel: "HTTP request",
+      workflowInputNames: ["orderId"],
+      driverActionResult: { contributionId: "http-editor", value: { kind: "http-exchange", body: "response" } }
+    };
+    const start = { ...dirtyState(), testRun: withEvidence };
+    const refreshedView = { ...testRun.view, status: "Stopped", workflowExecutionId: "execution-1" };
+    const next = workflowDocumentReducer(start, { type: "testRunViewUpdated", view: refreshedView });
+
+    expect(next.testRun).toMatchObject({
+      ...withEvidence,
+      view: refreshedView,
+      startLabel: "HTTP request",
+      workflowInputNames: ["orderId"],
+      driverActionResult: withEvidence.driverActionResult
+    });
+  });
+
+  it("ignores a late view update belonging to an earlier Test Run", () => {
+    const start = { ...dirtyState(), testRun };
+    const next = workflowDocumentReducer(start, {
+      type: "testRunViewUpdated", view: { ...testRun.view, testRunId: "an-older-run", status: "Stopped" }
+    });
+    expect(next).toBe(start);
+  });
+
+  it("retains the dispatched snapshot on driver result updates and ignores another run's result", () => {
+    const snapshot = makeDraft("dispatched");
+    const start = { ...dirtyState(), testRun: { ...testRun, snapshot } };
+    const update = { ...testRun, view: { ...testRun.view, status: "Dispatched" }, startLabel: "Driver action" };
+    const next = workflowDocumentReducer(start, { type: "testRunResultUpdated", testRun: update });
+    expect(next.testRun?.snapshot).toBe(snapshot);
+    expect(next.testRun?.startLabel).toBe("Driver action");
+    expect(workflowDocumentReducer(next, { type: "testRunResultUpdated", testRun: { ...update, view: { ...update.view, testRunId: "old" } } })).toBe(next);
+  });
+
+  it("retains wait data and retry identity in the owner-held Test Run state", () => {
+    const start = { ...dirtyState(), testRun };
+    const waitDraft = {
+      modeId: "event",
+      draft: '{"payload":{"id":"evt-1"}}',
+      attempt: { signature: '{"waitId":"wait-1"}', deliveryId: "delivery-1" }
+    };
+    const next = workflowDocumentReducer(start, { type: "testRunWaitDraftUpdated", waitId: "wait-1", state: waitDraft });
+
+    expect(next.testRun?.waitDrafts?.["wait-1"]).toEqual(waitDraft);
+    expect(start.testRun?.waitDrafts).toBeUndefined();
+  });
+
   it("publishedArtifactChanged sets and clears the artifact id", () => {
     const set = workflowDocumentReducer(dirtyState(), { type: "publishedArtifactChanged", publishedArtifactId: "artifact-2" });
     expect(set.publishedArtifactId).toBe("artifact-2");

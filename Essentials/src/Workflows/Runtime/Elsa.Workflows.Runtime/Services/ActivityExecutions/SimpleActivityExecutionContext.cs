@@ -70,6 +70,7 @@ public sealed class SimpleActivityExecutionContext(
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<RuntimeChildSubtreeCancellationRequest> _childSubtreeCancellationRequests = [];
     private readonly List<RuntimeChildFaultAbsorptionRequest> _childFaultAbsorptionRequests = [];
+    private readonly List<RuntimeChildFaultInterventionRequest> _childFaultInterventionRequests = [];
     private readonly List<RuntimeParentNotificationRequest> _parentNotificationRequests = [];
     private readonly List<RuntimeAncestorNotificationRequest> _ancestorNotificationRequests = [];
 
@@ -94,14 +95,24 @@ public sealed class SimpleActivityExecutionContext(
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
         ActivitySchedulingProvenance? schedulingProvenance = null,
-        LoopIterationScopeRequest? iterationFrame = null)
+        LoopIterationScopeRequest? iterationFrame = null) =>
+        ScheduleChildActivity(executableNodeId, schedulingActivityExecutionId, metadata, schedulingProvenance, iterationFrame, notBefore: null);
+
+    public void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId,
+        IReadOnlyDictionary<string, string>? metadata,
+        ActivitySchedulingProvenance? schedulingProvenance,
+        LoopIterationScopeRequest? iterationFrame,
+        DateTimeOffset? notBefore)
     {
         _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
             executableNodeId,
             schedulingActivityExecutionId,
             metadata,
             schedulingProvenance,
-            iterationFrame));
+            iterationFrame,
+            notBefore));
     }
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
@@ -152,6 +163,27 @@ public sealed class SimpleActivityExecutionContext(
     public IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests() =>
         _childFaultAbsorptionRequests.ToArray();
 
+    public void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata));
+    }
+
+    public void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyCollection<string> decisions)
+    {
+        ArgumentNullException.ThrowIfNull(decisions);
+        _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata, decisions));
+    }
+
+    public IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests() =>
+        _childFaultInterventionRequests.ToArray();
+
     public void RequestParentNotification(string code, JsonElement? payload = null)
     {
         _parentNotificationRequests.Add(new RuntimeParentNotificationRequest(code, payload));
@@ -165,19 +197,24 @@ public sealed class SimpleActivityExecutionContext(
         _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(ancestorConsumerKey, code, payload));
     }
 
+    public void RequestAncestorNotification(RuntimeAncestorSelector selector, string code, JsonElement? payload = null)
+    {
+        _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(selector, code, payload));
+    }
+
     public IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests() =>
         _ancestorNotificationRequests.ToArray();
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
     public ActivityExecutionContext ToActivityExecutionContext() =>
-        new(
+        new ActivityExecutionContext(
             WorkflowExecutionId,
             InvocationId,
             AttemptId,
             ExecutableNodeId,
             CancellationToken,
             TriggerPayload,
-            TriggerNodeId);
+            TriggerNodeId).WithResolvedOperationKeys(activityExecutionState);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

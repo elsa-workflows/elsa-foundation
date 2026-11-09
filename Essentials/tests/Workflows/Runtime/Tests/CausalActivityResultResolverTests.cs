@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
@@ -147,6 +148,184 @@ public sealed class CausalActivityResultResolverTests
         Assert.Equal(producer.InvocationId, resolution.ProducerInvocation.InvocationId);
         Assert.Equal(ProjectionKey, resolution.ProjectionKey);
     }
+
+    [Fact]
+    public void Resolve_InsideAClosedScope_FindsTheBodyProducerWhateverItsRuntimeScope()
+    {
+        // A placed body node opens its own execution scope, so its runtime scope never equals the declared
+        // one; producer and consumer sharing the nearest closed boundary is what identifies it.
+        var boundary = ClosedBoundary("boundary-1");
+        var producer = Completed("producer", ProducerNodeId, 2, "scope:producer-own") with { ParentActivityExecutionId = boundary.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, "scope:consumer-own", schedulingInvocationId: producer.InvocationId) with { ParentActivityExecutionId = boundary.InvocationId };
+
+        var resolution = _resolver.Resolve(Reference(), consumer, [boundary, producer, consumer]);
+
+        Assert.NotNull(resolution);
+        Assert.Equal(producer.InvocationId, resolution.ProducerInvocation.InvocationId);
+    }
+
+    [Fact]
+    public void Resolve_DoesNotCrossIntoAnotherClosedScope()
+    {
+        var first = ClosedBoundary("boundary-1");
+        var second = ClosedBoundary("boundary-2");
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = first.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, schedulingInvocationId: producer.InvocationId) with { ParentActivityExecutionId = second.InvocationId };
+
+        var exception = Assert.Throws<CausalActivityResultResolutionException>(
+            () => _resolver.Resolve(Reference(), consumer, [first, second, producer, consumer]));
+
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, exception.Reason);
+    }
+
+    [Fact]
+    public void Resolve_FollowsACommittedCompositeCompletionAfterStateReload()
+    {
+        var parent = Completed("block", "node-block", 1, RootScopeId);
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        parent = WithCompletionCause(parent, producer.InvocationId);
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, parent.InvocationId);
+        var reloaded = JsonSerializer.Deserialize<ActivityExecutionState[]>(JsonSerializer.Serialize(new[] { parent, producer, consumer }))!;
+
+        var resolution = _resolver.Resolve(Reference(), reloaded[2], reloaded);
+
+        Assert.Equal(producer.InvocationId, resolution!.ProducerInvocation.InvocationId);
+    }
+
+    [Fact]
+    public void Resolve_FollowsNestedCompositeCompletionsWithoutLoopingOnParentRelationships()
+    {
+        var outer = WithCompletionCause(Completed("outer", "node-outer", 1, RootScopeId), "inner");
+        var inner = WithCompletionCause(Completed("inner", "node-inner", 2, RootScopeId), "producer") with { ParentActivityExecutionId = outer.InvocationId };
+        var producer = Completed("producer", ProducerNodeId, 3, RootScopeId) with { ParentActivityExecutionId = inner.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 4, RootScopeId, outer.InvocationId);
+
+        var resolution = _resolver.Resolve(Reference(), consumer, [outer, inner, producer, consumer]);
+
+        Assert.Equal(producer.InvocationId, resolution!.ProducerInvocation.InvocationId);
+    }
+
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Running)]
+    [InlineData(ActivityExecutionStatus.Faulted)]
+    [InlineData(ActivityExecutionStatus.Cancelled)]
+    public void Resolve_DoesNotFollowACompletionMarkerOnAnUnfinishedParent(ActivityExecutionStatus status)
+    {
+        var parent = WithCompletionCause(Completed("block", "node-block", 1, RootScopeId), "producer") with { Status = status };
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, parent.InvocationId);
+
+        Assert.Null(_resolver.Resolve(Reference(isOptional: true), consumer, [parent, producer, consumer]));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("blank")]
+    [InlineData("null")]
+    [InlineData("unrelated")]
+    [InlineData("another-workflow")]
+    [InlineData("running")]
+    [InlineData("faulted")]
+    [InlineData("cancelled")]
+    [InlineData("superseded")]
+    [InlineData("missing-parent-completion")]
+    [InlineData("mismatched-parent-completion")]
+    [InlineData("mismatched-child-completion")]
+    public void Resolve_DoesNotExposeAProducerThroughAnInvalidCompletionEdge(string invalidity)
+    {
+        var parent = WithCompletionCause(Completed("block", "node-block", 1, RootScopeId), "producer");
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        switch (invalidity)
+        {
+            case "missing": parent = WithCompletionCause(parent, "absent"); break;
+            case "blank": parent = WithCompletionCause(parent, " "); break;
+            case "null": parent = WithCompletionCause(parent, null!); break;
+            case "unrelated": producer = producer with { ParentActivityExecutionId = "another-parent" }; break;
+            case "another-workflow": producer = producer with { Execution = producer.Execution with { WorkflowExecutionId = "another-workflow" } }; break;
+            case "running": producer = producer with { Status = ActivityExecutionStatus.Running }; break;
+            case "faulted": producer = producer with { Status = ActivityExecutionStatus.Faulted }; break;
+            case "cancelled": producer = producer with { Status = ActivityExecutionStatus.Cancelled }; break;
+            case "superseded": producer = producer with { Status = ActivityExecutionStatus.Superseded }; break;
+            case "missing-parent-completion": parent = parent with { Completion = null }; break;
+            case "mismatched-parent-completion": parent = parent with { Completion = producer.Completion }; break;
+            case "mismatched-child-completion": producer = producer with { Completion = parent.Completion }; break;
+        }
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, parent.InvocationId);
+
+        Assert.Null(_resolver.Resolve(Reference(isOptional: true), consumer, [parent, producer, consumer]));
+    }
+
+    [Fact]
+    public void Resolve_ACompletionBridgeDoesNotExposeAClosedReusableBody()
+    {
+        var parent = WithCompletionCause(Completed("boundary", "node-boundary", 1, RootScopeId), "producer");
+        parent = parent with { Metadata = new Dictionary<string, string>(parent.Metadata) { [RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed } };
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, parent.InvocationId);
+
+        Assert.Null(_resolver.Resolve(Reference(isOptional: true), consumer, [parent, producer, consumer]));
+    }
+
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Running)]
+    [InlineData(ActivityExecutionStatus.Faulted)]
+    [InlineData(ActivityExecutionStatus.Cancelled)]
+    [InlineData(ActivityExecutionStatus.Superseded)]
+    public void Resolve_AnUncommittedChildCannotBridgeToAnEarlierCompletedProducer(ActivityExecutionStatus status)
+    {
+        var parent = WithCompletionCause(Completed("block", "node-block", 1, RootScopeId), "unfinished");
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        var child = Running("unfinished", "node-unfinished", 3, RootScopeId, producer.InvocationId) with
+        {
+            ParentActivityExecutionId = parent.InvocationId,
+            Status = status
+        };
+        var consumer = Running("consumer", "node-consumer", 4, RootScopeId, parent.InvocationId);
+
+        Assert.Null(_resolver.Resolve(Reference(isOptional: true), consumer, [parent, producer, child, consumer]));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Resolve_ACompletionBridgeDoesNotCrossBranchOrIterationFrames(bool branch)
+    {
+        var parent = WithCompletionCause(Completed("block", "node-block", 1, RootScopeId), "producer");
+        var producer = Completed("producer", ProducerNodeId, 2, RootScopeId,
+            branchId: branch ? "branch-a" : null, iterationId: branch ? null : "iteration-a") with { ParentActivityExecutionId = parent.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 3, RootScopeId, parent.InvocationId,
+            branchId: branch ? "branch-b" : null, iterationId: branch ? null : "iteration-b");
+
+        Assert.Null(_resolver.Resolve(Reference(isOptional: true), consumer, [parent, producer, consumer]));
+    }
+
+    [Fact]
+    public void Resolve_ACompletionBridgeStillRejectsAmbiguousProducerOccurrences()
+    {
+        var parent = WithCompletionCause(Completed("block", "node-block", 1, RootScopeId), "producer-later");
+        var first = Completed("producer-first", ProducerNodeId, 2, RootScopeId) with { ParentActivityExecutionId = parent.InvocationId };
+        var later = Completed("producer-later", ProducerNodeId, 3, RootScopeId, first.InvocationId) with { ParentActivityExecutionId = parent.InvocationId };
+        var consumer = Running("consumer", "node-consumer", 4, RootScopeId, parent.InvocationId);
+
+        var exception = Assert.Throws<CausalActivityResultResolutionException>(
+            () => _resolver.Resolve(Reference(), consumer, [parent, first, later, consumer]));
+
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Ambiguous, exception.Reason);
+        Assert.Equal(new[] { first.InvocationId, later.InvocationId }, exception.CandidateInvocationIds);
+    }
+
+    private static ActivityExecutionState WithCompletionCause(ActivityExecutionState state, string childId) =>
+        state with { Metadata = new Dictionary<string, string>(state.Metadata) { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = childId } };
+
+    private static ActivityExecutionState ClosedBoundary(string invocationId) =>
+        Running(invocationId, $"node-{invocationId}", 1, RootScopeId) with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScope] =
+                    Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed
+            }
+        };
 
     private static RuntimeActivityResultReference Reference(bool isOptional = false) =>
         new(ProducerNodeId, ProjectionKey, RootScopeId, isOptional);

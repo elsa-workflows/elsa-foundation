@@ -35,7 +35,9 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 
 Executable, provenance, instance, and diagnostics reads use `workflows/runtime:read`; execution/stimulus operations use `workflows/runtime:execute`; diagnostics mutation uses `workflows/runtime:manage`. The shared wildcard permission remains supported. Foundation Identity policy authorization and the host's ASP.NET Core authentication middleware establish the principal and challenges; the module mapper emits the RFC 7807 error contract.
 
-`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
+`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. A start whose inputs break the workflow's input contract (a missing required input, an unknown name or a mistyped value) is refused before anything is enqueued: `execute` answers `400`, and `stimuli` reports that start as `Refused` with its reason code and answers `400` when every matched start was refused and nothing resumed (#3728). `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
+
+A drain can also end its turn early by yielding: to a Cancel for the same execution that waits for its mailbox, or to a passivation of the mailbox, such as a distributed member handing the execution off while it drains or stops (#3678). The response is then `200` with `Accepted` while the run has not reached a quiescence point: the Cancel takes effect at the yield checkpoint, or the run continues from it: on this node after a re-drive, through the resumption sweep, or on the next owner. Read the instance for its state.
 
 `POST .../stimuli` accepts an optional `idempotencyKey` for its start path. With a key, each matching workflow is started under an execution id derived from the key and the workflow's artifact (#2195), so a repeated call never starts it twice: reusing a key for the same artifact is answered `SkippedDuplicate` **permanently**, on every node and after restarts, and a caller that wants a second start sends a new key. Without a key, a repeated call may start a second instance.
 
@@ -43,11 +45,19 @@ Dispatch inspection is allowlist-only: it exposes lifecycle/linkage, child artif
 
 Provenance is deliberately read-only here. Publishing owns creation and retirement of publication/test-run references, while Runtime owns artifact retention and garbage collection.
 
+When a read names a source-reference ID, Runtime preserves that exact historical view only while a retained execution pins both the same artifact and source reference. This keeps a replaced or unpublished Published reference's frozen layout and source available for its execution history without substituting the current publication. Expired TestRun references follow the same exact-pin rule; retired TestRun references remain unavailable, and unpinned retired or expired references are not inspectable by their ID.
+
 Executable detail includes a compact BPMN graph projection only for the persisted `elsa.bpmn.structure` schema `1.0.0`: `bpmnStructure.elements` carries element IDs, element types, bound child-node IDs, and names; `bpmnStructure.sequenceFlows` carries flow IDs, source/target references, names, outcome conditions, and default-flow flags. The API reads these fields directly from the versioned JSON payload without loading the BPMN activity module. It omits arbitrary properties, expressions, event definitions, and diagram data; other structure kinds or BPMN schemas return `bpmnStructure: null`.
 
 Activation slots are the runtime-owned ledger for the live activation of a `(definitionId, slotName)` pair.
 The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
 they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
+
+The list response also exposes the shell's declared `channels` (name, display name and description) and
+`allowAdHocChannels`, including when `items` is empty. A slot's optional `channel` carries its matching declaration.
+Declarations are global to the shell; the slot identity remains `(definitionId, slotName)`. Clients can therefore
+offer channels before the first publication without presenting a per-definition slot as a global entity.
+See [channel configuration](../Elsa.Workflows.Runtime/README.md#activation-channels).
 
 ## Withheld and protected values
 

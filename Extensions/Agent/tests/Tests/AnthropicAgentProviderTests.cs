@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Elsa.Agent.Anthropic;
 using Elsa.Agent.Anthropic.Options;
 using Elsa.Agent.Anthropic.Services;
@@ -89,6 +90,89 @@ public sealed class AnthropicAgentProviderTests
     }
 
     [Fact]
+    public async Task Tool_result_protocol_preserves_independent_module_type_version_and_evidence()
+    {
+        var client = new ScriptedChatClient(Update(new TextContent("Done.")));
+        var provider = BuildProvider(client);
+        var result = new AgentToolResult("call_1", "independent_tool", true, "Observed result.",
+            new("independent.result", "7", JsonSerializer.SerializeToElement(new { actualValue = 42 })));
+        var context = new AgentTurnContext("s1", "s1", [new(AgentRole.Tool, result.Content, result.ToolCallId, result.ToolName)], [result], [], [], 1, 4);
+        await Collect(provider.ContinueTurnAsync(context));
+        var toolMessage = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.Tool);
+        var protocolResult = Assert.Single(toolMessage.Contents.OfType<FunctionResultContent>());
+        var json = Assert.IsType<string>(protocolResult.Result);
+        Assert.Contains("independent.result", json);
+        Assert.Contains("\"schemaVersion\":\"7\"", json);
+        Assert.Contains("42", json);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Context_envelope_identity_and_provenance_reach_the_provider(bool changeOrigin)
+    {
+        var attachment = IndependentContext();
+        var changed = changeOrigin
+            ? attachment with { Origin = AgentContextOrigin.AuthoritativeRead }
+            : attachment with { Target = attachment.Target! with { ResourceId = "other-resource", Revision = "other-revision" } };
+
+        var originalPrompt = await ContextPrompt(attachment);
+        var changedPrompt = await ContextPrompt(changed);
+
+        // Domain content is identical: the envelope alone must preserve the selected resource and its provenance.
+        Assert.NotEqual(originalPrompt, changedPrompt);
+        Assert.Contains("independent.module", originalPrompt);
+        Assert.Contains("\"schemaVersion\":\"7\"", originalPrompt);
+        Assert.Contains("envelope-only-resource", originalPrompt);
+        Assert.Contains("envelope-only-revision", originalPrompt);
+        Assert.Contains("ClientSnapshot", originalPrompt);
+        Assert.Contains(changeOrigin ? "AuthoritativeRead" : "other-resource", changedPrompt);
+        Assert.DoesNotContain("private-client-binding", originalPrompt);
+        Assert.DoesNotContain("private-authority-scope", originalPrompt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Context_metadata_preserves_the_sensitive_content_gate(bool includeSensitive)
+    {
+        var client = new ScriptedChatClient();
+        var provider = BuildProvider(client, includeSensitiveContextContent: includeSensitive);
+        var sensitive = IndependentContext() with { Sensitivity = AgentContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
+        var secret = IndependentContext() with { Id = "secret", Sensitivity = AgentContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
+
+        await Collect(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [sensitive, secret])));
+
+        var prompt = string.Join("\n", client.CapturedMessages!.Select(message => message.Text));
+        Assert.Contains("envelope-only-resource", prompt);
+        Assert.Equal(includeSensitive, prompt.Contains("SENSITIVE_CONTENT_ONLY", StringComparison.Ordinal));
+        Assert.DoesNotContain("SECRET_CONTENT_ONLY", prompt);
+        Assert.DoesNotContain("private-client-binding", prompt);
+        Assert.DoesNotContain("private-authority-scope", prompt);
+    }
+
+    [Fact]
+    public async Task Context_metadata_keeps_resource_data_out_of_installed_guidance()
+    {
+        var client = new ScriptedChatClient();
+        var provider = BuildProvider(client);
+        var resource = IndependentContext() with { Content = new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" } };
+        var guidance = IndependentContext() with { Id = "guidance", Target = null, Origin = AgentContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
+
+        await Collect(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [resource, guidance])));
+
+        var system = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.System).Text;
+        var resourceMessage = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.User && message.Text?.StartsWith("Resource context data.", StringComparison.Ordinal) == true).Text;
+        Assert.Contains("INSTALLED_MODULE_GUIDANCE", system);
+        Assert.Contains("InstalledGuidance", system);
+        Assert.DoesNotContain("UNTRUSTED_RESOURCE_INSTRUCTION", system);
+        Assert.DoesNotContain("envelope-only-resource", system);
+        Assert.Contains("UNTRUSTED_RESOURCE_INSTRUCTION", resourceMessage);
+        Assert.Contains("ClientSnapshot", resourceMessage);
+        Assert.DoesNotContain("INSTALLED_MODULE_GUIDANCE", resourceMessage);
+    }
+
+    [Fact]
     public async Task Yields_an_error_when_no_api_key_is_configured()
     {
         var provider = BuildProvider(new ScriptedChatClient(), apiKey: null);
@@ -101,10 +185,25 @@ public sealed class AnthropicAgentProviderTests
         Assert.Equal("agent.provider.anthropic.unavailable", error.Error!.Code);
     }
 
-    private static AnthropicAgentProvider BuildProvider(IChatClient client, string? apiKey = "sk-test")
+    private static AnthropicAgentProvider BuildProvider(IChatClient client, string? apiKey = "sk-test", bool includeSensitiveContextContent = false)
     {
-        var options = Options.Create(new AnthropicAgentOptions { Enabled = true, ApiKey = apiKey, Model = "claude-test" });
+        var options = Options.Create(new AnthropicAgentOptions { Enabled = true, ApiKey = apiKey, Model = "claude-test", IncludeSensitiveContextContent = includeSensitiveContextContent });
         return new AnthropicAgentProvider(new StubChatClientFactory(client), options, NullLogger<AnthropicAgentProvider>.Instance);
+    }
+
+    private static AgentContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
+        AgentContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
+    {
+        ModuleId = "independent.module", SchemaVersion = "7", Origin = AgentContextOrigin.ClientSnapshot,
+        Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),
+        Client = new("private-client-binding", "private-generation"), AgentScopes = ["private-authority-scope"]
+    };
+
+    private static async Task<string> ContextPrompt(AgentContextAttachment attachment)
+    {
+        var client = new ScriptedChatClient();
+        await Collect(BuildProvider(client).ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [attachment])));
+        return string.Join("\n", client.CapturedMessages!.Select(message => message.Text));
     }
 
     private static ChatResponseUpdate Update(AIContent content) => new() { Contents = [content] };

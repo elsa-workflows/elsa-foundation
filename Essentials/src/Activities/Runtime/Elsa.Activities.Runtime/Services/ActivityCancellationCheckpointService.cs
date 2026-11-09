@@ -24,7 +24,8 @@ internal static class ActivityCancellationCheckpointService
         ActivityExecutionState state,
         string reason,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -106,7 +107,7 @@ internal static class ActivityCancellationCheckpointService
             ],
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     private static ActivityExecutionState EndOpenAttempt(ActivityExecutionState state, DateTimeOffset endedAt)

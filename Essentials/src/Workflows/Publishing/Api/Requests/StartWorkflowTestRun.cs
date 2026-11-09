@@ -2,6 +2,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Requests;
 
@@ -25,7 +26,9 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         string? ArtifactVersion = null,
         IReadOnlyDictionary<string, JsonElement>? Inputs = null,
         IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null,
-        bool AcknowledgeUnavailableExpressionValidation = false)
+        bool AcknowledgeUnavailableExpressionValidation = false,
+        WorkflowTestRunStartSelection? Start = null,
+        IReadOnlyCollection<WorkflowExecutableLayoutRecord>? Layout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(SnapshotId);
@@ -39,6 +42,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         this.ActivityPresentation =
             ActivityPresentationRecord.NormalizeCollection(ActivityPresentation);
         this.AcknowledgeUnavailableExpressionValidation = AcknowledgeUnavailableExpressionValidation;
+        this.Start = Start;
+        this.Layout = Layout?.ToArray() ?? [];
     }
 
     public string DefinitionId { get; init; }
@@ -54,4 +59,50 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
 
     public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; init; }
     public bool AcknowledgeUnavailableExpressionValidation { get; init; }
+    public WorkflowTestRunStartSelection? Start { get; init; }
+
+    /// <summary>Frozen canvas coordinates for this draft snapshot, separate from executable behavior.</summary>
+    public IReadOnlyCollection<WorkflowExecutableLayoutRecord> Layout { get; init; } = [];
 }
+
+/// <summary>Module-neutral selection for a direct start or one discovered trigger option.</summary>
+public sealed record WorkflowTestRunStartSelection(
+    string Kind,
+    string? OptionId = null,
+    string? ModeId = null,
+    JsonElement? Data = null)
+{
+    public const string Direct = "direct";
+    public const string Trigger = "trigger";
+}
+
+/// <summary>Captured draft state for read-only trigger and declared-input discovery.</summary>
+public sealed record DraftTestRunOptionsRequest : IRequest<DraftTestRunOptionsView>
+{
+    public DraftTestRunOptionsRequest(
+        string definitionId,
+        string snapshotId,
+        WorkflowDefinitionState state,
+        string? artifactVersion = null,
+        IReadOnlyCollection<ActivityPresentationRecord>? activityPresentation = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
+        ArgumentNullException.ThrowIfNull(state);
+        DefinitionId = definitionId;
+        SnapshotId = snapshotId;
+        State = state;
+        ArtifactVersion = artifactVersion;
+        ActivityPresentation = ActivityPresentationRecord.NormalizeCollection(activityPresentation);
+    }
+
+    public string DefinitionId { get; }
+    public string SnapshotId { get; }
+    public WorkflowDefinitionState State { get; }
+    public string? ArtifactVersion { get; }
+    public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; }
+}
+
+public sealed record GetWorkflowTestRun(string TestRunId) : IRequest<WorkflowTestRunView>;
+
+public sealed record StopWorkflowTestRun(string TestRunId) : IRequest<WorkflowTestRunView>;

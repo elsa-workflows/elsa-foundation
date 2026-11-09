@@ -9,4 +9,10 @@ public sealed record WorkflowDefinitionListProjection(
     string? DraftId,
     string? LatestVersionId,
     string? LatestVersion,
-    int VersionCount);
+    int VersionCount,
+    string? DraftSourceVersionId = null,
+    string? DraftSourceVersion = null,
+    IReadOnlyList<WorkflowDefinitionVersionProjection>? Versions = null);
+
+/// <summary>The stable identity and semantic version of one saved workflow-definition version.</summary>
+public sealed record WorkflowDefinitionVersionProjection(string Id, string Version);

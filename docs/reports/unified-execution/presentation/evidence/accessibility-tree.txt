@@ -1,0 +1,90 @@
+- link "Skip to architecture":
+  - /url: "#content"
+- text: ELSA / ARCHITECTURE LAB Reviewed research · proposed architecture
+- 'link "Program #2892 ↗"':
+  - /url: https://github.com/elsa-workflows/elsa-foundation/issues/2892
+- main:
+  - paragraph: Elsa 4 · research milestone
+  - heading "One foundation. Distinct execution semantics." [level=1]
+  - paragraph: Native workflows, BPMN and data pipelines share durable execution infrastructure. Their models keep the meaning of ordering, joining, data movement and completion.
+  - paragraph: Explore responsibilities, walk through recovery, and inspect the evidence behind the proposal.
+  - navigation "Presentation views":
+    - button "01 Architecture" [pressed]
+    - button "02 Recovery lab"
+    - button "03 Evidence & decisions"
+  - region "Architecture explorer":
+    - text: View through
+    - combobox "View through":
+      - option "Native workflow"
+      - option "BPMN process"
+      - option "ETL pipeline"
+      - option "Agent collaboration" [selected]
+      - option "Independent rule model"
+    - button "Zoom diagram out": −
+    - status: 100%
+    - button "Zoom diagram in": +
+    - button "Reset view"
+    - navigation "Diagram breadcrumbs":
+      - button "Architecture overview"
+      - text: Agent collaboration Atomic durable transition
+    - heading "Agent collaboration" [level=2]
+    - paragraph: Candidate native composition with explicit messages, rounds and resource bindings.
+    - region "Scrollable architecture diagram":
+      - button "Typed collaboration structure Model-specific definition":
+        - strong: Typed collaboration structure
+        - text: Model-specific definition
+      - button "Pinned artifact Definition · package · state schema":
+        - strong: Pinned artifact
+        - text: Definition · package · state schema
+      - button "Private / shared resource bindings Scope · identity · version":
+        - strong: Private / shared resource bindings
+        - text: Scope · identity · version
+      - text: Validate and resolve ↓ ONE EXECUTION INSTANCE · ONE SERIALIZED COORDINATOR
+      - button "Native execution model Interprets durable inputs":
+        - strong: Native execution model
+        - text: Interprets durable inputs
+      - button "Agent collaboration composite Mailboxes / rounds / fan-in":
+        - strong: Agent collaboration composite
+        - text: Mailboxes / rounds / fan-in
+      - strong: Nested composition
+      - paragraph: Sequence → Collect request → Agent collaboration [Researcher ∥ Specialist → Reviewer → bounded feedback → approved tool] → Notify. One native execution; no actor per turn.
+      - text: Proposed composition ·
+      - link "Inspect bounded resource-binding evidence (online) ↗":
+        - /url: https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/AgentCompositionProof/evidence.json
+      - button "Durable execution kernel State + owed work + receipt · revision + ownership fence" [pressed]:
+        - strong: Durable execution kernel
+        - text: State + owed work + receipt · revision + ownership fence
+      - text: Pinned invocation ↓ Durable result ↑ INDEPENDENT WORK · OUTSIDE THE COORDINATOR TURN
+      - button "Agent turns / approved tool work Claims · attempts · parallel compute":
+        - strong: Agent turns / approved tool work
+        - text: Claims · attempts · parallel compute
+      - button "Memory / knowledge / tools Connector-specific idempotency":
+        - strong: Memory / knowledge / tools
+        - text: Connector-specific idempotency
+      - text: Execution addressing and activation
+      - button "Replaceable hosting provider Built-in or actor framework · one membership authority":
+        - strong: Replaceable hosting provider
+        - text: Built-in or actor framework · one membership authority
+    - text: "Solid boundary: execution coordinator Dashed boundary: worker/data plane"
+    - complementary:
+      - paragraph: Responsibility lens
+      - heading "Atomic durable transition" [level=2]
+      - paragraph: Commit state, owed work and a stable receipt together. Check current ownership fence and state revision for new writes; safely replay identical receipts.
+      - text: "The experiment exposes a gap: a completion boolean and work cancellation are not a full model-outcome contract."
+      - paragraph: Proposed contract · bounded work witness
+      - link "Inspect bounded shared-work evidence (online) ↗":
+        - /url: https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/UnifiedExecution.WorkProof/evidence.json
+  - paragraph:
+    - strong: Reviewed research proposal
+    - text: · Executable evidence baseline
+    - code: 5fa96727f
+    - text: · 17 October 2026. The interactive HTML runs offline. Local report links need the accompanying bundle; GitHub evidence requires a connection.
+  - paragraph:
+    - link "Recommendation":
+      - /url: ../architecture-recommendation.md
+    - text: ·
+    - link "Acceptance audit":
+      - /url: ../acceptance-audit.md
+    - text: ·
+    - link "Orchard and original ETL intent":
+      - /url: ../original-requirements-and-prior-art.md

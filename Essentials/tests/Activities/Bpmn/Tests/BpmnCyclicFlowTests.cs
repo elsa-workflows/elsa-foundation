@@ -14,6 +14,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnTokenStatus = global::Bpmn.Model.State.BpmnTokenStatus;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -159,7 +162,7 @@ public sealed class BpmnCyclicFlowTests
             observedKeys.Add(catchToken.IterationKey);
 
             var bookmark = Assert.Single(await fixture.BookmarksAsync());
-            run = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new EventReceived("tick")));
+            run = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "tick" }));
         }
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -244,7 +247,7 @@ public sealed class BpmnCyclicFlowTests
             var bookmarks = await fixture.BookmarksAsync();
             Assert.Equal(2, bookmarks.Count);
             var hostBookmark = Assert.Single(bookmarks, candidate => candidate.ExecutableNodeId == "node-host");
-            run = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new EventReceived("proceed")));
+            run = await fixture.ResumeAsync(hostBookmark, JsonSerializer.SerializeToElement(new { eventName = "proceed" }));
         }
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -297,7 +300,7 @@ public sealed class BpmnCyclicFlowTests
                 token => token.AtElementId == "catch" && token.Status == BpmnTokenStatus.AwaitingChild);
             keys.Add(catchToken.IterationKey);
             var bookmark = Assert.Single(await fixture.BookmarksAsync());
-            await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new EventReceived("tick")));
+            await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new { eventName = "tick" }));
         }
 
         return keys;

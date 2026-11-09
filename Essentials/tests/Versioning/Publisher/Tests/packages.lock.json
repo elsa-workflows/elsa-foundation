@@ -100,8 +100,14 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "elsa.versioning.calculator": {
+      "elsa.maps.projects": {
         "type": "Project"
+      },
+      "elsa.versioning.calculator": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Maps.Projects": "[1.0.0, )"
+        }
       },
       "elsa.versioning.publisher": {
         "type": "Project",

@@ -4,6 +4,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -20,7 +21,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -62,6 +63,12 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        var taskAccess = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess)).ToArray();
+        if (taskAccess.Length != 1) throw new InvalidOperationException("Exactly one user-task eligibility adapter must be selected.");
+        if (taskAccess[0].ImplementationType == typeof(Elsa.Workflows.Runtime.UserTasks.UnavailableUserTaskAccess))
+            services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess, UserTasks.TaskRequestAccess>());
+        services.AddApiCapabilitySource<UserTasks.UserTaskCapabilitySource>();
+
         services.AddDynamicEndpointApiExplorerRefresh();
         // The owner's failure services are keyed so hosts composing several modules keep each
         // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
@@ -91,22 +98,39 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // The operation seams the endpoint classes dispatch to. Registered against the concrete
         // services so a replacement of either registration keeps the other coherent.
         services.TryAddScoped<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<WorkflowExecutableInspector>());
+        // The exact Executable read for other domains through Workflows Runtime Core (spec 1193 slice F, D4), over the same
+        // inspector the executable endpoint uses. One implementation per shell, rejected at configuration and at startup.
+        WorkflowExecutableInspectionStartupTask.Validate(services);
+        services.TryAddScoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableInspection, WorkflowExecutableInspection>();
+        AddExecutableInspectionValidator(services);
         services.TryAddScoped<StimulusDispatchService>();
         services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
         services.TryAddScoped<WorkflowExecutionStartService>();
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
         services.TryAddScoped<ActivityExecutionInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
+        services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<WorkflowInstanceDetailsService>();
         services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
         services.TryAddScoped<WorkflowInstanceListService>();
         services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
         services.TryAddScoped<WorkflowIncidentListService>();
         services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
+        // The exact Run read for other domains through Workflows Runtime Core (spec 1193 slice G, D4), over the services the run
+        // endpoints use. One implementation per shell, rejected at configuration and at startup.
+        WorkflowRunInspectionStartupTask.Validate(services);
+        services.TryAddScoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowRunInspection, WorkflowRunInspection>();
+        AddRunInspectionValidator(services);
         services.TryAddScoped<WorkflowDispatchInspectionService>();
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
         services.TryAddScoped<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeDiagnosticsSettingsService>());
+        services.TryAddScoped<ActivityExecutionStateViewService>();
+        services.TryAddScoped<IActivityExecutionStateViewService>(sp => sp.GetRequiredService<ActivityExecutionStateViewService>());
+        services.TryAddSingleton<ActivityStateViewProjectorRegistry>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityStateViewProjectorsStartupTask>());
+        services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
+        services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
@@ -127,7 +151,10 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowAlterationAdmissionGate, AllowWorkflowAlterationAdmissionGate>();
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityExecutionBrowsingCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 
@@ -138,6 +165,36 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
     /// WorkflowsRuntimeCheckpointPersistence feature registered, whichever of the two features CShells composes first.
     /// </summary>
     public virtual void PostConfigureServices(IServiceCollection services) => services.AddPersistenceModes();
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddExecutableInspectionValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowExecutableInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowExecutableInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowExecutableInspectionStartupTask(services);
+        services.RemoveAll<WorkflowExecutableInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowExecutableInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowExecutableInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
+
+    // One validator per configuring collection, as for the Executable inspection.
+    private static void AddRunInspectionValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowRunInspectionStartupTask(services);
+        services.RemoveAll<WorkflowRunInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowRunInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowRunInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(endpoints);

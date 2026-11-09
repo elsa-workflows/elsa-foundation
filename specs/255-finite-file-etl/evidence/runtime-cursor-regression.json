@@ -1,0 +1,28 @@
+{
+  "source": "Extensions/Etl/src/Runtime/Api/EtlRuntimeOperations.cs",
+  "removed": "cursor resource identity comparison",
+  "originalSha256": "09420f5d9b39a2324c05c79a0eeba145bd0be69f0b1b46677555d166b41245b9",
+  "mutatedSha256": "fe25e2c96ffa2f110f4f3ce249c31d473557ab29b906b1de095ec46d76d970e9",
+  "restoredSha256": "09420f5d9b39a2324c05c79a0eeba145bd0be69f0b1b46677555d166b41245b9",
+  "failure": "Expected BadRequest, actual OK for a signed partition cursor reused against a different run",
+  "command": "dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --no-restore --filter FullyQualifiedName~Runtime_only_http_api_pages_scoped_run_and_partition_views_without_exposing_runtime_identity -p:WarningsNotAsErrors=NU1603",
+  "restoredSuite": {
+    "command": "dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --no-restore -p:WarningsNotAsErrors=NU1603",
+    "passed": 344,
+    "failed": 0,
+    "skipped": 0,
+    "duration": "4m56s",
+    "log": "t028-etl-restored.log"
+  },
+  "additionalOrderingCase": "Added after this suite started; verification tracked separately",
+  "subsequentChanges": "After exact restoration, added input-identity projection and the encoded-order/input-identity tests. Cursor resource comparison remains present.",
+  "finalSourceSha256": "2dbb8955f1de621b48fa186d0c0b3e0ce9f80da2454c6b0f96382b0ba4580723",
+  "finalSuite": {
+    "passed": 346,
+    "failed": 0,
+    "skipped": 0,
+    "duration": "3m41s",
+    "log": "t028-etl-final.log",
+    "command": "dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --no-restore -p:WarningsNotAsErrors=NU1603"
+  }
+}

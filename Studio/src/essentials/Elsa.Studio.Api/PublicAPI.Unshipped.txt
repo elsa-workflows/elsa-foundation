@@ -1,0 +1,7 @@
+#nullable enable
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementManagePermission = "module-management:manage" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementManagePolicyName = "StudioManagementBridge:ModuleManagement.Manage" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementReadPermission = "module-management:read" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementReadPolicyName = "StudioManagementBridge:ModuleManagement.Read" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.PolicyName = "StudioManagementBridge" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.TenantClaimType = "elsa.studio.tenant" -> string!

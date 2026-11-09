@@ -17,7 +17,7 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimePostCommitOutboxProcessorTests
+public sealed partial class RuntimePostCommitOutboxProcessorTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 16, 0, 0, TimeSpan.Zero);
 

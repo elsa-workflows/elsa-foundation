@@ -128,7 +128,7 @@ public sealed class WorkerOidcHostTests
             {
                 stimulusType = bookmark.GetProperty("stimulusType").GetString(),
                 stimulusHash = bookmark.GetProperty("stimulusHash").GetString(),
-                input = JsonSerializer.SerializeToElement(new EventReceived("worker-oidc-ready")),
+                input = JsonSerializer.SerializeToElement(new { eventName = "worker-oidc-ready" }),
                 mode = "ResumeOnly"
             })
         })

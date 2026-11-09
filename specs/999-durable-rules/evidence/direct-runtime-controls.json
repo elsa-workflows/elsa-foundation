@@ -1,0 +1,32 @@
+[
+  {
+    "control": "snapshot-consumption",
+    "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Progress.cs",
+    "restored_sha256": "d823743e4fdbbdb00b0b2e69ee78cd75485094b37902bca779cace1211b096ab",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 934 ms - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "log": "/tmp/3181-composition-control-snapshot-consumption.log"
+  },
+  {
+    "control": "durable-proof-required",
+    "path": "Extensions/Rules/src/Persistence/EntityFrameworkCore/EfRuleRunStore.Delivery.cs",
+    "restored_sha256": "bc7dcc044fc55963fc1f43752096971840743a504db00679d055afcd9d2add0c",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 685 ms - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "log": "/tmp/3181-composition-control-durable-proof-required.log"
+  },
+  {
+    "control": "loaded-asset-digest",
+    "path": "Extensions/Rules/src/Runtime/RuleDeploymentIdentitySource.cs",
+    "restored_sha256": "6bb89ce0024a03020972583d7e1d16436101d357300e999695460f7fd987f9fd",
+    "exit_code": 1,
+    "summary": [
+      "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 45 ms - Elsa.Rules.Tests.dll (net10.0)"
+    ],
+    "log": "/tmp/3181-composition-control-loaded-asset-digest.log"
+  }
+]

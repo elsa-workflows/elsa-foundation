@@ -429,6 +429,8 @@ public sealed class SetVariableDurabilityExecutionTests
             activityExecutionInspectionWriter: inspectionStore,
             rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+        var types = Elsa.Serialization.Testing.SerializationServices.TypeRegistry();
+        types.RegisterType(typeof(string), "String");
         var executor = new WorkflowIntrinsicExecutor(
             workflowStore,
             activityStore,
@@ -436,7 +438,8 @@ public sealed class SetVariableDurabilityExecutionTests
             new InMemoryDurableValueStateStore(),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FakeTimeProvider(Now),
-            portableExpressionEvaluator: portableExpressionEvaluator);
+            portableExpressionEvaluator: portableExpressionEvaluator,
+            inputValidator: new WorkflowExecutableInputValidator(types));
         var services = new ServiceCollection();
         services.AddScoped(_ => executor);
         var serviceProvider = services.BuildServiceProvider();

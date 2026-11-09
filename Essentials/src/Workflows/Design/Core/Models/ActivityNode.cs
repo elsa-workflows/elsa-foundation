@@ -36,11 +36,18 @@ public sealed record ActivityNode(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AuthoredWorkflowIntrinsic? Intrinsic { get; init; }
+
+    /// <summary>
+    /// Selects where this invocation is executed. Inline is omitted to preserve existing authored JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ActivityExecutionPlacement ExecutionPlacement { get; init; }
 }
 
 /// <summary>
-/// Portable authored contract for an engine intrinsic. The value type is pinned at authoring time
-/// because no CLR activity input contract exists from which Publishing could infer it.
+/// Portable authored contract for an engine intrinsic. Variable-writing intrinsics use their selected
+/// declaration's type at publication; other intrinsics use the authored value type because they have no
+/// CLR activity input contract from which Publishing could infer it.
 /// </summary>
 public sealed record AuthoredWorkflowIntrinsic
 {
@@ -96,7 +103,22 @@ public enum AuthoredWorkflowIntrinsicKind
 public sealed record ActivityChildProjection(
     string Name,
     IEnumerable<ActivityNode> Activities
-);
+)
+{
+    /// <summary>Structure-owned outcome declarations for individual child invocations.</summary>
+    public IReadOnlyCollection<ActivityChildOutcomeProjection> OutcomeProjections { get; init; } = [];
+}
+
+/// <summary>
+/// Additional outcomes owned by a child's structural relationships. Publication applies these only
+/// when the child's resolved activity type matches <see cref="ActivityTypeKey"/>. An optional literal
+/// input can also declare a fixed outcome; expression results remain constrained to the pinned names.
+/// </summary>
+public sealed record ActivityChildOutcomeProjection(
+    string NodeId,
+    string ActivityTypeKey,
+    IReadOnlyCollection<string> OutcomeNames,
+    string? LiteralOutcomeInputKey = null);
 
 /// <summary>
 /// Disclosure-safe public-contract usage contributed by an activity-owned structure for one child.

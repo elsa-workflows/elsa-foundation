@@ -54,7 +54,7 @@ public sealed class ReusableActivityAuthoringService(
         var definition = NewDefinition(definitionId, activityTypeKey, command.Category, command.DisplayName, command.Description, now);
         var authoring = NewAuthoring(definitionId, new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design), null, now);
         var draft = NewDraft(draftId, definitionId, null, contract, command.Provider, now);
-        var layout = NewDraftLayout(draftId, command.Layout, now);
+        var layout = NewDraftLayout(draftId, command.Layout, now, command.ActivityPresentation?.Records);
 
         try
         {
@@ -104,9 +104,10 @@ public sealed class ReusableActivityAuthoringService(
         ActivityContract contract;
         ActivityProviderManifest provider;
         IReadOnlyList<ActivityLayoutRecord> records;
+        IReadOnlyList<ActivityNodePresentationRecord> presentation;
         if (command.SourceVersionId is not null)
         {
-            if (command.Provider is not null || command.Contract is not null || command.Layout is not null)
+            if (command.Provider is not null || command.Contract is not null || command.Layout is not null || command.ActivityPresentation is not null)
                 throw BadRequest("A clone request supplies only 'sourceVersionId'.");
 
             var source = await GetPublicationAsync(command.SourceVersionId, cancellationToken);
@@ -117,6 +118,7 @@ public sealed class ReusableActivityAuthoringService(
             contract = source.Contract;
             provider = source.Provider;
             records = sourceLayout.Records.ToArray();
+            presentation = sourceLayout.ActivityPresentation.ToArray();
         }
         else
         {
@@ -125,13 +127,14 @@ public sealed class ReusableActivityAuthoringService(
             contract = ToDomainContract(command.Contract);
             provider = command.Provider;
             records = command.Layout;
+            presentation = NormalizePresentation(command.ActivityPresentation?.Records);
         }
 
         var now = timeProvider.GetUtcNow();
         var draft = NewDraft(NewId("activity-draft"), command.DefinitionId, command.SourceVersionId, contract, provider, now, command.PresentationLabel);
         await EnsureAuthorableProviderAsync(provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", draft.Id, draft.DefinitionId, Revision: draft.Revision));
-        var layout = NewDraftLayout(draft.Id, records, now);
+        var layout = NewDraftLayout(draft.Id, records, now, presentation);
         try
         {
             await createDraft.ExecuteAsync(new(draft, layout, authoring.HeadVersionId), cancellationToken);
@@ -141,7 +144,7 @@ public sealed class ReusableActivityAuthoringService(
             throw Conflict("activity.definition.stale-head", "Activity definition head is stale", "The definition head changed while the draft was being created.", exception);
         }
 
-        return await ToDraftViewAsync(draft, layout.Records.ToArray(), null, cancellationToken);
+        return await ToDraftViewAsync(draft, layout.Records.ToArray(), null, cancellationToken, layout.ActivityPresentation);
     }
 
     public async Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(
@@ -161,7 +164,7 @@ public sealed class ReusableActivityAuthoringService(
             var updated = await updateDraftPresentation.ExecuteAsync(
                 new(current.Id, current.Revision, label, timeProvider.GetUtcNow()),
                 cancellationToken);
-            return await ToDraftViewAsync(updated, layout.Records.ToArray(), null, cancellationToken);
+            return await ToDraftViewAsync(updated, layout.Records.ToArray(), null, cancellationToken, layout.ActivityPresentation);
         }
         catch (InvalidOperationException exception)
         {
@@ -191,7 +194,11 @@ public sealed class ReusableActivityAuthoringService(
             now,
             command.PresentationLabel);
         copy.State = copy.State with { Options = new Dictionary<string, string>(source.State.Options, StringComparer.Ordinal) };
-        var layout = NewDraftLayout(copy.Id, command.Layout, now);
+        var sourceLayout = await layoutStore.FindDraftLayoutAsync(source.Id, cancellationToken)
+            ?? throw OperationFailed("The source draft layout is unavailable.");
+        if (sourceLayout.Revision != source.Revision)
+            throw StaleRevision(source, command.ExpectedSourceRevision);
+        var layout = NewDraftLayout(copy.Id, command.Layout, now, command.ActivityPresentation?.Records ?? sourceLayout.ActivityPresentation.ToArray());
         try
         {
             await createConflictCopy.ExecuteAsync(new(source.Id, command.ExpectedSourceRevision, copy, layout), cancellationToken);
@@ -200,7 +207,7 @@ public sealed class ReusableActivityAuthoringService(
         {
             throw await LatestStaleRevisionAsync(source, command.ExpectedSourceRevision, exception, cancellationToken);
         }
-        return await ToDraftViewAsync(copy, layout.Records.ToArray(), null, cancellationToken);
+        return await ToDraftViewAsync(copy, layout.Records.ToArray(), null, cancellationToken, layout.ActivityPresentation);
     }
 
     public async Task<ReusableActivityDraftView> ReplaceDraftAsync(
@@ -216,6 +223,12 @@ public sealed class ReusableActivityAuthoringService(
         await EnsureAuthorableProviderAsync(command.Provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", current.Id, current.DefinitionId, Revision: current.Revision));
 
+        var currentLayout = await layoutStore.FindDraftLayoutAsync(current.Id, cancellationToken)
+            ?? throw OperationFailed("The draft layout is unavailable.");
+        if (currentLayout.Revision != current.Revision)
+            throw StaleRevision(current, command.ExpectedRevision);
+        var presentation = NormalizePresentation(command.ActivityPresentation?.Records ?? currentLayout.ActivityPresentation.ToArray());
+
         ActivityDefinitionDraft updated;
         try
         {
@@ -225,7 +238,7 @@ public sealed class ReusableActivityAuthoringService(
                     command.ExpectedRevision,
                     new(contract, command.Provider, current.State.Options),
                     command.Layout,
-                    NormalizePresentationLabel(command.PresentationLabel)),
+                    NormalizePresentationLabel(command.PresentationLabel)) { ActivityPresentation = presentation },
                 cancellationToken);
         }
         catch (InvalidOperationException exception)
@@ -233,7 +246,7 @@ public sealed class ReusableActivityAuthoringService(
             throw await LatestStaleRevisionAsync(current, command.ExpectedRevision, exception, cancellationToken);
         }
 
-        return await ToDraftViewAsync(updated, command.Layout, null, cancellationToken);
+        return await ToDraftViewAsync(updated, command.Layout, null, cancellationToken, presentation);
     }
 
     public async Task<ReusableActivityDraftView> MigrateDraftAsync(
@@ -256,6 +269,12 @@ public sealed class ReusableActivityAuthoringService(
         {
             throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, [], exception);
         }
+
+        if (!ActivityProviderMigrationCapabilities.SupportsAuthorableMigrationFrom(
+                targetProvider,
+                command.TargetSchemaVersion,
+                current.State.Provider))
+            throw MigrationUnsupported(current.State.Provider, command.TargetProviderKey, command.TargetSchemaVersion, []);
 
         ActivityManifestMigration migration;
         try
@@ -306,7 +325,7 @@ public sealed class ReusableActivityAuthoringService(
         {
             Options = new Dictionary<string, string>(current.State.Options, StringComparer.Ordinal)
         };
-        var migratedLayout = NewDraftLayout(migrated.Id, currentLayout.Records.ToArray(), now);
+        var migratedLayout = NewDraftLayout(migrated.Id, currentLayout.Records.ToArray(), now, currentLayout.ActivityPresentation);
 
         try
         {
@@ -321,7 +340,7 @@ public sealed class ReusableActivityAuthoringService(
                 exception);
         }
 
-        return await ToDraftViewAsync(migrated, migratedLayout.Records.ToArray(), null, cancellationToken);
+        return await ToDraftViewAsync(migrated, migratedLayout.Records.ToArray(), null, cancellationToken, migratedLayout.ActivityPresentation);
     }
 
     public async Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken)
@@ -391,7 +410,7 @@ public sealed class ReusableActivityAuthoringService(
         var layout = await layoutStore.FindDraftLayoutAsync(draftId, cancellationToken)
             ?? throw OperationFailed("The draft layout is unavailable.");
         var validation = await validationStore.FindAsync(draftId, draft.Revision, cancellationToken);
-        return await ToDraftViewAsync(draft, layout.Records.ToArray(), validation, cancellationToken);
+        return await ToDraftViewAsync(draft, layout.Records.ToArray(), validation, cancellationToken, layout.ActivityPresentation);
     }
 
     public async Task<ReusableActivityVersionView> GetVersionAsync(string versionId, CancellationToken cancellationToken)
@@ -413,6 +432,9 @@ public sealed class ReusableActivityAuthoringService(
             !StringComparer.Ordinal.Equals(definition.TenantId, version.TenantId) ||
             !StringComparer.Ordinal.Equals(authoring.TenantId, version.TenantId))
             throw NotFound("activity.version.not-found", "Activity version not found", "The requested activity version was not found.");
+        var versionLayout = await layoutStore.FindVersionLayoutAsync(version.DefinitionVersionId, cancellationToken);
+        if (versionLayout is not null && !StringComparer.Ordinal.Equals(versionLayout.TenantId, version.TenantId))
+            throw OperationFailed("The version presentation scope is inconsistent.");
         return new(
             ToIdentity(definition, authoring),
             version.DefinitionVersionId,
@@ -430,7 +452,7 @@ public sealed class ReusableActivityAuthoringService(
                 version.ClosedTemplateCount,
                 version.RuntimeRequirements.ToArray()),
             version.Lifecycle,
-            version.PublishedAt);
+            version.PublishedAt) { ActivityPresentation = versionLayout?.ActivityPresentation.ToArray() ?? [] };
     }
 
     private ActivityDefinition NewDefinition(
@@ -490,13 +512,15 @@ public sealed class ReusableActivityAuthoringService(
     private ActivityDefinitionDraftLayout NewDraftLayout(
         string draftId,
         IReadOnlyList<ActivityLayoutRecord> records,
-        DateTimeOffset now) => new()
+        DateTimeOffset now,
+        IEnumerable<ActivityNodePresentationRecord>? presentation = null) => new()
     {
         Id = NewId("activity-draft-layout"),
         TenantId = context.TenantId,
         DraftId = draftId,
         Revision = 1,
         Records = records.ToList(),
+        ActivityPresentation = NormalizePresentation(presentation).ToList(),
         CreatedAt = now,
         LastModifiedAt = now
     };
@@ -646,7 +670,8 @@ public sealed class ReusableActivityAuthoringService(
         ActivityDefinitionDraft draft,
         IReadOnlyList<ActivityLayoutRecord> layout,
         ActivityDraftValidationState? validation,
-        CancellationToken cancellationToken) => new(
+        CancellationToken cancellationToken,
+        IEnumerable<ActivityNodePresentationRecord> presentation) => new(
         draft.Id,
         draft.DefinitionId,
         draft.TenantId,
@@ -659,7 +684,13 @@ public sealed class ReusableActivityAuthoringService(
         validation is null ? null : ToValidationView(validation),
         draft.CreatedAt,
         draft.LastModifiedAt,
-        draft.PresentationLabel);
+        draft.PresentationLabel) { ActivityPresentation = presentation.ToArray() };
+
+    private static IReadOnlyList<ActivityNodePresentationRecord> NormalizePresentation(IEnumerable<ActivityNodePresentationRecord>? records)
+    {
+        try { return ActivityNodePresentationRecord.NormalizeCollection(records); }
+        catch (ArgumentException exception) { throw BadRequest(exception.Message); }
+    }
 
     private static ActivityDraftValidationView ToValidationView(ActivityDraftValidationState validation) => new(
         validation.DraftId,

@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.UserTasks.UserTasksStudioFeature
+Elsa.Studio.UserTasks.UserTasksStudioFeature.UserTasksStudioFeature() -> void
+virtual Elsa.Studio.UserTasks.UserTasksStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

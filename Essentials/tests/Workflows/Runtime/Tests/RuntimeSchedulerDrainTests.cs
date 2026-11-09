@@ -1380,6 +1380,7 @@ public sealed class RuntimeSchedulerDrainTests
         {
             SchedulerCompletionKind.ActivityCompleted => RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason,
             SchedulerCompletionKind.ParentCompletionEvaluation => RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+            SchedulerCompletionKind.ParentOutcomeEvaluation => RuntimeCompleteActivityCommandPayload.ParentOutcomeEvaluationReason,
             SchedulerCompletionKind.ContinuationScheduling => RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
             _ => completionKind.ToString()
         };

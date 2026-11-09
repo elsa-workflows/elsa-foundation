@@ -5,13 +5,15 @@ using Elsa.Versioning.Calculator;
 //
 // Usage: dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
 //          (--record <file> | --record-ref <revision> [--record-path <path>]) [--commit <revision>] [--repo <dir>] [--output <file>] \
-//          [--pack-properties <file> --branch <name>] [--force-advance <package-id>[,<package-id>...] --force-reason <text>]
+//          [--pack-properties <file> --branch <name>] [--force-advance <package-id>[,<package-id>...] --force-reason <text>] \
+//          [--dataset auto|committed|derived]
 //
 // Exit codes: 0 computed; 1 a publish gate refused (FR-012 monotonicity, FR-021 forward-only); 2 invalid input or usage.
 
 const string Usage =
     "Usage: (--record <file> | --record-ref <revision> [--record-path <path>]) [--commit <revision>] [--repo <dir>] [--output <file>] " +
-    "[--pack-properties <file> --branch <name>] [--force-advance <package-id>[,<package-id>...] --force-reason <text>]";
+    "[--pack-properties <file> --branch <name>] [--force-advance <package-id>[,<package-id>...] --force-reason <text>] " +
+    "[--dataset auto|committed|derived]";
 
 try
 {
@@ -19,7 +21,7 @@ try
     for (var index = 0; index < args.Length; index += 2)
     {
         if (args[index] is not ("--record" or "--record-ref" or "--record-path" or "--commit" or "--repo" or "--output" or "--pack-properties" or "--branch"
-                or "--force-advance" or "--force-reason") ||
+                or "--force-advance" or "--force-reason" or "--dataset") ||
             index + 1 >= args.Length)
             throw new ArgumentException($"Unexpected argument '{args[index]}'. {Usage}");
         if (!options.TryAdd(args[index], args[index + 1]))
@@ -42,7 +44,15 @@ try
 
     // Rendered before anything is written, so a branch that makes no label leaves neither output behind.
     var forced = options.TryGetValue("--force-advance", out var forcedIds) ? ForcedAdvance.Parse(forcedIds, options["--force-reason"]) : null;
-    var computation = VersionCalculator.Compute(git, options.GetValueOrDefault("--commit") ?? "HEAD", record, forced);
+    // Where each commit's dependency map comes from (spec 259): auto unless comparing the committed and derived maps.
+    var source = options.GetValueOrDefault("--dataset") switch
+    {
+        null or "auto" => DatasetSource.Auto,
+        "committed" => DatasetSource.Committed,
+        "derived" => DatasetSource.Derived,
+        var other => throw new ArgumentException($"--dataset takes auto, committed or derived, not '{other}'. {Usage}")
+    };
+    var computation = VersionCalculator.Compute(git, options.GetValueOrDefault("--commit") ?? "HEAD", record, forced, source);
     var packProperties = options.TryGetValue("--pack-properties", out var packPropertiesFile) ? PackProperties.Render(computation, options["--branch"]) : null;
 
     var json = computation.ToJson();

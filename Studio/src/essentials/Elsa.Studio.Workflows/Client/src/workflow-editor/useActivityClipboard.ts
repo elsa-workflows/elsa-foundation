@@ -56,7 +56,7 @@ export function useActivityClipboard({
     });
   }, [catalogByVersion, disabled, draft, frames]);
 
-  const applySnapshot = useCallback((snapshot: ActivityClipboardSnapshot, status: string) => {
+  const applySnapshot = useCallback((snapshot: ActivityClipboardSnapshot, status: string, insertAfterNodeId?: string) => {
     if (disabled) return false;
     let selectedNodeId: string | null = null;
     let applied = false;
@@ -70,7 +70,8 @@ export function useActivityClipboard({
           draft: current,
           frames: currentFrames,
           snapshot,
-          catalog: catalogByVersion
+          catalog: catalogByVersion,
+          insertAfterNodeId
         });
         if (!result) return null;
         selectedNodeId = result.selectedNodeIds[0] ?? null;
@@ -107,7 +108,8 @@ export function useActivityClipboard({
     clipboardRef.current = snapshot;
     return applySnapshot(
       snapshot,
-      snapshot.activities.length === 1 ? "Duplicated 1 activity." : `Duplicated ${snapshot.activities.length} activities.`
+      snapshot.activities.length === 1 ? "Duplicated 1 activity." : `Duplicated ${snapshot.activities.length} activities.`,
+      snapshot.activities.at(-1)?.nodeId
     );
   }, [applySnapshot, selectedNodeIds, snapshotFrom]);
 

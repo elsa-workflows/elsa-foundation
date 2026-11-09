@@ -17,6 +17,192 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("WorkingCopyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("WorkingCopyKey", "Revision", "Key");
+
+                    b.ToTable("elsa_workflow_sources_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("SnapshotKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SnapshotKey");
+
+                    b.ToTable("elsa_workflow_sources_pins", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseSnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CopyId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Discarded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Fence")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Partition")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("BaseSnapshotId");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("SourceIdentity")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "Discarded", "Key");
+
+                    b.ToTable("elsa_workflow_sources_copies", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
@@ -132,6 +318,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("LibraryModifiedTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -155,6 +344,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "Id");
+
+                    b.HasIndex("ScopeKey", "LibraryModifiedTicks", "IdLookupHash");
 
                     b.HasIndex("ScopeKey", "Name", "Id");
 
@@ -181,16 +372,29 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("LibraryCreatedTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LibraryIdentitySortKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LibraryModifiedTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("SourceVersionId")
-                        .HasMaxLength(128)
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("StateSource")
+                    b.Property<string>("SourceVersionId")
+                        .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
@@ -211,7 +415,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.HasIndex("SchemaVersion");
 
+                    b.HasIndex("SourceKey");
+
                     b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LastModifiedAt", "IdLookupHash");
+
+                    b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LibraryModifiedTicks", "LibraryCreatedTicks", "LibraryIdentitySortKey");
 
                     b.ToTable("elsa_workflow_definition_drafts", (string)null);
                 });
@@ -460,13 +668,641 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.ToTable("elsa_design_operations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFavoriteEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubjectHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubjectId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash");
+
+                    b.HasIndex("ScopeKey", "SubjectHash", "DefinitionHash")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_favorites", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParentId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParentKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(641)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "ParentId");
+
+                    b.HasIndex("ScopeKey", "Path");
+
+                    b.HasIndex("ScopeKey", "ParentKey", "NameHash")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_folders", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryAuditEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "TargetId");
+
+                    b.ToTable("elsa_workflow_library_audit", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryFenceEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_library_fence", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowLibraryViewEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Shared")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "OwnerHash");
+
+                    b.HasIndex("ScopeKey", "Shared");
+
+                    b.HasIndex("ScopeKey", "OwnerHash", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_library_views", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowOrganizationEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FolderId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Published")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "FolderId");
+
+                    b.HasIndex("ScopeKey", "Published", "DefinitionHash");
+
+                    b.ToTable("elsa_workflow_organization", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagAssignmentEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TagId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ValueKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "DefinitionHash", "TagId", "ValueKey")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "TagId", "ValueKey", "DefinitionHash");
+
+                    b.ToTable("elsa_workflow_tag_assignments", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Cardinality")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deprecated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("EverAssigned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationFingerprint")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ValuesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKey", "NameHash")
+                        .IsUnique();
+
+                    b.HasIndex("ScopeKey", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("elsa_workflow_tags", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTemplateEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_templates", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshot", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", null)
+                        .WithMany()
+                        .HasForeignKey("WorkingCopyKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceSnapshotPin", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.Core.SourceWorkingCopy", b =>
+                {
+                    b.HasOne("Elsa.Persistence.Core.SourceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("BaseSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", b =>
                 {
+                    b.HasOne("Elsa.Persistence.Core.SourceWorkingCopy", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceKey")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", "WorkflowDefinition")
                         .WithMany()
                         .HasForeignKey("ScopeKey", "WorkflowDefinitionIdLookupHash")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Source");
 
                     b.Navigation("WorkflowDefinition");
                 });
@@ -502,6 +1338,52 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired();
 
                     b.Navigation("WorkflowDefinitionVersion");
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFavoriteEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowOrganizationEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowFolderEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "FolderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagAssignmentEntity", b =>
+                {
+                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "DefinitionHash")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTagEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeKey", "TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -1,7 +1,8 @@
 import "./WorkflowEditorToolbar.css";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, ChevronRight, GitBranch, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
+import { Check, ChevronRight, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
+import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
 export interface WorkflowToolbarActionGroup {
   label: string;
@@ -16,6 +17,7 @@ export interface WorkflowToolbarActionGroup {
 
 interface WorkflowEditorToolbarProps {
   name: string;
+  templateMode?: boolean;
   status: string;
   saving: boolean;
   busy: boolean;
@@ -29,9 +31,11 @@ interface WorkflowEditorToolbarProps {
   onAutoLayout(): void;
   onBack(): void;
   onSave(): void;
-  onPublish(): void;
+  onPublish(mode: WorkflowPublishMode): void;
   onRun(): void;
   canRun: boolean;
+  publicationUnavailableReason?: string;
+  directBpmnPublication?: ReactNode;
   runTitle: string;
   runStatus?: ReactNode;
   moreActions: WorkflowToolbarActionGroup[];
@@ -78,20 +82,22 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   return (
     <header className="wf-editor-top wf-editor-toolbar">
       <div className="wf-editor-identity">
-        <button type="button" className="wf-link-button" onClick={props.onBack}>Definitions</button>
+        <button type="button" className="wf-link-button" onClick={props.onBack}>{props.templateMode ? "Templates" : "Definitions"}</button>
         <ChevronRight size={14} aria-hidden="true" />
         <div className="wf-editor-heading">
-          <strong title={props.name}>{props.name}</strong>
-          <div className="wf-editor-metadata">
-            <span className="wf-chip">Draft</span>
-            <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
-              {props.status ? <>
-                {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-                <span>{props.status}</span>
-              </> : null}
-            </span>
+          <div className="wf-editor-title">
+            <strong title={props.name}>{props.name}</strong>
+            <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
           </div>
         </div>
+      </div>
+      <div className="wf-editor-metadata">
+        <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
+          {props.status ? <>
+            {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+            <span>{props.status}</span>
+          </> : null}
+        </span>
       </div>
       <div className="wf-editor-actions">
         <div className="wf-canvas-tools" role="group" aria-label="Canvas tools">
@@ -99,10 +105,10 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           <button type="button" className="wf-icon-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!props.canRedo} onClick={props.onRedo}><Redo2 size={16} /></button>
           <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
         </div>
-        <button type="button" disabled={props.busy} onClick={props.onSave}><Save size={15} /> Save</button>
-        <button type="button" className="wf-review-button" disabled={props.busy} title={props.saving ? "Finishing the current save; the review will open once it settles." : undefined} onClick={props.onPublish}><GitBranch size={15} /> Review &amp; publish</button>
-        {props.runStatus}
-        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} /> Run</button>
+        <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
+        {!props.templateMode ? props.directBpmnPublication : null}
+        {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
+        {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button> : null}
         <button
           ref={triggerRef}
           type="button"
@@ -125,6 +131,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           }}
         ><MoreHorizontal size={18} /></button>
       </div>
+      {props.runStatus ? <div className="wf-editor-actions wf-editor-run-status">{props.runStatus}</div> : null}
       <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)}>
         <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
           <div role="group" aria-label="Saving">

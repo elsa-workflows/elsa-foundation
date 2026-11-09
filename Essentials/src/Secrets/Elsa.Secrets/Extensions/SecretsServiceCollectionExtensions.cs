@@ -44,6 +44,7 @@ public static class SecretsServiceCollectionExtensions
         services.TryAddScoped<ISecretManager, DefaultSecretManager>();
         services.TryAddScoped<ISecretValueResolver, DefaultSecretValueResolver>();
         services.TryAddSingleton<ISecretStoreRegistry, SecretStoreRegistry>();
+        services.TryAddSingleton<ISecretScopeRegistry, SecretScopeRegistry>();
         services.TryAddSingleton<ISecretTypeRegistry, SecretTypeRegistry>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretStore, EncryptedSecretStore>());

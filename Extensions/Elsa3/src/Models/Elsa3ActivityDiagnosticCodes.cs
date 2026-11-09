@@ -31,6 +31,15 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A value does not provably fit the narrower Elsa 4 contract.</summary>
     public const string ValueOutsideContract = "ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT";
 
+    /// <summary>A variable's starting value cannot be converted to the variable's own type by Elsa 3's rule.</summary>
+    public const string VariableValueUnconvertible = "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE";
+
+    /// <summary>
+    /// A member is null, and what Elsa 3 ran it with cannot be reproduced or represented in Elsa 4 (spec 267): Elsa 3
+    /// hung, faulted, dropped data or rejected the activity, or Elsa 4 cannot publish the null.
+    /// </summary>
+    public const string NullUnconvertible = "ELS3-ACTIVITY-NULL-UNCONVERTIBLE";
+
     /// <summary>A captured output has no Elsa 4 counterpart and no exact projection.</summary>
     public const string OutputNotRepresentable = "ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE";
 
@@ -44,8 +53,8 @@ public static class Elsa3ActivityDiagnosticCodes
     public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
 
     /// <summary>
-    /// No longer raised by any built-in map entry: graph conversion (spec 239) converts Flowchart, FlowFork, FlowJoin and
-    /// Start. Kept because a code is never reused.
+    /// Retired 2026-10-19 (spec 247): never raised. Graph conversion (spec 239) converts Flowchart, FlowFork, FlowJoin and
+    /// Start, and the map target that raised it is removed. Kept because a code is never removed or reused.
     /// </summary>
     public const string GraphConversionPending = "ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING";
 
@@ -73,6 +82,13 @@ public static class Elsa3ActivityDiagnosticCodes
     /// </summary>
     public const string GraphStartTriggerMisplaced = "ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED";
 
+    /// <summary>
+    /// A reusable workflow's body uses an activity that converts to an Elsa 4 engine intrinsic (SetVariable, SetOutput,
+    /// Correlate, SetName). A graph activity resolves every node to a published activity version and intrinsics have
+    /// none, so the reusable cannot be published (spec 246 D-7).
+    /// </summary>
+    public const string ReusableIntrinsicUnsupported = "ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED";
+
     /// <summary>Activities nest deeper than the conversion supports.</summary>
     public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
 
@@ -90,6 +106,9 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>SendHttpRequest: Elsa 4 does not validate the Authorization header.</summary>
     public const string AuthHeaderUnvalidated = "ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED";
+
+    /// <summary>SendHttpRequest.Authorization was removed; bind an http connection instead.</summary>
+    public const string HttpAuthorizationUseConnection = "ELS3-BEHAVIOUR-HTTP-AUTHORIZATION-CONNECTION";
 
     /// <summary>While.Condition is re-read only from persisted state.</summary>
     public const string WhilePersistedCondition = "ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION";
@@ -109,11 +128,23 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>RunJavaScript.PossibleOutcomes: routing is by return value.</summary>
     public const string ScriptOutcomeRouting = "ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING";
 
+    /// <summary>
+    /// A null member of an alias or a verbatim catalog key gets the Elsa 4 input's default; Elsa 3 ran it with its own
+    /// activity's default, which the conversion cannot see (#3293).
+    /// </summary>
+    public const string NullTakesElsa4Default = "ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT";
+
     /// <summary>A reusable workflow's Complete names an outcome the definition does not declare; it is declared anyway.</summary>
     public const string OutcomeUndeclared = "ELS3-BEHAVIOUR-OUTCOME-UNDECLARED";
 
     /// <summary>A reusable workflow's declared outcome is reached by no Complete; it is dropped from the contract.</summary>
     public const string OutcomeUnreached = "ELS3-BEHAVIOUR-OUTCOME-UNREACHED";
+
+    /// <summary>
+    /// WriteHttpResponse: an object body with a JSON content type Elsa 3 did not match exactly (letter case, a parameter,
+    /// a <c>+json</c> type). Elsa 3 sent the value's type name; Elsa 4 sends the JSON.
+    /// </summary>
+    public const string HttpResponseJsonVariant = "ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT";
 
     /// <summary>A connection Elsa 3 never follows (leaving Complete, End or Break, or a FlowFork port outside its branches) is removed.</summary>
     public const string DeadConnectionRemoved = "ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED";

@@ -6,8 +6,10 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { saveRuntimeDiagnosticsSettings } from "../api/workflows";
 import { clearApiCapabilityCache } from "../api/capabilities";
+import { register } from "../module";
 import { RuntimeDiagnosticsSettingsPage } from "../RuntimeDiagnosticsSettingsPage";
 import type { RuntimeDiagnosticsSettingsView } from "../workflowTypes";
+import { testApi } from "./routeRenderingHelpers";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
@@ -21,13 +23,30 @@ afterEach(() => {
 });
 
 describe("RuntimeDiagnosticsSettingsPage", () => {
+  it("registers Runtime evidence settings at the existing sidebar and route address", () => {
+    const api = testApi();
+
+    register(api);
+
+    expect(api.navigation.list()).toContainEqual(expect.objectContaining({
+      id: "workflows-runtime-diagnostics",
+      label: "Runtime evidence settings",
+      path: "/workflows/runtime-diagnostics"
+    }));
+    expect(api.routes.list()).toContainEqual(expect.objectContaining({
+      id: "workflows-runtime-diagnostics",
+      label: "Runtime evidence settings",
+      path: "/workflows/runtime-diagnostics"
+    }));
+  });
+
   it("renders requested and effective runtime diagnostics settings", async () => {
     const context = stubContext(defaultSettingsView());
     const container = render(<RuntimeDiagnosticsSettingsPage context={context} />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Runtime diagnostics");
-      expect(container.textContent).toContain("New capture events use");
+      expect(container.textContent).toContain("Runtime evidence settings");
+      expect(container.textContent).not.toContain("New capture events use");
       expect(container.textContent).toContain("Diagnostic snapshots");
       expect(container.textContent).toContain("Choose the level Studio should request.");
       expect(container.textContent).toContain("Full payload capture is disabled by host policy.");
@@ -35,6 +54,37 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
 
     expect(findButton(container, "Save").hasAttribute("disabled")).toBe(true);
     expect(Array.from(container.querySelectorAll("option")).some(option => option.value === "Payload")).toBe(false);
+  });
+
+  it("keeps view-only settings readable while preventing edits and writes", async () => {
+    const putJson = vi.fn(async () => defaultSettingsView());
+    const container = render(<RuntimeDiagnosticsSettingsPage context={stubContext(defaultSettingsView(), putJson)} />);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("Current user can view settings but cannot change them.");
+      expect(container.textContent).toContain("Diagnostic snapshots");
+    });
+
+    const controls = Array.from(container.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select"));
+    expect(controls.length).toBeGreaterThan(0);
+    expect(controls.every(control => control.matches(":disabled"))).toBe(true);
+    const save = findButton(container, "Save changes");
+    expect(save.disabled).toBe(true);
+
+    for (const control of controls) {
+      if (control instanceof HTMLInputElement) {
+        control.checked = !control.checked;
+      } else {
+        const next = Array.from(control.options).find(option => !option.disabled && option.value !== control.value);
+        if (next) control.value = next.value;
+      }
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    save.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(putJson).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Current user can view settings but cannot change them.");
   });
 
   it("explains when Host Policy lowers the saved request", async () => {
@@ -48,8 +98,8 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const container = render(<RuntimeDiagnosticsSettingsPage context={stubContext(settings)} />);
 
     await waitFor(() => {
-      expect(container.querySelector(".runtime-diagnostics-effective strong")?.textContent).toBe("Metadata only");
-      expect(container.textContent).toContain("Saved request: Diagnostic snapshots. Host Policy applies a lower level.");
+      expect(container.querySelector(".runtime-diagnostics-effective-note")?.textContent).toContain("Host policy limits new capture events to Metadata only.");
+      expect(container.textContent).toContain("Saved request: Diagnostic snapshots.");
       expect(container.textContent).toContain("Host Policy limits the default to metadata.");
     });
   });
@@ -86,7 +136,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const container = render(<RuntimeDiagnosticsSettingsPage context={context} />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("New capture events use");
+      expect(container.textContent).not.toContain("New capture events use");
       expect(container.textContent).toContain("Diagnostic snapshots");
       expect(container.querySelectorAll("input[name='runtime-diagnostics-default-level']")).toHaveLength(3);
       expect(findLevelInput(container, "DiagnosticSnapshot").checked).toBe(true);
@@ -102,7 +152,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     await waitFor(() => {
       expect(off.checked).toBe(true);
       expect(container.textContent).toContain("Unsaved request: Off");
-      expect(container.querySelector(".runtime-diagnostics-effective strong")?.textContent).toBe("Diagnostic snapshots");
+      expect(container.querySelector(".runtime-diagnostics-applied")?.textContent).toContain("Diagnostic snapshots");
     });
 
     clickLevelCard(metadata);

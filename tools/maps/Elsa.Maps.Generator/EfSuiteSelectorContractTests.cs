@@ -36,8 +36,8 @@ public static class EfSuiteSelectorContractTests
         // The manifest is the inventory: every suite in it becomes a leg, with its required-provider mode, and there is
         // no count to keep in step here.
         var repo = RepoContext.Discover();
-        var manifest = JsonDocument.Parse(File.ReadAllText(repo.Absolute("tools/ci/ef-suites.json")))
-            .RootElement.GetProperty("suites").EnumerateArray()
+        var manifest = JsonDocument.Parse(File.ReadAllText(repo.Absolute("tools/ci/test-tiers.json")))
+            .RootElement.GetProperty("containerSuites").EnumerateArray()
             .ToDictionary(suite => suite.GetProperty("suite").GetString()!, suite => suite.GetProperty("require").GetString()!);
         var include = JsonDocument.Parse(EfSuiteSelector.Select(repo).ToJson()).RootElement
             .GetProperty("matrix").GetProperty("include").EnumerateArray()

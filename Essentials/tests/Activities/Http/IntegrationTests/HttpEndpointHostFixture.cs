@@ -581,8 +581,8 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
         string method,
         string resultValueId,
         int statusCode,
-        string body,
-        string contentType,
+        object? body,
+        string? contentType,
         (string Name, string Value)? header = null,
         ResponseMode responseMode = ResponseMode.Sync)
     {
@@ -727,8 +727,11 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
             activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
     }
 
-    /// <summary>Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.</summary>
-    private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, string body, string contentType, (string Name, string Value)? header)
+    /// <summary>
+    /// Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.
+    /// A string body binds as text, as a Literal does; a <see cref="JsonElement"/> body binds as that JSON value.
+    /// </summary>
+    private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, object? body, string? contentType, (string Name, string Value)? header)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
         var descriptorPayload = ClrConstruction.Payload(serializer, typeof(WriteHttpResponse));
@@ -736,7 +739,7 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
             [nameof(WriteHttpResponse.StatusCode)] = TypedLiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, typeof(int)),
-            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), body, typeof(string)),
+            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), BodyElement(body), typeof(JsonElement?)),
             [nameof(WriteHttpResponse.ContentType)] = TypedLiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, typeof(string)),
             [nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(nameof(WriteHttpResponse.Headers), null, typeof(IDictionary<string, string[]>))
         };
@@ -751,7 +754,7 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
         var inputContracts = new[]
         {
             WriteResponseInputContract(nameof(WriteHttpResponse.StatusCode), typeof(int)),
-            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(JsonElement?)),
             WriteResponseInputContract(nameof(WriteHttpResponse.ContentType), typeof(string)),
             WriteResponseInputContract(nameof(WriteHttpResponse.Headers), typeof(IDictionary<string, string[]>))
         };
@@ -1148,6 +1151,13 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
             outcomes,
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityTypeAlias));
     }
+
+    private static JsonElement? BodyElement(object? body) => body switch
+    {
+        null => null,
+        JsonElement element => element,
+        _ => JsonSerializer.SerializeToElement(body, body.GetType())
+    };
 
     private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
     {

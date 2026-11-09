@@ -16,6 +16,8 @@ DOCKER_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
 def derive_tags(ref: str, version: str, sha: str, publish: bool, preview_tag: str) -> list[str]:
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise ValueError("Studio source commit must be a full lowercase SHA-1.")
+    if not STABLE_OR_PREVIEW_VERSION.fullmatch(version):
+        raise ValueError("Studio package artifact has an invalid version.")
 
     short_sha = sha[:7]
     if ref == "refs/heads/main":
@@ -27,8 +29,6 @@ def derive_tags(ref: str, version: str, sha: str, publish: bool, preview_tag: st
                 raise ValueError("Main image publication requires a floor-checked 4.0.0-preview.N tag.")
             tags = [f"{IMAGE}:latest", f"{IMAGE}:{preview_tag}", f"{IMAGE}:sha-{short_sha}"]
     elif ref.startswith("refs/tags/"):
-        if not STABLE_OR_PREVIEW_VERSION.fullmatch(version):
-            raise ValueError("Release artifact has an invalid Studio semver.")
         if "-" in version:
             # A prerelease must not update the stable major/minor aliases.
             tags = [f"{IMAGE}:{version}", f"{IMAGE}:sha-{short_sha}"]
@@ -60,12 +60,18 @@ def self_test() -> None:
         expected = [expected_image + suffix for suffix in suffixes]
         if actual != expected:
             raise AssertionError(f"Unexpected tags for {ref}: {actual!r} != {expected!r}")
-    try:
-        derive_tags("refs/heads/main", "4.0.0-preview.12", sha, True, "4.0.0-preview.bad")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Invalid preview image tag was accepted.")
+    invalid_cases = [
+        ("refs/heads/main", "4.0.0-preview.12", True, "4.0.0-preview.bad"),
+        ("refs/heads/feature/example", "4.0.0-feature.1\npublish_image=true", False, ""),
+        ("refs/tags/v4.2.0", "4.2.0\npublish_image=true", False, ""),
+    ]
+    for ref, version, publish, preview in invalid_cases:
+        try:
+            derive_tags(ref, version, sha, publish, preview)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid Studio image metadata was accepted.")
 
 
 def main() -> None:

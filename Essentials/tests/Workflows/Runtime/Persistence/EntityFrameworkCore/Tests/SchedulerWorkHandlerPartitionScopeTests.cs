@@ -75,7 +75,7 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
                     workflowExecutionId: ExecutionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(RuntimeEntityFrameworkCoreEndToEndTests.EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = RuntimeEntityFrameworkCoreEndToEndTests.EventName })));
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
         }
 

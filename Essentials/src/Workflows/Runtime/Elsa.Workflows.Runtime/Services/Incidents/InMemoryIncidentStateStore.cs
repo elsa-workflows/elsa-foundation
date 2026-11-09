@@ -9,6 +9,17 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
     private readonly object _syncRoot = new();
     private readonly Dictionary<IncidentStateKey, IncidentState> _states = new();
 
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var key in _states.Keys
+                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                         .ToArray())
+                _states.Remove(key);
+        }
+    }
+
     public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

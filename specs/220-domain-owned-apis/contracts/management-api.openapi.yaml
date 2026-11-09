@@ -1509,8 +1509,20 @@ components:
         lastModifiedAt: { type: string, format: date-time }
         deletedAt: { type: [string, 'null'], format: date-time }
         draftId: { type: [string, 'null'] }
+        draftSourceVersionId: { type: [string, 'null'] }
+        draftSourceVersion:
+          type: [string, 'null']
+          description: Saved base version of the mutable, as-yet unnumbered draft, when available.
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
+        publicationState:
+          type: [string, 'null']
+          enum: [draft, published, retracted, retired, null]
+          description: Omitted or null when the host cannot establish publication state.
+        publishedVersionId: { type: [string, 'null'] }
+        publishedVersion:
+          type: [string, 'null']
+          description: Exact active source version, when publication evidence identifies it unambiguously.
         versionCount: { type: integer, minimum: 0 }
     WorkflowDefinitionDetails:
       allOf:

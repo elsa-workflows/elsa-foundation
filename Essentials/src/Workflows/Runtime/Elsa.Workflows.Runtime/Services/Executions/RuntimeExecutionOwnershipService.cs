@@ -1,5 +1,4 @@
 using System.Globalization;
-using Elsa.Primitives.Identity;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -59,11 +58,14 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             cancellationToken.ThrowIfCancellationRequested();
             var loaded = await FindVersionedOwnershipStateAsync(workflowExecutionId, cancellationToken);
             var existing = loaded?.State;
+            if (IsDeletionTombstoned(existing))
+                throw new InvalidOperationException("A deleted workflow execution cannot reacquire ownership.");
+
             var nextToken = checked(ReadHighestIssuedToken(existing) + 1);
             var now = _timeProvider.GetUtcNow();
 
             var lease = new RuntimeExecutionLease(
-                leaseId: ShortIdentityGenerator.Generate(now),
+                leaseId: RuntimeExecutionIdGenerator.NewId(now),
                 workflowExecutionId: workflowExecutionId,
                 ownerId: _options.OwnerId,
                 acquiredAt: now,
@@ -200,7 +202,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
 
     private RuntimeHeartbeat NewHeartbeat(string workflowExecutionId, RuntimeExecutionLease lease, DateTimeOffset now) =>
         new(
-            heartbeatId: ShortIdentityGenerator.Generate(now),
+            heartbeatId: RuntimeExecutionIdGenerator.NewId(now),
             workflowExecutionId: workflowExecutionId,
             ownerId: lease.OwnerId,
             leaseId: lease.LeaseId,
@@ -247,8 +249,16 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
                 throw new InvalidOperationException("Execution ownership state contains a fencing-token counter that does not match its active lease.");
             return token;
         }
-
         return state.ExecutionLease?.FencingToken ?? 0;
+    }
+
+    private static bool IsDeletionTombstoned(ExecutionLivenessState? state)
+    {
+        if (state?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value) != true)
+            return false;
+        if (!StringComparer.Ordinal.Equals(value, "true"))
+            throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+        return true;
     }
 
     private static bool Matches(RuntimeExecutionLease? current, RuntimeExecutionLease presented) =>

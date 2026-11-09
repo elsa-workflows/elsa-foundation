@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 EF template referencer/source writer fencing prerequisite; conditional EF maintenance remains open",
+  "sourceParentCommit": "9be5b0a01509bf59222a6074c5311191c1e42ec9",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "798da767314229859807cec78d65e222b761c49ca74f67bd66ff78a24699c0ea",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityPublicationRuntimeCommit.cs": "2cdb5aa059765a5064dbe17c8e626bdc509bfc044d13eb9302b21d8b8cf97489",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.cs": "aaf4adf43ea65501857a1e81c58cb531f111d8536da754b536dc787cbc1bfdbb",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "222c26a674aea64d51cf191a0f55de2a4f52e03d9afd27974960d17f56c885b2",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "2d8f490e9ade2c477c1d120282bb69a8b625ea735c45e4e1061409fa4981f9eb",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/EfActivityPublicationCommandTests.cs": "7fe29caff172e04bb125b8118adaa3c99c714398cffd80358549c6bb65edfa37",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.cs": "aad9d923dc95e1426dfb02c2ba254133d3c7e1228649a1dc78441f469fb20bb4",
+    "specs/1006-bpmn-library-adoption/tasks.md": "f09205375e8af8de19777667c0c736f2fdb760b606338d020146c1f3d2e6304c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.ReferenceFences.cs": "defc28a57d010bb3ad40297fccc863c972030187d24ff942da07af251b491fc4",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.TemplateReferenceFences.cs": "41b50577db983bd2f3aaeb48adde7dd7766c89b7f9da3c52b31e8a5d84de7f17",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "2fe5ff544aaa64721e69e90bf2c05a80e69bcb215472c18ee9ed2a7d5b4ca968"
+  },
+  "checks": [
+    {
+      "project": "Runtime EF",
+      "passed": 1363,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 45
+    },
+    {
+      "project": "Publishing EF",
+      "passed": 161,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing API",
+      "passed": 863,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "newActualSqliteWriterCases": 45,
+  "discovery": {
+    "ef": {
+      "listed": 1363,
+      "uniqueDisplayNames": 1361,
+      "executed": 1363,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-ef": {
+      "listed": 161,
+      "uniqueDisplayNames": 159,
+      "executed": 161,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-api": {
+      "listed": 843,
+      "uniqueDisplayNames": 843,
+      "executed": 863,
+      "deferredTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "unmapped": []
+    },
+    "publishing": {
+      "listed": 61,
+      "uniqueDisplayNames": 61,
+      "executed": 61,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "workflow-template-fence-removed",
+      "exitCode": 1,
+      "failed": 15,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-template-fence-removed",
+      "exitCode": 1,
+      "failed": 7,
+      "passed": 38,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "new-source-template-fence-removed",
+      "exitCode": 1,
+      "failed": 13,
+      "passed": 32,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "adopted-source-cas-removed",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 43,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "publication-exact-dependency-fence-removed",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 43,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "template-revision-not-advanced",
+      "exitCode": 1,
+      "failed": 18,
+      "passed": 27,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "workflow-wrapper-metadata-ignored",
+      "exitCode": 1,
+      "failed": 11,
+      "passed": 34,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "workflow-nested-metadata-ignored",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 42,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "closed-template-dependencies-ignored",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 42,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "direct-template-dependencies-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 44,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "missing-exact-dependency-admitted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 44,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "different-exact-hash-admitted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 44,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "id-projection-hides-present-material",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 44,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "orphan-material-treated-as-import",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 43,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "mixed-publication-scopes-admitted",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 43,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "publication-scope-not-captured",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 43,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-local-metadata-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 4,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "parent-nested-metadata-ignored",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 4,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 0,
+  "coreApiRemovals": 0,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Canonical physical template/hash-claim keys validate present projections before optional missing-import acceptance; corruption matrix covers both workflow and source routes.",
+    "Capture and rebind template/source access contexts once per publication operation; refuse same-context mixed scopes before effects and preserve fresh scope capture for later units.",
+    "Rollback control now induces an actual SQLite provider failure after SQL/before commit, asserting contextual domain wrapping and preserved provider cause.",
+    "Unreadable schema stamps assert EfSchemaVersionSkewException separately from malformed persisted data.",
+    "Existing interrupted-publication retry control requires exact +1 coordination revisions while strengthening byte-exact payload/incarnation preservation."
+  ],
+  "reviews": {
+    "correctness": "final source and receipt clean",
+    "standards": "final source/catalog/exception boundary and receipt clean",
+    "acceptance": "finite source/control scope and receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Actual SQLite referencer transactions and revision/row-CAS mechanism controls only. The stale template delete uses actual EF removal of an earlier physical row snapshot, not the future conditional EF maintenance operation.",
+    "Adoption revision-conflict control advances actual SQL state inside the same owned transaction before SaveChanges; it is not a concurrent peer, process kill or production recovery proof.",
+    "EF template maintenance ports remain unsupported. Conditional collector integration, reverse GC-wins material admission, complete publication/draft-test handoffs and qualified default cohort composition still keep T049 open; publisher activation stays disabled.",
+    "Writer participation/quiescence and old-writer gating must be qualified before enabling reclamation/publication. These passes do not prove upgraded host/Studio compatibility, T050 exact bookmark/immutable-input activation or T051 host/fresh-provider recovery.",
+    "Other stories, duplicate-semantics deletion/guards, final current host/Studio, full-PR review/exact-head checks/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance stays open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "9be5b0a01509bf59222a6074c5311191c1e42ec9",
+    "run": 40385441056,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "not run: draft",
+    "gitGuardianIncident": "38996611 unresolved older public source-digest finding; no bypass",
+    "boundary": "Previous native-maintenance pushed head only; new source still requires exact-head remote checks."
+  }
+}

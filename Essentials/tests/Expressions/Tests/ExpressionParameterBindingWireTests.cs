@@ -33,6 +33,9 @@ public sealed class ExpressionParameterBindingWireTests
             ["ActivityResult"] = (
                 new ActivityResultExpressionParameterBinding("calculate", "amount", isOptional: true),
                 """{"kind":"ActivityResult","producerNodeId":"calculate","projectionKey":"amount","isOptional":true}"""),
+            ["WorkflowInstance"] = (
+                new WorkflowInstanceExpressionParameterBinding(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId),
+                """{"kind":"WorkflowInstance","member":"correlationId"}"""),
         };
 
     [Theory]
@@ -40,6 +43,7 @@ public sealed class ExpressionParameterBindingWireTests
     [InlineData("WorkflowRequest")]
     [InlineData("Variable")]
     [InlineData("ActivityResult")]
+    [InlineData("WorkflowInstance")]
     public void A_binding_kind_keeps_its_discriminator_and_shape(string kind)
     {
         var (binding, json) = Kinds[kind];
@@ -48,6 +52,23 @@ public sealed class ExpressionParameterBindingWireTests
         var read = JsonSerializer.Deserialize<ExpressionParameterBinding>(json)!;
         Assert.Equal(binding.GetType(), read.GetType());
         Assert.Equal(json, JsonSerializer.Serialize(read));
+    }
+
+    [Theory]
+    [InlineData("correlationId")]
+    [InlineData("instanceId")]
+    public void A_workflow_instance_binding_reads_a_known_member(string member) =>
+        Assert.Equal(member, new WorkflowInstanceExpressionParameterBinding(member).Member);
+
+    [Theory]
+    [InlineData("CorrelationId")]
+    [InlineData("instanceName")]
+    [InlineData("")]
+    public void A_workflow_instance_binding_rejects_an_unknown_member(string member)
+    {
+        Assert.Throws<ArgumentException>(() => new WorkflowInstanceExpressionParameterBinding(member));
+        Assert.ThrowsAny<Exception>(() => JsonSerializer.Deserialize<ExpressionParameterBinding>(
+            $$"""{"kind":"WorkflowInstance","member":"{{member}}"}"""));
     }
 
     /// <summary>
@@ -72,7 +93,7 @@ public sealed class ExpressionParameterBindingWireTests
             "JavaScript",
             "args.a + args.b + args.c + args.d",
             new TypeReference("String"),
-            Kinds.ToDictionary(kind => kind.Key, kind => kind.Value.Binding),
+            Kinds.Where(kind => kind.Key != "WorkflowInstance").ToDictionary(kind => kind.Key, kind => kind.Value.Binding),
             JsonSerializer.SerializeToElement(new { strict = true }),
             ExpressionCapabilityProfiles.BindingPureV1);
         var persistedDefinition = serializer.Serialize(definition);
@@ -88,5 +109,32 @@ public sealed class ExpressionParameterBindingWireTests
             """{"referenceKey":"var-total","name":"Total","type":{"alias":"Int32","collectionKind":"Single"},"default":{"value":42}}""");
 
         Assert.Equal(("var-total", "Total", typeof(int), (object?)42), (variable.Id, variable.Name, variable.GetVariableType(), variable.DefaultValue));
+    }
+
+    [Fact]
+    public async Task A_workflow_instance_binding_keeps_its_persisted_bytes_through_the_composed_serializer()
+    {
+        var services = SerializationServices.Compose();
+        new EventsFeature().ConfigureServices(services);
+        new ExpressionsFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using (var scope = provider.CreateAsyncScope())
+            foreach (var startupTask in scope.ServiceProvider.GetServices<IStartupTask>())
+                await startupTask.ExecuteAsync(CancellationToken.None);
+        var serializer = provider.GetRequiredService<IPayloadSerializer>();
+
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "args.correlation",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding> { ["correlation"] = Kinds["WorkflowInstance"].Binding },
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var persistedDefinition = serializer.Serialize(definition);
+
+        Assert.Equal(
+            """{"capabilityProfile":"binding-pure-v1","language":"JavaScript","metadata":{},"options":{},"parameters":{"correlation":{"kind":"WorkflowInstance","member":"correlationId"}},"resultType":{"alias":"String","collectionKind":"Single"},"source":"args.correlation"}""",
+            persistedDefinition);
+        Assert.Equal(persistedDefinition, serializer.Serialize(serializer.Deserialize<ExpressionDefinition>(persistedDefinition)));
     }
 }

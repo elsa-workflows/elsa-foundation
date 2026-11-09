@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:4bd3c8475d8f1be1f4eb46eb134caa58e3d488f88d9151e056e50de214e942e1",
-    "artifactId": "artifact-4bd3c8475d8f",
+    "artifactHash": "sha256:f3cb7d3355b2dedbc5d614484e60ef694bdf89b5e995fbd1f9dac2020c1dfb6c",
+    "artifactId": "artifact-f3cb7d3355b2",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"

@@ -7,6 +7,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// drain coordinator was discarded and dispatch callers always observed success even when the drain stopped on a fault or
 /// the outbox failed to deliver. This result carries the drain verdict back to the agent so it can surface a non-success
 /// dispatch outcome.</para>
+/// <para>For model executions, <c>WorkflowTerminated</c> also reports a fully settled model after its permitted
+/// drain so the in-process mailbox can be evicted. It does not authorize the native terminal stop/purge policy.</para>
 /// </summary>
 public sealed record WorkflowExecutionCommandProcessResult(
     bool DrainPerformed,
@@ -33,7 +35,9 @@ public sealed record WorkflowExecutionCommandProcessResult(
 
     /// <summary>
     /// Projects a completed drain into a process result, extracting the first faulted work item's error (or an outbox
-    /// failure message) as the human-readable fault reason.
+    /// failure message) as the human-readable fault reason. A deferred drain carries its safe explanation in the same
+    /// reason field without setting a fault flag; <see cref="StopReason"/> distinguishes it from quiescence.
+    /// This is a drain diagnostic. The command remains accepted with durable retry work, unlike admission refusal.
     /// </summary>
     public static WorkflowExecutionCommandProcessResult FromDrain(RuntimeSchedulerDrainResult drainResult)
     {
@@ -51,6 +55,13 @@ public sealed record WorkflowExecutionCommandProcessResult(
         else if (outboxDeliveryFailed)
         {
             faultReason = "One or more post-commit outbox intents failed to deliver during drain.";
+        }
+        else if (drainResult.StoppedOnDeferral)
+        {
+            // Durable retry deferral carries an explanation without becoming a fault. The work item's
+            // error is the handler's safe summary, never an exception dump or dependency details.
+            faultReason = drainResult.Items.FirstOrDefault(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Deferred)?.Error
+                ?? "A scheduler work item is waiting for a temporarily unavailable dependency.";
         }
 
         return new WorkflowExecutionCommandProcessResult(

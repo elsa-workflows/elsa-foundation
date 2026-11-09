@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Net.Http.Headers;
+using System.Text;
 
 namespace Elsa.Http.Core.Models;
 
@@ -11,8 +12,9 @@ public sealed class RawStringContent : ByteArrayContent
     public RawStringContent(string content, Encoding encoding, string mediaType)
         : base(GetBytes(content, encoding))
     {
-        // Set media type exactly as provided, without charset parameter.
-        Headers.ContentType = new(mediaType);
+        // Set the media type exactly as provided, parameters included; no charset parameter is added. Parse, because the
+        // MediaTypeHeaderValue constructor rejects a value with parameters ("application/json; charset=utf-8").
+        Headers.ContentType = MediaTypeHeaderValue.Parse(mediaType);
     }
 
     private static byte[] GetBytes(string content, Encoding encoding)

@@ -2,7 +2,9 @@
 
 Index of every ADR in this folder. Generated from each file's H1 and status line; the ADR files are the source of truth.
 The early Extension Builder series carries its own `EB-` prefix and is closed; every ADR number is unique.
-A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/` before choosing.
+A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/`, and the `initiative/*` branches, before choosing. An initiative's ADRs take the number its coordinator reserves on the board, across `main`, every [initiative branch](../contributing/initiatives.md#the-initiative-branch) and open PRs; their PRs do not edit this index, which the coordinator updates when merging them into the initiative branch.
+
+An ADR proposed from an [initiative](../contributing/initiatives.md) follows its [agreement rule](../contributing/initiatives.md#how-work-flows): the author prepares the acceptance status, the required humans agree the final commit, and the coordinator records that commit on the board. A status line or bot approval alone is not agreement. Other ADRs keep their existing practice.
 
 | Number | Title | Status |
 |---|---|---|
@@ -52,7 +54,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0060 | [Execution evidence ordering is workflow-local and causal](0060-execution-evidence-ordering-is-workflow-local-and-causal.md) | Proposed |
 | 0061 | [Baseline execution evidence records committed semantic transitions](0061-baseline-execution-evidence-records-committed-semantic-transitions.md) | Proposed |
 | 0062 | [Execution Evidence starts in memory and adds Groundwork durability](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) | Proposed |
-| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Proposed |
+| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Accepted |
 | 0064 | [Flowchart Infers Joins From Propagated Dead Paths](0064-flowchart-infers-joins-from-propagated-dead-paths.md) | Proposed |
 | 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Superseded |
 | 0066 | [Reusable-Activity Publication Orders Its Writes Instead of Requiring One Transaction](0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md) | Accepted |
@@ -75,6 +77,12 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0083 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0083-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
 | 0084 | [Runtime Commits Append One Journal Row And The Per-Activity Tables Become Read Models](0084-runtime-commit-journal.md) | Proposed |
 | 0085 | [Elsa 3.8/3.9 Parity: Identity Administration and Scope](0085-elsa-3-parity-identity-administration-and-scope.md) | Accepted |
+| 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
+| 0087 | [ETL owns its execution domain](0087-etl-owns-its-execution-domain.md) | Accepted |
+| 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
+| 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
+| 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Proposed |
+| 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Proposed |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |
