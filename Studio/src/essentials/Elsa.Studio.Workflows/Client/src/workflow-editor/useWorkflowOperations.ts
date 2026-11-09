@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type SetStateAction } from "react";
 import { getNotifications, notifySuccess, useNotificationGuard } from "./notifications";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
@@ -579,7 +579,9 @@ export function useWorkflowOperations({
       // Runtime and the attached-run status retain progress and problems after this confirmation fades.
       if (canNotify() && !rejected && !runtimeIssue) getNotifications().notify({
         level: deferred || duplicate ? "info" : "success",
-        title: prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started"
+        title: prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        message: prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
+        ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
       });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;

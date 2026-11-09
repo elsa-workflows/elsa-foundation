@@ -32,6 +32,7 @@ describe("shell-owned Weaver intent", () => {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
       createSession: vi.fn<clients.AgentClient["createSession"]>(async () => ({ sessionId: "same-tick-session", status: "active", contextAttachments: [] })),
       sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async () => ({ messageId: "same-tick-message", status: "pending", streamUrl: "/_elsa/agent/sessions/same-tick-session/stream" })),
+      listSessions: vi.fn(), listProposals: vi.fn(), withdrawMessage: vi.fn(), resolveClientInvocation: vi.fn(),
       getSession: vi.fn(), updateAutonomy: vi.fn(),
       approveProposal: vi.fn(), denyProposal: vi.fn(), executeProposal: vi.fn(), acknowledgeClient: vi.fn(), submitFeedback: vi.fn(), cancelTurn: vi.fn()
     };
@@ -71,6 +72,7 @@ describe("shell-owned Weaver intent", () => {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read.", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], provider: { providerId: "protocol", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} }, policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
       createSession: vi.fn<clients.AgentClient["createSession"]>(async () => ({ sessionId: crypto.randomUUID(), status: "active", contextAttachments: [] })),
       sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async session => ({ messageId: "message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` })),
+      listSessions: vi.fn(), listProposals: vi.fn(), withdrawMessage: vi.fn(), resolveClientInvocation: vi.fn(),
       getSession: vi.fn(), updateAutonomy: vi.fn(),
       approveProposal: vi.fn(), denyProposal: vi.fn(), executeProposal: vi.fn(), acknowledgeClient: vi.fn(), submitFeedback: vi.fn(), cancelTurn: vi.fn()
     };
