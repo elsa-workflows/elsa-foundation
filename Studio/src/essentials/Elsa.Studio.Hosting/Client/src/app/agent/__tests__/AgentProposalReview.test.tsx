@@ -69,6 +69,7 @@ describe("AgentProposalReview", () => {
             resourceId: "nuget-prod",
             displayName: "Production NuGet feed",
             moduleId: "Elsa.Studio.PackageFeeds",
+            revision: "rev_02",
             summary: "Changes Studio package feed availability."
           },
           audit: {
@@ -109,6 +110,8 @@ describe("AgentProposalReview", () => {
           status: "awaiting-approval",
           revision: "rev_03",
           resourceTarget: {
+            moduleId: "Elsa.Studio.Secrets",
+            revision: "rev_03",
             resourceType: "extension-secret",
             resourceId: "stripe-api-key",
             displayName: "Stripe API key"
@@ -160,6 +163,8 @@ describe("AgentProposalReview", () => {
           status: "awaiting-approval",
           revision: "rev_04",
           resourceTarget: {
+            moduleId: "Elsa.Studio.Workflows",
+            revision: "rev_04",
             resourceType: "workflow-definition",
             resourceId: "order-flow"
           },
@@ -195,6 +200,8 @@ describe("AgentProposalReview", () => {
           status: "awaiting-approval",
           revision: "rev_04",
           resourceTarget: {
+            moduleId: "Elsa.Studio.Workflows",
+            revision: "rev_04",
             resourceType: "workflow-definition",
             resourceId: "order-flow"
           },
@@ -239,6 +246,8 @@ describe("AgentProposalReview", () => {
           status: "awaiting-approval",
           revision: "rev_05",
           resourceTarget: {
+            moduleId: "Elsa.Studio.Extensions",
+            revision: "rev_05",
             resourceType: "extension-resource",
             resourceId: "stripe-extension"
           },
