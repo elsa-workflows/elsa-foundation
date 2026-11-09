@@ -98,11 +98,20 @@ No activation by a program goal is needed for any phase.
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
 this page, needs an authorized role, a scope, a reason and a record on the PR.
 
+**Alternatives.** Every ADR and ADR amendment records, in an **Alternatives considered** section, the alternatives
+its author weighed and why each was not chosen, including doing nothing. The section exposes the angles the author
+used, so a reviewer can judge whether every real option was seen — or whether none of them addresses the actual
+problem. A spec does not repeat this: it refers to the alternatives in the ADRs it applies, and records only a design
+choice of its own in its `research.md`. The pre-merge gate's deterministic checks fail an ADR that carries no such
+section.
+
 **Review.** The PR requests every non-author approver in its plan, so GitHub notifies them at once. Small points are
 settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting. If disagreement
 persists or an approver is unavailable, the coordinator brings the question to the role authorized under project
 governance to resolve it or arrange a delegation. Record any authorized change in the approval plan. Silence is
-never approval, and the coordinator cannot remove an approver merely to unblock a PR.
+never approval, and the coordinator cannot remove an approver merely to unblock a PR. An approver reviews an
+initiative proposal through the [Initiative Proposal Review](../skills/catalog.md#initiative-proposal-review) method:
+first understanding the problem and where it sits, then judging the direction and the author's alternatives.
 
 **Reconciliation.** A review or a position comment that raises more than a couple of points gets a reconciliation: a
 table that answers every point.
@@ -116,6 +125,15 @@ table that answers every point.
   - **needs clarification:** a question back, asked where the point lives;
   - **differs:** the positions, the current text, and the answer or options.
 - **Every point the PR adopts** also gets a short reply on its review thread, naming the commit.
+- **A point that changes a document is handled only when its edit is prepared.** When a point means an ADR or spec
+  must change, its drafter makes the concrete edit to that document's text in a pushed commit on the proposal's
+  branch, kept in draft, and the row names that commit. A point left as a comment, or as a bare "agreed", is **not**
+  handled: the edit, not the intention, is what a later reader sees. If every approver agrees, applying it is
+  bookkeeping; if anyone opposes, they counter on the PR and the reconciled text is prepared the same way. The drafter
+  is the PR's **author** for a single-PR review (the author deduces the text in their own PR), the **coordinator** for
+  a position across PRs; the coordinator, working in that PR's scope, may also deduce the verdict from the forum and
+  apply it, then ask the reviewers to verify the proposed text. The sync and the pre-merge gate both check that no such
+  point is left comment-only.
 - **A reconciliation never makes anything agreed.** It says what each PR's text will be. Agreement still follows the
   final-commit approval rule below.
 - **Open rows reach the board:** a clarification names who must answer in *Who is needed where*, and a "differs" that
@@ -137,6 +155,37 @@ table that answers every point.
   it rechecks that spec against the new text. Until then, the spec's row on the board shows that it needs a recheck.
 - **General defects.** A defect a spec finds that does not depend on the initiative's decisions gets its own issue
   outside the initiative. The spec does not depend on it.
+
+**Surfaces: the document, the forum, the board.** An initiative keeps its thinking on three surfaces, and each holds
+a different thing. Keeping them in their places is what makes a proposal cheap to reason about, both on its own and in
+the wider initiative.
+- **The document** — the ADR or spec text — records only the decision and how it was reached: the problem it solves,
+  what it enables, the alternatives weighed, and the context of its time and place. It is written to be read years
+  later. It carries **no personal names and no "who is needed where"**: nothing that is only true now.
+- **The PR and the issue are the forum.** Discussion, questions, counter-proposals and the live state of the proposal
+  live here. The document is **deduced from** the forum, not edited in lockstep with it, and not everything on the
+  forum reaches the document. The **title stays stable and general** — it names the topic, not a mechanism that may
+  still change. The **description is the live state**: it states the current direction and points to the latest
+  decisive comments, so a reader, often an agent, sees from it alone where the proposal stands. The **document may
+  lag** the latest direction; when it does, the description says so. **Open questions live as a checklist in the
+  description**, each one open or answered with a link — not in the document, and not tied to a named person.
+- **The board** holds the only transient routing: **Who is needed where**. An open question, or a "differs" that
+  comments cannot settle, appears there as someone who is needed; two approvals may stand in when a reviewer is away,
+  and the row is cleared when the question is answered.
+
+**Everyone is offered to contribute; only some are offered to edit the document.** When a session helps anyone take
+part in an initiative PR or issue, it offers to record their thoughts, questions and discussion points as a **forum
+comment**, so the forum stays the live record. It offers to edit the **document's text** only to the PR's **author**,
+in their own PR, and to the **coordinator working in that PR's scope**, who may deduce the verdict from the forum,
+apply it to the document, and then ask the reviewers to verify the proposed text. It never offers anyone else to edit
+the document, even though anyone with access may push.
+
+**Reconciling the surfaces.** When a finding changes the direction, the description is brought current at once; the
+document's text is reconciled when the direction is agreed, through the prepared edit in *Reconciliation* above. The
+coordinator checks **surface consistency** at every sync and before every merge: the title, the description and the
+document agree on the current direction, no decisive comment is left unreflected in the description, and no finding
+that changes a document is left as a comment only. A mismatch is a contradiction and blocks the merge until the
+drafter reconciles it.
 
 **Agreement (ADRs and specs).** Both kinds of PR stay drafts until the following steps are complete:
 1. Once review has settled the text, the **author** commits the final record: `Status: accepted (<date>)` for an ADR,
@@ -212,7 +261,11 @@ The source record stays visible before the next sync. The pointer looks like thi
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
   browser) still reaches the board;
 - it checks that every reconciliation row has reached its PR (applied, asked, or on the meeting list), and offers a
-  reconciliation for any multi-point review or position that has none yet.
+  reconciliation for any multi-point review or position that has none yet;
+- it checks surface consistency on every open proposal: the title, the description and the document agree on the
+  current direction, the description reflects the latest decisive comments and carries the open-questions checklist,
+  and no finding that changes a document is left as a comment only — it offers the drafter the prepared edit wherever
+  one is missing.
 
 **Check-in.** "Where am I needed on #N?" reads three things:
 - the board;
@@ -286,9 +339,13 @@ out.
 3. **Check the proposal.** In a local, unpushed checkout of the proposal's head with the updated initiative branch
    merged in, the proposal is checked against everything already on the initiative branch, not only the files it
    touches. If that local merge conflicts, the author merges the initiative branch into the PR first; the coordinator
-   never commits to a proposal.
+   never commits to a proposal. The coordinator also checks the **surfaces**: the title, the description and the ADR or
+   spec text state the same current direction, the description reflects the latest decisive comments, and every finding
+   that changes the document has its prepared edit applied. A stale title or description, or a finding left as a
+   comment only, blocks the merge until the drafter reconciles it.
 4. **Run the deterministic checks** in that same checkout: `python tools/initiatives/check_decision_docs.py`. They find
-   duplicate ADR or spec numbers and malformed status lines, and show which ADR references do not resolve.
+   duplicate ADR or spec numbers, malformed status lines and an ADR with no **Alternatives considered** section, and
+   show which ADR references do not resolve.
 5. **Review independently and verify.** Independent reviewers do steps 2 and 3 without seeing each other's output, and a
    fresh reviewer verifies every finding against the text. A finding names both passages and the kind of problem:
    *contradiction*, *ambiguity*, *overlap*, *stale reference* or *number collision*. Unverified findings are dropped.
@@ -306,9 +363,9 @@ out.
      the amendment PR that changes it merges.
    - **Ambiguity, overlap and stale references** go back to the proposal's author as review comments. They block only
      when the coordinator says so in the gate comment.
-8. **Merge.** The gate is **clean** when no contradiction, number collision or deterministic-check error is open for
-   the proposal. Then squash-merge the PR, push the ADR index update, and record the merge commit on the proposal's board
-   row.
+8. **Merge.** The gate is **clean** when no contradiction, number collision, deterministic-check error or
+   unreconciled surface is open for the proposal. Then squash-merge the PR, push the ADR index update, and record the
+   merge commit on the proposal's board row.
 
 ### Side tracks
 
