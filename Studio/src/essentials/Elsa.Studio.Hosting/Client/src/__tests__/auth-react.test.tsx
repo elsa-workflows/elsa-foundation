@@ -259,13 +259,14 @@ describe("auth React SDK", () => {
   it("keeps refreshed session when capabilities fail after refresh", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const manager = stubManager(authenticatedSession());
-    manager.getCapabilities = vi.fn()
+    const getCapabilities = vi.fn<AuthProviderManager["getCapabilities"]>()
       .mockResolvedValueOnce(capabilities())
       .mockRejectedValueOnce(new Error("capabilities unavailable"));
+    manager.getCapabilities = getCapabilities;
     const { container, unmount } = renderWithAuth(manager, <AuthorizationRefreshProbe />);
 
     await waitFor(
-      () => manager.getCapabilities.mock.calls.length === 2 && !container.textContent?.includes("foundation-owned"),
+      () => getCapabilities.mock.calls.length === 2 && !container.textContent?.includes("foundation-owned"),
       "Expected capabilities to clear after refresh reload failed."
     );
 
