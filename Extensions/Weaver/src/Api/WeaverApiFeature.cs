@@ -17,8 +17,8 @@ namespace Elsa.Weaver.Api;
 [ManifestFeatureCategory("Weaver")]
 [ShellFeature(
     name: "WeaverApi",
-    DisplayName = "Foundation Agent API",
-    Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints.",
+    DisplayName = "Weaver API",
+    Description = "Exposes the Weaver bootstrap, session, message, stream, proposal, feedback, and audit endpoints behind provider-neutral agent contracts.",
     DependsOn = new object[] { typeof(WeaverFeature), typeof(ApiCapabilitiesFeature) }
 )]
 public class WeaverApiFeature : WeaverFeature, IWebShellFeature

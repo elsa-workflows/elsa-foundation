@@ -256,9 +256,9 @@ specs. Each old name is reported by the startup warning if a stored role still h
 | `api-capabilities.read` | `api-capabilities:read` |
 | `module-management.read`, `module-management.manage` | `module-management:read`, `module-management:manage` |
 | `extension-builder.read`, `extension-builder.manage` | `extension-builder:read`, `extension-builder:manage` |
-| `agent.use` | `weaver:use` |
-| `agent.proposals` | `weaver/proposals:manage` |
-| `agent.audit` | `weaver/audit:read` |
+| `agent.use` | `agent:use`, renamed again to `weaver:use` by #4027 |
+| `agent.proposals` | `agent/proposals:manage`, renamed again to `weaver/proposals:manage` by #4027 |
+| `agent.audit` | `agent/audit:read`, renamed again to `weaver/audit:read` by #4027 |
 
 The `secrets:*` names already had this shape and are unchanged. The catalog's other implications are gone:
 `secrets:write` no longer satisfies `secrets:read`, `studio/preferences:write` no longer satisfies

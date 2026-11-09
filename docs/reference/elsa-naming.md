@@ -25,7 +25,7 @@ Supports Elsa constitution §E6, which keeps R1-R8 as one line each. Moved verba
 - **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
 - **R6 — One concept, one head-noun.** If several types share a `…State` (or similar) head, the *head* must make the distinction obvious (`Hold`, `Liveness`, `Scheduler…`) rather than leaning on a vague adjective.
 - **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus the provider prefix `Ef…` (the convention in use across the EF implementations; `EfCore…` appears on a handful of older types and is not the pattern to copy). Keep using them.
-- **R8 — Reserve `Agent` for the AI-assistant domain.** Workflow-execution "agents" use `Actor`/`Worker`/`Host` to avoid the cross-domain homonym.
+- **R8 — Reserve `Agent` for user-defined agents (the `Elsa.Agent` domain) and `Weaver` for the Studio assistant (the `Elsa.Weaver` domain).** Workflow-execution "agents" use `Actor`/`Worker`/`Host` to avoid the cross-domain homonym.
 
 **Protected names (NM-14, do not "fix").** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope`, `Slot` are concrete, evocative domain nouns — they are exempt from any shortening pressure. The extension-point grammar (R4 first bullet), `.Core`/Feature layering, `…Store`, Command/Request/Result, and the R7 prefixes are strengths to protect, not simplify (NM-13).
 
