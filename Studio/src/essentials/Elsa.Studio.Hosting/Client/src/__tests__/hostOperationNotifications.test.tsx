@@ -8,7 +8,7 @@ import { createEndpointContext } from "../sdk";
 import { createTestQueryClient, withQueryClient } from "./queryTestUtils";
 
 function host(name: string): HostModel {
-  return { id: "studio", label: name, context: createEndpointContext(`https://${name}.example`), mutationsAvailable: true, readRegistry: vi.fn() };
+  return { id: "studio", label: name, runtime: "Acme", context: createEndpointContext(`https://${name}.example`), mutationsAvailable: true, readRegistry: vi.fn() };
 }
 
 function fixture() {
