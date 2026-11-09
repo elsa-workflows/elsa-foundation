@@ -247,7 +247,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   useEffect(() => {
     if (!api) return;
     let disposed = false;
-    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state !== "available") {
+    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state !== "available") {
       api.agent.providerAvailability.set(false);
       return;
     }
@@ -526,7 +526,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendBaseUrl={backendBaseUrl}
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
-        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
         notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}

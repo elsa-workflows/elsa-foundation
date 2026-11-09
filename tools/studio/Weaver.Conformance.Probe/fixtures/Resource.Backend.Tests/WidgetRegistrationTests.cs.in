@@ -1,5 +1,5 @@
 using Acme.Home.Weaver;
-using Elsa.Agent.Core.Contracts;
+using Elsa.Weaver.Core.Contracts;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core.Contracts;

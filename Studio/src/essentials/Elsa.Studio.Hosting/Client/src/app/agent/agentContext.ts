@@ -52,7 +52,7 @@ export async function collectAgentContext(
       candidateIds.add(item.id);
     }
     if (attachments.length + snapshot.length > MAX_ATTACHMENTS || snapshot.some(item => (item.summary?.length ?? 0) > MAX_SUMMARY_LENGTH || (JSON.stringify(item.content)?.length ?? 0) > MAX_CONTENT_LENGTH)) {
-      diagnostics.push({ contributorId, code: "agent.context.budget_exceeded", message: "Context exceeds the supported candidate budget; contribute a bounded snapshot or an authorized detail tool.", required });
+      diagnostics.push({ contributorId, code: "weaver.context.budget_exceeded", message: "Context exceeds the supported candidate budget; contribute a bounded snapshot or an authorized detail tool.", required });
       return;
     }
     attachments.push(...snapshot);

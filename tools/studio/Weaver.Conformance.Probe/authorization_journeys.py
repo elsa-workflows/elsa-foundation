@@ -43,11 +43,11 @@ DENIED_MESSAGE = "The requested workflow definition is not readable in the curre
 # the turn at that refresh. An owner that cannot decide reports as unavailable: the workflow module marks its
 # diagnostic as owner-unavailable, so the refusal carries the Design API's stable code with 503 and the engine's fixed
 # text. A denying owner keeps the ordinary incomplete-context refusal with the module's fixed read-permission text. The
-# tool's own owner check is never reached through a native turn; its 503 is component evidence (Elsa.Agent.Tests).
+# tool's own owner check is never reached through a native turn; its 503 is component evidence (Elsa.Weaver.Tests).
 TURN_REFUSALS = {
     "unavailable": {"code": UNAVAILABLE_CODE, "statusCode": 503,
                     "message": "The owning module could not establish current authority for this operation."},
-    "denied": {"code": "agent.context.incomplete", "statusCode": 400,
+    "denied": {"code": "weaver.context.incomplete", "statusCode": 400,
                "message": "Current read permission for the workflow context is required."},
 }
 

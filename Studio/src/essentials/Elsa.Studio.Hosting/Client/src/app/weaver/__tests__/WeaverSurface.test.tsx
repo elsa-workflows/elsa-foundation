@@ -72,7 +72,7 @@ describe("WeaverSurface", () => {
     } finally { unmount(); }
   });
 
-  it.each(["agent.context.contributor_failed", "agent.context.deadline", "agent.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
+  it.each(["agent.context.contributor_failed", "agent.context.deadline", "weaver.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
     const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
     api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
@@ -220,7 +220,7 @@ describe("WeaverSurface", () => {
     client.createSession = vi.fn<AgentClient["createSession"]>()
       .mockResolvedValueOnce({ sessionId: "agt_1", status: "active", contextAttachments: [] })
       .mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
-    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => ({ messageId: session === "agt_1" ? "old-message" : "fresh-message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` }));
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => ({ messageId: session === "agt_1" ? "old-message" : "fresh-message", status: "pending", streamUrl: `/_elsa/weaver/sessions/${session}/stream` }));
     let deliverDenial!: (value: Awaited<ReturnType<AgentClient["denyProposal"]>>) => void;
     client.denyProposal = client.approveProposal = vi.fn<AgentClient["denyProposal"]>(() => new Promise(resolve => { deliverDenial = resolve; }));
     const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
@@ -270,7 +270,7 @@ describe("WeaverSurface", () => {
     fixture.client.createSession = vi.fn<AgentClient["createSession"]>(async () => ({ sessionId: "fresh-session", status: "active", contextAttachments: [] }));
     fixture.client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => {
       if (session === "agt_1") throw new StudioHttpError(409, "The original paused session remains busy.");
-      return { messageId: "fresh-message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` };
+      return { messageId: "fresh-message", status: "pending", streamUrl: `/_elsa/weaver/sessions/${session}/stream` };
     });
     try {
       flushSync(() => buttonByText(fixture.container, "Stop")!.click()); await flushPromises();
@@ -382,7 +382,7 @@ describe("WeaverSurface", () => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
     invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = action !== "autonomy-approve";
     if (action === "autonomy-approve") client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
-    const failure = new AgentExecutionError(409, "The reviewed invocation expired.", "agent.proposal.expired", { proposalId: "proposal", approvalStatus: "expired", executed: false }, {});
+    const failure = new AgentExecutionError(409, "The reviewed invocation expired.", "weaver.proposal.expired", { proposalId: "proposal", approvalStatus: "expired", executed: false }, {});
     if (action === "deny") client.denyProposal = vi.fn(async () => { throw failure; });
     else client.approveProposal = vi.fn(async () => { throw failure; });
     const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
@@ -436,7 +436,7 @@ describe("WeaverSurface", () => {
     const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
     const toolResult = status === "failed" ? { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "The owning resource revision changed.", payload: { typeId: "agent.lifecycle.refused", schemaVersion: "1", data: { applied: false } } } : null;
     const summary = status === "expired" ? "The reviewed invocation expired." : "The owning resource revision changed.";
-    const envelope = { error: { code: `agent.execution.${status}`, message: summary, statusCode: 409 }, data: { proposalId: "proposal", executed: false, status, resourceType: "sample", resourceId: "one", summary, clientInvocation: null, toolResult } };
+    const envelope = { error: { code: `weaver.execution.${status}`, message: summary, statusCode: 409 }, data: { proposalId: "proposal", executed: false, status, resourceType: "sample", resourceId: "one", summary, clientInvocation: null, toolResult } };
     client.executeProposal = createAgentClient({ ...api.backend, http: { ...api.backend.http, postJson: vi.fn(async () => { throw new StudioHttpError(409, summary, null, envelope); }) } }).executeProposal;
     let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
@@ -494,7 +494,7 @@ describe("WeaverSurface", () => {
     const client = readyClient();
     let resolveSend: ((value: Awaited<ReturnType<AgentClient["sendMessage"]>>) => void) | undefined;
     client.createSession = vi.fn<AgentClient["createSession"]>().mockResolvedValueOnce({ sessionId: "stopped-session", status: "active", contextAttachments: [] }).mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
-    client.sendMessage = vi.fn<AgentClient["sendMessage"]>().mockImplementationOnce(() => new Promise(resolve => { resolveSend = resolve; })).mockResolvedValue({ messageId: "fresh-message", status: "pending", streamUrl: "/_elsa/agent/sessions/fresh-session/stream" });
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>().mockImplementationOnce(() => new Promise(resolve => { resolveSend = resolve; })).mockResolvedValue({ messageId: "fresh-message", status: "pending", streamUrl: "/_elsa/weaver/sessions/fresh-session/stream" });
     const subscribeStream = vi.fn(() => ({ close: () => {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
 
     const { container, unmount } = render(
@@ -508,7 +508,7 @@ describe("WeaverSurface", () => {
     // The turn is parked awaiting sendMessage; stop, then let the send resolve.
     flushSync(() => container.querySelector<HTMLButtonElement>(".weaver-stop")?.click());
     typeAndSend(container, "Fresh request"); await flushPromises();
-    resolveSend?.({ messageId: "msg_1", status: "completed", streamUrl: "/_elsa/agent/sessions/stopped-session/stream", warnings: [{ code: "agent.message.duplicate", message: "Already completed." }] });
+    resolveSend?.({ messageId: "msg_1", status: "completed", streamUrl: "/_elsa/weaver/sessions/stopped-session/stream", warnings: [{ code: "weaver.message.duplicate", message: "Already completed." }] });
     await flushPromises();
 
     expect(subscribeStream).toHaveBeenCalledTimes(1);
@@ -652,7 +652,7 @@ describe("WeaverSurface", () => {
     await flushPromises();
     expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ approvalDigest: "digest", outcome: "applied", after: expect.objectContaining({ revision: "r2" }) }));
     expect(container.querySelector('[data-status="executed"]')).toBeTruthy(); expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1);
-    expect(subscribeStream).toHaveBeenLastCalledWith(api.backend, "/_elsa/agent/sessions/agt_1/stream", expect.any(Function), expect.any(Function), { defaultMessageId: "msg_1" });
+    expect(subscribeStream).toHaveBeenLastCalledWith(api.backend, "/_elsa/weaver/sessions/agt_1/stream", expect.any(Function), expect.any(Function), { defaultMessageId: "msg_1" });
     expect(results).toEqual([expect.objectContaining({ requestId: "original-request", status: "completed" })]);
     unmount();
   });
@@ -685,7 +685,7 @@ describe("WeaverSurface", () => {
 
   it("does not open another stream for a completed duplicate delivery", async () => {
     const api = readyApi(); const client = readyClient();
-    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "existing", status: "completed", streamUrl: "/stream", warnings: [{ code: "agent.message.duplicate", message: "Already accepted." }] }));
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "existing", status: "completed", streamUrl: "/stream", warnings: [{ code: "weaver.message.duplicate", message: "Already accepted." }] }));
     const subscribeStream = vi.fn(() => ({ close() {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
     await flushPromises(); typeAndSend(container, "Inspect"); await flushPromises();
@@ -839,7 +839,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>()
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockRejectedValueOnce(conflict("agent.session.policy_stale"));
+      .mockRejectedValueOnce(conflict("weaver.session.policy_stale"));
     client.getSession = vi.fn<AgentClient["getSession"]>(async () => ({ sessionId: "agt_1", status: "active", policy: sessionPolicy("auto-read-only", 3), messages: [] }));
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={completingStream} />);
     try {
@@ -882,8 +882,8 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
   });
 
   it.each([
-    ["agent.session.busy", "still working"],
-    ["agent.session.closed", "has ended"]
+    ["weaver.session.busy", "still working"],
+    ["weaver.session.closed", "has ended"]
   ])("settles %s as refused and keeps the previous acknowledged mode", async (code, explanation) => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(async () => { throw conflict(code); });
@@ -900,7 +900,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
 
   it("disables the selector with an explanation when the session cannot change or report its autonomy", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1));
-    client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(async () => { throw conflict("agent.session.autonomy_unsupported"); });
+    client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(async () => { throw conflict("weaver.session.autonomy_unsupported"); });
     const first = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={completingStream} />);
     try {
       await flushPromises(); await establish(first.container);
@@ -959,9 +959,9 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
     const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
     const prompt = deferred<Awaited<ReturnType<AgentClient["sendMessage"]>>>(); const retry = deferred<AgentSessionPolicy>();
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>()
-      .mockResolvedValueOnce({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" })
+      .mockResolvedValueOnce({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream" })
       .mockReturnValueOnce(prompt.promise)
-      .mockResolvedValue({ messageId: "msg_3", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" });
+      .mockResolvedValue({ messageId: "msg_3", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream" });
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockReturnValueOnce(retry.promise);
     // Another writer settled on Manual review after this surface's change committed.
     client.getSession = vi.fn<AgentClient["getSession"]>(async () => ({ sessionId: "agt_1", status: "active", policy: sessionPolicy("manual", 3), messages: [] }));
@@ -992,7 +992,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
   it("attributes a result to the policy that accepted its turn, not to a later selection", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("full-auto", 2));
     const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
-    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream", acceptedPolicy: { autonomyMode: "full-auto", revision: 2 } }));
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream", acceptedPolicy: { autonomyMode: "full-auto", revision: 2 } }));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(async () => sessionPolicy("manual", 3));
     let emit!: (event: AgentStreamEvent) => void;
     const subscribeStream = ((_context, _url, receive) => { emit = receive; return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
@@ -1135,7 +1135,7 @@ function readyClient(): AgentClient {
     createSession: vi.fn<AgentClient["createSession"]>(async () => ({ sessionId: "agt_1", status: "active", contextAttachments: [] })),
     getSession: vi.fn<AgentClient["getSession"]>(async () => ({ sessionId: "agt_1", status: "active", messages: [] })),
     updateAutonomy: vi.fn<AgentClient["updateAutonomy"]>(),
-    sendMessage: vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" })),
+    sendMessage: vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream" })),
     approveProposal: vi.fn<AgentClient["approveProposal"]>(async proposalId => ({ proposalId, approvalStatus: "approved" })),
     denyProposal: vi.fn<AgentClient["denyProposal"]>(async proposalId => ({ proposalId, approvalStatus: "denied" })),
     executeProposal: vi.fn<AgentClient["executeProposal"]>(async proposalId => ({ proposalId, approvalStatus: "executed" })),

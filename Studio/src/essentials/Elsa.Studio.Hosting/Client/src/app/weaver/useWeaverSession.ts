@@ -678,8 +678,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       // Candidates and session-creation metadata are not admitted request evidence. Older or
       // incomplete responses intentionally leave this empty instead of asserting local authority.
       setAttachments(response.contextAttachments ?? []);
-      if (response.warnings?.length && diagnosticGenerationRef.current === generation) setRequestContextDiagnostics(current => [...current, ...response.warnings!.filter(item => item.code !== "agent.message.duplicate").map(item => ({ contributorId: item.target ?? "agent", code: item.code, message: item.message, required: false }))]);
-      if (response.status !== "pending" && response.warnings?.some(item => item.code === "agent.message.duplicate")) {
+      if (response.warnings?.length && diagnosticGenerationRef.current === generation) setRequestContextDiagnostics(current => [...current, ...response.warnings!.filter(item => item.code !== "weaver.message.duplicate").map(item => ({ contributorId: item.target ?? "agent", code: item.code, message: item.message, required: false }))]);
+      if (response.status !== "pending" && response.warnings?.some(item => item.code === "weaver.message.duplicate")) {
         setError("This delivery was already accepted; it will not run again. Review the existing session outcome.");
         clearContextDiagnostics();
         settle("failed"); finishTurn(); return;
@@ -811,7 +811,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     streamRef.current?.close();
     setChatState("streaming");
     setMessages(current => current.map(message => message.id === messageId && message.status === "pending" ? { ...message, status: "streaming", content: ASSISTANT_PLACEHOLDER } : message));
-    streamRef.current = subscribeToTurn(session, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, generation, messageId ?? undefined, requestId);
+    streamRef.current = subscribeToTurn(session, `/_elsa/weaver/sessions/${encodeURIComponent(session)}/stream`, generation, messageId ?? undefined, requestId);
   }, [subscribeToTurn]);
 
   const runReviewedDecision = useCallback(async (action: "approveProposal" | "denyProposal" | "executeProposal", proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
@@ -1053,7 +1053,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       { id: replyId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming", ...(recorded.acceptedPolicy ? { acceptedPolicy: recorded.acceptedPolicy } : {}) }]);
     streamRef.current?.close();
     // The stream runs the latest accepted prompt or the paused continuation once; it is never a new submission.
-    streamRef.current = subscribeToTurn(session, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, generation, replyId, null);
+    streamRef.current = subscribeToTurn(session, `/_elsa/weaver/sessions/${encodeURIComponent(session)}/stream`, generation, replyId, null);
   }, [chatState, clearContextDiagnostics, messages, subscribeToTurn]);
 
   const withdrawMessage = useCallback((messageId: string) => void withProposalDecision(`withdraw:${messageId}`, async () => {

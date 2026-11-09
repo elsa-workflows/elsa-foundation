@@ -74,7 +74,7 @@ authorizes requests whether the grant reaches any registered permission.
 | Connections | `connections:manage`, `connections:bind-secret`, `connections:test` | `Elsa.Connections.Api` |
 | Studio preferences | `studio/preferences:read`, `studio/preferences:write`, `studio/preferences/defaults:manage` | `Elsa.Studio.Preferences.Api` |
 | Platform | `attention:read`, `api-capabilities:read`, `module-management:read`, `module-management:manage` | `Elsa.Attention.Api`, `Elsa.Api.Capabilities`, `Elsa.Modularity.Api` |
-| Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `agent:use`, `agent/proposals:manage`, `agent/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Agent.Api` |
+| Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `agent:use`, `agent/proposals:manage`, `agent/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Weaver.Api` |
 
 The execution evidence delete endpoint accepts `workflows/execution-evidence:delete` or
 `workflows/execution-evidence:manage`.

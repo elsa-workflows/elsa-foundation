@@ -89,8 +89,8 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
-| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md`](Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) |
+| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
 | Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
 | Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
@@ -107,8 +107,8 @@ not automatic constitution violations.
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflow Agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md) |
-| Workflow Runtime Agent (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Agent/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Workflow Agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md) |
+| Workflow Runtime Agent (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 
 ### Integrations
 

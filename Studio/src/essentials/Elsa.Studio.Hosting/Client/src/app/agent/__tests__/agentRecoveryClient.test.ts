@@ -11,14 +11,14 @@ describe("agent recovery client", () => {
       { id: "agt_1", status: "expired", updatedAt: "2026-11-01T10:00:00Z", pendingReviewCount: 0 }
     ], next: "cursor-1" } })) as typeof context.http.getJson;
     const page = await createAgentClient(context).listSessions({ workspace: "studio:acme", take: 2, before: "cursor-0" });
-    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/sessions?workspace=studio%3Aacme&take=2&before=cursor-0");
+    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/weaver/sessions?workspace=studio%3Aacme&take=2&before=cursor-0");
     expect(page).toEqual({ next: "cursor-1", items: [
       { id: "agt_2", title: "Studio assistant", status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: "2026-11-03T10:00:00Z", pendingReviewCount: 1 },
       { id: "agt_1", status: "expired", updatedAt: "2026-11-01T10:00:00Z", pendingReviewCount: 0 }
     ] });
     context.http.getJson = vi.fn(async () => ({ data: { items: [] } })) as typeof context.http.getJson;
     expect(await createAgentClient(context).listSessions()).toEqual({ items: [] });
-    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/sessions");
+    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/weaver/sessions");
   });
 
   it("sends the workspace and the continued session only when given", async () => {
@@ -45,7 +45,7 @@ describe("agent recovery client", () => {
         { id: "m3", role: "user", content: "Odd", status: "cancelled", statusReason: "something-else" }] } }) as typeof context.http.getJson;
     const client = createAgentClient(context);
     const proposals = await client.listProposals("agt_1");
-    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/sessions/agt_1/proposals");
+    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/weaver/sessions/agt_1/proposals");
     expect(proposals[0]).toMatchObject({ id: "prop_1", status: "uncertain", baseRevision: "r1", expiresAt: prepared.expiresAt, preparedInvocation: prepared, ownerResolution: { claim: "not-applied", actorId: "ada", resolvedAt: "2026-11-02T10:06:00Z" } });
     expect(proposals[1]).toMatchObject({ id: "prop_2", status: "awaiting-client" });
     expect(proposals[1].ownerResolution).toBeUndefined();
@@ -66,28 +66,28 @@ describe("agent recovery client", () => {
       : { data: { id: "prop_1", status: "uncertain", ownerResolution: { claim: "applied", actorId: "ada" } } }) as typeof context.http.postJson;
     const client = createAgentClient(context);
     expect(await client.withdrawMessage("agt 1", "m2")).toMatchObject({ id: "m2", status: "cancelled", statusReason: "withdrawn" });
-    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/agent/sessions/agt%201/messages/m2/withdraw", {});
+    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/weaver/sessions/agt%201/messages/m2/withdraw", {});
     expect(await client.resolveClientInvocation("agt 1", "inv_1", "not-applied")).toMatchObject({ id: "prop_1", ownerResolution: { claim: "applied" } });
-    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/agent/sessions/agt%201/client-invocations/inv_1/resolution", { claim: "notApplied" });
+    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/weaver/sessions/agt%201/client-invocations/inv_1/resolution", { claim: "notApplied" });
     await client.resolveClientInvocation("agt_1", "inv_1", "unknown");
-    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/agent/sessions/agt_1/client-invocations/inv_1/resolution", { claim: "unknown" });
+    expect(context.http.postJson).toHaveBeenLastCalledWith("/_elsa/weaver/sessions/agt_1/client-invocations/inv_1/resolution", { claim: "unknown" });
   });
 
   it.each([
-    ["agent.session.owned_elsewhere", 409, "owned-elsewhere"],
-    ["agent.session.ownership_lost", 409, "ownership-lost"],
-    ["agent.session.unavailable_state", 409, "unavailable"],
-    ["agent.session.query_unsupported", 409, "query-unsupported"],
-    ["agent.message.not_pending", 409, "not-pending"],
-    ["agent.invocation.not_uncertain", 409, "not-uncertain"],
-    ["agent.invocation.resolution_conflict", 409, "resolution-conflict"],
-    ["agent.invocation.resolution_invalid", 400, "invalid"],
-    ["agent.proposal.conflict", 409, "proposal-conflict"],
-    ["agent.proposal.policy_stale", 409, "policy-stale"],
-    ["agent.session.not_found", 404, "not-found"],
-    ["agent.session.forbidden", 403, "not-found"],
-    ["agent.message.not_found", 404, "not-found"],
-    ["agent.invocation.not_found", 404, "not-found"]
+    ["weaver.session.owned_elsewhere", 409, "owned-elsewhere"],
+    ["weaver.session.ownership_lost", 409, "ownership-lost"],
+    ["weaver.session.unavailable_state", 409, "unavailable"],
+    ["weaver.session.query_unsupported", 409, "query-unsupported"],
+    ["weaver.message.not_pending", 409, "not-pending"],
+    ["weaver.invocation.not_uncertain", 409, "not-uncertain"],
+    ["weaver.invocation.resolution_conflict", 409, "resolution-conflict"],
+    ["weaver.invocation.resolution_invalid", 400, "invalid"],
+    ["weaver.proposal.conflict", 409, "proposal-conflict"],
+    ["weaver.proposal.policy_stale", 409, "policy-stale"],
+    ["weaver.session.not_found", 404, "not-found"],
+    ["weaver.session.forbidden", 403, "not-found"],
+    ["weaver.message.not_found", 404, "not-found"],
+    ["weaver.invocation.not_found", 404, "not-found"]
   ] as const)("maps %s on HTTP and wrapped refusals to %s", async (code, status, failure) => {
     for (const transport of ["http", "wrapped"]) {
       const context = stub();
@@ -108,11 +108,11 @@ describe("agent recovery client", () => {
   });
 
   it("carries a retryable owner refusal's Retry-After hint from the transport", async () => {
-    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: { code: "agent.session.owned_elsewhere", message: "Another Studio host owns this session.", statusCode: 409 } }),
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: { code: "weaver.session.owned_elsewhere", message: "Another Studio host owns this session.", statusCode: 409 } }),
       { status: 409, headers: { "Content-Type": "application/json", "Retry-After": "17" } }));
     const context = { baseUrl: "https://foundation.example/", http: createHttpClient("https://foundation.example/", { fetch }) } as StudioEndpointContext;
     const error = await createAgentClient(context).listProposals("agt_1").catch(caught => caught);
-    expect(error).toMatchObject({ name: "AgentApiError", code: "agent.session.owned_elsewhere", status: 409 });
+    expect(error).toMatchObject({ name: "AgentApiError", code: "weaver.session.owned_elsewhere", status: 409 });
     expect(classifyRecoveryFailure(error)).toBe("owned-elsewhere");
     expect(getAgentRetryAfterSeconds(error)).toBe(17);
     fetch.mockImplementationOnce(async () => new Response("{}", { status: 409, headers: { "Content-Type": "application/json", "Retry-After": "soon" } }));

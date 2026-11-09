@@ -91,7 +91,7 @@ describe("module context collection", () => {
     api.agent.contextProviders.add({ id: "optional-large", displayName: "Optional", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ ...attachment, id: "extra-a" }, { ...attachment, id: "extra-b" }] });
     const result = await collectAgentContext(api, { route: "/sample" }, "explain", undefined, explicit);
     expect(result.attachments).toEqual(explicit);
-    expect(result.diagnostics).toEqual([expect.objectContaining({ contributorId: "optional-large", code: "agent.context.budget_exceeded", required: false })]);
+    expect(result.diagnostics).toEqual([expect.objectContaining({ contributorId: "optional-large", code: "weaver.context.budget_exceeded", required: false })]);
   });
 
   it("does not disguise malformed JSON as optional absence", async () => {

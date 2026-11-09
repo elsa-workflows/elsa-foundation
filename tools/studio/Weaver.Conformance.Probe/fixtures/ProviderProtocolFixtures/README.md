@@ -10,14 +10,14 @@ Discover the fixture assembly through normal public shell assembly discovery, fo
 
 | Profile | Actual provider feature | Fixture feature |
 |---|---|---|
-| Copilot | `GitHubCopilotAgent` | `AcmeCopilotProtocolFixture` |
-| Anthropic | `AnthropicAgent` | `AcmeAnthropicProtocolFixture` |
+| Copilot | `WeaverGitHubCopilot` | `AcmeCopilotProtocolFixture` |
+| Anthropic | `WeaverAnthropic` | `AcmeAnthropicProtocolFixture` |
 
 Each fixture declares a Type dependency on that exact actual provider feature. Do not enable the other provider feature, even with `Enabled=false`: its adapter registration would still conflict. Both fixture features have `CommandFile` and `TraceFile` string properties; bind these to **different absolute paths** inside the driver's private owned evidence directory. The optional `GateFile` defaults to blank; when configured it must be a third distinct absolute private path. The directory must already exist with private access (0700 on Unix). Unix trace files are created/tightened to mode 0600. Paths, configuration and normal host authorization remain driver-owned.
 
 The ordinary provider's readiness checks still run. For Copilot use `Enabled=true`, `RuntimeUrl="http://127.0.0.1:1"`, `UseLoggedInUser=false`, and set `GitHubToken=""`, `GitHubTokenEnvironmentVariable=""`, `RuntimeConnectionToken=""`. For Anthropic use `Enabled=true`, `ApiKey="protocol-fixture-only-not-a-credential"`, `ApiKeyEnvironmentVariable=""`. Empty strings explicitly suppress the default environment-token lookup without depending on null configuration binding. These declared fixture values are not credentials; the substitute factories ignore their authentication parameters and never construct a network client. Never inspect existing user/provider authentication state to configure this fixture.
 
-The public feature registration replaces only `IGitHubCopilotClientFactory` or `IAnthropicChatClientFactory`, after the actual feature registers its services. If composing manually instead of through CShells, call the actual provider's registration first and then the corresponding fixture feature's `ConfigureServices`. The real adapters and engine stay unchanged. For a native-loaded fixture, explicitly share/version-admit the baseline `Elsa.Agent.GitHubCopilot` and `Elsa.Agent.Anthropic` assemblies/packages as well as the common contracts: the public factory interfaces and provider feature Types live in those assemblies. A private copied provider assembly cannot replace the baseline adapter's factory contract.
+The public feature registration replaces only `IGitHubCopilotClientFactory` or `IAnthropicChatClientFactory`, after the actual feature registers its services. If composing manually instead of through CShells, call the actual provider's registration first and then the corresponding fixture feature's `ConfigureServices`. The real adapters and engine stay unchanged. For a native-loaded fixture, explicitly share/version-admit the baseline `Elsa.Weaver.GitHubCopilot` and `Elsa.Weaver.Anthropic` assemblies/packages as well as the common contracts: the public factory interfaces and provider feature Types live in those assemblies. A private copied provider assembly cannot replace the baseline adapter's factory contract.
 
 ## Driver command
 
@@ -49,7 +49,7 @@ For native cancellation evidence, wait for the actual native started/turn ID and
 
 ## Cross-domain contributions
 
-This package contributes no Agent context/capability/tool source or fan-in handler. Its two explicitly selected shell features replace the public provider-client factories in `Elsa.Agent.GitHubCopilot` and `Elsa.Agent.Anthropic`; the actual adapters continue to supply the provider and tool-policy integration.
+This package contributes no Agent context/capability/tool source or fan-in handler. Its two explicitly selected shell features replace the public provider-client factories in `Elsa.Weaver.GitHubCopilot` and `Elsa.Weaver.Anthropic`; the actual adapters continue to supply the provider and tool-policy integration.
 
 ## Contract checks
 

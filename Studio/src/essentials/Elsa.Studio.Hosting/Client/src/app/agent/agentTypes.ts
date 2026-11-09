@@ -135,7 +135,7 @@ export interface AgentSessionDetailResponse {
 export type AgentSessionLimit = "snapshots" | "bytes";
 
 /** Preview (#3441): the code of the documented session limit outcome. */
-export const SESSION_LIMIT_REACHED = "agent.context.disclosure_budget_exceeded";
+export const SESSION_LIMIT_REACHED = "weaver.context.disclosure_budget_exceeded";
 
 /** Preview (#3441): why a cancelled message stopped. A dropped stream records no reason. */
 export type AgentMessageStatusReason = "interrupted" | "withdrawn" | "user-stop";

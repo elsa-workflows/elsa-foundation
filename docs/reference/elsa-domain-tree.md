@@ -12,7 +12,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | Domain | Purpose (one verb-led sentence) |
 |---|---|
 | `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, reusable-activity composition, runtime activity handling, and the built-in activity libraries. |
-| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. |
+| `Elsa.Weaver` | Hosts AI-agent sessions and capabilities behind provider modules. |
 | `Elsa.Api` | Exposes application APIs through the endpoint framework and publishes the client capability document. |
 | `Elsa.Attention` | Aggregates permission-scoped attention items from domain contributors behind one query endpoint. |
 | `Elsa.Caching` | Provides caching contracts and providers. |

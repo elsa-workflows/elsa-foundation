@@ -65,7 +65,7 @@ export class AgentExecutionError extends StudioHttpError {
   }
 }
 
-/** An HTTP refusal that carries the Agent API's error code (for example `agent.session.policy_stale`). */
+/** An HTTP refusal that carries the Weaver API's error code (for example `weaver.session.policy_stale`). */
 export class AgentApiError extends StudioHttpError {
   constructor(status: number, message: string, public readonly code: string, payload: unknown, retryAfterSeconds: number | null = null) {
     super(status, message, null, payload, retryAfterSeconds);
@@ -91,20 +91,20 @@ export type AgentRecoveryFailure = "owned-elsewhere" | "ownership-lost" | "unava
   | "resolution-conflict" | "proposal-conflict" | "policy-stale" | "not-found" | "invalid" | "lost" | "refused";
 
 const RECOVERY_FAILURES: Record<string, AgentRecoveryFailure> = {
-  "agent.session.owned_elsewhere": "owned-elsewhere",
-  "agent.session.ownership_lost": "ownership-lost",
-  "agent.session.unavailable_state": "unavailable",
-  "agent.session.query_unsupported": "query-unsupported",
-  "agent.message.not_pending": "not-pending",
-  "agent.invocation.not_uncertain": "not-uncertain",
-  "agent.invocation.resolution_conflict": "resolution-conflict",
-  "agent.invocation.resolution_invalid": "invalid",
-  "agent.proposal.conflict": "proposal-conflict",
-  "agent.proposal.policy_stale": "policy-stale",
-  "agent.session.not_found": "not-found",
-  "agent.session.forbidden": "not-found",
-  "agent.message.not_found": "not-found",
-  "agent.invocation.not_found": "not-found"
+  "weaver.session.owned_elsewhere": "owned-elsewhere",
+  "weaver.session.ownership_lost": "ownership-lost",
+  "weaver.session.unavailable_state": "unavailable",
+  "weaver.session.query_unsupported": "query-unsupported",
+  "weaver.message.not_pending": "not-pending",
+  "weaver.invocation.not_uncertain": "not-uncertain",
+  "weaver.invocation.resolution_conflict": "resolution-conflict",
+  "weaver.invocation.resolution_invalid": "invalid",
+  "weaver.proposal.conflict": "proposal-conflict",
+  "weaver.proposal.policy_stale": "policy-stale",
+  "weaver.session.not_found": "not-found",
+  "weaver.session.forbidden": "not-found",
+  "weaver.message.not_found": "not-found",
+  "weaver.invocation.not_found": "not-found"
 };
 
 /** Classifies a failed recovery request; the shared 404 and 403 are one outcome, so a foreign session discloses nothing. */
@@ -127,11 +127,11 @@ export function getAgentRetryAfterSeconds(error: unknown): number | undefined {
 export type AgentAutonomyFailure = "lost" | "stale" | "busy" | "closed" | "unsupported" | "invalid" | "not-found" | "refused";
 
 const AUTONOMY_FAILURES: Record<string, AgentAutonomyFailure> = {
-  "agent.session.policy_stale": "stale",
-  "agent.session.busy": "busy",
-  "agent.session.closed": "closed",
-  "agent.session.autonomy_unsupported": "unsupported",
-  "agent.session.autonomy_invalid": "invalid"
+  "weaver.session.policy_stale": "stale",
+  "weaver.session.busy": "busy",
+  "weaver.session.closed": "closed",
+  "weaver.session.autonomy_unsupported": "unsupported",
+  "weaver.session.autonomy_invalid": "invalid"
 };
 
 /**
@@ -149,7 +149,7 @@ export function classifyAutonomyFailure(error: unknown): AgentAutonomyFailure {
 }
 
 /** Prompt admission lost to a committed policy change; the prompt was not accepted and is never resent automatically. */
-export const POLICY_CHANGED = "agent.message.policy_changed";
+export const POLICY_CHANGED = "weaver.message.policy_changed";
 
 /** The error code a refused Agent request carried, when it carried one. */
 export function getAgentErrorCode(error: unknown): string | undefined {
@@ -182,7 +182,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
   async function postReviewedProposal<T>(proposalId: string, decision: "approve" | "deny" | "execute", request: Record<string, unknown>): Promise<T> {
     let envelope: AgentApiResponse<T>;
     try {
-      envelope = await context.http.postJson<AgentApiResponse<T>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/${decision}`, request);
+      envelope = await context.http.postJson<AgentApiResponse<T>>(`/_elsa/weaver/proposals/${encodeURIComponent(proposalId)}/${decision}`, request);
     } catch (error) {
       if (error instanceof StudioHttpError) throw terminalExecutionError(error.payload, proposalId, error.status) ?? error;
       throw error;
@@ -195,10 +195,10 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
   return {
     async bootstrap() {
       // A single agent harness is active server-side; the client never chooses among providers.
-      return mapBootstrap(unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/agent/bootstrap")));
+      return mapBootstrap(unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/weaver/bootstrap")));
     },
     async createSession(request) {
-      return mapSession(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentSession>>("/_elsa/agent/sessions", {
+      return mapSession(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentSession>>("/_elsa/weaver/sessions", {
         conversationId: request.activeSurface.resourceId ?? request.activeSurface.route,
         mode: request.mode,
         autonomyMode: request.autonomyMode,
@@ -220,7 +220,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
     async getSession(sessionId) {
       let envelope: AgentApiResponse<BackendAgentSession>;
       try {
-        envelope = await context.http.getJson<AgentApiResponse<BackendAgentSession>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}`);
+        envelope = await context.http.getJson<AgentApiResponse<BackendAgentSession>>(`/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}`);
       } catch (error) { throw toAgentApiError(error); }
       const detail = unwrapCoded(envelope);
       const title = readString(detail, "title");
@@ -238,7 +238,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       let envelope: AgentApiResponse<unknown>;
       try {
         // Only the requested mode and the last acknowledged revision are sent; every other policy field is the owner's.
-        envelope = await context.http.putJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/autonomy`, {
+        envelope = await context.http.putJson<AgentApiResponse<unknown>>(`/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/autonomy`, {
           autonomyMode: request.autonomyMode,
           expectedRevision: request.expectedRevision
         });
@@ -253,7 +253,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       if (!requestId) { requestId = globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`; deliveryIds.set(request, requestId); }
       let envelope: AgentApiResponse<BackendAgentMessageAcceptedResponse>;
       try {
-        envelope = await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
+        envelope = await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/messages`, {
           role: "user",
           content: request.message,
           message: request.message,
@@ -280,8 +280,8 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         messageId: getAcceptedMessageId(accepted),
         status: mapMessageStatus(readField(readRecord(accepted, "message"), "status")),
         contextAttachments: readRecordArray(readRecord(accepted, "message"), "context").map(mapAdmittedContextAttachment),
-        warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
-        streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`,
+        warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "weaver.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
+        streamUrl: `/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/stream`,
         acceptedPolicy: mapAcceptedPolicy(readRecord(readRecord(accepted, "message"), "acceptedPolicy"))
       };
     },
@@ -307,11 +307,11 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
     },
     async acknowledgeClient(sessionId, invocationId, request) {
       const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(
-        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/acknowledgements`, request));
+        `/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/acknowledgements`, request));
       return mapExecution(result, invocationId);
     },
     async submitFeedback(sessionId, messageId, request) {
-      unwrap(await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/agent/feedback", {
+      unwrap(await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/weaver/feedback", {
         sessionId,
         messageId,
         rating: request.rating === "positive" ? 1 : -1,
@@ -320,7 +320,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       }));
     },
     async cancelTurn(sessionId, turnId) {
-      unwrap(await context.http.postJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`, {}));
+      unwrap(await context.http.postJson<AgentApiResponse<unknown>>(`/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`, {}));
     },
     async listSessions(query = {}) {
       const parameters = new URLSearchParams();
@@ -328,21 +328,21 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       if (query.take !== undefined) parameters.set("take", String(query.take));
       if (query.before) parameters.set("before", query.before);
       const search = parameters.toString();
-      const page = await readCoded<unknown>(() => context.http.getJson(`/_elsa/agent/sessions${search ? `?${search}` : ""}`));
+      const page = await readCoded<unknown>(() => context.http.getJson(`/_elsa/weaver/sessions${search ? `?${search}` : ""}`));
       const next = readString(page, "next");
       return { items: readRecordArray(page, "items").map(mapSessionSummary), ...(next ? { next } : {}) };
     },
     async listProposals(sessionId) {
-      const proposals = await readCoded<unknown>(() => context.http.getJson(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/proposals`));
+      const proposals = await readCoded<unknown>(() => context.http.getJson(`/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/proposals`));
       return (Array.isArray(proposals) ? proposals.filter(isRecord) : []).map(mapRecordedProposal);
     },
     async withdrawMessage(sessionId, messageId) {
       return mapRecordedMessage(await readCoded<Record<string, unknown>>(() => context.http.postJson(
-        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/withdraw`, {})));
+        `/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/withdraw`, {})));
     },
     async resolveClientInvocation(sessionId, invocationId, claim) {
       return mapRecordedProposal(await readCoded<Record<string, unknown>>(() => context.http.postJson(
-        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/resolution`,
+        `/_elsa/weaver/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/resolution`,
         { claim: claim === "not-applied" ? "notApplied" : claim })));
     }
   };

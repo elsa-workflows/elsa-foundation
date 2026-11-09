@@ -140,11 +140,6 @@
       "Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj",
       "Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj",
       "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
-      "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
-      "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
-      "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
-      "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
-      "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj",
       "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj",
       "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj",
       "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj",
@@ -158,8 +153,6 @@
       "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj",
       "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj",
       "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj",
-      "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/Elsa.Agent.Workflows.csproj",
-      "Extensions/Agent/src/Workflows/Runtime/Elsa.Agent.Workflows.Runtime.csproj",
       "Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj",
       "Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj",
       "Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj",
@@ -187,7 +180,14 @@
       "Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj",
       "Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj",
       "Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj",
-      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj"
+      "Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj",
+      "Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj",
+      "Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj",
+      "Extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj",
+      "Extensions/Weaver/src/GitHubCopilot/Elsa.Weaver.GitHubCopilot.csproj",
+      "Extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj",
+      "Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj",
+      "Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj"
     ]
   }
 }
