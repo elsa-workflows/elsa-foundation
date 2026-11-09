@@ -27,7 +27,40 @@ negative assertion by elapsed time instead of a test clock.
 
 ## Limits
 
-- In-process rebuild, not a process kill. The process-kill Workbench witness for Rules is the following leaf; the
-  pre-admission Workbench script `e2e-tests/rules/Test-RulesAdmissionRecovery.ps1` remains outside CI.
+- In-process rebuild, not a process kill; the process-kill Workbench witness is the section below. The pre-admission
+  Workbench script `e2e-tests/rules/Test-RulesAdmissionRecovery.ps1` remains outside CI.
 - SQLite only; the compiled Sequence parent of the existing journey (the hand-built Flowchart parent is not repeated).
 - Local run on 9 November 2026 (macOS, .NET SDK 10.0.402): 4 facts passed; the whole project 282 tests passed.
+
+## Process-kill witness (production Workbench)
+
+`RunRulesPendingParentResultCrashTests` in `Extensions/Rules/tests/Hosting/Tests` (tier `integration`, trait
+`child-process`, shard `workbench-extensions-hosting`) is the process-kill counterpart, mirroring the #3998 BPMN witness and
+the ETL witness in `Extensions/Etl/tests/Hosting/Tests`. It starts the production `Elsa.Workbench` as a child process
+through the shared `WorkbenchProcess` harness with `RulesRuntime`, `RulesRuntimeEntityFrameworkCore` (SQLite),
+`RulesWorkflowsRuntime` and `RulesWorkflowsDesign` enabled in its own copied `shells.json`, publishes a native parent over
+the REST API (Root `RunRules`, Sequence and Flowchart, each with the shared `seed → derived` program), and lets the
+Workbench's own Rules worker run the rounds to a terminal.
+
+Identity: a source-built Workbench has no packaged deployment receipt, so the fixture enables
+`RulesRuntime.AllowSourceBuildIdentity` ([ADR 0088 amendment](../../../docs/adr/0088-rules-owns-its-execution-domain.md#amendment--2026-11-09-accepted)).
+The restarted process loads the same build, so it advertises the same source-build pin and may recover the run; this is
+exactly the byte-identical-build condition the amendment states, and it establishes no package provenance.
+
+Cut: the Rules run is terminal and its delivery lease is claimed by the running process, which is frozen just before the
+parent resume by the `ELSA_HOLD_RULES_NATIVE_DELIVERY` test hold in `RulesNativeDeliveryExecution` (the same seam shape as
+the ETL and BPMN deliveries; production hosts never set the variable, and the seam writes an `.engaged` marker so the test
+observes the frozen claim). The test reads the Rules SQLite file directly, since Rules has no runtime inspection REST
+surface: exactly one run row, status `Succeeded`, terminal stored, delivery owned and not acknowledged. The process is then
+killed with `SIGKILL` (`Process.Kill(entireProcessTree: true)` on Windows) and a fresh process is started over the same
+content root. Proof: the parent was `Running` with `RunRules` `Suspended` and no incidents before the kill; the killed
+process exited non-zero and the restarted process has a different id; after the restart the parent is `Completed`, exactly
+one `RunRules` activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart; its line appears exactly
+once in the restarted process's console output and never in the killed process's), the single run row is still
+`Succeeded` and its delivery is acknowledged.
+
+Limits: completion only (fault and cancel across a process kill remain covered by the in-process witnesses above);
+SQLite only; the hold is armed before the parent starts, so the worker cannot deliver ahead of the freeze. The fixture sets
+`DeliveryLeaseSeconds` to 3 (production default 60; the lease is database time and has no heartbeat while a delivery is in
+flight), so the dead owner's lease has lapsed by the time the restarted worker first polls; each row takes about 12 seconds
+locally against a 90-second post-restart deadline.

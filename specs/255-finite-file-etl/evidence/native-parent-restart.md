@@ -44,7 +44,7 @@ activity ids its predecessor cannot have persisted.
 ## Process-kill witness (production Workbench)
 
 `RunEtlPendingParentResultCrashTests` in `Extensions/Etl/tests/Hosting/Tests` (tier `integration`, trait `child-process`,
-shard `workbench-etl-hosting`) is the process-kill counterpart, mirroring the #3998 BPMN witness. It starts the production
+shard `workbench-extensions-hosting`) is the process-kill counterpart, mirroring the #3998 BPMN witness. It starts the production
 `Elsa.Workbench` as a child process through the shared `WorkbenchProcess` harness with the eight ETL features enabled in
 its own copied `shells.json` over SQLite files, publishes the finite file pipeline and a native parent over the REST API
 (Root `RunEtl`, Sequence and Flowchart), and lets the Workbench's own ETL worker run the pipeline.
