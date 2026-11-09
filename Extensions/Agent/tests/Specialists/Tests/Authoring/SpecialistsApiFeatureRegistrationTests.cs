@@ -16,7 +16,7 @@ public sealed class SpecialistsApiFeatureRegistrationTests
         var capability = Assert.Single(services.Where(x => x.ImplementationInstance is ApiCapabilityDeclaration).Select(x => (ApiCapabilityDeclaration)x.ImplementationInstance!),
             x => x.CapabilityId == "elsa.api.agent-specialists");
         Assert.Equal(["agent-source-definitions", "agent-specialist-model-capabilities", "agent-specialist-model-providers"], capability.Links.Select(x => x.Rel).Order(StringComparer.Ordinal));
-        Assert.Single(services, x => x.ServiceType == typeof(NativeEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistsApi.OwnerId)
+        Assert.Single(services, x => x.ServiceType == typeof(MinimalEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistsApi.OwnerId)
             && x.KeyedImplementationType == typeof(SpecialistsApiFaultRenderer));
     }
 }

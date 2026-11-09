@@ -11,7 +11,10 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import subprocess
+import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -101,9 +104,22 @@ def fetch(record: dict) -> Path:
         with tempfile.NamedTemporaryFile(dir=cache, delete=False) as temporary:
             staged = Path(temporary.name)
         try:
-            with urllib.request.urlopen(record["url"]) as source, staged.open("wb") as target:
-                while chunk := source.read(1024 * 1024):
-                    target.write(chunk)
+            for attempt in range(1, 4):
+                try:
+                    with urllib.request.urlopen(record["url"]) as source, staged.open("wb") as target:
+                        while chunk := source.read(1024 * 1024):
+                            target.write(chunk)
+                except urllib.error.HTTPError as error:
+                    retry = error.code in (500, 502, 503, 504) and attempt < 3
+                    delay = 2 ** attempt
+                    outcome = f"retrying in {delay}s" if retry else "giving up"
+                    print(f"Evidence download attempt {attempt}/3 failed with HTTP {error.code}; {outcome}.", file=sys.stderr)
+                    error.close()
+                    if not retry:
+                        raise
+                    time.sleep(delay)
+                else:
+                    break
             if staged.stat().st_size != record["bytes"] or digest(staged) != record["sha256"]:
                 raise ValueError("Evidence download failed its pinned size/SHA-256 check.")
             staged.replace(archive)
