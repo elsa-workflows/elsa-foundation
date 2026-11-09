@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed partial class EfActivityExecutionInspectionStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter, IWorkflowExecutionRowPresenceProbe
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter, IRunRowPresenceProbe
 {
     private const string ContinuationPurpose = "elsa-runtime-activity-execution-inspection-summary-page-v1";
 
@@ -89,7 +89,7 @@ public sealed partial class EfActivityExecutionInspectionStore(
 
     // The predicate matches on the scope and workflow hashes, as the summary page does. A hash collision can only
     // make another run's projections count as this run's, which answers true and costs the saving, never correctness.
-    async ValueTask<bool> IWorkflowExecutionRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    async ValueTask<bool> IRunRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         ValidateWorkflow(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();

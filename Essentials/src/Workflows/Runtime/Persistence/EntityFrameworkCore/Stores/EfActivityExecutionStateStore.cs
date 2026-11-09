@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfActivityExecutionStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore, IWorkflowExecutionRowPresenceProbe
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore, IRunRowPresenceProbe
 {
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
@@ -95,7 +95,7 @@ public sealed class EfActivityExecutionStateStore(
 
     // The predicate matches on the scope and workflow hashes, as CountAsync does. A hash collision can only make
     // another run's rows count as this run's, which answers true and costs the saving, never correctness.
-    async ValueTask<bool> IWorkflowExecutionRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    async ValueTask<bool> IRunRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         ValidateWorkflow(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();

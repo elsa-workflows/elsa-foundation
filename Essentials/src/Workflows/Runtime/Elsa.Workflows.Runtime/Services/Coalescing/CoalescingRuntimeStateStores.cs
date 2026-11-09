@@ -53,7 +53,7 @@ public sealed class CoalescingActivityExecutionStateStore(
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore
 {
     private readonly IActivityExecutionStateStore _inner = inner.Value;
-    private readonly IWorkflowExecutionRowPresenceProbe? _presenceProbe = inner.Value as IWorkflowExecutionRowPresenceProbe;
+    private readonly IRunRowPresenceProbe? _presenceProbe = inner.Value as IRunRowPresenceProbe;
 
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -85,7 +85,12 @@ public sealed class CoalescingActivityExecutionStateStore(
             }
 
             if (baseline.IsKnownAbsent(activityExecutionId))
+            {
+                // What every store checks before it reads, so skipping the read does not skip the refusal.
+                ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
+                cancellationToken.ThrowIfCancellationRequested();
                 return null;
+            }
         }
 
         return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
@@ -485,7 +490,7 @@ internal static class CoalescingRuntimeStorePageMerger
 /// recorded projection holds, such as the outcome a completion carried, when the activity's later checkpoint folds
 /// into the same commit. An activity the session has recorded nothing for is read from the durable store, so each
 /// activity's durable row is read at most once per drain. The exception is a run with no durable record whose store
-/// can be probed (<see cref="IWorkflowExecutionRowPresenceProbe"/>) and holds none of its projections: there an
+/// can be probed (<see cref="IRunRowPresenceProbe"/>) and holds none of its projections: there an
 /// activity the session has not written is not read at all.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
@@ -493,7 +498,7 @@ public sealed class CoalescingActivityExecutionInspectionStore(
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
-    private readonly IWorkflowExecutionRowPresenceProbe? _presenceProbe = inner.Value as IWorkflowExecutionRowPresenceProbe;
+    private readonly IRunRowPresenceProbe? _presenceProbe = inner.Value as IRunRowPresenceProbe;
 
     public bool SupportsExecutionBrowsing => _inner.SupportsExecutionBrowsing;
 
@@ -517,7 +522,11 @@ public sealed class CoalescingActivityExecutionInspectionStore(
             }
 
             if (baseline.IsKnownAbsent(activityExecutionId))
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
+                cancellationToken.ThrowIfCancellationRequested();
                 return null;
+            }
         }
 
         return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);

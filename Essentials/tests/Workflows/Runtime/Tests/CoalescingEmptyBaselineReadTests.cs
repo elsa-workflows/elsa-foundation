@@ -135,23 +135,56 @@ public sealed class CoalescingEmptyBaselineReadTests
 
     // The ambient scope changes when a nested drain begins. From then on this run's rows can be written without
     // passing through its session.
-    [Fact]
-    public async Task AnotherAmbientScope_EndsWhatTheSessionKnows()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AnotherAmbientScope_EndsWhatTheSessionKnows(bool nestedSession)
     {
         var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
         var session = NewSession(NoRecord);
         using var outer = accessor.Push(session);
-        var durable = new ProbingActivityStore();
-        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durable), accessor);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
         Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
-        Assert.Equal(0, durable.FindCount);
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Equal(0, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.FindCount);
 
-        using (accessor.Push(new RuntimeCoalescingSession("wfexec-child", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions())))
-            await durable.Inner.SaveAsync(NewActivityState("actexec-unseen"));
+        // Either a nested drain's session or a scope that hides the session altogether.
+        var other = nestedSession
+            ? new RuntimeCoalescingSession("wfexec-child", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions())
+            : null;
+        using (accessor.Push(other))
+        {
+            var unseen = NewActivityState("actexec-unseen");
+            await durableActivities.Inner.SaveAsync(unseen);
+            await durableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
+        }
 
         Assert.NotNull(await activities.FindAsync(WorkflowExecutionId, "actexec-unseen"));
         Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-2"));
-        Assert.Equal(2, durable.FindCount);
+        Assert.NotNull(await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Equal(2, durableActivities.FindCount);
+        Assert.Equal(2, durableInspections.FindCount);
+    }
+
+    // A store refuses a blank id and a cancelled read before it reads. A read the session answers refuses them too.
+    [Fact]
+    public async Task ReadTheSessionAnswers_StillRefusesWhatTheStoreWouldRefuse()
+    {
+        var fixture = new Fixture(NoRecord);
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(async () => await fixture.Activities.FindAsync(WorkflowExecutionId, " "));
+        await Assert.ThrowsAnyAsync<ArgumentException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, " "));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2", cancelled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-2", cancelled.Token));
     }
 
     [Fact]
@@ -302,7 +335,7 @@ public sealed class CoalescingEmptyBaselineReadTests
             inner.ListByParentPageAsync(query, cancellationToken);
     }
 
-    private sealed class ProbingActivityStore() : CountingActivityStore(new InMemoryActivityExecutionStateStore()), IWorkflowExecutionRowPresenceProbe
+    private sealed class ProbingActivityStore() : CountingActivityStore(new InMemoryActivityExecutionStateStore()), IRunRowPresenceProbe
     {
         public int ProbeCount { get; private set; }
 
@@ -322,7 +355,7 @@ public sealed class CoalescingEmptyBaselineReadTests
         }
     }
 
-    private sealed class ProbingInspectionStore : IActivityExecutionInspectionStore, IWorkflowExecutionRowPresenceProbe
+    private sealed class ProbingInspectionStore : IActivityExecutionInspectionStore, IRunRowPresenceProbe
     {
         public InMemoryActivityExecutionInspectionStore Inner { get; } = new();
         public int FindCount { get; private set; }

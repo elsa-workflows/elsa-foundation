@@ -10,8 +10,10 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// not: their reads are dictionary lookups, and a probe would scan every execution's rows. A store that does not
 /// implement it has every row read from it, as before. A probe may answer <see langword="true"/> for a run it holds
 /// nothing of, which only costs the saving; it must never answer <see langword="false"/> for one it holds a row of.
+/// It is internal on purpose (ADR 0080 D3): only the first-party EF stores implement it, and a third-party store
+/// loses nothing but this saving. Making it an extension point is a separate decision with its own catalog entry.
 /// </remarks>
-internal interface IWorkflowExecutionRowPresenceProbe
+internal interface IRunRowPresenceProbe
 {
     ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 }
