@@ -1049,8 +1049,10 @@ jobs:
       # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
       # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
       # including the cancelled outcome so a shard that hits the 45-minute job timeout still surfaces what failed first.
+      # always() only lifts the implicit success() gate that would otherwise skip this step on a red job; the outcome
+      # checks keep it off on green runs and on setup failures.
       - name: Upload failed browser traces
-        if: ${{ steps.browser-tests.outcome == 'failure' || steps.browser-tests.outcome == 'cancelled' }}
+        if: ${{ always() && (steps.browser-tests.outcome == 'failure' || steps.browser-tests.outcome == 'cancelled') }}
         uses: actions/upload-artifact@v4
         with:
           name: browser-failures-${{ matrix.shard }}
