@@ -281,11 +281,15 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
             .ExecuteOneAsync(owner);
     }
 
-    internal async Task<RuleDeliveryClaimDisposition> ClaimDeliveryDispositionAsync(string owner)
+    internal async Task<RuleDeliveryClaimDisposition> ClaimDeliveryDispositionAsync(string owner) =>
+        (await ClaimDeliveryAsync(owner)).Disposition;
+
+    /// <summary>Claims the next eligible delivery as <paramref name="owner"/> and returns the store's own lease, expiry included.</summary>
+    internal async Task<RuleDeliveryClaimResult> ClaimDeliveryAsync(string owner)
     {
         using var scope = Harness.Services.CreateScope();
-        return (await scope.ServiceProvider.GetRequiredService<IRuleRunStore>()
-            .ClaimDeliveryAsync(new(owner, [RulesNativeBoundary.FormatVersion]))).Disposition;
+        return await scope.ServiceProvider.GetRequiredService<IRuleRunStore>()
+            .ClaimDeliveryAsync(new(owner, [RulesNativeBoundary.FormatVersion]));
     }
 
     internal static ActivityExecutionState StateFor(IEnumerable<ActivityExecutionState> states, string nodeId) =>

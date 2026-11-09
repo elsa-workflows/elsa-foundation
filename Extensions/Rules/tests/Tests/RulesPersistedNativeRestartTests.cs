@@ -68,9 +68,11 @@ public sealed class RulesPersistedNativeRestartTests
             var terminal = await first.DriveRulesToTerminalAsync(rulesIdentity);
             Assert.Equal(RuleTerminalKind.Succeeded, terminal.Result!.Kind);
 
-            // The first host claims the delivery lease and then dies before dispatching or acknowledging.
-            var claimedAt = DateTimeOffset.UtcNow;
-            Assert.Equal(RuleDeliveryClaimDisposition.Claimed, await first.ClaimDeliveryDispositionAsync("dead-host"));
+            // The first host claims the delivery lease and then dies before dispatching or acknowledging. The store's
+            // own expiry is the authority for both the negative window and the wait.
+            var claimed = await first.ClaimDeliveryAsync("dead-host");
+            Assert.Equal(RuleDeliveryClaimDisposition.Claimed, claimed.Disposition);
+            var expiry = claimed.Lease!.ExpiresAt;
             Assert.Equal(ActivityExecutionStatus.Suspended,
                 RulesPersistedNativeFixture.StateFor(await first.ActivityStatesAsync(), RulesCompiledPublicationFixture.RulesNodeId).Status);
 
@@ -78,7 +80,6 @@ public sealed class RulesPersistedNativeRestartTests
 
             // The dead owner's lease is honoured: while it is in force the new host finds nothing to deliver.
             Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.WorkflowStateAsync())!.Status);
-            var expiry = claimedAt + TimeSpan.FromSeconds(leaseSeconds);
             Assert.True(DateTimeOffset.UtcNow < expiry, "The reopen took longer than the lease; the negative assertion is not meaningful on this machine.");
             Assert.False(await fixture.DeliverOneAsync("restart-claimed-early-delivery"));
             Assert.Equal(ActivityExecutionStatus.Suspended,
