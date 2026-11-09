@@ -583,7 +583,8 @@ public sealed class EfActivityDesignStores(
                 Definition = new { request.Definition.ActivityTypeKey, request.Definition.Category, request.Definition.DisplayName, request.Definition.Description },
                 Authoring = new { request.AuthoringState.ContentAuthority, request.AuthoringState.ForkedFrom, request.AuthoringState.HeadVersionId, request.AuthoringState.RecommendedVersionId },
                 Draft = new { request.InitialDraft.DefinitionId, request.InitialDraft.Revision, request.InitialDraft.SourceVersionId, request.InitialDraft.PresentationLabel, request.InitialDraft.Status, request.InitialDraft.State },
-                Layout = request.InitialLayout.Records
+                Layout = request.InitialLayout.Records,
+                request.InitialLayout.ActivityPresentation
             };
             await EfDesignAtomicCommand.ExecuteAsync(atomic, new DesignOperationKey($"create:{request.Definition.Id}"), "activity.authoring.create.v1", material,
                 ["activityDefinition", "activityDefinitionAuthoring", "activityDefinitionDraft", "activityDefinitionDraftLayout"], async (context, token) =>
@@ -1261,6 +1262,8 @@ public sealed class EfActivityDesignStores(
         draft.LastModifiedAt = DateTimeOffset.UtcNow;
         layout.Revision = draft.Revision;
         layout.Records = request.Layout.ToList();
+        if (request.ActivityPresentation is not null)
+            layout.ActivityPresentation = ActivityNodePresentationRecord.NormalizeCollection(request.ActivityPresentation).ToList();
         layout.LastModifiedAt = draft.LastModifiedAt;
         if (projections is not null) await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(draft.LastModifiedAt, [], [draft], []), cancellationToken);
         else await SaveAsync(cancellationToken);

@@ -87,7 +87,7 @@ Each limit is stated in the [compensation guide](../../website/docs/essentials/c
 | A completed scope keeps no journal; Studio derives its view from run data. | Spec 258 R1, R22; [spec 260](../../specs/260-compensation-operator-actions/spec.md) FR-417 | By design |
 | An expression `scope` input on Confirm or Compensate is not resolved in the Studio run view. | Spec 258 R22 | None filed |
 | Only leaf handlers are key-stable across retries; activities inside a composite handler get their own default keys. | [Spec 251](../../specs/251-compensation-uncertainty/spec.md) edge cases | By design |
-| No exactly-once effects and no reconciliation framework; participants must follow the participant contract. | Spec 251 FR-220, program non-goals | By design; the [compensation sample](../../samples/Elsa.Samples.Compensation/README.md) is a reference participant |
+| No exactly-once effects and no reconciliation framework; participants must follow the participant contract. | Spec 251 FR-220, program non-goals | By design |
 | Operator reasons are visible to every reader of the run. | Spec 260 R17 | By design; the guide says to put no secret in a reason |
 | Bulk retry, cancel-run and variable edits from Studio stay parked. | Spec 260 OD12, ADR 0080 D0 | Parked by owner decision |
 | Retrying a terminal (faulted) run is out of scope. | Spec 251 FR-211 | By design |
@@ -95,7 +95,7 @@ Each limit is stated in the [compensation guide](../../website/docs/essentials/c
 | No jitter, no per-handler backoff, no "retry now" during a wait. | Spec 261 out of scope | None planned |
 | The journal keeps a retry's due time only while it waits; once the attempt runs, its record no longer shows when it was due. | Spec 261 data model (`CompensationHandlerAttempt`), found by the sample test (section 7) | None filed; the incidents' times show when each attempt failed |
 | The replay-safe warning covers leaves only; a `ReplaySafe` activity inside a composite step does not warn. | Spec 261 OD20 A | By design |
-| A step-result reference to an uncertain step has nothing to read; that step's compensation must work from `TargetOperationKey`. | Spec 250 FR-010, the causal result resolver; guide "Pass data from a step to its compensation" | By design; the sample's Release works from the key alone |
+| A step-result reference to an uncertain step has nothing to read; that step's compensation must work from `TargetOperationKey`. | Spec 250 FR-010, the causal result resolver; guide "Pass data from a step to its compensation" | By design |
 | Live-instance migration of a running scope to a new workflow version. | Program non-goal (runs keep their pinned executable) | By design |
 | Deleting a run that has not finished cancels it first, so a waiting recovery is never undone and the effects it had not undone stay. | Spec 261 FR-519 (section 7) | Documented in the guide; by design |
 | A plain Studio test run that waits past its 30-minute window keeps waiting and stays resumable from its run page; a trigger test run is cancelled when its window ends. | Spec 261 research R10 | Documented in the guide; by design |

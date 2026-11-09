@@ -10,7 +10,7 @@ client creation. Register scoped implementations through DI, keyed by their exac
 operation requires exactly one matching owner of its own port; duplicates and missing owners are refusals.
 A provider can implement both ports, while authoring-only and runtime-only hosts register only what they consume.
 This registry is independent of Weaver's selected assistant provider.
-Known intra-domain contributions are `AnthropicSpecialistModelProvider` and
+Known intra-domain contributions are `AnthropicSpecialistModelProvider`, `OpenAISpecialistModelProvider` and
 `AzureOpenAISpecialistModelProvider`, registered scoped by their respective optional specialist features.
 
 `GetCapabilitiesAsync` reads authorized current model metadata without inference. The capabilities
@@ -43,7 +43,7 @@ resume behavior. The runtime owns [bounded filtering and final acceptance](../El
 partial visible text is never an accepted business result or reusable history. Include changed effective
 support in the model profile fingerprint; never claim qualification from the presence of an SDK method.
 
-The [connection-backed contributors](../Connections/README.md) add separate Anthropic and Azure OpenAI
+The [connection-backed contributors](../Connections/README.md) add separate Anthropic, OpenAI and Azure OpenAI
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
 

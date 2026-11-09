@@ -2,7 +2,7 @@
 
 A compensation scope runs a list of named steps in order. Each step is a forward activity and, optionally, a compensation: the activity that undoes it. When a step fails, the scope undoes the steps that already completed, newest first, and finishes with the outcome `Compensated`. Use it when a workflow makes changes in other systems that cannot share a transaction: reserve inventory, reserve a delivery slot, then confirm the order; if the confirmation is rejected, cancel the delivery and release the inventory.
 
-The scope is part of the `ActivitiesCompensation` feature, which the Workbench enables by default. The [compensation sample](#samples) is a package you can load into the Workbench to try everything on this page.
+The scope is part of the `ActivitiesCompensation` feature, which the Workbench enables by default.
 
 ## Undo, stop, settle or keep
 
@@ -80,11 +80,11 @@ A system that a compensation scope calls is safe when it:
 4. treats a repeated undo for the same compensation key as done;
 5. reports an uncertain outcome only when it really cannot tell what happened.
 
-Elsa does not provide exactly-once delivery or a reconciliation framework; these rules are what make repeats harmless. The [compensation sample](#samples)'s participant is a small reference implementation of all five, with tests for each.
+Elsa does not provide exactly-once delivery or a reconciliation framework; these rules are what make repeats harmless.
 
 ## Pass data from a step to its compensation
 
-A compensation usually needs something the step produced: the reservation id to release. Bind the compensation's input to the step's result, a reference to one of the step's outputs. The compensation then reads the result of the exact run of the step it undoes: in a loop each iteration's compensation gets its own iteration's result, and an outer scope that undoes a nested scope's step after a hand-over still gets that step's result. The sample's workflows bind the **Release** compensation's `reservation` input to the result of the **Reserve** step it undoes:
+A compensation usually needs something the step produced: the reservation id to release. Bind the compensation's input to the step's result, a reference to one of the step's outputs. The compensation then reads the result of the exact run of the step it undoes: in a loop each iteration's compensation gets its own iteration's result, and an outer scope that undoes a nested scope's step after a hand-over still gets that step's result. For example, bind a **Release** compensation's `reservation` input to the result of the **Reserve** step it undoes:
 
 ```json
 { "referenceKey": "reservation", "value": { "expressionType": "ActivityResult", "value": { "producerNodeId": "reserve-inventory", "projectionKey": "reservation", "producerScopeId": "order" } } }
@@ -92,7 +92,7 @@ A compensation usually needs something the step produced: the reservation id to 
 
 A workflow variable also works for a step that runs once: capture the step's output into the variable and bind the compensation's input to it. In a loop, a later iteration overwrites the variable before an earlier iteration's compensation reads it, so use the step's result there.
 
-A step whose outcome is uncertain has no result for its compensation to read. Its compensation still gets the step's operation key as `TargetOperationKey`, which is enough to find the effect; the sample's **Release** works from that key alone when it is given no reservation.
+A step whose outcome is uncertain has no result for its compensation to read. Its compensation still gets the step's operation key as `TargetOperationKey`, which is enough to find the effect.
 
 A republished workflow does not change the steps or compensations of a run already in flight: a run always uses the version it started on.
 
@@ -106,7 +106,7 @@ if (LoseResponse == true)
     return ActivityTransition.Fault<ReservationResult>(new ActivityFault("reservation.timeout", $"No response from the {Resource} service.", category: "outcome-unknown"));
 ```
 
-This is the sample's **Reserve** activity, whose **Lose response** input applies the reservation and then reports this fault; a test keeps the snippet identical to the sample's code.
+Here a **Lose response** input simulates the lost response: the activity applies the reservation and then reports this fault.
 
 The scope records the step as **Uncertain** and starts recovery with that step included. Its compensation gets the step's operation key as `TargetOperationKey` and undoes the effect if it is there (rule 3 above covers the case where it is not there yet).
 
@@ -221,18 +221,6 @@ Nesting, confirmation and cancellation add these states:
 - `Cancelled — nothing undone` on a cancelled scope that undid no step.
 
 A scope that ran more than once, in a loop or because its parent ran again, has an **Occurrence** list to choose which run to show.
-
-## Samples
-
-The [compensation sample](https://github.com/elsa-workflows/elsa-foundation/tree/main/samples/Elsa.Samples.Compensation) (`samples/Elsa.Samples.Compensation`) is a package for the Workbench's package feed. It adds a **Reserve** and a **Release** activity backed by a file-based participant that follows [the participant contract](#what-a-participant-must-do), and three workflows to import:
-
-| Workflow | What it shows |
-|---|---|
-| Reservation saga | The order is rejected; the delivery and then the inventory are released, each with the reservation its step returned. |
-| Nested scope with Confirm | A confirmed charge is kept; an inner scope's two reservations are handed over and undone by the outer scope, newest first. |
-| Operator recovery | A release that always fails is retried after 5 and then 10 seconds, then waits for an operator to retry, resolve or abandon it. |
-
-Its README walks through building and loading the package, importing and running the workflows, and what to expect in Studio and in the participant's files. A Workbench test runs the three workflows on every change, so they keep matching this page.
 
 ## Supported configurations
 

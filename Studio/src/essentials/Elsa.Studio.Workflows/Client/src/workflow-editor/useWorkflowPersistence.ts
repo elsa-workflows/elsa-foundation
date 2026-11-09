@@ -15,6 +15,8 @@ interface WorkflowPersistenceParams {
   documentAdapter?: WorkflowEditorDocumentAdapter;
   autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
+  /** Reconcile an acknowledged live edit with history before adopting the server's normalized representation. */
+  onSaveReconciled?(requested: WorkflowDraft, saved: WorkflowDraft): void;
   setStatus(value: string): void;
   setError(value: WorkflowErrorInput): void;
   /**
@@ -29,7 +31,9 @@ interface WorkflowPersistenceParams {
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, onSaveReconciled, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+  const onSaveReconciledRef = useRef(onSaveReconciled);
+  onSaveReconciledRef.current = onSaveReconciled;
   const lineageHoldRef = useRef(lineageHold);
   lineageHoldRef.current = lineageHold;
   const lineageHeld = lineageHold?.held ?? false;
@@ -101,6 +105,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         setPersistedDraft(saved);
         const live = latestDraftRef.current;
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
+        if (coversLiveDraft) onSaveReconciledRef.current?.(draftSnapshot, saved);
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
         // An explicit save marks the batches of the line it wrote, even when the author kept editing while it was in flight:

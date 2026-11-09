@@ -137,9 +137,10 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     {
         SeedDefinition("definition");
         SeedDraft("draft", "definition", AsOf.AddHours(1));
-        await design.Database.ExecuteSqlRawAsync(
-            "UPDATE elsa_workflow_definition_drafts SET StateSource = {0}",
+        var corrupted = await design.Database.ExecuteSqlRawAsync(
+            "UPDATE elsa_workflow_sources_copies SET Content = {0}",
             "{invalid");
+        Assert.Equal(1, corrupted);
 
         var drafts = Source().StreamCurrentDraftsAsync(Tenant).GetAsyncEnumerator();
         try

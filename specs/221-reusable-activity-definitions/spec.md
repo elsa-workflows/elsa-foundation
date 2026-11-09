@@ -1,5 +1,7 @@
 # Feature Specification: Reusable Activity Definitions
 
+> **Shared revision amendment (4 November 2026, #3790):** Agent-authored typed content belongs to the Agent adapter over shared source revision storage. Reusable-activity authoring remains the owner of graph-backed Activity drafts and its current publication state machine. Generated Agent publications stay protected by provider-source authority; source-to-provider publication integration is T066, not another editable Agent activity source. See [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [delivery placement/boundary](../1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+
 **Feature Branch**: `598-reusable-activity-definitions`
 
 **Created**: 2026-07-15

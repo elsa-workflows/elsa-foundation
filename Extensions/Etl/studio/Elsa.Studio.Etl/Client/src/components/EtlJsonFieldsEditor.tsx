@@ -1,15 +1,15 @@
 import React, { useId } from "react";
-import type { EtlColumnType, EtlHttpJsonSource, EtlHttpPagination, EtlJsonField, EtlJsonlSource } from "../etlTypes";
+import type { EtlColumnType, EtlHttpJsonSource, EtlHttpPagination, EtlJsonField, EtlJsonlSource, EtlRabbitMqSource } from "../etlTypes";
 
 /** Edits JSON Pointer fields; HTTP JSON sources also get their records pointer and pagination. */
-export function EtlJsonFieldsEditor<T extends EtlHttpJsonSource | EtlJsonlSource>({ source, maxFields, disabled, onChange }: {
+export function EtlJsonFieldsEditor<T extends EtlHttpJsonSource | EtlJsonlSource | EtlRabbitMqSource>({ source, maxFields, disabled, onChange }: {
   source: T;
   maxFields: number;
   disabled: boolean;
   onChange(source: T): void;
 }) {
   const id = useId();
-  const noun = source.kind === "jsonl" ? "JSON Lines" : "HTTP JSON";
+  const noun = source.kind === "jsonl" ? "JSON Lines" : source.kind === "rabbitmq" ? "RabbitMQ message" : "HTTP JSON";
   const updateField = (index: number, changes: Partial<EtlJsonField>) =>
     onChange({ ...source, fields: source.fields.map((field, row) => row === index ? { ...field, ...changes } : field) });
 
@@ -20,7 +20,7 @@ export function EtlJsonFieldsEditor<T extends EtlHttpJsonSource | EtlJsonlSource
         <div className="etl-editor-section-heading">
           <div>
             <h4 id={`${id}-fields`}>{noun} fields</h4>
-            <p>{source.kind === "jsonl" ? "Declare each scalar value with a JSON Pointer into the object on each line." : "Declare each scalar value with a JSON Pointer relative to one record."}</p>
+            <p>{source.kind === "jsonl" ? "Declare each scalar value with a JSON Pointer into the object on each line." : source.kind === "rabbitmq" ? "Declare each scalar value with a JSON Pointer into the JSON object in each message body." : "Declare each scalar value with a JSON Pointer relative to one record."}</p>
           </div>
           <button type="button" disabled={disabled || source.fields.length >= maxFields} onClick={() => onChange({ ...source, fields: [...source.fields, { name: "", pointer: "", type: "string", required: false }] })}>Add field</button>
         </div>

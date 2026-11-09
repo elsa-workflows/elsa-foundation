@@ -1,33 +1,38 @@
-# Specialist state, identity and transactions
+# Agent state, identity and transactions
 
-**Status**: Proposed M1 model. These are logical shapes, not frozen C# signatures or an implemented schema.
+**Status**: Accepted ownership direction; source implementation in progress (#3790) under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); existing journal behavior remains the regression baseline. These are logical shapes; #3790 implements only shared source storage/adapters. Concrete placement and transition limits are recorded in plan.md; publication/release shapes remain pending.
 Meanings belong to the [glossary](../../docs/glossary/elsa.md); architecture choices are in [plan.md](plan.md).
 
-## Existing authorities retained
+## Shared source and distinct execution authorities
 
-| Existing record/authority | Specialist use |
+The [revision contract](contracts/revision-management.md) owns common state/transaction invariants and Workflow/Agent mapping. [Agent ownership](contracts/agent-ownership.md) adds Agent permissions and projection rules.
+
+| State/authority | Agent / Workflow use |
 |---|---|
-| ActivityDefinition/AuthoringState | Stable definition/type key, presentation, content authority, head/recommendation |
-| ActivityDefinitionDraft + revision | Public interface and provider manifest, exact saved candidate, conflict checks |
-| ActivityDefinitionVersionPublication/ExecutableActivityTemplate | Immutable specialist behavior, schemas, model/resource policy and runtime requirements |
-| WorkflowExecutable/activity invocation | Exact placed contract/artifact, input snapshot, logical invocation/OperationKey and process completion |
-| ConnectionDocument/ConnectionState.Version | Operational tenant connection settings/auth state/secret references under existing CAS |
-| Native background work/receipt/checkpoint/outbox | Worker delivery/fence, process acceptance/cancellation and durable settlement responsibility |
+| Shared source identity / working copy | Scoped identity and CAS revision; typed domain adapter owns content, permissions and editing semantics |
+| Shared immutable source revision | Captured content/profile/fingerprint/provenance; retained once and referenced by tests/publication |
+| Shared publication operation | References exact revision plus release/profile/expected heads and reservation; no independent Agent candidate payload |
+| Release association / domain draft/version views | Source-to-receipt association and read views; no extra source store or publication-success authority |
+| Derived activity version / executable template / receipt | Compiled workflow representation and successful executable-publication authority |
+| Workflow executable / activity invocation | Exact placed artifact, committed input, operation identity and process completion |
+| Connection document / version | Operational model settings/auth/secret-reference authority under CAS |
+| Native background work / journal / outbox | Runtime fence, accepted results, process application/cancellation and settlement |
 
-There is no separate specialist definition/version table. Derived collection/evaluation views retain
-foreign identities and never become publication authority.
+Working-copy CAS/snapshot capture and reference pins use shared provider-backed primitives. Publication reservation/receipt repair belongs to shared publishing. Typed source adapters remain independent of executable representations and one another. Physical co-location is optional; no distributed transaction is asserted. Pre-GA clean initialization replaces legacy source import, mixed-schema transfer and old-data rollback.
 
 ## Published behavior
 
-The provider manifest contains instructions, model connection reference/type, model ID, supported
+The shared immutable source revision selected for an Agent release contains instructions, model connection reference/type, model ID, supported
 settings and capability snapshot identity, optional field-level JSON constraints, continuity/resource/
-tool/budget policy and schema version. The compiler derives exact input/result JSON schemas and result
-projections from the public contract, validates constraints and includes all behavior in the artifact hash.
+tool/budget policy and schema version. The provider derives its activity contract, exact input/result JSON schemas and result
+projections from the one Agent-owned public contract, validates constraints and includes all behavior in the artifact hash.
 Credentials, live SDK agents/sessions, mutable connection documents and UI layout are not behavior payloads.
 
 The runtime descriptor retains exact definition/version/hash, compiled schemas, model/adapter/codec
 identity and policy. Connection authority is resolved at point of use; an artifact never requires a draft
 lookup. An operational authorization denial is a domain outcome, not permission to lose an artifact reader.
+
+The generated provider manifest is derived publication input, not another editor. Within a supported deployment its exact source/release and descriptor meaning remain fixed. A pre-GA schema break may recreate affected stores and rename descriptors without old-format readers; clean reinitialization and republish are explicit. This is never a journal retry or ordinary publication recovery mechanism. Historical implementation increments below describe the previous schema and are not new compatibility obligations.
 
 ## New logical records
 
@@ -119,6 +124,10 @@ inputs are explicitly unsupported/refused before dispatch, not decrypted or down
 A handle alone grants no access. Qualify supported redacted flow and unsupported-policy negatives;
 do not infer native encryption support from the journal or the M0 plain fixture.
 
+## Shared source and publication boundaries
+
+The [revision contract](contracts/revision-management.md) owns shared snapshot/capture-intent/pin, publication reservation and receipt/index-repair semantics, mapped through both Workflow and Agent adapters. The source store atomically persists capture intent/pin with its snapshot and reserves source authority; publishing commits its executable material and receipt in its owning boundary. These stores do not form a distributed transaction. Publication success remains distinct from journal acceptance and process application; source capture/index repair causes no turn or inference. W1–W8 qualify both adapters and within-deployment runtime recovery. Pre-GA delivery may recreate stores under the declared reset procedure; no historical association, mixed-schema ownership transfer or old-reader rollback protocol is required.
+
 ## Separate transaction boundaries
 
 | Boundary | Atomic facts | Crash/retry behavior |
@@ -187,6 +196,18 @@ turn claim. Acceptance advances one revision and points at the immutable accepte
 the protected session remains in that receipt rather than a second history copy. Known failures
 release the revision; unknown outcomes retain the active reference and block continuation. Replaying
 an older accepted turn returns its original receipt without changing current conversation state.
+
+**M5 second owner profile (T032): the playground's draft candidate workspace.** Each playground run is its own
+workflow execution, so the workflow-owned profile cannot span runs. The root specialist of an activity draft Test Run
+gets a different owner: one whose runtime-pinned source has kind `ActivityDraftTestRun` under run kind `TestRun`. That
+owner replaces the workflow execution with the workspace `activity-draft:{draftId}`. It still binds the tenant, the
+partition, the exact candidate version (one per saved draft revision) and the template hash.
+
+The profile deliberately grants cross-workflow access within that workspace. It is tenant-shared, not bound to a caller,
+because the generic draft Test Run it rides on records no requesting principal: any `workflows/publishing:manage` holder
+in the tenant can read every run and its `Conversation` output. A caller-bound playground would first need the generic
+Test Run to record and enforce its requester. Every other invocation keeps the workflow-owned profile above, and still
+infers no user principal.
 
 The runtime worker restores only this admitted accepted reference. The following draft increment adds
 explicit manifest2/descriptor2 continuation controls, retaining fresh-only schema1 readers and business

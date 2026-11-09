@@ -24,6 +24,18 @@ public sealed class SpecialistsRuntimeFeatureRegistrationTests
     }
 
     [Fact]
+    public void Runtime_projects_the_state_view_of_every_specialist_node_by_its_descriptor_kind()
+    {
+        var services = new ServiceCollection();
+        new SpecialistsRuntimeFeature().ConfigureServices(services);
+
+        var projector = (Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector)Activator.CreateInstance(
+            Assert.Single(services, x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector)).ImplementationType!)!;
+        Assert.Equal(("elsa.specialist", "elsa.specialist.invocation", 1), (projector.DescriptorKind, projector.ViewKind, projector.ViewVersion));
+        Assert.Null(projector.ActivityTypeWithoutState);
+    }
+
+    [Fact]
     public async Task Runtime_startup_refuses_a_second_invocation_inspector_instead_of_letting_the_last_one_win()
     {
         var services = new ServiceCollection();

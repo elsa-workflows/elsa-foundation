@@ -702,7 +702,50 @@
       "medianMinutes": null
     },
     {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
     }
@@ -825,7 +868,9 @@
           "Essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
           "Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
           "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
-          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj"
+          "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
+          "Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj",
+          "Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj"
         ]
       },
       {
@@ -864,7 +909,9 @@
           "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
           "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
-          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"
+          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj",
+          "Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj",
+          "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj"
         ]
       },
       {
@@ -896,7 +943,8 @@
           "Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
           "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
           "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
-          "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj"
+          "Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj",
+          "Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj"
         ]
       }
     ],
@@ -983,7 +1031,10 @@
           "locking-database",
           "mysql-feasibility",
           "runtime",
-          "secrets-sqlserver"
+          "secrets-sqlserver",
+          "etl-sql",
+          "etl-rabbitmq",
+          "etl-ef"
         ]
       }
     ]
@@ -1115,6 +1166,21 @@
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
+      "suite": "etl-sql",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-rabbitmq",
+      "project": "Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj",
+      "require": "ELSA_ETL_RABBITMQ_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-ef",
+      "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+      "require": "ELSA_ETL_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
       "suite": "connections",
       "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
@@ -1154,11 +1220,6 @@
     {
       "test": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
       "issue": 3260,
-      "since": "2026-10-22"
-    },
-    {
-      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
-      "issue": 3261,
       "since": "2026-10-22"
     },
     {

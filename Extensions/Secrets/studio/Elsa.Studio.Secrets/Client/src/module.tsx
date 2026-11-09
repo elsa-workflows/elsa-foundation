@@ -16,6 +16,7 @@ export function register(api: ElsaStudioModuleApi) {
     defaultEnabled: true,
     order: 45,
     nav: {
+      icon: KeyRound,
       requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
       title: "Secrets",
       path: "/security/secrets",

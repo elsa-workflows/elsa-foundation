@@ -1,0 +1,5 @@
+{
+  "extends": "../live/tsconfig.json",
+  "compilerOptions": { "typeRoots": ["../live/typings"] },
+  "include": ["./*.ts"]
+}

@@ -16,7 +16,7 @@ namespace Elsa.Agent.Specialists.Inspection.Api;
 [ManifestFeatureCategory("Agent")]
 [ManifestFeatureCategory("API")]
 [ShellFeature(name: "SpecialistsInspectionApi", DisplayName = "Specialists: Inspection API",
-    Description = "Read the specialist evidence of a draft Test Run: exact candidate, model, turn status, requests, usage, conversation and accepted output.",
+    Description = "Read the specialist evidence of a draft Test Run or a runtime occurrence: exact version, model, turn status, requests, usage, conversation and permitted accepted output.",
     DependsOn = new object[] { "SpecialistsRuntime", "WorkflowsPublishingApi", "ApiCapabilities" })]
 public class SpecialistsInspectionApiFeature : IWebShellFeature
 {
@@ -24,10 +24,13 @@ public class SpecialistsInspectionApiFeature : IWebShellFeature
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddElsaEndpoints();
-        services.TryAddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, SpecialistInspectionFaultRenderer>(SpecialistInspectionApi.OwnerId);
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<SpecialistEvidenceAccess>();
+        services.TryAddKeyedSingleton<MinimalEndpoints.IEndpointFaultRenderer, SpecialistInspectionFaultRenderer>(SpecialistInspectionApi.OwnerId);
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-specialist-inspection", 1,
         [
-            new("agent-specialist-test-run-evidence", SpecialistInspectionApi.TestRunEvidenceRoute, true)
+            new("agent-specialist-test-run-evidence", SpecialistInspectionApi.TestRunEvidenceRoute, true),
+            new("agent-specialist-invocation-evidence", SpecialistInspectionApi.InvocationEvidenceRoute, true)
         ], "SpecialistsInspectionApi"));
     }
 

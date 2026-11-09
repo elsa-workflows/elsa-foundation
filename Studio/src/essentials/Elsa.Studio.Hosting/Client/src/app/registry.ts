@@ -146,6 +146,7 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
         activePathPrefix: item.path,
         order: item.order ?? (featureArea.order ?? 500) + index + 1,
         iconColor: item.iconColor ?? parent.iconColor,
+        icon: item.icon,
         parentId: item.placement ? undefined : parent.id,
         ...copyPlacementMetadata(item)
       };
@@ -167,6 +168,7 @@ function createNavigationContribution(
     activePathPrefix,
     order: nav.order ?? featureArea.order,
     iconColor: nav.iconColor,
+    icon: nav.icon,
     ...copyPlacementMetadata(nav)
   };
 }

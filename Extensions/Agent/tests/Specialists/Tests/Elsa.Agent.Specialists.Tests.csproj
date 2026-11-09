@@ -11,6 +11,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <ProjectReference Include="../../../src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
     <ProjectReference Include="../../../src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
+    <ProjectReference Include="../../../src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.Logging" />

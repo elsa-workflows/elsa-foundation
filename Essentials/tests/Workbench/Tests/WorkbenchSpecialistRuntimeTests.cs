@@ -67,17 +67,18 @@ public sealed class WorkbenchSpecialistRuntimeTests
         Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
     }
 
-    private static async Task<string> CreateAgentDraftAsync(HttpClient client)
+    private static async Task<string> CreateAgentDraftAsync(HttpClient client, string connectionName = "preflight-model",
+        string endpoint = "https://api.anthropic.com/", string allowedHosts = "api.anthropic.com", bool withBrief = false)
     {
         using var connection = await client.PostAsync("/connections", Json(new JsonObject
         {
-            ["name"] = "preflight-model",
+            ["name"] = connectionName,
             ["typeName"] = "specialist-anthropic",
             ["authScheme"] = "api-key",
             ["settings"] = new JsonObject
             {
-                ["endpoint"] = "https://api.anthropic.com/",
-                ["allowedHosts"] = "api.anthropic.com",
+                ["endpoint"] = endpoint,
+                ["allowedHosts"] = allowedHosts,
                 ["modelId"] = "claude-fable-5-1",
                 ["maximumOutputTokens"] = "4096",
                 ["temperatureSupported"] = "true",
@@ -101,7 +102,7 @@ public sealed class WorkbenchSpecialistRuntimeTests
                 ["payload"] = new JsonObject
                 {
                     ["instructions"] = "Answer briefly.",
-                    ["model"] = new JsonObject { ["providerKey"] = "anthropic", ["connectionName"] = "preflight-model", ["modelId"] = "claude-fable-5-1" },
+                    ["model"] = new JsonObject { ["providerKey"] = "anthropic", ["connectionName"] = connectionName, ["modelId"] = "claude-fable-5-1" },
                     ["settings"] = new JsonObject(),
                     ["inputConstraints"] = new JsonObject(),
                     ["resultConstraints"] = new JsonObject(),
@@ -111,7 +112,10 @@ public sealed class WorkbenchSpecialistRuntimeTests
             ["contract"] = new JsonObject
             {
                 ["contractSchemaVersion"] = capabilities["contractSchemaVersions"]![0]!.DeepClone(),
-                ["inputs"] = new JsonArray(),
+                ["inputs"] = withBrief
+                    ? new JsonArray(new JsonObject { ["referenceKey"] = "brief", ["name"] = "Brief", ["type"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "Single" },
+                        ["isRequired"] = true, ["isNullable"] = false, ["default"] = null, ["storageDriverKey"] = "elsa.json" })
+                    : new JsonArray(),
                 ["outputs"] = new JsonArray(),
                 ["outcomes"] = outcomes
             },
@@ -120,6 +124,59 @@ public sealed class WorkbenchSpecialistRuntimeTests
         await AssertStatusAsync(HttpStatusCode.Created, created, "Creating the agent");
         return (string)(await created.Content.ReadFromJsonAsync<JsonNode>())!["draft"]!["draftId"]!;
 
+    }
+
+    [Fact]
+    public async Task Stock_development_shell_reads_a_real_invocations_evidence_by_test_run_and_by_occurrence()
+    {
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        using var client = await SignedInClientAsync(workbench);
+        // A closed local port: the model request is admitted and dispatched, then refused locally, so nothing leaves the machine.
+        var draftId = await CreateAgentDraftAsync(client, "unreachable-model", "https://localhost:9/", "localhost", withBrief: true);
+
+        using var started = await client.PostAsync($"/publishing/activity-drafts/{draftId}/test-runs", Json(new JsonObject
+        {
+            ["expectedRevision"] = 1, ["idempotencyKey"] = "evidence-real",
+            ["inputs"] = new JsonObject { ["brief"] = new JsonObject { ["state"] = "Present", ["value"] = "moss gardens" } }
+        }));
+        await AssertStatusAsync(HttpStatusCode.Accepted, started, "Starting the test run");
+        var testRunId = (string)(await started.Content.ReadFromJsonAsync<JsonNode>())!["testRunId"]!;
+
+        JsonNode view = null!;
+        for (var attempt = 0; attempt < 120; attempt++)
+        {
+            view = (await client.GetFromJsonAsync<JsonNode>($"/agent/specialists/test-runs/{testRunId}/evidence"))!;
+            if ((string?)view["status"] is "Completed" or "Faulted" or "Cancelled") break;
+            await Task.Delay(500);
+        }
+        var invocation = view["invocation"];
+        Assert.True(invocation is not null && (string?)view["status"] == "Faulted", $"The run did not fault with evidence: {view.ToJsonString()}");
+        var turn = invocation!["turn"]!;
+        Assert.Single(turn["modelRequests"]!.AsArray());
+        Assert.Contains((string?)turn["status"], new[] { "OutcomeUnknown", "Failed" });
+        Assert.Equal("draft-1", (string?)invocation["specialist"]!["version"]);
+        Assert.Equal("unreachable-model", (string?)invocation["model"]!["connectionName"]);
+        Assert.True((bool)view["valuesPermitted"]!);
+        Assert.DoesNotContain("placeholder-not-a-key", view.ToJsonString(), StringComparison.Ordinal);
+
+        var workflowExecutionId = (string)view["workflowExecutionId"]!;
+        var activityExecutionId = (string)invocation["activityExecutionId"]!;
+        using var occurrence = await client.GetAsync($"/agent/specialists/invocations/{workflowExecutionId}/{activityExecutionId}/evidence");
+        await AssertStatusAsync(HttpStatusCode.OK, occurrence, "Reading the occurrence evidence");
+        var read = (await occurrence.Content.ReadFromJsonAsync<JsonNode>())!;
+        Assert.Equal(activityExecutionId, (string?)read["invocation"]!["activityExecutionId"]);
+        Assert.Equal((string?)turn["status"], (string?)read["invocation"]!["turn"]!["status"]);
+        Assert.DoesNotContain("placeholder-not-a-key", read.ToJsonString(), StringComparison.Ordinal);
+
+        // Run inspection's state view names the occurrence as an agent invocation, which Studio links to its evidence page.
+        var stateView = (await client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view"))!;
+        Assert.True((bool)stateView["available"]!, stateView.ToJsonString());
+        Assert.Equal(("elsa.specialist.invocation", 1, true), ((string?)stateView["viewKind"], (int?)stateView["viewVersion"], (bool?)stateView["view"]!["invocation"]));
+
+        using var other = await client.GetAsync($"/agent/specialists/invocations/{workflowExecutionId}/not-an-activity/evidence");
+        await AssertStatusAsync(HttpStatusCode.NotFound, other, "Reading a non-specialist occurrence");
+        using var missing = await client.GetAsync($"/agent/specialists/invocations/not-a-run/{activityExecutionId}/evidence");
+        await AssertStatusAsync(HttpStatusCode.NotFound, missing, "Reading an unknown run");
     }
 
     private static async Task AssertStatusAsync(HttpStatusCode expected, HttpResponseMessage response, string step) =>

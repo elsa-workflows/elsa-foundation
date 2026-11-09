@@ -92,6 +92,26 @@ internal sealed class FileChunkStore : IFileChunkPublisher
         }
     }
 
+    public async ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        var key = KeyFor(effectIdentity);
+        try
+        {
+            return await ReadDescriptorAsync(Path.Combine(outputRoot, key), key, maxBytes, cancellationToken);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new EtlEffectException("etl.output-read-failed", "The ETL object could not be read.", exception);
+        }
+    }
+
     public async ValueTask<EtlChunk> PublishAsync(
         string outputRoot,
         string effectIdentity,

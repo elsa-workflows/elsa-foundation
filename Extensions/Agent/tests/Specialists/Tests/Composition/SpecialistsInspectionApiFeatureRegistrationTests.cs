@@ -8,17 +8,16 @@ namespace Elsa.Agent.Specialists.Tests.Composition;
 public sealed class SpecialistsInspectionApiFeatureRegistrationTests
 {
     [Fact]
-    public void Inspection_api_declares_its_capability_with_the_evidence_link_and_its_fault_renderer()
+    public void Inspection_api_declares_its_capability_with_both_evidence_links_and_its_fault_renderer()
     {
         var services = new ServiceCollection();
         new SpecialistsInspectionApiFeature().ConfigureServices(services);
 
         var capability = Assert.Single(services.Where(x => x.ImplementationInstance is ApiCapabilityDeclaration).Select(x => (ApiCapabilityDeclaration)x.ImplementationInstance!),
             x => x.CapabilityId == "elsa.api.agent-specialist-inspection");
-        var link = Assert.Single(capability.Links);
-        Assert.Equal("agent-specialist-test-run-evidence", link.Rel);
-        Assert.Equal(SpecialistInspectionApi.TestRunEvidenceRoute, link.Href);
-        Assert.Single(services, x => x.ServiceType == typeof(NativeEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistInspectionApi.OwnerId)
+        Assert.Equal([("agent-specialist-invocation-evidence", SpecialistInspectionApi.InvocationEvidenceRoute), ("agent-specialist-test-run-evidence", SpecialistInspectionApi.TestRunEvidenceRoute)],
+            capability.Links.Select(x => (x.Rel, x.Href)).Order());
+        Assert.Single(services, x => x.ServiceType == typeof(MinimalEndpoints.IEndpointFaultRenderer) && x.IsKeyedService && Equals(x.ServiceKey, SpecialistInspectionApi.OwnerId)
             && x.KeyedImplementationType == typeof(SpecialistInspectionFaultRenderer));
     }
 }

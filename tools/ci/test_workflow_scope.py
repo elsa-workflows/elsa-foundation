@@ -21,9 +21,25 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertTrue(selected['studio'])
         self.assertFalse(selected['weaver'])
 
-    def test_ready_event_only_starts_affected_weaver(self):
-        selected = self.selected(paths=['Studio/src/Feature.ts'], action='ready_for_review')
-        self.assertEqual(['weaver'], [name for name, enabled in selected.items() if enabled])
+    def test_composed_acceptance_inputs_and_deletions_select_studio(self):
+        for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
+                     'Studio/tests/acceptance/journeys.spec.ts',
+                     'Essentials/apps/Elsa.Workbench/shells.json',
+                     'Extensions/Agent/specialists/Core/Manifest.cs']:
+            with self.subTest(path=path):
+                self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
+
+    def test_ready_event_runs_the_same_proofs_as_a_ready_push(self):
+        for paths in [['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
+                      ['tools/contributor-pair-proof/run.mjs'], ['.github/workflows/ci.yml'], None]:
+            with self.subTest(paths=paths):
+                selected = self.selected(paths=paths, action='ready_for_review', pull_request={'draft': False})
+                pushed = self.selected(paths=paths, action='synchronize', pull_request={'draft': False})
+                self.assertEqual(pushed, selected)
+                self.assertTrue(any(selected.values()))
+
+    def test_docs_ready_event_does_not_start_unrelated_proofs(self):
+        self.assertFalse(any(self.selected(paths=['docs/README.md'], action='ready_for_review').values()))
 
     def test_push_always_validates_studio_but_scopes_weaver(self):
         self.assertEqual(['studio'], [name for name, enabled in self.selected('push', ['docs/README.md']).items() if enabled])

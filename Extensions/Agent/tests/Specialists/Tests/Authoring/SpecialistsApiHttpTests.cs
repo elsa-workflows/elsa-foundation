@@ -25,7 +25,7 @@ using Xunit;
 namespace Elsa.Agent.Specialists.Tests.Authoring;
 
 /// <summary>The editor's model reads: only providers that can back a specialist, and the same capabilities publication consults.</summary>
-public sealed class SpecialistsApiHttpTests : IAsyncLifetime
+public sealed partial class SpecialistsApiHttpTests : IAsyncLifetime
 {
     internal const string Scheme = "SpecialistsApiTest";
     private const string Author = "activities/design:author";
@@ -35,12 +35,15 @@ public sealed class SpecialistsApiHttpTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        await sourceConnection.OpenAsync();
+        await using (var sourceDb = new AgentSourceTestContext(sourceConnection)) await sourceDb.Database.EnsureCreatedAsync();
         host = new HostBuilder().ConfigureWebHost(web =>
         {
             web.UseTestServer();
             web.ConfigureServices(services =>
             {
                 services.AddLogging();
+                AddSourceStorage(services);
                 services.AddRouting();
                 services.AddAuthentication(Scheme).AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(Scheme, _ => { });
                 services.AddAuthorization();
@@ -70,6 +73,7 @@ public sealed class SpecialistsApiHttpTests : IAsyncLifetime
     {
         await host.StopAsync();
         host.Dispose();
+        await sourceConnection.DisposeAsync();
     }
 
     [Fact]
