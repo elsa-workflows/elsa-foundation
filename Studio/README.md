@@ -23,6 +23,7 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
+- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../Extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 - `Elsa.Studio.ExtensionBuilder` is an optional module: the Extension Builder page plus its bridge relay to the backend's `/_elsa/extension-builder` surface. It is not part of the default composition (see below).
 
@@ -63,6 +64,7 @@ Features ship in:
 | Feature name | Library | Contract |
 |---|---|---|
 | `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
+| `DecisionsStudio` | `Elsa.Studio.Decisions` | `IShellFeature` |
 | `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
 | `DashboardStudio` | `Elsa.Studio.Dashboard` | `IShellFeature` |
 | `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudioHttpError, type StudioActivityDefinitionImplementationState, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { SpecialistEditor } from "../SpecialistEditor";
+import { specialistEditorContributions } from "../module";
 import { initialSpecialistManifest, readSpecialistManifest, secondsToMilliseconds, specialistProblems, unreadableMembers } from "../specialistManifest";
 
 const cleanup = new Set<() => void>();
@@ -97,6 +98,33 @@ const configured = () => ({
 });
 
 describe("specialist editor", () => {
+  it("focuses actual instruction/model controls and reveals advanced execution limits", async () => {
+    const { context } = fakeContext();
+    const { container } = await render(context, configured());
+    const focus = specialistEditorContributions[0].focusDiagnosticLocation!;
+    for (const [pointer, label] of [["/instructions", "Instructions"], ["/model", "Model connection"], ["/limits/maximumModelCalls", "Maximum model calls"], ["/limits/timeoutMilliseconds", "Timeout (seconds)"]]) {
+      const result = await focus({ location: { providerKey: "elsa.specialist", jsonPointer: pointer }, subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, editorElement: container });
+      expect(result.kind).toBe("focused");
+      expect(document.activeElement).toBe(field(container, label));
+      if (pointer.startsWith("/limits/")) expect(container.querySelector<HTMLDetailsElement>(".agent-specialist-advanced")!.open).toBe(true);
+    }
+    const unsupported = await focus({ location: { providerKey: "elsa.specialist", jsonPointer: "/future-private-field" }, subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, editorElement: container });
+    expect(unsupported.kind).toBe("unsupported");
+  });
+
+  it("focuses the settings group for generic settings errors instead of a valid temperature", async () => {
+    const { context } = fakeContext();
+    const { container } = await render(context, { ...configured(), settings: { temperature: 0.3, top_p: 0.9 } });
+    const result = await specialistEditorContributions[0].focusDiagnosticLocation!({
+      location: { providerKey: "elsa.specialist", jsonPointer: "/settings" },
+      subject: { kind: "ActivityDefinition", id: "elsa.specialist" }, editorElement: container
+    });
+    expect(result.kind).toBe("focused");
+    expect(document.activeElement).toBe(container.querySelector("[data-specialist-field='model-group']"));
+    expect(document.activeElement).not.toBe(field(container, "Temperature"));
+    expect(button(container, "Remove unsupported settings")).toBeTruthy();
+  });
+
   it("links the saved draft revision to the agent playground", async () => {
     const { context } = fakeContext();
     const { container } = await render(context, { ...initialSpecialistManifest(), allowContinuity: false });
