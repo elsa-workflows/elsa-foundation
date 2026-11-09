@@ -4,7 +4,23 @@ Status: active, owner-authorized 18 October 2026. Steward: Sipke; delivery lead:
 
 [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) is the authoritative queue and progress record. The [program board](https://github.com/orgs/elsa-workflows/projects/62) mirrors the native hierarchy and separates delivery status from verification; issue comments and acceptance remain authoritative. The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967) and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156) supersede the earlier research-only gate within this program's scope. They do not reactivate unrelated parked work.
 
-## Outcome
+## Active milestone — 8 November 2026
+
+[Owner-approved smaller scope and resumption](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6727251664):
+
+> Deliver a verified SQLite execution milestone in which a native workflow invokes BPMN, waits durably, survives host restart, and handles completion, fault, retry and cancellation correctly. Preserve model-specific semantics and existing authoring contracts. Reuse merged recovery evidence, close the remaining gaps, remove demonstrated obsolete code and redundant tests, and verify the integrated result on main.
+
+Profile: SQLite, built-in host, root native parent and existing supported BPMN human/service-task paths. Completion of this milestone leaves Program #2892 open.
+
+The finish line is: selected-path cancellation with late-result refusal; restart/settlement and fault/retry proofs; disposition of the recorded post-restart timeout; applicable authoring/API compatibility; bounded code/test cleanup preserving unique coverage; one persistence/coordination overhead observation; a runnable example and supported-profile documentation; independent review, green exact-head required checks, protected landing and resulting-main verification.
+
+Reuse the source-bound evidence from [#3988](https://github.com/elsa-workflows/elsa-foundation/pull/3988), [#3992](https://github.com/elsa-workflows/elsa-foundation/pull/3992), [#3993](https://github.com/elsa-workflows/elsa-foundation/pull/3993) and [#3995](https://github.com/elsa-workflows/elsa-foundation/pull/3995). Merged ancestry is insufficient when later changes remove the witnesses: main `49c10b7732506a708f7cafa6932768c9b9556c13` deleted their new tests and qualification notes. Restoring those scoped postimages preserves their historical attribution; it does not constitute a fresh execution pass.
+
+R3 managed-store recovery, ETL expansion, native collaboration, additional providers/multi-host, comprehensive Studio/browser acceptance and generic-kernel extraction are deferred from this milestone, retained in the program. Existing claims, review counts, failures and holds remain; this resumption does not restart their paused workers or automations. Other programs keep separate ownership.
+
+Project #62 remains the board mirror. If the Codex App cannot resolve it, record the intended In Progress status and source-bound progress on the program issue, state the access limitation, and reconcile board fields when access is restored. Do not claim a direct board update from the fallback.
+
+## Broader program outcome — retained
 
 [Owner-confirmed goal, 29 October 2026](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6489393346):
 
@@ -14,7 +30,7 @@ The target is support for native workflows, first-class and embedded BPMN, and E
 
 ## Delivery sequence
 
-The immediate sequence is direct BPMN start → wait → host restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration using the delivered ETL capabilities. Continue the remaining approved scope after those journeys; preserve the existing deferrals and compatibility gates. Small verified increments advance the existing issue/PR, with Project62 reconciled at material transitions.
+The active sequence is the smaller native/BPMN SQLite milestone above. The historical wider sequence and its ETL, hosting, collaboration and Studio obligations remain backlog rather than prerequisites for this milestone. Preserve existing deferrals and compatibility gates. Small verified increments advance the existing issue/PR, with Project #62 reconciled at material transitions.
 
 | Stage | Delivery gate | Tracking |
 |---|---|---|
