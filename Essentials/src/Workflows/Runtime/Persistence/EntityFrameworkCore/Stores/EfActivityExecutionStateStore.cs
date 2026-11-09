@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -13,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfActivityExecutionStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore, IWorkflowExecutionRowPresenceProbe
 {
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
@@ -90,6 +91,20 @@ public sealed class EfActivityExecutionStateStore(
             () => context.ActivityExecutionStates.LongCountAsync(row =>
                 row.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) &&
                 row.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId), cancellationToken));
+    }
+
+    // The predicate matches on the scope and workflow hashes, as CountAsync does. A hash collision can only make
+    // another run's rows count as this run's, which answers true and costs the saving, never correctness.
+    async ValueTask<bool> IWorkflowExecutionRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "probing", workflowExecutionId,
+            () => context.ActivityExecutionStates.AsNoTracking().AnyAsync(row =>
+                row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash, cancellationToken));
     }
 
     public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default)

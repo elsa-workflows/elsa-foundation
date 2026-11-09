@@ -283,6 +283,13 @@ The existing fused Schedule anchors and committed continuation retain recovery r
 
 **Inspection reads see the segment's own data first.** Building an activity's inspection view reads the inspection store to choose how to merge. Inside a folding segment, the buffer first serves the view the segment already recorded for that activity, so a later checkpoint merges onto it as it would onto a saved one. (Building from the saved baseline instead dropped what the earlier checkpoint recorded, such as the outcome of a root activity that completed in the same commit as its workflow.) An activity the session has not recorded yet is read from the durable store, so each activity's durable row is read at most once per drain.
 
+**A run with no saved rows is not read row by row.** Scheduling an activity looks up its activity state and its inspection view, and for a new activity both lookups find nothing. When a drain begins for a run that has no saved record, the first such lookup asks the store one question instead: does it hold any row of this run? If it holds none, a row can only be there because this session sent it, so from then on a lookup of any other row returns nothing without a query. Ten new activities then cost two questions instead of twenty lookups.
+
+- The answer comes from the store, not from the missing record. A lost start, a direct save or a partly deleted run can leave rows without a record; the question finds them, and every lookup then goes to the store as before.
+- A row counts as possibly saved from the moment its save is attempted, so a save that fails after landing is still looked up. A direct save through the activity state store counts too.
+- When another drain scope becomes the ambient one, such as a nested drain, the session stops answering and every lookup goes to the store.
+- A run that already has a saved record is not asked: its rows are read as before. Only the EF activity stores can be asked; with the in-memory stores a lookup is already a dictionary read.
+
 **Reusing durable-value pages.** Within one eligible folding drain, unchanged provider pages of durable values are not read again. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to `false` to compare the same mode without reuse. This switch does not change any run's mode.
 
 - Reuse needs an unambiguous first-party EF backend that still owns its registrations, the shared built-in HMAC continuation codec, and the same live persistence scope. Unsupported, custom, overridden or ambiguous setups fall back to provider reads.

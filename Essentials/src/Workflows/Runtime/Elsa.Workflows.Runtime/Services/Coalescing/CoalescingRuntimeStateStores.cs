@@ -53,15 +53,40 @@ public sealed class CoalescingActivityExecutionStateStore(
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore
 {
     private readonly IActivityExecutionStateStore _inner = inner.Value;
+    private readonly IWorkflowExecutionRowPresenceProbe? _presenceProbe = inner.Value as IWorkflowExecutionRowPresenceProbe;
 
-    public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
-        _inner.SaveAsync(state, cancellationToken);
+    public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        // A direct save goes past the working set, so the session must stop answering for this row.
+        if (sessionAccessor.Current is { } session && session.AppliesTo(state.Execution.WorkflowExecutionId))
+            session.ActivityBaseline.RecordPossibleWrite(state.Execution.ActivityExecutionId);
+
+        return _inner.SaveAsync(state, cancellationToken);
+    }
 
     public async ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
-            session.TryGetActivity(activityExecutionId, out var overlay, out _))
-            return overlay;
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
+        {
+            if (session.TryGetActivity(activityExecutionId, out var overlay, out _))
+                return overlay;
+
+            // A run with no durable record is probed once. If the store holds none of its rows, a row this session
+            // has not sent there cannot exist, so a newly scheduled activity costs no read.
+            var baseline = session.ActivityBaseline;
+            if (baseline.NeedsProbe)
+            {
+                if (_presenceProbe is { } probe)
+                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken));
+                else
+                    baseline.End();
+            }
+
+            if (baseline.IsKnownAbsent(activityExecutionId))
+                return null;
+        }
 
         return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
     }
@@ -459,13 +484,16 @@ internal static class CoalescingRuntimeStorePageMerger
 /// exactly as it would have merged onto a committed one. Building from the durable baseline instead would drop what the
 /// recorded projection holds, such as the outcome a completion carried, when the activity's later checkpoint folds
 /// into the same commit. An activity the session has recorded nothing for is read from the durable store, so each
-/// activity's durable row is read at most once per drain.
+/// activity's durable row is read at most once per drain. The exception is a run with no durable record whose store
+/// can be probed (<see cref="IWorkflowExecutionRowPresenceProbe"/>) and holds none of its projections: there an
+/// activity the session has not written is not read at all.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
     CoalescingInner<IActivityExecutionInspectionStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
+    private readonly IWorkflowExecutionRowPresenceProbe? _presenceProbe = inner.Value as IWorkflowExecutionRowPresenceProbe;
 
     public bool SupportsExecutionBrowsing => _inner.SupportsExecutionBrowsing;
 
@@ -474,9 +502,23 @@ public sealed class CoalescingActivityExecutionInspectionStore(
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
-            session.TryGetInspection(activityExecutionId, out var recorded))
-            return recorded;
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
+        {
+            if (session.TryGetInspection(activityExecutionId, out var recorded))
+                return recorded;
+
+            var baseline = session.InspectionBaseline;
+            if (baseline.NeedsProbe)
+            {
+                if (_presenceProbe is { } probe)
+                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken));
+                else
+                    baseline.End();
+            }
+
+            if (baseline.IsKnownAbsent(activityExecutionId))
+                return null;
+        }
 
         return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
     }

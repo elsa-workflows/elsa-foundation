@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -22,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed partial class EfActivityExecutionInspectionStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter, IWorkflowExecutionRowPresenceProbe
 {
     private const string ContinuationPurpose = "elsa-runtime-activity-execution-inspection-summary-page-v1";
 
@@ -84,6 +85,20 @@ public sealed partial class EfActivityExecutionInspectionStore(
         var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
             () => context.ActivityExecutionInspections.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
         return row is null ? null : ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
+    }
+
+    // The predicate matches on the scope and workflow hashes, as the summary page does. A hash collision can only
+    // make another run's projections count as this run's, which answers true and costs the saving, never correctness.
+    async ValueTask<bool> IWorkflowExecutionRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "probing", workflowExecutionId,
+            () => context.ActivityExecutionInspections.AsNoTracking().AnyAsync(row =>
+                row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash, cancellationToken));
     }
 
     public async ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(ActivityExecutionInspectionSummaryPageQuery query, CancellationToken cancellationToken = default)

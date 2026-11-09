@@ -105,6 +105,8 @@ public sealed class RuntimeCoalescingSession
         _innerOutboxStore = innerOutboxStore;
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
+        ActivityBaseline = new RuntimeCoalescingEmptyBaseline(runHadNoRecord: !mode.RunHasRecord);
+        InspectionBaseline = new RuntimeCoalescingEmptyBaseline(runHadNoRecord: !mode.RunHasRecord);
         RecordCompletion = options.RecordCompletion;
         // Durable commits once per activity whatever the host's Balanced cap is. Ephemeral has no cap: it commits only at
         // boundaries, however many activities it folds.
@@ -144,6 +146,13 @@ public sealed class RuntimeCoalescingSession
     /// session has landed since. Once true it stays true, so the run's completion is always committed.
     /// </summary>
     public bool HasDurableRecord { get; private set; }
+
+    /// <summary>What this session knows of the activity execution rows the durable store holds for the run.</summary>
+    internal RuntimeCoalescingEmptyBaseline ActivityBaseline { get; }
+
+    /// <summary>What this session knows of the inspection projections the durable store holds for the run.</summary>
+    internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; }
+
     public bool CoalesceDurableValueReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
@@ -242,6 +251,30 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Records that a commit for this run reached the durable store.</summary>
     internal void MarkDurableRecord() => HasDurableRecord = true;
+
+    /// <summary>
+    /// Records the activity execution rows and inspection projections a commit is about to send to the durable store,
+    /// so neither empty baseline answers for them again. Call it before the write: a write that fails may still land.
+    /// </summary>
+    internal void RecordPossibleDurableWrites(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+
+        foreach (var change in changes.ActivityExecutions)
+            ActivityBaseline.RecordPossibleWrite(change.StateId);
+        foreach (var change in changes.ActivityExecutionInspections)
+            InspectionBaseline.RecordPossibleWrite(change.StateId);
+    }
+
+    /// <summary>
+    /// Ends both empty baselines for good. A nested drain can write this run's rows while its own session is the
+    /// ambient one, which this session never sees.
+    /// </summary>
+    internal void EndEmptyBaselines()
+    {
+        ActivityBaseline.End();
+        InspectionBaseline.End();
+    }
 
     /// <summary>
     /// Whether <paramref name="completion"/> may be dropped instead of committed: the one exception to committing a
