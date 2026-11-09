@@ -5,7 +5,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 /// <summary>
 /// <c>.github/workflows/packages.yml</c> stays a thin shell over the publisher, and keeps its workflow-level
 /// requirements: no global <c>/p:Version</c>, no <c>--skip-duplicate</c>, serialized runs from main that
-/// are never cancelled in progress, and pushes from main alone.
+/// are never cancelled in progress, pushes from main alone, and a push that publishes only what its CI run passed.
 /// </summary>
 public sealed class PackagesWorkflowTests
 {
@@ -96,6 +96,7 @@ public sealed class PackagesWorkflowTests
         Assert.Contains("--sha \"$GITHUB_SHA\"", (string)gate["run"], StringComparison.Ordinal);
         Assert.True(steps.IndexOf(gate) < steps.IndexOf(plan), "The CI gate must run before the publisher plans.");
         Assert.True(int.Parse((string)Jobs["pack"]["timeout-minutes"]) >= 90, "The pack job must allow for a full CI run before packing.");
+        Assert.Equal("read", Map(Workflow, "permissions")["actions"]);
     }
 
     /// <summary>The bootstrap is the owner's manual act: a boolean dispatch input, off unless set.</summary>

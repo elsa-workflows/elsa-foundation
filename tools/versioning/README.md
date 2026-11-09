@@ -208,9 +208,10 @@ On a push to `main` the pack job runs neither command until the same commit's CI
 ([`tools/ci/await_ci_result.py`](../ci/await_ci_result.py), #4002). A CI run that fails, or is cancelled by a newer
 push, fails the Packages run before anything is packed: nothing reaches the feed, `publish-state` is not written, and
 `docker.yml` admits no image build for the commit. The newer commit's own run then publishes every change the refused
-one would have (FR-020). Manual runs do not wait; the operator chose the commit.
+one would have (FR-020). Manual runs do not wait; the operator chose the commit. A push that starts no CI run (a
+`[skip ci]` commit) waits out the budget and fails; publish it with a manual run.
 
-**`plan`**, the pack job's first step, asks the remote whether `publish-state` exists (an unanswered question fails;
+**`plan`**, the pack job's first publisher step (after the CI gate on a push), asks the remote whether `publish-state` exists (an unanswered question fails;
 it is never taken for "no") and decides the run's mode:
 
 | Run | `publish-state` | Mode | Computed against | Pushes |

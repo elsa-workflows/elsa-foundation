@@ -23,7 +23,8 @@ name: Packages
 # this workflow: 4.0.23-preview was published from a commit whose CI failed half an hour later. If the commit's CI
 # run fails or is cancelled by a newer push, this run fails before anything is packed, so no package reaches the
 # feed and docker.yml's admission (a successful Packages run) blocks the image build too; the newer commit's own run
-# publishes everything this one would have (FR-020). Manual runs do not wait: the operator chose the commit.
+# publishes everything this one would have (FR-020). Manual runs do not wait: the operator chose the commit. A push
+# that starts no CI run at all (a [skip ci] commit) waits out the budget and fails; publish it with a manual run.
 #
 # A GitHub Release publishes nothing until the 4.0 release cut, #2085. The reserved contributor-preview prereleases
 # are metadata-only; every other release keeps the explicit refusal.
@@ -65,6 +66,9 @@ concurrency:
 
 permissions:
   contents: read
+  # The CI gate below lists this repository's workflow runs; without actions: read the default token gets a 403 and
+  # every main push would fail to publish (docker.yml grants the same for the same query).
+  actions: read
 
 env:
   feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
@@ -92,7 +96,8 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/ci/await_ci_result.py --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
+        # 85 minutes of waiting plus the thirty-minute pack stays inside the job's 120.
+        run: python3 tools/ci/await_ci_result.py --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA" --timeout-minutes 85
 
       - uses: actions/setup-dotnet@v4
         with:

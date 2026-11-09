@@ -87,6 +87,57 @@ class WaitTests(unittest.TestCase):
         code, _, slept = self.run_gate([[ci_run(conclusion="failure")]])
         self.assertEqual((code, slept), (1, []))
 
+    def test_a_transient_api_error_is_retried_not_a_verdict(self) -> None:
+        from urllib.error import HTTPError, URLError
+        now = [0.0]
+        slept: list[float] = []
+        logged: list[str] = []
+        answers: list[object] = [HTTPError("u", 502, "bad gateway", None, None), URLError("dns"), ValueError("bad json"), [ci_run()]]
+
+        def fetch() -> list[dict[str, object]]:
+            answer = answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        def sleep(seconds: float) -> None:
+            slept.append(seconds)
+            now[0] += seconds
+
+        code = gate.wait_for_success(fetch, SHA, timeout_seconds=600, interval_seconds=60, clock=lambda: now[0], sleep=sleep, log=logged.append)
+        self.assertEqual((code, slept), (0, [60, 60, 60]))
+        self.assertTrue(all("retrying" in line for line in logged[:3]))
+
+    def test_a_permission_refusal_fails_at_once(self) -> None:
+        from email.message import Message
+        from urllib.error import HTTPError
+        logged: list[str] = []
+        slept: list[float] = []
+
+        def forbidden() -> list[dict[str, object]]:
+            raise HTTPError("u", 403, "Forbidden", Message(), None)
+
+        code = gate.wait_for_success(forbidden, SHA, timeout_seconds=600, interval_seconds=60, clock=lambda: 0.0, sleep=slept.append, log=logged.append)
+        self.assertEqual((code, slept), (1, []))
+        self.assertIn("actions: read", logged[-1])
+
+    def test_a_rate_limited_403_is_retried(self) -> None:
+        from email.message import Message
+        from urllib.error import HTTPError
+        headers = Message()
+        headers["Retry-After"] = "30"
+        answers: list[object] = [HTTPError("u", 403, "rate limited", headers, None), [ci_run()]]
+        slept: list[float] = []
+
+        def fetch() -> list[dict[str, object]]:
+            answer = answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        code = gate.wait_for_success(fetch, SHA, timeout_seconds=600, interval_seconds=60, clock=lambda: 0.0, sleep=slept.append, log=lambda _: None)
+        self.assertEqual((code, slept), (0, [60]))
+
     def test_gives_up_at_the_deadline(self) -> None:
         code, logged, slept = self.run_gate([[ci_run(status="queued", conclusion=None)]], timeout=150, interval=60)
         self.assertEqual(code, 1)
