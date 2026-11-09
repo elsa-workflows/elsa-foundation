@@ -178,9 +178,10 @@ internal static class ModuleManagementEndpoints
         catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
     }
 
-    private static IReadOnlyList<ModuleManagementFeed> ReadFeeds(IConfiguration configuration) =>
-        configuration.GetSection(FeedPrefix).GetChildren().Select(feed => new ModuleManagementFeed(
-            feed["Name"] ?? "", feed["ServiceIndex"], feed["DirectoryPath"], feed["Credentials"], feed.GetValue<bool>("IncludeAll"),
+    // The registry view never reads a feed's Credentials value: it stays in the host's configuration (#3735).
+    private static IReadOnlyList<ModuleManagementRegistryFeed> ReadFeeds(IConfiguration configuration) =>
+        configuration.GetSection(FeedPrefix).GetChildren().Select(feed => new ModuleManagementRegistryFeed(
+            feed["Name"] ?? "", feed["ServiceIndex"], feed["DirectoryPath"], feed.GetValue<bool>("IncludeAll"),
             feed.GetSection("IncludePatterns").GetChildren().Select(item => item.Value).OfType<string>().ToArray(),
             new(feed.GetValue<bool?>("Directory:Watch") ?? true, feed["Directory:DebounceWindow"] ?? "00:00:01")))
         .Where(feed => !string.IsNullOrWhiteSpace(feed.Name)).OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -191,7 +192,8 @@ internal static class ModuleManagementEndpoints
         result["Name"] = name;
         result["ServiceIndex"] = feed.ServiceIndex;
         result["DirectoryPath"] = feed.DirectoryPath;
-        result["Credentials"] = feed.Credentials;
+        // A write without a credential keeps the stored one: the browser never receives it, so it cannot send it back.
+        if (!string.IsNullOrWhiteSpace(feed.Credentials)) result["Credentials"] = feed.Credentials;
         result["IncludeAll"] = feed.IncludeAll;
         result["IncludePatterns"] = JsonSerializer.SerializeToNode(feed.IncludePatterns ?? [], JsonOptions);
         var directory = ManagementConfigurationStore.Object(result, "Directory");
