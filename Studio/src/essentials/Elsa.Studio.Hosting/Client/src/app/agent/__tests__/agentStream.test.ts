@@ -42,7 +42,7 @@ describe("agent stream", () => {
   });
 
   it("attaches endpoint access tokens to stream requests", async () => {
-    const fetch = vi.fn(async () => new Response(streamFrom([
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(streamFrom([
       `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`
     ]), { status: 200 }));
 

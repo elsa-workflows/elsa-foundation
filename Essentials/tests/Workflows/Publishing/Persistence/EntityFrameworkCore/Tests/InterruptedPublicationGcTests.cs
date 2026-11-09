@@ -67,6 +67,8 @@ public sealed class InterruptedPublicationGcTests : IAsyncLifetime
             var sweepNow = createdAt + grace + TimeSpan.FromMinutes(1);
             sweep = await collector.SweepAsync(sweepNow);
             afterGc = await CaptureNativeAsync(interrupted, artifactId);
+            Assert.False(afterGc.ArtifactPresent, "The sweep must delete the staged artifact before retry classification.");
+            Assert.Equal(1, sweep.DeletedArtifactCount);
 
             output.WriteLine(
                 "native interrupted-publication GC: grace={0} pumpSweep={1} pumpMaxBackoff={2} createdAt={3:o} sweepNow={4:o} deletedArtifacts={5} deletedReferences={6}",
