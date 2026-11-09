@@ -23,8 +23,8 @@ name: Packages
 # this workflow: 4.0.23-preview was published from a commit whose CI failed half an hour later. If the commit's CI
 # run fails or is cancelled by a newer push, this run fails before anything is packed, so no package reaches the
 # feed and docker.yml's admission (a successful Packages run) blocks the image build too; the newer commit's own run
-# publishes everything this one would have (FR-020). Manual runs do not wait: the operator chose the commit. A push
-# that starts no CI run at all (a [skip ci] commit) waits out the budget and fails; publish it with a manual run.
+# publishes everything this one would have (FR-020). Manual runs do not wait: the operator chose the commit. If no
+# CI push run for the commit ever appears, the gate waits out its budget and fails; publish it with a manual run.
 #
 # A GitHub Release publishes nothing until the 4.0 release cut, #2085. The reserved contributor-preview prereleases
 # are metadata-only; every other release keeps the explicit refusal.

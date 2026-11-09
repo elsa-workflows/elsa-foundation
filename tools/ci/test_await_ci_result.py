@@ -108,35 +108,53 @@ class WaitTests(unittest.TestCase):
         self.assertEqual((code, slept), (0, [60, 60, 60]))
         self.assertTrue(all("retrying" in line for line in logged[:3]))
 
-    def test_a_permission_refusal_fails_at_once(self) -> None:
-        from email.message import Message
-        from urllib.error import HTTPError
+    def run_errors(self, answers: list[object], *, timeout: float = 600) -> tuple[int, list[str], list[float]]:
+        now = [0.0]
+        slept: list[float] = []
         logged: list[str] = []
-        slept: list[float] = []
-
-        def forbidden() -> list[dict[str, object]]:
-            raise HTTPError("u", 403, "Forbidden", Message(), None)
-
-        code = gate.wait_for_success(forbidden, SHA, timeout_seconds=600, interval_seconds=60, clock=lambda: 0.0, sleep=slept.append, log=logged.append)
-        self.assertEqual((code, slept), (1, []))
-        self.assertIn("actions: read", logged[-1])
-
-    def test_a_rate_limited_403_is_retried(self) -> None:
-        from email.message import Message
-        from urllib.error import HTTPError
-        headers = Message()
-        headers["Retry-After"] = "30"
-        answers: list[object] = [HTTPError("u", 403, "rate limited", headers, None), [ci_run()]]
-        slept: list[float] = []
 
         def fetch() -> list[dict[str, object]]:
-            answer = answers.pop(0)
+            answer = answers.pop(0) if len(answers) > 1 else answers[0]
             if isinstance(answer, Exception):
                 raise answer
             return answer
 
-        code = gate.wait_for_success(fetch, SHA, timeout_seconds=600, interval_seconds=60, clock=lambda: 0.0, sleep=slept.append, log=lambda _: None)
+        def sleep(seconds: float) -> None:
+            slept.append(seconds)
+            now[0] += seconds
+
+        code = gate.wait_for_success(fetch, SHA, timeout_seconds=timeout, interval_seconds=60, clock=lambda: now[0], sleep=sleep, log=logged.append)
+        return code, logged, slept
+
+    def test_a_permission_refusal_fails_at_once(self) -> None:
+        import io
+        from email.message import Message
+        from urllib.error import HTTPError
+        for code, body in ((401, b""), (404, b"{}"), (403, b'{"message":"Resource not accessible by integration"}')):
+            with self.subTest(code=code):
+                result, logged, slept = self.run_errors([HTTPError("u", code, "refused", Message(), io.BytesIO(body))])
+                self.assertEqual((result, slept), (1, []))
+                self.assertIn("actions: read", logged[-1])
+
+    def test_rate_limited_403s_are_retried_with_or_without_a_retry_after_header(self) -> None:
+        import io
+        from email.message import Message
+        from urllib.error import HTTPError
+        with_header = Message()
+        with_header["Retry-After"] = "30"
+        exhausted = Message()
+        exhausted["x-ratelimit-remaining"] = "0"
+        secondary = HTTPError("u", 403, "rate limited", Message(), io.BytesIO(b'{"message":"You have exceeded a secondary rate limit."}'))
+        for error in (HTTPError("u", 403, "rate limited", with_header, None), HTTPError("u", 403, "rate limited", exhausted, None), secondary):
+            with self.subTest(error=error):
+                code, _, slept = self.run_errors([error, [ci_run()]])
+                self.assertEqual((code, slept), (0, [60]))
+
+    def test_a_truncated_body_is_retried(self) -> None:
+        from http.client import IncompleteRead
+        code, logged, slept = self.run_errors([IncompleteRead(b"partial"), [ci_run()]])
         self.assertEqual((code, slept), (0, [60]))
+        self.assertIn("retrying", logged[0])
 
     def test_gives_up_at_the_deadline(self) -> None:
         code, logged, slept = self.run_gate([[ci_run(status="queued", conclusion=None)]], timeout=150, interval=60)

@@ -17,6 +17,7 @@ import sys
 import time
 from typing import Any, Callable
 from urllib import parse, request
+from http.client import HTTPException
 from urllib.error import HTTPError
 
 WORKFLOW_FILE = "ci.yml"
@@ -48,12 +49,21 @@ def decide(runs: list[dict[str, Any]], sha: str) -> tuple[str, str]:
     return "wait", f"CI for {sha[:10]} is still running: {pending}."
 
 
-def rate_limited(error: HTTPError) -> bool:
-    """A 403 that is a primary or secondary rate limit is transient; one that is a permission refusal is not."""
-    headers = error.headers
-    if headers is None:
+def permission_refused(error: HTTPError) -> bool:
+    """Only a 401, a 404, or GitHub's explicit permission refusal is final; every other 403 (rate limits, with or
+    without a Retry-After header) is transient and worth another poll."""
+    if error.code in (401, 404):
+        return True
+    if error.code != 403:
         return False
-    return headers.get("Retry-After") is not None or headers.get("X-RateLimit-Remaining") == "0"
+    headers = error.headers
+    if headers is not None and (headers.get("Retry-After") is not None or headers.get("X-RateLimit-Remaining") == "0"):
+        return False
+    try:
+        body = error.read().decode("utf-8", "replace") if error.fp is not None else ""
+    except (OSError, ValueError, HTTPException):
+        body = ""
+    return "not accessible" in body.lower()
 
 
 def fetch_runs(repository: str, sha: str, token: str | None) -> list[dict[str, Any]]:
@@ -83,14 +93,15 @@ def wait_for_success(
         try:
             verdict, reason = decide(fetch(), sha)
         except HTTPError as error:
-            if error.code in (401, 404) or (error.code == 403 and not rate_limited(error)):
+            if permission_refused(error):
                 # The token cannot see this repository's runs: waiting will not change that. Fail at once.
                 verdict, reason = "failure", f"GitHub refused the CI run listing for {sha[:10]} with HTTP {error.code}; check the workflow's actions: read permission."
             else:
                 verdict, reason = "wait", f"GitHub answered HTTP {error.code} while listing CI runs for {sha[:10]}; retrying."
-        except (OSError, ValueError) as error:
-            # URLError and socket timeouts are OSErrors; a malformed page is a ValueError. A blip during a long poll
-            # is not a verdict about the commit, so keep waiting until the budget runs out.
+        except (OSError, ValueError, HTTPException) as error:
+            # URLError and socket timeouts are OSErrors, a truncated body is an http.client.HTTPException, a malformed
+            # page is a ValueError. A blip during a long poll is not a verdict about the commit, so keep waiting
+            # until the budget runs out.
             verdict, reason = "wait", f"Could not read the CI runs for {sha[:10]} ({error}); retrying."
         log(reason)
         if verdict == "success":
