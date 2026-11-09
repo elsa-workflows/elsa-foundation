@@ -80,6 +80,24 @@ public sealed class PackagesWorkflowTests
         Assert.Contains($"-p:PackageOutputPath=\"$RUNNER_TEMP/versions/{PlanFiles.Packages}\"", pack, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A push to main publishes only what CI has passed (#4002): the pack job's first script waits for the commit's
+    /// CI push run before the publisher plans, and fails rather than skips when that run did not succeed. Manual runs
+    /// are the operator's choice and do not wait.
+    /// </summary>
+    [Fact]
+    public void A_push_from_main_waits_for_the_commits_CI_run_before_planning()
+    {
+        var steps = ((List<object>)Jobs["pack"]["steps"]).Cast<Dictionary<object, object>>().ToList();
+        var gate = steps.Single(step => step.TryGetValue("run", out var run) && ((string)run).Contains("tools/ci/await_ci_result.py", StringComparison.Ordinal));
+        var plan = steps.Single(step => step.TryGetValue("id", out var id) && (string)id == "plan");
+
+        Assert.Equal("${{ github.event_name == 'push' }}", (string)gate["if"]);
+        Assert.Contains("--sha \"$GITHUB_SHA\"", (string)gate["run"], StringComparison.Ordinal);
+        Assert.True(steps.IndexOf(gate) < steps.IndexOf(plan), "The CI gate must run before the publisher plans.");
+        Assert.True(int.Parse((string)Jobs["pack"]["timeout-minutes"]) >= 90, "The pack job must allow for a full CI run before packing.");
+    }
+
     /// <summary>The bootstrap is the owner's manual act: a boolean dispatch input, off unless set.</summary>
     [Fact]
     public void The_bootstrap_is_a_manual_boolean_input_that_defaults_to_off()

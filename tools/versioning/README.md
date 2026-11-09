@@ -204,6 +204,12 @@ dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- publish \
 Both exit 0 when done, 1 when they refused or a publish failed, and 2 on invalid input. An empty `--force-advance`
 with an empty `--force-reason` means none, so the workflow passes its dispatch inputs as they are.
 
+On a push to `main` the pack job runs neither command until the same commit's CI push run has succeeded
+([`tools/ci/await_ci_result.py`](../ci/await_ci_result.py), #4002). A CI run that fails, or is cancelled by a newer
+push, fails the Packages run before anything is packed: nothing reaches the feed, `publish-state` is not written, and
+`docker.yml` admits no image build for the commit. The newer commit's own run then publishes every change the refused
+one would have (FR-020). Manual runs do not wait; the operator chose the commit.
+
 **`plan`**, the pack job's first step, asks the remote whether `publish-state` exists (an unanswered question fails;
 it is never taken for "no") and decides the run's mode:
 
