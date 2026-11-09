@@ -1,10 +1,28 @@
 # Unified execution
 
-Status: active, owner-authorized 18 October 2026. Steward: Sipke; delivery lead: this program's Codex workroom.
+Status: active, owner-authorized 18 October 2026. Steward: Sipke; delivery lead: the active Claude session since the [9 November 2026 handover](https://github.com/elsa-workflows/elsa-foundation/pull/3987#issuecomment-6731129032).
 
 [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) is the authoritative queue and progress record. The [program board](https://github.com/orgs/elsa-workflows/projects/62) mirrors the native hierarchy and separates delivery status from verification; issue comments and acceptance remain authoritative. The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967) and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156) supersede the earlier research-only gate within this program's scope. They do not reactivate unrelated parked work.
 
-## Outcome
+## Active milestone — 8 November 2026
+
+[Owner-approved smaller scope and resumption](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6727251664):
+
+> Deliver a verified SQLite execution milestone in which a native workflow invokes BPMN, waits durably, survives host restart, and handles completion, fault, retry and cancellation correctly. Preserve model-specific semantics and existing authoring contracts. Reuse merged recovery evidence, close the remaining gaps, remove demonstrated obsolete code and redundant tests, and verify the integrated result on main.
+
+Profile: SQLite, built-in host, root native parent and existing supported BPMN human/service-task paths. Completion of this milestone leaves Program #2892 open.
+
+The finish line is: selected-path cancellation with late-result refusal; restart/settlement and fault/retry proofs; disposition of the recorded post-restart timeout; applicable authoring/API compatibility; bounded code/test cleanup preserving unique coverage; one persistence/coordination overhead observation; a runnable example and supported-profile documentation; independent review, green exact-head required checks, protected landing and resulting-main verification.
+
+Reuse the source-bound evidence from [#3988](https://github.com/elsa-workflows/elsa-foundation/pull/3988), [#3992](https://github.com/elsa-workflows/elsa-foundation/pull/3992), [#3993](https://github.com/elsa-workflows/elsa-foundation/pull/3993) and [#3995](https://github.com/elsa-workflows/elsa-foundation/pull/3995). Merged ancestry is insufficient when later changes remove the witnesses: main `49c10b7732506a708f7cafa6932768c9b9556c13` deleted their new tests and qualification notes. Restoring those scoped postimages preserves their historical attribution; it does not constitute a fresh execution pass.
+
+R3 managed-store recovery, ETL expansion, native collaboration, additional providers/multi-host, comprehensive Studio/browser acceptance and generic-kernel extraction are deferred from this milestone, retained in the program. Existing claims, review counts, failures and holds remain; this resumption does not restart their paused workers or automations. Other programs keep separate ownership.
+
+Delivered: [#3998](https://github.com/elsa-workflows/elsa-foundation/pull/3998) landed the native/BPMN restart, settlement, fault/retry and cancellation witnesses on SQLite (`dd2fa5943b`). The 8 November stash incident (#3955) was reverted by [#4000](https://github.com/elsa-workflows/elsa-foundation/pull/4000) and closed out by [#3987](https://github.com/elsa-workflows/elsa-foundation/pull/3987) and [#4004](https://github.com/elsa-workflows/elsa-foundation/pull/4004); [#4005](https://github.com/elsa-workflows/elsa-foundation/pull/4005) (#4002) gates package publishing on green CI. The milestone proves recovery for native and BPMN only; the next leaf, [planned on the program issue](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6738102053), adds host-restart witnesses for a native parent waiting on `RunEtl` and `RunRules` over SQLite: in-process host-rebuild witnesses first, process-kill Workbench witnesses as the following leaf.
+
+Project #62 remains the board mirror, updated at milestone transitions. If the posting identity cannot resolve it, record the intended status and source-bound progress on the program issue, state the access limitation, and reconcile board fields when access is restored. Do not claim a direct board update from the fallback.
+
+## Broader program outcome — retained
 
 [Owner-confirmed goal, 29 October 2026](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6489393346):
 
@@ -12,9 +30,19 @@ Status: active, owner-authorized 18 October 2026. Steward: Sipke; delivery lead:
 
 The target is support for native workflows, first-class and embedded BPMN, and ETL with shared durable infrastructure and tooling. Models retain their own semantics; native composites retain their own composition rules. Agent collaboration builds on native composition and existing Elsa agent integrations. New execution models and hosting providers can extend the foundation without kernel model-name switches.
 
+## Owner clarification — 9 November 2026
+
+[Decided in session after the independent architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6737964981); the review itself is on [#3987](https://github.com/elsa-workflows/elsa-foundation/pull/3987#issuecomment-6734169085).
+
+1. **What "unified execution" means.** A shared durable host with model-owned semantics, joined by a small set of ports. The ports are the shared abstraction: `IRuntimeExecutionProtocolDriver` with `IRuntimeExecutionProtocolSource`; `IRuntimeCheckpointCommitStore` with `RuntimeCheckpointCommit` and the fence (`IRuntimeExecutionOwnershipService`, `RuntimeExecutionFence`); `IBookmarkResumeDispatcher`; and the post-commit intent contracts (`IRuntimeCheckpointCommitEnricher`, `IRuntimePostCommitIntentHandler` and the durable-source variant). A neutral extracted kernel is not the destination and is not a deferred deliverable; it is out of scope.
+2. **ETL and Rules are separately owned execution domains** ([ADR 0087](../adr/0087-etl-owns-its-execution-domain.md), [ADR 0088](../adr/0088-rules-owns-its-execution-domain.md)) with first-class native integration through those ports. They are not co-equal execution models of the shared host and are not migrated onto the host's lease, fence or outbox. The only convergence in scope is host plumbing with no state or contract change: the two polling loops onto `BackoffSweepWorkerTask` and one shared heartbeat helper, as a later leaf.
+3. **The shared ports are locked only after a second real protocol driver exists.** Decisions durable runs ([ADR 0095](../adr/0095-decisions-owns-business-decision-semantics.md)) is that second driver. Locking means PublicAPI analyzer opt-in for the projects that declare the ports, not a redesign.
+4. **Priority order for the remaining work:** native and BPMN journeys first; Decisions as the second driver; Specialists native collaboration third; ETL connectors last and only from the approved list below. Existing deferrals stand.
+5. **Working method tightened:** see [Working method](#working-method).
+
 ## Delivery sequence
 
-The immediate sequence is direct BPMN start → wait → host restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration using the delivered ETL capabilities. Continue the remaining approved scope after those journeys; preserve the existing deferrals and compatibility gates. Small verified increments advance the existing issue/PR, with Project62 reconciled at material transitions.
+The active sequence is the smaller native/BPMN SQLite milestone above, then the leaves in the priority order of the owner clarification: ETL and Rules native-parent restart witnesses (in-process, then process-kill), Decisions as the second protocol driver, lock the shared ports, Specialists native collaboration, then the retained deferrals (managed-store qualification of the proven journeys, Studio affordances across models). ETL connector expansion comes last and only from the approved list. The historical wider sequence and its hosting, collaboration and Studio obligations remain backlog rather than prerequisites for the milestone. Preserve existing deferrals and compatibility gates. Small verified increments advance the existing issue/PR, with Project #62 reconciled at milestone transitions.
 
 | Stage | Delivery gate | Tracking |
 |---|---|---|
@@ -33,7 +61,7 @@ The immediate sequence is direct BPMN start → wait → host restart → resume
 
 ## Approved scope and boundaries
 
-- Keep the existing EF checkpoint/outbox authority; prove native and BPMN integration before stabilizing neutral public contracts. Actors address whole executions, not every activity or record.
+- Keep the existing EF checkpoint/outbox authority. The shared abstraction is the set of ports named in the owner clarification; lock them only after Decisions provides the second real protocol driver, and never extract a neutral kernel. Actors address whole executions, not every activity or record.
 - BPMN foundation APIs: task claim/completion, external work, correlation, timers, incidents/retry, cancellation and inspection. Arbitrary token alteration, live-instance migration and a full operator console are deferred, not demonstrated.
 - ETL connectors: CSV/JSON Lines files; paginated JSON HTTP ingestion and JSON delivery; PostgreSQL and SQL Server snapshot/watermark reads and transactional keyed writes; RabbitMQ JSON with manual acknowledgement and publisher confirms. Include local mapping, filtering, validation, routing and lookups. Log CDC, distributed shuffle, windows/stream joins and general analytics are deferred.
 - ETL uses partition cursors, bounded batches, byte limits and durable admission budgets. Lease expiry does not prove physical memory reclamation or worker shutdown. External effects remain at least once unless destination guarantees are verified.
@@ -72,7 +100,7 @@ extend an already-issued request timeout or treat a lease expiry as proof of ter
 
 ## Working method
 
-One active implementation leaf, one integration lane and a small prepared successor queue. Reuse matching PRs and honor claims. Use a concise contract for substantial behavior, executable acceptance tests, focused changes, bounded self-review under the owner’s standing authorization, CI/maps and post-merge evidence. Use bounded worker reviews where useful; they do not create an independent-approval gate. Do not create a parallel backlog in this file or duplicate existing native proofs. Progressive elaboration follows real integrations.
+One active implementation leaf, one integration lane and a small prepared successor queue; no parallel workers or supervisors. Reuse matching PRs and honor claims. Use a concise contract for substantial behavior, executable acceptance tests, focused changes, bounded self-review under the owner’s standing authorization, CI/maps and post-merge evidence. Review is independent lenses on the exact diff with findings recorded as PR comments; it does not create an independent-approval gate. Evidence is the PR comment and CI artifacts, never private manifests or hash receipts. Do not create a parallel backlog in this file or duplicate existing native proofs. Progressive elaboration follows real integrations.
 
 BPMN library changes, refactoring, upgrades and necessary releases are explicitly authorized. Use the relevant GitHub App identity and normal review/publication gates. This authority does not extend to unrelated releases/deployments, permission changes, live model costs or overriding active claims.
 

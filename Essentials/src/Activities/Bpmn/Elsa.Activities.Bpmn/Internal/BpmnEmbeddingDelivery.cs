@@ -44,7 +44,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             {
                 // Hosting tests may pin this exact cut (model terminal, parent not yet resumed) by creating
                 // the file named in ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME. Production hosts never set it.
-                if (NativeParentResumeHeld()) throw Pending();
+                await HoldNativeParentResumeForTestAsync(cancellationToken);
                 await resumes.DispatchAsync(new(invocation.NativeExecutionId, BpmnEmbeddingBoundary.StimulusType, invocation.ExecutionId,
                     source.Intent.Payload, source.SourceOutboxItemId, BpmnEmbeddingBoundary.ProviderId, null,
                     BpmnEmbeddingBoundary.CompletionType, BpmnEmbeddingBoundary.ProviderId, invocation.RegistrationId, null), cancellationToken: cancellationToken);
@@ -99,9 +99,21 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
 
     internal const string NativeParentResumeHoldVariable = "ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME";
 
-    private static bool NativeParentResumeHeld()
+    private static async ValueTask HoldNativeParentResumeForTestAsync(CancellationToken cancellationToken)
     {
         var path = Environment.GetEnvironmentVariable(NativeParentResumeHoldVariable);
-        return !string.IsNullOrEmpty(path) && File.Exists(path);
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        // This mode lets the owned hosting test kill a real in-flight delivery claim, rather
+        // than depending on a race between claiming and recording the ordinary deferral.
+        string mode;
+        try { mode = File.ReadAllText(path); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Transient,
+                "bpmn.embedded.test-hold-unavailable", "The configured test hold could not be read.", error);
+        }
+        if (mode == "hold-claim")
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        throw Pending();
     }
 }

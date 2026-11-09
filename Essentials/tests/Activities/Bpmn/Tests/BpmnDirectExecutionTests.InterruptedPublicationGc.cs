@@ -54,6 +54,8 @@ public sealed partial class BpmnDirectExecutionTests
             var sweepNow = createdAt + grace + TimeSpan.FromMinutes(1);
             sweep = await collector.SweepAsync(sweepNow);
             afterGc = await CaptureBpmnAsync(materials, sources, artifactId);
+            Assert.False(afterGc.ArtifactPresent, "The sweep must delete the staged artifact before retry classification.");
+            Assert.Equal(1, sweep.DeletedArtifactCount);
             Assert.True(createdAt <= sweepNow - grace);
             Assert.Equal(TimeSpan.FromMinutes(5), pumpSweep);
             Assert.Equal(TimeSpan.FromMinutes(30), pumpMaxBackoff);
