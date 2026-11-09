@@ -1,3 +1,4 @@
+import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
@@ -23,10 +24,16 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 
 test.afterEach(async ({ page }) => {
+  // Teardown also runs after failed interactions against these disposable stores.
+  for (const creation of createdWorkflows.get(page) ?? []) {
+    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
+    expect(removed.ok()).toBe(true);
+  }
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
