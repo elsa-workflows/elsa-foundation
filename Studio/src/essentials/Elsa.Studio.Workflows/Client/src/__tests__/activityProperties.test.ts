@@ -24,6 +24,7 @@ import {
 import {
   readWorkflowInputExpressionArguments,
   withWorkflowInputExpressionArgument,
+  withActivityResultExpressionArgument,
   withoutPortableExpressionParameter
 } from "../workflowInputArgumentBindings";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
@@ -40,6 +41,19 @@ const textDescriptor = {
 };
 
 describe("activity property values", () => {
+  it("authors an existing ActivityResult parameter from typed metadata and preserves other bindings", () => {
+    const existing = { language: "JavaScript", source: "args.result2", resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { result: { kind: "WorkflowRequest", memberKey: "A" } }, options: { strict: true }, capabilityProfile: "binding-pure-v1" };
+    const symbol = { id: "opaque:unrelated", name: "Earlier sum", kind: "value" as const,
+      parameterBinding: { kind: "ActivityResult", producerNodeId: "producer:one", projectionKey: "projection:sum", isOptional: false } };
+    const definition = withActivityResultExpressionArgument(existing, "JavaScript", textDescriptor, symbol);
+    expect(definition).toEqual({ ...existing, parameters: { ...existing.parameters,
+      result2: { kind: "ActivityResult", producerNodeId: "producer:one", projectionKey: "projection:sum", isOptional: false }
+    } });
+    expect(withoutPortableExpressionParameter(definition, "JavaScript", "result2")).toEqual(existing);
+    expect(withActivityResultExpressionArgument(existing, "JavaScript", textDescriptor, { ...symbol, parameterBinding: { kind: "Unknown" } })).toBeNull();
+  });
+
   it("exposes a selected workflow input as an explicit JavaScript argument and can remove it", () => {
     const inputDefinition = withWorkflowInputExpressionArgument(
       {

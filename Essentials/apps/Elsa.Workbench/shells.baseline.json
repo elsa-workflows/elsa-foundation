@@ -39,6 +39,7 @@
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
+          "ActivitiesScripting": {},
           "ActivitiesDesignReconciliation": {},
           "ClrActivityReconciliation": {
             "Options": {

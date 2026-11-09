@@ -38,7 +38,7 @@ const contextPayload = {
     nodeId: "activity-1",
     propertyKey: "Text",
     expressionType: "JavaScript",
-    documentRevision: "server-revision"
+    documentRevision: "3"
   },
   contextRevision: "context-1",
   symbolCatalogRevision: "catalog-1",
@@ -87,6 +87,8 @@ const contextPayload = {
   }
 };
 
+const activityContextPayload = { ...contextPayload, document: { ...contextPayload.document, workflowDraftId: "", owner: { kind: "activity-draft", id: "draft-1" } } };
+
 function outcome(payload: unknown, state: unknown = "Success", documentRevision = "3", contextRevision = "context-1") {
   return {
     result: {
@@ -117,10 +119,11 @@ function numericOutcome(
   };
 }
 
-function createContext(postJson?: ReturnType<typeof vi.fn>) {
+function createContext(postJson?: ReturnType<typeof vi.fn>, activity = false) {
   const getJson = vi.fn(async (url: string) => {
     if (url === "/capabilities") {
-      return { capabilities: [{ id: "expressions.tooling.v1", contractVersion: "1", links }] };
+      return { capabilities: [{ id: activity ? "activity-expressions.tooling.v1" : "expressions.tooling.v1", contractVersion: "1",
+        links: activity ? links.map(link => ({ ...link, href: link.href.replace("design/workflows/", "design/activities/") })) : links }] };
     }
     if (url.endsWith("/descriptors")) {
       return outcome([{
@@ -136,7 +139,7 @@ function createContext(postJson?: ReturnType<typeof vi.fn>) {
   const post = postJson ?? vi.fn(async (url: string, body?: { documentRevision?: string; contextRevision?: string }) => {
     const documentRevision = body?.documentRevision ?? "3";
     const contextRevision = body?.contextRevision ?? "context-1";
-    if (url.endsWith("/context")) return outcome(contextPayload, "Success", documentRevision);
+    if (url.endsWith("/context")) return outcome(activity ? activityContextPayload : contextPayload, "Success", documentRevision);
     if (url.endsWith("/symbols")) {
       return outcome({ items: [{ label: "customer", documentation: "Current customer.", kind: "WorkflowInput" }] }, "Success", documentRevision, contextRevision);
     }
@@ -166,6 +169,157 @@ function client(context: StudioEndpointContext, authorizationScope?: string) {
 }
 
 describe("expression tooling transport", () => {
+  it("uses the activity-owned capability and activity draft location for every operation", async () => {
+    const api = createContext(undefined, true);
+    const tooling = createExpressionToolingClient(api.context, { backend: api.context.baseUrl, subject: "author", tenantId: "tenant" }, "activity-session", "activity-draft");
+    await expect(tooling.describe()).resolves.toMatchObject({ state: "ready" });
+    const resolved = await tooling.getAuthoringContext(document, { rootSymbols: [{ name: "injected" }] });
+    expect(resolved.state).toBe("ready");
+    await tooling.getCatalog(document, resolved.data!);
+    await tooling.getCompletions(document, resolved.data!, { line: 0, column: 1 });
+    await tooling.getHover(document, resolved.data!, { line: 0, column: 1 });
+    await tooling.validate(document, resolved.data!);
+    expect(api.postJson).toHaveBeenCalledTimes(5);
+    for (const [path, body] of api.postJson.mock.calls) {
+      expect(path).toMatch(/^\/?design\/activities\/expression-tooling\//);
+      expect(body).toMatchObject({ activityDraftId: "draft-1", nodeId: "activity-1", propertyKey: "Text" });
+      expect(body).not.toHaveProperty("workflowDraftId");
+      expect(body).not.toHaveProperty("rootSymbols");
+    }
+    tooling.dispose();
+  });
+
+  it("does not fall back to workflow tooling when activity capability is absent", async () => {
+    const api = createContext();
+    const tooling = createExpressionToolingClient(api.context, { backend: api.context.baseUrl, subject: "author", tenantId: "tenant" }, "activity-session", "activity-draft");
+    await expect(tooling.getAuthoringContext(document, {})).resolves.toMatchObject({ state: "unavailable" });
+    expect(api.postJson).not.toHaveBeenCalled();
+    tooling.dispose();
+  });
+
+  it("retains typed producer identity without parsing an opaque symbol ID", async () => {
+    const binding = { kind: "ActivityResult", producerNodeId: "producer:with:colons", projectionKey: "result:key", isOptional: false };
+    const api = createContext(vi.fn(async () => outcome({ ...activityContextPayload, rootSymbols: [{
+      symbolId: "opaque:does:not:encode:the:producer", name: "Earlier sum", kind: "ActivityResult", parameterBinding: binding
+    }] })), true);
+    const tooling = createExpressionToolingClient(api.context, { backend: api.context.baseUrl, subject: "author", tenantId: "tenant" }, "session", "activity-draft");
+    const resolved = await tooling.getAuthoringContext(document, {});
+    expect(resolved.data?.visibleActivityOutputs).toEqual([expect.objectContaining({ parameterBinding: binding })]);
+    tooling.dispose();
+  });
+
+  it.each([
+    { kind: "Literal", value: "private" },
+    { kind: "ActivityResult", producerNodeId: "", projectionKey: "result" },
+    { kind: "ActivityResult", producerNodeId: "producer", projectionKey: null },
+    { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "result", isOptional: "false" },
+    ["ActivityResult", "producer", "result"]
+  ])("refuses malformed or unknown-kind result reference metadata: %j", async parameterBinding => {
+    const api = createContext(vi.fn(async () => outcome({ ...contextPayload, rootSymbols: [{
+      symbolId: "opaque", name: "Unavailable result", kind: "ActivityResult", parameterBinding
+    }] })));
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.data?.visibleActivityOutputs[0]?.parameterBinding).toBeUndefined();
+  });
+
+  it.each([100, 500])("finds a selectable typed result after %i input/variable symbols using context pages", async preceding => {
+    const symbols = Array.from({ length: preceding }, (_, index) => ({ symbolId: `variable:${index}`, name: `Variable${index}`, kind: "Variable" }));
+    const binding = { kind: "ActivityResult", producerNodeId: "producer:colon", projectionKey: "result:key", isOptional: false };
+    const all = [...symbols, { symbolId: "opaque:result", name: "Earlier sum", kind: "ActivityResult", parameterBinding: binding }];
+    const post = vi.fn(async (_path: string, request: { skip?: number; take?: number }) => outcome({ ...activityContextPayload,
+      rootSymbols: all.slice(request.skip ?? 0, (request.skip ?? 0) + (request.take ?? 100)) }));
+    const api = createContext(post, true);
+    const tooling = createExpressionToolingClient(api.context, { backend: api.context.baseUrl, subject: "author", tenantId: "tenant" }, "session", "activity-draft");
+    const resolved = await tooling.getAuthoringContext(document, {});
+    expect(resolved.data?.visibleActivityOutputs).toEqual([expect.objectContaining({ parameterBinding: binding })]);
+    expect(resolved.data?.rootSymbols).toHaveLength(preceding + 1);
+    expect(post.mock.calls[0][1]).toMatchObject({ take: 500, skip: 0 });
+    if (preceding === 500) expect(post.mock.calls[1][1]).toMatchObject({ take: 500, skip: 500, contextRevision: "context-1" });
+    tooling.dispose();
+  });
+
+  it.each(["Unauthorized", "Stale", "Canceled"])("discards all earlier context pages when a later page is %s", async state => {
+    const page = Array.from({ length: 500 }, (_, index) => ({ symbolId: `symbol${index}`, name: `Symbol${index}`, kind: "Variable" }));
+    const post = vi.fn(async (_path: string, request: { skip: number }) => request.skip === 0
+      ? outcome({ ...contextPayload, rootSymbols: page }) : outcome(undefined, state));
+    const api = createContext(post);
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.state).toBe(state.toLowerCase());
+    expect(resolved.data).toBeUndefined();
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels between context pages without sending another page or exposing partial metadata", async () => {
+    const controller = new AbortController();
+    const page = Array.from({ length: 500 }, (_, index) => ({ symbolId: `symbol${index}`, name: `Symbol${index}`, kind: "Variable" }));
+    const post = vi.fn(async () => { controller.abort(); return outcome({ ...contextPayload, rootSymbols: page }); });
+    const api = createContext(post);
+    const resolved = await client(api.context).getAuthoringContext(document, {}, controller.signal);
+    expect(resolved.state).toBe("canceled");
+    expect(resolved.data).toBeUndefined();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a malformed symbol page instead of mistaking filtered rows for catalog termination", async () => {
+    const roots = Array.from({ length: 500 }, (_, index) => ({ symbolId: `symbol${index}`, name: `Symbol${index}`, kind: "Variable" }));
+    const api = createContext(vi.fn(async () => outcome({ ...contextPayload, rootSymbols: [...roots.slice(0, -1), { symbolId: "missing-name" }] })));
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.state).toBe("incompatible");
+    expect(resolved.data).toBeUndefined();
+  });
+
+  it("rejects a repeated actual result tuple across pages while preserving distinct opaque identities", async () => {
+    const binding = { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "result", isOptional: false };
+    const page = [{ symbolId: "first-id", name: "Earlier", kind: "ActivityResult", parameterBinding: binding },
+      ...Array.from({ length: 499 }, (_, index) => ({ symbolId: `v${index}`, name: `V${index}`, kind: "Variable" }))];
+    const api = createContext(vi.fn(async (_path: string, request: { skip: number }) => outcome({ ...contextPayload,
+      rootSymbols: request.skip === 0 ? page : [{ symbolId: "another-id", name: "Repeated", kind: "ActivityResult", parameterBinding: binding }] })));
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.state).toBe("incompatible");
+    expect(resolved.data).toBeUndefined();
+  });
+
+  it("refuses another document owner or location on a later context page", async () => {
+    const page = Array.from({ length: 500 }, (_, index) => ({ symbolId: `v${index}`, name: `V${index}`, kind: "Variable" }));
+    const api = createContext(vi.fn(async (_path: string, request: { skip: number }) => outcome({ ...contextPayload,
+      document: request.skip === 0 ? contextPayload.document : { ...contextPayload.document, workflowDraftId: "another-draft" },
+      rootSymbols: request.skip === 0 ? page : [] })));
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.state).toBe("incompatible");
+    expect(resolved.data).toBeUndefined();
+  });
+
+  it("refuses changed revision metadata between context pages", async () => {
+    const page = Array.from({ length: 500 }, (_, index) => ({ symbolId: `symbol${index}`, name: `Symbol${index}`, kind: "Variable" }));
+    const api = createContext(vi.fn(async (_path: string, request: { skip: number }) => outcome({ ...contextPayload,
+      rootSymbols: request.skip === 0 ? page : [], permissionRevision: request.skip === 0 ? "permission-1" : "permission-2" })));
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved).toMatchObject({ state: "stale" });
+    expect(resolved.data).toBeUndefined();
+  });
+
+  it("bounds context paging and reports unavailable instead of claiming a truncated empty result list", async () => {
+    const page = Array.from({ length: 500 }, (_, index) => ({ symbolId: `symbol${index}`, name: `Symbol${index}`, kind: "Variable" }));
+    const post = vi.fn(async () => outcome({ ...contextPayload, rootSymbols: page }));
+    const api = createContext(post);
+    const resolved = await client(api.context).getAuthoringContext(document, {});
+    expect(resolved.state).toBe("unavailable");
+    expect(resolved.data).toBeUndefined();
+    expect(post).toHaveBeenCalledTimes(11);
+  });
+
+  it("keeps metadata caches distinct for authoritative locations even when client document IDs collide", async () => {
+    const api = createContext();
+    const tooling = client(api.context);
+    const context = { version: "context-1", workflowInputs: [], visibleVariables: [], visibleActivityOutputs: [] };
+    await tooling.getCatalog(document, context);
+    await tooling.getCatalog({ ...document, activityId: "another:node", propertyKey: "another:key" }, context);
+    await tooling.getCatalog(document, context);
+    expect(api.postJson).toHaveBeenCalledTimes(2);
+    expect(api.postJson.mock.calls[1][1]).toMatchObject({ nodeId: "another:node", propertyKey: "another:key" });
+    tooling.dispose();
+  });
+
   it("describes provider-owned capabilities before a document context is requested", async () => {
     const api = createContext();
 

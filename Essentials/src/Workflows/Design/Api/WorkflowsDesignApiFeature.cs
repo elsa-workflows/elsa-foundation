@@ -14,6 +14,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,10 +72,21 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IWorkflowDefinitionAuthorizer, HttpWorkflowDefinitionAuthorizer>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
+        ExpressionToolingStartupTask.Validate(services);
+        services.TryAddScoped<IExpressionToolingOperations, ExpressionToolingOperations>();
+        AddExpressionToolingValidator(services);
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
-            ActivatorUtilities.CreateInstance<PersistedExpressionAuthoringContextSource>(
+            new PersistedExpressionAuthoringContextSource(
+                serviceProvider.GetServices<IWorkflowDefinitionDraftStore>(),
+                serviceProvider.GetRequiredService<IActivityStructureService>(),
+                serviceProvider.GetRequiredService<Elsa.Workflows.Design.Core.Services.ScopedVariablePicker>(),
+                serviceProvider.GetService<IActivityDefinitionVersionStore>(),
+                serviceProvider.GetServices<IExpressionAuthoringContextFilter>(),
+                serviceProvider.GetServices<IExpressionAuthoringSymbolFilter>(),
                 serviceProvider,
-                serviceProvider.GetServices<IWorkflowDefinitionDraftStore>()));
+                serviceProvider.GetServices<IActivityDraftAuthoringReader>(),
+                serviceProvider.GetServices<IActivityDraftExpressionGraphProjection>()));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityDraftExpressionGraphProjectionsStartupTask>());
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
@@ -114,6 +127,21 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
             if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsDesignJsonTypeInfoResolver))
                 options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsDesignJsonTypeInfoResolver());
         });
+    }
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddExpressionToolingValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(ExpressionToolingStartupTask))
+                ?.ImplementationInstance is not ExpressionToolingStartupTask validator || !validator.Owns(services))
+            validator = new ExpressionToolingStartupTask(services);
+        services.RemoveAll<ExpressionToolingStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is ExpressionToolingStartupTask
+                         || item.ImplementationType == typeof(ExpressionToolingStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
     }
 
     // One validator per configuring collection: a copied child shell rebinds it to its own collection.

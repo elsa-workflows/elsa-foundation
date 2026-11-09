@@ -1,6 +1,6 @@
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import type {
@@ -11,7 +11,9 @@ import type {
   StudioExpressionDescriptor,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
+import { createLazyExpressionToolingClient } from "./expression-tooling/lazyExpressionToolingClient";
+import type { ExpressionToolingCacheIdentity } from "./expression-tooling/expressionToolingClient";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
@@ -288,9 +290,30 @@ export function ActivityGraphImplementationEditor({
   expressionEditors = [],
   graphAuthoringPanels = [],
   historyResetKey = `${draftId}:active`,
+  expressionToolingIdentity,
   readOnly,
   onChange
-}: StudioActivityDefinitionImplementationEditorProps) {
+}: StudioActivityDefinitionImplementationEditorProps & { expressionToolingIdentity?: ExpressionToolingCacheIdentity }) {
+  const sessionId = useId();
+  const expressionEditorSessionScope = `${sessionId}:activity-draft:${draftId}`;
+  const expressionTooling = useMemo(() => expressionToolingIdentity
+    ? createLazyExpressionToolingClient(context, expressionToolingIdentity, expressionEditorSessionScope, "activity-draft")
+    : undefined, [context, expressionToolingIdentity, expressionEditorSessionScope]);
+  useEffect(() => {
+    if (!expressionTooling) return;
+    const revoke = () => expressionTooling.revokeAuthorization?.();
+    const restore = () => expressionTooling.restoreAuthorization?.();
+    window.addEventListener(authSessionEndedEvent, revoke);
+    window.addEventListener(authSessionStartedEvent, restore);
+    return () => {
+      window.removeEventListener(authSessionEndedEvent, revoke);
+      window.removeEventListener(authSessionStartedEvent, restore);
+      expressionTooling.dispose();
+    };
+  }, [expressionTooling]);
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent(expressionEditorSessionEndedEvent, { detail: { scope: expressionEditorSessionScope } }));
+  }, [expressionEditorSessionScope]);
   const catalogQuery = useWorkflowActivities(context);
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
@@ -883,6 +906,9 @@ export function ActivityGraphImplementationEditor({
             key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
             context={context}
             workflowState={workflowState}
+            draftId={draftId}
+            expressionTooling={expressionTooling}
+            expressionEditorSessionScope={expressionEditorSessionScope}
             selectedNode={inspectedNode}
             selectedNodeLabel={resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? ""), inspectedCatalogItem, inspectedNode?.nodeId ?? "Activity graph")}
             selectedPresentation={inspectedPresentation}

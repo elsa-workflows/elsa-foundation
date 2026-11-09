@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Expressions.Core.Contracts;
@@ -344,6 +345,200 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         Assert.Null(await source.TryResolveAsync(request with { PropertyKey = "Case:deleted:Condition" }, new(true, "author"), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task An_activity_owner_reads_only_its_authorized_body_and_invalidates_on_its_revision()
+    {
+        var target = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var earlier = new ActivityNode("earlier:node", "activity", [], []);
+        var root = new ActivityNode("root", "container", [], [], new ActivityNodeStructure("elsa.sequence.structure", "1", JsonSerializer.SerializeToElement(new { })));
+        var structure = new ScopeStructureService(root, target, earlier, Variable("inside"), Variable("hidden"));
+        var state = new WorkflowDefinitionState([Variable("graph")], root,
+            [new InputDefinition("a", "A", new("Int32"), null, "A", null, false)], [], null);
+        var workflowStore = new SingleDraftStore(new WorkflowDefinitionDraft { Id = "draft", WorkflowDefinitionId = "workflow", State = state with
+            { Inputs = [new InputDefinition("caller", "CallerOnly", new("Int32"), null, "CallerOnly", null, false)] } });
+        var reader = new ActivityReader();
+        var projection = new GraphProjection(state);
+        var unrelatedProjection = new GraphProjection(null, "another-provider");
+        var version = new ActivityDefinitionVersion("1.0.0", "activity-definition") { Id = "activity",
+            Outputs = [new OutputDefinition("result:key", "Result", new("Int32"), null, "Result", null, false)] };
+        var source = new PersistedExpressionAuthoringContextSource([workflowStore], structure,
+            new ScopedVariablePicker(new ScopedVariableResolver(structure)), new SingleActivityVersionStore(version),
+            contextFilters: null, symbolFilters: [new RemoveSymbolFilter("inside")], serviceProvider: null, activityDraftReaders: [reader], activityGraphProjections: [unrelatedProjection, projection]);
+        var service = new ExpressionAuthoringContextService([source]);
+        var request = ActivityRequest();
+
+        var first = await service.ResolveAsync(request, new(true), CancellationToken.None);
+        reader.Revision++;
+        var stale = await service.ResolveAsync(request with { ContextRevision = first.ContextRevision }, new(true), CancellationToken.None);
+        var refreshed = await service.ResolveAsync(request, new(true), CancellationToken.None);
+
+        Assert.True(first.IsSuccess);
+        Assert.Equal("", first.Payload!.Document.WorkflowDraftId);
+        Assert.Equal(request.Owner, first.Payload.Document.Owner);
+        Assert.StartsWith("activity-draft:draft:", first.Payload.Document.DocumentId, StringComparison.Ordinal);
+        Assert.Contains(first.Payload.RootSymbols, symbol => symbol.Name == "A");
+        Assert.Contains(first.Payload.RootSymbols, symbol => symbol.Name == "graph");
+        Assert.Contains(first.Payload.RootSymbols, symbol => symbol.SymbolId == "activity-result:earlier%3Anode:result%3Akey");
+        Assert.DoesNotContain(first.Payload.RootSymbols, symbol => symbol.Name is "CallerOnly" or "inside" or "hidden" || symbol.SymbolId == "activity-result:target:result");
+        var resultBinding = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(first.Payload.RootSymbols,
+            symbol => symbol.SymbolId == "activity-result:earlier%3Anode:result%3Akey").ParameterBinding);
+        Assert.Equal("earlier:node", resultBinding.ProducerNodeId);
+        Assert.Equal("result:key", resultBinding.ProjectionKey);
+        Assert.Equal(0, workflowStore.ReadCount);
+        Assert.Equal(ExpressionToolingOutcomeState.Stale, stale.State);
+        Assert.NotEqual(first.ContextRevision, refreshed.ContextRevision);
+        Assert.Equal(3, projection.ReadCount);
+        Assert.Equal(0, unrelatedProjection.ReadCount);
+    }
+
+    [Theory]
+    [InlineData(0, true, true)]
+    [InlineData(2, true, true)]
+    [InlineData(1, false, true)]
+    [InlineData(1, true, false)]
+    public async Task Activity_metadata_is_unavailable_without_one_visible_authority_and_an_owned_projection(int readerCount, bool visible, bool projectable)
+    {
+        var root = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var structure = new ScopeStructureService(root, root, root, Variable("inside"), Variable("hidden"));
+        var projection = new GraphProjection(projectable ? new([], root, [], [], null) : null);
+        var readers = Enumerable.Range(0, readerCount).Select(_ => new ActivityReader { Visible = visible }).ToArray();
+        var source = new PersistedExpressionAuthoringContextSource([], structure,
+            new ScopedVariablePicker(new ScopedVariableResolver(structure)), activityVersions: null, contextFilters: null, symbolFilters: null, serviceProvider: null, activityDraftReaders: readers, activityGraphProjections: [projection]);
+        var result = await new ExpressionAuthoringContextService([source]).ResolveAsync(ActivityRequest(), new(true), CancellationToken.None);
+        Assert.Equal(ExpressionToolingOutcomeState.Unavailable, result.State);
+        Assert.Null(result.Payload);
+        if (readerCount != 1 || !visible) Assert.Equal(0, projection.ReadCount);
+    }
+
+    [Fact]
+    public async Task Colliding_colon_tuples_have_distinct_opaque_symbol_ids_and_exact_existing_bindings()
+    {
+        var first = new ActivityNode("a:b", "activity", [], []);
+        var second = new ActivityNode("a", "activity", [], []);
+        var target = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var root = new ActivityNode("root", "container", [], [], new ActivityNodeStructure("elsa.sequence.structure", "1", JsonSerializer.SerializeToElement(new { })));
+        var later = new ActivityNode("later", "activity", [], []);
+        var structure = new RankedStructureService(root, [first, second, target, later], new Dictionary<string, string[]>());
+        var version = new ActivityDefinitionVersion("1.0.0", "activity-definition") { Id = "activity", Outputs = [
+            new OutputDefinition("c", "C", new("String"), null, "C", null, false),
+            new OutputDefinition("b:c", "BC", new("String"), null, "BC", null, false)] };
+        var state = new WorkflowDefinitionState([], root, [], [], null);
+        var source = new PersistedExpressionAuthoringContextSource([], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            new SingleActivityVersionStore(version), contextFilters: null, symbolFilters: null, serviceProvider: null, activityDraftReaders: [new ActivityReader()], activityGraphProjections: [new GraphProjection(state)]);
+        var result = await new ExpressionAuthoringContextService([source]).ResolveAsync(ActivityRequest(), new(true), CancellationToken.None);
+        Assert.True(result.IsSuccess);
+        var symbols = result.Payload!.RootSymbols.Where(symbol => symbol.Kind == ExpressionSymbolKind.ActivityResult).ToArray();
+        Assert.Equal(4, symbols.Length);
+        Assert.DoesNotContain(symbols, symbol => ((ActivityResultExpressionParameterBinding)symbol.ParameterBinding!).ProducerNodeId is "target" or "later");
+        Assert.Equal(4, symbols.Select(symbol => symbol.SymbolId).Distinct(StringComparer.Ordinal).Count());
+        var left = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(symbols, symbol => symbol.SymbolId == "activity-result:a%3Ab:c").ParameterBinding);
+        var right = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(symbols, symbol => symbol.SymbolId == "activity-result:a:b%3Ac").ParameterBinding);
+        Assert.Equal("a:b", left.ProducerNodeId);
+        Assert.Equal("c", left.ProjectionKey);
+        Assert.Equal("a", right.ProducerNodeId);
+        Assert.Equal("b:c", right.ProjectionKey);
+    }
+
+    [Fact]
+    public async Task A_placed_graph_exposes_its_public_result_without_opening_its_private_descriptor_body()
+    {
+        var placed = new ActivityNode("placed", "activity", [], []);
+        var target = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var root = new ActivityNode("root", "container", [], [], new ActivityNodeStructure("elsa.sequence.structure", "1", JsonSerializer.SerializeToElement(new { })));
+        var structure = new RankedStructureService(root, [placed, target], new Dictionary<string, string[]>());
+        var version = new ActivityDefinitionVersion("1.0.0", "private-graph-definition") { Id = "activity",
+            DescriptorPayload = JsonSerializer.SerializeToElement(new { rootActivity = new { nodeId = "private-body-node" } }),
+            Outputs = [new OutputDefinition("public-result", "PublicResult", new("String"), null, "Public result", null, false)] };
+        var state = new WorkflowDefinitionState([], root, [], [], null);
+        var source = new PersistedExpressionAuthoringContextSource([], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            new SingleActivityVersionStore(version), contextFilters: null, symbolFilters: null, serviceProvider: null, activityDraftReaders: [new ActivityReader()], activityGraphProjections: [new GraphProjection(state)]);
+        var service = new ExpressionAuthoringContextService([source]);
+        var visible = await service.ResolveAsync(ActivityRequest(), new(true), CancellationToken.None);
+        var hidden = await service.ResolveAsync(ActivityRequest() with { NodeId = "private-body-node" }, new(true), CancellationToken.None);
+        Assert.Contains(visible.Payload!.RootSymbols, symbol => symbol.SymbolId == "activity-result:placed:public-result");
+        Assert.DoesNotContain(visible.Payload.RootSymbols, symbol => symbol.SymbolId.Contains("private-body-node", StringComparison.Ordinal));
+        Assert.Equal(ExpressionToolingOutcomeState.Unavailable, hidden.State);
+        Assert.Null(hidden.Payload);
+    }
+
+    [Fact]
+    public async Task Feature_factory_resolves_the_activity_source_with_optional_stores_and_selects_only_its_provider()
+    {
+        var root = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var structure = new ScopeStructureService(root, root, root, Variable("inside"), Variable("hidden"));
+        var selected = new GraphProjection(new([], root, [], [], null));
+        var other = new GraphProjection(null, "another-provider");
+        var services = new ServiceCollection();
+        services.AddSingleton<IActivityStructureService>(structure);
+        services.AddScoped<IActivityDraftAuthoringReader>(_ => new ActivityReader());
+        services.AddScoped<IActivityDraftExpressionGraphProjection>(_ => other);
+        services.AddScoped<IActivityDraftExpressionGraphProjection>(_ => selected);
+        new WorkflowsDesignApiFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var source = scope.ServiceProvider.GetRequiredService<IExpressionAuthoringContextSource>();
+        var context = await source.TryResolveAsync(ActivityRequest(), new(true), CancellationToken.None);
+
+        Assert.NotNull(context);
+        Assert.Equal(ActivityRequest().Owner, context.Document.Owner);
+        Assert.Equal(1, selected.ReadCount);
+        Assert.Equal(0, other.ReadCount);
+    }
+
+    [Fact]
+    public async Task An_unregistered_persisted_provider_does_not_invoke_another_strategy()
+    {
+        var root = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
+        var structure = new ScopeStructureService(root, root, root, Variable("inside"), Variable("hidden"));
+        var other = new GraphProjection(new([], root, [], [], null), "another-provider");
+        var source = new PersistedExpressionAuthoringContextSource([], structure,
+            new ScopedVariablePicker(new ScopedVariableResolver(structure)), null, null, null, null, [new ActivityReader()], [other]);
+
+        var result = await new ExpressionAuthoringContextService([source]).ResolveAsync(ActivityRequest(), new(true), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.Unavailable, result.State);
+        Assert.Null(result.Payload);
+        Assert.Equal(0, other.ReadCount);
+    }
+
+    [Fact]
+    public void Legacy_constructor_optional_arguments_remain_unambiguous()
+    {
+        var root = new ActivityNode("root", "activity", [], []);
+        var structure = new ScopeStructureService(root, root, root, Variable("inside"), Variable("hidden"));
+        var picker = new ScopedVariablePicker(new ScopedVariableResolver(structure));
+        IWorkflowDefinitionDraftStore store = new SingleDraftStore(new WorkflowDefinitionDraft
+            { Id = "draft", WorkflowDefinitionId = "workflow", State = new([], root, [], [], null) });
+        Assert.NotNull(new PersistedExpressionAuthoringContextSource([store], structure, picker));
+        Assert.NotNull(new PersistedExpressionAuthoringContextSource([store], structure, picker, null));
+        Assert.NotNull(new PersistedExpressionAuthoringContextSource(store, structure, picker));
+        Assert.NotNull(new PersistedExpressionAuthoringContextSource(store, structure, picker, null));
+    }
+
+    private static ResolveExpressionAuthoringContextRequest ActivityRequest() =>
+        new(ExpressionToolingContractVersion.V1, "", "target", "text", "JavaScript", "document") { Owner = new("activity-draft", "draft") };
+
+    private sealed class ActivityReader : IActivityDraftAuthoringReader
+    {
+        public long Revision { get; set; } = 1;
+        public bool Visible { get; init; } = true;
+        public ValueTask<ActivityDraftAuthoringSource?> FindAsync(string draftId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityDraftAuthoringSource?>(Visible ? new(draftId, Revision,
+                new(new("1", [], [], []), new("elsa.activity-graph", "1", JsonSerializer.SerializeToElement(new { })), new Dictionary<string, string>()), "permission-1") : null);
+    }
+
+    private sealed class GraphProjection(WorkflowDefinitionState? state, string providerKey = "elsa.activity-graph") : IActivityDraftExpressionGraphProjection
+    {
+        public string ProviderKey => providerKey;
+        public int ReadCount { get; private set; }
+        public WorkflowDefinitionState? TryProject(ActivityDefinitionDraftState draft)
+        {
+            ReadCount++;
+            return state;
+        }
+    }
+
     private static PersistedExpressionAuthoringContextSource SourceFor(ActivityNode root, IActivityStructureService structure)
     {
         var draft = new WorkflowDefinitionDraft
@@ -395,7 +590,12 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
 
     private sealed class SingleDraftStore(WorkflowDefinitionDraft draft) : IWorkflowDefinitionDraftStore
     {
-        public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinitionDraft?>(draftId == draft.Id ? draft : null);
+        public int ReadCount { get; private set; }
+        public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return Task.FromResult<WorkflowDefinitionDraft?>(draftId == draft.Id ? draft : null);
+        }
         public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinitionDraft?>(draft);
         public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>([draft]);
         public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyCollection<DesignMetadataRecord>>([]);

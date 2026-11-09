@@ -276,3 +276,14 @@ run (plan D-12).
 4. **Authoring**: US6 Studio, and US7 Elsa 3.
 5. One PR for the unit (owner preference), with the status set in it. If T051 narrows FR-009, its follow-up issue is
    linked from the PR.
+
+## #3197 follow-up implementation and qualification
+
+- [ ] T3197-1 Add explicit activity-owned expression locations, exact authority validation and authorized persisted draft source.
+- [ ] T3197-2 Register provider-keyed graph projection strategy with startup key validation and reuse existing scope/order/filter projection without crossing placed graph boundaries.
+- [ ] T3197-3 Add activity-owned optional tooling routes/capability and shared operation contract; keep workflow wire behavior and permissions unchanged.
+- [ ] T3197-4 Wire graph InspectorPanel tooling/client/session lifecycle, including auth invalidation and missing-capability states.
+- [ ] T3197-5 Add legacy-constructor/actual-DI/late-duplicate/child-shell controls and causal ownership/permission/tenant/provider-hidden/stale/capability/scope/closed-boundary behavior controls and mounted picker/capture/save-reopen coverage.
+- [ ] T3197-6 Add composed Add-two-numbers journey: picked earlier result feeds later node feeds Sum; A=2/B=3 with different caller-owned inputs; persisted reference identities and Sum=5.
+- [ ] T3197-7 Update extension catalogs, provider strategy docs and opted-in public API baseline; run appropriate architecture/maps and whole touched suites under this issue's own admitted phase.
+- [ ] T3197-8 Open current-head downloadable composed visuals, obtain independent UX plus three review axes, and finish hosted required CI before requesting review/merge.
