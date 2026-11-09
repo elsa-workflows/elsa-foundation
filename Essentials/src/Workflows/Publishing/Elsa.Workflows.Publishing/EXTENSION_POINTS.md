@@ -18,6 +18,11 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 
 | Contract | Built-in default | Replace when |
 |---|---|---|
+| `IActivityTemplateCompiler` *(Publishing Core)* | `ActivityTemplateCompiler` (scoped) | Candidate dependency resolution, provider compilation or template admission differs. |
+| `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
+| `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
+| `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
+| `IActivityPublicationVersionPolicy` *(Publishing Core)* | `ActivityPublicationVersions` (scoped) | Release choices differ while respecting the contract compatibility floor. |
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
@@ -43,6 +48,14 @@ boundary and recompute the canonical request fingerprint with `ActivityPublicati
 accepting the receipt.
 
 ## Contract obligations
+
+### Candidate publication services
+
+These five contracts are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. They are not contribution collections.
+
+The compiler request/result and `ActivityTemplateCandidate` models live in Publishing Core. Draft publication and provider-backed source publication share the evaluator, readiness and catalog projection; draft publication also consumes the release policy. Typed domain source adapters can consume these Core ports without referencing this engine implementation. A provider-backed source publisher may supply an evaluator without the default template compiler.
+
+The evaluator must preserve the validator's refusal even without an error diagnostic, return ordered diagnostics against the candidate's actual subject, and admit only successful compilation with no error diagnostics. The compiler retains exact dependency pins and provider/template admission policy. Readiness reports the selected Runtime consumers/schema versions and durable storage drivers, and binds review to a stable fingerprint. Catalog projection derives activity ports, emitted outcomes and immutable publication metadata from the validated contract and compiled template; it does not create editable source. Release choices must satisfy the existing semantic-version compatibility floor; recommendation and activation remain separate domain commands. Replacements must preserve those obligations and each owning publisher's canonical commit and authorization boundaries.
 
 ### Authority stores
 
@@ -188,6 +201,7 @@ Ordinary edits still follow the coordinator's snapshot semantics; this is not a 
   child metadata and dependency claims after tenant/liveness/input-contract validation.
 - **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
   exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
+- **Known implementation:** `DecisionPinSource` *(cross-domain — `Elsa.Decisions.Workflows.Design`)* resolves a permitted published decision once and contributes its exact frozen artifact/profile/semantics metadata. Decision identity is not a child workflow-executable dependency claim.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.

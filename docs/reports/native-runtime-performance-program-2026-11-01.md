@@ -25,7 +25,7 @@ Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 17
 
 ## Cooperative cancellation of a progressing native drain
 
-The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify until #3669 stopped the placement pump waiting for a dispatched drain, after which its two-node runs cancelled the loop three times out of three (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
+The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify until #3669 stopped the placement pump waiting for a dispatched drain, after which its two-node runs on one machine cancelled the loop three times out of three, and fixture `i69` later passed the same case on independent machines (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
 
 Six real SQLite integration cases cover External and ReplaySafe loop bodies under Durable, Balanced and Ephemeral. Each starts an otherwise unbounded progressing While with no total-cycle cap, requests Cancel through the public actor API while the first body is executing, and proves one completed body, durable Cancelled state, a yielded turn and unchanged activity state after a resumption sweep. A bounded runaway guard makes removal of the behavior fail without hanging.
 
@@ -720,8 +720,35 @@ The main build showed the same stalled sender in its single run. Local cooperati
 covered by the in-process tests only. #3669 addresses the cross-node case (#2831): the placement pump no longer waits
 for a dispatched drain, so it keeps renewing placement and delivers a forwarded Cancel to the drain's mailbox. In its
 two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
-Those runs used two Workbench processes and PostgreSQL 16 on one machine; progressing cross-node Cancel has no
-independent-machine result.
+Those runs used two Workbench processes and PostgreSQL 16 on one machine.
+
+On independent machines (fixture `i69`, 2026-11-03), the build containing #3669 passed all four cases. Node A and
+node B each ran on their own D2s_v6 machine, and PostgreSQL 16.15 ran in Docker on a third, on that machine's OS
+volume (Premium SSD), all on one private subnet. The controller and hook are the ones above, unchanged. Unlike the
+documented two-host topology, the database host had a public IP, open only to SSH from the operator's address.
+
+| Case | Series | Result |
+|---|---|---|
+| Parked Cancel | `x1` | Cancelled; placement on node A before and after |
+| Progressing Cancel | `x1`, `x2`, `x3` | Cancelled in each; placement on node A before and after |
+
+- Both duplicate Cancel envelopes were forwarded as `Deferred` in every case, so each Cancel crossed the durable
+  transport to the owner.
+- The sender's receipt reported the execution Cancelled with an empty queue, no incidents and no undelivered outbox
+  within 2.0 s of the request for the parked case and 4.1 s for each progressing case. These are approximate
+  controller-side measurements that include one-second SSH polling, not latencies; the hook marks its output `timingEligible: false`.
+- In each progressing case, activity rows grew by 146–196 in the five seconds before the Cancel, kept growing until
+  it took effect, and did not change in the ten seconds after the settled receipt.
+- Every case ended with the owner's API reporting `Cancelled`, an empty transport and no incidents.
+- Errors logged: each surviving node log (three of the seven node processes) has one PostgreSQL `40001` serialization conflict on the command transport, which EF
+  logs at `fail` level and the transport's bounded compare-and-swap retries as a transient write conflict. Node A's
+  other eight `fail` lines are EF probing migration-history tables on the fresh database. No case failed.
+- Node logs survive only for the last series of each process name (see `cancel-i69-custody.json`). Every case ledger
+  and sender receipt is kept.
+- Limits: two nodes only, so four-node results remain open; one parked and three progressing runs; no owner failure
+  or database interruption during a Cancel. Placement was on node A in the controller's before/after snapshots and
+  the sender hook's pre-dispatch snapshot; no continuous placement trace was retained. The sender's owner check
+  passed in every case, unlike `c5`/`c6`. No throughput or allocation is claimed.
 
 ### Second fixture cleanup
 
@@ -729,6 +756,13 @@ After the 2,178-file archive was verified, the database container and task direc
 transfer token) were removed from the runner, the added NSG rule was deleted (remaining rules equal the original), the
 task resource group with both workers and its storage was deleted, and the runner was deallocated again. No
 task-tagged resource or running VM remains. See `fixture-cleanup-i68.json`.
+
+### Third fixture cleanup
+
+After the i69 collection was downloaded and extracted, the task resource group with all three machines, their disks,
+the network and the public IP was deleted; the database password existed only on the three deleted machines (the database host and
+each node's `node.env`), and the task SSH key was deleted from the operator machine. No task resource or running VM remains, and no existing resource
+was touched. See `fixture-cleanup-i69.json`.
 
 ### Rebuilt backend REST end-to-end suite
 

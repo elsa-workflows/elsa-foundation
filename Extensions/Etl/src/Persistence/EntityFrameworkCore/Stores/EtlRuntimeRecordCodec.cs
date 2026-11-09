@@ -41,11 +41,9 @@ internal static class EtlRuntimeRecordCodec
             !StringComparer.Ordinal.Equals(row.TenantId, identity.TenantId) ||
             !StringComparer.Ordinal.Equals(row.PersistencePartition, identity.PersistencePartition))
             throw new InvalidDataException("The ETL runtime row does not match its scoped identity.");
-
-        EnsureEncodedResidual(row.RunId, expectedRunId: Decode(row.RunKey, "run id"), "run id");
     }
 
-    public static EtlRuntimeRunRecord RunRecord(EtlInvocation invocation, string fingerprint, string? bindingsJson, long nowTicks)
+    public static EtlRuntimeRunRecord RunRecord(EtlInvocation invocation, string runKey, string fingerprint, string? bindingsJson, long nowTicks)
     {
         var scope = Scope(invocation.Scope);
         return new EtlRuntimeRunRecord
@@ -53,7 +51,7 @@ internal static class EtlRuntimeRecordCodec
             ScopeKey = scope.Key,
             TenantId = scope.TenantId,
             PersistencePartition = scope.PersistencePartition,
-            RunKey = EncodeIdentity(invocation.RunId, "run id"),
+            RunKey = runKey,
             RunId = EncodeIdentity(invocation.RunId, "run id"),
             InvocationFingerprint = fingerprint,
             InvocationJson = Write(invocation),
@@ -288,12 +286,6 @@ internal static class EtlRuntimeRecordCodec
     {
         if (value is not null)
             ValidateIdentity(value, label);
-    }
-
-    private static void EnsureEncodedResidual(string encoded, string expectedRunId, string label)
-    {
-        if (!StringComparer.Ordinal.Equals(Decode(encoded, label), expectedRunId))
-            throw new InvalidDataException($"The ETL runtime row does not match its {label} identity.");
     }
 
     private static string Decode(string encoded, string label)

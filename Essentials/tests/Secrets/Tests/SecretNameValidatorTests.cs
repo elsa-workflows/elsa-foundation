@@ -21,6 +21,7 @@ public sealed class SecretNameValidatorTests
     [InlineData("")]
     [InlineData("with space")]
     [InlineData("invalid/value")]
+    [InlineData("Key")]
     public void IsValid_Rejects_Invalid_Names(string name)
     {
         Assert.False(_validator.IsValid(name, out var error));

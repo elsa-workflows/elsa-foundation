@@ -1,13 +1,13 @@
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Instances;
 
 /// <summary>
 /// Binds the additive health filter while keeping it out of the legacy positional request constructor.
-/// NativeEndpoints binds positional contracts from their constructor parameters only.
+/// MinimalEndpoints binds positional contracts from their constructor parameters only.
 /// </summary>
 internal static class WorkflowInstanceListQueryBinding
 {

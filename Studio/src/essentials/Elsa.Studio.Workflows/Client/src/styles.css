@@ -3428,7 +3428,6 @@
   min-height: 38px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
   color: var(--wf-text);
   font: inherit;
   font-size: 14px;
@@ -3439,6 +3438,11 @@
   text-transform: none;
 }
 
+.wf-form-field input,
+.wf-form-field textarea {
+  background: var(--wf-panel-muted);
+}
+
 .wf-form-field textarea {
   min-height: 74px;
   padding: 9px 10px;
@@ -3446,6 +3450,8 @@
 }
 
 .wf-form-field select {
+  /* Preserve the shared host chevron while applying the field surface. */
+  background-color: var(--wf-panel-muted-tone);
   padding-right: 28px;
 }
 
@@ -3617,31 +3623,6 @@
 .wf-status {
   background: var(--wf-success-soft);
   color: var(--studio-success-fg);
-}
-
-.wf-test-run-status {
-  position: relative;
-}
-
-.wf-editor-actions .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
-  background: var(--wf-success-soft);
-  color: var(--studio-success-fg);
-  font-weight: 700;
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-warning) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-warning-text);
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="accepted-with-incidents"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
-  color: var(--studio-warning-fg);
 }
 
 .wf-editor-body {
@@ -4066,6 +4047,12 @@
   gap: 8px 16px;
   margin: 0;
   font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .wf-properties-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .wf-properties-info dt {
@@ -4721,7 +4708,8 @@
   margin: 0;
 }
 
-.wf-inspector > .wf-muted {
+.wf-inspector > .wf-muted,
+.wf-workbench-panel-content > .wf-muted {
   margin: 0;
   padding: 12px;
 }
@@ -7733,3 +7721,28 @@ html[data-theme-material] .availability-search .wf-search {
   gap: var(--studio-space-2);
 }
 .runtime-diagnostics-page .wf-section-label svg { flex: 0 0 auto; }
+
+/* Keep the immutable designer usable beside its details, and stack inspection at compact widths. */
+.wf-executable-workbench .wf-instance-canvas-shell > header h3 {
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 800px) {
+  .wf-executable-workbench:not(.inspector-maximized) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(24rem, 1fr) auto;
+    gap: var(--studio-space-2, .5rem);
+    overflow-y: auto;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-instance-inspector {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: 18rem;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-handle,
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-spacer {
+    display: none;
+  }
+}

@@ -1,3 +1,5 @@
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;

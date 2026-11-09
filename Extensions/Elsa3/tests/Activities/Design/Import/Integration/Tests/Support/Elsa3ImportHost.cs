@@ -144,19 +144,44 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
 
     private readonly WebApplication _app;
     private readonly DirectoryInfo _root;
+    private readonly bool _withPublishing;
+    private readonly bool _withPublishSeam;
+    private readonly bool _withScheduling;
+    private readonly bool _withHttp;
+    private bool _ownsRoot = true;
 
-    private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings)
+    private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings,
+        bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
     {
         _app = app;
         _root = root;
+        _withPublishing = withPublishing;
+        _withPublishSeam = withPublishSeam;
+        _withScheduling = withScheduling;
+        _withHttp = withHttp;
         Shell = shell;
         Warnings = warnings;
         Client = app.GetTestClient();
     }
 
+    /// <summary>
+    /// Stops this host and starts a new one on the same stores (the same SQLite files), composed as this one was, with the
+    /// folder import of <paramref name="reconcileFolder"/> when given. This host is disposed; use the returned one.
+    /// </summary>
+    /// <remarks>
+    /// When the new host fails to start, nobody owns the stores any more: a test that expects that failure reads them
+    /// through this host and then calls <see cref="DeleteStores"/>.
+    /// </remarks>
+    public async Task<Elsa3ImportHost> RestartAsync(string? reconcileFolder = null, bool strict = false, bool refuseAllPublications = false)
+    {
+        _ownsRoot = false;
+        await DisposeAsync();
+        return await StartAsync(_withPublishing, _withPublishSeam, _withScheduling, _withHttp, reconcileFolder, strict, refuseAllPublications, _root);
+    }
+
     public IShell Shell { get; }
 
-    /// <summary>Every warning and error the host logged, for failure messages.</summary>
+    /// <summary>Every warning and error the host logged, and the folder import's information lines.</summary>
     public WarningLog Warnings { get; }
     public HttpClient Client { get; }
 
@@ -175,15 +200,38 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
     /// the test's publish seam around it (<see cref="Refusals"/>); with <paramref name="withScheduling"/> it composes the
     /// scheduling activities (Delay); with <paramref name="withHttp"/> the HTTP activities, whose endpoints listen under
-    /// <c>/workflows/http</c>.
+    /// <c>/workflows/http</c>. With <paramref name="reconcileFolder"/> the shell composes <c>Elsa3JsonReconciliation</c> on
+    /// that folder (spec 235), strict when <paramref name="strict"/>, so the folder is imported while the shell activates.
+    /// With <paramref name="refuseAllPublications"/> the publish seam refuses every reusable from the first publication on
+    /// (it needs <paramref name="withPublishSeam"/>).
     /// </summary>
-    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false, bool withScheduling = false, bool withHttp = false)
+    public static async Task<Elsa3ImportHost> StartAsync(
+        bool withPublishing = true,
+        bool withPublishSeam = false,
+        bool withScheduling = false,
+        bool withHttp = false,
+        string? reconcileFolder = null,
+        bool strict = false,
+        bool refuseAllPublications = false,
+        DirectoryInfo? existingRoot = null)
     {
-        var root = Directory.CreateTempSubdirectory("elsa3-import-");
+        var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
+        var refusals = new PublishRefusals();
+        if (refuseAllPublications)
+            refusals.RefuseAll();
         try
         {
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp)).Build();
+            var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp);
+            if (reconcileFolder is not null)
+            {
+                var reconciliation = $"CShells:Shells:{ShellName}:Features:Elsa3JsonReconciliation:Options:";
+                settings[$"{reconciliation}SourceId"] = "elsa3-test";
+                settings[$"{reconciliation}FolderPath"] = reconcileFolder;
+                settings[$"{reconciliation}FailOnUnconvertible"] = strict ? "true" : "false";
+            }
+
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -192,7 +240,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddSingleton<IConfiguration>(configuration);
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
-            builder.Services.AddSingleton(new PublishRefusals());
+            builder.Services.AddSingleton(refusals);
             // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
             builder.Services.AddEfSchemaReadability();
             builder.Services.AddFoundationIdentityAbstractions(options =>
@@ -243,6 +291,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
                     typeof(Elsa3ImportActivitiesPublishingFeature).Assembly,
+                    typeof(Elsa3.Activities.Design.Import.Reconciliation.Elsa3JsonReconciliationFeature).Assembly,
                     typeof(Elsa3ImportPublishSeamFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
@@ -251,8 +300,20 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             app.UseAuthorization();
             app.MapShells();
             await app.StartAsync();
-            var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-            var host = new Elsa3ImportHost(app, shell, root, warnings);
+            IShell shell;
+            try
+            {
+                shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            }
+            catch
+            {
+                // A startup task refused the shell (for example a strict folder import); release the app's stores.
+                await app.DisposeAsync();
+                throw;
+            }
+
+            // A restarted host takes over the stores and deletes them when it is disposed.
+            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withScheduling, withHttp);
             try
             {
                 await host.RequireCatalogAsync();
@@ -267,7 +328,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
         catch
         {
-            DeleteQuietly(root);
+            if (existingRoot is null)
+                DeleteQuietly(root);
             throw;
         }
     }
@@ -455,6 +517,35 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         return new(workflowVersionId, Required(published, "artifactId"), Required(published, "sourceReferenceId"));
     }
 
+    /// <summary>
+    /// The active publication of <paramref name="definitionId"/>'s default slot and its source reference, read in the
+    /// host's persistence scope; null when the slot has none.
+    /// </summary>
+    public async Task<(PublishedWorkflow Workflow, WorkflowExecutableSourceReference Reference)?> ActivePublicationAsync(string definitionId)
+    {
+        await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(TenantId));
+        var services = scope.ServiceProvider;
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(definitionId, "default");
+        if (slot?.ActiveActivationId is not { } publicationId)
+            return null;
+        var record = await services.GetRequiredService<Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore>().FindAsync(publicationId);
+        if (record?.SourceReferenceId is not { } sourceReferenceId)
+            return null;
+        var reference = await services.GetRequiredService<IWorkflowExecutableSourceReferenceReader>().FindAsync(sourceReferenceId);
+        return reference is null ? null : (new PublishedWorkflow(record.WorkflowDefinitionVersionId, record.ArtifactId, sourceReferenceId), reference);
+    }
+
+    /// <summary>Every publication record of <paramref name="definitionId"/>'s default slot, read in the host's persistence scope.</summary>
+    public async Task<IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.PublicationRecord>> PublicationRecordsAsync(string definitionId)
+    {
+        await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(TenantId));
+        var services = scope.ServiceProvider;
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(definitionId, "default");
+        return slot is null ? [] : await services.GetRequiredService<Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore>().ListBySlotAsync(slot.SlotId);
+    }
+
     /// <summary>Starts a published workflow with <paramref name="inputs"/> through the runtime API; returns its execution id.</summary>
     public async Task<string> ExecuteAsync(PublishedWorkflow workflow, JsonObject? inputs = null)
     {
@@ -605,16 +696,30 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         return counts;
     }
 
+    /// <summary>Deletes the stores' folder, for a test whose restart failed (see <see cref="RestartAsync"/>).</summary>
+    public void DeleteStores() => DeleteQuietly(_root);
+
     public async ValueTask DisposeAsync()
     {
         try
         {
             Client.Dispose();
-            await _app.DisposeAsync();
+            // Disposing the app leaves the shell's recurring tasks running against the stores. A host restarted on the
+            // same stores would then have the old shell's resumption pump re-drive its executions, a second owner that
+            // fences the first out (StaleToken). Stop them first.
+            try
+            {
+                await Shell.ServiceProvider.GetRequiredService<Elsa.Tasks.Core.ITaskManager>().StopExecutingRegisteredTasks();
+            }
+            finally
+            {
+                await _app.DisposeAsync();
+            }
         }
         finally
         {
-            DeleteQuietly(_root);
+            if (_ownsRoot)
+                DeleteQuietly(_root);
         }
     }
 
@@ -653,7 +758,10 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         private sealed class Logger(string category, System.Collections.Concurrent.ConcurrentQueue<string> entries) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+            // The folder import's summary and conversion-warning lines are Information; the tests assert them (spec 235).
+            public bool IsEnabled(LogLevel logLevel) =>
+                logLevel >= LogLevel.Warning
+                || (logLevel == LogLevel.Information && category.StartsWith("Elsa3.Activities.Design.Import.Reconciliation", StringComparison.Ordinal));
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {

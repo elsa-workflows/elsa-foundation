@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
@@ -45,6 +45,7 @@ import {
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
+import { getNotifications } from "./notifications";
 
 interface WorkflowOperationsParams {
   context: StudioEndpointContext;
@@ -554,12 +555,27 @@ export function useWorkflowOperations({
       startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
-      setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
+      setStatus("");
+      const rejected = isRejectedTestRun(nextTestRun);
+      const runtimeIssue = nextTestRun.commandDispatchStatus === "AcceptedButFaulted" || (nextTestRun.incidentCount ?? 0) > 0;
+      const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
+      const deferred = nextTestRun.status === "DispatchDeferred";
+      const duplicate = nextTestRun.status === "DispatchDuplicate";
+      getNotifications().notify({
+        level: rejected || runtimeIssue ? "error" : deferred || duplicate ? "info" : "success",
+        title: rejected ? "Test run rejected" : runtimeIssue ? "Test run needs attention" : prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        message: rejected ? nextTestRun.reason ?? "Review the Runtime panel for details."
+          : runtimeIssue ? "Review the Runtime panel for incident details."
+          : prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
+        ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
+      });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;
     } catch (e) {
       setStatus("");
-      setError(describeWorkflowError(e, "The test run could not be dispatched."));
+      const error = describeWorkflowError(e, "The test run could not be dispatched.");
+      setError(error);
+      getNotifications().notify({ level: "error", title: "Test run could not start", message: error.message });
       return null;
     } finally {
       setOperation("idle");

@@ -1,0 +1,308 @@
+#nullable enable
+Elsa.Decisions.Persistence.Core.DecisionAsset
+Elsa.Decisions.Persistence.Core.DecisionAsset.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionAsset!
+Elsa.Decisions.Persistence.Core.DecisionAsset.CreatedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionAsset.CreatedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.DecisionAsset(string! Id, string! Name, string? Description, string! Revision, string! Xml, string! SourceHash, bool IsSensitive, string? PublishedVersionId, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Deconstruct(out string! Id, out string! Name, out string? Description, out string! Revision, out string! Xml, out string! SourceHash, out bool IsSensitive, out string? PublishedVersionId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Description.get -> string?
+Elsa.Decisions.Persistence.Core.DecisionAsset.Description.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Equals(Elsa.Decisions.Persistence.Core.DecisionAsset? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionAsset.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAsset.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionAsset.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Name.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAsset.Name.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.PublishedVersionId.get -> string?
+Elsa.Decisions.Persistence.Core.DecisionAsset.PublishedVersionId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Revision.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAsset.Revision.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.SourceHash.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAsset.SourceHash.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionAsset.UpdatedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionAsset.Xml.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionAsset.Xml.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase
+Elsa.Decisions.Persistence.Core.DecisionCase.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionCase!
+Elsa.Decisions.Persistence.Core.DecisionCase.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCase.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.CreatedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionCase.CreatedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.DecisionCase(string! Id, string! AssetId, string! Name, string! Revision, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>! Inputs, string! ExpectedStatus, System.Text.Json.JsonElement ExpectedResult, bool IsSensitive, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Deconstruct(out string! Id, out string! AssetId, out string! Name, out string! Revision, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>! Inputs, out string! ExpectedStatus, out System.Text.Json.JsonElement ExpectedResult, out bool IsSensitive, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Equals(Elsa.Decisions.Persistence.Core.DecisionCase? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionCase.ExpectedResult.get -> System.Text.Json.JsonElement
+Elsa.Decisions.Persistence.Core.DecisionCase.ExpectedResult.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.ExpectedStatus.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCase.ExpectedStatus.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCase.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Inputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>!
+Elsa.Decisions.Persistence.Core.DecisionCase.Inputs.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionCase.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Name.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCase.Name.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.Revision.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCase.Revision.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCase.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionCase.UpdatedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionCaseComparison!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Actual.get -> System.Text.Json.JsonElement?
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Actual.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.CaseId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.CaseId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.DecisionCaseComparison(string! CaseId, string! Name, bool Passed, string! Status, string? FailurePath, System.Text.Json.JsonElement? Expected, System.Text.Json.JsonElement? Actual, System.Collections.Generic.IReadOnlyList<string!>! MatchedRules, System.Collections.Generic.IReadOnlyList<string!>! SelectedRules, System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionRuleTrace!>! Trace) -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Deconstruct(out string! CaseId, out string! Name, out bool Passed, out string! Status, out string? FailurePath, out System.Text.Json.JsonElement? Expected, out System.Text.Json.JsonElement? Actual, out System.Collections.Generic.IReadOnlyList<string!>! MatchedRules, out System.Collections.Generic.IReadOnlyList<string!>! SelectedRules, out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionRuleTrace!>! Trace) -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Equals(Elsa.Decisions.Persistence.Core.DecisionCaseComparison? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Expected.get -> System.Text.Json.JsonElement?
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Expected.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.FailurePath.get -> string?
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.FailurePath.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.MatchedRules.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.MatchedRules.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Name.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Name.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Passed.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Passed.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.SelectedRules.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.SelectedRules.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Status.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Status.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Trace.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Core.DecisionRuleTrace!>!
+Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Trace.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionCaseIdentity!
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.DecisionCaseIdentity(string! Id, string! Revision, string! Hash) -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Deconstruct(out string! Id, out string! Revision, out string! Hash) -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Equals(Elsa.Decisions.Persistence.Core.DecisionCaseIdentity? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Hash.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Hash.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Revision.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Revision.init -> void
+Elsa.Decisions.Persistence.Core.DecisionDesignException
+Elsa.Decisions.Persistence.Core.DecisionDesignException.Code.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionDesignException.DecisionDesignException(string! code, string! message, System.Exception? innerException = null) -> void
+Elsa.Decisions.Persistence.Core.DecisionOperation
+Elsa.Decisions.Persistence.Core.DecisionOperation.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionOperation!
+Elsa.Decisions.Persistence.Core.DecisionOperation.ActorId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionOperation.ActorId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionOperation.DecisionOperation(string! TenantId, string! ActorId, string! OperationId) -> void
+Elsa.Decisions.Persistence.Core.DecisionOperation.Deconstruct(out string! TenantId, out string! ActorId, out string! OperationId) -> void
+Elsa.Decisions.Persistence.Core.DecisionOperation.Equals(Elsa.Decisions.Persistence.Core.DecisionOperation? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionOperation.OperationId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionOperation.OperationId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionOperation.TenantId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionOperation.TenantId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionOperationReceipt!
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Confirmation.get -> Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Confirmation.init -> void
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.DecisionOperationReceipt(string! Kind, string! Fingerprint, Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation! Confirmation) -> void
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Deconstruct(out string! Kind, out string! Fingerprint, out Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation! Confirmation) -> void
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Equals(Elsa.Decisions.Persistence.Core.DecisionOperationReceipt? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Fingerprint.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Fingerprint.init -> void
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Kind.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Kind.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionTestReceipt!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.ActorId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.ActorId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CandidateHash.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CandidateHash.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CandidateId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CandidateId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Cases.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseIdentity!>!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Cases.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Comparisons.get -> System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseComparison!>!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Comparisons.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CompletedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CompletedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.DecisionTestReceipt(string! Id, string! AssetId, string! ActorId, string! RequestFingerprint, string! CandidateId, string! CandidateHash, System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseIdentity!>! Cases, System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseComparison!>! Comparisons, bool Passed, bool HasDetailedPayload, bool IsSensitive, System.DateTimeOffset EvaluatedAt, System.DateTimeOffset CompletedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Deconstruct(out string! Id, out string! AssetId, out string! ActorId, out string! RequestFingerprint, out string! CandidateId, out string! CandidateHash, out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseIdentity!>! Cases, out System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCaseComparison!>! Comparisons, out bool Passed, out bool HasDetailedPayload, out bool IsSensitive, out System.DateTimeOffset EvaluatedAt, out System.DateTimeOffset CompletedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Equals(Elsa.Decisions.Persistence.Core.DecisionTestReceipt? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.EvaluatedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.EvaluatedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.HasDetailedPayload.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.HasDetailedPayload.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Passed.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Passed.init -> void
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.RequestFingerprint.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.RequestFingerprint.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion
+Elsa.Decisions.Persistence.Core.DecisionVersion.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionVersion!
+Elsa.Decisions.Persistence.Core.DecisionVersion.Artifact.get -> Elsa.Decisions.Core.DecisionArtifact!
+Elsa.Decisions.Persistence.Core.DecisionVersion.Artifact.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionVersion.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.DecisionVersion(string! Id, string! AssetId, int Number, string! Name, string! Xml, string! SourceHash, Elsa.Decisions.Core.DecisionArtifact! Artifact, bool IsSensitive, System.DateTimeOffset PublishedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.Deconstruct(out string! Id, out string! AssetId, out int Number, out string! Name, out string! Xml, out string! SourceHash, out Elsa.Decisions.Core.DecisionArtifact! Artifact, out bool IsSensitive, out System.DateTimeOffset PublishedAt) -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.Equals(Elsa.Decisions.Persistence.Core.DecisionVersion? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionVersion.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionVersion.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionVersion.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.Name.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionVersion.Name.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.Number.get -> int
+Elsa.Decisions.Persistence.Core.DecisionVersion.Number.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.PublishedAt.get -> System.DateTimeOffset
+Elsa.Decisions.Persistence.Core.DecisionVersion.PublishedAt.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.SourceHash.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionVersion.SourceHash.init -> void
+Elsa.Decisions.Persistence.Core.DecisionVersion.Xml.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionVersion.Xml.init -> void
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.<Clone>$() -> Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.DecisionWriteConfirmation(string! Id, string! Revision, bool Replayed = false) -> void
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Deconstruct(out string! Id, out string! Revision, out bool Replayed) -> void
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Equals(Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation? other) -> bool
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Id.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Id.init -> void
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Replayed.get -> bool
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Replayed.init -> void
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Revision.get -> string!
+Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Revision.init -> void
+Elsa.Decisions.Persistence.Core.IDecisionReader
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindAssetAsync(string! tenantId, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionAsset?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindCaseAsync(string! tenantId, string! assetId, string! caseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionCase?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindCompletedOperationAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionTestReceipt?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindOperationAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionOperationReceipt?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindRunAsync(string! tenantId, string! assetId, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionTestReceipt?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.FindVersionAsync(string! tenantId, string! assetId, string! versionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionVersion?>
+Elsa.Decisions.Persistence.Core.IDecisionReader.ListAssetsAsync(string! tenantId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionAsset!>!>
+Elsa.Decisions.Persistence.Core.IDecisionReader.ListCasesAsync(string! tenantId, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionCase!>!>
+Elsa.Decisions.Persistence.Core.IDecisionReader.ListRunsAsync(string! tenantId, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionTestReceipt!>!>
+Elsa.Decisions.Persistence.Core.IDecisionReader.ListVersionsAsync(string! tenantId, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Persistence.Core.DecisionVersion!>!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter
+Elsa.Decisions.Persistence.Core.IDecisionWriter.DeleteCaseAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, string! assetId, string! caseId, string! expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.DeleteRunAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, string! assetId, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.PublishAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.PublishDecision! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveAssetAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.SaveDecision! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveCaseAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.SaveDecisionCase! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.IDecisionWriter.SaveCompletedRunAsync(Elsa.Decisions.Persistence.Core.DecisionOperation! operation, Elsa.Decisions.Persistence.Core.DecisionTestReceipt! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Persistence.Core.PublishDecision
+Elsa.Decisions.Persistence.Core.PublishDecision.<Clone>$() -> Elsa.Decisions.Persistence.Core.PublishDecision!
+Elsa.Decisions.Persistence.Core.PublishDecision.Artifact.get -> Elsa.Decisions.Core.DecisionArtifact!
+Elsa.Decisions.Persistence.Core.PublishDecision.Artifact.init -> void
+Elsa.Decisions.Persistence.Core.PublishDecision.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.PublishDecision.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.PublishDecision.Deconstruct(out string! AssetId, out string! ExpectedRevision, out Elsa.Decisions.Core.DecisionArtifact! Artifact) -> void
+Elsa.Decisions.Persistence.Core.PublishDecision.Equals(Elsa.Decisions.Persistence.Core.PublishDecision? other) -> bool
+Elsa.Decisions.Persistence.Core.PublishDecision.ExpectedRevision.get -> string!
+Elsa.Decisions.Persistence.Core.PublishDecision.ExpectedRevision.init -> void
+Elsa.Decisions.Persistence.Core.PublishDecision.PublishDecision(string! AssetId, string! ExpectedRevision, Elsa.Decisions.Core.DecisionArtifact! Artifact) -> void
+Elsa.Decisions.Persistence.Core.SaveDecision
+Elsa.Decisions.Persistence.Core.SaveDecision.<Clone>$() -> Elsa.Decisions.Persistence.Core.SaveDecision!
+Elsa.Decisions.Persistence.Core.SaveDecision.Deconstruct(out string? Id, out string? ExpectedRevision, out string! Name, out string? Description, out string! Xml, out string! SourceHash, out bool IsSensitive) -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.Description.get -> string?
+Elsa.Decisions.Persistence.Core.SaveDecision.Description.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.Equals(Elsa.Decisions.Persistence.Core.SaveDecision? other) -> bool
+Elsa.Decisions.Persistence.Core.SaveDecision.ExpectedRevision.get -> string?
+Elsa.Decisions.Persistence.Core.SaveDecision.ExpectedRevision.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.Id.get -> string?
+Elsa.Decisions.Persistence.Core.SaveDecision.Id.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.SaveDecision.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.Name.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecision.Name.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.SaveDecision(string? Id, string? ExpectedRevision, string! Name, string? Description, string! Xml, string! SourceHash, bool IsSensitive) -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.SourceHash.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecision.SourceHash.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecision.Xml.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecision.Xml.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.<Clone>$() -> Elsa.Decisions.Persistence.Core.SaveDecisionCase!
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.AssetId.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.AssetId.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Deconstruct(out string! AssetId, out string? Id, out string? ExpectedRevision, out string! Name, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>! Inputs, out string! ExpectedStatus, out System.Text.Json.JsonElement ExpectedResult, out bool IsSensitive) -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Equals(Elsa.Decisions.Persistence.Core.SaveDecisionCase? other) -> bool
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedResult.get -> System.Text.Json.JsonElement
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedResult.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedRevision.get -> string?
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedRevision.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedStatus.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.ExpectedStatus.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Id.get -> string?
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Id.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Inputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>!
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Inputs.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.IsSensitive.get -> bool
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.IsSensitive.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Name.get -> string!
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.Name.init -> void
+Elsa.Decisions.Persistence.Core.SaveDecisionCase.SaveDecisionCase(string! AssetId, string? Id, string? ExpectedRevision, string! Name, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>! Inputs, string! ExpectedStatus, System.Text.Json.JsonElement ExpectedResult, bool IsSensitive) -> void
+override Elsa.Decisions.Persistence.Core.DecisionAsset.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionAsset.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionAsset.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionCase.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionCase.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionCase.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionCaseComparison.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionCaseComparison.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionCaseComparison.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionOperation.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionOperation.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionOperation.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionTestReceipt.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionTestReceipt.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionTestReceipt.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionVersion.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionVersion.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionVersion.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.PublishDecision.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.PublishDecision.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.PublishDecision.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.SaveDecision.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.SaveDecision.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.SaveDecision.ToString() -> string!
+override Elsa.Decisions.Persistence.Core.SaveDecisionCase.Equals(object? obj) -> bool
+override Elsa.Decisions.Persistence.Core.SaveDecisionCase.GetHashCode() -> int
+override Elsa.Decisions.Persistence.Core.SaveDecisionCase.ToString() -> string!
+static Elsa.Decisions.Persistence.Core.DecisionAsset.operator !=(Elsa.Decisions.Persistence.Core.DecisionAsset? left, Elsa.Decisions.Persistence.Core.DecisionAsset? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionAsset.operator ==(Elsa.Decisions.Persistence.Core.DecisionAsset? left, Elsa.Decisions.Persistence.Core.DecisionAsset? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCase.operator !=(Elsa.Decisions.Persistence.Core.DecisionCase? left, Elsa.Decisions.Persistence.Core.DecisionCase? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCase.operator ==(Elsa.Decisions.Persistence.Core.DecisionCase? left, Elsa.Decisions.Persistence.Core.DecisionCase? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCaseComparison.operator !=(Elsa.Decisions.Persistence.Core.DecisionCaseComparison? left, Elsa.Decisions.Persistence.Core.DecisionCaseComparison? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCaseComparison.operator ==(Elsa.Decisions.Persistence.Core.DecisionCaseComparison? left, Elsa.Decisions.Persistence.Core.DecisionCaseComparison? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.operator !=(Elsa.Decisions.Persistence.Core.DecisionCaseIdentity? left, Elsa.Decisions.Persistence.Core.DecisionCaseIdentity? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionCaseIdentity.operator ==(Elsa.Decisions.Persistence.Core.DecisionCaseIdentity? left, Elsa.Decisions.Persistence.Core.DecisionCaseIdentity? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionOperation.operator !=(Elsa.Decisions.Persistence.Core.DecisionOperation? left, Elsa.Decisions.Persistence.Core.DecisionOperation? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionOperation.operator ==(Elsa.Decisions.Persistence.Core.DecisionOperation? left, Elsa.Decisions.Persistence.Core.DecisionOperation? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.operator !=(Elsa.Decisions.Persistence.Core.DecisionOperationReceipt? left, Elsa.Decisions.Persistence.Core.DecisionOperationReceipt? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionOperationReceipt.operator ==(Elsa.Decisions.Persistence.Core.DecisionOperationReceipt? left, Elsa.Decisions.Persistence.Core.DecisionOperationReceipt? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionTestReceipt.operator !=(Elsa.Decisions.Persistence.Core.DecisionTestReceipt? left, Elsa.Decisions.Persistence.Core.DecisionTestReceipt? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionTestReceipt.operator ==(Elsa.Decisions.Persistence.Core.DecisionTestReceipt? left, Elsa.Decisions.Persistence.Core.DecisionTestReceipt? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionVersion.operator !=(Elsa.Decisions.Persistence.Core.DecisionVersion? left, Elsa.Decisions.Persistence.Core.DecisionVersion? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionVersion.operator ==(Elsa.Decisions.Persistence.Core.DecisionVersion? left, Elsa.Decisions.Persistence.Core.DecisionVersion? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.operator !=(Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation? left, Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation? right) -> bool
+static Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation.operator ==(Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation? left, Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation? right) -> bool
+static Elsa.Decisions.Persistence.Core.PublishDecision.operator !=(Elsa.Decisions.Persistence.Core.PublishDecision? left, Elsa.Decisions.Persistence.Core.PublishDecision? right) -> bool
+static Elsa.Decisions.Persistence.Core.PublishDecision.operator ==(Elsa.Decisions.Persistence.Core.PublishDecision? left, Elsa.Decisions.Persistence.Core.PublishDecision? right) -> bool
+static Elsa.Decisions.Persistence.Core.SaveDecision.operator !=(Elsa.Decisions.Persistence.Core.SaveDecision? left, Elsa.Decisions.Persistence.Core.SaveDecision? right) -> bool
+static Elsa.Decisions.Persistence.Core.SaveDecision.operator ==(Elsa.Decisions.Persistence.Core.SaveDecision? left, Elsa.Decisions.Persistence.Core.SaveDecision? right) -> bool
+static Elsa.Decisions.Persistence.Core.SaveDecisionCase.operator !=(Elsa.Decisions.Persistence.Core.SaveDecisionCase? left, Elsa.Decisions.Persistence.Core.SaveDecisionCase? right) -> bool
+static Elsa.Decisions.Persistence.Core.SaveDecisionCase.operator ==(Elsa.Decisions.Persistence.Core.SaveDecisionCase? left, Elsa.Decisions.Persistence.Core.SaveDecisionCase? right) -> bool
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CaseInputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>!>?
+Elsa.Decisions.Persistence.Core.DecisionTestReceipt.CaseInputs.init -> void

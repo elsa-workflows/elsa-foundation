@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "spec": "1202-etl-design-store-providers",
+  "sourceRevision": "7462b02e26606117b4e228c98b6fecbd5e0e8d83",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "d8b1b00138daf55acda5c208e39fc4f1ecba2345ad7bca0b48d0c1eb8d9b408f",
+  "engines": {
+    "PostgreSql": {
+      "definition": "people-899040ee",
+      "twin": "People-899040ee",
+      "selection": "etl1:people-899040ee:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "nativeVersionId": "14v1p6mO3OK",
+      "nativePublicationArtifactId": "artifact-90befc824f21",
+      "nativeSourceReferenceId": "activation-ref:publication-14v1p7Gtj4w",
+      "workflowExecutionId": "01a1a8022d6875a0bd46e1d4a89b44dd",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "delivered": [
+        "Ada",
+        "Bram",
+        "Cleo"
+      ],
+      "catalogBefore": [
+        "People-899040ee",
+        "people-899040ee"
+      ],
+      "catalogAfter": [
+        "People-899040ee",
+        "people-899040ee"
+      ],
+      "reopenedRevision": 1,
+      "reopenedLastPublishedVersion": 1,
+      "versionsAfter": [
+        1
+      ],
+      "designTables": [
+        "elsa_etl_definition_drafts",
+        "elsa_etl_published_artifacts"
+      ],
+      "secretInOutput": false
+    },
+    "SqlServer": {
+      "definition": "people-0d63e967",
+      "twin": "People-0d63e967",
+      "selection": "etl1:people-0d63e967:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "nativeVersionId": "14v1rAc3fBD",
+      "nativePublicationArtifactId": "artifact-09d28a9a8f02",
+      "nativeSourceReferenceId": "activation-ref:publication-14v1rB7L6Pd",
+      "workflowExecutionId": "01a1a8029a857cedab52ff60529bb430",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "delivered": [
+        "Ada",
+        "Bram",
+        "Cleo"
+      ],
+      "catalogBefore": [
+        "People-0d63e967",
+        "people-0d63e967"
+      ],
+      "catalogAfter": [
+        "People-0d63e967",
+        "people-0d63e967"
+      ],
+      "reopenedRevision": 1,
+      "reopenedLastPublishedVersion": 1,
+      "versionsAfter": [
+        1
+      ],
+      "designTables": [
+        "elsa_etl_definition_drafts",
+        "elsa_etl_published_artifacts"
+      ],
+      "secretInOutput": false
+    },
+    "MySql": {
+      "definition": "people-abaa12c8",
+      "twin": "People-abaa12c8",
+      "selection": "etl1:people-abaa12c8:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "nativeVersionId": "14v1tIRadxR",
+      "nativePublicationArtifactId": "artifact-9397ce159222",
+      "nativeSourceReferenceId": "activation-ref:publication-14v1tIweoRG",
+      "workflowExecutionId": "01a1a8030b1072708d32cc3e53a9b50b",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "delivered": [
+        "Ada",
+        "Bram",
+        "Cleo"
+      ],
+      "catalogBefore": [
+        "People-abaa12c8",
+        "people-abaa12c8"
+      ],
+      "catalogAfter": [
+        "People-abaa12c8",
+        "people-abaa12c8"
+      ],
+      "reopenedRevision": 1,
+      "reopenedLastPublishedVersion": 1,
+      "versionsAfter": [
+        1
+      ],
+      "designTables": [
+        "elsa_etl_definition_drafts",
+        "elsa_etl_published_artifacts"
+      ],
+      "secretInOutput": false
+    }
+  },
+  "checks": {
+    "PostgreSql:publishedRunCompletedThroughDone": true,
+    "PostgreSql:recordsDelivered": true,
+    "PostgreSql:catalogListsBothCaseTwins": true,
+    "PostgreSql:reopenedHostReadsTheDraftAndPublication": true,
+    "PostgreSql:designTablesOnTheEngine": true,
+    "PostgreSql:noSecretInApiOutput": true,
+    "SqlServer:publishedRunCompletedThroughDone": true,
+    "SqlServer:recordsDelivered": true,
+    "SqlServer:catalogListsBothCaseTwins": true,
+    "SqlServer:reopenedHostReadsTheDraftAndPublication": true,
+    "SqlServer:designTablesOnTheEngine": true,
+    "SqlServer:noSecretInApiOutput": true,
+    "MySql:publishedRunCompletedThroughDone": true,
+    "MySql:recordsDelivered": true,
+    "MySql:catalogListsBothCaseTwins": true,
+    "MySql:reopenedHostReadsTheDraftAndPublication": true,
+    "MySql:designTablesOnTheEngine": true,
+    "MySql:noSecretInApiOutput": true
+  },
+  "passed": true,
+  "productSourceRevision": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+  "proofScope": "Server-backed ETL design stores; ETL runtime/native SQLite. Completed-state restart/readback, not mid-work, upgrade or Studio."
+}
