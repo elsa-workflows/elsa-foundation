@@ -3434,7 +3434,6 @@
   min-height: 38px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
   color: var(--wf-text);
   font: inherit;
   font-size: 14px;
@@ -3445,6 +3444,11 @@
   text-transform: none;
 }
 
+.wf-form-field input,
+.wf-form-field textarea {
+  background: var(--wf-panel-muted);
+}
+
 .wf-form-field textarea {
   min-height: 74px;
   padding: 9px 10px;
@@ -3452,6 +3456,8 @@
 }
 
 .wf-form-field select {
+  /* Preserve the shared host chevron while applying the field surface. */
+  background-color: var(--wf-panel-muted-tone);
   padding-right: 28px;
 }
 

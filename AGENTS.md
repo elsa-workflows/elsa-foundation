@@ -29,7 +29,7 @@ Use the narrowest source that answers the task.
 | Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
-| Human-led planning: initiatives, their coordinator and approvers, ADR agreement, the initiative board | `docs/contributing/initiatives.md` |
+| Human-led planning: initiatives, their coordinator and approvers, ADR agreement, the initiative branch and its pre-merge gate, the initiative board | `docs/contributing/initiatives.md` |
 | Repo navigation, extension points, dependency/test maps | [docs/maps/README.md](docs/maps/README.md) (the generated maps are published on the [`generated-maps` branch](https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps)) and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
@@ -70,7 +70,7 @@ For visible UI or interaction changes, follow [Studio UX acceptance](docs/contri
 
 ## Program bookkeeping
 
-Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. An initiative proposal (a PR whose base is an `initiative/*` branch, or the branch of a proposal stacked on one) is the exception: the initiative's coordinator merges it after the [pre-merge gate](docs/contributing/initiatives.md#the-pre-merge-gate). See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
