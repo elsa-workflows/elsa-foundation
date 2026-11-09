@@ -5,6 +5,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Rules.Runtime;
 
@@ -27,6 +29,18 @@ public class RulesRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Host root", Description = "Absolute directory containing the deployed host and semantic assets.", Category = "Deployment")]
     public string HostRoot { get; set; } = AppContext.BaseDirectory;
 
+    /// <summary>
+    /// Advertise the identity of the Rules assemblies this process loaded from disk instead of a packaged deployment
+    /// receipt. Off by default; intended for source-built development and test hosts only.
+    /// </summary>
+    /// <remarks>
+    /// The source-build pin is distinguishable from every packaged pin and the host logs a warning when it is used. A run
+    /// admitted under it is recoverable only by a host that loads byte-identical Rules assemblies, so a changed build
+    /// leaves such runs unavailable rather than refused. Cannot be combined with <see cref="DeploymentReceiptPath"/>.
+    /// </remarks>
+    [ManifestSetting(DisplayName = "Allow source-build identity", Description = "Use the loaded Rules assemblies as the implementation identity instead of a deployment receipt; development hosts only.", Category = "Deployment")]
+    public bool AllowSourceBuildIdentity { get; set; }
+
     /// <summary>Maximum number of actual attempt tasks in this host provider.</summary>
     [ManifestSetting(DisplayName = "Maximum concurrent attempts", Description = "Bound on actual running Rules attempts, from 1 through 64.", Category = "Runtime")]
     public int MaxConcurrentAttempts { get; set; } = 2;
@@ -44,6 +58,8 @@ public class RulesRuntimeFeature : IShellFeature
         ArgumentNullException.ThrowIfNull(services);
         if (MaxConcurrentAttempts is < 1 or > 64) throw new ArgumentOutOfRangeException(nameof(MaxConcurrentAttempts));
         if (PollIntervalMilliseconds is < 10 or > 60_000) throw new ArgumentOutOfRangeException(nameof(PollIntervalMilliseconds));
+        if (AllowSourceBuildIdentity && !string.IsNullOrEmpty(DeploymentReceiptPath))
+            throw new InvalidOperationException("AllowSourceBuildIdentity cannot be combined with DeploymentReceiptPath; a host advertises one Rules identity.");
         var options = new RulesRuntimeOptions(MaxConcurrentAttempts, TimeSpan.FromMilliseconds(PollIntervalMilliseconds));
         var acceptNewInvocations = AcceptNewInvocations;
         var receipt = DeploymentReceiptPath;
@@ -51,7 +67,11 @@ public class RulesRuntimeFeature : IShellFeature
         var root = HostRoot;
         services.AddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddSingleton<IRuleImplementationIdentitySource>(_ => new RuleDeploymentIdentitySource(deps, receipt, root));
+        if (AllowSourceBuildIdentity)
+            services.TryAddSingleton<IRuleImplementationIdentitySource>(provider => new RuleSourceBuildIdentitySource(
+                provider.GetService<ILogger<RuleSourceBuildIdentitySource>>() ?? NullLogger<RuleSourceBuildIdentitySource>.Instance));
+        else
+            services.TryAddSingleton<IRuleImplementationIdentitySource>(_ => new RuleDeploymentIdentitySource(deps, receipt, root));
         services.TryAddScoped<IRuleArtifactCompiler, RuleArtifactCompiler>();
         services.TryAddScoped<IRuleInvocationFactory, RuleInvocationFactory>();
         services.TryAddScoped<IRuleAdmissionValidator>(provider =>
