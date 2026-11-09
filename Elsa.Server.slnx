@@ -80,6 +80,9 @@
     <Project Path="Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
     <Project Path="Extensions/Etl/tests/WorkerHost/Elsa.Etl.WorkerHost.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/tests/Hosting/">
+    <Project Path="Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/tests/Persistence/">
     <Project Path="Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj" />
   </Folder>
@@ -100,6 +103,7 @@
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj" />
   </Folder>
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/Persistence/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
@@ -198,6 +202,9 @@
   </Folder>
   <Folder Name="/Extensions/Rules/tests/">
     <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/tests/Hosting/">
+    <Project Path="Extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/tests/Persistence/" />
   <Folder Name="/Extensions/Rules/tests/Persistence/EntityFrameworkCore/">

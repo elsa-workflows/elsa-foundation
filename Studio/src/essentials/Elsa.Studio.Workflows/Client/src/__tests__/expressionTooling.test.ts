@@ -573,4 +573,77 @@ describe("expression tooling transport", () => {
     const resolved = await tooling.getAuthoringContext(document, {});
     await expect(tooling.getCatalog(document, resolved.data!)).resolves.toMatchObject({ state: "stale" });
   });
+
+  it.each([
+    ["success", "ready"],
+    ["supportedEmpty", "supported-empty"]
+  ] as const)("maps camelCase named outcome %s to %s", async (wireState, expectedState) => {
+    const api = createContext(vi.fn(async () => outcome(contextPayload, wireState)));
+    await expect(client(api.context).getAuthoringContext(document, {})).resolves.toMatchObject({ state: expectedState });
+  });
+
+  it("parses completion and catalog item kinds from v1 ordinals", async () => {
+    const api = createContext(vi.fn(async (url: string) => {
+      if (url.endsWith("/context")) return outcome(contextPayload);
+      if (url.endsWith("/completions")) {
+        return outcome({ items: [{ label: "getName", insertText: "getName()", kind: 3 }] });
+      }
+      if (url.endsWith("/symbols")) {
+        return outcome({ items: [{ label: "customer", documentation: "Current customer.", kind: 1 }] });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    }));
+    const tooling = client(api.context);
+    const resolved = await tooling.getAuthoringContext(document, {});
+
+    await expect(tooling.getCompletions(
+      document,
+      resolved.data!,
+      { line: 0, column: 1 }
+    )).resolves.toMatchObject({
+      state: "ready",
+      data: { items: [{ label: "getName", kind: "function" }] }
+    });
+    await expect(tooling.getCatalog(document, resolved.data!)).resolves.toMatchObject({
+      state: "ready",
+      data: { symbols: [{ name: "customer", kind: "value" }] }
+    });
+  });
+
+  it("maps diagnostic Information ordinal and Hint name to info", async () => {
+    const api = createContext(vi.fn(async (url: string) => {
+      if (url.endsWith("/context")) return outcome(contextPayload);
+      if (url.endsWith("/validate")) {
+        return outcome({
+          diagnostics: [
+            {
+              code: "EXPR003",
+              severity: 2,
+              message: "Informational note.",
+              range: { start: { line: 0, character: 1 }, end: { line: 0, character: 4 } }
+            },
+            {
+              code: "EXPR004",
+              severity: "Hint",
+              message: "A hint.",
+              range: { start: { line: 0, character: 5 }, end: { line: 0, character: 8 } }
+            }
+          ]
+        });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    }));
+    const tooling = client(api.context);
+    const resolved = await tooling.getAuthoringContext(document, {});
+
+    await expect(tooling.validate(document, resolved.data!)).resolves.toMatchObject({
+      state: "ready",
+      data: {
+        diagnostics: [
+          { severity: "info", code: "EXPR003", message: "Informational note." },
+          { severity: "info", code: "EXPR004", message: "A hint." }
+        ]
+      }
+    });
+  });
 });

@@ -39,6 +39,9 @@ internal sealed class EtlNativeResultExecutor(IEtlRuntimeStore runs, IWorkflowEx
         var address = invocation.ResultAddress;
         var payload = new RunEtlCompletion(EtlNativeBoundary.FormatVersion, EtlRuntimeJson.WriteElement(invocation),
             EtlRuntimeJson.WriteElement(delivery.Result));
+        // Owned hosting tests freeze a real in-flight delivery claim here, after the terminal result exists and before
+        // the parent is resumed, by naming a hold file in ELSA_HOLD_NATIVE_RESULT_DELIVERY. Production hosts never set it.
+        await HoldNativeResultDeliveryForTestAsync(Environment.GetEnvironmentVariable(NativeResultDeliveryHoldVariable), cancellationToken);
         var dispatched = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
             address.WorkflowExecutionId, address.StimulusType, address.StimulusHash,
             JsonSerializer.SerializeToElement(payload), delivery.DeliveryId, address.ProviderId, null,
@@ -93,6 +96,31 @@ internal sealed class EtlNativeResultExecutor(IEtlRuntimeStore runs, IWorkflowEx
         if (EtlRuntimeIdentity.InvocationFingerprint(EtlNativeBoundary.Invocation(activity)) != EtlRuntimeIdentity.InvocationFingerprint(invocation))
             throw EtlNativeBoundary.Invalid();
         return new(null, true);
+    }
+
+    internal const string NativeResultDeliveryHoldVariable = "ELSA_HOLD_NATIVE_RESULT_DELIVERY";
+    internal const string HoldClaimMode = "hold-claim";
+
+    /// <summary>
+    /// When <paramref name="holdPath"/> names an existing file whose text is <c>hold-claim</c>, writes a sibling
+    /// <c>.engaged</c> marker and then waits until cancelled, so the claimed delivery lease stays unacknowledged exactly
+    /// as a crash between claim and dispatch would leave it. Any other path or content returns at once.
+    /// </summary>
+    internal static async ValueTask HoldNativeResultDeliveryForTestAsync(string? holdPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(holdPath) || !File.Exists(holdPath))
+            return;
+        string mode;
+        try { mode = File.ReadAllText(holdPath).Trim(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException("The configured native result delivery test hold could not be read.", error);
+        }
+        if (mode != HoldClaimMode)
+            return;
+        try { File.WriteAllText(holdPath + ".engaged", DateTimeOffset.UtcNow.ToString("O")); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { /* The marker only helps the test observe the hold. */ }
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
     private sealed record DeliveryProof(EtlDeliveryDisposition? Disposition, bool CanDispatch);
