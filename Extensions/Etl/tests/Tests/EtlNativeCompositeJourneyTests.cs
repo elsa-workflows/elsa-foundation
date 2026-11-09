@@ -431,6 +431,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
         private bool _workerStarted;
         private bool _retainFailureEvidence;
         private bool _directoryHandedOff;
+        private bool _disposed;
 
         private NativeEtlJourney(
             string directory,
@@ -476,7 +477,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
         public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind,
             NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null, bool includeBindings = true,
             NativeHttpConfiguration? http = null, EtlDeliveryHold? deliveryHold = null, int deliveryLeaseSeconds = 30,
-            string? existingDirectory = null, string? retainedWorkflowExecutionId = null, int generation = 0)
+            string? existingDirectory = null, string? retainedWorkflowExecutionId = null, int generation = 0, TimeProvider? clock = null)
         {
             // A rebuild (generation > 0) reopens an existing directory and execution id: the files, databases and
             // identities of the previous host generation are the durable state the new host must recover from.
@@ -565,6 +566,10 @@ public sealed partial class EtlNativeCompositeJourneyTests
                         // resolves, so the hold wraps nothing and simply refuses to dispatch or acknowledge.
                         if (deliveryHold is not null)
                             services.AddScoped<IEtlResultDelivery>(_ => new HeldEtlResultDelivery(deliveryHold));
+                        // The ETL store and worker read time from the registered TimeProvider; a test clock lets a witness
+                        // expire a lease by advancing time instead of sleeping through the five-second minimum.
+                        if (clock is not null)
+                            services.AddSingleton(clock);
                         if (gate is not null)
                             services.AddScoped<IEtlRunAdmissionService>(provider => new GatedAdmission(
                                 provider.GetRequiredService<EtlExecution>(), gate));
@@ -604,7 +609,8 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     await lifetimeHost.StopAsync();
                     lifetimeHost.Dispose();
                 }
-                if (Directory.Exists(directory))
+                // A failed rebuild keeps the previous generation's files as evidence; only a failed first build cleans up.
+                if (generation == 0 && Directory.Exists(directory))
                     Directory.Delete(directory, recursive: true);
                 throw;
             }
@@ -1013,6 +1019,9 @@ public sealed partial class EtlNativeCompositeJourneyTests
 
         public async ValueTask DisposeAsync()
         {
+            if (_disposed)
+                return;
+            _disposed = true;
             try
             {
                 if (_workerStarted)

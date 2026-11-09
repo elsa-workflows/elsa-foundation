@@ -13,15 +13,17 @@ shard `pr-1`):
 | Case | Cut | Proof |
 |---|---|---|
 | `A_suspended_RunRules_survives_a_host_rebuild_before_any_round_and_completes_once` | Parent suspended, run admitted, no round executed | Rebuilt host drives the rounds and delivers; one consumed receipt, `after-rules` runs once, a second delivery attempt finds nothing |
-| `A_terminal_result_claimed_for_delivery_before_the_rebuild_is_consumed_exactly_once_after_the_lease_expires` | Terminal stored, delivery lease claimed by the first host, no dispatch, no acknowledgement | The dead owner's one-second lease is honoured; the rebuilt host then delivers exactly once and a later attempt finds nothing |
+| `A_terminal_result_claimed_for_delivery_before_the_rebuild_is_consumed_exactly_once_after_the_lease_expires` | Terminal stored, delivery lease claimed by the first host, no dispatch, no acknowledgement | While the dead owner's three-second lease is in force the rebuilt host's delivery attempt finds nothing and the child stays suspended; after expiry it delivers exactly once and a later attempt finds nothing |
 | `A_round_budget_fault_survives_a_host_rebuild_and_faults_the_parent_once` | Terminal `Faulted` (`rules.round-budget-exhausted`) stored, parent still waiting | After the rebuild the delivery faults the child once with the same code; the parent faults; nothing left to deliver |
-| `A_parent_cancellation_issued_before_the_rebuild_settles_the_rules_run_after_it` | Parent cancelled, the cancel intent still in the native outbox | The rebuilt host's sweep delivers the intent; terminal `Cancelled`, native child `Cancelled`, the obligation settles with parent-terminal proof |
+| `A_parent_cancellation_issued_before_the_rebuild_settles_the_rules_run_after_it` | Parent cancelled with the child in flight; the Rules run is still `Running` with no terminal when the host dies, so the cancel intent is undelivered | The rebuilt host's sweep delivers the intent; terminal `Cancelled`, native child `Cancelled`, the delivery obligation is acknowledged and nothing remains to deliver |
 
 ## How the restart is simulated
 
 `RulesPersistedNativeFixture.ReopenAsync` disposes the harness (DI container and SQLite connections) while keeping the
 database file, then builds a new fixture over the same file with the same executable and execution id; the new
-generation uses activity ids its predecessor cannot have persisted. The returned fixture owns the file.
+generation uses activity ids its predecessor cannot have persisted. The returned fixture owns the file. Rules lease
+expiry is database time (`strftime('now')`), so the held-result case uses a real three-second lease and guards its
+negative assertion by elapsed time instead of a test clock.
 
 ## Limits
 

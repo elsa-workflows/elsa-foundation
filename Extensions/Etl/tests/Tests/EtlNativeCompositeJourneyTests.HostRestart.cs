@@ -4,7 +4,6 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Workflows.Runtime.Models;
 using Elsa.Workflows.Runtime.Core.Models;
-using Xunit;
 
 namespace Elsa.Etl.Tests;
 
@@ -16,6 +15,8 @@ namespace Elsa.Etl.Tests;
 /// </summary>
 public sealed partial class EtlNativeCompositeJourneyTests
 {
+    private static readonly TimeSpan HeldDeliveryLease = TimeSpan.FromSeconds(5);
+
     [Theory]
     [InlineData(CompositeKind.Sequence)]
     [InlineData(CompositeKind.Flowchart)]
@@ -40,6 +41,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
     public Task A_result_claimed_for_delivery_before_native_consumption_survives_a_host_rebuild_and_is_consumed_once(CompositeKind compositeKind)
     {
         var hold = new EtlDeliveryHold();
+        var leaseSeconds = (int)HeldDeliveryLease.TotalSeconds;
         return WithRestartableJourneyAsync(compositeKind, NativeOutcome.Succeeded, async chain =>
         {
             var invocation = await chain.Current.StartSuspendedAsync();
@@ -48,6 +50,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
             // The first host runs the pipeline to its terminal result and claims the delivery lease, then dies before
             // dispatching into the parent or acknowledging the delivery.
             await hold.Claimed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var claimedAt = DateTimeOffset.UtcNow;
             var run = Assert.IsType<EtlRunView>(await chain.Current.ReadRunAsync(invocation.Scope, invocation.RunId));
             Assert.Equal(EtlRunStatus.Succeeded, run.Status);
             Assert.Null((await chain.Current.ReadOutboxAsync(invocation.Scope, invocation.RunId)).AcknowledgedAtUtcTicks);
@@ -55,12 +58,20 @@ public sealed partial class EtlNativeCompositeJourneyTests
             Assert.Equal(ActivityExecutionStatus.Suspended,
                 Assert.Single(pending.Activities, state => state.Execution.ExecutableNodeId == chain.Current.RunEtlNodeId).Status);
 
-            // The dead owner's lease is honoured until it expires; the rebuilt host then delivers exactly once.
-            await chain.RebuildAsync(deliveryLeaseSeconds: 5);
+            // The rebuilt host reads time from a test clock that starts at the real now, so the dead owner's lease is still
+            // in force; its worker must not deliver until the clock passes the lease's expiry.
+            var clock = new MutableTimeProvider(DateTimeOffset.UtcNow);
+            await chain.RebuildAsync(deliveryLeaseSeconds: leaseSeconds, clock: clock);
             await chain.Current.StartWorkerAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(600));
+            Assert.Null((await chain.Current.ReadOutboxAsync(invocation.Scope, invocation.RunId)).AcknowledgedAtUtcTicks);
+            Assert.Equal(ActivityExecutionStatus.Suspended,
+                Assert.Single((await chain.Current.ReadNativeStateAsync()).Activities, state => state.Execution.ExecutableNodeId == chain.Current.RunEtlNodeId).Status);
+
+            clock.Now = claimedAt + HeldDeliveryLease + TimeSpan.FromSeconds(1);
             await chain.Current.WaitForNativeResultAsync(invocation, ActivityExecutionStatus.Completed, WorkflowExecutionStatus.Completed);
             await AssertCompletedOnceAsync(chain.Current, invocation);
-        }, deliveryHold: hold, deliveryLeaseSeconds: 5);
+        }, deliveryHold: hold, deliveryLeaseSeconds: leaseSeconds);
     }
 
     [Theory]
@@ -97,32 +108,39 @@ public sealed partial class EtlNativeCompositeJourneyTests
                 Assert.Equal(EtlRunStatus.BusinessError, run.Status);
                 Assert.Equal(1, run.TerminalResult!.RejectedRecords);
                 Assert.Equal(["BusinessError"], WorkflowExecutionRun.CompletionOutcomes(child));
+                Assert.Equal(ActivityExecutionStatus.Completed,
+                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == chain.Current.AfterEtlNodeId).Status);
             }
             else
             {
                 Assert.Equal(EtlRunStatus.Faulted, run.Status);
                 Assert.Equal("etl.output-write-failed", run.TerminalResult!.Diagnostic?.Code);
                 Assert.Equal("etl.output-write-failed", child.Fault?.Code);
+                Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == chain.Current.AfterEtlNodeId);
             }
-            Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == chain.Current.AfterEtlNodeId &&
-                outcome == NativeOutcome.Faulted);
         });
 
     [Theory]
     [InlineData(CompositeKind.Sequence)]
     [InlineData(CompositeKind.Flowchart)]
     [InlineData(CompositeKind.CompensationScope)]
-    public Task A_parent_cancelled_after_a_host_rebuild_settles_the_admitted_run_and_refuses_a_late_result(CompositeKind compositeKind) =>
+    public Task A_parent_cancelled_before_a_host_rebuild_settles_the_admitted_run_after_it_and_refuses_a_late_result(CompositeKind compositeKind) =>
         WithRestartableJourneyAsync(compositeKind, NativeOutcome.Succeeded, async chain =>
         {
             var invocation = await chain.Current.StartSuspendedAsync();
 
+            // The parent is cancelled while the child is in flight. The native side commits at once; the cancel intent
+            // to ETL sits in the native post-commit outbox and the run is still admitted when the host dies.
+            await chain.Current.CancelNativeAsync(subtree: false);
+            Assert.Equal(WorkflowExecutionStatus.Cancelled, (await chain.Current.ReadNativeStateAsync()).Workflow.Status);
+            var admitted = Assert.IsType<EtlRunView>(await chain.Current.ReadRunAsync(invocation.Scope, invocation.RunId));
+            Assert.NotEqual(EtlRunStatus.Cancelled, admitted.Status);
+
             await chain.RebuildAsync();
 
-            await chain.Current.CancelNativeAsync(subtree: false);
+            // The rebuilt host's sweep delivers the retained intent; the shared assertion then starts a worker only now
+            // and proves the late terminal is settled with parent-terminal proof instead of resurrecting the run.
             await chain.Current.WaitForNativeCancellationAsync(invocation, subtree: false);
-            // The shared assertion also starts a worker only now and proves the late terminal is settled with
-            // parent-terminal proof instead of resurrecting the cancelled run or delivering into the cancelled parent.
             await AssertNativeCancellationAsync(chain.Current, invocation, subtree: false);
         });
 
@@ -133,8 +151,9 @@ public sealed partial class EtlNativeCompositeJourneyTests
         var child = Assert.Single(completed.Activities, state => state.Execution.ExecutableNodeId == journey.RunEtlNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, child.Status);
         await AssertConsumedDeliveryAsync(journey, invocation, child);
-        Assert.Equal(ActivityExecutionStatus.Completed,
-            Assert.Single(completed.Activities, state => state.Execution.ExecutableNodeId == journey.AfterEtlNodeId).Status);
+        var afterEtl = Assert.Single(completed.Activities, state => state.Execution.ExecutableNodeId == journey.AfterEtlNodeId);
+        Assert.Equal(ActivityExecutionStatus.Completed, afterEtl.Status);
+        Assert.Single(afterEtl.Attempts!);
         var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
         Assert.Equal(EtlRunStatus.Succeeded, run.Status);
         AssertCompletionResult(child, run);
@@ -165,8 +184,8 @@ public sealed partial class EtlNativeCompositeJourneyTests
     {
         public NativeEtlJourney Current { get; private set; } = first;
 
-        public async Task RebuildAsync(int deliveryLeaseSeconds = 30) =>
-            Current = await Current.RebuildAsync(deliveryLeaseSeconds: deliveryLeaseSeconds);
+        public async Task RebuildAsync(int deliveryLeaseSeconds = 30, TimeProvider? clock = null) =>
+            Current = await Current.RebuildAsync(deliveryLeaseSeconds: deliveryLeaseSeconds, clock: clock);
     }
 
     private sealed partial class NativeEtlJourney
@@ -174,15 +193,16 @@ public sealed partial class EtlNativeCompositeJourneyTests
         /// <summary>
         /// Simulates a host restart: stops the worker and disposes this host's DI container and SQLite connections while
         /// keeping the directory, then builds the next host generation over the same files, execution id and outcome
-        /// configuration. The returned journey owns the directory from then on.
+        /// configuration. The returned journey owns the directory from then on; if the rebuild fails, the files stay as
+        /// evidence of the previous generation.
         /// </summary>
-        public async Task<NativeEtlJourney> RebuildAsync(EtlDeliveryHold? deliveryHold = null, int deliveryLeaseSeconds = 30)
+        public async Task<NativeEtlJourney> RebuildAsync(EtlDeliveryHold? deliveryHold = null, int deliveryLeaseSeconds = 30, TimeProvider? clock = null)
         {
             _directoryHandedOff = true;
             await DisposeAsync();
             return await CreateAsync(CompositeKind, Outcome, gate: null, includeBindings: _includeBindings, http: _http,
                 deliveryHold: deliveryHold, deliveryLeaseSeconds: deliveryLeaseSeconds,
-                existingDirectory: _directory, retainedWorkflowExecutionId: WorkflowExecutionId, generation: _generation + 1);
+                existingDirectory: _directory, retainedWorkflowExecutionId: WorkflowExecutionId, generation: _generation + 1, clock: clock);
         }
     }
 
@@ -200,5 +220,12 @@ public sealed partial class EtlNativeCompositeJourneyTests
             // No disposition: the worker leaves the lease claimed and unacknowledged, as a crash mid-delivery would.
             return ValueTask.FromResult<EtlDeliveryDisposition?>(null);
         }
+    }
+
+    /// <summary>Overrides only the wall clock; timers stay real, so the worker keeps polling while the lease clock moves.</summary>
+    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }

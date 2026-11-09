@@ -53,8 +53,11 @@ public sealed class RulesPersistedNativeRestartTests
     public async Task A_terminal_result_claimed_for_delivery_before_the_rebuild_is_consumed_exactly_once_after_the_lease_expires()
     {
         var executable = await RulesCompiledPublicationFixture.CompileAsync();
+        // Rules lease expiry is database time, so this case uses a short real lease and guards its negative assertion by the
+        // elapsed time; the reopen itself takes well under the lease.
+        const int leaseSeconds = 3;
         var first = await RulesPersistedNativeFixture.CreateAsync(executable, $"rules-restart-claimed-{Guid.NewGuid():N}",
-            deliveryLeaseSeconds: 1);
+            deliveryLeaseSeconds: leaseSeconds);
         RulesPersistedNativeFixture fixture = first;
         try
         {
@@ -66,15 +69,24 @@ public sealed class RulesPersistedNativeRestartTests
             Assert.Equal(RuleTerminalKind.Succeeded, terminal.Result!.Kind);
 
             // The first host claims the delivery lease and then dies before dispatching or acknowledging.
+            var claimedAt = DateTimeOffset.UtcNow;
             Assert.Equal(RuleDeliveryClaimDisposition.Claimed, await first.ClaimDeliveryDispositionAsync("dead-host"));
             Assert.Equal(ActivityExecutionStatus.Suspended,
                 RulesPersistedNativeFixture.StateFor(await first.ActivityStatesAsync(), RulesCompiledPublicationFixture.RulesNodeId).Status);
 
-            fixture = await first.ReopenAsync(deliveryLeaseSeconds: 1);
+            fixture = await first.ReopenAsync(deliveryLeaseSeconds: leaseSeconds);
 
-            // The dead owner's lease is still held, so the new host cannot deliver until it expires.
+            // The dead owner's lease is honoured: while it is in force the new host finds nothing to deliver.
             Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.WorkflowStateAsync())!.Status);
-            await Task.Delay(TimeSpan.FromMilliseconds(1_500));
+            var expiry = claimedAt + TimeSpan.FromSeconds(leaseSeconds);
+            Assert.True(DateTimeOffset.UtcNow < expiry, "The reopen took longer than the lease; the negative assertion is not meaningful on this machine.");
+            Assert.False(await fixture.DeliverOneAsync("restart-claimed-early-delivery"));
+            Assert.Equal(ActivityExecutionStatus.Suspended,
+                RulesPersistedNativeFixture.StateFor(await fixture.ActivityStatesAsync(), RulesCompiledPublicationFixture.RulesNodeId).Status);
+
+            var remaining = expiry + TimeSpan.FromMilliseconds(500) - DateTimeOffset.UtcNow;
+            if (remaining > TimeSpan.Zero)
+                await Task.Delay(remaining);
             Assert.True(await fixture.DeliverOneAsync("restart-claimed-delivery"));
 
             await AssertCompletedOnceAsync(fixture);
@@ -140,9 +152,12 @@ public sealed class RulesPersistedNativeRestartTests
             var rulesIdentity = await first.ReadRulesIdentityAsync(RulesCompiledPublicationFixture.RulesNodeId);
             Assert.Equal(RuleRunStatus.Running, (await first.FindRunAsync(rulesIdentity)).View!.Status);
 
-            // The parent is cancelled; the cancel intent to Rules sits in the native outbox when the host dies.
+            // The parent is cancelled. The native side commits inline; the cancel intent to Rules sits in the native
+            // post-commit outbox and the Rules run is still Running when the host dies.
             await first.Harness.CancelAsync(first.WorkflowExecutionId, RulesPersistedNativeFixture.Partition);
             Assert.Equal(WorkflowExecutionStatus.Cancelled, (await first.WorkflowStateAsync())!.Status);
+            Assert.Equal(RuleRunStatus.Running, (await first.FindRunAsync(rulesIdentity)).View!.Status);
+            Assert.Equal(RuleTerminalReadDisposition.NotTerminal, (await first.ReadTerminalAsync(rulesIdentity)).Disposition);
 
             fixture = await first.ReopenAsync();
 
@@ -158,7 +173,7 @@ public sealed class RulesPersistedNativeRestartTests
             Assert.DoesNotContain(native, state => state.Execution.ExecutableNodeId == RulesPersistedNativeFixture.AfterRulesNodeId);
             Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.WorkflowStateAsync())!.Status);
 
-            // The obligation settles with parent-terminal proof and nothing is left to deliver.
+            // The delivery obligation is acknowledged against the terminal parent and nothing is left to deliver.
             Assert.True(await fixture.DeliverOneAsync("restart-cancel-delivery"));
             Assert.Equal(RuleDeliveryClaimDisposition.NoEligibleDelivery, await fixture.ClaimDeliveryDispositionAsync("restart-cancel-after-ack"));
         }

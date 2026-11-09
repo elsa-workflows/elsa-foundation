@@ -143,6 +143,8 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
         }
         catch
         {
+            // A failed reopen keeps the previous generation's database as evidence; only a failed first build deletes it.
+            fixture._ownsDatabase = generation == 0;
             await fixture.DisposeAsync();
             throw;
         }
