@@ -544,13 +544,17 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
         return ValueTask.FromResult(new ClaimsNormalizationResult(new ClaimsPrincipal(identity), roles, permissions));
     }
 
-    private static readonly string[] InternalIdentityClaimTypes =
-    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.SubjectProvider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission, IdentityClaimTypes.UserId];
-
     // Case-insensitive, as ClaimsPrincipal.FindAll and FindFirstValue read claim types: an incoming claim that differs
-    // from an internal type only in case would otherwise survive the strip and still be honoured downstream.
+    // from an internal type only in case would otherwise survive the strip and still be honoured downstream. Spelled
+    // out per type so the architecture boundary scan still sees this reviewed reader compare the permission type.
     private static bool IsInternalIdentityClaim(string claimType) =>
-        InternalIdentityClaimTypes.Contains(claimType, StringComparer.OrdinalIgnoreCase);
+        string.Equals(claimType, IdentityClaimTypes.Normalized, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.TenantId, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Provider, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.Permission, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
