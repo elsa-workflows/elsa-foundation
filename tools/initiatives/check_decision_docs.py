@@ -13,8 +13,9 @@ Errors (exit code 1):
     `## Status` heading followed by a value), or a new or changed spec.md has no `**Status**:` line holding exactly
     one spec-lifecycle value, optionally followed by ` — ` and prose.
   - alternatives: a new or changed ADR has no `Alternatives considered` (or `Options considered`) section, or that
-    section is empty. This is a presence check, like the status line; it never judges whether the alternatives are
-    good. Specs do not carry their own section: they refer to the alternatives in the ADRs they apply.
+    section is empty. The heading may be a hash heading (`## Alternatives considered`) or a bold run-in label
+    (`**Alternatives considered.**`). This is a presence check, like the status line; it never judges whether the
+    alternatives are good. Specs do not carry their own section: they refer to the alternatives in the ADRs they apply.
 Warnings (exit code 0): `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
 match no ADR in the tree. A reference can name a number the board has reserved but that is not drafted yet, so it is
 reported, not failed.
@@ -43,7 +44,9 @@ SPEC_STATUS_VALUE = re.compile(
     r"^(?:Draft|Approved|In progress|Implemented|Superseded|Abandoned)(?:\s+—\s+.*)?$", re.IGNORECASE)
 ADR_REFERENCE = re.compile(r"\bADRs?[\s-]+(?P<list>\d{4}(?:\s*(?:,|/|&|\band\b|\bor\b)\s*\d{4})*)")
 ADR_ALTERNATIVES_HEADING = re.compile(
-    r"^(?P<hashes>#+)[ \t]*(?:alternatives|options[ \t]+considered)\b.*$", re.IGNORECASE | re.MULTILINE)
+    r"^(?P<hashes>#+)[ \t]*(?:alternatives|options)[ \t]+considered\b.*$", re.IGNORECASE | re.MULTILINE)
+ADR_ALTERNATIVES_BOLD = re.compile(
+    r"^[ \t>*-]*\*\*[ \t]*(?:alternatives|options)[ \t]+considered\b", re.IGNORECASE | re.MULTILINE)
 STATUS_WINDOW = 25  # lines from the top of an ADR in which its status must appear
 REFERENCE_SCOPE = ("docs", "specs", "CONTEXT.md", ".specify/memory")
 
@@ -90,6 +93,8 @@ def spec_status_error(path: str, text: str) -> str | None:
 
 
 def adr_alternatives_error(path: str, text: str) -> str | None:
+    if ADR_ALTERNATIVES_BOLD.search(text):
+        return None  # a bold run-in label (e.g. **Alternatives considered.**); its content is on or after the line
     match = ADR_ALTERNATIVES_HEADING.search(text)
     if match is None:
         return f"alternatives: {path} has no 'Alternatives considered' section"
@@ -195,6 +200,15 @@ def self_test() -> int:
          {"docs/adr/0092-a.md"}, [], 0, 0),
         ("alternatives subheading counts",
          {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Alternatives considered\n\n### Option A\n\nRejected.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("heading must say considered",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Alternatives to this process\n\nprose\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("bold alternatives label",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n**Alternatives considered.** We chose X over Y.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("bold options list item",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n- **Options considered:** X vs Y.\n"},
          {"docs/adr/0092-a.md"}, [], 0, 0),
         ("bad spec status", {"specs/1208-x/spec.md": "**Status**: Pending\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("spec status prefix only", {"specs/1208-x/spec.md": "**Status**: Drafting\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
