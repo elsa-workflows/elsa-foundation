@@ -26,20 +26,33 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Rules.Tests;
 
-/// <summary>Shared durable native execution setup for the hand-built Flowchart and compiled Sequence journeys.</summary>
+/// <summary>
+/// Shared durable native execution setup for the hand-built Flowchart and compiled Sequence journeys. A fixture owns one
+/// SQLite file; <see cref="ReopenAsync"/> rebuilds the whole host over that same file so a test can prove that a native
+/// parent waiting on RunRules survives a host restart.
+/// </summary>
 internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
 {
+    private const int ActivityIdsPerGeneration = 64;
     private readonly string _databasePath;
     private readonly WorkflowExecutable _executable;
+    private readonly Action<IServiceCollection>? _configureServices;
+    private readonly int _deliveryLeaseSeconds;
+    private readonly int _generation;
+    private bool _ownsDatabase;
     private WorkflowExecutionHarness? _harness;
 
     private RulesPersistedNativeFixture(WorkflowExecutable executable, string workflowExecutionId, string databasePath,
-        RuleSemanticPin implementation)
+        RuleSemanticPin implementation, Action<IServiceCollection>? configureServices, int deliveryLeaseSeconds, int generation)
     {
         _executable = executable;
         WorkflowExecutionId = workflowExecutionId;
         _databasePath = databasePath;
         Implementation = implementation;
+        _configureServices = configureServices;
+        _deliveryLeaseSeconds = deliveryLeaseSeconds;
+        _generation = generation;
+        _ownsDatabase = true;
     }
 
     internal const string RulesNodeId = "rules";
@@ -61,7 +74,35 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
 
         var selectedImplementation = implementation ?? RuleTestData.Invocation().ExpectedImplementation;
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-rules-native-{Guid.NewGuid():N}.db");
-        var fixture = new RulesPersistedNativeFixture(executable, workflowExecutionId, databasePath, selectedImplementation);
+        return await BuildAsync(executable, workflowExecutionId, databasePath, configureServices, selectedImplementation,
+            deliveryLeaseSeconds, generation: 0);
+    }
+
+    /// <summary>
+    /// Simulates a host restart: disposes this host (worker references, DI container, SQLite connections) while keeping the
+    /// database file, then builds a fresh host over the same file with the same executable and execution id. The new
+    /// generation uses activity ids its predecessor cannot have persisted. The returned fixture owns the file from then on.
+    /// </summary>
+    internal async Task<RulesPersistedNativeFixture> ReopenAsync(Action<IServiceCollection>? configureServices = null,
+        int? deliveryLeaseSeconds = null)
+    {
+        _ownsDatabase = false;
+        await DisposeAsync();
+        return await BuildAsync(_executable, WorkflowExecutionId, _databasePath, configureServices ?? _configureServices,
+            Implementation, deliveryLeaseSeconds ?? _deliveryLeaseSeconds, _generation + 1);
+    }
+
+    private static async Task<RulesPersistedNativeFixture> BuildAsync(
+        WorkflowExecutable executable,
+        string workflowExecutionId,
+        string databasePath,
+        Action<IServiceCollection>? configureServices,
+        RuleSemanticPin selectedImplementation,
+        int deliveryLeaseSeconds,
+        int generation)
+    {
+        var fixture = new RulesPersistedNativeFixture(executable, workflowExecutionId, databasePath, selectedImplementation,
+            configureServices, deliveryLeaseSeconds, generation);
         try
         {
             fixture._harness = WorkflowExecutionHarness.Create()
@@ -92,7 +133,8 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
                 })
                 .WithPersistenceMode(PersistenceMode.Durable)
                 .Build(executable.Identity, workflowExecutionId,
-                    Enumerable.Range(1, 64).Select(index => $"{workflowExecutionId}-activity-{index}"));
+                    Enumerable.Range(1 + generation * ActivityIdsPerGeneration, ActivityIdsPerGeneration)
+                        .Select(index => $"{workflowExecutionId}-activity-{index}"));
 
             foreach (var initializer in fixture.Harness.Services.GetServices<IShellInitializer>())
                 await initializer.InitializeAsync();
@@ -114,6 +156,8 @@ internal sealed class RulesPersistedNativeFixture : IAsyncDisposable
             _harness = null;
         }
 
+        if (!_ownsDatabase)
+            return;
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             if (File.Exists(file))
                 File.Delete(file);
