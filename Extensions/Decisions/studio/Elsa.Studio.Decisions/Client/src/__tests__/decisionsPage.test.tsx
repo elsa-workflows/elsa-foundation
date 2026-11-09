@@ -4,7 +4,7 @@ import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
-import { studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
+import { createNotificationController, studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
@@ -29,6 +29,8 @@ describe("Decisions Studio journeys", () => {
     type(name, "Purchase approval"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({ name: "Purchase approval", xml: expect.stringContaining("decisionTable") }));
+    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" });
+    expect(host.textContent).not.toContain("Decision saved");
   });
   it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
@@ -120,6 +122,62 @@ describe("Decisions Studio journeys", () => {
     click(button(host, "Clone to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/clone-to-draft", expect.objectContaining({ expectedRevision: "r1", versionId: "v1" }));
+    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version copied to the draft" });
+    expect(host.textContent).not.toContain("Version copied to the draft");
+  });
+  it("keeps validation evidence inline and confirms publication through shared notifications", async () => {
+    const api = stubApi(), navigate = vi.fn();
+    api.backend.http.postJson.mockImplementation(async path => path.endsWith("/validate") ? { success: true, diagnostics: [] } : { id: "v1", number: 1 });
+    const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    click(button(host, "Validate"));
+    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid for the supported DMN profile."));
+    expect(api.notifications.notify).not.toHaveBeenCalled();
+    click(button(host, "Publish"));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval&version=v1"));
+    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
+    expect(host.textContent).not.toContain("Version 1 published");
+  });
+  it("keeps failed saves inline and confirms only the successful retry", async () => {
+    const api = stubApi();
+    api.backend.http.putJson.mockRejectedValueOnce(new Error("Save unavailable")).mockResolvedValueOnce({ ...asset, description: "Updated", revision: "r2" } as never);
+    const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!;
+    type(description, "Updated"); click(button(host, "Save decision"));
+    await vi.waitFor(() => expect(host.textContent).toContain("Save unavailable"));
+    expect(description.value).toBe("Updated"); expect(api.notifications.notify).not.toHaveBeenCalled();
+    click(button(host, "Save decision"));
+    await vi.waitFor(() => { expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" }); });
+    expect(host.textContent).not.toContain("Save unavailable"); expect(host.textContent).not.toContain("Decision saved");
+  });
+  it("does not confirm a cancelled clone", async () => {
+    const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
+    api.dialogs.confirm.mockResolvedValue(false);
+    const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    click(button(host, "Clone to draft")); await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
+    expect(api.backend.http.postJson).not.toHaveBeenCalled(); expect(api.notifications.notify).not.toHaveBeenCalled();
+  });
+  it.each(["save", "publish", "clone"])("suppresses a retired %s completion when the notification controller changes scope", async operation => {
+    const api = stubApi(), controller = createNotificationController(), navigate = vi.fn();
+    controller.setScope("backend-a:user-a"); Object.assign(api, { notifications: controller.api });
+    const published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
+    let complete!: (result: unknown) => void;
+    const pending = new Promise(resolve => { complete = resolve; });
+    const request = operation === "save" ? api.backend.http.putJson : api.backend.http.postJson;
+    request.mockImplementation(() => pending);
+    const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "clone" ? "v1" : undefined} />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!, "Updated");
+    click(button(host, operation === "save" ? "Save decision" : operation === "clone" ? "Clone to draft" : "Publish"));
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    update(<button>Current backend</button>); controller.setScope("backend-b:user-a");
+    complete(operation === "publish" ? published : { ...asset, revision: "r2" });
+    await pending; await Promise.resolve(); await Promise.resolve();
+    expect(controller.getEntries()).toEqual([]); expect(navigate).not.toHaveBeenCalled();
   });
   it("offers latest-at-publication and exact immutable versions to workflow authors", async () => {
     const api = stubApi(), onChange = vi.fn(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };

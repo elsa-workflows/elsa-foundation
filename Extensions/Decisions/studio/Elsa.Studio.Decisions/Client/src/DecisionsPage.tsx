@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Upload } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import { SkeletonRows, StudioAlert, StudioButton, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
@@ -39,7 +39,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     finally { if (ticket === generation.current) { setLoading(false); requestAnimationFrame(() => isNew ? titleInput.current?.focus() : editor ? heading.current?.focus() : newButton.current?.focus()); } }
   }, [api, assetId, versionId, isNew, apply, editor]);
   const invalidate = useCallback(() => { generation.current += 1; }, []);
-  useEffect(() => { void load(); return invalidate; }, [load, invalidate]);
+  useLayoutEffect(() => { void load(); return invalidate; }, [load, invalidate]);
   const path = (id?: string, selectedVersion?: string) => qualifyStudioBackendPath(`/decisions${id ? `?decision=${encodeURIComponent(id)}${selectedVersion ? `&version=${encodeURIComponent(selectedVersion)}` : ""}` : ""}`);
   const savedNavigation = (target: string) => { writing.current = false; dirtyRef.current = false; notifyStudioNavigationGuardReleased(); navigate(target); };
   const leave = useCallback(async (target: string) => {
@@ -67,7 +67,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const save = () => work(async ticket => {
     const input = { name: name.trim(), description, xml, isSensitive: sensitive };
     const next = asset ? await saveDecision(api, asset, input) : await createDecision(api, input);
-    if (ticket !== generation.current) return; apply(next); dirtyRef.current = caseDirty; setNotice("Decision saved.");
+    if (ticket !== generation.current) return; apply(next); dirtyRef.current = caseDirty; api.notifications?.notify({ level: "success", title: "Decision saved" });
     if (!asset) savedNavigation(path(next.id));
   });
   const importDocument = async (file: File) => {
@@ -94,9 +94,9 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     </> : (!isNew && !asset) ? <StudioResultState title="Decision unavailable" description="The resource could not be loaded. Your account may not have access." /> : <>
       <h2 ref={heading} tabIndex={-1} className="decision-visually-hidden">{published ? "Published decision" : "Decision draft"}</h2>
       <div className="decision-draft-bar"><span>{published ? `Version ${published.number} · Read only` : !asset ? "Unsaved decision" : dirty ? "Unsaved changes" : "Saved draft"}</span>{asset ? <label>View<select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(asset.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></label> : null}<div className="decision-actions">
-        {!published ? <StudioButton variant="primary" disabled={busy || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save decision"}</StudioButton> : <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || !can(api, "decisions:manage") || !published.xml} onClick={() => void work(async ticket => { if (!asset || !await api.dialogs.confirm({ title: "Clone version to draft", message: "Replace the current saved draft with this version? The published version remains immutable.", confirmLabel: "Clone to draft" })) return; const next = await cloneVersion(api, asset, published.id); if (ticket === generation.current) { apply(next); savedNavigation(path(next.id)); setNotice("Version copied to the draft."); } })}>Clone to draft</StudioButton>}
+        {!published ? <StudioButton variant="primary" disabled={busy || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save decision"}</StudioButton> : <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || !can(api, "decisions:manage") || !published.xml} onClick={() => void work(async ticket => { if (!asset || !await api.dialogs.confirm({ title: "Clone version to draft", message: "Replace the current saved draft with this version? The published version remains immutable.", confirmLabel: "Clone to draft" })) return; const next = await cloneVersion(api, asset, published.id); if (ticket === generation.current) { apply(next); api.notifications?.notify({ level: "success", title: "Version copied to the draft" }); savedNavigation(path(next.id)); } })}>Clone to draft</StudioButton>}
         <StudioButton disabled={busy || !asset || dirty || !!published || !can(api, "decisions:manage")} onClick={() => void work(async ticket => { if (!asset) return; const result = await validateDecision(api, asset); if (ticket === generation.current) { setDiagnostics(result.diagnostics); setNotice(result.success ? "The saved draft is valid for the supported DMN profile." : "Validation found unsupported or invalid content."); } })}>Validate</StudioButton>
-        {!published ? <StudioButton disabled={busy || caseBusy || caseDirty || !asset || dirty || !can(api, "decisions:publish")} onClick={() => void work(async ticket => { if (!asset) return; const result = await publishDecision(api, asset); if (ticket === generation.current) { setNotice(`Version ${result.number} published.`); savedNavigation(path(asset.id, result.id)); } })}>Publish</StudioButton> : null}
+        {!published ? <StudioButton disabled={busy || caseBusy || caseDirty || !asset || dirty || !can(api, "decisions:publish")} onClick={() => void work(async ticket => { if (!asset) return; const result = await publishDecision(api, asset); if (ticket === generation.current) { api.notifications?.notify({ level: "success", title: `Version ${result.number} published` }); savedNavigation(path(asset.id, result.id)); } })}>Publish</StudioButton> : null}
         <StudioButton disabled={busy || !asset || !can(api, "decisions:source")} onClick={() => void download()}>Export DMN</StudioButton>
       </div></div>
       <fieldset disabled={readOnly || busy} className="decision-metadata"><legend className="decision-visually-hidden">Decision details</legend><label>Name<input ref={titleInput} value={name} maxLength={200} onChange={event => setName(event.target.value)} /></label><label>Description<input value={description} maxLength={2048} onChange={event => setDescription(event.target.value)} /></label><label className="decision-checkbox"><input type="checkbox" checked={sensitive} onChange={event => setSensitive(event.target.checked)} /> Protect decision source and values</label></fieldset>
