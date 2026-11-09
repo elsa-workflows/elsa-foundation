@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -20,7 +21,17 @@ public sealed record ActivityDataSelectionDocument(
     Elsa.Workflows.Design.Core.Models.ActivityNode? RootActivity,
     ImmutableArray<InputDefinition> Inputs,
     ImmutableArray<VariableDefinition> Variables,
-    ImmutableArray<OutputDefinition> Outputs);
+    ImmutableArray<OutputDefinition> Outputs)
+{
+    /// <summary>
+    /// Complete input states selected by Publishing for each exact resolved closed boundary, including
+    /// authored values and selected public defaults. Presence, including an empty array, makes the
+    /// invocation opaque to caller-side structure projection. Resource APIs do not accept these facts.
+    /// </summary>
+    [JsonIgnore]
+    public ImmutableDictionary<string, ImmutableArray<Elsa.Workflows.Design.Core.Models.ArgumentState>> CompiledBoundaryInputs { get; init; } =
+        ImmutableDictionary.Create<string, ImmutableArray<Elsa.Workflows.Design.Core.Models.ArgumentState>>(StringComparer.Ordinal);
+}
 
 /// <summary>A consuming location; projected inputs retain their structure-owned stable reference key.</summary>
 public sealed record ActivityDataSelectionTarget(string NodeId, string InputKey);

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -16,11 +17,26 @@ internal sealed class ActivityDataSelectionGraph(IActivityStructureService struc
     public bool IsAmbiguous(string nodeId) => _duplicates.Contains(nodeId);
     public Location? Find(string nodeId) => _byId.GetValueOrDefault(nodeId);
 
-    public void Build(ActivityNode? root, int maxDepth, ICollection<ValidationError> findings, CancellationToken cancellationToken)
+    public void Build(ActivityNode? root, int maxDepth, ICollection<ValidationError> findings, CancellationToken cancellationToken,
+        ImmutableDictionary<string, ImmutableArray<ArgumentState>> compiledBoundaryInputs)
     {
-        if (root is null) return;
+        if (compiledBoundaryInputs is null || compiledBoundaryInputs.Count > 10000)
+        {
+            findings.Add(new("$workflow", "ActivityData/InvalidCompiledBoundaryInputs", "Compiled boundary input facts are missing or exceed the analysis limit."));
+            return;
+        }
+        // Never inherit a caller-supplied dictionary comparer for canonical node identities.
+        var boundaries = new Dictionary<string, ImmutableArray<ArgumentState>>(StringComparer.Ordinal);
+        foreach (var (nodeId, inputs) in compiledBoundaryInputs)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId) || !boundaries.TryAdd(nodeId, inputs) || inputs.IsDefault ||
+                inputs.Any(input => input is null || string.IsNullOrWhiteSpace(input.ReferenceKey)) ||
+                inputs.GroupBy(input => input.ReferenceKey, StringComparer.Ordinal).Any(group => group.Count() > 1))
+                findings.Add(new(nodeId, "ActivityData/InvalidCompiledBoundaryInputs", "Compiled boundary inputs must have an exact node identity and unique, nonempty input keys."));
+        }
+        if (findings.Count > 0) return;
         var pending = new Stack<(ActivityNode Node, Location? Parent, int Depth)>();
-        pending.Push((root, null, 0));
+        if (root is not null) pending.Push((root, null, 0));
         while (pending.TryPop(out var item))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -29,18 +45,26 @@ internal sealed class ActivityDataSelectionGraph(IActivityStructureService struc
                 findings.Add(new("$workflow", "ActivityData/AnalysisLimit", "The canonical graph exceeds the source-analysis limit."));
                 break;
             }
-            var projection = structures.ProjectInputs(item.Node);
-            var location = new Location(item.Node, item.Parent, projection,
-                projection.ApplyToInputs(item.Node.Inputs));
+            var children = structures.ProjectChildren(item.Node);
+            ImmutableArray<ArgumentState> inputs = default;
+            var boundary = !string.IsNullOrWhiteSpace(item.Node.NodeId) && boundaries.TryGetValue(item.Node.NodeId, out inputs);
+            if (boundary && (item.Node.Intrinsic is not null || children.SelectMany(slot => slot.Activities).Any()))
+                findings.Add(new(item.Node.NodeId, "ActivityData/InvalidCompiledBoundaryInputs", "Compiled boundary facts cannot replace an intrinsic or a node with authored children."));
+            var projection = boundary ? ActivityStructureInputProjection.Empty : structures.ProjectInputs(item.Node);
+            var location = new Location(boundary ? item.Node with { Structure = null } : item.Node, item.Parent, projection,
+                boundary ? inputs : projection.ApplyToInputs(item.Node.Inputs));
             _nodes.Add(location);
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || !_byId.TryAdd(item.Node.NodeId, location))
             {
                 _duplicates.Add(item.Node.NodeId);
                 findings.Add(new(item.Node.NodeId, "ActivityData/AmbiguousNode", "Activity node identities must be nonempty and unique."));
             }
-            foreach (var child in structures.ProjectChildren(item.Node).SelectMany(slot => slot.Activities).Reverse())
+            foreach (var child in children.SelectMany(slot => slot.Activities).Reverse())
                 pending.Push((child, location, item.Depth + 1));
         }
+        foreach (var nodeId in boundaries.Keys)
+            if (!_byId.ContainsKey(nodeId) || _duplicates.Contains(nodeId))
+                findings.Add(new(nodeId, "ActivityData/InvalidCompiledBoundaryInputs", "Compiled boundary facts must name one reachable, unambiguous activity node."));
     }
 
     public ActivityChildResultFacts Assess(Location producer, Location consumer)

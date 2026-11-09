@@ -23,6 +23,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Xunit;
 using DesignContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
+using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -137,6 +138,71 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(before, await CountPublishWritesAsync());
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    public async Task Ignored_caller_structure_cannot_hide_public_boundary_result_reads(bool portable, bool authored, bool earlier)
+    {
+        var selected = ResultDefault(portable, earlier ? "earlier" : "later");
+        var fixture = await ReusableDefaultAsync(authored ? ResultDefault(portable, "later") : selected,
+            authored ? new("Value", new(selected.Value, selected.Syntax), null, null, null, null) : null,
+            inputKey: "Value", callerStructure: new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { cases = Array.Empty<object>() })));
+        var before = await CountPublishWritesAsync();
+        var sourceBefore = JsonSerializer.Serialize(fixture.Version.State);
+        if (earlier)
+        {
+            var publication = await fixture.Handler.Handle(new PublishWorkflow(fixture.Version.Id), CancellationToken.None);
+            Assert.NotNull(await _store.FindAsync(publication.ArtifactId));
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                fixture.Handler.Handle(new PublishWorkflow(fixture.Version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Value" && finding.Type == "ValueFlow/UnavailableProducer");
+            Assert.Equal(before, await CountPublishWritesAsync());
+        }
+        Assert.Equal(sourceBefore, JsonSerializer.Serialize(fixture.Version.State));
+    }
+
+    [Theory]
+    [InlineData("cases")]
+    [InlineData("Cases")]
+    public async Task A_native_Switch_with_accepted_property_casing_can_publish_a_reusable_literal_default(string caseProperty)
+    {
+        var fixture = await ReusableDefaultAsync(new("Literal", JsonSerializer.SerializeToElement("hello")), nativeSwitchCaseProperty: caseProperty);
+        var sourceBefore = JsonSerializer.Serialize(fixture.Version.State);
+        var publication = await fixture.Handler.Handle(new PublishWorkflow(fixture.Version.Id), CancellationToken.None);
+        Assert.NotNull(await _store.FindAsync(publication.ArtifactId));
+        Assert.Equal(sourceBefore, JsonSerializer.Serialize(fixture.Version.State));
+    }
+
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("flowchart")]
+    public async Task An_inputless_reusable_producer_does_not_inherit_return_requirements_from_ignored_caller_structure(string structure)
+    {
+        var ignored = new ActivityNodeStructure(structure == "sequence" ? "elsa.sequence.structure" : "elsa.flowchart.structure", "1.0.0",
+            JsonSerializer.SerializeToElement(new { activities = Array.Empty<ActivityNode>(), connections = Array.Empty<object>() }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var read = new ExpressionDefinition("JavaScript", "String(p)", new("String"),
+            new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding("consumer", "$result") },
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        var fixture = await ReusableDefaultAsync(new("Literal", JsonSerializer.SerializeToElement("hello")),
+            callerStructure: ignored, noPublicInputs: true,
+            rootFactory: producer => SequenceNode("sequence", [producer, Node("capture", new WorkflowArgumentState("Text", new(read, "JavaScript"), null, null, null, null))]));
+        var sourceBefore = JsonSerializer.Serialize(fixture.Version.State);
+        var publication = await fixture.Handler.Handle(new PublishWorkflow(fixture.Version.Id), CancellationToken.None);
+        Assert.NotNull(await _store.FindAsync(publication.ArtifactId));
+        Assert.Equal(sourceBefore, JsonSerializer.Serialize(fixture.Version.State));
+    }
+
     private static ActivityInputDefault ResultDefault(bool portable, string producer) => portable
         ? new("JavaScript", JsonSerializer.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(producer, "$result") },
@@ -147,7 +213,9 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     // that exact publication placed in a native Sequence and published through the real shared analyzer.
     private async Task<(Elsa.Workflows.Publishing.Handlers.PublishWorkflowRequestHandler Handler,
         Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion Version)> ReusableDefaultAsync(
-        ActivityInputDefault value, WorkflowArgumentState? authored = null, bool nullable = false, bool flowchart = false)
+        ActivityInputDefault value, WorkflowArgumentState? authored = null, bool nullable = false, bool flowchart = false,
+        string inputKey = "value", ActivityNodeStructure? callerStructure = null, string? nativeSwitchCaseProperty = null,
+        bool noPublicInputs = false, Func<ActivityNode, ActivityNode>? rootFactory = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(DefaultResultProducer), TypeAliasConvention.CanonicalAlias(typeof(DefaultResultProducer)));
@@ -165,7 +233,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var bodyPublication = DefaultPublication(_writeLineActivity.Id, _writeLineActivity.DefinitionId, bodyContract, bodyTemplate,
             new("clr", "1", JsonSerializer.SerializeToElement(new { })), ActivityDefinitionVersionResolutionKind.AuthorableActivity);
         var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
-        var contract = new DesignContract("1", [new("value", "Value", new("String"), true, nullable, value, "elsa.json")], [], [new("done", "Done", true)]);
+        var contract = new DesignContract("1", noPublicInputs ? [] : [new(inputKey, "Value", new("String"), true, nullable, value, "elsa.json")], [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
         {
             rootActivity = Node("body", Text("body")), variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
@@ -197,14 +265,25 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                 input.StorageDriverKey, input.Name, null, input.IsNullable, IsRequired: input.IsRequired,
                 DefaultValue: input.Default?.Value, DefaultSyntax: input.Default?.Syntax)).ToArray()
         };
-        var consumer = new ActivityNode("consumer", publication.DefinitionVersionId, authored is null ? [] : [authored], []);
+        var consumer = new ActivityNode("consumer", publication.DefinitionVersionId, authored is null ? [] : [authored], [], callerStructure);
         ActivityNode earlier = new("earlier", producer.Id, [], []), later = new("later", producer.Id, [], []);
         var root = flowchart
             ? FlowchartNode("flowchart", [later, consumer, earlier],
                 [new(new("earlier", "Done"), new("consumer", null)), new(new("consumer", "done"), new("later", null))], "earlier")
             : SequenceNode("sequence", [earlier, consumer, later]);
+        var switchVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(SwitchActivity));
+        if (nativeSwitchCaseProperty is not null)
+        {
+            registry.RegisterType(typeof(SwitchActivity), TypeAliasConvention.CanonicalAlias(typeof(SwitchActivity)));
+            switchVersion.DesignFacets = [StructureFacet(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion)];
+            root = new("switch", switchVersion.Id, [new("Value", new("hello", "Literal"), null, null, null, null)], [],
+                new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(
+                    new Dictionary<string, object> { [nativeSwitchCaseProperty] = new[] { new { match = "hello", caseId = "case-a", activity = consumer } } },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+        }
+        root = rootFactory?.Invoke(consumer) ?? root;
         var version = WorkflowVersion(root);
-        var versions = new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity, _flowchartActivity, producer, reusableVersion]);
+        var versions = new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity, _flowchartActivity, switchVersion, producer, reusableVersion]);
         static WorkflowExecutableSourceReference Source(ActivityDefinitionVersionPublication item, ExecutableActivityTemplate itemTemplate) =>
             new(item.SourceReferenceId, itemTemplate.TemplateId, "ActivityDefinitionVersion", item.DefinitionVersionId, item.Version,
                 item.DefinitionId, item.DefinitionVersionId, item.Version, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,

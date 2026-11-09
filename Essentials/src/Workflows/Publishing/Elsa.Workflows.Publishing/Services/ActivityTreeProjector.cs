@@ -53,45 +53,6 @@ public sealed class ActivityTreeProjector(IActivityStructureService activityStru
         return new ActivityTreeProjection(nodes, childProjectionsByNodeId);
     }
 
-    /// <summary>
-    /// Presents only the public defaults actually selected by boundary compilation to source analysis.
-    /// This request-only view leaves the authored source and its behavioral identity unchanged. Child
-    /// replacement remains owned by each structure handler, using the memoized slots and their metadata.
-    /// </summary>
-    internal ActivityNode WithInputDefaults(ActivityNode root, ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, IReadOnlyList<ArgumentState>> defaults)
-    {
-        if (defaults.Count == 0)
-            return root;
-
-        var replacements = new Dictionary<string, ActivityNode>(StringComparer.Ordinal);
-        for (var index = projection.Nodes.Count - 1; index >= 0; index--)
-        {
-            var original = projection.Nodes[index];
-            var current = original;
-            var childChanged = false;
-            var slots = projection.ChildProjections(original).Select(slot =>
-            {
-                var activities = slot.Activities.Select(child =>
-                {
-                    if (!replacements.TryGetValue(child.NodeId, out var replacement))
-                        return child;
-                    childChanged = true;
-                    return replacement;
-                }).ToArray();
-                return slot with { Activities = activities };
-            }).ToArray();
-            if (childChanged)
-                current = activityStructureService.ReplaceChildren(current, slots);
-            if (defaults.TryGetValue(original.NodeId, out var inputs))
-                current = current with { Inputs = [.. current.Inputs, .. inputs] };
-            if (!ReferenceEquals(current, original))
-                replacements.Add(original.NodeId, current);
-        }
-
-        return replacements.GetValueOrDefault(root.NodeId) ?? root;
-    }
-
     public static void Validate(IReadOnlyCollection<ActivityNode> activities)
     {
         if (activities.Count == 0)

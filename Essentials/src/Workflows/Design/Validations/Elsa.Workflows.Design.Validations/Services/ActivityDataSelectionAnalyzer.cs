@@ -36,7 +36,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         cancellationToken.ThrowIfCancellationRequested();
         var findings = new List<ValidationError>();
         var graph = new ActivityDataSelectionGraph(structures);
-        graph.Build(document.RootActivity, options.Value.MaxRecursionDepth, findings, cancellationToken);
+        graph.Build(document.RootActivity, options.Value.MaxRecursionDepth, findings, cancellationToken, document.CompiledBoundaryInputs);
         if (findings.Count > 0) return Result(document, null, [], findings);
         var context = new Request(document, graph, options.Value.MaxRecursionDepth);
 

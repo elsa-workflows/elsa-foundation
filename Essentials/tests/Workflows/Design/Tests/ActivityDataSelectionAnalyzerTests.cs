@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Design.Tests;
 
-public sealed class ActivityDataSelectionAnalyzerTests
+public sealed partial class ActivityDataSelectionAnalyzerTests
 {
     [Theory]
     [InlineData("sequence")]

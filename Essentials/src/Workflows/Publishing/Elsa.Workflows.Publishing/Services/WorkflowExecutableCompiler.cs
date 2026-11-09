@@ -174,7 +174,7 @@ public sealed class WorkflowExecutableCompiler(
             var placedStorageDriverRequirements = new HashSet<RuntimeStorageDriverRequirement>();
             var placedLayoutSegments = new List<ExecutableLayoutBoundarySegment>();
             var placedPresentation = new List<WorkflowExecutableActivityPresentationRecord>();
-            var effectiveDefaults = new Dictionary<string, IReadOnlyList<ArgumentState>>(StringComparer.Ordinal);
+            var compiledBoundaryInputs = ImmutableDictionary.CreateBuilder<string, ImmutableArray<ArgumentState>>(StringComparer.Ordinal);
             foreach (var activity in projection.Nodes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -198,9 +198,8 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var defaults);
-                if (defaults.Count > 0)
-                    effectiveDefaults.Add(activity.NodeId, defaults);
+                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs);
+                compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
                     publication.Contract.Outputs,
@@ -246,9 +245,8 @@ public sealed class WorkflowExecutableCompiler(
             var sourceAnalysis = await sourceAuthority.AnalyzeAsync(new ActivityDataSelectionDocument(
                 "Workflow", source.DefinitionId,
                 sourceRevision,
-                activityTreeProjector.WithInputDefaults(rootActivity, projection, effectiveDefaults),
-                state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
-                state.Outputs.ToImmutableArray()), cancellationToken: cancellationToken);
+                rootActivity, state.Inputs.ToImmutableArray(), state.Variables.ToImmutableArray(),
+                state.Outputs.ToImmutableArray()) { CompiledBoundaryInputs = compiledBoundaryInputs.ToImmutable() }, cancellationToken: cancellationToken);
             if (!StringComparer.Ordinal.Equals(sourceAnalysis.ContractRevision, sourceRevision))
                 throw new InvalidOperationException("Activity data selection analysis does not match the actual workflow candidate.");
             var sourceErrors = sourceAnalysis.Findings
@@ -364,7 +362,7 @@ public sealed class WorkflowExecutableCompiler(
         Elsa.Activities.Design.Core.Models.ActivityContract contract,
         RuntimeActivityDescriptor boundaryDescriptor,
         RuntimeInputBindingCompiler compiler,
-        out IReadOnlyList<ArgumentState> defaults)
+        out ImmutableArray<ArgumentState> effectiveInputs)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var authored = activity.Inputs.ToArray();
@@ -377,7 +375,6 @@ public sealed class WorkflowExecutableCompiler(
 
         var authoredByKey = authored.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
         var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState? State)>();
-        var selectedDefaults = new List<ArgumentState>();
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
@@ -392,8 +389,6 @@ public sealed class WorkflowExecutableCompiler(
             }
 
             inputStates.Add((input, inputState));
-            if (inputState is not null && !authoredByKey.ContainsKey(input.ReferenceKey))
-                selectedDefaults.Add(inputState);
         }
 
         // A reusable boundary is activated by its template root, which for a graph template captures its inputs
@@ -408,7 +403,7 @@ public sealed class WorkflowExecutableCompiler(
             result[input.ReferenceKey] = inputState is null
                 ? compiler.CompileUnboundPublishedBoundaryInput(activity.NodeId, input)
                 : compiler.CompilePublishedBoundaryInput(activity.NodeId, input, inputState);
-        defaults = selectedDefaults;
+        effectiveInputs = [.. inputStates.Where(item => item.State is not null).Select(item => item.State!)];
         return result;
     }
 
