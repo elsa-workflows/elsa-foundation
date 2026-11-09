@@ -110,6 +110,27 @@ public sealed class Elsa3VariableStartingValueTests
         Assert.Null(variable.Default);
     }
 
+    /// <summary>Elsa 3's default storage driver kept the value with the instance, as Elsa 4 does without a storage driver.</summary>
+    [Theory]
+    [InlineData("Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core")]
+    [InlineData("Elsa.Workflows.WorkflowInstanceStorageDriver")]
+    public void A_variable_on_the_Elsa_3_default_storage_driver_has_no_Elsa_4_storage_driver(string storageDriverTypeName)
+    {
+        var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = "Object", StorageDriverTypeName = storageDriverTypeName };
+
+        Assert.True(Elsa3VariableMapper.TryMap(Registry(), ObjectConverter, source, out var variable, out _));
+
+        Assert.Null(variable.StorageDriverType);
+    }
+
+    /// <summary>A driver of another assembly that shares the type's name is not Elsa 3's default.</summary>
+    [Fact]
+    public void A_custom_driver_with_the_same_type_name_is_not_the_Elsa_3_default()
+    {
+        Assert.False(Elsa3VariableMapper.IsDefaultStorageDriver("Acme.WorkflowInstanceStorageDriver, Acme"));
+        Assert.True(Elsa3VariableMapper.IsDefaultStorageDriver("WorkflowInstanceStorageDriver"));
+    }
+
     public static TheoryData<string, string, string, string> Refusals => new()
     {
         // Elsa 3 started this one as 0, the type's default, without a warning; it is refused as an authoring mistake.

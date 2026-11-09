@@ -446,3 +446,58 @@ provider-managed conversations and stream resume are separate capabilities. See 
 **Feasibility limit**: the inspected code demonstrates patterns and current overlap, not an implemented shared Elsa capability or quantitative code savings. Before freezing APIs, demonstrate one working-copy/snapshot implementation behind both adapters, real provider CAS/capture/pin races and publication recovery with independently unavailable stores. Assess reusable-activity authoring as a third consumer. Reject wrappers hiding duplicated engines. Aster adoption remains a separately evaluated option requiring resource/schema/query/tenant/profile/package and shared-receipt integration proof; no dependency is added here.
 
 **Design propagation**: ADR 0094 and [revision-management.md](contracts/revision-management.md) own the selected design and operation mapping. T064–T071 remain gated on final agreement and separate delivery authorization. Workflow/activity owning specs must be reconciled before future code changes. Historical research/implementation receipts above remain bounded to their original designs.
+
+## R11 — #2912 prerequisite reconciliation for M6 (T041, 4 November 2026)
+
+**Decision**: M6 production work (T042–T048, T050) consumes #2912's approved production carry-forward. It does not
+build a second decision, approval or effect engine inside the Agent extension. #2912 is not forked, reparented or
+completed here. The specialist runtime keeps tools refused until those contracts exist. The prerequisites below are the
+exact ones M6 waits for, task by task. T049 (team editor/publication) falls under the ADR 0094 hold and is to be
+re-planned against T064–T071 after agreement.
+
+**#2912 state**: open, `status:todo`, under epic #2893 and Program #2892. It has no production leaf, PR or claim for its
+carry-forward obligations; the earlier #3056 / PR #3087 native-hosting slice is delivered. Its only
+child, #2913, closed on 17 October 2026 as bounded research evidence. The issue body lists five unchecked production
+obligations:
+
+1. typed message routes and rounds, with distinct scoped memory, knowledge and tool bindings and their visibility/authority;
+2. durably accepted decisions with no silent re-evaluation, and exact authorized tool requests, arguments and effect
+   identities that survive approval suspension and replay;
+3. resource and usage budgets applied before dispatch, with proofs for cancellation, recovery,
+   duplicate/conflicting/late messages and results, and approval/effect races (effects remain at-least-once);
+4. provider adapters, native parent/composite lifecycle, and integrated Studio authoring and inspection;
+5. tests, failure controls and exact-head/resulting-main verification.
+
+The M6 epic (#3526) is natively `blocked_by` both #2912 and #3525. Weaver recovery (#3441, merged as PR #3640) made only
+foreground conversations durable. Its FR-019 leaves workflow-runtime continuation with #2912.
+
+**What exists today**:
+
+| Layer | Contracts | Fit for M6 |
+|---|---|---|
+| Weaver core (`Extensions/Agent/src/Core`, `Elsa.Agent`) | Tool registry/invoker/authorization; exact `AgentPreparedToolInvocation` with approval digest and policy revision; proposal service and executor; session-record decisions; `AgentEffectReceipt` and call keys; paused turns; audit sink and reader | Foreground only. Turns are coupled to their stream, defaults are in-memory, and durability exists only with the opt-in EF session store. The specialist runtime does not reference these packages. Their shapes (exact prepared invocation, approval digest, effect receipt) are evidence for #2912, not a workflow-runtime owner. |
+| Specialist runtime (`Extensions/Agent/src/Specialists`) | Per-turn model-request reservations; turn journal; accepted-versus-applied settlement on the native checkpoint enricher and post-commit intents; HumanReview as a generic bookmark wait guarded by `ActivityResumeValidating` | Reservations cover only model calls and output tokens. Tools are refused (`ChatToolMode.None`). HumanReview approves content, not tool effects (`contracts/human-review.md`). |
+| Native runtime (Essentials) | Bookmarks and keyed resume; `ActivityResumeValidating`; incidents and resolution actions; background work claims and stable operation keys; keyed workflow start identity; structural child callbacks | Reusable for suspension, resume, incidents and an idempotent workflow-tool start. There is no generic external-effect receipt or idempotency store. |
+
+There is no knowledge, memory or versioned-observation contract anywhere. There is no MCP client or dependency. No tool
+invokes a workflow.
+
+**Exact dependencies by consuming task**:
+
+| Task | Missing prerequisite | Owner |
+|---|---|---|
+| T042 knowledge/tool bindings | Scoped, versioned knowledge and memory references with observation identities; tool capability bindings with authority | #2912 obligation 1 |
+| T043 proposal/approval/wait/effect | A workflow-runtime record of the exact proposal: canonical arguments, authorization revision and effect identity, accepted once and replayed without re-evaluation. The model leaf cannot suspend (R4), so this sits outside the leaf. | #2912 obligation 2 |
+| T044 workflow tool and MCP | Effect identity that survives approval and replay, plus effect-race and recovery evidence. This reconciliation finds no generic external-effect receipt or reconciliation store to carry them. The workflow tool can reuse the keyed workflow start identity. | #2912 obligations 2 (effect identity) and 3 (race and recovery evidence). **MCP has no owner in #2912**; only #3526 names it. Decide its owner before T044. |
+| T045 Studio policy/proposal/receipt views | Authoring and inspection of the above. Reuse candidates: Weaver `AgentProposalReview`, `HumanReviewPage`, incident components | #2912 obligation 4 (in part) |
+| T046 proofs | Everything above | #2912 obligations 1–3 and 5 |
+| T047 team budgets | Team, cohort and round reservations before dispatch. Today reservations are per turn and cover model calls only. | #2912 obligation 3 |
+| T048 team routes, rounds and aggregation | Typed routes, round barriers and memory visibility over the native structural contracts | #2912 obligation 1 |
+| T049 team editor/publication | Team source through the shared revision and publication capability (#3526; ADR 0094) | ADR 0094 hold (T064–T071) |
+| T050 team proofs | T047–T049 | #2912 obligations 3 and 5 |
+
+**Consequences**: M6 implementation can begin only after #2912's owning hierarchy delivers obligations 1–3, or after a
+work unit that the owner authorizes for them. T045 also needs obligation 4, and T046 and T050 need obligation 5. Specialist work may add only typed adapters over those contracts. An MCP owner
+must be chosen before T044. Knowledge and memory bindings follow obligation 1's scope/version/observation model and must
+not be invented in the specialist extension. Until then, tool-capable specialists are refused at capability preflight,
+as they are today.

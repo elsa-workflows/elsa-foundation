@@ -29,6 +29,7 @@ That C# is the whole composition root. The sample still needs the downloaded `Cu
 | `Elsa.Studio.Dashboard` | The sample's Home module. Select other existing Studio module packages deliberately. |
 | `Elsa.Studio.Hosting.Themes` | Optional Theme Store, directory sources, picker and management capabilities. Independent of Nuplane. |
 | `Elsa.Studio.Hosting.Nuplane` | Optional package/feature administration using the shared CShells/Nuplane adapter and native store protection. Independent of themes. |
+| `Elsa.Studio.FeatureManagement` | Optional in-box management UI for package/feature administration (shell feature ID `FeatureManagement`). Pair with the Nuplane server addon when you want that UI. |
 | `Elsa.Studio.ConsoleStream` | Optional console capture and streaming. Its host services and hub belong in the application root. |
 | `Elsa.Studio.Api` / `Elsa.Studio.Core` | Public policy and module-author contracts when writing a module. Core remains lightweight; it is not a host infrastructure bucket. |
 
@@ -36,7 +37,7 @@ The reference distribution's [module assembly list](../src/apps/Elsa.Studio.Web/
 
 ## Run the sample outside the repository
 
-These commands use a .NET 10 SDK and a Bash-compatible shell. The producer currently pins SDK 10.0.300 with `latestFeature` roll-forward in [global.json](../../global.json). No Node, npm, pnpm or frontend source is needed by the consumer.
+These commands use a .NET 10 SDK and a Bash-compatible shell. The producer currently pins SDK 10.0.300 with `latestFeature` roll-forward in [global.json](../../global.json). No Node, npm, pnpm or frontend source is needed by the consumer. Downloading the CI artifact needs a GitHub account. The example below also needs an authenticated GitHub CLI (`gh`).
 
 This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
 
@@ -120,7 +121,7 @@ Use the typed `StudioThemeSourceMode` and existing `Themes` configuration descri
 
 ### Package and feature administration
 
-Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices; enable the UI modules you actually want.
+Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices. For the in-box management UI, reference `Elsa.Studio.FeatureManagement`, pass its public feature assembly (see the reference host's [StudioFeatureAssemblies.cs](../src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs)), and enable shell feature ID `FeatureManagement`; enable only the UI modules you actually want.
 
 The addon loads `nuplane-management.json` by default. With no resolving directory feed it registers a `packages` fallback without a watcher; uploads trigger reconciliation, while direct file copies need manual or explicitly configured reconciliation. Select an effective directory feed deliberately when several exist. Feed and file choices are frozen for the process. The existing public Nuplane builder callback configures trusted feeds/loading/store ownership; the addon does not introduce another membership protocol.
 
@@ -128,7 +129,7 @@ Installed metadata/assets require the coordinated immutable extracted-store prof
 
 The supported retention setting is `Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage`: `null` retains all installs; zero deliberately keeps no extra inactive versions. Active/protected versions remain protected by Nuplane. Legacy count/age/automatic cleanup settings are incompatible until an operator explicitly saves the supported policy; there is no silent migration or automatic deletion. A successful management-file save normalizes JSON and does not preserve comments. Custom/overlaid configuration stays readable but refuses local changes. Atomic saves and reloads share Hosting's process-lifetime configuration lease, not a cross-process file transaction.
 
-CShells.Nuplane owns change sequencing and shell replacement. Use its public `NuplaneIntegrationOptions.OnReloadResults`/logging for diagnostics; the current addon logs result names/errors and successful reload counts. Additional correlation/change/catalog facts must come from their owning public contracts. Do not restore the former duplicate Studio coordinator. Optional zero-count log verbosity refinements are not a delivered behavior change here. The qualification observer lookup is pinned to `IShellGenerationBuildParticipant`, as noted at the fixture.
+CShells.Nuplane owns change sequencing and shell replacement. Use its public `NuplaneIntegrationOptions.OnReloadResults`/logging for diagnostics; the current addon logs result names/errors and successful reload counts. Additional correlation/change/catalog facts must come from their owning public contracts. Do not restore the former duplicate Studio coordinator. Optional zero-count log verbosity refinements are not a delivered behavior change here. Qualification only: the qualification observer lookup is pinned to `IShellGenerationBuildParticipant`, as noted at the fixture.
 
 Workbench Server's pre-existing read-only administration is a separate profile. This program does not claim native Workbench maintenance convergence.
 

@@ -1,7 +1,9 @@
 # Elsa3.Mapping
 
 Converts Elsa 3 workflow definitions to Elsa 4 Design state. The single-definition import and the Elsa 3 collection
-import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235) builds on it. The
+import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235,
+[`Elsa3JsonReconciliation`](../Activities/Design/Import/Reconciliation/README.md)) runs the collection import on a
+folder of Elsa 3 exports at engine start, so it converts exactly as the collection import does. The
 decision record for every Elsa 3 member is
 [`specs/236-elsa3-activity-map/member-map.md`](../../../../specs/236-elsa3-activity-map/member-map.md); flowchart
 connections follow [`specs/239-elsa3-flowchart-connections`](../../../../specs/239-elsa3-flowchart-connections/spec.md).
@@ -85,7 +87,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
   right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
-  array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
+  array) into the captured variable, or into `http.{node}.headers` / `.query` for a bare memory slot. The
   endpoint must sit in a list of activities (a Sequence or a Flowchart) so that a node can follow it; in a Flowchart the
   node is connected between the endpoint and the endpoint's former successors.
 - **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
@@ -132,7 +134,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):
   - The body becomes a schema-2 graph.
-  - `SetOutput` of a declared output writes a synthesized variable (`elsa3.output.{hash}`) that `outputMappings`
+  - `SetOutput` of a declared output writes a synthesized variable (`output.{hash}`) that `outputMappings`
     expose.
   - `Complete` becomes the graph `Complete` activity, at any depth, with the outcome's reference key (`Done` →
     `done`, other names verbatim). `End` does the same with `done`, but only in the workflow's root flowchart: Elsa 3
@@ -255,6 +257,18 @@ For example, 4 Parallels (20) inside 8 Sequences (32) put a node at level 54, wh
 `ELS3-ACTIVITY-NESTING-TOO-DEEP`, and the message names the level reached. A binding value that is itself deeply
 nested JSON can still exceed the limit at a convertible depth; the import then fails before anything is committed.
 
+## Converter revision
+
+An imported Elsa 3 version n becomes Elsa 4 version `{n}.{R}.0`, where R is `Elsa3ConverterRevision.CurrentRevision`
+(spec 235 R-8, #3921). At revision 0 the Elsa 4 version id is the Elsa 3 version id and a reusable's activity version
+id derives from it alone, as every import did before revisions existed. From revision 1 on, both ids and the draft ids
+derive from the Elsa 3 version id and R, so the same export imported after a converter upgrade adds `{n}.{R}.0`
+beside `{n}.{R-1}.0` instead of colliding with it (`ELS3-REUSABLE-IDENTITY-COLLISION`); nothing the earlier revision
+wrote is changed or unpublished. Bump the revision in the change that makes the converter emit different content for
+the same input, never otherwise. An older Elsa 3 version of a reusable whose `{m}.{R}.0` would be below a newer
+version that is already published is refused by the activity version bump rule and skipped with its dependents; the
+versions imported at the earlier revision keep running.
+
 ## Registration
 
 `Elsa3MappingFeature` registers the following:
@@ -262,6 +276,7 @@ nested JSON can still exceed the limit at a convertible depth; the import then f
 - the resolver, the replaced-type index, the normalizer and the converter, all scoped;
 - one `IElsa3NodeRewrite` per rewrite strategy;
 - the mappers and value-flow services;
-- the importer and the reusable-activity materializer.
+- the importer and the reusable-activity materializer;
+- the converter revision (`IElsa3ConverterRevision`), with `TryAdd`.
 
 The replaceable contracts are listed in its [extension-point catalog](EXTENSION_POINTS.md).

@@ -22,6 +22,13 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Default implementation:** `Elsa3ReusableActivityTriggerClassifier` from `Elsa3.Mapping`, over the activity map.
 - **Invariant:** `null` for a type it does not know; the analyzer treats that, and every flagged activity when no classifier is registered, as a trigger.
 
+### `IElsa3ConverterRevision`
+
+- **Kind:** optional revision port (spec 235 R-8, #3921).
+- **Purpose:** tells the analyzer and the mapping which converter revision an import runs at. An imported Elsa 3 version n is numbered `{n}.{R}.0`; above revision 0 its workflow version id, reusable activity version id, draft id and layout id derive from the Elsa 3 source version id and R (`ReusableActivityImportIdentity.WorkflowVersion`, `ActivityVersion`, `ActivityDraft`, `ActivityDraftLayout`), so a converter upgrade re-imports the same Elsa 3 input as new versions beside the earlier ones instead of colliding with them.
+- **Default implementation:** `Elsa3ConverterRevision` from `Elsa3.Mapping`, registered with `TryAdd`; without it the import runs at revision 0.
+- **Invariant:** revision 0 is the numbering and the identities of every import before revisions existed, so stored data stays valid. The import is add-only across revisions: it writes the new versions and never rewrites, deletes or unpublishes what an earlier revision wrote. The folder import (spec 235) publishes the newest `{n}.{R}.0` of each definition under its add-only rules; an older Elsa 3 version of a reusable whose `{m}.{R}.0` is below a newer version already published is refused by the activity version bump rule and skipped.
+
 ### `IReusableActivityImportCommand`
 
 - **Kind:** atomic persistence command.

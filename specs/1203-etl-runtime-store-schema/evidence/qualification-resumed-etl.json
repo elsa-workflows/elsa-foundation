@@ -1,0 +1,131 @@
+{
+  "scope": "One complete Elsa.Etl.Tests project after delivered-main integration; not native-provider/architecture/generator/host-upgrade/Studio acceptance.",
+  "testedSource": {
+    "head": "154762f4714bc861d46289d30c055a51f6bb9d00",
+    "tree": "a300119e65e5ffd5d99fa3ff6bf4c2672c0686cf",
+    "branch": "agent/claude/2908-etl-runtime-providers",
+    "status": ""
+  },
+  "deliveredBase": "697e9a342998282a08a598ad7137b2e90c9435c2",
+  "scriptSha256": "3a0643459440bb2dbc40c98f5ad56db484901fd6a0cc202900d5c3f4974c008a",
+  "commands": {
+    "test": [
+      "dotnet",
+      "test",
+      "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "-p:BuildInParallel=false",
+      "-p:RestoreLockedMode=true",
+      "--logger",
+      "trx;LogFileName=whole-etl.trx",
+      "--results-directory",
+      "$EVIDENCE_DIR"
+    ],
+    "discovery": [
+      "dotnet",
+      "test",
+      "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "-c",
+      "Release",
+      "-m:1",
+      "--no-build",
+      "--no-restore",
+      "--list-tests"
+    ],
+    "note": "Only the output directory is normalized to a verifier-selected EVIDENCE_DIR; raw invocation and files are retained in the phase receipt."
+  },
+  "result": {
+    "exitCode": 0,
+    "counters": {
+      "total": 1328,
+      "executed": 1328,
+      "passed": 1328,
+      "failed": 0,
+      "error": 0,
+      "timeout": 0,
+      "aborted": 0,
+      "inconclusive": 0,
+      "passedButRunAborted": 0,
+      "notRunnable": 0,
+      "notExecuted": 0,
+      "disconnected": 0,
+      "warning": 0,
+      "completed": 0,
+      "inProgress": 0,
+      "pending": 0
+    },
+    "listedCases": 1328,
+    "exactCaseNamesMatch": true,
+    "methodCaseCountsMatch": true,
+    "missingMethodCases": {},
+    "unexpectedMethodCases": {},
+    "retainedIdentityControls": [
+      {
+        "name": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Delivery_discovery_isolates_an_invalid_persisted_run_id_without_consuming_it(invalidRunId: \"control\\nid\")",
+        "outcome": "Passed"
+      },
+      {
+        "name": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Delivery_discovery_isolates_an_invalid_persisted_run_id_without_consuming_it(invalidRunId: \" \")",
+        "outcome": "Passed"
+      },
+      {
+        "name": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Delivery_discovery_isolates_an_invalid_persisted_run_id_without_consuming_it(invalidRunId: \" untrimmed \")",
+        "outcome": "Passed"
+      }
+    ]
+  },
+  "timingSeconds": {
+    "test": 362.56,
+    "discovery": 0.68,
+    "phaseWithObservationCleanup": 364.28
+  },
+  "selectedChildEnvironment": {
+    "MSBUILDDISABLENODEREUSE": "1",
+    "DOTNET_CLI_USE_MSBUILD_SERVER": "0"
+  },
+  "dotnetResolvedFromNormalPath": "/usr/local/share/dotnet/dotnet",
+  "sourceVerifiedAfterExecution": {
+    "head": "154762f4714bc861d46289d30c055a51f6bb9d00",
+    "tree": "a300119e65e5ffd5d99fa3ff6bf4c2672c0686cf",
+    "branch": "agent/claude/2908-etl-runtime-providers",
+    "status": ""
+  },
+  "processProvenance": {
+    "samplingIntervalSeconds": 0.2,
+    "observedOwnedProcesses": 69,
+    "observedRoleCounts": {
+      "Python": 1,
+      "dotnet": 2,
+      "vstest": 2,
+      "testhost": 2,
+      "ETL-worker-fixture": 62
+    },
+    "observedGroups": [
+      47599,
+      47605,
+      53319
+    ],
+    "postLeaderOwnedSurvivors": 0,
+    "cleanupSignals": [],
+    "remainingOwnedLiveProcesses": [],
+    "baselineProcessesPreserved": true,
+    "slotReturned": true,
+    "limit": "Explicit launcher records plus sampled ancestry; not a kernel-level trace of every sub-sampling ephemeral process."
+  },
+  "artifactSha256": {
+    "testLog": "4a41c1ded7d5a55674bce1fc055e8a8f9b19d2e0302775deb8175bf01cb5f4ce",
+    "discoveryLog": "7de1a6712d0716c8c5aff28bda5b42258ae3aa1686352efa788f01a69f60ad79",
+    "trx": "8bd749504270633ea0a20753f780f448465107037a5a07c95c15862add4e18de",
+    "rawPhaseReceipt": "370a5ffc9042ea10dc8ff349561bacabcdc80735e36eb1b45bf58d21f9e68b54",
+    "rawProcessProvenance": "b3b83c796e4e409f2aaabcb56154880db572d9e89eb74af2335cd6a0b1e77a3a"
+  },
+  "pending": [
+    "Current native-provider whole project and new server instances of the retained-ID controls",
+    "Current architecture and generator gates",
+    "Fresh scoped R9 on the explicitly bound final source/evidence",
+    "All three actual exact-head required checks, protection/hold audit, protected and resulting-main delivery",
+    "Mid-work/old-host recovery and Studio acceptance outside this schema slice"
+  ]
+}

@@ -31,19 +31,18 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
         return result
     if event_name not in {'push', 'pull_request', 'merge_group'}:
         return result
-    # A merge-queue entry is validated as a ready pull request that just received a push: same scope, same proofs.
+    # A merge-queue entry is validated as a pull request that just received a push: same scope, same proofs.
     pr_like = event_name in {'pull_request', 'merge_group'}
-    ready = event.get('action') == 'ready_for_review'
     draft = event.get('pull_request', {}).get('draft', False)
     for suite, filters in patterns.items():
         affected = changed is None or any(matches(path, pattern) for path in changed for pattern in filters)
         if suite == 'studio':
-            result[suite] = event_name == 'push' or affected and not ready
+            result[suite] = event_name == 'push' or affected
         elif suite == 'weaver':
             result[suite] = affected and not draft
         else:
-            result[suite] = pr_like and affected and not ready
-    result['studio-order'] = pr_like and not ready and (
+            result[suite] = pr_like and affected
+    result['studio-order'] = pr_like and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',
                                       '.github/actions/setup-studio/action.yml'} for path in changed))

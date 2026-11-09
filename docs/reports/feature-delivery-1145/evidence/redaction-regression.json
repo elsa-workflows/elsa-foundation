@@ -1,0 +1,8 @@
+{
+  "regression": "padded base64 fixture key is removed from saved logs",
+  "beforeSource": "7f0e968b30f99cd7f94f4e81a650c40b3341beca",
+  "beforeExitCode": 1,
+  "afterExitCode": 0,
+  "tests": 1,
+  "sensitiveTestOutputPublished": false
+}
