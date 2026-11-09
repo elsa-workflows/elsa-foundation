@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -86,6 +87,14 @@ public static class WorkflowsPublishingApi
         {
             closure = await context.RequestServices.GetRequiredService<IWorkflowArtifactClosureFactory>()
                 .CreateAsync(versionId, context.RequestAborted);
+            var authorization = context.RequestServices.GetRequiredService<IPermissionAuthorizationService>();
+            var resourcePermission = await authorization.AuthorizeAsync(
+                new(context.User, WorkflowPublishingPermissions.Read, Resource: closure), context.RequestAborted);
+            if (!resourcePermission.Succeeded)
+            {
+                await WriteProblemAsync(context, StatusCodes.Status403Forbidden, "The current caller cannot export this workflow artifact.");
+                return;
+            }
             delivery = await DeliverAsync(target, closure, versionId, context.RequestAborted);
         }
         catch (WorkflowArtifactClosureSourceNotFoundException exception)
