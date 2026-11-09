@@ -43,12 +43,16 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
         scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreated();
     }
 
+    /// <summary>The provider the fixture's non-user subjects are issued under; it scopes their token subject.</summary>
+    public const string TestProvider = "test-provider";
+
     /// <summary>The token service, resolved from the root scope (sufficient for tests).</summary>
     public ITokenService TokenService => Services.GetRequiredService<ITokenService>();
 
+    /// <summary>Issues a pair for a subject that is no Elsa user, under <see cref="TestProvider"/>.</summary>
     public ValueTask<TokenIssueResult> IssueAsync(
         string subject = "user-1", string tenant = "tenant-a", params string[] scopes) =>
-        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity/users:read"] : scopes));
+        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity/users:read"] : scopes) { Provider = TestProvider });
 
     internal static void ConfigureInMemoryStore(DbContextOptionsBuilder builder, string databaseName) =>
         builder.UseInMemoryDatabase(databaseName);

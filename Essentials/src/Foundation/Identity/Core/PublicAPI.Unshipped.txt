@@ -81,7 +81,7 @@ Elsa.Foundation.Identity.Core.Authentication.ITokenService
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.IssueAsync(Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenIssueResult!>
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RefreshAsync(Elsa.Foundation.Identity.Core.Authentication.TokenRefreshRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult!>
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeAsync(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeSubjectAsync(string! subjectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Foundation.Identity.Core.Authentication.ITokenService.RevokeSubjectAsync(Elsa.Foundation.Identity.Core.Authentication.TokenSubject! subject, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Foundation.Identity.Core.Authentication.ITokenService.ValidateAsync(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult!>
 Elsa.Foundation.Identity.Core.Authentication.IUserTokenEligibility
 Elsa.Foundation.Identity.Core.Authentication.IUserTokenEligibility.IsEligibleAsync(string! tenantId, string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
@@ -108,6 +108,8 @@ Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.CanonicalUserId.g
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.CanonicalUserId.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Deconstruct(out string! SubjectId, out string! TenantId, out System.Collections.Generic.IReadOnlyCollection<string!>! Scopes) -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Equals(Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest? other) -> bool
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Provider.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Provider.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Scopes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.Scopes.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SubjectId.get -> string!
@@ -153,6 +155,13 @@ Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Reason.init 
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Token.get -> string!
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Token.init -> void
 Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.TokenRevocationRequest(string! Token, string? Reason = null) -> void
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Equals(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? other) -> bool
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Provider.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ProviderSubject.get -> string?
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.TenantId.get -> string!
+Elsa.Foundation.Identity.Core.Authentication.TokenSubject.UserId.get -> string?
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.<Clone>$() -> Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest!
 Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.Deconstruct(out string! Token) -> void
@@ -828,6 +837,7 @@ const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Normalized 
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Permission = "elsa.identity.permission" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Provider = "elsa.identity.provider" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.Role = "elsa.identity.role" -> string!
+const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.SubjectProvider = "elsa.identity.subject_provider" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.TenantId = "elsa.identity.tenant_id" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.IdentityClaimTypes.UserId = "elsa.identity.user_id" -> string!
 const Elsa.Foundation.Identity.Core.Authorization.PermissionKey.ResourceSeparator = '/' -> char
@@ -865,6 +875,9 @@ override Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.ToStrin
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.Equals(object? obj) -> bool
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.GetHashCode() -> int
 override Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.ToString() -> string!
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.Equals(object? obj) -> bool
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.GetHashCode() -> int
+override Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ToString() -> string!
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.Equals(object? obj) -> bool
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.GetHashCode() -> int
 override Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.ToString() -> string!
@@ -990,6 +1003,10 @@ static Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.operator 
 static Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult? left, Elsa.Foundation.Identity.Core.Authentication.TokenRefreshResult? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenRevocationRequest? right) -> bool
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ForProviderSubject(string! tenantId, string! provider, string! providerSubject) -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ForUser(string! tenantId, string! userId) -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? left, Elsa.Foundation.Identity.Core.Authentication.TokenSubject? right) -> bool
+static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenSubject? left, Elsa.Foundation.Identity.Core.Authentication.TokenSubject? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest.operator ==(Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationRequest? right) -> bool
 static Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult.operator !=(Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult? left, Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult? right) -> bool
