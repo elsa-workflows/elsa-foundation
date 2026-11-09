@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -35,16 +36,23 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Assert.Null(harness.OwnershipContext.Current);
     }
 
-    // An alteration during a held lease: it waits, as it waits behind a drain's mailbox turn on one node.
+    // An alteration during a held lease: it waits, as it waits behind a drain's mailbox turn on one node. Through the
+    // actor, because the wait only works if the refused command keeps its idempotency key: the pump delivers the job
+    // again under the same key, and a consumed key would answer Duplicate for ever.
     [Fact]
-    public async Task ActorCommand_WhileALiveOwnerHoldsTheRun_DoesNothing_AndRunsWhenDeliveredAgain()
+    public async Task ActorCommand_WhileAnOwnerHoldsTheRun_IsRefusedWithItsKeyKept_AndRunsWhenDeliveredAgain()
     {
         var harness = await LeasedHarness.CreateAsync();
         var drain = harness.OwnershipOf("node-drain");
         var drainLease = await drain.AcquireAsync("workflow-1");
+        using var provider = new InProcessWorkflowExecutionActorProvider(harness.NewRouter());
+        var actor = await provider.GetAgentAsync(NewActivationRequest());
+        var envelope = NewEnvelope(harness.Claim);
 
-        await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim));
+        var waited = await actor.EnqueueAsync(envelope);
 
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, waited.Status);
+        Assert.Equal(WorkflowSchedulerCommandRouter.AlterationWaitsForRunReason, waited.Reason);
         Assert.Equal(0, harness.Handler.CallCount);
         Assert.Empty(harness.Checkpoints.ListCommits());
         var job = (await harness.Alterations.FindJobAsync(harness.Claim.JobId))!;
@@ -56,29 +64,35 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             await harness.Committer.CommitAsync(NewDrainCommit("drain-commit"));
 
         await drain.ReleaseAsync(drainLease);
-        await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim));
+        var ran = await actor.EnqueueAsync(envelope);
 
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, ran.Status);
         Assert.Equal(1, harness.Handler.CallCount);
         Assert.Equal(2, harness.Checkpoints.ListCommits().Single(record => record.Commit.StateChanges.AlterationJobTerminalChange is not null).Commit.ExpectedFence!.FencingToken);
         Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await harness.Alterations.FindJobAsync(harness.Claim.JobId))!.Status);
     }
 
-    // A lease that has expired is a dead owner's. The alteration takes the run, and the dead owner is fenced out.
+    // An expired lease is the evidence that its owner stopped mid-drain. Recovery reads it to drive the run again and
+    // the migration quiescence probe reads it to refuse the run, so the alteration leaves it and waits for recovery.
     [Fact]
-    public async Task ActorCommand_TakesARunWhoseOwnersLeaseHasExpired()
+    public async Task ActorCommand_WhileAnExpiredLeaseIsOnTheRun_Waits_AndRunsOnceTheRunIsRecovered()
     {
         var harness = await LeasedHarness.CreateAsync();
         var deadLease = await harness.OwnershipOf("node-dead").AcquireAsync("workflow-1");
         harness.Time.Advance(TimeSpan.FromMinutes(2));
 
-        await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim));
+        Assert.False(await harness.Executor.TryExecuteAsync(NewEnvelope(harness.Claim)));
 
-        Assert.Equal(2, Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence!.FencingToken);
-        using (harness.OwnershipContext.Push(deadLease))
-        {
-            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(async () =>
-                await harness.Committer.CommitAsync(NewDrainCommit("dead-owner-commit")));
-        }
+        Assert.Empty(harness.Checkpoints.ListCommits());
+        var evidence = await harness.OwnershipRecordAsync();
+        Assert.Equal(deadLease.LeaseId, evidence.ExecutionLease!.LeaseId);
+        Assert.Equal(deadLease.LeaseId, evidence.Heartbeat!.LeaseId);
+
+        var recovery = harness.OwnershipOf("node-recovery");
+        await recovery.ReleaseAsync(await recovery.AcquireAsync("workflow-1"));
+        Assert.True(await harness.Executor.TryExecuteAsync(NewEnvelope(harness.Claim)));
+
+        Assert.Equal(3, Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence!.FencingToken);
     }
 
     // An alteration racing a drain on two nodes: the drain takes the run while the alteration is still deciding.
@@ -147,16 +161,37 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Assert.Equal(1, harness.Handler.CallCount);
     }
 
-    // A replacement ownership service cannot acquire only when unheld, so the alteration acquires as a drain does.
+    // Acquiring only when unheld needs the runtime's own ownership service: the contract's acquisition always takes
+    // the run over. With a replacement the alteration runs as it did before this lease existed.
     [Fact]
-    public async Task ActorCommand_WithAReplacementOwnershipService_AcquiresAsADrainDoes()
+    public async Task ActorCommand_WithAReplacementOwnershipService_RunsWithoutALease_AsBefore()
     {
         var harness = await LeasedHarness.CreateAsync(replacementOwnership: true);
-        await harness.OwnershipOf("node-drain").AcquireAsync("workflow-1");
+        var drainLease = await harness.OwnershipOf("node-drain").AcquireAsync("workflow-1");
 
-        await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim));
+        Assert.True(await harness.Executor.TryExecuteAsync(NewEnvelope(harness.Claim)));
 
-        Assert.Equal(2, Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence!.FencingToken);
+        Assert.Null(Assert.Single(harness.Checkpoints.ListCommits()).Commit.ExpectedFence);
+        Assert.Equal(drainLease.LeaseId, (await harness.OwnershipRecordAsync()).ExecutionLease!.LeaseId);
+    }
+
+    // The check and the write are one compare-and-swap: an owner that acquires after the record was read, and
+    // before it is written, is found on the next attempt and is not overwritten.
+    [Fact]
+    public async Task AcquiringOnlyWhenUnheld_FindsAnOwnerThatAcquiredBetweenItsReadAndItsWrite()
+    {
+        var liveness = new InMemoryExecutionLivenessStateStore();
+        var drain = new RuntimeExecutionOwnershipService(liveness, new FakeTimeProvider(Now), new RuntimeExecutionOwnershipOptions { OwnerId = "node-drain" });
+        // The service reads the clock between reading the record and writing it.
+        var clock = new HookedClock(Now, () => drain.AcquireAsync("workflow-1").AsTask().GetAwaiter().GetResult());
+        var alteration = new RuntimeExecutionOwnershipService(liveness, clock, new RuntimeExecutionOwnershipOptions { OwnerId = "node-alteration" });
+
+        var lease = await alteration.TryAcquireUnheldAsync("workflow-1");
+
+        Assert.Null(lease);
+        var record = Assert.Single(await liveness.ListAsync("workflow-1"));
+        Assert.Equal("node-drain", record.ExecutionLease!.OwnerId);
+        Assert.Equal(1, record.ExecutionLease.FencingToken);
     }
 
     [Fact]
@@ -211,6 +246,15 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         public RuntimeCheckpointCommitter Committer { get; }
         public WorkflowAlterationActorCommandExecutor Executor { get; }
         public WorkflowAlterationJobState Claim { get; private set; } = null!;
+
+        // The router and actor a real host puts in front of the executor. No drain is reached on the alteration path.
+        public WorkflowSchedulerCommandRouter NewRouter() =>
+            new(
+                new InMemoryWorkflowSchedulerWorkQueue(),
+                new ImmediateWorkflowSchedulerDrainPolicy(),
+                new UnusedDrains(),
+                Time,
+                alterationActorCommandExecutor: Executor);
 
         public RuntimeExecutionOwnershipService OwnershipOf(string ownerId) =>
             new(Liveness, Time, new RuntimeExecutionOwnershipOptions { OwnerId = ownerId });
@@ -270,6 +314,33 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
 
         public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default) =>
             inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
+    }
+
+    private static WorkflowExecutionActorActivationRequest NewActivationRequest() =>
+        new(
+            "workflow-1",
+            WorkflowExecutionActorActivationReason.Start,
+            Now,
+            "test",
+            WorkflowExecutionActorCapabilities.None,
+            partition: new WorkflowExecutionPartition("tenant-a"));
+
+    private sealed class UnusedDrains : IWorkflowDrainOrchestrator
+    {
+        public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("An alteration command does not drain.");
+    }
+
+    // Runs a callback the first time the clock is read, which is between the service's read and its write.
+    private sealed class HookedClock(DateTimeOffset now, Action onFirstRead) : TimeProvider
+    {
+        private Action? _onFirstRead = onFirstRead;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            Interlocked.Exchange(ref _onFirstRead, null)?.Invoke();
+            return now;
+        }
     }
 
     private sealed class UnusedHeartbeatScopes : IPersistenceOperationScopeFactory

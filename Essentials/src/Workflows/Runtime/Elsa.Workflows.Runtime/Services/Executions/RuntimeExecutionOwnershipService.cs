@@ -53,10 +53,11 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         (await AcquireCoreAsync(workflowExecutionId, onlyWhenUnheld: false, cancellationToken))!;
 
     /// <summary>
-    /// Acquires the run only when no live lease holds it, and returns <see langword="null"/> when one does. Unlike
-    /// <see cref="AcquireAsync(string, CancellationToken)"/> it never takes a run from an owner whose lease has not
-    /// expired. The check and the write are one compare-and-swap on the ownership record's revision, so an owner that
-    /// acquires in between is seen on the next attempt instead of being overwritten.
+    /// Acquires the run only when its ownership record holds no lease, and returns <see langword="null"/> when it
+    /// holds one. Unlike <see cref="AcquireAsync(string, CancellationToken)"/> it never replaces a lease, live or
+    /// expired: an expired lease is the evidence that its owner stopped mid-drain, which recovery and the migration
+    /// quiescence probe read. The check and the write are one compare-and-swap on the record's revision, so an owner
+    /// that acquires in between is seen on the next attempt instead of being overwritten.
     /// </summary>
     internal ValueTask<RuntimeExecutionLease?> TryAcquireUnheldAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
         AcquireCoreAsync(workflowExecutionId, onlyWhenUnheld: true, cancellationToken);
@@ -75,7 +76,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
 
             var nextToken = checked(ReadHighestIssuedToken(existing) + 1);
             var now = _timeProvider.GetUtcNow();
-            if (onlyWhenUnheld && existing?.ExecutionLease is { } held && !held.IsExpired(now))
+            if (onlyWhenUnheld && existing?.ExecutionLease is not null)
                 return null;
 
             var lease = new RuntimeExecutionLease(

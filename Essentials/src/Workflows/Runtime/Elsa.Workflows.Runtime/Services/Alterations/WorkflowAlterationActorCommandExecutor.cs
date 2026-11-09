@@ -49,7 +49,15 @@ public sealed class WorkflowAlterationActorCommandExecutor(
     /// <summary>Whether this executor runs its jobs under the target run's ownership lease.</summary>
     internal bool HoldsRunLease => _runLease is not null;
 
-    public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+    public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+        await TryExecuteAsync(envelope, cancellationToken);
+
+    /// <summary>
+    /// Runs the claimed job. Returns <see langword="false"/>, having run and written nothing, when the run's ownership
+    /// record holds a lease: the job stays claimed and must be delivered again. The command router reads this so the
+    /// refused command keeps its idempotency key; <see cref="ExecuteAsync"/> cannot tell its caller.
+    /// </summary>
+    internal async ValueTask<bool> TryExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(envelope);
         if (envelope.Command.Kind != WorkflowExecutionCommandKind.AlterWorkflow)
@@ -72,7 +80,7 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         // A duplicate after an acknowledgement loss reaches the same actor. The checkpoint marker is authoritative;
         // re-running handlers would be unsafe and is deliberately avoided.
         if (job.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled)
-            return;
+            return true;
         if (job.Status != WorkflowAlterationJobStatus.Running || job.Claim is null ||
             !StringComparer.Ordinal.Equals(job.Claim.Token, actorCommand.ClaimToken))
         {
@@ -87,12 +95,11 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (_runLease is null)
         {
             await ExecuteClaimedAsync(job, plan, cancellationToken);
-            return;
+            return true;
         }
 
-        // Only now, so a duplicate of a finished job or a stale claim never touches the run's ownership. When a live
-        // owner holds the run nothing runs, and the job stays claimed for the pump to deliver again.
-        await _runLease.TryRunAsync(envelope, leasedCancellation => ExecuteClaimedAsync(job, plan, leasedCancellation), cancellationToken);
+        // Only now, so a duplicate of a finished job or a stale claim never touches the run's ownership.
+        return await _runLease.TryRunAsync(envelope, leasedCancellation => ExecuteClaimedAsync(job, plan, leasedCancellation), cancellationToken);
     }
 
     // Reads the run and commits the job's checkpoint. Under a run lease both happen while the lease is held.
