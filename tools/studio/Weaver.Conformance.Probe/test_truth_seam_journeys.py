@@ -117,7 +117,7 @@ class TurnTests(unittest.TestCase):
         changes = {
             "not-completed": lambda v: v.__setitem__(-1, {"kind": "error", "error": {}}),
             "no-context": lambda v: [v.remove(f) for f in [f for f in v if f["kind"] == "contextAdmitted"]],
-            "diagnostic": lambda v: v[1]["payload"].update(diagnostics=[{"code": "agent.workflow.catalog_unavailable", "required": False}]),
+            "diagnostic": lambda v: v[1]["payload"].update(diagnostics=[{"code": "weaver.workflow.catalog_unavailable", "required": False}]),
             "no-catalog": lambda v: v[1]["payload"].update(attachments=[i for i in v[1]["payload"]["attachments"] if i["contentType"] != "workflow.catalog"]),
             "no-permissions": lambda v: v[2]["payload"].update(attachments=[i for i in v[2]["payload"]["attachments"] if i["contentType"] != "workflow.permissions"]),
             "client-catalog": lambda v: attachment(v, "workflow.catalog").update(origin="clientSnapshot"),
@@ -295,8 +295,8 @@ class BrowserTests(unittest.TestCase):
 
 class PlaceholderTests(unittest.TestCase):
     def generation(self, **changes):
-        value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Agent.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
-                 "types": ["DefaultWorkflowAgentContextProvider", "FoundationWorkflowsAgentFeature", "WorkflowActivityCatalog", "WorkflowAgentGraph"]}}
+        value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Weaver.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
+                 "types": ["DefaultWorkflowAgentContextProvider", "WeaverWorkflowsFeature", "WorkflowActivityCatalog", "WorkflowAgentGraph"]}}
         value["workflowAgent"].update(changes)
         return value
 

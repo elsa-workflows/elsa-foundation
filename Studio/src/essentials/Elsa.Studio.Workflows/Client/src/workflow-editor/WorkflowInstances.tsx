@@ -1,3 +1,4 @@
+import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
@@ -13,7 +14,7 @@ import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
@@ -1332,6 +1333,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    if (tab === activeInspectorTab) return;
     beginEvidenceNavigation();
     setActiveInspectorTab(tab);
   };
@@ -1613,31 +1615,30 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   return (
     <>
-      <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
-        <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
-        {selectedDefinitionCanBeReviewed && selectedDefinitionId ? (
-          <button type="button" onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} /> Review workflow definition</button>
-        ) : null}
-        <button type="button" onClick={refreshWorkspace}><RotateCcw size={14} /> Refresh</button>
-        <button type="button" aria-pressed={observation.following} onClick={() => observation.setFollowing(!observation.following)}
-          title="Follow recorded updates without changing the inspected occurrence. Pausing observation does not stop execution.">{observation.following ? "Pause following" : "Follow execution"}</button>
-        <span role="status">{observation.status === "connected" ? data ? "Execution on this canvas" : `Execution ${observation.value?.instance.status ?? "observed"}` : observation.status === "paused" ? "Observation paused · last confirmed state"
-          : observation.status === "disconnected" ? "Execution observation disconnected · last confirmed evidence" : observation.status === "loading" ? "Connecting to execution…" : "Execution observation unavailable"}</span>
-        {observation.error ? <span role="status">{observation.error}</span> : null}
-        {data && instanceAction ? (
-          // data-run-selection names the activity execution the page discloses with the Run, so a journey waits on that state.
-          <button type="button" data-run-selection={selectedActivity?.activityExecutionId ?? ""} onClick={() => dispatchAiAction(ai, instanceAction, {
-            // The page contributes the exact Run itself (workflows.run-inspector), so the prompt attaches none; without the
-            // Workflows agent state the prompt attaches the same identity.
-            workflowExecutionId: data.details.instance.workflowExecutionId,
-            activityExecutionId: selectedActivity?.activityExecutionId ?? null,
-            status: data.details.instance.status,
-            attached: Boolean(weaver?.inspection?.runs)
-          })}>
-            <Sparkles size={13} /> Explain
-          </button>
-        ) : null}
+      <div className="wf-toolbar wf-run-toolbar" role="group" aria-label="Run workspace actions">
+        <div className="wf-run-identity">
+          <button type="button" className="wf-run-tool" onClick={goBack}><ChevronLeft size={14} aria-hidden="true" /> Runs</button>
+          <ChevronRight size={13} aria-hidden="true" />
+          <strong>{data?.definitionName ?? data?.definitionVersion?.definition?.name ?? "Workflow run"}</strong>
+          {data ? <WorkflowStatusBadge status={data.details.instance.status} subStatus={data.details.instance.subStatus} /> : null}
+        </div>
+        <div className="wf-run-actions">
+          {selectedDefinitionCanBeReviewed && selectedDefinitionId ? <button type="button" className="wf-run-tool"
+            onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</button> : null}
+          <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
+          <RunObservationControls following={observation.following} onFollowingChange={observation.setFollowing}
+            onRefresh={refreshWorkspace} complete={observation.status === "connected" && isTerminalExecution(data?.details.instance.status)} />
+          {data && instanceAction ? <OverflowMenu ariaLabel="More run actions" items={[{
+            id: "explain-run", label: <><Sparkles size={13} aria-hidden="true" /> Explain</>,
+            onSelect: () => dispatchAiAction(ai, instanceAction, {
+              workflowExecutionId: data.details.instance.workflowExecutionId,
+              activityExecutionId: selectedActivity?.activityExecutionId ?? null,
+              status: data.details.instance.status,
+              attached: Boolean(weaver?.inspection?.runs)
+            })
+          }]} /> : null}
+        </div>
+        <RunObservationNotice status={observation.status} error={observation.error} />
         {operator.status}
       </div>
       {operator.dialog}

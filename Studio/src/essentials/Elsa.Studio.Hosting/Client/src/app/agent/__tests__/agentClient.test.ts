@@ -9,7 +9,7 @@ describe("agent client", () => {
     context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "Pending", context: [admitted] }, warnings: [] } })) as typeof context.http.postJson;
     const activeSurface = { route: "/sample/one", resourceType: "sample", resourceId: "one", selection: { opaqueSelection: "selected" } };
     const result = await createAgentClient(context).sendMessage("session", { message: "Inspect", mode: "explain", activeSurface, contextAttachments: [] });
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions/session/messages", expect.objectContaining({ activeSurface }));
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/sessions/session/messages", expect.objectContaining({ activeSurface }));
     expect(result.contextAttachments).toEqual([expect.objectContaining({ ...admitted, sensitivity: "internal", origin: "authoritativeRead" })]);
   });
 
@@ -28,13 +28,13 @@ describe("agent client", () => {
   it.each((["approveProposal", "denyProposal", "executeProposal"] as const)
     .flatMap(decision => ["http", "wrapped"].map(transport => ({ decision, transport }))))("preserves authoritative terminal $decision data on $transport refusal", async ({ decision, transport }) => {
     const context = stubContext();
-    const envelope = { error: { code: "agent.proposal.expired", message: "The reviewed invocation expired.", statusCode: 409 }, data: { proposalId: "proposal", executed: false, status: "expired", resourceType: "sample", resourceId: "one", summary: "Nothing was applied.", clientInvocation: null, toolResult: null } };
+    const envelope = { error: { code: "weaver.proposal.expired", message: "The reviewed invocation expired.", statusCode: 409 }, data: { proposalId: "proposal", executed: false, status: "expired", resourceType: "sample", resourceId: "one", summary: "Nothing was applied.", clientInvocation: null, toolResult: null } };
     context.http.postJson = async <T>() => { if (transport === "http") throw new StudioHttpError(409, envelope.error.message, null, envelope); return envelope as T; };
-    await expect(createAgentClient(context)[decision]("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "agent.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
+    await expect(createAgentClient(context)[decision]("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "weaver.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
   });
 
   it.each([{ status: "approved", proposalId: "proposal" }, { status: "expired", proposalId: "another-proposal" }])("does not treat nonterminal or unrelated data as a terminal outcome: %j", async data => {
-    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "agent.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
+    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "weaver.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
     context.http.postJson = vi.fn(async () => { throw error; });
     await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toBe(error);
     expect(error).not.toHaveProperty("terminalOutcome");
@@ -69,14 +69,14 @@ describe("agent client", () => {
     await client.executeProposal("prop_01", { revision: "1" });
     await client.submitFeedback("agt_01", "msg_01", { rating: "positive" });
 
-    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/bootstrap");
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({
+    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/weaver/bootstrap");
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/sessions", expect.objectContaining({
       metadata: expect.objectContaining({ mode: "troubleshoot", route: "/workflows/order" })
     }));
     // The client never chooses a provider; the server binds the session to the single active harness.
-    const sessionCall = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === "/_elsa/agent/sessions");
+    const sessionCall = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === "/_elsa/weaver/sessions");
     expect(sessionCall?.[1]).not.toHaveProperty("providerId");
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions/agt_01/messages", expect.objectContaining({
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/sessions/agt_01/messages", expect.objectContaining({
       role: "user",
       content: "Explain this workflow.",
       capabilityId: "workflow.explain",
@@ -85,10 +85,10 @@ describe("agent client", () => {
     expect(context.http.postJson).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       contextAttachments: [expect.objectContaining({ summary: expect.stringContaining("super-secret") })]
     }));
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/proposals/prop_01/approve", { actorId: "studio", revision: "1", comment: undefined });
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/proposals/prop_01/deny", { actorId: "studio", revision: undefined, comment: "Not now", reason: "Not now" });
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/proposals/prop_01/execute", { actorId: "studio", revision: "1", comment: undefined });
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/feedback", { sessionId: "agt_01", messageId: "msg_01", rating: 1, actorId: "studio" });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/proposals/prop_01/approve", { actorId: "studio", revision: "1", comment: undefined });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/proposals/prop_01/deny", { actorId: "studio", revision: undefined, comment: "Not now", reason: "Not now" });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/proposals/prop_01/execute", { actorId: "studio", revision: "1", comment: undefined });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/feedback", { sessionId: "agt_01", messageId: "msg_01", rating: 1, actorId: "studio" });
   });
 
   it("forwards a structured workflow graph as the attachment content", async () => {
@@ -159,7 +159,7 @@ describe("agent client", () => {
     });
 
     // The client forwards the requested mode verbatim; the server is the authoritative ceiling.
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({ autonomyMode: "full-auto" }));
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/weaver/sessions", expect.objectContaining({ autonomyMode: "full-auto" }));
   });
 
   it("derives allowed autonomy modes from the ceiling when the backend omits them", async () => {
@@ -182,7 +182,7 @@ describe("agent client", () => {
   it("surfaces wrapped feedback errors", async () => {
     const context = stubContext();
     context.http.postJson = mockPostJson(async url => {
-      if (url === "/_elsa/agent/feedback") return { error: { code: "feedback_failed", message: "Feedback failed." } };
+      if (url === "/_elsa/weaver/feedback") return { error: { code: "feedback_failed", message: "Feedback failed." } };
       return { data: { id: "ignored" } };
     });
     const client = createAgentClient(context);
@@ -228,13 +228,13 @@ describe("agent client", () => {
   });
   it("retains a generated delivery ID across retries and exposes duplicate/admission warnings", async () => {
     const context = stubContext();
-    context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "completed" }, warnings: [{ code: "agent.message.duplicate", message: "Already accepted.", target: "delivery" }] } })) as typeof context.http.postJson;
+    context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "completed" }, warnings: [{ code: "weaver.message.duplicate", message: "Already accepted.", target: "delivery" }] } })) as typeof context.http.postJson;
     const client = createAgentClient(context);
     const request = { message: "Inspect", mode: "explain" as const, contextAttachments: [] };
     const first = await client.sendMessage("session", request); await client.sendMessage("session", request);
     const calls = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls[0][1].requestId).toBeTruthy(); expect(calls[1][1].requestId).toBe(calls[0][1].requestId);
-    expect(first).toMatchObject({ status: "completed", warnings: [{ code: "agent.message.duplicate", target: "delivery" }] });
+    expect(first).toMatchObject({ status: "completed", warnings: [{ code: "weaver.message.duplicate", target: "delivery" }] });
   });
 
   it("sends one conditional autonomy-only update through the selected backend and maps the acknowledged policy", async () => {
@@ -242,18 +242,18 @@ describe("agent client", () => {
     context.http.putJson = vi.fn(async () => ({ data: { autonomyMode: "fullAuto", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 7 } })) as typeof context.http.putJson;
     const policy = await createAgentClient(context).updateAutonomy("agt/01", { autonomyMode: "full-auto", expectedRevision: 6 });
     // Exactly the intent and its precondition: no owner, actor, tenant or unrelated policy fields travel.
-    expect(vi.mocked(context.http.putJson).mock.calls).toEqual([["/_elsa/agent/sessions/agt%2F01/autonomy", { autonomyMode: "full-auto", expectedRevision: 6 }]]);
+    expect(vi.mocked(context.http.putJson).mock.calls).toEqual([["/_elsa/weaver/sessions/agt%2F01/autonomy", { autonomyMode: "full-auto", expectedRevision: 6 }]]);
     expect(policy).toEqual({ autonomyMode: "full-auto", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 7 });
   });
 
   it.each([
-    [409, "agent.session.policy_stale", "stale"],
-    [409, "agent.session.busy", "busy"],
-    [409, "agent.session.closed", "closed"],
-    [409, "agent.session.autonomy_unsupported", "unsupported"],
-    [400, "agent.session.autonomy_invalid", "invalid"],
-    [404, "agent.session.not_found", "not-found"],
-    [403, "agent.forbidden", "refused"]
+    [409, "weaver.session.policy_stale", "stale"],
+    [409, "weaver.session.busy", "busy"],
+    [409, "weaver.session.closed", "closed"],
+    [409, "weaver.session.autonomy_unsupported", "unsupported"],
+    [400, "weaver.session.autonomy_invalid", "invalid"],
+    [404, "weaver.session.not_found", "not-found"],
+    [403, "weaver.forbidden", "refused"]
   ] as const)("classifies a %s %s autonomy refusal as %s for both HTTP and wrapped envelopes", async (status, code, kind) => {
     const envelope = { data: null, error: { code, message: `Refused: ${code}`, statusCode: status } };
     for (const transport of ["http", "wrapped"]) {
@@ -293,7 +293,7 @@ describe("agent client", () => {
     const expected = { autonomyMode: "auto-read-only", maxAutonomyMode: "auto-read-only", allowedAutonomyModes: ["manual", "auto-read-only"], revision: 3 };
     expect((await client.createSession(request)).policy).toEqual(expected);
     const detail = await client.getSession("agt_01");
-    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/sessions/agt_01");
+    expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/weaver/sessions/agt_01");
     expect(detail.policy).toEqual(expected);
     expect(detail.messages).toEqual([expect.objectContaining({ id: "m1", acceptedPolicyRevision: 2 }), expect.objectContaining({ id: "m2", acceptedPolicyRevision: undefined })]);
     context.http.postJson = vi.fn(async () => ({ data: { sessionId: "agt_02", status: "active" } })) as typeof context.http.postJson;
@@ -306,7 +306,7 @@ describe("agent client", () => {
       .mockResolvedValueOnce({ data: { message: { id: "m1", status: "Pending", acceptedPolicy: { autonomyMode: "full-auto", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 4 } }, warnings: [] } })
       .mockRejectedValueOnce(new StudioHttpError(409, "Conflict", null, { error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } }))
       .mockResolvedValueOnce({ error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } })
-      .mockRejectedValueOnce(new StudioHttpError(409, "Other conflict", null, { error: { code: "agent.other" } })) as typeof context.http.postJson;
+      .mockRejectedValueOnce(new StudioHttpError(409, "Other conflict", null, { error: { code: "weaver.other" } })) as typeof context.http.postJson;
     const client = createAgentClient(context);
     const request = () => ({ message: "Resize", mode: "build" as const, contextAttachments: [] });
     expect((await client.sendMessage("agt_01", request())).acceptedPolicy).toEqual({ autonomyMode: "full-auto", revision: 4 });
@@ -338,10 +338,10 @@ function stubContext(): StudioEndpointContext {
       ...createHttpClient("https://foundation.example/"),
       getJson: mockGetJson({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } }),
       postJson: mockPostJson(async url => {
-        if (url === "/_elsa/agent/sessions") return { data: { id: "agt_01", status: "active" } };
+        if (url === "/_elsa/weaver/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };
         if (url.endsWith("/execute")) return { data: { proposalId: "prop_01", executed: true, message: "Executed." } };
-        if (url === "/_elsa/agent/feedback") return { data: { id: "feedback_01" } };
+        if (url === "/_elsa/weaver/feedback") return { data: { id: "feedback_01" } };
         return { data: { id: "prop_01", status: "approved" } };
       })
     }
@@ -376,7 +376,7 @@ function stubPascalCaseContext(): StudioEndpointContext {
         }
       }),
       postJson: mockPostJson(async url => {
-        if (url === "/_elsa/agent/sessions") return { Data: { SessionId: "agt_01", Status: "Active" } };
+        if (url === "/_elsa/weaver/sessions") return { Data: { SessionId: "agt_01", Status: "Active" } };
         if (url.endsWith("/messages")) return { Data: { Message: { Id: "msg_01" }, Warnings: [] } };
         if (url.endsWith("/execute")) return { Data: { ProposalId: "prop_01", Executed: true, Message: "Executed." } };
         return { Data: { ProposalId: "prop_01", ApprovalStatus: "Approved", ApprovedAt: "2026-06-25T21:00:00Z" } };

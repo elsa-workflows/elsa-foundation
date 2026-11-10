@@ -203,7 +203,7 @@ describe("workflow explain context", () => {
   });
 
   it("produces exactly the shared snapshot the server admits against the owning catalog", () => {
-    // Elsa.Agent.Tests (WorkflowExplainContextTests) admits this same content strictly; a drift on either side fails one suite.
+    // Elsa.Weaver.Tests (WorkflowExplainContextTests) admits this same content strictly; a drift on either side fails one suite.
     const node = apiNode();
     const content = snapshot(draftWith([node]), { selected: node, validationErrors: sharedErrors });
     expect(content).toEqual(shared.content);

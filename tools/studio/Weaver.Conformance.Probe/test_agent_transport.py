@@ -55,7 +55,7 @@ class AgentTransportTests(unittest.TestCase):
         result = self.agent.execute("ProposalAa", revision="reviewed-revision")
         self.assertEqual(202, result.status); self.assertEqual(pending, result.json())
         terminal = {"data": {"executed": False, "status": "failed", "toolResult": {"payload": {"arbitrary": 7}}},
-                    "error": {"code": "agent.proposal.refused", "statusCode": 409}}
+                    "error": {"code": "weaver.proposal.refused", "statusCode": 409}}
         self.http.respond(409, terminal)
         failed = self.agent.execute("ProposalAa", revision="reviewed-revision")
         with self.assertRaises(AgentTransportError) as caught: failed.require_status(200)
@@ -68,7 +68,7 @@ class AgentTransportTests(unittest.TestCase):
                    "contextAttachments": [{"id": "a", "content": {"nested": [False, {"any": 3}]}}]}
         self.http.respond(200, {"data": {"message": {"id": "native-id"}}, "error": None})
         self.agent.message("Aa/?", request)
-        self.assertEqual(("POST", "/_elsa/agent/sessions/Aa%2F%3F/messages", request), self.http.calls[0])
+        self.assertEqual(("POST", "/_elsa/weaver/sessions/Aa%2F%3F/messages", request), self.http.calls[0])
 
     def test_ack_cancel_and_recovery_are_explicit_native_requests(self):
         acknowledgement = {"client": {"clientId": "c", "generationId": "g"}, "approvalDigest": "d", "outcome": "uncertain", "result": {"data": [1, 2]}}
@@ -77,8 +77,8 @@ class AgentTransportTests(unittest.TestCase):
         self.agent.cancel("SessionAa", "TurnCc")
         snapshot = self.agent.recovery_snapshot("SessionAa")
         self.assertEqual(acknowledgement, self.http.calls[0][2])
-        self.assertEqual("/_elsa/agent/sessions/SessionAa/client-invocations/InvocationBb/acknowledgements", self.http.calls[0][1])
-        self.assertEqual("/_elsa/agent/sessions/SessionAa/turns/TurnCc/cancel", self.http.calls[1][1])
+        self.assertEqual("/_elsa/weaver/sessions/SessionAa/client-invocations/InvocationBb/acknowledgements", self.http.calls[0][1])
+        self.assertEqual("/_elsa/weaver/sessions/SessionAa/turns/TurnCc/cancel", self.http.calls[1][1])
         self.assertEqual(["GET", "GET"], [call[0] for call in self.http.calls[2:]])
         self.assertEqual({"session", "audit"}, set(snapshot))
 
@@ -112,7 +112,7 @@ class AgentTransportTests(unittest.TestCase):
         self.assertNotIn(self.http.bearer, json.dumps(receipt))
 
     def test_error_event_with_http_200_is_preserved_without_invented_completion(self):
-        value = self.event("error", error={"code": "agent.session.busy", "statusCode": 409})
+        value = self.event("error", error={"code": "weaver.session.busy", "statusCode": 409})
         self.http.opener.responses.append(Wire(self.sse(value)))
         stream = self.agent.collect_stream("s")
         self.assertEqual(200, stream.status); self.assertEqual([value], [frame.value for frame in stream.frames])

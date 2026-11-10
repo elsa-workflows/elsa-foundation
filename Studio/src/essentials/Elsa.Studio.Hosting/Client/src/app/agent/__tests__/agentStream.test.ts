@@ -35,7 +35,7 @@ describe("agent stream", () => {
 
   it("omits ambient cookies for anonymous SSE and aborts its subscription",async()=>{
     const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(streamFrom([]),{status:200}));
-    const subscription=subscribeAgentSessionStream(createEndpointContext("https://foundation.example/shell/"),"/_elsa/agent/stream",()=>{},()=>{},{fetch:request});
+    const subscription=subscribeAgentSessionStream(createEndpointContext("https://foundation.example/shell/"),"/_elsa/weaver/stream",()=>{},()=>{},{fetch:request});
     await flushPromises();
     expect(request.mock.calls[0][1]?.credentials).toBe("omit");
     subscription.close();expect(request.mock.calls[0][1]?.signal?.aborted).toBe(true);
@@ -51,7 +51,7 @@ describe("agent stream", () => {
         ...createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Tenant": "tenant-a" } }),
         accessTokenFactory: vi.fn(async () => "access-token-1")
       },
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       () => {},
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch });
@@ -75,7 +75,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -98,7 +98,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -122,7 +122,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -145,7 +145,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -166,7 +166,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -199,7 +199,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -223,7 +223,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => errors.push(error),
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -251,7 +251,7 @@ describe("agent stream", () => {
 
     subscribeAgentSessionStream(
       createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
+      "/_elsa/weaver/sessions/agt_01/stream",
       event => events.push(event),
       error => { throw error; },
       { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
@@ -293,35 +293,35 @@ describe("agent stream recovery outcomes", () => {
     const events: AgentStreamEvent[] = [];
     const fetch = vi.fn(async () => new Response(streamFrom([
       // The server's AgentProviderNotice(Code, Label); the label is the notice's text even without event content.
-      `data: ${JSON.stringify({ kind: "progress", payload: { code: "agent.provider.github_copilot.conversation_reset", label: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "progress", payload: { code: "weaver.provider.github_copilot.conversation_reset", label: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
       `data: ${JSON.stringify({ Kind: "progress", Content: "Reading context" })}\n\n`,
-      `data: ${JSON.stringify({ Kind: "error", Error: { Code: "agent.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`
+      `data: ${JSON.stringify({ Kind: "error", Error: { Code: "weaver.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`
     ]), { status: 200 }));
     subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
     await flushPromises();
     expect(events).toEqual([
-      { type: "provider-notice", code: "agent.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." },
+      { type: "provider-notice", code: "weaver.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." },
       { type: "progress", label: "Reading context" },
-      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+      { type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached." }
     ]);
   });
 
   it.each(["snapshots", "bytes"])("keeps the %s session limit detail and drops an unknown one", async limit => {
     const events: AgentStreamEvent[] = [];
     const fetch = vi.fn(async () => new Response(streamFrom([
-      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", statusCode: 409, limit } })}\n\n`,
-      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "rows" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached.", statusCode: 409, limit } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "rows" } })}\n\n`,
       // One disclosure that does not fit, or is larger than any session: not a session limit, so no limit is kept.
-      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-does-not-fit" } })}\n\n`,
-      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-too-large" } })}\n\n`
+      `data: ${JSON.stringify({ kind: "error", error: { code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-does-not-fit" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-too-large" } })}\n\n`
     ]), { status: 200 }));
     subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
     await flushPromises();
     expect(events).toEqual([
-      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit },
-      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
-      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
-      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+      { type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached.", limit },
+      { type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "Session limit reached." }
     ]);
   });
 });

@@ -1,108 +1,157 @@
-# Agent EF session record store
+# Agent EF turn journal
 
-`Elsa.Agent.Persistence.EntityFrameworkCore` is the opt-in durable backing for Weaver sessions
-([#3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441),
-[spec 1189](../../../../../specs/1189-weaver-recovery/spec.md)). It implements the Preview
-`IAgentSessionRecordStore` and replaces the audit sink, reader and ownership together. The default
-session owner is not replaced: it writes through this store and hydrates from it, so session policy,
-autonomy and durable recovery stay supported. Replacing a lifecycle service (session, streaming, invoker or
-proposal) or `IAgentTurnStateStore` while this store is selected fails shell activation
-(`AgentDurableRecoveryValidator`), because such a composition cannot recover what it records. The package carries EF Core and Relational APIs; the
-host supplies its selected engine. Enable shell feature `FoundationAgentEntityFrameworkCore` (it
-depends on `FoundationAgentAbstractions` and `Secrets`), or register directly:
+`Elsa.Agent.Persistence.EntityFrameworkCore` implements the agent conditional turn
+journal. The package carries EF Core and Relational APIs; the host supplies its selected engine.
+Enable shell feature `AgentEntityFrameworkCore`, or register directly:
 
 ```csharp
 services.AddAgentEntityFrameworkCore(new()
 {
     Provider = "Sqlite",
-    ConnectionString = "Data Source=agent.db"
+    ConnectionString = "Data Source=agents.db"
 });
 ```
 
-SQLite, SQL Server, Npgsql PostgreSQL and Oracle MySQL have separate context/migration sets under
-`Migrations/Agent/<Provider>/`. The module uses the shared EF startup policy, named connections,
-schema selection and pooling. The stable history module is `ElsaAgent`.
+SQLite, SQL Server, Npgsql PostgreSQL and Oracle MySQL have separate context/migration sets.
+The module uses the shared EF startup policy, named connections, schema selection and pooling.
+The stable history module is `ElsaAgent`. Enabling the explicit development in-memory
+feature before or after EF registration cannot replace this database backend.
 
-## Selection
+An application can instead call `modelBuilder.AddAgentModel(Database.ProviderName!)` in its
+own `DbContext`, then `services.AddAgentTurnStore<ApplicationDbContext>()`. Its host owns
+migrations. The context needs a public constructor accepting its own `DbContextOptions<TContext>`.
+Writes create fresh owned contexts and commit independently; they do not flush pending application
+changes or enlist in its transaction. Resolve a separate scoped store for each concurrent operation.
 
-The store and the audit trio are chosen through `SelectAgentSessionRecordStore` and
-`SelectAgentAuditStore` (`Elsa.Agent.Extensions.AgentPersistenceSelection`). A selection replaces
-only the process-local default, whichever of the two registrations runs first. A second selection,
-or a selection over a store registered some other way, throws at registration; the
-`AgentRegistrationValidator` still refuses two record stores or two of any audit facet at shell
-activation.
+The operation index hashes the exact tenant, partition, workflow and operation identity, using a
+structured encoding. Malformed UTF-16 is refused before hashing. Caller-supplied keys must match.
+Identical stage replay preserves the original deadline and ciphertext. The store compares record
+schema, version, lifecycle, fence, admission generation and finite lease/deadline in conditional database writes. It never replaces
+an accepted result, and it refuses unsupported record schemas without mutation.
 
-An application can instead call `modelBuilder.AddAgentModel(Database.ProviderName!)` in its own
-`DbContext`, then `services.AddAgentStores<ApplicationDbContext>()`. Its host owns migrations.
-Every operation resolves a fresh scoped context and commits independently; it never flushes pending
-application changes or enlists in an application transaction.
+Physical model requests append unique reservations under the same conditional version/state/fence
+and deadline checks. Concurrent reservations cannot exceed the staged finite request maximum.
+Retained output ceilings and configured resource observations survive response loss and host restart;
+missing usage does not release a reservation. Native runtime checks authenticate the staged request
+maximum before creating its transport authority. This is not a hard input/total-token accounting claim.
+Completing the exact reserved request set records nullable usage and the reported model ID while
+freezing further reservations. Acceptance with reservations requires that completed response. Wrong
+request sets, stale fences, expired completion and later observation replacement are refused. The
+accepted protected receipt uses known single-request output usage or conservative reserved ceilings
+when output usage cannot be attributed; no absent value is treated as zero.
 
-## Tables
+Business input, accepted output and the conversation candidate are protected by the runtime using
+the selected Secrets protector/key ring. Retain the required keys across host restarts. Store
+capabilities describe configuration: file-backed SQLite and the three other supported relational
+providers report durability; temporary, memory and custom-VFS SQLite profiles do not. This is not
+a reachability or credential-durability check.
 
-| Table | Holds |
-| --- | --- |
-| `elsa_agent_sessions` | Owner columns (actor, tenant, workspace), list columns (title, status, update and expiry time), policy revision, `ContinuedFrom`, the reached session limit, owner token, fence, lease and version; the protected session, paused turn and the audit records a recovery settlement still owes |
-| `elsa_agent_messages` | One protected `AgentMessageRecord` per message, with role, status and status reason |
-| `elsa_agent_disclosure_snapshots` | Each distinct snapshot once per session: digest, size and the protected canonical text |
-| `elsa_agent_context` | Each context attachment once per session, protected, keyed by the SHA-256 of its identity |
-| `elsa_agent_proposals` | One protected `AgentProposalRecord` per proposal, with status, prepared deadline and its record version |
-| `elsa_agent_call_keys` | The call, invocation, turn-mutation and call-input keys, keyed by SHA-256 of the key |
-| `elsa_agent_audit`, `elsa_agent_audit_owners` | Protected audit records and the first-wins owner association that scopes audit queries |
-| `elsa_agent_audit_sequence` | One counter row that allocates audit append positions |
+The agent test project covers SQLite behavior, native workflow execution, protected pair recovery,
+scope/schema refusals and consumer-owned contexts. `Elsa.Agent.ProviderTests` applies the
+actual migrations on PostgreSQL, SQL Server and MySQL and exercises competing stages/claims, live
+leases, acceptance and fresh-host replay. It forces renewal commits between a response/acceptance read
+and its conditional update, verifying safe metadata retries on all three actual database engines. Full tier sets `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
+for this suite, so an unavailable required database fails rather than skipping.
 
-Messages, snapshots, context, proposals and keys keep their first-insertion order. Owner and identity
-columns compare and order ordinally on every provider. Owner and workspace filters are exact: SQL Server's
-`Latin1_General_100_BIN2` compares with PAD SPACE (and `LEN` ignores trailing spaces), so those filters also
-compare each side with a fixed suffix appended, and an actor, tenant or workspace with a trailing space is a
-different one.
+The conversation table retains owner/version, revision, active turn/fence, uncertainty and the last
+accepted receipt reference. Staging alone does not create a conversation. Claim atomically admits
+one operation at its expected revision. Acceptance advances the revision and stores the turn result
+in one transaction; a conversation CAS/write failure rolls back the turn mutation too. Known failure
+releases the active revision without adding history; unknown outcome blocks further continuation.
+The initial owner is a verified workflow execution in the exact tenant/partition and agent
+version/template. Cross-workflow ownership policies are not supplied by business input.
 
-An audit append bumps the counter row with a locking update inside its transaction and takes the new value
-as its position, so concurrent appends across the deployment (for example, many sessions recovering after a
-restart) wait on that row instead of colliding on the next position. The order stays distinct and gap-free,
-because a rolled-back append rolls its position back too.
+Lease generation/expiry are payload fields in the existing record schema; this increment adds no table
+or migration. Each owned mutation validates the current payload, then binds its update to the row's
+version. A rejected row/conversation CAS rolls back and retries a fresh metadata transaction, up to32
+attempts. An exception or unconfirmed commit is never retried. Renewal cannot extend the original
+deadline, and expired dispatch is recorded as OutcomeUnknown without releasing reservations.
 
-## Ownership, fence and lease
+New protocol1 records register matching native deliveries through conditional turn metadata writes.
+Concurrent stage/accepted replay is bounded by row versions and preserves the original receipt,
+request deadline and newer conversation history, including uncertainty from another operation.
+The three actual providers qualify eight concurrent registrations/replays and fresh-host restoration.
+A deterministic interceptor also commits one registration between another registration's read/update;
+the metadata CAS retries and preserves both associations.
+No relational schema changed: associations are bounded payload metadata. Cancellation/applied
+settlement and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
+recovery; it is not independent-process or live-model qualification.
 
-Every write first moves the session row's version under the writer's owner token and fence. That
-conditional update takes the aggregate's row lock until commit, so competing writers of one session wait
-for each other instead of racing, and the key and proposal checks that follow cannot change before the
-write commits. Ownership acquisition takes the same lock before it decides. A transient provider conflict
-or a racing insert of the same proposal identity by another session retries the whole operation through
-the shared bounded `EfWriteRetry`. A stale owner or fence returns `OwnershipLost`,
-a key recorded with another value `KeyConflict`, a proposal of another session `AlreadyExists`, and a
-proposal record that moved since its writer read it `VersionConflict`; none changes anything. The same
-write extends the lease, or re-acquires a lapsed lease nobody took over. Acquisition takes ownership
-when the owner is this process, the lease has lapsed or was released; a takeover increments the fence,
-and another process's live lease answers `OwnedElsewhere` with its expiry. Lease time is database
-time (each provider's own UTC clock), so hosts share one clock. The lease is 30 seconds by default
-(`LeaseSeconds`, 15 to 86400), longer than the owner's 10-second renewal.
-
-`FindOwnerAsync` and the owner list read only plain columns; nothing is decoded before authorization.
-The owner list filters actor and tenant, then workspace, then orders by update time and session id
-for its cursor before the limit.
-
-## Protection and unreadable state
-
-Every payload column holds ciphertext from the selected `ISecretValueProtector`, bound to its purpose,
-session and row identity, so ciphertext moved to another row does not authenticate. Retain the Secrets
-keys across restarts. Snapshot text is returned byte-identical, so recorded digests and fingerprints
-re-verify after any number of restarts. Credentials, provider SDK objects and cancellation sources are
-never part of a record; the store records only the owner's Core records.
-
-A row whose ciphertext does not authenticate, whose JSON does not decode, whose plain columns disagree
-with its protected record, or whose schema version this build does not read makes hydration fail with
-`AgentSessionUnavailableException` (`agent.session.unavailable_state`, reason `unreadable`, the cause
-kept as the inner exception); nothing is settled or changed. A provider failure leaves the store as an
-`AgentContributionException` naming the session and operation, with the original exception inside.
-
-## Tests
-
-`Extensions/Agent/tests/Persistence/Tests` covers the store on SQLite with the actual migrations,
-including the Agent restart, deduplication, execution and ownership scenarios run over this store.
-`Extensions/Agent/tests/Persistence/ProviderTests` applies the migrations on PostgreSQL 16, SQL Server
-2022 and MySQL 8.4 through Testcontainers and exercises round-trips, fencing and competing writers. It
-skips without Docker unless `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`.
-
-See [extension points](EXTENSION_POINTS.md). Regenerate the pre-GA Initial migrations with
+See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with
 `bash tools/ef/generate-module-migrations.sh 'Agent.*DbContext'`; temporarily remove the generated
 migration API entries while their types are absent, then restore the API baseline and build normally.
+
+A runtime acceptance attempt whose acknowledgement is lost can be reconciled through an authoritative
+protected receipt read after rechecking native provenance. This is confirmation of an immutable
+committed result, not a retry of an uncertain write. Before-commit failure or unavailable confirmation
+cannot report native success. Native cancellation after acceptance preserves the journal winner while
+preventing process application. Current operation identity, contract and input-binding fingerprints
+are compared with the protected request at acceptance, cached replay and final typed completion.
+These source-runtime tests exercise both Memory and SQLite; they do not imply packaged or live-model qualification.
+
+`ApplyAsync` is a versioned, metadata-only transition for an exact accepted parent/child delivery.
+It persists one source ID/fingerprint and native completion time, supports exact-original legacy
+readers, and refuses conflicting sources. It neither changes protected content nor replays a
+conversation transition. Native source validation belongs to the runtime handler; these neutral Core
+facts grant no authority. No relational entity or migration changes in this increment.
+
+The cancellation increment adds `elsa_agent_operations`, an owner-local row keyed by the same
+scope/operation hash as the turn. It retains exact-parent cancellation decisions even before staging;
+it contains no fabricated protected request. Stage, claim takeover and cancellation compare/update
+its version in their fresh owned transaction before touching the turn. A confirmed gate insert/CAS
+loss reopens the transaction; an unconfirmed commit is never retried inside the store. Other model
+mutations keep their turn-row version/fence checks. This avoids relying on a read of an absent
+cancellation row or assuming serializable provider isolation.
+
+Cancellation competes atomically with acceptance through the turn version. AlreadyAccepted preserves
+result/history; an old parent's notification cannot invalidate another parent's claim generation.
+Matching unknown ownership can be explicitly cancelled without clearing a later conversation owner.
+Four pre-GA Initial migrations are regenerated by the normal module tooling; this changes their IDs,
+and does not establish a deployed-data upgrade path. Required PostgreSQL/SQL Server/MySQL tests force
+gate insert, claim, acceptance and successor overlap in both winner orders and restore through a fresh
+host. The earlier forced-registration test now injects before the operation-gate CAS; nesting another
+Stage after acquiring that same gate would test a self-inflicted lock wait instead of a real overlap.
+
+## Host upgrade and rollback boundary
+
+Agent journal/session compatibility does not override the enclosing runtime's schema family gate.
+The current workflow runtime reads its older native records and the `RuntimeWorkflowExecution` 2.0.0
+family introduced for model-owned work. After normal finalization at 2.0.0, a runtime binary supporting
+only 1.0.0 must refuse activation. Keep a compatible reader/worker installed for admitted agent
+work; disabling new operations is independent of unloading that reader. A rejected older host must
+leave protected acceptance, conversation and native/source state intact. Resume recovery with the
+compatible runtime, or follow the owning runtime's documented backup/restore process for a downgrade;
+no reverse migration or arbitrary binary rollback is supplied by this module.
+
+The [package compatibility witness](../../../../../tools/agents/conformance/README.md) distinguishes
+a named unchanged-format bidirectional pair from an upgrade with an explicit schema rollback refusal.
+Neither outcome qualifies every host/store, power loss, live inference or a restored backup.
+
+## Agent source authoring
+
+`AgentSourcesEntityFrameworkCore` installs typed source storage without `AgentRuntime`.
+Its settings match the journal feature. Direct composition uses
+`AddAgentSourcesEntityFrameworkCore(options)`. The combined `AddAgentEntityFrameworkCore`
+registration also installs source ports; choose one built-in context configuration per shell.
+For an application-owned context, map `AddSourceRevisions("your_prefix", provider)` and register
+`AddAgentSourceStore<ApplicationDbContext>()`. Source writes use that scoped context and refuse
+pending unrelated changes; resolve a separate scope for concurrent operations.
+
+Normal module startup applies migrations and admits the schema write gate before source operations.
+The shared writer stamps new rows before that gate checks them and retains the verified shadow stamp
+when reattaching a copy. Applying migrations directly without module admission does not exercise this
+host boundary; composition qualification uses the ordinary module lifecycle.
+
+`IAgentSourceReader`/`IAgentSourceWriter` own typed instructions, model reference, business contract and
+policy. Tenant/partition/authority comes from trusted composition. The source API requires
+`agent/definitions:read` or `agent/definitions:manage`; generic activity permissions do not grant it.
+Saving returns its exact committed revision; capture/history/fork/discard use the shared engine.
+One Agent copy per source is the initial cardinality policy. Discard retains history and capture pins.
+
+This is unpublished source storage. The old activity-backed editor/provider remains the publication
+path until T066/T068 switch it together; the new API does not publish or run an Agent and does not
+mirror content into generic editable activity drafts. Workflow and Agent source migrations are a
+pre-GA break requiring coordinated clean-store deployment, never an automatic live reset. See
+[the delivery boundary](../../../../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition).
+
+Source reader/writer ports are paired replacement contracts. A competing context selection fails immediately; startup also refuses late duplicate or substituted registrations. The database is never selected by registration order.

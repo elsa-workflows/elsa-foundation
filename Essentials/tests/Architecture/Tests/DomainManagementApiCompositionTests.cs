@@ -74,6 +74,12 @@ public sealed class DomainManagementApiCompositionTests
         "elsa.api.workflow-design"
     ];
 
+    private static IEnumerable<string> ExpectedCapabilitiesWithDataSelection =>
+        ExpectedCapabilities.Append("elsa.api.activity-data-selection").Order(StringComparer.Ordinal);
+
+    private static readonly EndpointIdentity ActivityDataContextRoute =
+        new("/design/activities/drafts/{draftId}/activity-data/context", "POST");
+
     private static readonly EndpointIdentity[] ExpectedActivitiesDesignRoutes =
     [
         new("/design/activities/availability/settings", "GET"),
@@ -171,7 +177,10 @@ public sealed class DomainManagementApiCompositionTests
 
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
-        Assert.Equal(ExpectedCapabilities, capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
+        Assert.Equal(ExpectedCapabilitiesWithDataSelection, capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
+        var dataSelection = Assert.Single(capabilities.Capabilities, capability => capability.Id == "elsa.api.activity-data-selection");
+        Assert.Equal("1", dataSelection.ContractVersion);
+        Assert.Equal(new[] { "activity-data-context", "workflow-data-context" }, dataSelection.Links.Select(link => link.Rel).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -211,12 +220,15 @@ public sealed class DomainManagementApiCompositionTests
             .ToArray();
         var publishingIdentities = publishing.SelectMany(entry => entry.Identities).ToArray();
 
-        Assert.Equal(ExpectedActivitiesDesignRoutes.Length, activities.Length);
-        Assert.Equal(ExpectedActivitiesDesignRoutes.Length, identities.Length);
+        // Retain the reviewed legacy inventory; the context is one explicit additive operation.
+        Assert.Equal(38, ExpectedActivitiesDesignRoutes.Length);
+        var expectedActivities = ExpectedActivitiesDesignRoutes.Append(ActivityDataContextRoute).ToArray();
+        Assert.Equal(expectedActivities.Length, activities.Length);
+        Assert.Equal(expectedActivities.Length, identities.Length);
         Assert.Equal(
-            ExpectedActivitiesDesignRoutes.OrderBy(identity => identity.ToString(), StringComparer.Ordinal),
+            expectedActivities.OrderBy(identity => identity.ToString(), StringComparer.Ordinal),
             identities.OrderBy(identity => identity.ToString(), StringComparer.Ordinal));
-        Assert.Equal(ExpectedActivitiesDesignRoutes.Length, identities.Distinct().Count());
+        Assert.Equal(expectedActivities.Length, identities.Distinct().Count());
         Assert.All(activities, entry =>
         {
             Assert.Equal("Minimal API", entry.AuthoringModel);
@@ -271,7 +283,7 @@ public sealed class DomainManagementApiCompositionTests
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
         Assert.Equal(
-            ExpectedCapabilities.Where(x => x != "elsa.api.expressions"),
+            ExpectedCapabilitiesWithDataSelection.Where(x => x != "elsa.api.expressions"),
             capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
     }
 
@@ -299,7 +311,8 @@ public sealed class DomainManagementApiCompositionTests
             "Expressions",
             "FoundationIdentityAbstractions",
             "Mediator",
-            "WorkflowsPublishingApi"
+            "WorkflowsPublishingApi",
+            "WorkflowDesignValidations"
         };
         var overrides = StockServerFeatureNames()
             .Where(feature => !enabledFeatures.Contains(feature))
@@ -334,6 +347,9 @@ public sealed class DomainManagementApiCompositionTests
                 typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeTriggersFeature).Assembly,
                 typeof(Elsa.Events.EventsFeature).Assembly,
+                // The production Workbench catalog already includes this assembly. This reduced
+                // fixture must also discover the mandatory shared authority required by both owners.
+                typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(ExpressionsFeature).Assembly,
                 typeof(MediatorFeature).Assembly,
                 typeof(DomainManagementApiCompositionTests).Assembly)
@@ -366,6 +382,7 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Contains("DomainManagementTestAuthentication", shellSettings.EnabledFeatures);
         Assert.Contains("ActivitiesDesignApi", shellSettings.EnabledFeatures);
         Assert.Contains("ActivitiesGraphDesign", shellSettings.EnabledFeatures);
+        Assert.Contains("WorkflowDesignValidations", shellSettings.EnabledFeatures);
         var routePatterns = app.Services.GetServices<EndpointDataSource>()
             .Concat(shell.ServiceProvider.GetServices<EndpointDataSource>())
             .SelectMany(source => source.Endpoints)

@@ -16,7 +16,7 @@ describe("module context collection", () => {
   it("classifies a contributor fault at its boundary while preserving structural composition failures", async () => {
     const api = registry(); api.agent.contextProviders.add({ id: "broken", displayName: "Broken", surfaces: ["*"], sensitivity: "internal", collect: async () => { throw new Error("Unexpected failure"); } });
     // Contributor failures now become typed limitations; duplicate/malformed composition remains fatal.
-    expect(await collectAgentContext(api, { route: "/" }, "explain")).toEqual({ attachments: [], diagnostics: [expect.objectContaining({ contributorId: "broken", code: "agent.context.contributor_failed", required: false })] });
+    expect(await collectAgentContext(api, { route: "/" }, "explain")).toEqual({ attachments: [], diagnostics: [expect.objectContaining({ contributorId: "broken", code: "weaver.context.contributor_failed", required: false })] });
   });
 
   it.each([false, true])("identifies a thrown contributor as required=%s without discarding independent evidence", async required => {
@@ -72,7 +72,7 @@ describe("module context collection", () => {
       await vi.advanceTimersByTimeAsync(5);
       const result = await operation;
       expect(observedSignal?.aborted).toBe(true);
-      expect(result).toEqual({ attachments: [], diagnostics: [expect.objectContaining({ contributorId: "late", code: "agent.context.deadline", required: false })] });
+      expect(result).toEqual({ attachments: [], diagnostics: [expect.objectContaining({ contributorId: "late", code: "weaver.context.deadline", required: false })] });
       release([attachment]); await Promise.resolve(); await Promise.resolve();
       expect(result.attachments).toEqual([]);
     } finally { release?.([]); await operation; vi.useRealTimers(); }
@@ -91,7 +91,7 @@ describe("module context collection", () => {
     api.agent.contextProviders.add({ id: "optional-large", displayName: "Optional", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ ...attachment, id: "extra-a" }, { ...attachment, id: "extra-b" }] });
     const result = await collectAgentContext(api, { route: "/sample" }, "explain", undefined, explicit);
     expect(result.attachments).toEqual(explicit);
-    expect(result.diagnostics).toEqual([expect.objectContaining({ contributorId: "optional-large", code: "agent.context.budget_exceeded", required: false })]);
+    expect(result.diagnostics).toEqual([expect.objectContaining({ contributorId: "optional-large", code: "weaver.context.budget_exceeded", required: false })]);
   });
 
   it("does not disguise malformed JSON as optional absence", async () => {

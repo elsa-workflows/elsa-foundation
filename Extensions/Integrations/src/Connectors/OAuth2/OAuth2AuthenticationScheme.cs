@@ -58,6 +58,7 @@ internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthe
             new AuthSchemeField(OAuth2SettingKeys.GrantType, "Grant type", Sensitive: false, "text"),
             new AuthSchemeField(OAuth2SettingKeys.TokenUrl, "Token URL", Sensitive: false, "url"),
             new AuthSchemeField(OAuth2SettingKeys.AuthorizationUrl, "Authorization URL", Sensitive: false, "url", Required: false),
+            new AuthSchemeField(OAuth2SettingKeys.ScopesUrl, "Scopes URL", Sensitive: false, "url", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.Scopes, "Scopes", Sensitive: false, "text", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.ClientId, "Client ID", Sensitive: false, "text"),
             new AuthSchemeField(OAuth2SecretFields.ClientSecret, "Client secret", Sensitive: true, "password", Required: false),

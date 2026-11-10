@@ -9,6 +9,8 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using System.Linq.Expressions;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Expressions.Core.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Flowchart;
@@ -26,6 +28,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Tests.Support;
@@ -47,10 +50,11 @@ using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using IfActivity = Elsa.Activities.If.Activities.If;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class PublishWorkflowRequestHandlerTests
+public sealed partial class PublishWorkflowRequestHandlerTests
 {
     private const string UnknownStructureKind = "test.opaque.structure";
     private const string UnknownStructureSchemaVersion = "1.0.0";
@@ -68,6 +72,9 @@ public sealed class PublishWorkflowRequestHandlerTests
         typeof(FlowchartActivity).FullName!,
         [],
         StructureFacet(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion));
+    private readonly ActivityDefinitionVersion _ifActivity = ActivityVersion("activity-if", typeof(IfActivity).FullName!,
+        [new("Condition", "Condition", new("Boolean"), null, "Condition", null, false)],
+        StructureFacet(IfActivity.StructureKind, IfActivity.StructureSchemaVersion));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
     private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
@@ -82,6 +89,235 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
     private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
+
+    [Theory]
+    [InlineData("dictionary", false)]
+    [InlineData("json-object", false)]
+    [InlineData("dictionary", true)]
+    [InlineData("json-object", true)]
+    [InlineData("json", false)]
+    [InlineData("typed", false)]
+    [InlineData("json", true)]
+    [InlineData("typed", true)]
+    public async Task Root_expression_payloads_cannot_bypass_self_or_descendant_admission_before_publication_writes(string form, bool descendant)
+    {
+        var definition = new ExpressionDefinition("JavaScript", descendant ? "p !== null" : "String(p)",
+            new(descendant ? "Boolean" : "String"),
+            new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(descendant ? "producer" : "consumer", "$result") },
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        object payload = form switch
+        {
+            "dictionary" => new Dictionary<string, object?> { ["language"] = definition.Language, ["source"] = definition.Source,
+                ["resultType"] = definition.ResultType, ["parameters"] = definition.Parameters, ["options"] = definition.Options,
+                ["capabilityProfile"] = definition.CapabilityProfile },
+            "json-object" => (JsonObject)JsonSerializer.SerializeToNode(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web))!,
+            "json" => JsonSerializer.SerializeToElement(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            _ => definition
+        };
+        var input = new WorkflowArgumentState(descendant ? "Condition" : "Text", new ArgumentValue(payload, "JavaScript"), null, null, null, null);
+        var root = descendant
+            ? new ActivityNode("consumer", "activity-if", [input], [], new(IfActivity.StructureKind, IfActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new Elsa.Activities.If.Models.IfAuthoredStructure(Node("producer", Text("value"))))))
+            : Node("consumer", input);
+        var version = WorkflowVersion(root);
+        var before = await CountPublishWritesAsync();
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(version, _writeLineActivity, _ifActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+        if (form is "dictionary" or "json-object")
+            Assert.Contains("unsupported CLR expression payload", exception.Message, StringComparison.Ordinal);
+        else
+        {
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == $"consumer/inputs/{input.ReferenceKey}" &&
+                finding.Type is "ValueFlow/UnavailableProducer" or "ValueFlow/ScopeBoundary");
+        }
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    [Fact]
+    public async Task Refusing_an_uninspectable_root_expression_never_reads_its_business_getter()
+    {
+        var payload = new ExpressionGetterTrap();
+        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", new ArgumentValue(payload, "JavaScript"), null, null, null, null)));
+        var before = await CountPublishWritesAsync();
+        var failure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(version, _writeLineActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+        Assert.Contains("unsupported CLR expression payload", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, payload.Reads);
+        Assert.Equal(before, await CountPublishWritesAsync());
+    }
+
+    [Theory]
+    [InlineData("typed")]
+    [InlineData("json")]
+    [InlineData("plain-text")]
+    [InlineData("literal")]
+    public async Task Owned_and_plain_root_expression_forms_still_publish(string form)
+    {
+        var definition = new ExpressionDefinition("JavaScript", "'value'", new("String"),
+            new Dictionary<string, ExpressionParameterBinding>(), JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        var value = form switch
+        {
+            "typed" => new ArgumentValue(definition, "JavaScript"),
+            "json" => new ArgumentValue(JsonSerializer.SerializeToElement(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript"),
+            "plain-text" => new ArgumentValue("'value'", "JavaScript"),
+            _ => new ArgumentValue("value", "Literal")
+        };
+        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)));
+        var publication = await Handler(version, _writeLineActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        Assert.NotNull(await _store.FindAsync(publication.ArtifactId));
+        Assert.NotNull(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    private sealed class ExpressionGetterTrap
+    {
+        public int Reads;
+        public string Language { get { Reads++; throw new InvalidOperationException("Expression admission must not invoke business getters."); } }
+    }
+
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("typed-portable")]
+    [InlineData("json-portable")]
+    public async Task Static_source_admission_refuses_missing_optional_producers_before_any_publication_write(string form)
+    {
+        var expression = new Elsa.Expressions.Core.Models.ExpressionDefinition("JavaScript", "customer", new("String"),
+            new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+            {
+                ["customer"] = new Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding("missing-producer", "$result", true)
+            }, JsonSerializer.SerializeToElement(new { }), Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1);
+        var value = form switch
+        {
+            "direct" => new ArgumentValue(JsonSerializer.SerializeToElement(new
+                { producerNodeId = "missing-producer", projectionKey = "$result", producerScopeId = "workflow", isOptional = true }), "ActivityResult"),
+            "typed-portable" => new ArgumentValue(expression, "JavaScript"),
+            _ => new ArgumentValue(JsonSerializer.SerializeToElement(expression, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript")
+        };
+        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)));
+        var before = await CountPublishWritesAsync();
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/UnavailableProducer");
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    /// <summary>
+    /// A result binding without a scope publishes where the owning structure states that no earlier producer run can
+    /// lead to the reader, and compiles to a reference without one. On a Flowchart cycle it is refused before any write.
+    /// A binding that declares a scope keeps today's rules there (#4056), so existing documents still publish.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_scope_free_result_binding_publishes_only_where_no_earlier_producer_run_can_reach_its_reader(bool cycle, bool declaresScope)
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(declaresScope
+            ? JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root" })
+            : JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
+        List<FlowchartConnection> connections =
+        [
+            new(new FlowchartEndpoint("start", "Done"), new FlowchartEndpoint("producer", null)),
+            new(new FlowchartEndpoint("producer", "Done"), new FlowchartEndpoint("consumer", null))
+        ];
+        if (cycle)
+            connections.Add(new(new FlowchartEndpoint("consumer", "Done"), new FlowchartEndpoint("start", null)));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(DefaultResultProducer), TypeAliasConvention.CanonicalAlias(typeof(DefaultResultProducer)));
+        var producer = SecretBindingCompilerFixture.ClrActivityVersion(typeof(DefaultResultProducer));
+        var version = WorkflowVersion(FlowchartNode("flowchart",
+            [Node("start", Text("start")), new ActivityNode("producer", producer.Id, [], []), Node("consumer", read)], connections, "start"));
+        var before = await CountPublishWritesAsync();
+        var versionStore = new FakeVersionStore(version);
+        var handler = Handler(null, TestCompiler.Create(versionStore,
+            new FakeActivityVersionStore([_writeLineActivity, _flowchartActivity, producer]), _activityStructureService, registry), versionStore);
+
+        if (cycle && !declaresScope)
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/EarlierProducerRun");
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
+        var reference = consumer.InputBindings["Text"].ActivityResult!;
+        Assert.Equal("producer", reference.ProducerExecutableNodeId);
+        Assert.Equal(declaresScope ? "scope:root" : null, reference.ProducerScopeId);
+    }
+
+    [Theory]
+    [InlineData("canonical", false)]
+    [InlineData("capital-parameters", false)]
+    [InlineData("nested-casing", false)]
+    [InlineData("parameter-alias", false)]
+    [InlineData("nested-alias", false)]
+    [InlineData("duplicate-parameters", false)]
+    [InlineData("canonical", true)]
+    [InlineData("capital-parameters", true)]
+    [InlineData("nested-casing", true)]
+    [InlineData("parameter-alias", true)]
+    [InlineData("nested-alias", true)]
+    [InlineData("duplicate-parameters", true)]
+    public async Task Portable_json_aliases_use_the_compiled_parameter_for_causal_admission_before_publication_writes(string form, bool earlierProducer)
+    {
+        var producer = earlierProducer ? "earlier" : "later";
+        var decoy = earlierProducer ? "later" : "earlier";
+        var parameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = producer, projectionKey = "$result" });
+        var decoyParameter = JsonSerializer.Serialize(new { kind = "ActivityResult", producerNodeId = decoy, projectionKey = "$result" });
+        var nestedCasing = JsonSerializer.Serialize(new { ProducerNodeId = producer, ProjectionKey = "$result", IsOptional = false, kind = "ActivityResult" });
+        var nestedAlias = JsonSerializer.Serialize(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["kind"] = "ActivityResult", ["producerNodeId"] = decoy, ["ProducerNodeId"] = producer,
+            ["projectionKey"] = "$result", ["isOptional"] = true, ["IsOptional"] = false
+        });
+        static string Parameters(string name, string binding) => "\"" + name + "\":{\"customer\":" + binding + "}";
+        var properties = form switch
+        {
+            "capital-parameters" => Parameters("Parameters", parameter),
+            "nested-casing" => Parameters("parameters", nestedCasing),
+            "parameter-alias" => Parameters("parameters", decoyParameter) + "," + Parameters("Parameters", parameter),
+            "nested-alias" => Parameters("parameters", nestedAlias),
+            "duplicate-parameters" => Parameters("parameters", decoyParameter) + "," + Parameters("parameters", parameter),
+            _ => Parameters("parameters", parameter)
+        };
+        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"customer","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-pure-v1",""" + properties + "}");
+        var value = new ArgumentValue(json.RootElement.Clone(), "JavaScript");
+        var version = WorkflowVersion(SequenceNode("sequence", [Node("earlier", Text("one")),
+            Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)), Node("later", Text("two"))]));
+        var before = await CountPublishWritesAsync();
+        var handler = Handler(version, _writeLineActivity, _sequenceActivity);
+
+        if (!earlierProducer)
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/UnavailableProducer");
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
+        var compiled = Assert.IsType<Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding>(consumer.InputBindings["Text"].Expression!.Parameters["customer"]);
+        Assert.Equal(producer, compiled.ProducerNodeId);
+        Assert.False(compiled.IsOptional);
+        Assert.NotEqual(before, await CountPublishWritesAsync());
+        Assert.NotNull(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
 
     [Fact]
     public async Task Republishing_with_a_retained_pre_fix_Set_artifact_stores_and_executes_the_corrected_contract()
@@ -1648,6 +1884,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }

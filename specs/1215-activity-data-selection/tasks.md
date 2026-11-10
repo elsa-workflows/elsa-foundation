@@ -2,8 +2,9 @@
 
 **Input:** [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [binding](contracts/binding-contract.md) and [authoring](contracts/authoring-contract.md) contracts.
-**Status:** Reviewed M2 task plan; approval takes effect on M2 merge. All boxes are unexecuted. M1 research
-is closed; M2 merge and resulting-main qualification precede production dispatch. No pending CI is a pass.
+**Status:** Approved M2 task plan. M1 research and M2 closeout are complete; #3922 has begun the shared
+foundation implementation. Checked setup items have receipts below. Source changes alone do not complete
+test-bearing tasks or accept product journeys. No pending CI is a pass.
 
 Use existing projects and separate worker worktrees. Paths below are repository-relative; named new files
 are proposed locations within the plan's fixed package ownership. Coordinate shared files serially.
@@ -18,11 +19,21 @@ existing all-feature composition test. No tests assert these documents' text.
 
 ## Phase 1: Setup and gates
 
-- [ ] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`.
-- [ ] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`.
+- [x] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`. Receipt: [M2 qualification/closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3885#issuecomment-6676152380), qualified f6; fresh tracker/claim checks clear. Newer fd0 integration is not qualified by that receipt.
+- [x] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`. Native child [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922), closed blocker #3885, winning [claim6676170172](https://github.com/elsa-workflows/elsa-foundation/issues/3922#issuecomment-6676170172); no Ready promotion/assignment.
 - [ ] T003 Establish the finite criterion/evidence ledger from `specs/1215-activity-data-selection/quickstart.md`, including all M1 failures, exact host/head ownership and nine journey families; allocate disposable owned stores/ports before any product proof.
 
 **Checkpoint:** M1 and M2 merge/resulting-main receipts exist; workers have concrete claims and boundaries.
+
+Current #3922 ownership: one implementation worker owns the integrating Foundation leaf; the coordinator
+sequences qualification and review. Shared Core contracts precede dependent code. The bounded owned
+Azure development run is closed; see its [build and retained-failure receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728243018).
+Approved local qualification runs owning whole projects sequentially after fresh capacity checks, using
+two processors, preserving the build-slot wrapper when present and unchanged stock retry/hang guards;
+see the [source-bound qualification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728799519).
+T003 remains open until its owned proof-host/store allocation obligations are met. T004–T010, M1 journey
+failures and downstream acceptance remain open; protected CI, formal review and resulting-main
+qualification remain required.
 
 ## Phase 2: Shared analysis and static admission
 
@@ -39,6 +50,30 @@ of optional expression languages. This phase blocks production story integration
 
 **Checkpoint:** Real authorized API and headless publication agree; no optional validation fallback remains.
 Update owning extension-point catalogs with the new analysis port in the same delivery slice.
+
+#3922 / PR #3948 foundation-leaf receipt (this branch; not task completion): source on
+`agent/codex/3922-data-selection-analysis` implements T004–T010 shared analysis/static admission
+and CLR whole-`$result` metadata, including Evaluate Decision's typed `DecisionEvaluation` result
+(`status`/`result`/`trace`, Result as `activity.shape.dynamic-json`, outcomes Done/NoMatch/Refused,
+automatic producer still `binding: null` / `RuntimeScopeBindingUnavailable`). Tasks stay unchecked
+until owned proof-host qualification and resulting-main. This leaf does not add runtime member
+binding (T011–T017) or Studio chooser/inspector work (T018–T026).
+
+#4053 receipt (branch `agent/claude/4053-activity-result-binding`; not task completion): the analyzer
+now returns the complete direct `ActivityResult` binding for a browsed producer, without a
+`producerScopeId`, wherever publication admits it unchanged; `RuntimeScopeBindingUnavailable` is
+retired in favour of `EarlierProducerRun` and `NoTypedResult` beside the availability reasons. Every
+first-party structure handler states `ActivityChildResultFacts.EarlierProducerRunCanReachConsumer`
+(architecture guard over compiled code); publication refuses a stored scope-free binding to a producer
+whose structure does not say `false`, before any write. `RuntimeActivityResultReference.ProducerScopeId`
+is nullable and omitted when null; scoped references keep their stored form, executable hash and
+template hash, pinned against values computed on the commit before the change. No resolver rule
+changed. Evidence: real-engine runs in `ActivityResultOccurrenceTests` (direct scope-free form in
+Sequence, top-level Flowchart, loop consumer of a producer before the Flowchart, first-wins fork,
+placed reusable sibling, loop bodies and a merge node; scoped and portable loop cases unchanged,
+#4056), analyzer, handler, endpoint (workflow and activity definition), compiler, remapper, hash and
+publisher no-write tests. Design and review record: `research-4053-activity-result-scope.md`
+section 9. Code-first builder and portable parameters stay on today's rules (#4056).
 
 ## Phase 3: User Story 1 — Choose earlier data at an input (P1)
 

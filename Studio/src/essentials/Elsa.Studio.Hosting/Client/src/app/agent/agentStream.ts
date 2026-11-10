@@ -205,7 +205,7 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return {
         type: "context-admitted",
         attachments: Array.isArray(attachments) ? attachments.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(mapAdmittedContextAttachment) : [],
-        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false })) : []
+        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "weaver.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false })) : []
       };
     }
     case "message-started":

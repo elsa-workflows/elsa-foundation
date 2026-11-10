@@ -118,12 +118,12 @@ def _native_results(output, requests):
     sessions = set()
     for request in requests:
         url = urlparse(request["url"])
-        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/messages", url.path)
+        match = re.fullmatch(r"/_elsa/weaver/sessions/([^/]+)/messages", url.path)
         if match: sessions.add((url.scheme, url.netloc, match[1]))
     results = []
     for stream in strict_json(path.read_text()):
         url = urlparse(stream["url"])
-        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/stream", url.path)
+        match = re.fullmatch(r"/_elsa/weaver/sessions/([^/]+)/stream", url.path)
         if (not match or (url.scheme, url.netloc, match[1]) not in sessions or stream.get("status") != 200
                 or stream.get("contentType", "").split(";", 1)[0].strip() != "text/event-stream"
                 or stream.get("captureError")):
