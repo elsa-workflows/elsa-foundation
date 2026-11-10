@@ -126,11 +126,11 @@ The nine shipped workers live in other domains: `RuntimeResumptionPumpTask`, `Du
 `WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
 `Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
 `ExpiredImportCollectionSweepTask` in the Elsa 3 import extension and internal
-`SpecialistRetentionPumpTask` in `Elsa.Agent.Specialists`. The specialist worker uses
+`AgentRetentionPumpTask` in `Elsa.Agent`. The agent worker uses
 `IPersistenceScopeRunner` to visit fresh ordinary partitions, keeps independent finite keyset cursors
 for explicit tenant and legacy-null tenant keys, and delegates native/source eligibility plus
 conditional content purge to its scoped pruner. Its baseline interval is five minutes, with one-hour
-maximum failure backoff. See the [specialist runtime catalog](../../../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md).
+maximum failure backoff. See the [agent runtime catalog](../../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md).
 
 ---
 

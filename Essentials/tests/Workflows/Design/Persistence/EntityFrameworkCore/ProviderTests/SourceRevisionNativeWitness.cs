@@ -1,5 +1,5 @@
-using Elsa.Agent.Specialists.Core.Models;
-using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Agent.Core.Models;
+using Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Core.Models;

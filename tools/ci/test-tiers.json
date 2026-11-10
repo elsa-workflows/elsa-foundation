@@ -623,13 +623,13 @@
       "medianMinutes": 0.05
     },
     {
-      "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
+      "project": "Extensions/Agent/tests/ProviderTests/Elsa.Agent.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
       "medianMinutes": null
     },
     {
-      "project": "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
+      "project": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
     },
@@ -908,7 +908,7 @@
           "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
           "Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj",
           "Extensions/Weaver/tests/Workflows/Runtime/Tests/Elsa.Weaver.Workflows.Runtime.Tests.csproj",
-          "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
+          "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Microsoft365/Tests/Elsa.Integrations.Connectors.Microsoft365.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Slack/Tests/Elsa.Integrations.Connectors.Slack.Tests.csproj",
@@ -1021,7 +1021,7 @@
           "transaction-topology",
           "workbench-openiddict",
           "connections",
-          "specialist-journal"
+          "agent-journal"
         ]
       },
       {
@@ -1210,8 +1210,8 @@
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     },
     {
-      "suite": "specialist-journal",
-      "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
+      "suite": "agent-journal",
+      "project": "Extensions/Agent/tests/ProviderTests/Elsa.Agent.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     }
   ],

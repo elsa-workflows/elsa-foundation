@@ -1,5 +1,5 @@
 using Elsa.Weaver.Persistence.EntityFrameworkCore;
-using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
+using Elsa.Agent.Persistence.EntityFrameworkCore;
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
@@ -32,7 +32,7 @@ internal static class ModuleContextCatalog
         typeof(WeaverDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
         typeof(ConnectionsDbContext).Assembly,
-        typeof(SpecialistsDbContext).Assembly,
+        typeof(AgentDbContext).Assembly,
         typeof(DataProtectionKeysDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
         typeof(StructuredLogsDbContext).Assembly,
@@ -79,7 +79,7 @@ internal static class ModuleContextCatalog
     public static readonly string[] OrdinalModules =
     [
         "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "Specialists", "Weaver", "WorkflowsDesign"
+        "PublishingSnapshotReview", "Secrets", "Agent", "Weaver", "WorkflowsDesign"
     ];
 
     public static bool DeclaresOrdinal(Type context) =>

@@ -91,7 +91,7 @@ Two additional Anthropic cases matter for the production design:
 
 SDK transport success does not establish business acceptance. Elsa must inspect refusal/content/finish
 signals, validate the complete result schema and enforce policy/usage limits before accepting a turn.
-The research fixture records these signals and deliberately accepts no specialist business result.
+The research fixture records these signals and deliberately accepts no agent business result.
 
 ## Provider schema compatibility
 
