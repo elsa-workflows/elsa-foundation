@@ -152,7 +152,7 @@ function studioRegistry() {
     generatedAt: new Date().toISOString(),
     modules: [{ id: "Elsa.Studio.FeatureManagement", displayName: "Feature management", surface: "Studio", runtime: "Elsa.Studio.Web", sourceKind: "static-web-asset", scope: "full-stack", version: "1.0.1", status: "loaded", compatibility: "compatible", packageId: null, packageVersion: null, contributions: [], diagnostics: [], manifest: null }],
     packages: [], dropFolderPackages: [],
-    feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, credentials: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
+    feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
     retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
     capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true }, diagnostics: []
   };

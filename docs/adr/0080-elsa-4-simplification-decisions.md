@@ -42,6 +42,27 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner amendment, 9 November 2026 (triage review):** the owner recorded eight end-to-end delivery
+authorizations that were given in issue comments between 4 and 6 November and had not reached this ADR or the
+[registry](../program-goals/README.md): [external authentication and OIDC #3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579#issuecomment-6627537005)
+(4 November, under parity Program #2771), [standalone triggers #3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582#issuecomment-6671646417),
+[durable messaging #3583](https://github.com/elsa-workflows/elsa-foundation/issues/3583#issuecomment-6671359620),
+[standalone background jobs #3586](https://github.com/elsa-workflows/elsa-foundation/issues/3586#issuecomment-6671631992)
+with its [scoped `Elsa.Jobs` domain adoption](https://github.com/elsa-workflows/elsa-foundation/issues/3586#issuecomment-6672110215),
+[workflow releases and promotion #3590](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586),
+[optional bpmn-js editor #3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597#issuecomment-6671704533)
+(all 5 November), [AI-authored dashboards #3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604#issuecomment-6672688295)
+(6 November) and [Timeline workspace #3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849) (5 November).
+Each covers research, necessary design and specification, scoped implementation, verification, review/merge
+under current rules and resulting-main qualification, as its comment states; none reactivates other parked work,
+and none includes releases, deployments or production credentials. Sequencing: they run beside the active
+programs with consolidation keeping priority one, one implementation leaf each, and their whole-feature draft PRs
+are resubmitted as reviewable slices of roughly three thousand lines. The same review confirmed that
+[Elsa Agents #3519](../program-goals/elsa-agents.md) is paused since 6 November and that
+[Native Compensation #3035](../program-goals/native-compensation.md) is delivered. Regression testing #3901
+holds no owner authorization and stays in the backlog. The registry row is the record of an active program; an
+authorization that exists only in a comment is recorded here within the week.
+
 **Owner amendment, 6 November 2026:** [Entity-aware integrations #3608](../program-goals/entity-aware-integrations.md)
 is authorized for research, necessary product/architecture design and specification, scoped implementation,
 verification, applicable review/merge and resulting-main qualification. The [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6671902429)

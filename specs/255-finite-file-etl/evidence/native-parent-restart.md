@@ -40,3 +40,27 @@ activity ids its predecessor cannot have persisted.
 - "Late result refused" is proved through the cancellation case only; a duplicate delivery after a consumed completion
   is covered by the adapter-level `EtlNativeResultDeliveryTests`, not re-proved across a restart here.
 - Local run on 9 November 2026 (macOS, .NET SDK 10.0.402): 15 rows passed; the whole project passed 1,343 tests.
+
+## Process-kill witness (production Workbench)
+
+`RunEtlPendingParentResultCrashTests` in `Extensions/Etl/tests/Hosting/Tests` (tier `integration`, trait `child-process`,
+shard `workbench-extensions-hosting`) is the process-kill counterpart, mirroring the #3998 BPMN witness. It starts the production
+`Elsa.Workbench` as a child process through the shared `WorkbenchProcess` harness with the eight ETL features enabled in
+its own copied `shells.json` over SQLite files, publishes the finite file pipeline and a native parent over the REST API
+(Root `RunEtl`, Sequence and Flowchart), and lets the Workbench's own ETL worker run the pipeline.
+
+Cut: the ETL run is terminal and its delivery lease is claimed by the running process, which is frozen just before the
+parent resume by the `ELSA_HOLD_NATIVE_RESULT_DELIVERY` test hold in `EtlNativeResultExecutor` (the same seam shape #3998
+added to `ParentResumeExecutor` and `BpmnEmbeddingDelivery`; production hosts never set the variable, and the seam writes
+an `.engaged` marker so the test observes the frozen claim instead of guessing). The process is then killed with
+`SIGKILL` (`Process.Kill(entireProcessTree: true)` on Windows) and a fresh process is started over the same content root.
+Proof: the parent was `Running` with `RunEtl` `Suspended` and no incidents before the kill; the killed process exited
+non-zero and the restarted process has a different id; after the restart the parent is `Completed`, exactly one `RunEtl`
+activity is `Completed`, the following `WriteLine` ran once (Sequence, Flowchart), the single ETL run is `succeeded`, and
+no second run exists. The hold is armed before the parent starts, so the worker cannot deliver ahead of the freeze.
+
+Limits: completion only (fault and cancel across a process kill remain covered by the in-process witnesses above);
+SQLite only; the restarted process recovers the claimed delivery when the dead owner's lease lapses, so each case takes
+the delivery lease plus two Workbench starts. The fixture sets `DeliveryLeaseSeconds` to its floor of 5 (production default
+30; the lease has no heartbeat while a delivery is in flight), against a 90-second post-restart deadline; each row takes
+about 13 seconds locally.
