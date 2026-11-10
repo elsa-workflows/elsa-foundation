@@ -227,8 +227,7 @@ that is based on a stale read is a lost update, even when the other write was bl
   history and shown in inspection. It is never silent.
 - No other policies in this baseline; decision 14 plans an opt-in merge policy separately. A "warn and continue"
   policy is not offered: with the write history, `LastWins` is already visible, so a third option would add choice
-  without adding information. Whether even `LastWins` should exist, or the engine should allow one strict behaviour
-  only, is open question 3.
+  without adding information.
 
 *Why.* A lost update is almost never what the author meant, so stopping before the wrong value spreads is the safer
 default (Sipke's position, agreed by Joey). Some designs genuinely accept last-wins; they say so explicitly.
@@ -338,8 +337,7 @@ refresh inputs or discard dependencies because time passed.
 On resume, decision 5 applies to explicit writes: a write whose base is stale and whose current value differs from
 that base is a lost update. A read alone produces no write and no lost-update fault. A value that changed and returned
 to its base still follows decision 5, and the invocation's own writes still follow decision 4. Long waits may make
-conflicts frequent; they do not introduce a different commit rule. Open question 8 asks whether this is the right
-contract for long-running workflows.
+conflicts frequent; they do not introduce a different commit rule.
 
 ### 12. Operator alterations use per-variable versions
 
