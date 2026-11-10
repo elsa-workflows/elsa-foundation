@@ -54,6 +54,19 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     [Fact]
+    public void An_activity_result_without_a_scope_follows_the_placement_and_still_declares_none()
+    {
+        var node = NodeWith(Binding(
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("compute", "result")));
+
+        var result = PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope).InputBindings["value"].ActivityResult!;
+
+        Assert.Equal("node-compute", result.ProducerExecutableNodeId);
+        Assert.Null(result.ProducerScopeId);
+    }
+
+    [Fact]
     public void Expression_parameters_follow_the_placement_and_keep_the_rest_of_the_expression()
     {
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)

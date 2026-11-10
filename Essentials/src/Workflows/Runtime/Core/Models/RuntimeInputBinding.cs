@@ -196,6 +196,17 @@ public sealed class RuntimeVariableReference
 
 public sealed class RuntimeActivityResultReference
 {
+    /// <summary>
+    /// A required reference that names only the producer and projection and declares no scope: the shape of a binding
+    /// the server returned.
+    /// </summary>
+    /// <param name="producerExecutableNodeId">The producer node.</param>
+    /// <param name="projectionKey">The declared result projection, or <c>$result</c>.</param>
+    public RuntimeActivityResultReference(string producerExecutableNodeId, string projectionKey)
+        : this(producerExecutableNodeId, projectionKey, producerScopeId: null)
+    {
+    }
+
     /// <param name="producerExecutableNodeId">The producer node.</param>
     /// <param name="projectionKey">The declared result projection, or <c>$result</c>.</param>
     /// <param name="producerScopeId">
@@ -203,6 +214,7 @@ public sealed class RuntimeActivityResultReference
     /// that declares none. A declared scope must not be blank.
     /// </param>
     /// <param name="isOptional">Whether an unavailable producer resolves to no value instead of failing.</param>
+    [JsonConstructor]
     public RuntimeActivityResultReference(
         string producerExecutableNodeId,
         string projectionKey,
@@ -224,9 +236,10 @@ public sealed class RuntimeActivityResultReference
     public string ProjectionKey { get; }
 
     /// <summary>
-    /// The producer's declared execution scope. When set, a producer that ran in another scope is not a candidate.
-    /// <see langword="null"/> declares none: the producer is identified by causal lineage and frames alone, and the
-    /// member is left out of the stored reference.
+    /// The producer's declared execution scope, kept for documents that declare one. When set, a producer that ran in
+    /// another scope is not a candidate. <see langword="null"/> declares none: the producer is identified by causal
+    /// lineage and branch and iteration frames alone, which publication admits only where the owning structure says
+    /// that no earlier run of the producer can lead to the consumer. A null scope is left out of the stored reference.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ProducerScopeId { get; }
