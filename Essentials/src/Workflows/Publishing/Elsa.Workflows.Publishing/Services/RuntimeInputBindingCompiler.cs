@@ -1032,13 +1032,15 @@ public sealed class RuntimeInputBindingCompiler(
         if (nullableTargetType.IsEnum)
             return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
 
-        // A scalar authored into a collection-typed input is coerced into a single-element collection, and a
-        // comma-separated scalar into one element per trimmed item ("GET" → ["GET"], "200, 404" → [200, 404]).
-        // The Studio surfaces collection inputs with a list editor now (#924), but users still type a bare value or
-        // a comma list into the scalar box — accepting both keeps that authoring gesture publishable.
-        if (value is string scalarText && TryGetCollectionElementType(nullableTargetType, out var elementType) &&
-            TryCoerceScalarToCollection(scalarText, nullableTargetType, elementType, out var coercedCollection))
-            return coercedCollection;
+        // Authoring stores a collection default as JSON array text. Read it exactly as a raw array literal;
+        // scalar text and comma-separated lists must not silently become a different value.
+        if (value is string collectionText && IsCollectionType(nullableTargetType))
+        {
+            using var document = JsonDocument.Parse(collectionText);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                throw new JsonException("A collection literal must be a JSON array.");
+            return document.RootElement.Deserialize(nullableTargetType);
+        }
 
         if (!typeof(IConvertible).IsAssignableFrom(nullableTargetType) || value is not IConvertible)
             return JsonSerializer.SerializeToElement(value).Deserialize(nullableTargetType);
@@ -1047,68 +1049,25 @@ public sealed class RuntimeInputBindingCompiler(
     }
 
     /// <summary>
-    /// Resolves the element type of a supported collection target (array, or a single-argument generic collection:
+    /// Recognizes a supported collection target (array, or a single-argument generic collection:
     /// <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c> and friends). Dictionaries are not
-    /// scalar-coercible (no key), so they are excluded.
+    /// collection literals (no key), so they are excluded.
     /// </summary>
-    private static bool TryGetCollectionElementType(Type collectionType, out Type elementType)
+    private static bool IsCollectionType(Type collectionType)
     {
-        if (collectionType.IsArray && collectionType.GetElementType() is { } arrayElement)
-        {
-            elementType = arrayElement;
+        if (collectionType.IsArray)
             return true;
-        }
 
-        if (collectionType is { IsGenericType: true } && collectionType.GetGenericArguments() is [var single])
+        if (collectionType is { IsGenericType: true } && collectionType.GetGenericArguments().Length == 1)
         {
             var definition = collectionType.GetGenericTypeDefinition();
             if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
                 definition == typeof(IEnumerable<>) || definition == typeof(IReadOnlyList<>) ||
                 definition == typeof(IReadOnlyCollection<>) || definition == typeof(HashSet<>) || definition == typeof(ISet<>))
-            {
-                elementType = single;
                 return true;
-            }
         }
 
-        elementType = null!;
         return false;
-    }
-
-    /// <summary>
-    /// Coerces a scalar (single value or comma-separated list) into the target collection, converting each trimmed,
-    /// non-empty item to the element type. Returns false when the element conversion is unsupported so the caller can
-    /// fall through to the ordinary JSON path (and, ultimately, a structured coercion diagnostic).
-    /// </summary>
-    private static bool TryCoerceScalarToCollection(string scalarText, Type collectionType, Type elementType, out object? result)
-    {
-        var items = scalarText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var elements = Array.CreateInstance(elementType, items.Length);
-        for (var i = 0; i < items.Length; i++)
-        {
-            var element = ConvertLiteral(items[i], elementType);
-            if (element is null && elementType.IsValueType && Nullable.GetUnderlyingType(elementType) is null)
-            {
-                result = null;
-                return false;
-            }
-
-            elements.SetValue(element, i);
-        }
-
-        if (collectionType.IsArray)
-        {
-            result = elements;
-            return true;
-        }
-
-        // The generic collection targets published here are always closed to List<T>/HashSet<T> by
-        // TypeReferenceFactory.Close, both of which expose an IEnumerable<T> constructor.
-        var concreteType = collectionType.GetGenericTypeDefinition() == typeof(HashSet<>)
-            ? typeof(HashSet<>).MakeGenericType(elementType)
-            : typeof(List<>).MakeGenericType(elementType);
-        result = Activator.CreateInstance(concreteType, elements)!;
-        return true;
     }
 
     private static string DescribeAuthoredValue(object? value) =>
