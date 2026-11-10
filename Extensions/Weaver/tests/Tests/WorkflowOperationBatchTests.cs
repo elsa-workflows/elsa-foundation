@@ -41,7 +41,7 @@ public sealed class WorkflowOperationBatchTests
         Assert.Equal(Snapshot().Target, preparation.Target);
         Assert.Equal(Snapshot().Client, preparation.Client);
         // The batch takes its highest operation risk: the disconnection is destructive.
-        Assert.Equal(AgentRisk.Destructive, preparation.Risk);
+        Assert.Equal(WeaverRisk.Destructive, preparation.Risk);
         var operations = preparation.Arguments.GetProperty("operations").EnumerateArray().ToArray();
         Assert.Equal(7, operations.Length);
         Assert.Equal("greet", operations[0].GetProperty("nodeId").GetString());
@@ -64,9 +64,9 @@ public sealed class WorkflowOperationBatchTests
         var result = await PrepareAsync(new { kind = "position", activity = new { id = "write-1" }, x = 10, y = 20 });
 
         Assert.True(result.Succeeded, result.Error?.Message);
-        Assert.Equal(AgentRisk.ReviewRequired, result.Value!.Risk);
+        Assert.Equal(WeaverRisk.ReviewRequired, result.Value!.Risk);
         Assert.True(result.Value.RequiresApproval);
-        Assert.Equal(AgentExecutionLocation.ClientWorkingState, WorkflowApplyOperationBatchTool.Contract.ExecutionLocation);
+        Assert.Equal(WeaverExecutionLocation.ClientWorkingState, WorkflowApplyOperationBatchTool.Contract.ExecutionLocation);
         Assert.Equal("workflows/design:manage", Assert.Single(WorkflowApplyOperationBatchTool.Contract.RequiredPermissions));
     }
 
@@ -275,7 +275,7 @@ public sealed class WorkflowOperationBatchTests
         Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, twice.Error?.Code);
         Assert.Contains("at most one root", twice.Error!.Message);
         Assert.True(result.Succeeded, result.Error?.Message);
-        Assert.Equal(AgentRisk.Destructive, result.Value!.Risk);
+        Assert.Equal(WeaverRisk.Destructive, result.Value!.Risk);
         Assert.True(result.Value.Arguments.GetProperty("operations")[1].GetProperty("replacesRoot").GetBoolean());
         // The replaced tree is gone for the rest of the batch.
         var after = await PrepareAsync(
@@ -335,7 +335,7 @@ public sealed class WorkflowOperationBatchTests
         var tool = Tool();
         var invocation = Invocation(Snapshot(), new { kind = "position", activity = new { id = "write-1" }, x = 1, y = 2 });
         var preparation = await tool.PrepareAsync(invocation);
-        var result = await tool.ExecuteAsync(AgentTestToolHelpers.Prepared(invocation, tool.Descriptor, preparation.Value!));
+        var result = await tool.ExecuteAsync(WeaverTestToolHelpers.Prepared(invocation, tool.Descriptor, preparation.Value!));
 
         Assert.Equal("weaver.workflow.client_execution_required", result.Error?.Code);
     }
@@ -348,7 +348,7 @@ public sealed class WorkflowOperationBatchTests
         var result = await tool.CompleteAsync(prepared, Acknowledgement(prepared));
 
         Assert.True(result.Succeeded, result.Error?.Message);
-        Assert.Equal(AgentEffectScope.ClientWorkingState, result.Value!.Receipt?.Scope);
+        Assert.Equal(WeaverEffectScope.ClientWorkingState, result.Value!.Receipt?.Scope);
         Assert.Equal("sha256:after", result.Value.Receipt?.After.Revision);
         Assert.Contains("has not been saved or published", result.Value.Content);
         var data = result.Value.Payload!.Data;
@@ -372,7 +372,7 @@ public sealed class WorkflowOperationBatchTests
         ack = defect switch
         {
             "same-revision" => ack with { After = ack.After! with { Revision = prepared.Target!.Revision } },
-            "refused" => ack with { Outcome = AgentClientOutcome.Refused },
+            "refused" => ack with { Outcome = WeaverClientOutcome.Refused },
             "generation" => ack with { Client = new("client-1", "other") },
             _ => ack
         };
@@ -386,7 +386,7 @@ public sealed class WorkflowOperationBatchTests
     [Fact]
     public async Task Through_the_engine_a_batch_is_a_proposal_awaiting_review_even_in_full_auto()
     {
-        using var root = AgentTestServices.Create(services =>
+        using var root = WeaverTestServices.Create(services =>
         {
             new WeaverWorkflowsFeature().ConfigureServices(services);
             services.AddSingleton<IWorkflowDefinitionAuthorizer>(new Owner(true));
@@ -394,21 +394,21 @@ public sealed class WorkflowOperationBatchTests
         });
         using var scope = root.CreateScope();
         var services = scope.ServiceProvider;
-        var policy = AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto };
-        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
+        var policy = WeaverPolicy.Default with { AutonomyMode = WeaverAutonomyMode.FullAuto };
+        var session = await services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
             "test-provider", "build", null, policy, new Dictionary<string, string>()));
-        var context = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
-            WorkflowAgentTests.Request(Snapshot()) with { SessionId = session.Id });
+        var context = await services.GetRequiredService<IWeaverContextCollector>().CollectAsync(session.Policy,
+            WorkflowWeaverTests.Request(Snapshot()) with { SessionId = session.Id });
         Assert.True(context.Succeeded, context.Error?.Message);
         var arguments = new Dictionary<string, object?> { ["operations"] = JsonSerializer.SerializeToElement(new object[] { new { kind = "position", activity = new { id = "write-1" }, x = 5, y = 6 } }) };
 
-        var dispatch = await services.GetRequiredService<IAgentToolInvoker>().DispatchAsync(new("batch-call", WorkflowApplyOperationBatchTool.ToolName,
+        var dispatch = await services.GetRequiredService<IWeaverToolInvoker>().DispatchAsync(new("batch-call", WorkflowApplyOperationBatchTool.ToolName,
             session.Id, "actor-1", arguments, context.Value!.Attachments) { TenantId = "tenant-1", TurnId = "turn-1", Client = Snapshot().Client }, session.Policy);
 
-        Assert.Equal(AgentToolDispatchOutcome.ProposalCreated, dispatch.Outcome);
+        Assert.Equal(WeaverToolDispatchOutcome.ProposalCreated, dispatch.Outcome);
         Assert.True(dispatch.Proposal!.RequiresApproval);
-        Assert.Equal(AgentActionProposalStatus.AwaitingApproval, dispatch.Proposal.Status);
-        Assert.Equal(AgentExecutionLocation.ClientWorkingState, dispatch.Proposal.PreparedInvocation!.ExecutionLocation);
+        Assert.Equal(WeaverActionProposalStatus.AwaitingApproval, dispatch.Proposal.Status);
+        Assert.Equal(WeaverExecutionLocation.ClientWorkingState, dispatch.Proposal.PreparedInvocation!.ExecutionLocation);
         Assert.Equal(WorkflowApplyOperationBatchTool.RendererId, dispatch.Proposal.ResultRendererId);
     }
 
@@ -431,14 +431,14 @@ public sealed class WorkflowOperationBatchTests
         };
 
         foreach (var snapshot in malformed)
-            Assert.False(WorkflowAgentSnapshot.TryRead(snapshot, out _, out _));
-        Assert.True(WorkflowAgentSnapshot.TryRead(Snapshot(), out var admitted, out _));
+            Assert.False(WorkflowWeaverSnapshot.TryRead(snapshot, out _, out _));
+        Assert.True(WorkflowWeaverSnapshot.TryRead(Snapshot(), out var admitted, out _));
         Assert.Equal(6, admitted.Structure!.Count);
         Assert.Equal(("seq", SequenceSlot), (admitted.Structure["send"].ParentId, admitted.Structure["send"].Slot));
         Assert.Equal("version-excluded", admitted.Structure["legacy"].ActivityVersionId);
         // The admitted projection keeps the compact form, so a re-read (as tools and re-admission do) still fits and agrees.
         var readmitted = Snapshot() with { Content = admitted.Content };
-        Assert.True(WorkflowAgentSnapshot.TryRead(readmitted, out var again, out _));
+        Assert.True(WorkflowWeaverSnapshot.TryRead(readmitted, out var again, out _));
         Assert.Equal(admitted.Structure.Values.OrderBy(node => node.Id).Select(node => (node.Id, node.ParentId, node.Slot, node.ActivityVersionId)),
             again.Structure!.Values.OrderBy(node => node.Id).Select(node => (node.Id, node.ParentId, node.Slot, node.ActivityVersionId)));
         await Task.CompletedTask;
@@ -446,7 +446,7 @@ public sealed class WorkflowOperationBatchTests
 
     // ---- Fixtures ----
 
-    private static void Clarification(AgentResult<AgentToolPreparation> result, string expected)
+    private static void Clarification(WeaverResult<WeaverToolPreparation> result, string expected)
     {
         Assert.False(result.Succeeded);
         Assert.Equal(WorkflowOperationBatch.ClarificationRequired, result.Error?.Code);
@@ -454,18 +454,18 @@ public sealed class WorkflowOperationBatchTests
         Assert.Contains("nothing changed", result.Error.Message);
     }
 
-    private static Task<AgentResult<AgentToolPreparation>> PrepareAsync(params object[] operations)
+    private static Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(params object[] operations)
         => Tool().PrepareAsync(Invocation(Snapshot(), operations));
 
-    private static Task<AgentResult<AgentToolPreparation>> PrepareAsync(JsonElement arguments)
+    private static Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(JsonElement arguments)
         => Tool().PrepareAsync(Invocation(Snapshot(), []) with
         {
             Arguments = arguments.EnumerateObject().ToDictionary(property => property.Name, property => (object?)property.Value.Clone())
         });
 
-    private static Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation) => Tool().PrepareAsync(invocation);
+    private static Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation) => Tool().PrepareAsync(invocation);
 
-    private static async Task<(WorkflowApplyOperationBatchTool, AgentPreparedToolInvocation)> PreparedAsync()
+    private static async Task<(WorkflowApplyOperationBatchTool, WeaverPreparedToolInvocation)> PreparedAsync()
     {
         var tool = Tool();
         var invocation = Invocation(Snapshot(),
@@ -473,11 +473,11 @@ public sealed class WorkflowOperationBatchTests
             new { kind = "remove", activity = new { id = "write-2" } });
         var preparation = await tool.PrepareAsync(invocation);
         Assert.True(preparation.Succeeded, preparation.Error?.Message);
-        return (tool, AgentTestToolHelpers.Prepared(invocation, tool.Descriptor, preparation.Value!));
+        return (tool, WeaverTestToolHelpers.Prepared(invocation, tool.Descriptor, preparation.Value!));
     }
 
-    private static AgentClientAcknowledgement Acknowledgement(AgentPreparedToolInvocation invocation, string? defect = null)
-        => new(invocation.Client!, invocation.ApprovalDigest, AgentClientOutcome.Applied, "Untrusted summary", invocation.Target! with { Revision = "sha256:after" },
+    private static WeaverClientAcknowledgement Acknowledgement(WeaverPreparedToolInvocation invocation, string? defect = null)
+        => new(invocation.Client!, invocation.ApprovalDigest, WeaverClientOutcome.Applied, "Untrusted summary", invocation.Target! with { Revision = "sha256:after" },
             new(WorkflowOperationBatch.ResultType, "1", JsonSerializer.SerializeToElement(new
             {
                 observed = true, revision = "sha256:after", baseRevision = defect == "base" ? "other" : invocation.Target!.Revision,
@@ -488,7 +488,7 @@ public sealed class WorkflowOperationBatchTests
     private static WorkflowApplyOperationBatchTool Tool(bool host = true, bool? owner = true, FixtureActivityCatalog? catalog = null)
         => new(new HostAuthority(host), [new Owner(owner)], [catalog ?? new FixtureActivityCatalog { Entries = Entries() }]);
 
-    private static AgentToolInvocation Invocation(AgentContextAttachment snapshot, params object[] operations)
+    private static WeaverToolInvocation Invocation(WeaverContextAttachment snapshot, params object[] operations)
         => new("call-1", WorkflowApplyOperationBatchTool.ToolName, "session-1", "actor-1",
             new Dictionary<string, object?> { ["operations"] = JsonSerializer.SerializeToElement(operations) }, [snapshot])
         { TenantId = "tenant-1", TurnId = "turn-1", Client = snapshot.Client };
@@ -509,7 +509,7 @@ public sealed class WorkflowOperationBatchTests
     /// A structured working draft: a root flowchart with two same-named Write Line nodes, a nested sequence holding one
     /// activity, and an existing activity whose version is no longer addable.
     /// </summary>
-    internal static AgentContextAttachment Snapshot(string? workingState = "draft", Action<List<Dictionary<string, object?>>>? mutate = null,
+    internal static WeaverContextAttachment Snapshot(string? workingState = "draft", Action<List<Dictionary<string, object?>>>? mutate = null,
         Action<JsonObject>? mutateStructure = null)
     {
         static object[] Slots(string id, string mode) => [new { id, mode, cardinality = "many" }];
@@ -538,11 +538,11 @@ public sealed class WorkflowOperationBatchTests
             content["structure"] = structure;
         }
         if (workingState is not null) content["workingState"] = workingState;
-        return new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition", AgentContextSensitivity.Internal, "selection", "Workflow data",
+        return new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition", WeaverContextSensitivity.Internal, "selection", "Workflow data",
             JsonSerializer.SerializeToElement(content), new Dictionary<string, string>())
         {
-            ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.ClientSnapshot,
-            Target = new(WorkflowAgentSnapshot.ModuleId, "workflow-definition", "wf-1", "sha256:before"), Client = new("client-1", "generation-1")
+            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.ClientSnapshot,
+            Target = new(WorkflowWeaverSnapshot.ModuleId, "workflow-definition", "wf-1", "sha256:before"), Client = new("client-1", "generation-1")
         };
     }
 
@@ -571,10 +571,10 @@ public sealed class WorkflowOperationBatchTests
         return new JsonObject { ["versions"] = versions, ["containers"] = containers };
     }
 
-    private sealed class HostAuthority(bool allowed) : IAgentToolAuthorizer
+    private sealed class HostAuthority(bool allowed) : IWeaverToolAuthorizer
     {
-        public Task<AgentPolicyDecision> AuthorizeAsync(AgentToolDescriptor tool, string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
-            => Task.FromResult(new AgentPolicyDecision(allowed, allowed ? [] : [new("unit.denied", "Host authority withheld the tool.")]));
+        public Task<WeaverPolicyDecision> AuthorizeAsync(WeaverToolDescriptor tool, string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WeaverPolicyDecision(allowed, allowed ? [] : [new("unit.denied", "Host authority withheld the tool.")]));
     }
 
     /// <summary>The owning workflow authorizer: null manage means it cannot decide.</summary>

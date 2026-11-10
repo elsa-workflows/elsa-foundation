@@ -22,11 +22,11 @@ public sealed class GitHubCopilotSemanticToolEventsTests
         var fixture = new Fixture(mode);
         var events = await fixture.Run();
         var invocation = Assert.Single(fixture.Invocations);
-        var result = Assert.IsType<AgentToolResult>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ContributedResult).Payload);
+        var result = Assert.IsType<WeaverToolResult>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ContributedResult).Payload);
         Assert.False(result.Succeeded); Assert.Null(result.Payload); Assert.Null(result.Receipt);
-        var completed = Assert.IsType<AgentToolCallOutcome>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallCompleted).Payload);
+        var completed = Assert.IsType<WeaverToolCallOutcome>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallCompleted).Payload);
         Assert.False(completed.Succeeded);
-        var started = Assert.IsType<AgentToolCallRequest>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallStarted).Payload);
+        var started = Assert.IsType<WeaverToolCallRequest>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallStarted).Payload);
         Assert.Equal(invocation.ToolCallId, started.ToolCallId);
         Assert.Equal(fixture.Tool.Descriptor.Risk, started.Risk);
         Assert.False(started.RequiresApproval);
@@ -49,8 +49,8 @@ public sealed class GitHubCopilotSemanticToolEventsTests
     {
         var fixture = new Fixture("read"); var events = await fixture.Run();
         var invocation = Assert.Single(fixture.Invocations);
-        var result = Assert.IsType<AgentToolResult>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ContributedResult).Payload);
-        var outcome = Assert.IsType<AgentToolCallOutcome>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallCompleted).Payload);
+        var result = Assert.IsType<WeaverToolResult>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ContributedResult).Payload);
+        var outcome = Assert.IsType<WeaverToolCallOutcome>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallCompleted).Payload);
         Assert.Equal(invocation.ToolCallId, outcome.ToolCallId); Assert.Equal(invocation.ToolCallId, result.ToolCallId);
         Assert.True(outcome.Succeeded); Assert.Equal("The declared read completed.", outcome.Summary);
         Assert.Same(result, outcome.Result); Assert.Null(result.Receipt);
@@ -61,12 +61,12 @@ public sealed class GitHubCopilotSemanticToolEventsTests
     public async Task Pending_proposal_reports_declared_start_risk_and_final_prepared_risk_without_success()
     {
         var fixture = new Fixture("proposal"); var events = await fixture.Run();
-        var started = Assert.IsType<AgentToolCallRequest>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallStarted).Payload);
-        Assert.Equal(AgentRisk.ReviewRequired, started.Risk); Assert.True(started.RequiresApproval);
-        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ProposalCreated).Payload);
-        Assert.Equal(AgentRisk.Admin, proposal.PreparedInvocation!.Risk);
-        Assert.Equal(AgentActionProposalStatus.AwaitingApproval, proposal.Status);
-        Assert.DoesNotContain(events, item => item.Kind is AgentStreamEventKind.ToolCallCompleted or AgentStreamEventKind.ContributedResult);
+        var started = Assert.IsType<WeaverToolCallRequest>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallStarted).Payload);
+        Assert.Equal(WeaverRisk.ReviewRequired, started.Risk); Assert.True(started.RequiresApproval);
+        var proposal = Assert.IsType<WeaverActionProposal>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ProposalCreated).Payload);
+        Assert.Equal(WeaverRisk.Admin, proposal.PreparedInvocation!.Risk);
+        Assert.Equal(WeaverActionProposalStatus.AwaitingApproval, proposal.Status);
+        Assert.DoesNotContain(events, item => item.Kind is WeaverStreamEventKind.ToolCallCompleted or WeaverStreamEventKind.ContributedResult);
         Assert.Equal(0, fixture.Tool.Executions); Assert.Single(fixture.Invocations);
     }
 
@@ -78,9 +78,9 @@ public sealed class GitHubCopilotSemanticToolEventsTests
         var fixture = new Fixture("mixed", count: 2, parallel: parallel); var events = await fixture.Run();
         var invocations = fixture.Invocations.ToArray(); Assert.Equal(2, invocations.Length);
         Assert.Equal(2, invocations.Select(item => item.ToolCallId).Distinct(StringComparer.Ordinal).Count());
-        var started = events.Where(item => item.Kind == AgentStreamEventKind.ToolCallStarted).Select(item => Assert.IsType<AgentToolCallRequest>(item.Payload)).ToArray();
-        var completed = events.Where(item => item.Kind == AgentStreamEventKind.ToolCallCompleted).Select(item => Assert.IsType<AgentToolCallOutcome>(item.Payload)).ToArray();
-        var results = events.Where(item => item.Kind == AgentStreamEventKind.ContributedResult).Select(item => Assert.IsType<AgentToolResult>(item.Payload)).ToArray();
+        var started = events.Where(item => item.Kind == WeaverStreamEventKind.ToolCallStarted).Select(item => Assert.IsType<WeaverToolCallRequest>(item.Payload)).ToArray();
+        var completed = events.Where(item => item.Kind == WeaverStreamEventKind.ToolCallCompleted).Select(item => Assert.IsType<WeaverToolCallOutcome>(item.Payload)).ToArray();
+        var results = events.Where(item => item.Kind == WeaverStreamEventKind.ContributedResult).Select(item => Assert.IsType<WeaverToolResult>(item.Payload)).ToArray();
         Assert.Equal(2, started.Length); Assert.Equal(2, completed.Length); Assert.Equal(2, results.Length);
         foreach (var invocation in invocations)
         {
@@ -98,13 +98,13 @@ public sealed class GitHubCopilotSemanticToolEventsTests
         var fixture = new Fixture("read") { IncludeTools = false };
         fixture.Session.BuiltinFailure = true;
         var events = await fixture.Run();
-        var started = Assert.IsType<AgentToolCallRequest>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallStarted).Payload);
+        var started = Assert.IsType<WeaverToolCallRequest>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallStarted).Payload);
         Assert.Equal("sdk-builtin-call", started.ToolCallId);
-        var completed = Assert.IsType<AgentToolCallOutcome>(Assert.Single(events, item => item.Kind == AgentStreamEventKind.ToolCallCompleted).Payload);
+        var completed = Assert.IsType<WeaverToolCallOutcome>(Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ToolCallCompleted).Payload);
         Assert.Equal("sdk-builtin-call", completed.ToolCallId); Assert.False(completed.Succeeded);
         Assert.Equal("Built-in SDK tool failed.", completed.Summary);
-        Assert.Equal("test.sdk_failure", Assert.Single(events, item => item.Kind == AgentStreamEventKind.Error).Error!.Code);
-        Assert.Empty(fixture.Invocations); Assert.DoesNotContain(events, item => item.Kind == AgentStreamEventKind.ContributedResult);
+        Assert.Equal("test.sdk_failure", Assert.Single(events, item => item.Kind == WeaverStreamEventKind.Error).Error!.Code);
+        Assert.Empty(fixture.Invocations); Assert.DoesNotContain(events, item => item.Kind == WeaverStreamEventKind.ContributedResult);
     }
 
     [Fact]
@@ -112,8 +112,8 @@ public sealed class GitHubCopilotSemanticToolEventsTests
     {
         var fixture = new Fixture("read"); fixture.Session.CustomTransportFailure = true;
         var events = await fixture.Run();
-        Assert.Single(events, item => item.Kind == AgentStreamEventKind.ContributedResult);
-        var completed = events.Where(item => item.Kind == AgentStreamEventKind.ToolCallCompleted).Select(item => Assert.IsType<AgentToolCallOutcome>(item.Payload)).ToArray();
+        Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ContributedResult);
+        var completed = events.Where(item => item.Kind == WeaverStreamEventKind.ToolCallCompleted).Select(item => Assert.IsType<WeaverToolCallOutcome>(item.Payload)).ToArray();
         Assert.Equal(2, completed.Length);
         Assert.True(Assert.Single(completed, item => item.ToolCallId == Assert.Single(fixture.Invocations).ToolCallId).Succeeded);
         Assert.False(Assert.Single(completed, item => item.ToolCallId == "sdk-custom-1").Succeeded);
@@ -123,48 +123,48 @@ public sealed class GitHubCopilotSemanticToolEventsTests
     {
         internal readonly SemanticTool Tool;
         internal readonly Session Session;
-        internal readonly ConcurrentQueue<AgentToolInvocation> Invocations = new();
+        internal readonly ConcurrentQueue<WeaverToolInvocation> Invocations = new();
         internal bool IncludeTools = true;
         internal Fixture(string mode, int count = 1, bool parallel = false) { Tool = new(mode, parallel); Session = new(count, parallel); }
-        internal async Task<List<AgentStreamEvent>> Run()
+        internal async Task<List<WeaverStreamEvent>> Run()
         {
-            var invoker = new AgentTestToolInvoker(async (invocation, _) =>
+            var invoker = new WeaverTestToolInvoker(async (invocation, _) =>
             {
                 Invocations.Enqueue(invocation);
                 var preparation = await Tool.PrepareAsync(invocation);
-                if (!preparation.Succeeded) return AgentToolDispatch.Denied(preparation.Error!);
-                var prepared = AgentTestToolHelpers.Prepared(invocation, Tool.Descriptor, preparation.Value!);
+                if (!preparation.Succeeded) return WeaverToolDispatch.Denied(preparation.Error!);
+                var prepared = WeaverTestToolHelpers.Prepared(invocation, Tool.Descriptor, preparation.Value!);
                 if (Tool.Mode == "proposal")
                 {
                     var now = DateTimeOffset.UtcNow;
-                    return AgentToolDispatch.Proposed(new("test-proposal", invocation.SessionId, null, Tool.Descriptor.Name, "tool-invocation",
+                    return WeaverToolDispatch.Proposed(new("test-proposal", invocation.SessionId, null, Tool.Descriptor.Name, "tool-invocation",
                         "Review the declared operation", "Review before application.", prepared.Risk, null, [], [], [], null, [], null, null, true,
-                        AgentActionProposalStatus.AwaitingApproval, null, null, now, now) { PreparedInvocation = prepared });
+                        WeaverActionProposalStatus.AwaitingApproval, null, null, now, now) { PreparedInvocation = prepared });
                 }
                 var result = await Tool.ExecuteAsync(prepared);
-                return result.Succeeded ? AgentToolDispatch.Executed(result.Value!) : AgentToolDispatch.Denied(result.Error!);
+                return result.Succeeded ? WeaverToolDispatch.Executed(result.Value!) : WeaverToolDispatch.Denied(result.Error!);
             });
             var provider = new WeaverGitHubCopilotProvider(new ClientFactory(Session),
                 Options.Create(new WeaverGitHubCopilotOptions { Enabled = true, GitHubToken = "fixture-only-token" }), invoker,
                 NullLogger<WeaverGitHubCopilotProvider>.Instance);
-            var request = new AgentHarnessTurnRequest("test-session", "test-actor", [new(AgentRole.User, "Perform the declared tool operation.")], [],
-                IncludeTools ? [Tool] : [], AgentPolicy.Default) { TenantId = "test-tenant", TurnId = "test-turn" };
-            var events = new List<AgentStreamEvent>();
+            var request = new WeaverHarnessTurnRequest("test-session", "test-actor", [new(WeaverRole.User, "Perform the declared tool operation.")], [],
+                IncludeTools ? [Tool] : [], WeaverPolicy.Default) { TenantId = "test-tenant", TurnId = "test-turn" };
+            var events = new List<WeaverStreamEvent>();
             await foreach (var item in provider.RunTurnAsync(request)) events.Add(item);
             return events;
         }
     }
 
-    private sealed class SemanticTool(string mode, bool parallel) : IAgentTool
+    private sealed class SemanticTool(string mode, bool parallel) : IWeaverTool
     {
         private readonly TaskCompletionSource bothPrepared = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int preparations;
         internal int Executions;
         internal string Mode => mode;
-        public AgentToolDescriptor Descriptor { get; } = new("test_semantic_tool", "Declared tool", "Performs its declared operation.",
-            mode == "proposal" ? AgentToolMutability.Mutating : AgentToolMutability.ReadOnly,
-            mode == "proposal" ? AgentRisk.ReviewRequired : AgentRisk.Admin, "{\"type\":\"object\"}", [], []) { ModuleId = "test.module" };
-        public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+        public WeaverToolDescriptor Descriptor { get; } = new("test_semantic_tool", "Declared tool", "Performs its declared operation.",
+            mode == "proposal" ? WeaverToolMutability.Mutating : WeaverToolMutability.ReadOnly,
+            mode == "proposal" ? WeaverRisk.ReviewRequired : WeaverRisk.Admin, "{\"type\":\"object\"}", [], []) { ModuleId = "test.module" };
+        public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
         {
             if (parallel)
             {
@@ -172,15 +172,15 @@ public sealed class GitHubCopilotSemanticToolEventsTests
                 await bothPrepared.Task.WaitAsync(cancellationToken);
             }
             if (mode == "prepare-denied" || mode == "mixed" && (int)invocation.Arguments["ordinal"]! == 2)
-                return AgentResult<AgentToolPreparation>.Failure("test.semantic_refused", "The declared tool operation was refused.", 409);
-            return AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Risk = AgentRisk.Admin });
+                return WeaverResult<WeaverToolPreparation>.Failure("test.semantic_refused", "The declared tool operation was refused.", 409);
+            return WeaverResult<WeaverToolPreparation>.Success(WeaverTestToolHelpers.Preparation(invocation, Descriptor) with { Risk = WeaverRisk.Admin });
         }
-        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        public Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref Executions);
             return Task.FromResult(mode == "execute-denied"
-                ? AgentResult<AgentToolResult>.Failure("test.semantic_refused", "The declared tool operation was refused.", 409)
-                : AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, invocation.ToolName, mode != "unsuccessful",
+                ? WeaverResult<WeaverToolResult>.Failure("test.semantic_refused", "The declared tool operation was refused.", 409)
+                : WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, invocation.ToolName, mode != "unsuccessful",
                     mode == "unsuccessful" ? "The declared tool operation was refused." : "The declared read completed.")));
         }
     }

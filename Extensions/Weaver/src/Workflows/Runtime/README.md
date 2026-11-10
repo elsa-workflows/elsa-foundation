@@ -8,7 +8,7 @@ The package references Agent, Agent Core and Workflows Runtime Core only, so it 
 
 ## Cross-domain contributions
 
-This package contributes to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`: two `IAgentContextProvider`s (`workflows.executable-context` and, from slice G, `workflows.run-context`), two `IAgentTool`s with `IAgentToolAuthorization` (`workflow_read_executable` and `workflow_read_run`) and one `IAgentCapabilityProvider` (`workflow.executable-explain` and `workflow.run-explain`). It consumes Workflows Runtime Core's [`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) and registers no fallback for either. See [the module extension-point catalog](EXTENSION_POINTS.md) for each contribution's admission, bounds and refusals.
+This package contributes to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`: two `IWeaverContextProvider`s (`workflows.executable-context` and, from slice G, `workflows.run-context`), two `IWeaverTool`s with `IWeaverToolAuthorization` (`workflow_read_executable` and `workflow_read_run`) and one `IWeaverCapabilityProvider` (`workflow.executable-explain` and `workflow.run-explain`). It consumes Workflows Runtime Core's [`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) and registers no fallback for either. See [the module extension-point catalog](EXTENSION_POINTS.md) for each contribution's admission, bounds and refusals.
 
 ## Upgrade requirement
 

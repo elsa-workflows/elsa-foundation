@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { StudioAgentContextAttachment, StudioAgentPreparedInvocation } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverContextAttachment, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { pageBindingProblem, pageReceipt } from "./workflowLibraryAgent";
 
@@ -16,7 +16,7 @@ export function useWorkflowPageAgent<TState>({ controller, clientId, kind, toolI
   toolId: string;
   resultType: string;
   /** The page's attachment for a visible state, or null while it has none to disclose. */
-  build(state: TState, client: { clientId: string; generationId: string }): StudioAgentContextAttachment | null;
+  build(state: TState, client: { clientId: string; generationId: string }): StudioWeaverContextAttachment | null;
   /** The next page state for an approved change, or null when the change is not one this page supports. */
   apply(change: unknown): TState | null;
   current(): TState;
@@ -40,7 +40,7 @@ export function useWorkflowPageAgent<TState>({ controller, clientId, kind, toolI
   }, [library, snapshotKey, revision]);
   useEffect(() => {
     if (!library) return;
-    const handler = async (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => {
+    const handler = async (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal) => {
       const problem = signal?.aborted ? "The change was cancelled before it was applied." : pageBindingProblem(invocation, library.snapshots.get(snapshotKey), library.snapshots.get(snapshotKey)?.target?.resourceType ?? "");
       if (problem) return { outcome: "refused" as const, summary: problem };
       const args = invocation.arguments as { change?: unknown } | null;

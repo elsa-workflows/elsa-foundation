@@ -8,11 +8,11 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 public abstract class WeaverDbContext : DbContext
 {
     protected WeaverDbContext(DbContextOptions options) : base(options) { }
-    internal DbSet<AgentSessionRow> Sessions => Set<AgentSessionRow>();
+    internal DbSet<WeaverSessionRow> Sessions => Set<WeaverSessionRow>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasElsaDefaultSchema(this);
-        modelBuilder.AddAgentModel(Database.ProviderName!);
+        modelBuilder.AddWeaverModel(Database.ProviderName!);
         modelBuilder.MapSchemaFinalization(WeaverEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();

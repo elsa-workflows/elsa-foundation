@@ -70,7 +70,7 @@ def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL, BATCH_TOOL)):
 
 
 # The exact envelope target both adapters' native streams carried in the 499853897 witness: the engine serializes the
-# optional presentation members of AgentResourceTarget as null.
+# optional presentation members of WeaverResourceTarget as null.
 WIRE_TARGET = {**TARGET, "displayName": None, "route": None}
 
 
@@ -296,7 +296,7 @@ class BrowserTests(unittest.TestCase):
 class PlaceholderTests(unittest.TestCase):
     def generation(self, **changes):
         value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Weaver.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
-                 "types": ["DefaultWorkflowAgentContextProvider", "WeaverWorkflowsFeature", "WorkflowActivityCatalog", "WorkflowAgentGraph"]}}
+                 "types": ["DefaultWorkflowWeaverContextProvider", "WeaverWorkflowsFeature", "WorkflowActivityCatalog", "WorkflowWeaverGraph"]}}
         value["workflowAgent"].update(changes)
         return value
 
@@ -307,7 +307,7 @@ class PlaceholderTests(unittest.TestCase):
         for name in sorted(LEGACY_PLACEHOLDERS):
             with self.subTest(placeholder=name):
                 with self.assertRaises(RuntimeError):
-                    require_no_placeholders(self.generation(types=["DefaultWorkflowAgentContextProvider", "WorkflowActivityCatalog", name]))
+                    require_no_placeholders(self.generation(types=["DefaultWorkflowWeaverContextProvider", "WorkflowActivityCatalog", name]))
         for name, value in (("absent", {"generation": "g-1"}), ("empty", self.generation(types=[])),
                             ("foreign", self.generation(types=["SomethingElse"])),
                             ("no-catalog", self.generation(activityAuthoringCatalogs=[])),

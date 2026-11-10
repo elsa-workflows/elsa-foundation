@@ -27,17 +27,17 @@
 
   <!-- The Agent restart scenarios (T009-T014), compiled unchanged and run over the EF store on SQLite. -->
   <ItemGroup>
-    <Compile Include="../../Tests/AgentRestartHarness.cs" Link="Restart/AgentRestartHarness.cs" />
-    <Compile Include="../../Tests/AgentRecoveryRestartTests.cs" Link="Restart/AgentRecoveryRestartTests.cs" />
-    <Compile Include="../../Tests/AgentRecoveryDeduplicationTests.cs" Link="Restart/AgentRecoveryDeduplicationTests.cs" />
-    <Compile Include="../../Tests/AgentRecoveryExecutionTests.cs" Link="Restart/AgentRecoveryExecutionTests.cs" />
-    <Compile Include="../../Tests/AgentSessionOwnershipTests.cs" Link="Restart/AgentSessionOwnershipTests.cs" />
-    <Compile Include="../../Tests/AgentSessionSummaryTests.cs" Link="Restart/AgentSessionSummaryTests.cs" />
-    <Compile Include="../../Tests/AgentRecoveryAuditTests.cs" Link="Restart/AgentRecoveryAuditTests.cs" />
-    <Compile Include="../../Tests/AgentTestServices.cs" Link="Restart/AgentTestServices.cs" />
-    <Compile Include="../../Tests/AgentTestTools.cs" Link="Restart/AgentTestTools.cs" />
-    <Compile Include="../../Tests/AgentProposalFixtures.cs" Link="Restart/AgentProposalFixtures.cs" />
-    <Compile Include="../../Tests/DeterministicAgentProvider.cs" Link="Restart/DeterministicAgentProvider.cs" />
+    <Compile Include="../../Tests/WeaverRestartHarness.cs" Link="Restart/WeaverRestartHarness.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryRestartTests.cs" Link="Restart/WeaverRecoveryRestartTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryDeduplicationTests.cs" Link="Restart/WeaverRecoveryDeduplicationTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryExecutionTests.cs" Link="Restart/WeaverRecoveryExecutionTests.cs" />
+    <Compile Include="../../Tests/WeaverSessionOwnershipTests.cs" Link="Restart/WeaverSessionOwnershipTests.cs" />
+    <Compile Include="../../Tests/WeaverSessionSummaryTests.cs" Link="Restart/WeaverSessionSummaryTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryAuditTests.cs" Link="Restart/WeaverRecoveryAuditTests.cs" />
+    <Compile Include="../../Tests/WeaverTestServices.cs" Link="Restart/WeaverTestServices.cs" />
+    <Compile Include="../../Tests/WeaverTestTools.cs" Link="Restart/WeaverTestTools.cs" />
+    <Compile Include="../../Tests/WeaverProposalFixtures.cs" Link="Restart/WeaverProposalFixtures.cs" />
+    <Compile Include="../../Tests/DeterministicWeaverProvider.cs" Link="Restart/DeterministicWeaverProvider.cs" />
   </ItemGroup>
 
   <ItemGroup>

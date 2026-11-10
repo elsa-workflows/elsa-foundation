@@ -1,5 +1,5 @@
 import React, { lazy } from "react";
-import type { StudioAgentClientExecutionResult, StudioAgentContextAttachment, StudioAgentPreparedInvocation, StudioAgentRegistry, StudioAgentResultRendererProps, StudioAgentToolAvailability } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientExecutionResult, StudioWeaverContextAttachment, StudioWeaverPreparedInvocation, StudioWeaverRegistry, StudioWeaverResultRendererProps, StudioWeaverToolAvailability } from "@elsa-workflows/studio-sdk";
 import { workflowAgentCapabilities, workflowPromptStarters } from "./workflowAgentPromptStarters";
 
 /** Whether a reviewed batch's whole-change Undo may act now; designer history decides (spec 1193 FR-009). */
@@ -16,8 +16,8 @@ export interface WorkflowBatchUndoAvailability {
  * entries; nothing here holds a live page object.
  */
 export interface WorkflowLibraryAgentController {
-  snapshots: Map<string, StudioAgentContextAttachment>;
-  handlers: Map<string, (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>>;
+  snapshots: Map<string, StudioWeaverContextAttachment>;
+  handlers: Map<string, (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal) => Promise<StudioWeaverClientExecutionResult>>;
   /** Each applied page change's revert, by its receipt's token: a message on success, or the reason it cannot revert now. */
   reverts: Map<string, () => string>;
   revert?: ((token: string) => string) | null;
@@ -28,19 +28,19 @@ export interface WorkflowLibraryAgentController {
  * persisted workflow version, each keyed by its page instance's generation so two mounted pages never replace each other.
  */
 export interface WorkflowInspectionAgentController {
-  executables: Map<string, StudioAgentContextAttachment>;
-  versions: Map<string, StudioAgentContextAttachment>;
+  executables: Map<string, StudioWeaverContextAttachment>;
+  versions: Map<string, StudioWeaverContextAttachment>;
   /** The run page's exact Run and selected activity execution (spec 1193 slice G). */
-  runs?: Map<string, StudioAgentContextAttachment>;
+  runs?: Map<string, StudioWeaverContextAttachment>;
 }
 
 export interface WorkflowAgentController {
-  snapshot: StudioAgentContextAttachment | null;
+  snapshot: StudioWeaverContextAttachment | null;
   /** The Executable Inspector's and version history's read-only contexts (spec 1193 slice F). */
   inspection?: WorkflowInspectionAgentController;
   /** The library pages' contexts (by kind and page generation) and working-state handlers (by tool and page generation). */
   library?: WorkflowLibraryAgentController;
-  execute: ((invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>) | null;
+  execute: ((invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal) => Promise<StudioWeaverClientExecutionResult>) | null;
   undo: ((token: string) => Promise<string>) | null;
   /** Designer-history Undo of a reviewed Operation Batch, owned by the open editor. */
   batch?: {
@@ -49,11 +49,11 @@ export interface WorkflowAgentController {
     subscribe(listener: () => void): () => void;
   } | null;
   /** Whether a prepared invocation's originating editor still exists, before anything is dispatched. */
-  targetAvailability?: ((invocation: StudioAgentPreparedInvocation) => StudioAgentToolAvailability) | null;
+  targetAvailability?: ((invocation: StudioWeaverPreparedInvocation) => StudioWeaverToolAvailability) | null;
 }
 
 /** Registration closes over one native module instance; live editor objects never enter shared state. */
-export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgentController {
+export function registerWorkflowAgent(agent: StudioWeaverRegistry): WorkflowAgentController {
   const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null,
     library: { snapshots: new Map(), handlers: new Map(), reverts: new Map(), revert: null },
     inspection: { executables: new Map(), versions: new Map(), runs: new Map() } };
@@ -144,14 +144,14 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
     id: "workflows.agent.page-revert", moduleId: "Elsa.Studio.Workflows", displayName: "Revert page change",
     resultTypes: ["workflows.list-state", "workflows.create-dialog-prefill"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowAgentResult").then(module => ({
-      default: (props: StudioAgentResultRendererProps) => <module.WorkflowPageRevertControl {...props} controller={controller} />
+      default: (props: StudioWeaverResultRendererProps) => <module.WorkflowPageRevertControl {...props} controller={controller} />
     })))
   });
   agent.resultRenderers.add({
     id: "workflows.agent.layout-result", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow layout change",
     resultTypes: ["workflows.layout-change"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowAgentResult").then(module => ({
-      default: (props: StudioAgentResultRendererProps) => <module.WorkflowLayoutResult {...props} controller={controller} />
+      default: (props: StudioWeaverResultRendererProps) => <module.WorkflowLayoutResult {...props} controller={controller} />
     })))
   });
   // The designer-history Undo of an applied batch belongs to the module that owns the designer. It is a result control:
@@ -160,7 +160,7 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
     id: "workflows.agent.batch-undo", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
     resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowAgentResult").then(module => ({
-      default: (props: StudioAgentResultRendererProps) => <module.WorkflowBatchUndoControl {...props} controller={controller} />
+      default: (props: StudioWeaverResultRendererProps) => <module.WorkflowBatchUndoControl {...props} controller={controller} />
     })))
   });
   return controller;

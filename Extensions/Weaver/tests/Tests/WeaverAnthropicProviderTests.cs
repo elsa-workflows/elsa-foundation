@@ -14,7 +14,7 @@ namespace Elsa.Weaver.Tests;
 
 public sealed class WeaverAnthropicProviderTests
 {
-    private static readonly AgentToolDescriptor MutatingTool = new ApplyChangeTool().Descriptor;
+    private static readonly WeaverToolDescriptor MutatingTool = new ApplyChangeTool().Descriptor;
 
     [Fact]
     public async Task Feature_registers_a_single_unavailable_provider_when_unconfigured()
@@ -23,13 +23,13 @@ public sealed class WeaverAnthropicProviderTests
         new WeaverAnthropicFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var agentProvider = Assert.Single(provider.GetServices<IAgentProvider>());
+        var agentProvider = Assert.Single(provider.GetServices<IWeaverProvider>());
         Assert.IsType<WeaverAnthropicProvider>(agentProvider);
 
         var diagnostics = await agentProvider.GetDiagnosticsAsync();
-        Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
+        Assert.Equal(WeaverProviderKind.ProviderSdkBinding, diagnostics.Kind);
         Assert.False(diagnostics.IsAvailable);
-        Assert.Contains(AgentProviderOperation.Streaming, diagnostics.SupportedOperations);
+        Assert.Contains(WeaverProviderOperation.Streaming, diagnostics.SupportedOperations);
     }
 
     [Fact]
@@ -40,21 +40,21 @@ public sealed class WeaverAnthropicProviderTests
             Update(new TextContent("world")),
             Update(new FunctionCallContent("call_1", MutatingTool.Name, new Dictionary<string, object?> { ["change"] = "add-node" })));
         var provider = BuildProvider(client);
-        var context = new AgentTurnContext("s1", "s1", [new AgentTurnMessage(AgentRole.User, "Edit the workflow.")], [], [MutatingTool], [], 0, 4);
+        var context = new WeaverTurnContext("s1", "s1", [new WeaverTurnMessage(WeaverRole.User, "Edit the workflow.")], [], [MutatingTool], [], 0, 4);
 
         var events = await Collect(provider.ContinueTurnAsync(context));
 
-        var deltas = events.Where(e => e.Kind == AgentStreamEventKind.MessageDelta).Select(e => e.Content).ToList();
+        var deltas = events.Where(e => e.Kind == WeaverStreamEventKind.MessageDelta).Select(e => e.Content).ToList();
         Assert.Equal(["Hello ", "world"], deltas);
 
-        var toolEvent = Assert.Single(events, e => e.Kind == AgentStreamEventKind.ToolCallRequested);
-        var request = Assert.IsType<AgentToolCallRequest>(toolEvent.Payload);
+        var toolEvent = Assert.Single(events, e => e.Kind == WeaverStreamEventKind.ToolCallRequested);
+        var request = Assert.IsType<WeaverToolCallRequest>(toolEvent.Payload);
         Assert.Equal("call_1", request.ToolCallId);
         Assert.Equal(MutatingTool.Name, request.ToolName);
         Assert.Contains("add-node", request.Arguments);
         // The descriptor is mutating, so the request advertises that approval is needed (orchestrator gates it).
         Assert.True(request.RequiresApproval);
-        Assert.Equal(AgentRisk.ReviewRequired, request.Risk);
+        Assert.Equal(WeaverRisk.ReviewRequired, request.Risk);
 
         // Tools are advertised as declaration-only functions so the model emits calls rather than auto-running them.
         var tool = Assert.Single(client.CapturedOptions!.Tools!);
@@ -67,13 +67,13 @@ public sealed class WeaverAnthropicProviderTests
         var client = new ScriptedChatClient(Update(new TextContent("Done.")));
         var provider = BuildProvider(client);
         // History as the orchestrator accumulates it: user, assistant text, then the executed tool's result.
-        var history = new List<AgentTurnMessage>
+        var history = new List<WeaverTurnMessage>
         {
-            new(AgentRole.User, "Edit the workflow."),
-            new(AgentRole.Assistant, "Calling a tool."),
-            new(AgentRole.Tool, "applied", "call_1", MutatingTool.Name)
+            new(WeaverRole.User, "Edit the workflow."),
+            new(WeaverRole.Assistant, "Calling a tool."),
+            new(WeaverRole.Tool, "applied", "call_1", MutatingTool.Name)
         };
-        var context = new AgentTurnContext("s1", "s1", history, [], [MutatingTool], [], 1, 4);
+        var context = new WeaverTurnContext("s1", "s1", history, [], [MutatingTool], [], 1, 4);
 
         await Collect(provider.ContinueTurnAsync(context));
 
@@ -94,9 +94,9 @@ public sealed class WeaverAnthropicProviderTests
     {
         var client = new ScriptedChatClient(Update(new TextContent("Done.")));
         var provider = BuildProvider(client);
-        var result = new AgentToolResult("call_1", "independent_tool", true, "Observed result.",
+        var result = new WeaverToolResult("call_1", "independent_tool", true, "Observed result.",
             new("independent.result", "7", JsonSerializer.SerializeToElement(new { actualValue = 42 })));
-        var context = new AgentTurnContext("s1", "s1", [new(AgentRole.Tool, result.Content, result.ToolCallId, result.ToolName)], [result], [], [], 1, 4);
+        var context = new WeaverTurnContext("s1", "s1", [new(WeaverRole.Tool, result.Content, result.ToolCallId, result.ToolName)], [result], [], [], 1, 4);
         await Collect(provider.ContinueTurnAsync(context));
         var toolMessage = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.Tool);
         var protocolResult = Assert.Single(toolMessage.Contents.OfType<FunctionResultContent>());
@@ -113,7 +113,7 @@ public sealed class WeaverAnthropicProviderTests
     {
         var attachment = IndependentContext();
         var changed = changeOrigin
-            ? attachment with { Origin = AgentContextOrigin.AuthoritativeRead }
+            ? attachment with { Origin = WeaverContextOrigin.AuthoritativeRead }
             : attachment with { Target = attachment.Target! with { ResourceId = "other-resource", Revision = "other-revision" } };
 
         var originalPrompt = await ContextPrompt(attachment);
@@ -138,10 +138,10 @@ public sealed class WeaverAnthropicProviderTests
     {
         var client = new ScriptedChatClient();
         var provider = BuildProvider(client, includeSensitiveContextContent: includeSensitive);
-        var sensitive = IndependentContext() with { Sensitivity = AgentContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
-        var secret = IndependentContext() with { Id = "secret", Sensitivity = AgentContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
+        var sensitive = IndependentContext() with { Sensitivity = WeaverContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
+        var secret = IndependentContext() with { Id = "secret", Sensitivity = WeaverContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
 
-        await Collect(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [sensitive, secret])));
+        await Collect(provider.ContinueTurnAsync(WeaverTurnContext.ForMessage("s1", "Inspect", [sensitive, secret])));
 
         var prompt = string.Join("\n", client.CapturedMessages!.Select(message => message.Text));
         Assert.Contains("envelope-only-resource", prompt);
@@ -157,9 +157,9 @@ public sealed class WeaverAnthropicProviderTests
         var client = new ScriptedChatClient();
         var provider = BuildProvider(client);
         var resource = IndependentContext() with { Content = new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" } };
-        var guidance = IndependentContext() with { Id = "guidance", Target = null, Origin = AgentContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
+        var guidance = IndependentContext() with { Id = "guidance", Target = null, Origin = WeaverContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
 
-        await Collect(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [resource, guidance])));
+        await Collect(provider.ContinueTurnAsync(WeaverTurnContext.ForMessage("s1", "Inspect", [resource, guidance])));
 
         var system = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.System).Text;
         var resourceMessage = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.User && message.Text?.StartsWith("Resource context data.", StringComparison.Ordinal) == true).Text;
@@ -176,12 +176,12 @@ public sealed class WeaverAnthropicProviderTests
     public async Task Yields_an_error_when_no_api_key_is_configured()
     {
         var provider = BuildProvider(new ScriptedChatClient(), apiKey: null);
-        var context = AgentTurnContext.ForMessage("s1", "Hi", []);
+        var context = WeaverTurnContext.ForMessage("s1", "Hi", []);
 
         var events = await Collect(provider.ContinueTurnAsync(context));
 
         var error = Assert.Single(events);
-        Assert.Equal(AgentStreamEventKind.Error, error.Kind);
+        Assert.Equal(WeaverStreamEventKind.Error, error.Kind);
         Assert.Equal("weaver.provider.anthropic.unavailable", error.Error!.Code);
     }
 
@@ -191,26 +191,26 @@ public sealed class WeaverAnthropicProviderTests
         return new WeaverAnthropicProvider(new StubChatClientFactory(client), options, NullLogger<WeaverAnthropicProvider>.Instance);
     }
 
-    private static AgentContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
-        AgentContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
+    private static WeaverContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
+        WeaverContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
     {
-        ModuleId = "independent.module", SchemaVersion = "7", Origin = AgentContextOrigin.ClientSnapshot,
+        ModuleId = "independent.module", SchemaVersion = "7", Origin = WeaverContextOrigin.ClientSnapshot,
         Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),
         Client = new("private-client-binding", "private-generation"), AgentScopes = ["private-authority-scope"]
     };
 
-    private static async Task<string> ContextPrompt(AgentContextAttachment attachment)
+    private static async Task<string> ContextPrompt(WeaverContextAttachment attachment)
     {
         var client = new ScriptedChatClient();
-        await Collect(BuildProvider(client).ContinueTurnAsync(AgentTurnContext.ForMessage("s1", "Inspect", [attachment])));
+        await Collect(BuildProvider(client).ContinueTurnAsync(WeaverTurnContext.ForMessage("s1", "Inspect", [attachment])));
         return string.Join("\n", client.CapturedMessages!.Select(message => message.Text));
     }
 
     private static ChatResponseUpdate Update(AIContent content) => new() { Contents = [content] };
 
-    private static async Task<List<AgentStreamEvent>> Collect(IAsyncEnumerable<AgentStreamEvent> events)
+    private static async Task<List<WeaverStreamEvent>> Collect(IAsyncEnumerable<WeaverStreamEvent> events)
     {
-        var list = new List<AgentStreamEvent>();
+        var list = new List<WeaverStreamEvent>();
         await foreach (var item in events)
             list.Add(item);
         return list;

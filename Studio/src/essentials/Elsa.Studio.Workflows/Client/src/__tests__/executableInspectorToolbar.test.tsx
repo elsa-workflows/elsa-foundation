@@ -30,7 +30,7 @@ describe("Executable Inspector toolbar", () => {
     }));
 
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1", api => {
-      api.agent.promptActions.add({
+      api.weaver.promptActions.add({
         id: "weaver.workflows.explain-executable",
         label: "Explain executable",
         placement: "selection",

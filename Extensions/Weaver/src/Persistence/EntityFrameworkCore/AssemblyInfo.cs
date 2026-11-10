@@ -8,11 +8,11 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     PostgreSql = typeof(WeaverPostgreSqlDbContext), MySql = typeof(WeaverMySqlDbContext))]
 [assembly: ManifestExtension("efModules", "Weaver")]
 [assembly: EfSchemaFamily(WeaverEfModule.SchemaFamily, "Weaver", WeaverEfModule.SchemaVersion)]
-[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(AgentSessionRow), nameof(AgentSessionRow.Payload), nameof(AgentSessionRow.PausedTurnPayload),
-    nameof(AgentSessionRow.PendingAuditsPayload))]
-[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(AgentMessageRow), nameof(AgentMessageRow.Payload))]
-[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(AgentContextRow), nameof(AgentContextRow.Payload))]
-[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(AgentProposalRow), nameof(AgentProposalRow.Payload))]
-[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(AgentAuditRow), nameof(AgentAuditRow.Payload))]
-[assembly: EfSchemaIntegrity(WeaverEfModule.SchemaFamily, typeof(AgentDisclosureSnapshotRow), nameof(AgentDisclosureSnapshotRow.Canonical),
+[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverSessionRow), nameof(WeaverSessionRow.Payload), nameof(WeaverSessionRow.PausedTurnPayload),
+    nameof(WeaverSessionRow.PendingAuditsPayload))]
+[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverMessageRow), nameof(WeaverMessageRow.Payload))]
+[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverContextRow), nameof(WeaverContextRow.Payload))]
+[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverProposalRow), nameof(WeaverProposalRow.Payload))]
+[assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverAuditRow), nameof(WeaverAuditRow.Payload))]
+[assembly: EfSchemaIntegrity(WeaverEfModule.SchemaFamily, typeof(WeaverDisclosureSnapshotRow), nameof(WeaverDisclosureSnapshotRow.Canonical),
     "The canonical text a disclosure digest was taken over; it is kept byte-identical and verified against its digest, never upcast.")]
