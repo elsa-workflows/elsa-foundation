@@ -89,23 +89,33 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (!StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, job.TenantPartition))
             throw new InvalidOperationException("The alteration plan tenant does not match its claimed target job.");
 
+        // Before the lease: a job whose plan cannot be read on this node will never run here, however often it is
+        // delivered, and must not take the run from its owner each time.
+        var plaintext = _payloadProtector.Unprotect(
+            plan.PlanId,
+            plan.AuthorityScope.TenantPartition,
+            plan.CanonicalRequestHash,
+            plan.ProtectedPayload);
+        var envelopes = ReadEnvelopes(plaintext);
+
         if (_leaseRunner is null)
         {
-            await ExecuteClaimedAsync(job, plan, cancellationToken);
+            await ExecuteClaimedAsync(job, envelopes, cancellationToken);
             return;
         }
 
-        // Only now, so a duplicate of a finished job or a stale claim never touches the run's ownership.
+        // Only now, so a duplicate of a finished job, a stale claim or an unreadable plan never touches the run's
+        // ownership.
         await _leaseRunner.RunAsync(
             envelope,
-            leasedCancellation => ExecuteClaimedAsync(job, plan, leasedCancellation),
+            leasedCancellation => ExecuteClaimedAsync(job, envelopes, leasedCancellation),
             cancellationToken);
     }
 
     // Reads the run and commits the job's checkpoint. Under a run lease both happen while the lease is held.
     private async ValueTask ExecuteClaimedAsync(
         WorkflowAlterationJobState job,
-        WorkflowAlterationPlanState plan,
+        IReadOnlyList<WorkflowAlterationEnvelope> envelopes,
         CancellationToken cancellationToken)
     {
         var workflow = await _workflowExecutionStateStore.FindAsync(job.WorkflowExecutionId, cancellationToken)
@@ -114,12 +124,6 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (!StringComparer.Ordinal.Equals(workflowPartition, job.TenantPartition))
             throw new InvalidOperationException("The targeted workflow execution tenant does not match the alteration job.");
 
-        var plaintext = _payloadProtector.Unprotect(
-            plan.PlanId,
-            plan.AuthorityScope.TenantPartition,
-            plan.CanonicalRequestHash,
-            plan.ProtectedPayload);
-        var envelopes = ReadEnvelopes(plaintext);
         var activities = _activityExecutionStateStore is null
             ? []
             : await _activityExecutionStateStore.ListAllAsync(workflow.WorkflowExecutionId, cancellationToken);

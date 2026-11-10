@@ -330,6 +330,64 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Assert.Equal(0, harness.Handler.CallCount);
     }
 
+    // A plan this node cannot read will never run here. It must not take the run from its owner on every delivery.
+    [Fact]
+    public async Task ActorCommand_WhosePlanCannotBeRead_IsRefused_BeforeItTouchesTheRunsOwnership()
+    {
+        var harness = await LeasedHarness.CreateAsync(unreadablePlan: true);
+        var drainLease = await harness.OwnershipOf("node-drain").AcquireAsync("workflow-1");
+
+        await Assert.ThrowsAsync<System.Security.Cryptography.CryptographicException>(async () =>
+            await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim)));
+
+        var lease = (await harness.OwnershipRecordAsync()).ExecutionLease!;
+        Assert.Equal(drainLease.LeaseId, lease.LeaseId);
+        Assert.Equal(1, lease.FencingToken);
+        Assert.Equal(0, harness.Handler.CallCount);
+    }
+
+    // The caller's cancellation stops the alteration, not the return of its lease: a host that shuts down must not
+    // leave a live lease behind.
+    [Fact]
+    public async Task ActorCommand_ThatIsCancelled_StillReturnsItsLease()
+    {
+        using var shutdown = new CancellationTokenSource();
+        var harness = await LeasedHarness.CreateAsync(new CompletingHandler(async leasedCancellation =>
+        {
+            await shutdown.CancelAsync();
+            leasedCancellation.ThrowIfCancellationRequested();
+        }));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim), shutdown.Token));
+
+        Assert.Empty(harness.Checkpoints.ListCommits());
+        var record = await harness.OwnershipRecordAsync();
+        Assert.Null(record.ExecutionLease);
+        Assert.Null(record.Heartbeat);
+    }
+
+    // A renewal keeps the mark of a lease borrowed from no owner too. Without it, an alteration that renewed and then
+    // stopped would pass for an owner to the next one.
+    [Fact]
+    public async Task ActorCommand_ThatOutlastsARenewal_WithNoOwner_KeepsItsMark()
+    {
+        RuntimeExecutionLease? renewed = null;
+        LeasedHarness? harness = null;
+        harness = await LeasedHarness.CreateAsync(new CompletingHandler(async _ =>
+        {
+            var borrowed = (await harness!.OwnershipRecordAsync()).ExecutionLease!;
+            harness.Time.Advance(LeaseDuration / 3);
+            await WaitUntilAsync(async () => (await harness.OwnershipRecordAsync()).ExecutionLease!.ExpiresAt > borrowed.ExpiresAt);
+            renewed = (await harness.OwnershipRecordAsync()).ExecutionLease;
+        }));
+
+        await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim));
+
+        Assert.True(BorrowedLeaseMark.IsFromNoOwner(renewed!));
+        Assert.Null((await harness.OwnershipRecordAsync()).ExecutionLease);
+    }
+
     // Borrowing is an operation of the runtime's own ownership service. With a replacement the alteration runs as it
     // did before this lease existed, and says so.
     [Fact]
@@ -505,7 +563,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
 
     private sealed class LeasedHarness
     {
-        private LeasedHarness(CompletingHandler handler, Func<ValueTask>? beforeCommit, Func<ValueTask>? afterCommit, bool replacementOwnership)
+        private LeasedHarness(CompletingHandler handler, Func<ValueTask>? beforeCommit, Func<ValueTask>? afterCommit, bool replacementOwnership, bool unreadablePlan)
         {
             Handler = handler;
             Checkpoints = new InMemoryRuntimeCheckpointCommitStore(
@@ -522,7 +580,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
                 ownership = new ReplacementOwnershipService(ownership);
             Executor = new WorkflowAlterationActorCommandExecutor(
                 Alterations,
-                NewProtector(),
+                unreadablePlan ? new UnreadablePlanProtector() : NewProtector(),
                 Workflows,
                 new WorkflowAlterationJobExecutor(new SingleHandlerResolver(handler), writer, Time),
                 activityExecutionStateStore: null,
@@ -559,9 +617,10 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             CompletingHandler? handler = null,
             Func<ValueTask>? beforeCommit = null,
             Func<ValueTask>? afterCommit = null,
-            bool replacementOwnership = false)
+            bool replacementOwnership = false,
+            bool unreadablePlan = false)
         {
-            var harness = new LeasedHarness(handler ?? new CompletingHandler(), beforeCommit, afterCommit, replacementOwnership);
+            var harness = new LeasedHarness(handler ?? new CompletingHandler(), beforeCommit, afterCommit, replacementOwnership, unreadablePlan);
             await harness.Workflows.SaveAsync(NewWorkflow());
             harness.Claim = await AdmitSealAndClaimAsync(harness.Alterations);
             return harness;
@@ -611,6 +670,16 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
 
         public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default) =>
             inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
+    }
+
+    // A node whose key ring cannot open the plan's payload.
+    private sealed class UnreadablePlanProtector : IWorkflowAlterationPayloadProtector
+    {
+        public ProtectedWorkflowAlterationPayload Protect(string planId, string tenantPartition, string canonicalRequestHash, string plaintext) =>
+            throw new NotSupportedException();
+
+        public string Unprotect(string planId, string tenantPartition, string canonicalRequestHash, ProtectedWorkflowAlterationPayload payload) =>
+            throw new System.Security.Cryptography.CryptographicException("The payload key is not configured on this node.");
     }
 
     // Runs a callback the first time the clock is read, which is between the service's read and its write.
