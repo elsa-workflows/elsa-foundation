@@ -28,5 +28,39 @@ public sealed class WorkflowOutputWireTests
         Assert.Equal(view.Outputs.Keys, restored.Outputs.Keys);
     }
 
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"outputs\"")]
+    [InlineData("{\"Result\":null}")]
+    [InlineData("{\"Result\":§,\"Result\":§}")]
+    public void Malformed_runtime_outputs_are_rejected_rather_than_partially_read(string outputs)
+    {
+        var contract = DetailsContract();
+        var view = new WorkflowInstanceDetailsView(null!, [], [], new Dictionary<string, WorkflowOutputView>(StringComparer.Ordinal) { ["Result"] = Output("only") }, "Balanced", "Workflow");
+        var json = JsonSerializer.SerializeToElement(view, contract);
+        var valid = json.GetProperty("outputs").GetProperty("Result").GetRawText();
+        var malformed = json.GetRawText().Replace(json.GetProperty("outputs").GetRawText(), outputs.Replace("§", valid));
+
+        Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize(malformed, contract));
+    }
+
+    [Fact]
+    public void Truncated_runtime_outputs_are_rejected()
+    {
+        var contract = DetailsContract();
+        var view = new WorkflowInstanceDetailsView(null!, [], [], new Dictionary<string, WorkflowOutputView>(StringComparer.Ordinal) { ["Result"] = Output("only") }, "Balanced", "Workflow");
+        var text = JsonSerializer.SerializeToElement(view, contract).GetRawText();
+        var truncated = text[..(text.IndexOf("\"Result\"", StringComparison.Ordinal) + "\"Result\"".Length)];
+
+        Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize(truncated, contract));
+    }
+
+    private static System.Text.Json.Serialization.Metadata.JsonTypeInfo DetailsContract()
+    {
+        var type = RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext")!;
+        var context = (JsonSerializerContext)type.GetProperty("Default")!.GetValue(null)!;
+        return context.GetTypeInfo(typeof(WorkflowInstanceDetailsView))!;
+    }
+
     private static WorkflowOutputView Output(string note) => WorkflowOutputView.From(new WorkflowOutputProjection("Result", JsonSerializer.SerializeToElement(new { Note = note }), false, null, null!, DateTimeOffset.UnixEpoch) { CaptureMode = RuntimePayloadCaptureMode.Payload });
 }

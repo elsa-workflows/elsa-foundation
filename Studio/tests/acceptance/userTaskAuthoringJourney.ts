@@ -6,7 +6,7 @@ const jsonAlias = "System.Text.Json.JsonElement";
 // Real Studio authoring and autosave, followed by real publication, response and result reads.
 // Forms/tasks, run navigation and results use the project's viewport. Multi-pane graph wiring
 // uses desktop size; affected authoring inspectors are additionally captured at project size.
-export async function userTaskAuthoringJourney(page: Page, info: TestInfo, capture: Capture, registerDefinition: (id: string) => void) {
+export async function userTaskAuthoringJourney(page: Page, info: TestInfo, capture: Capture, registerDefinition: (id: string) => void, registerCleanup: (cleanup: () => Promise<void>) => void) {
   const base = process.env.UX_BACKEND_URL;
   if (!base || process.env.UX_ACCEPTANCE_OWNED !== "1") throw new Error("Owned backend URL is required");
   const get = async (path: string) => { const response = await page.request.get(`${base}${path}`); expect(response.ok(), await response.text()).toBe(true); return response.json(); };
@@ -19,10 +19,31 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const title = `Approval ${suffix}`;
   const who = await get("/runtime/user-task-identity");
   let runId: string | null = null;
+  // A failure between starting the run and Approve would leave an open task in admin's inbox, and the next
+  // project's inbox journey starts from "No tasks here". Close any task this run still holds open.
+  registerCleanup(async () => {
+    if (!runId) return;
+    const listed = await page.request.get(`${base}/runtime/user-tasks?view=mine&limit=100`, { timeout: 5_000 });
+    if (!listed.ok()) throw new Error(`Cleanup could not list user tasks: HTTP ${listed.status()}`);
+    const open = ((await listed.json()).items as Array<{ id: string; workflowExecutionId: string; status: string; revision: number }>)
+      .filter(item => item.workflowExecutionId === runId && (item.status === "Open" || item.status === "Claimed"));
+    for (const task of open) {
+      const closed = await page.request.post(`${base}/runtime/user-tasks/${encodeURIComponent(task.id)}/complete`, {
+        timeout: 5_000,
+        data: { revision: task.revision, requestId: `acceptance-cleanup-${task.id}`, action: "Reject", data: { Note: "Closed by acceptance cleanup" } }
+      });
+      if (!closed.ok()) throw new Error(`Cleanup could not close open user task ${task.id}: HTTP ${closed.status()}`);
+    }
+  });
   const save = async () => {
     const response = page.waitForResponse(item => item.request().method() === "PUT" && item.url().includes("/design/workflows/drafts/"));
     await page.getByRole("button", { name: "Save", exact: true }).click();
     expect((await response).ok()).toBe(true);
+    // An in-flight autosave can answer the wait above. "Saved" appears only once the explicit save covers the
+    // live draft, and nothing is pending, so a reload cannot drop the final layout or meet the unsaved-changes guard.
+    const saveStatus = page.locator(".wf-editor-save-status");
+    await expect(saveStatus).toHaveText(/Saved$/);
+    await expect(saveStatus).not.toHaveAttribute("data-pending");
   };
   const selectVariable = async (select: Locator) => {
     await expect(select).toBeEnabled();

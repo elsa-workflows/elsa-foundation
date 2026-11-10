@@ -248,6 +248,52 @@ it("serializes target paging and retries a failed page before advancing", async 
   expect([...container.querySelectorAll("option")].map(x => x.value)).toEqual(["", "first", "middle", "last"]);
 });
 
+describe("assignee and group assignment rule", () => {
+  const targetsPage = () => vi.fn().mockResolvedValue({ users: [{ id: "alice", name: "Alice" }], groups: [{ id: "buyers", name: "Buyers" }], moreUsers: false, moreGroups: false });
+  async function renderAssignment(group: boolean, inputValues: Record<string, unknown> | undefined) {
+    const validation = vi.fn();
+    await act(async () => root.render(<AssignmentEditor api={api(targetsPage())} group={group} value={null} onChange={vi.fn()} onValidationChange={validation}
+      descriptor={{ name: group ? "GroupId" : "AssigneeId", typeName: "String" }} context={{ activity: {}, expressionDescriptors: [], inputValues }} />));
+    return validation;
+  }
+  const alerts = () => [...container.querySelectorAll('[role="alert"]')].map(item => item.textContent);
+
+  it("accepts exactly one of an assignee or a group", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "alice", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(false);
+    expect(alerts()).toEqual([]);
+    expect(container.querySelector("select")!.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("asks to clear one side when both an assignee and a group are set", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "alice", GroupId: "buyers" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual(["Choose either an assignee or a group; clear the other assignment."]);
+    expect(container.querySelector("select")!.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("asks for an assignee or a group when neither is set, treating whitespace as unset", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "  ", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual(["Select an assignee or a group for this task."]);
+  });
+
+  it("reports the rule from the group row without repeating the message", async () => {
+    const validation = await renderAssignment(true, { AssigneeId: "", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual([]);
+  });
+
+  it("does not judge the rule while either side is an expression rather than a literal", async () => {
+    // Expression-valued inputs are absent from inputValues; their runtime value is unknown at design time.
+    const validation = await renderAssignment(false, { AssigneeId: "" });
+    expect(validation).toHaveBeenLastCalledWith(false);
+    expect(alerts()).toEqual([]);
+    await act(async () => root.unmount()); root = createRoot(container);
+    expect(await renderAssignment(false, undefined)).toHaveBeenLastCalledWith(false);
+  });
+});
+
 it("renders an explicit external integration and submits its nested case-sensitive response", async () => {
   const custom = { ...task(), form: { id: "external", version: "immutable-1", name: "External", provider: "acme.forms/1", fields: [] } };
   const post = vi.fn().mockResolvedValue({ ...custom, status: "CompletionPending", revision: 2 });

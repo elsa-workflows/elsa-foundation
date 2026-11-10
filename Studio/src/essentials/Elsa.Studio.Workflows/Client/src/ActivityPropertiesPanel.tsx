@@ -571,8 +571,7 @@ function PropertyRow({
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
   const context: StudioActivityPropertyEditorContext = {
     activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled,
-    inputValues: Object.fromEntries(activityDescriptor.inputs.filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
-      .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)])),
+    inputValues: readLiteralInputValues(activity, activityDescriptor),
     setLiteralInputs: values => {
       const current = latestProperty.current;
       if (current.editorDisabled || current.activity.nodeId !== activity.nodeId) return;
@@ -1250,8 +1249,8 @@ function PropertyRow({
 const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
 
 /**
- * Contributions observe the current activity, including related inputs. Reuse a row only while
- * that activity and the rest of its authoring context are unchanged.
+ * Reuse a row across a sibling input edit unless the row reads the activity: through a property editor
+ * contribution it resolved, or through an expression editor that opted into activity context.
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (
@@ -1292,8 +1291,8 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
   const propertyName = getInputPropertyName(previous.input);
   if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
   if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
-  // Property editor contributions receive the activity and literal inputs as context.
-  if (previous.editors.length > 0 || next.editors.length > 0) return false;
+  // A row that resolved a property editor contribution receives the activity and its literal inputs as context.
+  if (resolvesPropertyEditor(previous) || resolvesPropertyEditor(next)) return false;
   // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
   return !expressionEditorReadsActivity(previous) && !expressionEditorReadsActivity(next);
 }
@@ -1912,6 +1911,25 @@ function replacesGenericDictionaryEditor(
   syntax: string
 ) {
   return !!editor && editor.id !== objectExpressionEditorId && (syntax === "Object" || syntax === "Literal");
+}
+
+/** Literal values of the activity's other readable inputs, keyed as property editor contributions address them. */
+function readLiteralInputValues(activity: ActivityNode, activityDescriptor: StudioActivityDescriptor) {
+  return Object.fromEntries(activityDescriptor.inputs
+    .filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
+    .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)]));
+}
+
+function resolvesPropertyEditor(props: PropertyRowProps) {
+  if (props.editors.length === 0) return false;
+  return !!resolveEditor(props.editors, props.input, {
+    activity: props.activity,
+    activityId: props.activity.nodeId,
+    expressionDescriptors: props.expressionDescriptors,
+    readOnly: props.readOnly,
+    inputValues: readLiteralInputValues(props.activity, props.activityDescriptor),
+    setLiteralInputs: () => undefined
+  });
 }
 
 function resolveEditor(

@@ -36,7 +36,7 @@ test("user task authoring and workflow result", async ({ page }, info) => {
   createdWorkflows.set(page, creations);
   await userTaskAuthoringJourney(page, info, capture, id => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
-  });
+  }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
@@ -45,6 +45,12 @@ test.afterEach(async ({ page, playwright }, info) => {
   const failures: Error[] = [];
   const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
   let cleanup: APIRequestContext | undefined;
+  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
+  // They run first, so an open task is closed while its workflow definition still exists.
+  for (const ownedCleanup of ownedCleanups.get(page) ?? []) {
+    try { await ownedCleanup(); }
+    catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
+  }
   // This hook and request context outlive a timed-out body. Delete only registered, case-owned IDs.
   try {
     if (creations.length) {
@@ -78,11 +84,6 @@ test.afterEach(async ({ page, playwright }, info) => {
     try {
       await info.attach("workflow-cleanup.json", { body: JSON.stringify({ requestTimeoutMs: 5_000, ownedIds: creations.map(item => item.id), primaryErrors: info.errors, outcomes }, null, 2), contentType: "application/json" });
     } catch (error) { failures.push(new Error("Could not retain the workflow cleanup results", { cause: error })); }
-  }
-  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
-  for (const ownedCleanup of ownedCleanups.get(page) ?? []) {
-    try { await ownedCleanup(); }
-    catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
   }
   try { expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]); }
   catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
