@@ -87,7 +87,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
             WeaverAuditEventKind.SessionCreated,
             session.Id,
             session.ActorId,
-            "Agent session created.",
+            "Weaver session created.",
             now,
             new Dictionary<string, string> { ["providerId"] = session.ProviderId }), cancellationToken);
 
@@ -121,7 +121,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
     public async Task<WeaverMessage> AddMessageAsync(string sessionId, WeaverMessageCreateRequest request, CancellationToken cancellationToken = default)
     {
         if (await RowAsync(sessionId, cancellationToken) is not { } loaded)
-            throw new InvalidOperationException($"Agent session '{sessionId}' was not found.");
+            throw new InvalidOperationException($"Weaver session '{sessionId}' was not found.");
         sessionId = loaded.Session.Id;
 
         var message = new WeaverMessage(
@@ -150,7 +150,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
         // Canonical records are computed before the row monitor is taken; only snapshots the session has not recorded are written.
         var snapshots = message.DisclosureHistory?.Select(WeaverDisclosureHistory.Record).ToArray() ?? [];
 
-        var (accepted, inserted) = await CommitAsync<(WeaverMessage Message, bool Inserted)>(sessionId, () => throw new InvalidOperationException($"Agent session '{sessionId}' was not found."), row =>
+        var (accepted, inserted) = await CommitAsync<(WeaverMessage Message, bool Inserted)>(sessionId, () => throw new InvalidOperationException($"Weaver session '{sessionId}' was not found."), row =>
         {
             var messages = row.Messages;
             if (request.Role == WeaverRole.Tool && !string.IsNullOrEmpty(request.RequestId))
@@ -197,7 +197,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
             WeaverAuditEventKind.MessageAccepted,
             sessionId,
             null,
-            "Agent message accepted.",
+            "Weaver message accepted.",
             accepted.CreatedAt,
             new Dictionary<string, string> { ["messageId"] = accepted.Id, ["role"] = accepted.Role.ToString() }), cancellationToken);
 
@@ -229,11 +229,11 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
     /// </summary>
     public Task<WeaverResult<WeaverMessage>> WithdrawMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
         => CommitAsync<WeaverResult<WeaverMessage>>(sessionId,
-            () => WeaverResult<WeaverMessage>.Failure("weaver.session.not_found", $"Agent session '{sessionId}' was not found.", 404), row =>
+            () => WeaverResult<WeaverMessage>.Failure("weaver.session.not_found", $"Weaver session '{sessionId}' was not found.", 404), row =>
             {
                 var message = row.Messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.Ordinal));
                 if (message is not { Role: WeaverRole.User })
-                    return new(WeaverResult<WeaverMessage>.Failure("weaver.message.not_found", $"Agent message '{messageId}' was not found in session '{sessionId}'.", 404));
+                    return new(WeaverResult<WeaverMessage>.Failure("weaver.message.not_found", $"Weaver message '{messageId}' was not found in session '{sessionId}'.", 404));
                 if (message.Status != WeaverMessageStatus.Pending || turns?.IsActive(row.Session.Id) == true)
                     return new(WeaverResult<WeaverMessage>.Failure("weaver.message.not_pending", "The prompt is not waiting to start, so it cannot be withdrawn.", 409));
                 var planned = PlanMessageStatus(row, messageId, WeaverMessageStatus.Pending, WeaverMessageStatus.Cancelled, WeaverMessageStatusReasons.Withdrawn);
@@ -276,7 +276,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
         if (attachments.Count == 0)
             return;
 
-        await CommitAsync<bool>(sessionId, () => throw new InvalidOperationException($"Agent session '{sessionId}' was not found."), row =>
+        await CommitAsync<bool>(sessionId, () => throw new InvalidOperationException($"Weaver session '{sessionId}' was not found."), row =>
         {
             var existingIds = row.Context.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
             var added = attachments.Where(x => existingIds.Add(x.Id)).ToArray();
@@ -437,7 +437,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
     internal Task SavePausedTurnAsync(WeaverPausedTurn state, CancellationToken cancellationToken = default)
     {
         var snapshots = state.DisclosureHistory?.Select(WeaverDisclosureHistory.Record).ToArray() ?? [];
-        return CommitAsync<bool>(state.SessionId, () => throw new InvalidOperationException($"Agent session '{state.SessionId}' was not found."), row =>
+        return CommitAsync<bool>(state.SessionId, () => throw new InvalidOperationException($"Weaver session '{state.SessionId}' was not found."), row =>
         {
             var interned = row.Intern(state);
             var added = row.Unrecorded(snapshots);
@@ -812,7 +812,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
         // A proposal decided on a version that moved meanwhile; its caller refuses the decision with a conflict.
         if (written.Outcome == WeaverSessionRecordOutcome.VersionConflict)
             throw new WeaverProposalConflictException(write.SessionId);
-        throw new WeaverContributionException($"Agent session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
+        throw new WeaverContributionException($"Weaver session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
     }
 
     /// <summary>Under the session write gate: hydrate, plan under the row monitor, await the write, apply under the monitor.</summary>
@@ -913,7 +913,7 @@ internal sealed class InMemoryWeaverSessionService(IWeaverAuditSink auditSink, T
     private void ThrowIfShutDown(string sessionId)
     {
         if (Volatile.Read(ref _disposed) == 1)
-            throw new ObjectDisposedException(nameof(InMemoryWeaverSessionService), $"This host process is shutting down; agent session '{sessionId}' was not loaded.");
+            throw new ObjectDisposedException(nameof(InMemoryWeaverSessionService), $"This host process is shutting down; Weaver session '{sessionId}' was not loaded.");
     }
 
     /// <summary>After shutdown began, gives back the lease a completed store operation just took or extended; true when it did.</summary>
@@ -1161,7 +1161,7 @@ internal sealed class InMemoryWeaverFeedbackService(IWeaverAuditSink auditSink) 
             WeaverAuditEventKind.FeedbackReceived,
             feedback.SessionId,
             feedback.ActorId,
-            "Agent feedback received.",
+            "Weaver feedback received.",
             feedback.CreatedAt,
             new Dictionary<string, string> { ["feedbackId"] = feedback.Id, ["messageId"] = feedback.MessageId ?? string.Empty, ["rating"] = feedback.Rating }), cancellationToken);
 

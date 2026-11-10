@@ -9,7 +9,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Weaver")]
 [ManifestFeatureCategory("Persistence")]
-[ShellFeature(name: "WeaverEntityFrameworkCore", DisplayName = "Foundation Agent Entity Framework Core Persistence",
+[ShellFeature(name: "WeaverEntityFrameworkCore", DisplayName = "Foundation Weaver Entity Framework Core Persistence",
     Description = "Opt-in durable Weaver sessions: the session record store and owner-scoped audit in a relational database, with owner, fence and database-time lease checks and protected payloads.",
     DependsOn = new object[] { "Weaver", "Secrets" })]
 [UsesEfModule("Weaver")]

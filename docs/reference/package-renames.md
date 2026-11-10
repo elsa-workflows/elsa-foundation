@@ -90,3 +90,31 @@ Not renamed: the branch name `agent/codex/3538-specialist-design` in the spec he
 Version line: [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted) gives the rename one Minor bump of the single pre-GA version line, with this page as its release note. The bump is not part of this stage. It is one change of its own, `ElsaVersion` 4.0 → 4.1 in `VersionLines.props`, made after the last rename stage (3b, Weaver's own wording) has merged, so that every Line B package moves to the new minor once and the note it carries is the complete map. Until then the renamed ids are published on the current line (see the top of this page) and this ledger records the break.
 
 Weaver enum members and JSON property names that still say agent (`agentScopes`, `AgentHarnessProvider`, `SubAgents`) are wire names and stay until an owner decision; the analyzer checks type and namespace declarations only, so it does not flag them.
+
+## 2026-11-11: Weaver's own words follow (stage 3b of the agent rename)
+
+Decision: plan on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). Stages 1 and 1b renamed the Weaver packages and types; this stage renames what was left inside the Weaver layer that still said agent: file names, CSS classes, messages, test names and catalog text. No package, public .NET type, route, error code, permission id, table or persisted identifier changes.
+
+| Kind | Was | Is |
+|---|---|---|
+| Studio Hosting client folder | `Client/src/app/agent/` | `Client/src/app/weaver/`; the two barrel files become one `app/weaver/index.ts` |
+| Studio client files | `agentClient.ts`, `agentContext.ts`, `agentContributions.ts`, `agentErrors.ts`, `agentStream.ts`, `agentTypes.ts`, `Agent*.tsx` components, `workflowAgent*.ts(x)`, `useWorkflowLibraryAgent.ts`, `workflowLibraryAgent.ts` and their tests | the same names with `weaver` / `Weaver` |
+| Studio client locals and non-exported helpers | `agent…` / `Agent…` | `weaver…` / `Weaver…` |
+| Studio CSS classes | `agent-*` (for example `agent-proposal-result`, `agent-result-control`) | `weaver-*`. Twenty `agent-*` rules that no markup used were deleted instead of renamed, because their new names collided with live `weaver-*` rules |
+| Studio client defaults | proposal resource type `"agent-proposal"`, contributor id fallback `"agent"` | `"weaver-proposal"`, `"weaver"`. Both are client-side fallbacks used only when the server sends no value |
+| Feature display names | `Foundation Agent Abstractions`, `Foundation Workflows Agent`, `Anthropic (Claude) Agent Provider`, ... | `Foundation Weaver Abstractions`, `Foundation Workflows Weaver`, `Anthropic (Claude) Weaver Provider`, ... The feature `name:` strings (`"Weaver"`, `"WeaverAnthropic"`, ...) are unchanged |
+| Human-readable texts | error messages, audit summaries, permission display names and tool descriptions that said "agent" or "the agent" | Weaver. Error codes and permission ids are unchanged |
+| Conformance probe (`tools/studio/Weaver.Conformance.Probe`) | `agent_transport.py`, `test_agent_transport.py`; evidence files `agent-streams.json`, `agent-requests.json`, `agent-records.db`, `agent.db`; evidence folder `durable-agent-store` | `weaver_transport.py`, `test_weaver_transport.py`; `weaver-streams.json`, `weaver-requests.json`, `weaver-records.db`, `weaver.db`; `durable-weaver-store` |
+| Test fixture | `workflowAgentRegistrations.json` | `workflowWeaverRegistrations.json` |
+| Test names | `..._agent_...`, `Agent...Tests` method names for Weaver behaviour | `..._weaver_...` |
+| Catalog and README text under `Extensions/Weaver/src` | "Agent foundation", "Workflow agent", "agent provider" headings and prose | Weaver |
+
+Three README corrections ride along, each checked against the code: the provider configuration key is `"Weaver"` (sections `Elsa:Weaver:Anthropic` and `Elsa:Weaver:GitHubCopilot`), not `"Agent"`; the migration folders are `Migrations/Weaver/<Provider>/` with the context filter `'Weaver.*DbContext'`; and the reserved owner-code prefix is `weaver.`.
+
+Not renamed, because each is a wire name, a persisted value or a different meaning of the word:
+
+- Weaver wire names: `agentScopes` / `AgentScopes`, `AgentHarnessProvider` / `"agent-harness-provider"`, `SubAgents`, the contribution ids `workflows.agent.layout-result`, `workflows.agent.page-revert` and `workflows.agent.batch-undo`, and the `agent` property of the SDK prompt request. Renaming them changes what clients and stored sessions exchange; that is an owner decision.
+- The `foundationagent` environment-variable prefix the probe scrubs, and the removed placeholder type names (`IWorkflowAgentContextProvider`, `WorkflowAgentContext`, `WorkflowAgentPermissionSummary`) that the probe and `WorkflowWeaverNativeAuthorityTests` assert are gone. Those lists name types as they were shipped.
+- User-defined agents (`Elsa.Agent.*`, `elsa.agent`, `agent.manifest.*`), which are the product's agents and keep the word.
+- Runtime execution agents in `Elsa.Workflows.Runtime` (mailbox and `GetAgentAsync` wording) and coding agents (`AGENTS.md`, `.agents/`, `ready-for-agent`).
+- "Agent loop" and `User-Agent`, which are general terms.

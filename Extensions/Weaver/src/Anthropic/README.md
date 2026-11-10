@@ -1,6 +1,6 @@
-# Anthropic agent provider
+# Anthropic Weaver provider
 
-`Elsa.Weaver.Anthropic` binds Elsa's provider-neutral agent contracts to the Anthropic API through
+`Elsa.Weaver.Anthropic` binds Elsa's provider-neutral Weaver contracts to the Anthropic API through
 `Microsoft.Extensions.AI`. It registers provider ID `anthropic` and implements the host-driven step loop: the Elsa
 turn orchestrator owns the loop, the history and every tool dispatch, and the provider maps one step to one model
 request.
@@ -14,7 +14,7 @@ The `WeaverAnthropic` feature registers the provider. It stays unavailable until
 ```json
 {
   "Elsa": {
-    "Agent": {
+    "Weaver": {
       "Anthropic": {
         "Enabled": true,
         "ApiKeyEnvironmentVariable": "ANTHROPIC_API_KEY",
@@ -26,7 +26,7 @@ The `WeaverAnthropic` feature registers the provider. It stays unavailable until
 ```
 
 Supported settings: `Enabled`, `ApiKey`, `ApiKeyEnvironmentVariable`, `Model`, `SystemMessage`, `MaxOutputTokens` and
-`IncludeSensitiveContextContent`. Only one agent provider can be enabled at a time.
+`IncludeSensitiveContextContent`. Only one Weaver provider can be enabled at a time.
 
 ## Conversation state
 

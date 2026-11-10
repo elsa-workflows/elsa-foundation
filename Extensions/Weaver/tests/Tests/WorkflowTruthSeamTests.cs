@@ -241,7 +241,7 @@ public sealed class WorkflowTruthSeamTests
 
         var reported = Content(Single(contribution, DefaultWorkflowWeaverContextProvider.PermissionsContentType));
         // The owner still allows managing the workflow; only the host policy withholds the tool. The capability is admitted
-        // by its own id, as the Agent API admits it, so it stays.
+        // by its own id, as the Weaver API admits it, so it stays.
         Assert.Equal("allowed", reported.GetProperty("manage").GetString());
         Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(reported, "capabilities"));

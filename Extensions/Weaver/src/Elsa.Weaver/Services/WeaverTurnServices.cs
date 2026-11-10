@@ -172,7 +172,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         var provider = boundary.Call("select-provider", () => providers.Active, cancellationToken);
         if (provider is null)
         {
-            yield return Error("weaver.provider.not_found", "No agent harness is enabled.", 404);
+            yield return Error("weaver.provider.not_found", "No Weaver harness is enabled.", 404);
             yield break;
         }
 
@@ -665,7 +665,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
             var cleanupFailures = new List<Exception>();
             void RecordCleanupFailure(string operation, Exception cause)
                 => cleanupFailures.Add(new WeaverContributionException(
-                    $"Agent disclosure '{operation}' for session '{sessionId}' could not complete.", cause));
+                    $"Weaver disclosure '{operation}' for session '{sessionId}' could not complete.", cause));
             try
             {
                 if ((prepared is null ? preparationSource : prepared.Source) is { } source && !paused && !sourceMoved)
@@ -723,8 +723,8 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                     // Cleanup failures must neither replace the original causal failure nor
                     // prevent the other cleanup operations. The transport caller owns logging.
                     if (boundary.Failure is { } primaryFailure) cleanupFailures.Insert(0, primaryFailure);
-                    throw new WeaverContributionException($"Agent disclosure 'cleanup-turn' for session '{sessionId}' could not complete.",
-                        new AggregateException("Agent disclosure cleanup encountered retained failures.", cleanupFailures));
+                    throw new WeaverContributionException($"Weaver disclosure 'cleanup-turn' for session '{sessionId}' could not complete.",
+                        new AggregateException("Weaver disclosure cleanup encountered retained failures.", cleanupFailures));
                 }
             }
         }
@@ -741,14 +741,14 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         internal WeaverContributionException Capture(string operation, Exception cause)
         {
             var domain = cause as WeaverContributionException ?? new WeaverContributionException(
-                $"Agent disclosure '{operation}' for session '{SessionId}' could not complete.", cause);
+                $"Weaver disclosure '{operation}' for session '{SessionId}' could not complete.", cause);
             lock (gate)
             {
                 if (Failure is null) Failure = domain;
                 else if (!Contains(Failure, domain))
                     Failure = Contains(domain, Failure) ? domain : new WeaverContributionException(
-                        $"Agent disclosure '{operation}' for session '{SessionId}' encountered multiple failures.",
-                        new AggregateException("Agent disclosure retained multiple causal failures.", Failure, domain));
+                        $"Weaver disclosure '{operation}' for session '{SessionId}' encountered multiple failures.",
+                        new AggregateException("Weaver disclosure retained multiple causal failures.", Failure, domain));
                 return Failure;
             }
         }
@@ -873,7 +873,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         catch (WeaverContributionException) { throw; }
         catch (Exception cause)
         {
-            throw new WeaverContributionException($"Agent disclosure '{operation}' for session '{sessionId}' could not be recorded.", cause);
+            throw new WeaverContributionException($"Weaver disclosure '{operation}' for session '{sessionId}' could not be recorded.", cause);
         }
         return new("weaver.history.provenance_unavailable", "The assistant transcript could not retain complete disclosure history. Its recorded effects remain unchanged; start a fresh supported session.", 503);
     }
@@ -934,7 +934,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                 catch (Exception cause)
                 {
                     fail(cause as WeaverContributionException ?? new WeaverContributionException(
-                        $"Agent disclosure 'admit-tool' for session '{invocation.SessionId}' could not be established.", cause));
+                        $"Weaver disclosure 'admit-tool' for session '{invocation.SessionId}' could not be established.", cause));
                     current = new(null, new("weaver.tool.admission_unavailable", "Current tool admission could not be established.", 503), true);
                 }
                 if (current.Error is { } refusal)
@@ -950,7 +950,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                 catch (Exception cause)
                 {
                     fail(cause as WeaverContributionException ?? new WeaverContributionException(
-                        $"Agent disclosure 'dispatch-tool' for session '{invocation.SessionId}' could not complete.", cause));
+                        $"Weaver disclosure 'dispatch-tool' for session '{invocation.SessionId}' could not complete.", cause));
                     stop(new("weaver.tool.admission_unavailable", "The current tool operation could not complete safely.", 503));
                     throw new OperationCanceledException("Provider disclosure stopped during tool dispatch.", cancellationToken);
                 }
@@ -966,7 +966,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                     catch (Exception cause)
                     {
                         fail(cause as WeaverContributionException ?? new WeaverContributionException(
-                            $"Agent disclosure 'admit-result' for session '{invocation.SessionId}' could not be established.", cause));
+                            $"Weaver disclosure 'admit-result' for session '{invocation.SessionId}' could not be established.", cause));
                         denied = new("weaver.result.disclosure_unavailable", "The observed outcome could not be admitted for provider disclosure. Its effect is retained and will not be repeated.", 503);
                     }
                     if (denied is not null)
@@ -1129,7 +1129,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         catch (WeaverContributionException) { throw; }
         catch (Exception cause)
         {
-            throw new WeaverContributionException($"Agent disclosure 'authorize-history' for session '{session.Id}' could not be established.", cause);
+            throw new WeaverContributionException($"Weaver disclosure 'authorize-history' for session '{session.Id}' could not be established.", cause);
         }
     }
 
@@ -1186,7 +1186,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         catch (WeaverContributionException) { throw; }
         catch (Exception cause)
         {
-            throw new WeaverContributionException($"Agent disclosure 'admit-evidence' for session '{session.Id}' could not be established.", cause);
+            throw new WeaverContributionException($"Weaver disclosure 'admit-evidence' for session '{session.Id}' could not be established.", cause);
         }
     }
 
@@ -1295,7 +1295,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         catch (WeaverContributionException) { throw; }
         catch (Exception cause)
         {
-            throw new WeaverContributionException($"Agent disclosure 'save-paused-turn' for session '{sessionId}' could not be retained.", cause);
+            throw new WeaverContributionException($"Weaver disclosure 'save-paused-turn' for session '{sessionId}' could not be retained.", cause);
         }
         return new("weaver.history.provenance_unavailable", "The paused transcript could not retain complete disclosure history. Its operation remains retained and cannot be replayed.", 503);
     }

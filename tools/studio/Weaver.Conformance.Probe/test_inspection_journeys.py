@@ -353,7 +353,7 @@ class GateTests(unittest.TestCase):
                        lambda name, value: value["native"]["edit-refused"].update(unchanged=False),
                        lambda name, value: value["native"]["edit-refused"].update(offered=[BATCH_TOOL]),
                        lambda name, value: value["native"]["edit-refused"].pop("offered"),
-                       lambda name, value: value["native"].pop("design-agent-absent" if name.endswith("versions") else "runtime-agent-absent"),
+                       lambda name, value: value["native"].pop("design-weaver-absent" if name.endswith("versions") else "runtime-weaver-absent"),
                        lambda name, value: value["native"]["stale-hash" if name.endswith("executables") else "compare"].update(control="other"),
                        lambda name, value: value["browser"]["observations"].update(readOnly=False),
                        lambda name, value: value.update(adapter="other")):

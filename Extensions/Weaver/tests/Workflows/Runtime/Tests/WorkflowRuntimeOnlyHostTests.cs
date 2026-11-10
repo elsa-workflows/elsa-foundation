@@ -18,7 +18,7 @@ using static Elsa.Weaver.Workflows.Runtime.Tests.WorkflowRuntimeWeaverTestHost;
 namespace Elsa.Weaver.Workflows.Runtime.Tests;
 
 // Spec 1193 SC-009 (FR-027), the started Runtime-only shape: a real CShells shell with the Workflows Runtime API and the
-// Runtime-side workflow agent package only. The Executable is read through the real Runtime API inspection over the
+// Runtime-side workflow Weaver package only. The Executable is read through the real Runtime API inspection over the
 // runtime's own executable stores; no Workflows Design assembly is composed or loaded; Design journeys are unavailable.
 public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
 {
@@ -143,8 +143,8 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
     }
 }
 
-/// <summary>The test host's permission decisions in place of the Agent API's HTTP authorizer: every permission is granted.</summary>
-[ShellFeature(name: "TestAgentAuthority", DisplayName = "Test agent authority", Description = "Grants every tool permission in composition tests.",
+/// <summary>The test host's permission decisions in place of the Weaver API's HTTP authorizer: every permission is granted.</summary>
+[ShellFeature(name: "TestWeaverAuthority", DisplayName = "Test Weaver authority", Description = "Grants every tool permission in composition tests.",
     DependsOn = new object[] { typeof(WeaverWorkflowsRuntimeFeature) })]
 public sealed class TestWeaverAuthorityFeature : IShellFeature
 {

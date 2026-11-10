@@ -43,7 +43,7 @@ BUSY_RUN_ORDER = ("create", "command", "message", "initialStream", "busyReview",
 class Native:
     """Builds the retained shape of one Python lifecycle case; mutations change parts before writing.
 
-    Parts are written like AgentTransport receipts, ``NNNN-<name>.json`` in retention order; ``order`` maps the
+    Parts are written like WeaverTransport receipts, ``NNNN-<name>.json`` in retention order; ``order`` maps the
     default order to the written one, and a name it omits is not retained at all."""
     def __init__(self, root, key, provider, mutate=None, order=None):
         self.root, self.key, self.provider = Path(root), key, provider
@@ -374,7 +374,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                        {"kind": "toolApprovalRequested", "proposalId": proposal["id"]}]
         frames.append({"kind": "completed"})
         body = "".join("data: " + json.dumps(dict(value, id="event-" + str(index))) + "\n\n" for index, value in enumerate(frames))
-        files["agent-streams"] = [AutonomyEvidenceTests.stream(body)]
+        files["weaver-streams"] = [AutonomyEvidenceTests.stream(body)]
         files["autonomy-create-session"] = {"status": 200, "request": {"autonomyMode": mode or "manual"}, "response": {"data": {"sessionId": SESSION, "policy": policy}}}
         accepted = {"status": 200, "response": {"data": {"message": {"sessionId": SESSION, "acceptedPolicy": copy.deepcopy(policy)}}}}
         base = BACKEND + "/_elsa/weaver"
@@ -392,7 +392,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                           "owner-at-review": own({"visible": True, "revision": "rev-1"}), "owner-after-approval": own({"visible": True, "revision": "rev-1"}),
                           "owner-after": own({"visible": False, "revision": "rev-2"}),
                           "resource-execute": {"status": 200, "response": {"data": {"proposalId": "proposal-0", "executed": True, "status": "executed", "toolResult": result}}},
-                          "agent-requests": [create, message, message, action("approve"), action("execute")]})
+                          "weaver-requests": [create, message, message, action("approve"), action("execute")]})
             observation = {"status": "passed", "journey": "resource", "observations": {}}
         else:
             draft, saved = {"layout": [1]}, {"layout": [2]}
@@ -406,7 +406,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                               "workflow-save-ack": {"status": 200, "response": {"data": {"executed": True, "toolResult": results[1]}}},
                               "owner-after-undo": own({"draft": draft}), "owner-after": own({"draft": saved}),
                               "owning-write-attempts": [{"method": "PUT"}], "explicit-save": {"status": 200}, "saved-draft-validations": own({"errors": []}),
-                              "publish-attempts": [], "agent-requests": [create, message, action("approve"), action("execute"), ack(),
+                              "publish-attempts": [], "weaver-requests": [create, message, action("approve"), action("execute"), ack(),
                                                                          message, action("approve", 1), action("execute", 1), ack()]})
                 observation = {"status": "passed", "journey": "workflow", "observations": {name: True for name in (
                     "workingStateChanged", "noImplicitSave", "wholeUndo", "validated", "explicitSaveReadback")}}
@@ -418,7 +418,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                               "confirmation-retry": {"status": 200, "request": {"outcome": "applied"}, "response": envelope},
                               "lost-confirmation-uncertain-ui": {"status": "uncertain"}, "owner-after": own({"draft": draft}),
                               "browser-diagnostics": {"failedRequests": [{"url": ack()["url"], "errorText": "net::ERR_FAILED"}]},
-                              "agent-requests": [create, message, action("approve"), action("execute"), ack(), ack()]})
+                              "weaver-requests": [create, message, action("approve"), action("execute"), ack(), ack()]})
                 observation = {"status": "failed", "journey": "lost-confirmation", "expectedFailureObserved": True,
                                "actual": {"stage": "client-confirmation-delivery", "diagnostic": "net::ERR_FAILED"},
                                "observations": {name: True for name in ("responseLost", "uncertain", "sameAcknowledgement", "sameInvocation",
@@ -429,7 +429,7 @@ class BrowserLifecycleTests(unittest.TestCase):
         for name, value in files.items(): (output / (name + ".json")).write_text(json.dumps(value))
         observation.update(provider=provider, lifecycle={"caseKey": key, "sessionId": SESSION, "createdPolicy": policy},
                            ownerBefore=retained(output / "owner-before.json"), ownerAfter=retained(output / "owner-after.json"),
-                           evidence=[retained(output / "agent-requests.json")])
+                           evidence=[retained(output / "weaver-requests.json")])
         (output / "trace.json").write_text("{}"); (output / "adapter-correlation.json").write_text("{}")
         correlated = {"trace": retained(output / "trace.json"), "receipt": retained(output / "adapter-correlation.json")}
         return output, observation, correlated
@@ -459,9 +459,9 @@ class BrowserLifecycleTests(unittest.TestCase):
         self.assertEqual("lifecycle.review_bypassed", self.cause("visibility-review-control",
                          lambda f, o: f["owner-at-review"]["value"].update(visible=False)))
         self.assertEqual("lifecycle.native_requests", self.cause("visibility-review-control",
-                         lambda f, o: f["agent-requests"].append({"url": BACKEND + "/_elsa/weaver/sessions/" + SESSION + "/autonomy", "method": "PUT"})))
+                         lambda f, o: f["weaver-requests"].append({"url": BACKEND + "/_elsa/weaver/sessions/" + SESSION + "/autonomy", "method": "PUT"})))
         self.assertEqual("lifecycle.duplicate_effect", self.cause("visibility-review-control",
-                         lambda f, o: f["agent-requests"].append(f["agent-requests"][-1])))
+                         lambda f, o: f["weaver-requests"].append(f["weaver-requests"][-1])))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("workflow-review-control",
                          lambda f, o: f["lifecycle-session-after"]["value"]["data"]["policy"].update(revision=2)))
 
@@ -473,7 +473,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                          lambda f, o: f["workflow-message"]["response"]["data"]["message"].update(allowedContextKinds=["*"])))
         private = 'data: {"id": "event-private", "kind": "messageDelta", "payload": {"maxContextSensitivity": "sensitive"}}\n\n'
         with self.assertRaisesRegex(RuntimeError, "autonomy.policy_disclosed: A native stream frame disclosed private policy"):
-            self.verify("interrupted-after-effect", change=lambda f, o: f["agent-streams"][0].update(rawBody=private + f["agent-streams"][0]["rawBody"]))
+            self.verify("interrupted-after-effect", change=lambda f, o: f["weaver-streams"][0].update(rawBody=private + f["weaver-streams"][0]["rawBody"]))
 
     def test_workflow_boundaries_and_publish_are_mandatory(self):
         for change in (lambda f, o: f.update({"publish-attempts": [{"method": "POST"}]}),
@@ -490,7 +490,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                          lambda f, o: f["confirmation-retry"].update(request={"outcome": "uncertain"})))
         self.assertEqual("lifecycle.confirmation", self.cause("interrupted-after-effect", lambda f, o: f["browser-diagnostics"].update(failedRequests=[])))
         self.assertEqual("lifecycle.duplicate_effect", self.cause("interrupted-after-effect",
-                         lambda f, o: f["agent-requests"].insert(4, f["agent-requests"][3])))
+                         lambda f, o: f["weaver-requests"].insert(4, f["weaver-requests"][3])))
         self.assertEqual("lifecycle.stored_result", self.cause("interrupted-after-effect",
                          lambda f, o: f["lifecycle-session-after"]["value"]["data"].update(messages=[])))
 

@@ -13,7 +13,7 @@ import signal
 import threading
 import time
 
-from agent_transport import AgentTransport, _json as strict_json
+from weaver_transport import WeaverTransport, _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained
 from journey_runtime import BASE_GRANTS, HOST_HEADER, same
@@ -161,7 +161,7 @@ def _no_admission(runtime, checkpoint, name):
         data = path.read_bytes()
         check(len(data) >= before["offset"] and hashlib.sha256(data[:before["offset"]]).hexdigest() == before["prefixSha256"],
               "The actual adapter trace was truncated or replaced")
-        observer = AgentTransport(runtime.backend, runtime.output(name + "-trace-" + provider), trace_file=path)
+        observer = WeaverTransport(runtime.backend, runtime.output(name + "-trace-" + provider), trace_file=path)
         delta = observer.protocol_trace(before["offset"])
         check(delta["incompleteTailBytes"] == 0, "An incomplete SDK trace cannot prove absence of provider disclosure")
         require_no_adapter_admission(delta["records"])

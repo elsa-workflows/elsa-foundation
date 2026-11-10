@@ -10,7 +10,7 @@ public static class WorkflowWeaverServiceCollectionExtensions
 {
     public static IServiceCollection AddWeaverWorkflows(this IServiceCollection services)
     {
-        // The agent harness/provider is a single-implementation contract: a concrete harness feature
+        // The Weaver harness/provider is a single-implementation contract: a concrete harness feature
         // (e.g. GitHub Copilot) registers the one IWeaverProvider. The workflow feature only contributes
         // capabilities and context. DeterministicWorkflowWeaverProvider stays a test-only seam.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverCapabilityProvider, WorkflowWeaverCapabilityProvider>());
@@ -19,7 +19,7 @@ public static class WorkflowWeaverServiceCollectionExtensions
         // fallback for either; a missing owner is reported, never substituted.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverContextProvider, DefaultWorkflowWeaverContextProvider>());
 
-        // Workflow authoring tools the agent can call once the provider surfaces tool calls. They are policy-gated
+        // Workflow authoring tools Weaver can call once the provider surfaces tool calls. They are policy-gated
         // by the tool invoker (read-only runs inline; mutating becomes a proposal).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WorkflowReadGraphTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WorkflowSetDesignerPositionTool>());

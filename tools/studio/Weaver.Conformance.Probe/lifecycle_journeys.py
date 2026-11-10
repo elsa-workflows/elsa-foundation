@@ -2,7 +2,7 @@
 
 Each case runs once on the actual selected Copilot or Anthropic adapter. The Python cases reuse
 the original M1 driver operations (deny, stale, authority, cancel, duplicate delivery) with the
-module's size operation and the owning Agent HTTP/SSE routes; the browser cases reuse the original
+module's size operation and the owning Weaver HTTP/SSE routes; the browser cases reuse the original
 resource, workflow and lost-confirmation journeys. The fixture's pre-call gate and the browser ACK
 interception only coordinate those real paths. Verifiers read retained bytes: an HTTP status,
 selector label or provider text alone never establishes an outcome. Nothing here qualifies a
@@ -21,7 +21,7 @@ import time
 from urllib.parse import quote, urlparse
 import uuid
 
-from agent_transport import AgentTransportError, _json as strict_json
+from weaver_transport import WeaverTransportError, _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import _current_function_results, _normalized_result, _same_json, correlate_browser_protocol, retained
 from journey_runtime import BASE_GRANTS, atomic_json, browser_inputs, private_policy_keys, same
@@ -87,7 +87,7 @@ def _path(root, reference):
 
 
 def _exchange(root, reference, method, path, status):
-    """One retained AgentTransport exchange: exact method/route/status and its parsed native body."""
+    """One retained WeaverTransport exchange: exact method/route/status and its parsed native body."""
     record = strict_json(_path(root, reference).read_text())
     check(isinstance(record, dict) and record.get("method") == method and record.get("path") == path
           and isinstance(record.get("rawBody"), str) and not record.get("transportErrorType"),
@@ -95,7 +95,7 @@ def _exchange(root, reference, method, path, status):
     need(record.get("status") == status, "lifecycle.native_status",
          f"{method} {path} returned {record.get('status')}; expected {status}")
     value = strict_json(record["rawBody"]) if record["rawBody"] else None
-    check(isinstance(value, dict), "A native Agent response must be a JSON envelope")
+    check(isinstance(value, dict), "A native Weaver response must be a JSON envelope")
     return value, record
 
 
@@ -437,7 +437,7 @@ def verify_duplicate(root, o, witness, provider):
 
 
 BUSY_PHASES = (("busyReview", "review"), ("busyApproved", "approved"), ("busyContinuation", "receipt-continuation"))
-# The retention order _run_busy produces on one AgentTransport: each busy attempt and its detail sit strictly between
+# The retention order _run_busy produces on one WeaverTransport: each busy attempt and its detail sit strictly between
 # the transitions that define its phase (review paused -> approve -> execute -> continuation and settlement).
 BUSY_SEQUENCE = ("initialStream", "busyReview", "busyReviewDetail", "approve", "busyApproved", "busyApprovedDetail", "execute",
                  "busyContinuation", "busyContinuationDetail", "continuation", "settled", "acknowledge")
@@ -447,7 +447,7 @@ _TRANSPORT_RECEIPT = re.compile(r"(\d{4,})-[a-z-]+\.json")
 def _verify_busy_order(root, refs):
     """Proves when each busy attempt happened from the transport's own retained exchange ordinals.
 
-    AgentTransport names each receipt ``NNNN-<kind>.json`` from one monotonically increasing sequence, so the
+    WeaverTransport names each receipt ``NNNN-<kind>.json`` from one monotonically increasing sequence, so the
     ordinals of a single transport are its exchange order. Labels alone cannot prove a phase: the three busy
     exchanges are byte-identical, so a reordered, relabelled or foreign set is refused here."""
     phases = dict(BUSY_PHASES)
@@ -697,7 +697,7 @@ def _browser_owner(output, name):
 
 
 def _browser_requests(output, session):
-    requests = _browser_json(output, "agent-requests")
+    requests = _browser_json(output, "weaver-requests")
     check(isinstance(requests, list), "Native requests were not retained")
     counts = {}
     for row in requests:
@@ -917,7 +917,7 @@ def execute_lifecycle_case(runtime, provider, key):
     except LifecycleCaseFailure as error:
         error.observation = error.observation or observation
         raise
-    except AgentTransportError as error:
+    except WeaverTransportError as error:
         raise LifecycleCaseFailure(str(error), "lifecycle.native_transport", error.receipt or observation) from None
     record.update(source=runtime.run.source)
     runtime.run.assert_immutable_inputs()

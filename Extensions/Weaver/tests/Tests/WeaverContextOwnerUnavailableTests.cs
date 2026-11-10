@@ -12,7 +12,7 @@ namespace Elsa.Weaver.Tests;
 /// <summary>
 /// Context admission whose owner could not decide (spec 1193, story 5 scenario 3): collection, a turn's initial admission
 /// and the per-tool re-admission all fail as unavailable (503) with the owner's code and the engine's fixed message.
-/// Every other required refusal keeps <c>agent.context.incomplete</c> (400) exactly.
+/// Every other required refusal keeps <c>weaver.context.incomplete</c> (400) exactly.
 /// </summary>
 public sealed class WeaverContextOwnerUnavailableTests
 {

@@ -58,7 +58,7 @@ public enum WeaverRisk
 }
 
 /// <summary>
-/// How much the agent may do without per-mutation human approval. Ordered from most to least restrictive:
+/// How much Weaver may do without per-mutation human approval. Ordered from most to least restrictive:
 /// the integer value doubles as the autonomy "level" used when clamping a requested mode to a deployment ceiling.
 /// </summary>
 public enum WeaverAutonomyMode
@@ -167,7 +167,7 @@ public enum WeaverProviderRiskProfile
 public sealed record WeaverError(string Code, string Message, int StatusCode = 400)
 {
     /// <summary>
-    /// Preview: what an <c>agent.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
+    /// Preview: what a <c>weaver.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
     /// session and offered a continuation: <c>snapshots</c> (64 distinct snapshots) and <c>bytes</c> (8 MiB of recorded
     /// disclosure, with less than 64 KiB left, so the session is treated as full). Refusals of one disclosure, never recorded:
     /// <c>snapshot-too-large</c> (larger than any session can record) and <c>snapshot-does-not-fit</c> (larger than the room
@@ -197,7 +197,7 @@ public sealed record WeaverViolation(string Code, string Message, string? Target
     /// Honoured only on a violation from the installed tool's own <c>IWeaverToolAuthorization</c> decision; a host
     /// <c>IWeaverToolAuthorizer</c> violation that sets it stays an ordinary denial. The code must be the owner's own dotted
     /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters), outside the engine's
-    /// reserved <c>agent.</c> namespace; any other code stays an ordinary denial. Omitted from the wire when unset.
+    /// reserved <c>weaver.</c> namespace; any other code stays an ordinary denial. Omitted from the wire when unset.
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool OwnerUnavailable { get; init; }
@@ -565,7 +565,7 @@ public sealed record WeaverStepDescriptor(int StepIndex, int MaxSteps);
 /// <summary>Payload for <see cref="WeaverStreamEventKind.ToolCallStarted"/> / <see cref="WeaverStreamEventKind.ToolCallCompleted"/>.</summary>
 public sealed record WeaverToolCallOutcome(string ToolCallId, string ToolName, bool Succeeded, string Summary, object? Result = null);
 
-/// <summary>A single entry in the agent's working plan.</summary>
+/// <summary>A single entry in Weaver's working plan.</summary>
 public sealed record WeaverPlanStep(string Id, string Title, string Status);
 
 /// <summary>Payload for <see cref="WeaverStreamEventKind.PlanUpdated"/>.</summary>

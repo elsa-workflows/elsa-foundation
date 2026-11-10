@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Weaver.Workflows.Runtime.Tests;
 
-/// <summary>A Runtime-only Weaver host: the Agent foundation, the Runtime-side workflow package and one fixture Executable and Run inspection each.</summary>
+/// <summary>A Runtime-only Weaver host: the Weaver foundation, the Runtime-side workflow package and one fixture Executable and Run inspection each.</summary>
 internal sealed class WorkflowRuntimeWeaverTestHost : IDisposable
 {
     internal const string ModuleId = "Elsa.Studio.Workflows";

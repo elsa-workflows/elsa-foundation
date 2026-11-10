@@ -178,8 +178,8 @@ app.MapGet("/__qualification/generation", async (IShellRegistry registry, Cancel
             rootGuardUses = RootFeatureStoreGuard.UseCount + RootShellReloadGuard.UseCount
         },
         sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location }),
-        // Spec 1193 SC-003: the loaded Agent Workflows package's own types and the catalog the shell composes.
-        workflowAgent = WorkflowAgentObservation(scope.ServiceProvider)
+        // Spec 1193 SC-003: the loaded Weaver Workflows package's own types and the catalog the shell composes.
+        workflowWeaver = WorkflowWeaverObservation(scope.ServiceProvider)
     };
 }).RequirePermission(ModuleManagementPermissionKeys.Read);
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), shellName, builder.Configuration);
@@ -199,7 +199,7 @@ await QualificationPrincipals.InitializeAsync(app.Services.GetRequiredService<IS
 Console.WriteLine("WEAVER_BACKEND_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 
-static object WorkflowAgentObservation(IServiceProvider services)
+static object WorkflowWeaverObservation(IServiceProvider services)
 {
     var assembly = typeof(Elsa.Weaver.Workflows.WeaverWorkflowsFeature).Assembly;
     string[] catalogs;

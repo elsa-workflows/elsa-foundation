@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 
-/// <summary>Installs only the agent session, record and audit entities in an ordinary consumer-owned context.</summary>
+/// <summary>Installs only the Weaver session, record and audit entities in an ordinary consumer-owned context.</summary>
 public static class WeaverModelBuilderExtensions
 {
     internal const int IdentityLength = 128;
