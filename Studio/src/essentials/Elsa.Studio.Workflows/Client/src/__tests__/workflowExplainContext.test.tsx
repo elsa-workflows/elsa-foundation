@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge, workflowContextCandidateBudget } from "../workflow-editor/useWorkflowContextBridge";
 import { admittedSnapshotLength, clip, collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
@@ -70,7 +70,7 @@ function descriptorOf(item: ActivityCatalogItem): StudioActivityDescriptor {
 }
 
 function snapshot(draft: WorkflowDraft, options: { selected?: ActivityNode | null; validationErrors?: ValidationError[] } = {}) {
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
   const controller = registerWorkflowAgent(agent);
   const details = { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails;
   const selected = options.selected ?? null;
@@ -164,7 +164,7 @@ describe("workflow explain context", () => {
       provenance: { sourceKind: "CLR", sourceId: "/published/" } };
     const decorated = new Map([...catalogByVersion, [clrWriteLine.activityVersionId, clrWriteLine]]);
     const plain: ActivityNode = { nodeId: "plain", activityVersionId: clrWriteLine.activityVersionId, inputs: [], outputs: [] };
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     function Probe() {
       useWorkflowContextBridge({ controller, clientId: agent.clientId, details: { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails,
@@ -230,7 +230,7 @@ describe("workflow explain context", () => {
   it("leaves the property context out when the selected node's exact version is not in the catalog", () => {
     // The designer then inspects it with another version's descriptor, whose inputs the server would refuse as undeclared.
     const node = { ...apiNode(), activityVersionId: "activity-api-call-v0" };
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const details = { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails;
     function Probe() {

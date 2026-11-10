@@ -18,7 +18,7 @@ public sealed class WeaverGitHubCopilotProviderTests
 
     public WeaverGitHubCopilotProviderTests()
     {
-        var invoker = new AgentTestToolInvoker();
+        var invoker = new WeaverTestToolInvoker();
         _provider = new(_factory, Options.Create(_options), invoker, NullLogger<WeaverGitHubCopilotProvider>.Instance);
     }
 
@@ -30,8 +30,8 @@ public sealed class WeaverGitHubCopilotProviderTests
         Assert.False(diagnostics.IsAvailable);
         Assert.Equal("disabled", diagnostics.Metadata["statusCode"]);
         Assert.Equal("none", diagnostics.Metadata["authMode"]);
-        Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
-        Assert.DoesNotContain(AgentProviderOperation.ToolApproval, diagnostics.SupportedOperations);
+        Assert.Contains(WeaverProviderOperation.Chat, diagnostics.SupportedOperations);
+        Assert.DoesNotContain(WeaverProviderOperation.ToolApproval, diagnostics.SupportedOperations);
     }
 
     [Fact]
@@ -150,13 +150,13 @@ public sealed class WeaverGitHubCopilotProviderTests
 
         Assert.Collection(
             events,
-            started => Assert.Equal(AgentStreamEventKind.Started, started.Kind),
+            started => Assert.Equal(WeaverStreamEventKind.Started, started.Kind),
             delta =>
             {
-                Assert.Equal(AgentStreamEventKind.MessageDelta, delta.Kind);
+                Assert.Equal(WeaverStreamEventKind.MessageDelta, delta.Kind);
                 Assert.Equal("Hello", delta.Content);
             },
-            completed => Assert.Equal(AgentStreamEventKind.Completed, completed.Kind));
+            completed => Assert.Equal(WeaverStreamEventKind.Completed, completed.Kind));
     }
 
     [Fact]
@@ -165,13 +165,13 @@ public sealed class WeaverGitHubCopilotProviderTests
         _options.Enabled = true;
         _options.GitHubToken = "test-token";
         _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
-        var context = new AgentContextAttachment(
+        var context = new WeaverContextAttachment(
             "ctx-1",
             "workflow.definition",
             "wf-1",
             "Workflow",
             "application/json",
-            AgentContextSensitivity.Internal,
+            WeaverContextSensitivity.Internal,
             "selection",
             "Workflow summary.",
             new { Name = "Demo" },
@@ -191,7 +191,7 @@ public sealed class WeaverGitHubCopilotProviderTests
         _options.Enabled = true;
         _options.GitHubToken = "test-token";
         _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
-        var context = CreateWorkflowContext() with { Origin = AgentContextOrigin.InstalledGuidance, Summary = "Installed module guidance sample." };
+        var context = CreateWorkflowContext() with { Origin = WeaverContextOrigin.InstalledGuidance, Summary = "Installed module guidance sample." };
         _ = await StreamAsync(new("session-1", "Explain the resource.", [context]));
         Assert.Contains("Installed module guidance sample.", _factory.Client.Session.LastPrompt);
         Assert.DoesNotContain("Workflow authoring response contract:", _factory.Client.Session.LastPrompt);
@@ -207,7 +207,7 @@ public sealed class WeaverGitHubCopilotProviderTests
             """{"resultKind":"workflowGraphOperationBatch","workflowGraphOperationBatch":{"operations":[]}}"""));
         var events = await StreamAsync(new("session-1", "Propose an edit.", []));
         var error = Assert.Single(events);
-        Assert.Equal(AgentStreamEventKind.Error, error.Kind);
+        Assert.Equal(WeaverStreamEventKind.Error, error.Kind);
         Assert.Equal("weaver.provider.github_copilot.unsupported_result", error.Error?.Code);
     }
 
@@ -227,7 +227,7 @@ public sealed class WeaverGitHubCopilotProviderTests
         var events = await StreamAsync(new("session-1", "Create workflow.", [CreateWorkflowContext()]));
 
         var error = Assert.Single(events);
-        Assert.Equal(AgentStreamEventKind.Error, error.Kind);
+        Assert.Equal(WeaverStreamEventKind.Error, error.Kind);
         Assert.Equal("copilot.workflow.failed", error.Error?.Code);
         Assert.Equal("provider failed with [redacted]", error.Error?.Message);
     }
@@ -242,7 +242,7 @@ public sealed class WeaverGitHubCopilotProviderTests
         var events = await StreamAsync(new("session-1", "Explain", []));
 
         var error = Assert.Single(events);
-        Assert.Equal(AgentStreamEventKind.Error, error.Kind);
+        Assert.Equal(WeaverStreamEventKind.Error, error.Kind);
         Assert.Equal("sdk.error", error.Error?.Code);
         Assert.Equal("SDK failed for [redacted]", error.Error?.Message);
     }
@@ -284,7 +284,7 @@ public sealed class WeaverGitHubCopilotProviderTests
 
         var prompt = _factory.Client.Session.LastPrompt;
         Assert.Contains("Available tools:", prompt);
-        Assert.Contains(DeterministicAgentProvider.ReadOnlyToolName, prompt);
+        Assert.Contains(DeterministicWeaverProvider.ReadOnlyToolName, prompt);
         Assert.Contains("\"resultKind\":\"toolCall\"", prompt);
     }
 
@@ -294,7 +294,7 @@ public sealed class WeaverGitHubCopilotProviderTests
         _options.Enabled = true;
         _options.GitHubToken = "test-token";
         _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
-        var pending = new[] { new AgentToolResult("call-1", DeterministicAgentProvider.ReadOnlyToolName, true, "echo:hi") };
+        var pending = new[] { new WeaverToolResult("call-1", DeterministicWeaverProvider.ReadOnlyToolName, true, "echo:hi") };
         var turn = Turn("Continue.", tools: [new EchoTool().Descriptor], pending: pending, stepIndex: 1);
 
         _ = await StreamTurnAsync(turn);
@@ -316,12 +316,12 @@ public sealed class WeaverGitHubCopilotProviderTests
 
         var events = await StreamTurnAsync(turn);
 
-        var toolCall = Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
-        var request = Assert.IsType<AgentToolCallRequest>(toolCall.Payload);
+        var toolCall = Assert.Single(events, x => x.Kind == WeaverStreamEventKind.ToolCallRequested);
+        var request = Assert.IsType<WeaverToolCallRequest>(toolCall.Payload);
         Assert.Equal("call-7", request.ToolCallId);
-        Assert.Equal(DeterministicAgentProvider.ReadOnlyToolName, request.ToolName);
+        Assert.Equal(DeterministicWeaverProvider.ReadOnlyToolName, request.ToolName);
         Assert.Contains("hi", request.Arguments);
-        Assert.Equal(AgentRisk.ReadOnly, request.Risk);
+        Assert.Equal(WeaverRisk.ReadOnly, request.Risk);
         Assert.False(request.RequiresApproval);
     }
 
@@ -337,8 +337,8 @@ public sealed class WeaverGitHubCopilotProviderTests
 
         var events = await StreamTurnAsync(turn);
 
-        var request = Assert.IsType<AgentToolCallRequest>(Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallRequested).Payload);
-        Assert.Equal(DeterministicAgentProvider.MutatingToolName, request.ToolName);
+        var request = Assert.IsType<WeaverToolCallRequest>(Assert.Single(events, x => x.Kind == WeaverStreamEventKind.ToolCallRequested).Payload);
+        Assert.Equal(DeterministicWeaverProvider.MutatingToolName, request.ToolName);
         Assert.True(request.RequiresApproval);
         Assert.False(string.IsNullOrWhiteSpace(request.ToolCallId));
     }
@@ -354,50 +354,50 @@ public sealed class WeaverGitHubCopilotProviderTests
             : [new(GitHubCopilotStreamEventKind.MessageDelta, """{"resultKind":"toolCall","toolCall":{"id":"call-1","name":"echo","arguments":{"text":"hi"}}}""")];
 
         var firstStep = await StreamTurnAsync(Turn("Read then answer.", tools: [new EchoTool().Descriptor], pending: []));
-        var request = Assert.IsType<AgentToolCallRequest>(Assert.Single(firstStep, x => x.Kind == AgentStreamEventKind.ToolCallRequested).Payload);
+        var request = Assert.IsType<WeaverToolCallRequest>(Assert.Single(firstStep, x => x.Kind == WeaverStreamEventKind.ToolCallRequested).Payload);
 
         // Simulate the orchestrator dispatching the tool and feeding its result back on the next step.
-        var pending = new[] { new AgentToolResult(request.ToolCallId, request.ToolName, true, "echo:hi") };
+        var pending = new[] { new WeaverToolResult(request.ToolCallId, request.ToolName, true, "echo:hi") };
         var secondStep = await StreamTurnAsync(Turn("Read then answer.", tools: [new EchoTool().Descriptor], pending: pending, stepIndex: 1));
 
-        var message = Assert.Single(secondStep, x => x.Kind == AgentStreamEventKind.MessageDelta);
+        var message = Assert.Single(secondStep, x => x.Kind == WeaverStreamEventKind.MessageDelta);
         Assert.Equal("Done: echo:hi", message.Content);
-        Assert.DoesNotContain(secondStep, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
+        Assert.DoesNotContain(secondStep, x => x.Kind == WeaverStreamEventKind.ToolCallRequested);
     }
 
-    private static AgentTurnContext Turn(
+    private static WeaverTurnContext Turn(
         string content,
-        IReadOnlyCollection<AgentToolDescriptor> tools,
-        IReadOnlyList<AgentToolResult> pending,
+        IReadOnlyCollection<WeaverToolDescriptor> tools,
+        IReadOnlyList<WeaverToolResult> pending,
         int stepIndex = 0)
         => new(
             "session-1",
             "session-1",
-            [new AgentTurnMessage(AgentRole.User, content)],
+            [new WeaverTurnMessage(WeaverRole.User, content)],
             pending,
             tools,
             [],
             stepIndex,
             5);
 
-    private async Task<List<AgentStreamEvent>> StreamTurnAsync(AgentTurnContext turn, CancellationToken cancellationToken = default)
+    private async Task<List<WeaverStreamEvent>> StreamTurnAsync(WeaverTurnContext turn, CancellationToken cancellationToken = default)
     {
-        var events = new List<AgentStreamEvent>();
+        var events = new List<WeaverStreamEvent>();
         await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
             events.Add(item);
         return events;
     }
 
-    private async Task<List<AgentStreamEvent>> StreamAsync(AgentProviderMessage message, CancellationToken cancellationToken = default)
+    private async Task<List<WeaverStreamEvent>> StreamAsync(WeaverProviderMessage message, CancellationToken cancellationToken = default)
     {
-        var turn = AgentTurnContext.ForMessage(message.SessionId, message.Content, message.Context);
-        var events = new List<AgentStreamEvent>();
+        var turn = WeaverTurnContext.ForMessage(message.SessionId, message.Content, message.Context);
+        var events = new List<WeaverStreamEvent>();
         await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
             events.Add(item);
         return events;
     }
 
-    private static AgentSession CreateSession(string id) => new(
+    private static WeaverSession CreateSession(string id) => new(
         id,
         "Test session",
         "tenant-1",
@@ -405,21 +405,21 @@ public sealed class WeaverGitHubCopilotProviderTests
         "conversation-1",
         WeaverGitHubCopilotProvider.Id,
         "explain",
-        AgentPolicy.Default,
-        AgentSessionStatus.Active,
+        WeaverPolicy.Default,
+        WeaverSessionStatus.Active,
         DateTimeOffset.UtcNow,
         DateTimeOffset.UtcNow,
         null,
         new Dictionary<string, string>());
 
-    private static AgentContextAttachment CreateWorkflowContext()
+    private static WeaverContextAttachment CreateWorkflowContext()
         => new(
             "ctx-1",
             "workflow.definition",
             "wf-1",
             "Workflow",
             "workflow.definition",
-            AgentContextSensitivity.Internal,
+            WeaverContextSensitivity.Internal,
             "selection",
             "Workflow definition 'wf-1' at revision 'rev-1'.",
             null,

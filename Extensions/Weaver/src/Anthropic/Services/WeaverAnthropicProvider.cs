@@ -12,17 +12,17 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Weaver.Anthropic.Services;
 
 /// <summary>
-/// A real, model-backed agent provider driven by the host orchestrator (NOT an <c>IAgentHarness</c>). It maps the
-/// orchestrator's accumulated <see cref="AgentTurnContext"/> to Microsoft.Extensions.AI <see cref="ChatMessage"/>s,
+/// A real, model-backed agent provider driven by the host orchestrator (NOT an <c>IWeaverHarness</c>). It maps the
+/// orchestrator's accumulated <see cref="WeaverTurnContext"/> to Microsoft.Extensions.AI <see cref="ChatMessage"/>s,
 /// advertises the registry tools as declaration-only functions, and streams one step: assistant text becomes
-/// <see cref="AgentStreamEventKind.MessageDelta"/> events and model tool calls become
-/// <see cref="AgentStreamEventKind.ToolCallRequested"/> events. The orchestrator owns the loop, executes the tools
+/// <see cref="WeaverStreamEventKind.MessageDelta"/> events and model tool calls become
+/// <see cref="WeaverStreamEventKind.ToolCallRequested"/> events. The orchestrator owns the loop, executes the tools
 /// through the policy-aware invoker (so mutations are gated by autonomy mode), and calls back with their results.
 /// </summary>
 public sealed class WeaverAnthropicProvider(
     IAnthropicChatClientFactory chatClientFactory,
     IOptions<WeaverAnthropicOptions> options,
-    ILogger<WeaverAnthropicProvider> logger) : IAgentProvider
+    ILogger<WeaverAnthropicProvider> logger) : IWeaverProvider
 {
     public const string Id = "anthropic";
 
@@ -30,10 +30,10 @@ public sealed class WeaverAnthropicProvider(
 
     public string ProviderId => Id;
 
-    public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
+    public Task<WeaverProviderSession> CreateSessionAsync(WeaverSession session, CancellationToken cancellationToken = default)
     {
         var readiness = GetReadiness();
-        return Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>
+        return Task.FromResult(new WeaverProviderSession(session.Id, ProviderId, new Dictionary<string, string>
         {
             ["adapter"] = "anthropic",
             ["model"] = options.Value.Model,
@@ -41,7 +41,7 @@ public sealed class WeaverAnthropicProvider(
         }));
     }
 
-    public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<WeaverStreamEvent> ContinueTurnAsync(WeaverTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var readiness = GetReadiness();
         if (!readiness.Available)
@@ -59,7 +59,7 @@ public sealed class WeaverAnthropicProvider(
         while (true)
         {
             ChatResponseUpdate update;
-            AgentStreamEvent? failure = null;
+            WeaverStreamEvent? failure = null;
             try
             {
                 if (!await enumerator.MoveNextAsync())
@@ -91,19 +91,19 @@ public sealed class WeaverAnthropicProvider(
     }
 
     // Not used by this provider: tool approval is owned by the orchestrator's policy-aware invoker, not the model SDK.
-    public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentToolApprovalResult(false, "The Anthropic provider does not approve tools directly; the orchestrator gates mutations by autonomy mode."));
+    public Task<WeaverToolApprovalResult> ApproveToolAsync(WeaverProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+        => Task.FromResult(new WeaverToolApprovalResult(false, "The Anthropic provider does not approve tools directly; the orchestrator gates mutations by autonomy mode."));
 
-    public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+    public Task<WeaverProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
         var readiness = GetReadiness();
-        return Task.FromResult(new AgentProviderDiagnostics(
+        return Task.FromResult(new WeaverProviderDiagnostics(
             ProviderId,
             readiness.Available,
             readiness.Status,
-            AgentProviderKind.ProviderSdkBinding,
-            [AgentProviderOperation.Chat, AgentProviderOperation.Streaming],
-            AgentProviderRiskProfile.ReviewRequired,
+            WeaverProviderKind.ProviderSdkBinding,
+            [WeaverProviderOperation.Chat, WeaverProviderOperation.Streaming],
+            WeaverProviderRiskProfile.ReviewRequired,
             new Dictionary<string, string>
             {
                 ["adapter"] = "anthropic",
@@ -114,14 +114,14 @@ public sealed class WeaverAnthropicProvider(
             }));
     }
 
-    private IEnumerable<AgentStreamEvent> MapUpdate(ChatResponseUpdate update, AgentTurnContext context)
+    private IEnumerable<WeaverStreamEvent> MapUpdate(ChatResponseUpdate update, WeaverTurnContext context)
     {
         foreach (var content in update.Contents)
         {
             switch (content)
             {
                 case TextContent text when !string.IsNullOrEmpty(text.Text):
-                    yield return new(NewId(), AgentStreamEventKind.MessageDelta, text.Text, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
+                    yield return new(NewId(), WeaverStreamEventKind.MessageDelta, text.Text, null, null, DateTimeOffset.UtcNow, WeaverResultKind.Message);
                     break;
                 case FunctionCallContent call:
                     yield return MapToolCall(call, context);
@@ -132,22 +132,22 @@ public sealed class WeaverAnthropicProvider(
 
     // The orchestrator owns dispatch and policy: Risk/RequiresApproval are advisory hints from the advertised
     // descriptor (mutating tools surface as requiring approval), mirroring the other providers.
-    private AgentStreamEvent MapToolCall(FunctionCallContent call, AgentTurnContext context)
+    private WeaverStreamEvent MapToolCall(FunctionCallContent call, WeaverTurnContext context)
     {
         var arguments = call.Arguments is { Count: > 0 } args ? JsonSerializer.Serialize(args, JsonOptions) : "{}";
         var descriptor = context.AvailableTools.FirstOrDefault(x => string.Equals(x.Name, call.Name, StringComparison.Ordinal));
-        var risk = descriptor?.Risk ?? AgentRisk.ReviewRequired;
-        var requiresApproval = descriptor?.Mutability == AgentToolMutability.Mutating;
+        var risk = descriptor?.Risk ?? WeaverRisk.ReviewRequired;
+        var requiresApproval = descriptor?.Mutability == WeaverToolMutability.Mutating;
         var callId = string.IsNullOrWhiteSpace(call.CallId) ? NewId() : call.CallId;
-        return new(NewId(), AgentStreamEventKind.ToolCallRequested, null, callId, null, DateTimeOffset.UtcNow, null,
-            new AgentToolCallRequest(callId, call.Name, arguments, risk, requiresApproval));
+        return new(NewId(), WeaverStreamEventKind.ToolCallRequested, null, callId, null, DateTimeOffset.UtcNow, null,
+            new WeaverToolCallRequest(callId, call.Name, arguments, risk, requiresApproval));
     }
 
-    private ChatOptions BuildChatOptions(AgentTurnContext context)
+    private ChatOptions BuildChatOptions(WeaverTurnContext context)
     {
         var chatOptions = new ChatOptions { MaxOutputTokens = options.Value.MaxOutputTokens };
         if (context.AvailableTools.Count > 0)
-            chatOptions.Tools = AgentToolAIFunctions.CreateDeclarations(context.AvailableTools).Cast<AITool>().ToList();
+            chatOptions.Tools = WeaverToolAIFunctions.CreateDeclarations(context.AvailableTools).Cast<AITool>().ToList();
         return chatOptions;
     }
 
@@ -156,7 +156,7 @@ public sealed class WeaverAnthropicProvider(
     // authoritative record — PendingToolResults is redundant here. Because history stores assistant turns as plain
     // text (the tool_use blocks are not persisted), we synthesize the assistant function-call blocks that each
     // tool-result run answers, preserving the API's required tool_use/tool_result pairing.
-    private List<ChatMessage> BuildMessages(AgentTurnContext context)
+    private List<ChatMessage> BuildMessages(WeaverTurnContext context)
     {
         var messages = new List<ChatMessage>();
 
@@ -164,7 +164,7 @@ public sealed class WeaverAnthropicProvider(
         if (!string.IsNullOrWhiteSpace(system))
             messages.Add(new ChatMessage(ChatRole.System, system));
 
-        var resourceData = context.Context.Where(attachment => attachment.Origin != AgentContextOrigin.InstalledGuidance).Select(attachment => new
+        var resourceData = context.Context.Where(attachment => attachment.Origin != WeaverContextOrigin.InstalledGuidance).Select(attachment => new
         {
             attachment.Label, attachment.Source, attachment.Summary,
             attachment.ModuleId, attachment.ContentType, attachment.SchemaVersion, attachment.Target,
@@ -179,13 +179,13 @@ public sealed class WeaverAnthropicProvider(
             var message = history[i];
             switch (message.Role)
             {
-                case AgentRole.User:
+                case WeaverRole.User:
                     messages.Add(new ChatMessage(ChatRole.User, message.Content));
                     break;
-                case AgentRole.System:
+                case WeaverRole.System:
                     messages.Add(new ChatMessage(ChatRole.System, message.Content));
                     break;
-                case AgentRole.Assistant:
+                case WeaverRole.Assistant:
                 {
                     var toolRun = CollectToolRun(history, i + 1);
                     if (toolRun.Count > 0)
@@ -201,7 +201,7 @@ public sealed class WeaverAnthropicProvider(
 
                     break;
                 }
-                case AgentRole.Tool:
+                case WeaverRole.Tool:
                 {
                     // The model emitted tool calls with no accompanying text: an assistant turn of only tool_use.
                     var toolRun = CollectToolRun(history, i);
@@ -216,15 +216,15 @@ public sealed class WeaverAnthropicProvider(
         return messages;
     }
 
-    private static List<AgentTurnMessage> CollectToolRun(IReadOnlyList<AgentTurnMessage> history, int start)
+    private static List<WeaverTurnMessage> CollectToolRun(IReadOnlyList<WeaverTurnMessage> history, int start)
     {
-        var run = new List<AgentTurnMessage>();
-        for (var i = start; i < history.Count && history[i].Role == AgentRole.Tool; i++)
+        var run = new List<WeaverTurnMessage>();
+        for (var i = start; i < history.Count && history[i].Role == WeaverRole.Tool; i++)
             run.Add(history[i]);
         return run;
     }
 
-    private static ChatMessage AssistantWithToolCalls(string? text, IReadOnlyList<AgentTurnMessage> toolRun)
+    private static ChatMessage AssistantWithToolCalls(string? text, IReadOnlyList<WeaverTurnMessage> toolRun)
     {
         var contents = new List<AIContent>();
         if (!string.IsNullOrWhiteSpace(text))
@@ -234,7 +234,7 @@ public sealed class WeaverAnthropicProvider(
         return new ChatMessage(ChatRole.Assistant, contents);
     }
 
-    private static ChatMessage ToolResults(IReadOnlyList<AgentTurnMessage> toolRun, IReadOnlyList<AgentToolResult> pending)
+    private static ChatMessage ToolResults(IReadOnlyList<WeaverTurnMessage> toolRun, IReadOnlyList<WeaverToolResult> pending)
     {
         var contents = new List<AIContent>();
         foreach (var tool in toolRun)
@@ -245,7 +245,7 @@ public sealed class WeaverAnthropicProvider(
         return new ChatMessage(ChatRole.Tool, contents);
     }
 
-    private string? BuildSystemPrompt(AgentTurnContext context)
+    private string? BuildSystemPrompt(WeaverTurnContext context)
     {
         var builder = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(options.Value.SystemMessage))
@@ -254,7 +254,7 @@ public sealed class WeaverAnthropicProvider(
         if (context.Context.Count > 0)
         {
             builder.AppendLine("Elsa context attachments:");
-            foreach (var attachment in context.Context.Where(item => item.Origin == AgentContextOrigin.InstalledGuidance))
+            foreach (var attachment in context.Context.Where(item => item.Origin == WeaverContextOrigin.InstalledGuidance))
             {
                 builder.Append("- ").Append(attachment.Label)
                     .Append(" [").Append(attachment.Source).Append(']')
@@ -278,8 +278,8 @@ public sealed class WeaverAnthropicProvider(
         return builder.Length == 0 ? null : builder.ToString();
     }
 
-    private bool CanIncludeContent(AgentContextAttachment attachment)
-        => AgentProviderPrimitives.CanIncludeContent(attachment, options.Value.IncludeSensitiveContextContent);
+    private bool CanIncludeContent(WeaverContextAttachment attachment)
+        => WeaverProviderPrimitives.CanIncludeContent(attachment, options.Value.IncludeSensitiveContextContent);
 
     private AnthropicReadiness GetReadiness()
     {
@@ -323,12 +323,12 @@ public sealed class WeaverAnthropicProvider(
     // secret set is a single element; the shared helper's fallback is the message itself, so a blank
     // message returns blank exactly as before.
     private string Normalize(string message)
-        => AgentLogRedaction.Redact(message, [ResolveApiKey(options.Value, out _)], message);
+        => WeaverLogRedaction.Redact(message, [ResolveApiKey(options.Value, out _)], message);
 
-    private static AgentStreamEvent Error(string code, string message, int statusCode)
-        => AgentProviderPrimitives.Error(code, message, statusCode);
+    private static WeaverStreamEvent Error(string code, string message, int statusCode)
+        => WeaverProviderPrimitives.Error(code, message, statusCode);
 
-    private static string NewId() => AgentProviderPrimitives.NewId();
+    private static string NewId() => WeaverProviderPrimitives.NewId();
 
     private sealed record AnthropicReadiness(bool Available, string Code, string Status, string? ApiKey, string AuthMode);
 }

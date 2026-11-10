@@ -4,7 +4,7 @@ using Elsa.Weaver.Core.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using static Elsa.Weaver.Core.Extensions.AgentConfigurationBinding;
+using static Elsa.Weaver.Core.Extensions.WeaverConfigurationBinding;
 
 namespace Elsa.Weaver.Anthropic.Extensions;
 
@@ -18,7 +18,7 @@ public static class WeaverAnthropicServiceCollectionExtensions
             services.Configure<WeaverAnthropicOptions>(options => BindOptions(configuration.GetSection(WeaverAnthropicOptions.SectionName), options));
 
         services.TryAddSingleton<IAnthropicChatClientFactory, AnthropicChatClientFactory>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentProvider, WeaverAnthropicProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverAnthropicProvider>());
         return services;
     }
 

@@ -14,8 +14,8 @@ namespace Elsa.Weaver.Workflows.Runtime.Tools;
 /// compiled graph and the Source References the Runtime read discloses. A changed hash is stale and refused. Nothing is ever changed.
 /// </summary>
 internal sealed class WorkflowReadExecutableTool(
-    IAgentToolAuthorizer authorizer,
-    IServiceProvider services) : IAgentTool, IAgentToolAuthorization
+    IWeaverToolAuthorizer authorizer,
+    IServiceProvider services) : IWeaverTool, IWeaverToolAuthorization
 {
     // Resolved only when the tool is used, so listing the installed tools never builds the Runtime read path.
     private IEnumerable<IWorkflowExecutableInspection> inspections => services.GetServices<IWorkflowExecutableInspection>();
@@ -36,21 +36,21 @@ internal sealed class WorkflowReadExecutableTool(
         [(NodeLimit, 32, 64, 32), (150, 16, 32, 32), (80, 8, 16, 16), (40, 8, 16, 8), (20, 4, 8, 8), (10, 4, 8, 4), (1, 0, 0, 1)];
     private static readonly JsonSerializerOptions JsonOptions = WorkflowExecutableContext.JsonOptions;
 
-    internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow Executable",
+    internal static readonly WeaverToolDescriptor Contract = new(ToolName, "Read workflow Executable",
         "Returns one exact, immutable workflow Executable named by an admitted workflows.executable context (its artifactId, or the only one), read at its bound " +
         "Artifact Hash: its identity, Artifact Hash, compiled graph (activity types and versions, input binding names and sources but never values, slots and " +
         "connections) and the Source References that point at it. Read-only.",
-        AgentToolMutability.ReadOnly, AgentRisk.ReadOnly,
+        WeaverToolMutability.ReadOnly, WeaverRisk.ReadOnly,
         """{"type":"object","properties":{"artifactId":{"type":"string","minLength":1,"maxLength":256}},"additionalProperties":false}""",
         ["workflows/runtime:read"], ["/workflows"])
     {
-        ModuleId = WorkflowExecutableContext.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.Server,
+        ModuleId = WorkflowExecutableContext.ModuleId, ContractVersion = "1", ExecutionLocation = WeaverExecutionLocation.Server,
         ResultType = ResultType, ResultSchemaVersion = "1", DisclosureSourceId = WorkflowExecutableContext.ContextSourceId
     };
 
-    public AgentToolDescriptor Descriptor => Contract;
+    public WeaverToolDescriptor Descriptor => Contract;
 
-    public async ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverPolicyDecision> AuthorizeAsync(string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (WorkflowExecutableContext.Inspection(inspections) is not { } inspection)
@@ -65,7 +65,7 @@ internal sealed class WorkflowReadExecutableTool(
             : new(true, []);
     }
 
-    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         JsonElement arguments;
         try { arguments = JsonSerializer.SerializeToElement(invocation.Arguments, JsonOptions); }
@@ -79,7 +79,7 @@ internal sealed class WorkflowReadExecutableTool(
                 return Failure("weaver.workflow.executable_arguments_invalid", "Only artifactId, an Executable identity, is accepted.", 400);
             artifactId = value;
         }
-        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowExecutableContext.ExecutableKind && item.Origin == AgentContextOrigin.AuthoritativeRead)
+        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowExecutableContext.ExecutableKind && item.Origin == WeaverContextOrigin.AuthoritativeRead)
             .Select(item => WorkflowExecutableContext.TryRead(item, out var reference, out _) ? reference : null).OfType<WorkflowExecutableContext.Reference>().ToArray();
         var bound = artifactId is null ? contexts.Length == 1 ? contexts[0] : null : contexts.FirstOrDefault(item => item.ArtifactId == artifactId);
         if (bound is null)
@@ -105,12 +105,12 @@ internal sealed class WorkflowReadExecutableTool(
         }
         if (data is not { } bounded)
             return Failure("weaver.workflow.executable_too_large", "The workflow Executable's read does not fit the context budget even at its smallest bound; nothing was read.", 413);
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowExecutableContext.Target(executable.ArtifactId, executable.ArtifactHash), bounded, AgentRisk.ReadOnly,
+        return WeaverResult<WeaverToolPreparation>.Success(new(WorkflowExecutableContext.Target(executable.ArtifactId, executable.ArtifactHash), bounded, WeaverRisk.ReadOnly,
             new(ResultType, "1", bounded), RequiresApproval: false));
     }
 
-    public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
-        Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
+    public Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
+        Task.FromResult(WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
             "Read the exact workflow Executable through the workflow runtime at its bound Artifact Hash; nothing was changed.", new(ResultType, "1", invocation.Arguments))));
 
     private static JsonElement Result(WorkflowExecutableInspectionDetails executable, (int Nodes, int Inputs, int Connections, int References) bound)
@@ -196,6 +196,6 @@ internal sealed class WorkflowReadExecutableTool(
 
     private static int Count(WorkflowExecutableInspectionNode node) => 1 + node.Slots.Sum(slot => slot.Nodes.Sum(Count));
 
-    private static AgentResult<AgentToolPreparation> Failure(string code, string message, int status) =>
-        AgentResult<AgentToolPreparation>.Failure(code, message, status);
+    private static WeaverResult<WeaverToolPreparation> Failure(string code, string message, int status) =>
+        WeaverResult<WeaverToolPreparation>.Failure(code, message, status);
 }

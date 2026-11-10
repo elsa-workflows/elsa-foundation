@@ -202,7 +202,7 @@
  * Weaver risk chip — tone by severity.
  *
  * `data-risk` is set on the parent `.agent-proposal` article; the actual values are the
- * StudioAgentRisk levels (`review-required` | `destructive` | `admin`). We also accept the
+ * StudioWeaverRisk levels (`review-required` | `destructive` | `admin`). We also accept the
  * generic low/medium/high/critical aliases in case a provider emits those. Text uses the
  * WCAG-AA `--studio-*-fg` foreground tokens (same fix as the status chip: the saturated
  * tone colour fails AA as small text on its own tint).

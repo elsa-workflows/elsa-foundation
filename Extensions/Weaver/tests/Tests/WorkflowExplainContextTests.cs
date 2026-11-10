@@ -63,10 +63,10 @@ public sealed partial class WorkflowExplainContextTests
             case "unknown": diagnostic["payload"] = value; break;
             case "property-without-node": diagnostic.Remove("nodeId"); break;
             case "message": diagnostic["message"] = " "; break;
-            case "long-message": diagnostic["message"] = new string('m', WorkflowAgentExplainContext.MaxDiagnosticMessage + 1); break;
+            case "long-message": diagnostic["message"] = new string('m', WorkflowWeaverExplainContext.MaxDiagnosticMessage + 1); break;
         }
         content["diagnostics"] = defect == "too-many"
-            ? new JsonArray(Enumerable.Range(0, WorkflowAgentExplainContext.MaxDiagnostics + 1).Select(_ => (JsonNode)Diagnostic("error", null, null, null, "x")).ToArray())
+            ? new JsonArray(Enumerable.Range(0, WorkflowWeaverExplainContext.MaxDiagnostics + 1).Select(_ => (JsonNode)Diagnostic("error", null, null, null, "x")).ToArray())
             : new JsonArray(diagnostic);
         if (defect == "omitted-without-diagnostics")
         {
@@ -84,7 +84,7 @@ public sealed partial class WorkflowExplainContextTests
         var content = Draft(selected: "a");
         var script = "return `Hello ${getVariable('name')}`;" + new string('x', 3000);
         content["selectedActivity"] = Selected("a", "version-write-line",
-            Property("Text", "Text", "String", false, false, Expression("JavaScript", script[..WorkflowAgentExplainContext.MaxPropertyContent], true, script.Length)),
+            Property("Text", "Text", "String", false, false, Expression("JavaScript", script[..WorkflowWeaverExplainContext.MaxPropertyContent], true, script.Length)),
             Property("ApiKey", "ApiKey", "String", true, true, new JsonObject { ["kind"] = "withheld", ["expressionType"] = "Literal" }));
 
         var admitted = await host.AdmittedAsync(content);
@@ -96,7 +96,7 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal("JavaScript", text.GetProperty("expressionType").GetString());
         Assert.True(text.GetProperty("truncated").GetBoolean());
         Assert.Equal(script.Length, text.GetProperty("length").GetInt32());
-        Assert.Equal(WorkflowAgentExplainContext.MaxPropertyContent, text.GetProperty("content").GetString()!.Length);
+        Assert.Equal(WorkflowWeaverExplainContext.MaxPropertyContent, text.GetProperty("content").GetString()!.Length);
         // No Expression Module registers Weaver tools, so interpretation is reported unavailable by the server itself.
         Assert.Equal("unavailable", text.GetProperty("interpretation").GetString());
         var credential = properties[1].GetProperty("value");
@@ -159,7 +159,7 @@ public sealed partial class WorkflowExplainContextTests
             case "truncation-unmarked": value = Expression("Literal", Canary, false, Canary.Length + 10); break;
             case "truncation-claimed": value = Expression("Literal", Canary, true, Canary.Length); break;
             case "content-over-limit":
-                var long_ = Canary + new string('x', WorkflowAgentExplainContext.MaxPropertyContent);
+                var long_ = Canary + new string('x', WorkflowWeaverExplainContext.MaxPropertyContent);
                 value = Expression("Literal", long_, false, long_.Length);
                 break;
             case "claimed-interpretation": value["interpretation"] = "available"; break;
@@ -174,7 +174,7 @@ public sealed partial class WorkflowExplainContextTests
         if (defect == "budget")
             for (var index = 0; index < 9; index++)
             {
-                var text = new string('y', WorkflowAgentExplainContext.MaxPropertyContent);
+                var text = new string('y', WorkflowWeaverExplainContext.MaxPropertyContent);
                 properties.Add(Property("Input" + index, "input" + index, "String", false, false, Expression("Literal", text, false, text.Length)));
             }
         content["selectedActivity"] = Selected(nodeId, version, properties.ToArray());
@@ -197,13 +197,13 @@ public sealed partial class WorkflowExplainContextTests
             { UiHint = input["uiHint"]?.GetValue<string>() }).ToArray())).ToArray();
         var content = fixture["content"]!.AsObject();
         var revision = content["revision"]!.GetValue<string>();
-        var caller = WorkflowAgentTests.Snapshot() with
+        var caller = WorkflowWeaverTests.Snapshot() with
         {
             Content = JsonSerializer.SerializeToElement(content),
-            Target = new(WorkflowAgentSnapshot.ModuleId, "workflow-definition", "definition", revision)
+            Target = new(WorkflowWeaverSnapshot.ModuleId, "workflow-definition", "definition", revision)
         };
 
-        var contribution = await host.Source.CollectAsync(WorkflowAgentTests.Request(caller) with { SessionId = host.SessionId });
+        var contribution = await host.Source.CollectAsync(WorkflowWeaverTests.Request(caller) with { SessionId = host.SessionId });
 
         Assert.Empty(contribution.Diagnostics);
         var admitted = Assert.IsType<JsonElement>(Assert.Single(contribution.Attachments, item => item.ContentType == "workflow.definition").Content);
@@ -216,7 +216,7 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal("crm-signing-key", properties["signingKey"].GetProperty("secretReference").GetProperty("name").GetString());
         Assert.Equal("unavailable", properties["script"].GetProperty("interpretation").GetString());
         Assert.DoesNotContain(fixture["canary"]!.GetValue<string>(), JsonSerializer.Serialize(contribution));
-        // Studio's size guard estimates the host's measure of this admitted projection (AgentContextServices); it is exact.
+        // Studio's size guard estimates the host's measure of this admitted projection (WeaverContextServices); it is exact.
         Assert.Equal(fixture["admittedLength"]!.GetValue<int>(), JsonSerializer.Serialize(JsonSerializer.SerializeToElement(admitted)).Length);
     }
 
@@ -284,9 +284,9 @@ public sealed partial class WorkflowExplainContextTests
         var content = Draft();
         content["diagnostics"] = new JsonArray(Diagnostic("error", null, "b", null, "MARKER"));
         var text = content.ToJsonString().Replace("MARKER", "\\ud800", StringComparison.Ordinal);
-        var caller = WorkflowAgentTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
+        var caller = WorkflowWeaverTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
 
-        var contribution = await host.Source.CollectAsync(WorkflowAgentTests.Request(caller) with { SessionId = host.SessionId });
+        var contribution = await host.Source.CollectAsync(WorkflowWeaverTests.Request(caller) with { SessionId = host.SessionId });
 
         Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == "workflow.definition");
         Assert.Contains(contribution.Diagnostics, item => item.Code == "weaver.workflow.context_invalid" && item.Required);
@@ -311,9 +311,9 @@ public sealed partial class WorkflowExplainContextTests
         };
         target["MARKER"] = 1;
         var text = content.ToJsonString().Replace("MARKER", "\\ud800", StringComparison.Ordinal);
-        var caller = WorkflowAgentTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
+        var caller = WorkflowWeaverTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
 
-        var contribution = await host.Source.CollectAsync(WorkflowAgentTests.Request(caller) with { SessionId = host.SessionId });
+        var contribution = await host.Source.CollectAsync(WorkflowWeaverTests.Request(caller) with { SessionId = host.SessionId });
 
         Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == "workflow.definition");
         Assert.Contains(contribution.Diagnostics, item => item.Code == "weaver.workflow.context_invalid" && item.Required);
@@ -323,9 +323,9 @@ public sealed partial class WorkflowExplainContextTests
     public void An_unrelated_InvalidOperationException_is_not_disguised_as_malformed_text()
     {
         // Only a malformed name or string read is refused; any other failure surfaces as itself, never as a silent refusal.
-        var caller = WorkflowAgentTests.Snapshot() with { Content = new ThrowingContent() };
+        var caller = WorkflowWeaverTests.Snapshot() with { Content = new ThrowingContent() };
 
-        var thrown = Assert.Throws<InvalidOperationException>(() => WorkflowAgentSnapshot.TryRead(caller, out _, out _));
+        var thrown = Assert.Throws<InvalidOperationException>(() => WorkflowWeaverSnapshot.TryRead(caller, out _, out _));
         Assert.Equal(ThrowingContent.Message, thrown.Message);
     }
 
@@ -339,7 +339,7 @@ public sealed partial class WorkflowExplainContextTests
     public void Scope_paths_run_through_parallel_branches_as_through_any_container()
     {
         // A Parallel-like container: each branch is a member of its many slot, and a container inside a branch nests on.
-        var structure = new Dictionary<string, WorkflowAgentNode>
+        var structure = new Dictionary<string, WorkflowWeaverNode>
         {
             ["root"] = new("root", "Acme.Flowchart", "root", "flow", null, null, [new("flowchart:activities", "flowchart", "many")]),
             ["parallel"] = new("parallel", "Acme.Parallel", "parallel", "parallel", "root", "flowchart:activities", [new("parallel:branches", "generic", "many")]),
@@ -348,7 +348,7 @@ public sealed partial class WorkflowExplainContextTests
             ["deep"] = new("deep", "Acme.WriteLine", "deep", "write", "right", "sequence:activities", [])
         };
 
-        var (addresses, truncated) = WorkflowAgentExplainContext.Addresses(["root", "parallel", "left", "right", "deep"], structure);
+        var (addresses, truncated) = WorkflowWeaverExplainContext.Addresses(["root", "parallel", "left", "right", "deep"], structure);
 
         Assert.False(truncated);
         var paths = JsonSerializer.SerializeToNode(addresses)!.AsArray().ToDictionary(item => item!["id"]!.GetValue<string>(),
@@ -398,7 +398,7 @@ public sealed partial class WorkflowExplainContextTests
 
         var draft = Assert.Single(contribution.Attachments, item => item.ContentType == "workflow.definition");
         Assert.False(Assert.IsType<JsonElement>(draft.Content).TryGetProperty("selectedActivity", out _));
-        var diagnostic = Assert.Single(contribution.Diagnostics, item => item.Code == DefaultWorkflowAgentContextProvider.PropertyContextUnverified);
+        var diagnostic = Assert.Single(contribution.Diagnostics, item => item.Code == DefaultWorkflowWeaverContextProvider.PropertyContextUnverified);
         Assert.False(diagnostic.Required);
         // The catalog was read once for this collection, for both the check and the attachment.
         Assert.Equal(1, host.Catalog.ListCalls);
@@ -425,7 +425,7 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Empty(contribution.Diagnostics);
         var again = Assert.Single(readmitted.Attachments, item => item.ContentType == "workflow.definition");
         Assert.Equal(Assert.IsType<JsonElement>(admitted.Content).GetRawText(), Assert.IsType<JsonElement>(again.Content).GetRawText());
-        Assert.True(WorkflowAgentSnapshot.TryRead(again, out var snapshot, out _));
+        Assert.True(WorkflowWeaverSnapshot.TryRead(again, out var snapshot, out _));
         var graph = Assert.Single(snapshot!.GraphActivities);
         Assert.Equal(("definition-approval", "version-approval", "3"), (graph.ActivityDefinitionId, graph.ActivityVersionId, graph.Version));
     }
@@ -480,14 +480,14 @@ public sealed partial class WorkflowExplainContextTests
     {
         // A deep chain of containers: each address repeats its ancestors, so the budget is reached well before 256 activities.
         var ids = Enumerable.Range(0, 256).Select(index => "container-" + index.ToString("D4") + new string('z', 40)).ToArray();
-        var structure = ids.Select((id, index) => new WorkflowAgentNode(id, "Acme.Container", id, "version", index == 0 ? null : ids[index - 1],
+        var structure = ids.Select((id, index) => new WorkflowWeaverNode(id, "Acme.Container", id, "version", index == 0 ? null : ids[index - 1],
             index == 0 ? null : "slot", [new("slot", "sequence", "single")])).ToDictionary(node => node.Id);
 
-        var (addresses, truncated) = WorkflowAgentExplainContext.Addresses(ids, structure);
+        var (addresses, truncated) = WorkflowWeaverExplainContext.Addresses(ids, structure);
 
         Assert.True(truncated);
         Assert.InRange(addresses.Count, 1, ids.Length - 1);
-        Assert.True(JsonSerializer.SerializeToUtf8Bytes(addresses).Length <= WorkflowAgentExplainContext.AddressBudget);
+        Assert.True(JsonSerializer.SerializeToUtf8Bytes(addresses).Length <= WorkflowWeaverExplainContext.AddressBudget);
     }
 
     [Fact]
@@ -510,7 +510,7 @@ public sealed partial class WorkflowExplainContextTests
     {
         // SC-007: the Studio side (Weaver Workflows Vitest) holds every prompt, renderer and tool contract to this file.
         var fixture = Registrations();
-        using var root = AgentTestServices.Create(services =>
+        using var root = WeaverTestServices.Create(services =>
         {
             new WeaverWorkflowsFeature().ConfigureServices(services);
             services.AddSingleton<IWorkflowDefinitionAuthorizer>(new Owner());
@@ -518,10 +518,10 @@ public sealed partial class WorkflowExplainContextTests
         });
         using var scope = root.CreateScope();
         var moduleId = fixture["moduleId"]!.GetValue<string>();
-        var source = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
-        var tools = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync()).Where(tool => tool.Descriptor.ModuleId == moduleId)
+        var source = scope.ServiceProvider.GetServices<IWeaverContextProvider>().OfType<DefaultWorkflowWeaverContextProvider>().Single();
+        var tools = (await scope.ServiceProvider.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Where(tool => tool.Descriptor.ModuleId == moduleId)
             .Select(tool => tool.Descriptor).ToArray();
-        var capabilities = (await scope.ServiceProvider.GetServices<IAgentCapabilityProvider>().OfType<WorkflowAgentCapabilityProvider>().Single()
+        var capabilities = (await scope.ServiceProvider.GetServices<IWeaverCapabilityProvider>().OfType<WorkflowWeaverCapabilityProvider>().Single()
             .GetCapabilitiesAsync()).ToArray();
 
         Assert.Equal(moduleId, source.Descriptor.ModuleId);
@@ -529,12 +529,12 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal(Strings(fixture["contextKinds"]!), source.Descriptor.ContextKinds);
         Assert.Equal(Strings(fixture["capabilities"]!), capabilities.Select(item => item.Id));
         // The library context source (slice E) is the module's second source, with its own context kinds.
-        var library = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<WorkflowLibraryContextProvider>().Single();
+        var library = scope.ServiceProvider.GetServices<IWeaverContextProvider>().OfType<WorkflowLibraryContextProvider>().Single();
         Assert.Equal(moduleId, library.Descriptor.ModuleId);
         Assert.Equal(fixture["librarySource"]!["id"]!.GetValue<string>(), library.Descriptor.Id);
         Assert.Equal(Strings(fixture["librarySource"]!["contextKinds"]!), library.Descriptor.ContextKinds);
         // The version context source (slice F) is the module's third source.
-        var versions = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<WorkflowVersionContextProvider>().Single();
+        var versions = scope.ServiceProvider.GetServices<IWeaverContextProvider>().OfType<WorkflowVersionContextProvider>().Single();
         Assert.Equal(moduleId, versions.Descriptor.ModuleId);
         Assert.Equal(fixture["versionSource"]!["id"]!.GetValue<string>(), versions.Descriptor.Id);
         Assert.Equal(Strings(fixture["versionSource"]!["contextKinds"]!), versions.Descriptor.ContextKinds);
@@ -552,7 +552,7 @@ public sealed partial class WorkflowExplainContextTests
 
         // The guidance and the tool and capability texts name only registered tools and context kinds: any tool-like
         // snake_case token, whatever its prefix, must be a tool the composed registry holds.
-        var names = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToHashSet();
+        var names = (await scope.ServiceProvider.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToHashSet();
         foreach (var text in new[] { GuidanceText(), WorkflowVersionContext.Guidance().Summary }.Concat(tools.Select(tool => tool.Description)).Concat(capabilities.Select(item => item.Description)))
         {
             foreach (Match match in ToolToken().Matches(text)) Assert.Contains(match.Value, names);
@@ -569,18 +569,18 @@ public sealed partial class WorkflowExplainContextTests
 
     private static string GuidanceText()
     {
-        using var root = AgentTestServices.Create(services =>
+        using var root = WeaverTestServices.Create(services =>
         {
             new WeaverWorkflowsFeature().ConfigureServices(services);
             services.AddSingleton<IWorkflowDefinitionAuthorizer>(new Owner());
             services.AddSingleton<IActivityAuthoringCatalog>(new FixtureActivityCatalog());
         });
         using var scope = root.CreateScope();
-        var session = scope.ServiceProvider.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider",
-            "build", null, AgentPolicy.Default, new Dictionary<string, string>())).GetAwaiter().GetResult();
-        var source = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
+        var session = scope.ServiceProvider.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider",
+            "build", null, WeaverPolicy.Default, new Dictionary<string, string>())).GetAwaiter().GetResult();
+        var source = scope.ServiceProvider.GetServices<IWeaverContextProvider>().OfType<DefaultWorkflowWeaverContextProvider>().Single();
         var contribution = source.CollectAsync(new(session.Id, "workflow", new Dictionary<string, string>())).AsTask().GetAwaiter().GetResult();
-        return Assert.Single(contribution.Attachments, item => item.Origin == AgentContextOrigin.InstalledGuidance).Summary;
+        return Assert.Single(contribution.Attachments, item => item.Origin == WeaverContextOrigin.InstalledGuidance).Summary;
     }
 
     private static string[] Strings(JsonNode node) => node.AsArray().Select(item => item!.GetValue<string>()).ToArray();
@@ -650,7 +650,7 @@ public sealed partial class WorkflowExplainContextTests
         ["activityDefinitionId"] = definitionId, ["activityVersionId"] = versionId, ["version"] = version, ["nodes"] = new JsonArray(nodes.Select(item => (JsonNode)item).ToArray())
     };
 
-    private static AgentContextAttachment Attachment(JsonObject content) => WorkflowAgentTests.Snapshot() with
+    private static WeaverContextAttachment Attachment(JsonObject content) => WorkflowWeaverTests.Snapshot() with
     {
         Content = JsonSerializer.SerializeToElement(content)
     };
@@ -659,7 +659,7 @@ public sealed partial class WorkflowExplainContextTests
     {
         private readonly ServiceProvider root;
         private readonly IServiceScope scope;
-        private AgentSession? session;
+        private WeaverSession? session;
         internal FixtureActivityCatalog Catalog { get; } = new()
         {
             Entries =
@@ -673,7 +673,7 @@ public sealed partial class WorkflowExplainContextTests
 
         internal Host()
         {
-            root = AgentTestServices.Create(services =>
+            root = WeaverTestServices.Create(services =>
             {
                 new WeaverWorkflowsFeature().ConfigureServices(services);
                 services.AddSingleton<IWorkflowDefinitionAuthorizer>(new Owner());
@@ -682,12 +682,12 @@ public sealed partial class WorkflowExplainContextTests
             scope = root.CreateScope();
         }
 
-        internal DefaultWorkflowAgentContextProvider Source => scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
-        internal string SessionId => (session ??= scope.ServiceProvider.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1",
-            "conversation-1", "test-provider", "build", null, AgentPolicy.Default, new Dictionary<string, string>())).GetAwaiter().GetResult()).Id;
+        internal DefaultWorkflowWeaverContextProvider Source => scope.ServiceProvider.GetServices<IWeaverContextProvider>().OfType<DefaultWorkflowWeaverContextProvider>().Single();
+        internal string SessionId => (session ??= scope.ServiceProvider.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1",
+            "conversation-1", "test-provider", "build", null, WeaverPolicy.Default, new Dictionary<string, string>())).GetAwaiter().GetResult()).Id;
 
-        internal async Task<AgentContextContribution> CollectAsync(JsonObject content)
-            => await Source.CollectAsync(WorkflowAgentTests.Request(Attachment(content)) with { SessionId = SessionId });
+        internal async Task<WeaverContextContribution> CollectAsync(JsonObject content)
+            => await Source.CollectAsync(WorkflowWeaverTests.Request(Attachment(content)) with { SessionId = SessionId });
 
         internal async Task<JsonElement> AdmittedAsync(JsonObject content)
         {
@@ -696,7 +696,7 @@ public sealed partial class WorkflowExplainContextTests
             return Assert.IsType<JsonElement>(Assert.Single(contribution.Attachments, item => item.ContentType == "workflow.definition").Content);
         }
 
-        internal async Task<AgentContextContribution> RefusedAsync(JsonObject content)
+        internal async Task<WeaverContextContribution> RefusedAsync(JsonObject content)
         {
             var contribution = await CollectAsync(content);
             Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == "workflow.definition");

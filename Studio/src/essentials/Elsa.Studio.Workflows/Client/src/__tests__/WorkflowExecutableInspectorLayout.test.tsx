@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowExecutablesPage } from "../workflow-editor/pages";
 import { WorkflowExecutableInspectorPage } from "../workflow-editor/executableInspectorPage";
 import type { ExecutableInspectorIdentity } from "../workflow-editor/executableInspectorIdentity";
@@ -59,7 +59,7 @@ describe("Executable Inspector page layout", () => {
     flushSync(() => root.render(
       <WorkflowExecutableInspectorPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         runInputEditors={[]}
       />
     ));
@@ -76,7 +76,7 @@ describe("Executable Inspector page layout", () => {
     flushSync(() => root.render(
       <WorkflowExecutableInspectorPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         runInputEditors={[]}
       />
     ));
@@ -101,7 +101,7 @@ describe("Executable Inspector page layout", () => {
     flushSync(() => root.render(
       <WorkflowExecutableInspectorPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         runInputEditors={[]}
       />
     ));
@@ -124,7 +124,7 @@ describe("Executable Inspector page layout", () => {
     flushSync(() => root.render(
       <WorkflowExecutablesPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         runInputEditors={[]}
       />
     ));

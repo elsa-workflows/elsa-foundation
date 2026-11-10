@@ -1,10 +1,10 @@
 import React, { Suspense } from "react";
 import { AgentResultBoundary } from "./AgentResultBoundary";
-import { presentsResourceModule, type StudioAgentResultControlContribution, type StudioAgentResultRendererContribution, type StudioAgentToolResult } from "../../sdk";
+import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverToolResult } from "../../sdk";
 import { ResultControls } from "./AgentProposalReview";
 
 /** Displays module payloads opaquely through registered presentation, with a safe structured fallback. */
-export function AgentToolResults({ results, renderers, controls = [] }: { results: StudioAgentToolResult[]; renderers: StudioAgentResultRendererContribution[]; controls?: StudioAgentResultControlContribution[] }) {
+export function AgentToolResults({ results, renderers, controls = [] }: { results: StudioWeaverToolResult[]; renderers: StudioWeaverResultRendererContribution[]; controls?: StudioWeaverResultControlContribution[] }) {
   return <section aria-label="Module results">{results.map(result => {
     const payload = result.payload ?? result.receipt?.evidence;
     return <article key={result.toolCallId} data-succeeded={result.succeeded}><p>{result.content}</p>
@@ -15,7 +15,7 @@ export function AgentToolResults({ results, renderers, controls = [] }: { result
   })}</section>;
 }
 
-function ToolResultPresentation({ result, renderers, controls = [] }: { result: StudioAgentToolResult; renderers: StudioAgentResultRendererContribution[]; controls?: StudioAgentResultControlContribution[] }) {
+function ToolResultPresentation({ result, renderers, controls = [] }: { result: StudioWeaverToolResult; renderers: StudioWeaverResultRendererContribution[]; controls?: StudioWeaverResultControlContribution[] }) {
   const payload = result.payload ?? result.receipt?.evidence;
   const props = { proposal: undefined, resourceTarget: result.receipt?.after, result: payload, resultType: payload?.typeId, toolResult: result };
   const resourceModuleId = result.receipt?.after.moduleId;
