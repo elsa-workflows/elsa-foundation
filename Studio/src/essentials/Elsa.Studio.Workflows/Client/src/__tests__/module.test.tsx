@@ -1687,9 +1687,11 @@ describe("workflows module", () => {
 
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
     await click(buttonByLabel(container, "Open expanded Text editor"));
-    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Property editor");
-    await fill(textareaByLabel(container, "Text expanded value"), "Hello from expanded editor\nwith more room");
-    await click(buttonByText(container, "Close"));
+    const expandedDialog = document.body.querySelector<HTMLElement>(".wf-property-editor-dialog");
+    expect(expandedDialog).not.toBeNull();
+    expect(expandedDialog?.textContent).toContain("Property editor");
+    await fill(textareaByLabel(expandedDialog!, "Text expanded value"), "Hello from expanded editor\nwith more room");
+    await click(buttonByText(expandedDialog!, "Close"));
 
     await click(buttonByText(container, "Save"));
 

@@ -38,12 +38,20 @@ test("generic dictionary JSON remains the before surface without the dedicated e
   await capture(page, testInfo, "3979-before-inputs-json");
 });
 
-test("selecting a published decision seeds table inputs without tagged JSON", async ({ page }, testInfo) => {
+test("selecting a published decision leaves table inputs unset until they are entered", async ({ page }, testInfo) => {
   const inspector = await openInspector(page);
   await expect(inspector.getByLabel("Business decision", { exact: true })).toHaveValue("approval");
   await expect(inspector.getByLabel("amount", { exact: true })).toBeVisible();
   await expect(inspector.getByLabel("customerCategory", { exact: true })).toBeVisible();
+  await expect(inspector.getByLabel("amount value kind", { exact: true })).toHaveValue("unset");
+  await expect(inspector.getByLabel("customerCategory value kind", { exact: true })).toHaveValue("unset");
   await expect(inspector.locator(".wf-dictionary-editor")).toHaveCount(0);
+  await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();
+  const untouched = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(untouched.Inputs.expression.value).toEqual({});
+  await inspector.getByRole("button", { name: "Review & publish", exact: true }).click();
+  await expect(page.getByTestId("review-status")).toHaveText("blocked");
+  await page.getByRole("dialog", { name: "Review and publish" }).getByRole("button", { name: "Cancel" }).click();
   await inspector.getByLabel("amount", { exact: true }).fill("950");
   await inspector.getByLabel("customerCategory", { exact: true }).fill("Standard");
   const state = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
@@ -76,18 +84,20 @@ test("switching tables keeps extras until they are removed", async ({ page }, te
   await expect(page.locator(".wf-validation")).toContainText("InputMembership");
   await expect(page.getByText("No validation errors")).toHaveCount(0);
   await expect(inspector.getByLabel("score", { exact: true })).toBeVisible();
+  await expect(inspector.getByLabel("score value kind", { exact: true })).toHaveValue("unset");
   await expect(inspector.getByLabel("amount (not in this table)", { exact: true })).toBeVisible();
   const state = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
   expect(state.Inputs.expression.value).toEqual({
     amount: { kind: "number", value: "950" },
-    customerCategory: { kind: "string", value: "Standard" },
-    score: { kind: "number", value: "0" }
+    customerCategory: { kind: "string", value: "Standard" }
   });
+  expect(state.Inputs.expression.value.score).toBeUndefined();
   await capture(page, testInfo, "3979-table-switch-extras");
   await inspector.getByRole("button", { name: "Remove inputs not in this table", exact: true }).click();
   const cleaned = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
-  expect(cleaned.Inputs.expression.value).toEqual({ score: { kind: "number", value: "0" } });
+  expect(cleaned.Inputs.expression.value).toEqual({});
   await expect(inspector.getByLabel("amount", { exact: true })).toHaveCount(0);
+  await expect(inspector.getByLabel("score value kind", { exact: true })).toHaveValue("unset");
 });
 
 test("a type switch keeps the stored kind until an edit writes the displayed type", async ({ page }, testInfo) => {
@@ -103,19 +113,21 @@ test("a type switch keeps the stored kind until an edit writes the displayed typ
   await inspector.getByLabel("amount", { exact: true }).fill("951");
   const written = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
   expect(written.Inputs.expression.value.amount).toEqual({ kind: "string", value: "951" });
+  await inspector.getByLabel("customerCategory", { exact: true }).fill("Standard");
   await inspector.getByRole("button", { name: "Review & publish", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText("ready");
 });
 
-test("cleared JSON reseeds and invalid JSON blur restores stored text", async ({ page }) => {
+test("cleared JSON stays unset and invalid JSON blur restores stored text", async ({ page }) => {
   const inspector = await openInspector(page);
   await inspector.getByLabel("amount", { exact: true }).fill("950");
   await inspector.getByText("Advanced JSON").click();
   const json = inspector.getByRole("textbox", { name: "Decision inputs JSON" });
   await json.fill("{}");
-  await expect(inspector.getByLabel("amount", { exact: true })).toHaveValue("0");
-  const reseeded = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
-  expect(reseeded.Inputs.expression.value.amount).toEqual({ kind: "number", value: "0" });
+  await expect(inspector.getByLabel("amount value kind", { exact: true })).toHaveValue("unset");
+  await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();
+  const cleared = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(cleared.Inputs.expression.value).toEqual({});
   await inspector.getByLabel("amount", { exact: true }).fill("950");
   if (!await json.isVisible()) await inspector.getByText("Advanced JSON").click();
   await json.fill("{");
@@ -129,6 +141,7 @@ test("cleared JSON reseeds and invalid JSON blur restores stored text", async ({
 
 test("an empty required number is not Ready on the validation surface", async ({ page }, testInfo) => {
   const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
   await inspector.getByLabel("amount", { exact: true }).fill("");
   await expect(inspector.getByText("InvalidValue")).toBeVisible();
   await expect(page.locator(".wf-validation")).toContainText("InvalidValue");
@@ -235,6 +248,7 @@ test("an unrelated custom activity does not look up a decision table", async ({ 
 
 test("closing the expanded Inputs editor keeps the inline InvalidValue row error", async ({ page }, testInfo) => {
   const inspector = await openInspector(page);
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
   await inspector.getByLabel("amount", { exact: true }).fill("");
   await expect(inspector.getByText("InvalidValue")).toBeVisible();
   await inspector.getByRole("button", { name: "Open expanded Inputs editor" }).click();
@@ -249,4 +263,30 @@ test("closing the expanded Inputs editor keeps the inline InvalidValue row error
   await expect(page.getByRole("dialog", { name: "Review and publish" })).toContainText("InvalidValue");
   await expect(page.getByTestId("review-status")).toHaveText("blocked");
   await capture(page, testInfo, "3979-expanded-close-keeps-invalid");
+});
+
+test("confirming Number writes explicit 0 and remount preserves authored values", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page);
+  await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();
+  await inspector.getByLabel("amount value kind", { exact: true }).selectOption("number");
+  const confirmed = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(confirmed.Inputs.expression.value.amount).toEqual({ kind: "number", value: "0" });
+  await expect(inspector.getByLabel("amount", { exact: true })).toHaveValue("0");
+  await inspector.getByLabel("amount", { exact: true }).fill("950");
+  await inspector.getByLabel("customerCategory", { exact: true }).fill("Standard");
+  await inspector.getByRole("button", { name: "Remount inspector", exact: true }).click();
+  await expect(inspector.getByLabel("amount", { exact: true })).toHaveValue("950");
+  await expect(inspector.getByLabel("customerCategory", { exact: true })).toHaveValue("Standard");
+  const remounted = JSON.parse((await inspector.getByTestId("authored-state").textContent())!);
+  expect(remounted.Inputs.expression.value).toEqual({
+    amount: { kind: "number", value: "950" },
+    customerCategory: { kind: "string", value: "Standard" }
+  });
+  await page.reload();
+  const reloaded = page.getByRole("complementary", { name: "Activity inspector" });
+  await expect(reloaded.getByLabel("amount value kind", { exact: true })).toHaveValue("unset");
+  await expect(reloaded.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();
+  const afterReload = JSON.parse((await reloaded.getByTestId("authored-state").textContent())!);
+  expect(afterReload.Inputs.expression.value).toEqual({});
+  await capture(page, testInfo, "3979-unset-confirm-remount-reload");
 });

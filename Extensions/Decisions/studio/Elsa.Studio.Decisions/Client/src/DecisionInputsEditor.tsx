@@ -18,10 +18,9 @@ import {
   parseDecisionPin,
   readDecisionPin,
   removeDecisionInputs,
-  seedDecisionInputs,
   writtenDecisionInput
 } from "./decisionInputs";
-import { loadDecisionTable } from "./decisionDraftValidation";
+import { loadDecisionTable, missingDecisionInputs } from "./decisionDraftValidation";
 import { useForegroundGeneration } from "./decisionFreshness";
 import type { Table } from "./decisionXml";
 
@@ -61,15 +60,14 @@ export function DecisionInputsEditor({
   const extras = table && !loading ? extraDecisionInputs(values, table.inputs) : [];
   const mismatches = table && !loading ? mismatchedDecisionInputs(values, table.inputs) : [];
   const invalids = table && !loading ? invalidDecisionInputs(values, table.inputs) : [];
+  const missing = table && !loading ? missingDecisionInputs(values, table.inputs) : [];
   const jsonExternal = useMemo(() => formatDecisionInputsJson(values), [values]);
   const [jsonDraft, setJsonDraft] = useState(jsonExternal);
   const [jsonError, setJsonError] = useState("");
   const jsonFocused = useRef(false);
-  const seededPin = useRef("");
-  const withheldByPin = useRef(new Map<string, Set<string>>());
   const shownTable = useRef({ pin: tablePin, table });
   shownTable.current = { pin: tablePin, table };
-  const blocking = extras.length > 0 || mismatches.length > 0 || invalids.length > 0 || !!jsonError || !!error;
+  const blocking = extras.length > 0 || mismatches.length > 0 || invalids.length > 0 || missing.length > 0 || !!jsonError || !!error;
 
   useEffect(() => {
     onValidationChange?.(blocking);
@@ -120,34 +118,6 @@ export function DecisionInputsEditor({
     return () => { active = false; };
   }, [api, pin, freshness]);
 
-  useEffect(() => {
-    if (!table || disabled || loading) return;
-    const pinKey = parsed ? `${parsed.assetId}@${parsed.selection}` : "";
-    if (!pinKey || tablePin !== pinKey) return;
-    const current = asDecisionValueMap(value);
-    const missing = table.inputs.filter(clause => !isScalar(current[clause.name])).map(clause => clause.name);
-    if (Object.keys(current).length === 0) {
-      withheldByPin.current.delete(pinKey);
-      seededPin.current = pinKey;
-      const seeded = seedDecisionInputs(value, table.inputs);
-      if (seeded) onChange(seeded);
-      return;
-    }
-    const withheld = withheldByPin.current.get(pinKey) ?? new Set<string>();
-    const firstMount = seededPin.current === "";
-    const pinChanged = !firstMount && seededPin.current !== pinKey;
-    seededPin.current = pinKey;
-    if (firstMount || !pinChanged) {
-      for (const name of missing) withheld.add(name);
-      withheldByPin.current.set(pinKey, withheld);
-      return;
-    }
-    const seeded = seedDecisionInputs(value, table.inputs.filter(clause => !withheld.has(clause.name)));
-    for (const name of missing) withheld.add(name);
-    withheldByPin.current.set(pinKey, withheld);
-    if (seeded) onChange(seeded);
-  }, [disabled, loading, onChange, parsed, pin, table, tablePin, value]);
-
   const commit = (next: Record<string, Scalar>) => onChange(next);
   const updateClause = (name: string, clause: Table["inputs"][number], next: Scalar) =>
     commit({ ...values, [name]: writtenDecisionInput(clause, next) });
@@ -158,6 +128,10 @@ export function DecisionInputsEditor({
     {loading ? <p role="status">Loading input fields…</p> : null}
     {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it before Review &amp; publish; these fields follow the current draft table.</StudioAlert> : null}
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    {missing.length ? <StudioAlert tone="danger">
+      {missing.join(", ")} {missing.length === 1 ? "is" : "are"} missing from this table.
+      {" "}Runtime will refuse MissingInput. Enter or confirm a value before Review &amp; publish.
+    </StudioAlert> : null}
     {invalids.length ? <StudioAlert tone="danger">
       {invalids.map(item => `${item.name} is empty or not a valid ${item.tableType}.`).join(" ")}
       {" "}Runtime will refuse InvalidValue. Enter a valid value before Review &amp; publish.
@@ -170,9 +144,18 @@ export function DecisionInputsEditor({
       {extras.map(item => item.name).join(", ")} {extras.length === 1 ? "is" : "are"} not in this table.
       {" "}Runtime will refuse extra inputs (InputMembership). Remove them to keep only this table&apos;s fields; authored values are kept until you remove them.
     </StudioAlert> : null}
-    {table ? <fieldset disabled={disabled || loading} className="decision-evaluate-fields"><legend className="decision-visually-hidden">Decision table inputs</legend><div className="decision-form-grid">{table.inputs.map(clause =>
-      <ValueInput key={clause.id} clause={clause} label={clause.name} value={displayedDecisionInput(clause, values[clause.name])} onChange={next => updateClause(clause.name, clause, next)} />
-    )}</div>
+    {table ? <fieldset disabled={disabled || loading} className="decision-evaluate-fields"><legend className="decision-visually-hidden">Decision table inputs</legend><div className="decision-form-grid">{table.inputs.map(clause => {
+      const stored = values[clause.name];
+      const unset = !isScalar(stored);
+      return <ValueInput
+        key={clause.id}
+        clause={clause}
+        label={clause.name}
+        unset={unset}
+        value={unset ? { kind: clause.type === "number" ? "number" : clause.type === "boolean" ? "boolean" : "string", value: "" } : displayedDecisionInput(clause, stored)}
+        onChange={next => updateClause(clause.name, clause, next)}
+      />;
+    })}</div>
       {mismatches.length ? <StudioButton disabled={disabled || loading} onClick={() => { const next = matchDecisionInputTypes(values, table.inputs); if (next) commit(next); }}>Store as table types</StudioButton> : null}
     </fieldset> : null}
     {extras.length ? <fieldset disabled={disabled || loading} className="decision-evaluate-fields"><legend className="decision-visually-hidden">Inputs not in this table</legend><div className="decision-form-grid">{extras.map(item =>

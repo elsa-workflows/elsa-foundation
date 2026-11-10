@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { StudioAlert, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { can, deleteCase, deleteRun, failureMessage, getRun, history, listCases, runCases, saveCase, type DecisionAsset, type DecisionCase, type DecisionValue, type DecisionVersion, type Scalar, type TestRun } from "./decisionsApi";
@@ -12,15 +12,37 @@ export function displayValue(value: unknown): string {
   if (value && typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${displayValue(item)}`).join(", ");
   return value === null || value === undefined ? "Not retained" : String(value);
 }
-export function ValueInput({ clause, value, onChange, label }: { clause: Clause; value: Scalar; onChange(value: Scalar): void; label: string }) {
-  return <label className="decision-value-field">{label}<span className="decision-value-controls">
-    <select aria-label={`${label} value kind`} value={value.kind === "null" ? "null" : clause.type} onChange={event => onChange(event.target.value === "null" ? { kind: "null", value: null } : initial(clause.type))}><option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option><option value="null">Null</option></select>
-    {value.kind === "boolean" ? <select aria-label={label} value={value.value ?? "false"} onChange={event => onChange({ kind: "boolean", value: event.target.value })}><option value="true">True</option><option value="false">False</option></select>
-      : <input aria-label={label} disabled={value.kind === "null"} inputMode={clause.type === "number" ? "decimal" : "text"} value={value.value ?? ""} onChange={event => onChange({
-        kind: clause.type === "number" ? "number" : "string",
-        value: event.target.value
-      })} />}
-  </span></label>;
+export function ValueInput({ clause, value, onChange, label, unset = false }: { clause: Clause; value: Scalar; onChange(value: Scalar): void; label: string; unset?: boolean }) {
+  const missingId = useId();
+  const kind = unset ? "unset" : value.kind === "null" ? "null" : clause.type;
+  const confirm = (next: string) => {
+    if (next === "unset") return;
+    onChange(next === "null" ? { kind: "null", value: null } : initial(clause.type));
+  };
+  return <label className={unset ? "decision-value-field is-unset" : "decision-value-field"}>{label}<span className="decision-value-controls">
+    <select aria-label={`${label} value kind`} value={kind} onChange={event => confirm(event.target.value)}>
+      {unset ? <option value="unset">Not set</option> : null}
+      <option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option>
+      <option value="null">Null</option>
+    </select>
+    {unset
+      ? clause.type === "boolean"
+        ? <select aria-label={label} value="" aria-describedby={missingId} onChange={event => onChange({ kind: "boolean", value: event.target.value })}>
+            <option value="" disabled>Not set</option>
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
+        : <input aria-label={label} aria-describedby={missingId} placeholder="Not set" value="" inputMode={clause.type === "number" ? "decimal" : "text"} onChange={event => onChange({
+            kind: clause.type === "number" ? "number" : "string",
+            value: event.target.value
+          })} />
+      : value.kind === "boolean"
+        ? <select aria-label={label} value={value.value ?? "false"} onChange={event => onChange({ kind: "boolean", value: event.target.value })}><option value="true">True</option><option value="false">False</option></select>
+        : <input aria-label={label} disabled={value.kind === "null"} inputMode={clause.type === "number" ? "decimal" : "text"} value={value.value ?? ""} onChange={event => onChange({
+            kind: clause.type === "number" ? "number" : "string",
+            value: event.target.value
+          })} />}
+  </span>{unset ? <span id={missingId} className="decision-input-missing" role="status">{label} is not set. Runtime will refuse MissingInput until you enter or confirm a value.</span> : null}</label>;
 }
 export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void }) {
   const [cases, setCases] = useState<DecisionCase[]>([]), [runs, setRuns] = useState<TestRun[]>([]), [run, setRun] = useState<TestRun | null>(null);

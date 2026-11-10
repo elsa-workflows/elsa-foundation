@@ -1930,6 +1930,31 @@ describe("activity property organization", () => {
     expect(document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
     expect(document.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
   });
+
+  it("keeps an expanded property editor outside a clipping embedder while inheriting its theme tokens", () => {
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1 } } }
+      })
+    });
+    container.style.overflow = "hidden";
+    container.style.setProperty("--wf-text", "rgb(12, 34, 56)");
+    container.style.setProperty("--wf-panel", "rgb(210, 220, 230)");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
+    const dialog = document.body.querySelector<HTMLElement>(".wf-property-editor-dialog");
+    expect(dialog).not.toBeNull();
+    expect(container.contains(dialog)).toBe(false);
+    const portalRoot = dialog!.closest(".wf-tokens") as HTMLElement | null;
+    expect(portalRoot).not.toBeNull();
+    expect(portalRoot).not.toBe(container);
+    expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(12, 34, 56)");
+    expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("rgb(210, 220, 230)");
+  });
 });
 
 const secretDescriptor: StudioExpressionDescriptor = { type: "Secret", displayName: "Secret", editingMode: "reference" };

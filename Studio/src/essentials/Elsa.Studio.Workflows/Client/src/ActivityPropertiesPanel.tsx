@@ -1180,10 +1180,19 @@ function PropertyRow({
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
-      {/* User interaction opens this after rowRef mounts. Embedders scope theme tokens with
-          .wf-tokens; without a resource scope the dialog inherits the document theme. */}
+      {/* User interaction opens this after rowRef mounts. The overlay is position:fixed and must
+          escape inspector overflow, so the portal target is the owner document body. Embedders
+          stamp --wf-* / host tokens on .wf-tokens, .wf-editor, or .wf-page; copy those custom
+          properties onto this wrapper so the dialog keeps the embedder palette instead of
+          document fallbacks. */}
       {expanded ? createPortal(
-        <div className="wf-tokens">
+        <div
+          className="wf-tokens"
+          ref={node => copyThemeCustomProperties(
+            rowRef.current?.closest(workflowThemeScopeSelector) ?? null,
+            node
+          )}
+        >
           <ExpandedPropertyEditor
             input={input}
             dictionarySessionScope={dictionarySessionScope}
@@ -1276,6 +1285,28 @@ function expressionEditorReadsActivity(props: PropertyRowProps) {
     activity: props.activity,
     expressionDescriptors: props.expressionDescriptors
   }));
+}
+
+const workflowThemeScopeSelector = ".wf-tokens, .wf-editor, .wf-page";
+
+function copyThemeCustomProperties(source: Element | null, target: HTMLElement | null) {
+  if (!source || !target || source === target) return;
+  const styles = getComputedStyle(source);
+  let copied = 0;
+  for (let index = 0; index < styles.length; index++) {
+    const name = styles.item(index);
+    if (!name.startsWith("--")) continue;
+    const value = styles.getPropertyValue(name);
+    if (value === "") continue;
+    target.style.setProperty(name, value);
+    copied += 1;
+  }
+  if (copied > 0 || !(source instanceof HTMLElement)) return;
+  const inline = source.style;
+  for (let index = 0; index < inline.length; index++) {
+    const name = inline.item(index);
+    if (name.startsWith("--")) target.style.setProperty(name, inline.getPropertyValue(name));
+  }
 }
 
 function hasSameActivityMetadata(

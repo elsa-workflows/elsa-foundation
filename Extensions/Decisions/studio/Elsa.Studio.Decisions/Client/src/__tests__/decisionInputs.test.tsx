@@ -144,7 +144,7 @@ describe("decision input seeding helpers", () => {
 });
 
 describe("Evaluate Decision Inputs editor", () => {
-  it("seeds amount from the selected published table and commits typed values without JSON", async () => {
+  it("leaves amount unset until entered and commits typed values without JSON", async () => {
     const api = stubApi(), onChange = vi.fn();
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
     function Harness() {
@@ -153,9 +153,13 @@ describe("Evaluate Decision Inputs editor", () => {
     }
     const { host } = mount(<Harness />);
     await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('[aria-label="amount"]')).not.toBeNull());
-    expect(onChange).toHaveBeenCalledWith({ amount: { kind: "number", value: "0" } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("unset");
+    expect(host.querySelector<HTMLInputElement>('[aria-label="amount"]')?.placeholder).toBe("Not set");
+    expect(host.textContent).toContain("MissingInput");
     type(host.querySelector<HTMLInputElement>('[aria-label="amount"]')!, "950");
     expect(onChange).toHaveBeenLastCalledWith({ amount: { kind: "number", value: "950" } });
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("number");
     expect(host.querySelector(".wf-dictionary-editor")).toBeNull();
   });
 
@@ -174,7 +178,7 @@ describe("Evaluate Decision Inputs editor", () => {
     expect(json.getAttribute("aria-describedby")).toBeTruthy();
   });
 
-  it("reseeds after Advanced JSON is cleared and restores stored JSON on invalid blur", async () => {
+  it("keeps cleared Advanced JSON unset and restores stored JSON on invalid blur", async () => {
     const api = stubApi(), onChange = vi.fn();
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
     function Harness() {
@@ -186,8 +190,9 @@ describe("Evaluate Decision Inputs editor", () => {
     click(host.querySelector("summary")!);
     const json = host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!;
     type(json, "{}");
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({ amount: { kind: "number", value: "0" } }));
-    expect(host.querySelector<HTMLInputElement>('[aria-label="amount"]')?.value).toBe("0");
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("unset");
+    expect(host.textContent).toContain("MissingInput");
     type(host.querySelector<HTMLInputElement>('[aria-label="amount"]')!, "950");
     json.focus();
     type(json, "{");
@@ -222,8 +227,9 @@ describe("Evaluate Decision Inputs editor", () => {
     expect(host.querySelector('[aria-label="customerCategory (not in this table)"]')).not.toBeNull();
     expect(onValidationChange).toHaveBeenCalledWith(true);
     click(button(host, "Remove inputs not in this table"));
-    expect(onChange.mock.calls.at(-1)?.[0]).toEqual({ score: { kind: "number", value: "0" } });
+    expect(onChange.mock.calls.at(-1)?.[0]).toEqual({});
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).toBeNull());
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="score value kind"]')?.value).toBe("unset");
   });
 
   it("flags a type switch and writes the displayed table kind on edit", async () => {
@@ -257,6 +263,57 @@ describe("Evaluate Decision Inputs editor", () => {
     type(host.querySelector<HTMLInputElement>('[aria-label="amount"]')!, "");
     expect(host.textContent).toContain("InvalidValue");
     expect(onValidationChange).toHaveBeenCalledWith(true);
+  });
+
+  it("writes explicit 0 when the Number kind is confirmed and keeps that distinct from missing", async () => {
+    const api = stubApi(), onChange = vi.fn();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
+    function Harness() {
+      const [value, setValue] = useState<unknown>({});
+      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={value} context={expressionContext(pin("approval@v1"))} onChange={next => { onChange(next); setValue(next); }} />;
+    }
+    const { host } = mount(<Harness />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
+    expect(host.textContent).toContain("MissingInput");
+    select(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')!, "number");
+    expect(onChange).toHaveBeenLastCalledWith({ amount: { kind: "number", value: "0" } });
+    expect(host.querySelector<HTMLInputElement>('[aria-label="amount"]')?.value).toBe("0");
+    expect(host.textContent).not.toContain("MissingInput");
+  });
+
+  it("writes explicit empty text when the Text kind is confirmed", async () => {
+    const api = stubApi(), onChange = vi.fn();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v2") ? textPublished : path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
+    function Harness() {
+      const [value, setValue] = useState<unknown>({});
+      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={value} context={expressionContext(pin("approval@v2"))} onChange={next => { onChange(next); setValue(next); }} />;
+    }
+    const { host } = mount(<Harness />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("unset");
+    select(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')!, "string");
+    expect(onChange).toHaveBeenLastCalledWith({ amount: { kind: "string", value: "" } });
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="amount value kind"]')?.value).toBe("string");
+    expect(host.textContent).not.toContain("MissingInput");
+  });
+
+  it("distinguishes an unset boolean from an explicit false", async () => {
+    const booleanXml = (asset.xml ?? "").replace('typeRef="number"', 'typeRef="boolean"').replace(">amount<", ">approved<");
+    const booleanPublished = { ...published, xml: booleanXml };
+    const api = stubApi(), onChange = vi.fn();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? booleanPublished : { ...asset, publishedVersionId: "v1", xml: booleanXml });
+    function Harness() {
+      const [value, setValue] = useState<unknown>({});
+      return <DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={value} context={expressionContext(pin("approval@v1"))} onChange={next => { onChange(next); setValue(next); }} />;
+    }
+    const { host } = mount(<Harness />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="approved"]')).not.toBeNull());
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="approved"]')?.value).toBe("");
+    expect(host.textContent).toContain("MissingInput");
+    select(host.querySelector<HTMLSelectElement>('[aria-label="approved"]')!, "false");
+    expect(onChange).toHaveBeenLastCalledWith({ approved: { kind: "boolean", value: "false" } });
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="approved"]')?.value).toBe("false");
+    expect(host.textContent).not.toContain("MissingInput");
   });
 
   it("does not label a version-fetch failure as unpublished", async () => {
@@ -333,6 +390,17 @@ describe("Evaluate Decision draft validation collection", () => {
     expect(unpublished.map(item => item.type)).toContain("Decision/UnpublishedLatest");
     expect(unpublished.some(item => item.message.includes("Review & publish cannot pin"))).toBe(true);
     expect(unpublished[0]?.path).toBe("eval-1/inputs/Decision");
+
+    const missing = await collect(api, evaluateActivity({
+      Inputs: { expression: { type: "Object", value: {} } }
+    }));
+    expect(missing.map(item => item.type)).toContain("Decision/MissingInput");
+
+    const explicitZero = await collect(api, evaluateActivity({
+      Inputs: { expression: { type: "Object", value: { amount: { kind: "number", value: "0" } } } }
+    }));
+    expect(explicitZero.map(item => item.type)).not.toContain("Decision/MissingInput");
+    expect(explicitZero.map(item => item.type)).not.toContain("Decision/InvalidValue");
   });
 
   it("does not treat a custom activity Decision mailbox as a table pin", async () => {
@@ -488,11 +556,14 @@ describe("Evaluate Decision draft validation collection", () => {
     expect(remounted.host.querySelector<HTMLInputElement>('[aria-label="customerCategory"]')?.value).toBe("VIP");
   });
 
-  it("still reseeds a new @latest clause when Advanced JSON is cleared after table growth", async () => {
+  it("does not seed a new @latest clause when Advanced JSON is cleared after table growth", async () => {
     const { host, onChange, added } = await mountLatestThenGrow();
     click(host.querySelector("summary")!);
     type(host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!, "{}");
-    await vi.waitFor(() => expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(true));
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
+    expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);
+    expect(host.querySelector<HTMLSelectElement>(`[aria-label="${added.name} value kind"]`)?.value).toBe("unset");
+    expect(host.textContent).toContain("MissingInput");
   });
 
   it("keeps InvalidValue and field focus while a same-pin table refresh is in flight", async () => {

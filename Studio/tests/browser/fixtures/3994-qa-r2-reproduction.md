@@ -2,7 +2,7 @@
 
 Use this file against the **new collector + freshness head** (SHA is the PR tip after the additive bot commit). Do not treat helper-only tests as composed proof.
 
-`{}` still reseeds amount `0`. Untouched-default policy is unchanged and still a product question on #3976.
+Owner policy 8 Nov 18:04: leave guided decision inputs unset until explicitly entered or confirmed, preserving already-authored values. No implicit `0` / `false` / empty seeding on open or on JSON `{}`. Missing vs explicit `0` / `false` / empty text stay distinct. Absent controls show as **Not set** with inline MissingInput. No engine changes.
 
 ## Automated isolated routes (must pass; not composed-host proof)
 
@@ -10,11 +10,12 @@ From `Studio/` with the decision-inputs Playwright project:
 
 | Item | URL | What must happen |
 |---|---|---|
-| 9 | `/?mode=decision-inputs&theme=light` | Version 2 amount Text. Fill `951` in the **amount** textbox. Authored JSON `kind` becomes `"string"`. Review Ready. |
-| 11 | same | `{}` reseeds `0`; invalid `[` is `aria-invalid`; blur restores last valid JSON. |
+| 9 | `/?mode=decision-inputs&theme=light` | Version 2 amount Text. Fill `951` in the **amount** textbox **and** `customerCategory` (`Standard`). Authored JSON `kind` becomes `"string"`. Review Ready. Untouched `customerCategory` stays MissingInput. |
+| 11 | same | `{}` stays unset (`amount` kind **Not set**, MissingInput). Invalid `[` is `aria-invalid`; blur restores last valid JSON. |
 | 14 | `/?mode=decision-inputs&theme=light&unpublished=1` then Publish decision | After **window focus**, picker drops “no published version” and lists Version 1. |
 | 14 | same, then pin `@latest` and **Publish table with region** | After **window focus**, picker lists **Version 3**, `region` is visible, authored JSON has no `region`, amount stays `kind:number`, footer + Review **MissingInput**. |
-| 18 | same as 14, then edit **customerCategory** to `VIP` | JSON still has no `region`. MissingInput remains. Save / reselect `@latest` / remount / reload must not write `region:{kind:string,value:""}`. `{}` still reseeds `0` (product question). |
+| 18 | same as 14, then edit **customerCategory** to `VIP` | JSON still has no `region`. MissingInput remains. Save / reselect `@latest` / remount / reload must not write `region:{kind:string,value:""}`. `{}` stays unset. |
+| 20 | `/?mode=decision-inputs&theme=light` | Untouched fields: kind **Not set**, inline MissingInput, Review blocked. Confirm Number writes explicit `0`. Fill `950` / `Standard`. Remount keeps authored values. Reload of empty `{}` stays unset. |
 | 19 | Version picker: start versions GET for table A, immediately select table B | Late A must not replace B's list or write `B@A-version`. |
 | 15 | `/?mode=decision-inputs&theme=light&failOnce=1` | Review blocked on lookup; Recover lookup; Review Ready. |
 | 16 | `/?mode=decision-inputs&theme=light&unrelated=1` | Notify activity, `ops@example.com`, Review Ready, no `/ops` lookup. |
@@ -27,13 +28,13 @@ Suite: `pnpm --dir Studio exec playwright test tests/browser/decision-inputs.spe
 1. Bind Evaluate Decision to a published table whose **Version 2** amount is Text.
 2. Confirm inspector + footer + Review show **InputTypeMismatch**, Advanced JSON still `"kind": "number"`.
 3. Type `951` in the **amount** field (the labeled text box, not Store as table types).
-4. Advanced JSON must become `"kind": "string", "value": "951"`. Review must be Ready once extras are removed.
+4. Advanced JSON must become `"kind": "string", "value": "951"`. Fill `customerCategory` if it is still Not set. Review must be Ready once extras are removed.
 
 Do not use Store as table types for this check. Store is a separate explicit action.
 
 ## 11 — `{}` / invalid JSON
 
-Unchanged: `{}` reseeds `0`; invalid `[` is aria-invalid; blur restores last valid JSON.
+`{}` stays unset: amount kind is **Not set**, authored JSON is `{}`, MissingInput remains. Invalid `[` is aria-invalid; blur restores last valid JSON. Confirming Number is the way to write explicit `0`.
 
 ## 14 — same-session `@latest` freshness (editor + picker + Review)
 
@@ -73,6 +74,10 @@ Click it. A modal **dialog** named **Inputs** must appear (`role="dialog"`, head
 After item 14's refresh, `region` is visible and **absent** from JSON. Edit a **different** authored field (`customerCategory` → `VIP`). JSON must still omit `region`. MissingInput must remain. The empty default `region:{kind:string,value:""}` must not appear after save, reselect of `@latest`, remount, or reload.
 
 Isolated: Playwright item 14 test continues into customerCategory VIP, reselect, and **Remount inspector**.
+
+## 20 — unset until confirmed
+
+Open Evaluate Decision on a published table with empty Inputs `{}`. Amount and customerCategory must show **Not set**, inline MissingInput, and Review blocked. Confirm Number to write `{kind:number,value:"0"}`. Enter `950` / `Standard`. Remount keeps those values. Reload of the empty fixture must not seed `0` / `false` / `""`.
 
 ## 19 — rapid A/B deferred versions
 

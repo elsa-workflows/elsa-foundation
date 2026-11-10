@@ -39,6 +39,9 @@
 .decision-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .75rem; margin-block: .5rem; }
 .decision-value-field { display: grid; gap: .35rem; font-weight: 500; }
 .decision-value-controls { display: flex; gap: .4rem; }
+.decision-input-missing { color: var(--studio-danger, var(--wf-danger, #dc2626)); font-size: .875rem; font-weight: 400; }
+.decision-value-field.is-unset input,
+.decision-value-field.is-unset select[aria-describedby] { border-color: var(--studio-danger, var(--wf-danger, #dc2626)); }
 .decision-value-controls select { flex: 0 0 6rem; }
 .decision-comparison, .decision-history-row { border-bottom: 1px solid var(--studio-border); padding: .75rem 0; overflow-wrap: anywhere; }
 .decision-comparison h4, .decision-comparison p { margin: .25rem 0; }
