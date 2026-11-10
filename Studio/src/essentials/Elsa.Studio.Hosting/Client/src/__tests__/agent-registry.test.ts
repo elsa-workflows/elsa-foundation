@@ -10,7 +10,7 @@ describe("agent registry", () => {
       ...createEndpointContext("https://studio.example/")
     });
 
-    api.agent.contextProviders.add({
+    api.weaver.contextProviders.add({
       id: "workflow.context",
       displayName: "Workflow",
       surfaces: ["/workflows"],
@@ -24,8 +24,8 @@ describe("agent registry", () => {
         scope: "screen"
       }]
     });
-    api.agent.promptStarters.add({ id: "prompt", label: "Explain", prompt: "Explain this.", surfaces: ["/workflows"] });
-    api.agent.capabilities.add({
+    api.weaver.promptStarters.add({ id: "prompt", label: "Explain", prompt: "Explain this.", surfaces: ["/workflows"] });
+    api.weaver.capabilities.add({
       id: "workflow.explain",
       displayName: "Explain workflow",
       description: "Explain the active workflow.",
@@ -33,7 +33,7 @@ describe("agent registry", () => {
       risk: "read-only",
       surfaces: ["/workflows"]
     });
-    api.agent.actions.add({
+    api.weaver.actions.add({
       id: "workflow.propose",
       capabilityId: "workflow.propose-change",
       displayName: "Propose change",
@@ -42,7 +42,7 @@ describe("agent registry", () => {
       surfaces: ["/workflows"],
       proposalSchema: {}
     });
-    api.agent.toolSlots.add({
+    api.weaver.toolSlots.add({
       id: "workflow.tools",
       displayName: "Workflow tools",
       description: "Tools that inspect or mutate workflow resources.",
@@ -50,7 +50,7 @@ describe("agent registry", () => {
       invocationModes: ["read-only", "proposal"],
       order: 20
     });
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "workflow.explain.tool",
       slotId: "workflow.tools",
       displayName: "Explain workflow",
@@ -65,19 +65,19 @@ describe("agent registry", () => {
       invocationModes: ["read-only"],
       resultRendererIds: ["workflow.summary"]
     });
-    api.agent.resultRenderers.add({
+    api.weaver.resultRenderers.add({
       id: "workflow.summary",
       displayName: "Workflow summary",
       resourceTypes: ["workflow-definition"],
       component: ({ result }) => String(result)
     });
 
-    expect(api.agent.contextProviders.list()).toHaveLength(1);
-    expect(api.agent.promptStarters.list()).toHaveLength(1);
-    expect(api.agent.capabilities.list()).toHaveLength(1);
-    expect(api.agent.actions.list()).toHaveLength(1);
-    expect(api.agent.toolSlots.list()).toHaveLength(1);
-    expect(api.agent.toolContracts.list()).toHaveLength(1);
-    expect(api.agent.resultRenderers.list()).toHaveLength(1);
+    expect(api.weaver.contextProviders.list()).toHaveLength(1);
+    expect(api.weaver.promptStarters.list()).toHaveLength(1);
+    expect(api.weaver.capabilities.list()).toHaveLength(1);
+    expect(api.weaver.actions.list()).toHaveLength(1);
+    expect(api.weaver.toolSlots.list()).toHaveLength(1);
+    expect(api.weaver.toolContracts.list()).toHaveLength(1);
+    expect(api.weaver.resultRenderers.list()).toHaveLength(1);
   });
 });

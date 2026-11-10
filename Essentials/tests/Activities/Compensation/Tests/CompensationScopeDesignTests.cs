@@ -88,6 +88,17 @@ public sealed class CompensationScopeDesignTests : IDisposable
     }
 
     [Fact]
+    public void A_scope_runs_each_step_and_handler_at_most_once_so_no_earlier_run_leads_to_a_reader()
+    {
+        var node = ScopeNode("scope",
+            ("Inventory", Leaf("reserve"), Leaf("release")),
+            ("Delivery", Leaf("deliver"), Leaf("cancel")));
+
+        Assert.All(new[] { ("deliver", "cancel"), ("reserve", "cancel"), ("reserve", "deliver"), ("cancel", "deliver") }, pair =>
+            Assert.False(_structureService.AssessChildResult(node, pair.Item1, pair.Item2).EarlierProducerRunCanReachConsumer));
+    }
+
+    [Fact]
     public void Replacing_children_round_trips_through_compile_and_remap()
     {
         var node = ScopeNode("scope", ("Reserve", Leaf("reserve"), null), ("Confirm", Leaf("confirm"), null));

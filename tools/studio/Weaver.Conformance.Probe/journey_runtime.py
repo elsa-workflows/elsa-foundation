@@ -41,7 +41,7 @@ def same(left, right):
 
 
 # The client receives only the public session-policy shape (effective mode, ceiling, allowed modes and an
-# opaque revision; specs/1186-weaver-effects/data-model.md). These domain AgentPolicy members never reach it.
+# opaque revision; specs/1186-weaver-effects/data-model.md). These domain WeaverPolicy members never reach it.
 PRIVATE_POLICY_KEYS = frozenset({"deniedCapabilityIds", "allowedContextKinds", "maxContextSensitivity", "retentionLabel",
                                  "contextVisibility", "requiresApprovalForMutations"})
 

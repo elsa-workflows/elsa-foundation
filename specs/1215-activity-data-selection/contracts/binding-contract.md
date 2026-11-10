@@ -18,7 +18,16 @@ is forbidden because older compilers/readers can silently ignore such a field.
 | `InputMember` | `referenceKey`, `memberPath` |
 | `WorkflowRequestMember` | `memberKey`, `memberPath` |
 | `VariableMember` | `referenceKey`, `declaringScopeId`, `memberPath` |
-| `ActivityResultMember` | `producerNodeId`, `projectionKey`, `producerScopeId`, `memberPath`; existing producer `isOptional` defaults to false |
+| `ActivityResultMember` | `producerNodeId`, `projectionKey`, `memberPath`; existing producer `isOptional` defaults to false |
+
+`producerScopeId` is optional and legacy on both `ActivityResult` and `ActivityResultMember` (#4053). The
+server never writes it: the binding it returns for a browsed producer names only the producer and its
+projection, and is returned only where publication admits it unchanged. A document that declares a scope
+keeps it, its bytes and its hash, and a declared scope must still be a nonblank string. Without a scope the
+producer is identified by causal lineage and branch and iteration frames alone, so publication refuses a
+scope-free binding with `ValueFlow/EarlierProducerRun` unless the owning structure states that no earlier run
+of the producer can lead to the consumer. Bindings that declare a scope, and portable expression parameters,
+keep their existing rules (#4056).
 
 Authored input example under this contract, effective on M2 approval/merge:
 
@@ -30,7 +39,6 @@ Authored input example under this contract, effective on M2 approval/merge:
     "value": {
       "producerNodeId": "get-customer",
       "projectionKey": "Customer",
-      "producerScopeId": "workflow",
       "isOptional": false,
       "memberPath": ["customerId"]
     }
@@ -39,7 +47,8 @@ Authored input example under this contract, effective on M2 approval/merge:
 ```
 
 Identity fields retain their existing validation and lexical/causal meanings. The picker always emits
-an explicit variable declaring scope, including the workflow sentinel. Existing legacy whole-variable
+an explicit variable declaring scope, including the workflow sentinel, and stores an activity-result binding
+exactly as the server returned it, without a producer scope. Existing legacy whole-variable
 documents continue to use their historical default-scope rule.
 
 `memberPath` must contain at least one string segment. Preserve each exact serialized member name;

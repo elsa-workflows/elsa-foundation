@@ -204,6 +204,57 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
     }
 
+    /// <summary>
+    /// A result binding without a scope publishes where the owning structure states that no earlier producer run can
+    /// lead to the reader, and compiles to a reference without one. On a Flowchart cycle it is refused before any write.
+    /// A binding that declares a scope keeps today's rules there (#4056), so existing documents still publish.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_scope_free_result_binding_publishes_only_where_no_earlier_producer_run_can_reach_its_reader(bool cycle, bool declaresScope)
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(declaresScope
+            ? JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root" })
+            : JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
+        List<FlowchartConnection> connections =
+        [
+            new(new FlowchartEndpoint("start", "Done"), new FlowchartEndpoint("producer", null)),
+            new(new FlowchartEndpoint("producer", "Done"), new FlowchartEndpoint("consumer", null))
+        ];
+        if (cycle)
+            connections.Add(new(new FlowchartEndpoint("consumer", "Done"), new FlowchartEndpoint("start", null)));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(DefaultResultProducer), TypeAliasConvention.CanonicalAlias(typeof(DefaultResultProducer)));
+        var producer = SecretBindingCompilerFixture.ClrActivityVersion(typeof(DefaultResultProducer));
+        var version = WorkflowVersion(FlowchartNode("flowchart",
+            [Node("start", Text("start")), new ActivityNode("producer", producer.Id, [], []), Node("consumer", read)], connections, "start"));
+        var before = await CountPublishWritesAsync();
+        var versionStore = new FakeVersionStore(version);
+        var handler = Handler(null, TestCompiler.Create(versionStore,
+            new FakeActivityVersionStore([_writeLineActivity, _flowchartActivity, producer]), _activityStructureService, registry), versionStore);
+
+        if (cycle && !declaresScope)
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/EarlierProducerRun");
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
+        var reference = consumer.InputBindings["Text"].ActivityResult!;
+        Assert.Equal("producer", reference.ProducerExecutableNodeId);
+        Assert.Equal(declaresScope ? "scope:root" : null, reference.ProducerScopeId);
+    }
+
     [Theory]
     [InlineData("canonical", false)]
     [InlineData("capital-parameters", false)]

@@ -82,11 +82,11 @@ describe("studio registry", () => {
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
-    expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
-    expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
-    expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
-    expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
-    expect(api.agent.promptActions.slot.id).toBe(studioSlotIds.agentPromptActions);
+    expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.weaverPromptStarters);
+    expect(api.weaver.toolSlots.slot.id).toBe(studioSlotIds.weaverToolSlots);
+    expect(api.weaver.toolContracts.slot.id).toBe(studioSlotIds.weaverToolContracts);
+    expect(api.weaver.resultRenderers.slot.id).toBe(studioSlotIds.weaverResultRenderers);
+    expect(api.weaver.promptActions.slot.id).toBe(studioSlotIds.weaverPromptActions);
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
@@ -435,7 +435,7 @@ describe("studio registry", () => {
     });
     const listener = vi.fn();
 
-    api.agent.promptActions.add({
+    api.weaver.promptActions.add({
       id: "explain-resource",
       label: "Explain",
       placement: "selection",
@@ -447,7 +447,7 @@ describe("studio registry", () => {
     unsubscribe();
     api.ai.dispatchPrompt({ message: "This should not be observed." });
 
-    expect(api.agent.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(api.weaver.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
   });

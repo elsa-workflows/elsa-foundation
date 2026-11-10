@@ -220,7 +220,7 @@ async function captureNativeStreams(target) {
   const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
   function sseText(value, allowTrailingIncomplete = false) {
     const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value, { stream: allowTrailingIncomplete });
-    // This observer qualifies AgentApi.WriteEventAsync's UTF-8/no-BOM data lines,
+    // This observer qualifies WeaverApi.WriteEventAsync's UTF-8/no-BOM data lines,
     // not arbitrary SSE encodings or original compressed/network-wire bytes.
     if (text.startsWith("\ufeff") || text && !text.startsWith("data: "))
       throw new Error("Response bytes do not match the native Agent SSE framing profile.");

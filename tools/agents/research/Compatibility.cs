@@ -24,10 +24,10 @@ foreach (var leaf in new[] { typeof(WeaverAnthropicFeature), typeof(WeaverGitHub
     await using var root = services.BuildServiceProvider();
     var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("compatibility");
     await using var scope = shell.BeginScope();
-    var provider = scope.ServiceProvider.GetRequiredService<IAgentProviderRegistry>().Active;
+    var provider = scope.ServiceProvider.GetRequiredService<IWeaverProviderRegistry>().Active;
     if (provider is null) throw new InvalidOperationException("Provider not composed: " + leaf.Name);
-    scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
-    scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+    scope.ServiceProvider.GetRequiredService<IWeaverStreamingService>();
+    scope.ServiceProvider.GetRequiredService<IWeaverSessionService>();
     observations.Add(leaf.Name + " activated and resolves current Agent contracts");
     if (leaf == typeof(WeaverAnthropicFeature))
     {

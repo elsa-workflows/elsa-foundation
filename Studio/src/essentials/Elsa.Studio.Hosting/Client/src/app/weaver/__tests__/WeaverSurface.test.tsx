@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext, StudioHttpError, type StudioAgentContextCollection, type StudioAgentPreparedInvocation, type StudioAgentPromptRequest, type StudioAgentPromptResult } from "../../../sdk";
+import { createEndpointContext, StudioHttpError, type StudioWeaverContextCollection, type StudioWeaverPreparedInvocation, type StudioWeaverPromptRequest, type StudioWeaverPromptResult } from "../../../sdk";
 import { AgentApiError, AgentExecutionError, createAgentClient, POLICY_CHANGED, type AgentClient } from "../../agent/agentClient";
 import type { AgentAutonomyMode, AgentSessionPolicy, AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
@@ -12,8 +12,8 @@ import { AgentContextChips } from "../../agent/AgentContextChips";
 
 describe("WeaverSurface", () => {
   it("replaces displayed evidence on current disclosure and clears it on a terminal refusal", async () => {
-    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
-    api.agent.onPromptResult(result => results.push(result));
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
     let emit!: (event: AgentStreamEvent) => void;
     const subscribeStream = ((_context, _url, receive) => { emit = receive; return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "current-disclosure", requestId: "current-disclosure-request", message: "Inspect" }} />);
@@ -34,8 +34,8 @@ describe("WeaverSurface", () => {
   });
 
   it("waits for bootstrap then explicitly refuses a correlated request when the provider is unavailable", async () => {
-    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
-    api.agent.onPromptResult(result => results.push(result));
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
     let finishBootstrap!: (value: Awaited<ReturnType<AgentClient["bootstrap"]>>) => void;
     client.bootstrap = vi.fn<AgentClient["bootstrap"]>(() => new Promise(resolve => { finishBootstrap = resolve; }));
     const { unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} incomingPrompt={{ id: "unavailable", requestId: "unavailable-request", message: "Inspect" }} />);
@@ -58,10 +58,10 @@ describe("WeaverSurface", () => {
   });
 
   it.each([false, true])("uses independent evidence only when a thrown source is optional (required=%s)", async required => {
-    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
-    api.agent.onPromptResult(result => results.push(result));
-    api.agent.contextProviders.add({ id: "available", displayName: "Available context", surfaces: ["*"], sensitivity: "internal", order: 1, collect: async () => [{ id: "available", source: "Sample", label: "Available evidence", contentType: "sample", sensitivity: "internal", scope: "screen" }] });
-    api.agent.contextProviders.add({ id: "broken", displayName: "Unavailable context", surfaces: ["*"], sensitivity: "internal", order: 2, required, collect: async () => { throw new Error("Source could not collect"); } });
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
+    api.weaver.contextProviders.add({ id: "available", displayName: "Available context", surfaces: ["*"], sensitivity: "internal", order: 1, collect: async () => [{ id: "available", source: "Sample", label: "Available evidence", contentType: "sample", sensitivity: "internal", scope: "screen" }] });
+    api.weaver.contextProviders.add({ id: "broken", displayName: "Unavailable context", surfaces: ["*"], sensitivity: "internal", order: 2, required, collect: async () => { throw new Error("Source could not collect"); } });
     const subscribeStream = ((_context, _url, emit) => { emit({ type: "context-admitted", attachments: [], diagnostics: [] }); emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: `failure-${required}`, requestId: `failure-${required}`, message: "Inspect" }} />);
     try {
@@ -74,7 +74,7 @@ describe("WeaverSurface", () => {
 
   it.each(["weaver.context.contributor_failed", "weaver.context.deadline", "weaver.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
     const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
-    api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
+    api.weaver.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
     const streams: ((event: AgentStreamEvent) => void)[] = [];
     const subscribeStream = ((_context, _url, emit) => { streams.push(emit); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
@@ -110,7 +110,7 @@ describe("WeaverSurface", () => {
 
   it.each(["navigation", "error", "transport", "cancelled", "stop"])("clears request and server limitations on %s without allowing a late projection to restore them", async boundary => {
     const api = readyApi(); const client = readyClient();
-    api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: [{ contributorId: "client-source", code: "client.partial", message: "Local limitation to clear", required: false }] }) });
+    api.weaver.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: [{ contributorId: "client-source", code: "client.partial", message: "Local limitation to clear", required: false }] }) });
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: [{ code: "acceptance.partial", message: "Acceptance limitation to clear" }] }));
     let emit!: (event: AgentStreamEvent) => void;
     let fail!: (error: Error) => void;
@@ -165,7 +165,7 @@ describe("WeaverSurface", () => {
 
   it.each([false, true])("advertises a permission-bearing capability only when the backend admitted it (denied=%s)", async denied => {
     const api = readyApi(); const client = readyClient(); const permission = "Sample:Read";
-    api.agent.capabilities.add({ id: "sample.secured", moduleId: "Sample", displayName: "Read secured sample", description: "Read sample", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [permission] });
+    api.weaver.capabilities.add({ id: "sample.secured", moduleId: "Sample", displayName: "Read secured sample", description: "Read sample", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [permission] });
     client.bootstrap = vi.fn(async () => {
       const baseline = await readyClient().bootstrap();
       return { ...baseline, capabilities: denied ? [] : [{ id: "sample.secured", moduleId: "Sample", displayName: "Read secured sample", description: "Read sample", kind: "answer" as const, risk: "read-only" as const, surfaces: ["*"], requiredPermissions: [permission] }], policy: { ...baseline.policy, permissions: [permission] } };
@@ -176,10 +176,10 @@ describe("WeaverSurface", () => {
   });
 
   it("gives both same-tick direct requests exactly one disposition without a duplicate provider turn", async () => {
-    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
-    api.agent.onPromptResult(result => results.push(result));
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
     const releases: (() => void)[] = [];
-    api.agent.contextProviders.add({ id: "controlled", displayName: "Controlled", surfaces: ["*"], sensitivity: "internal", collect: () => new Promise(resolve => { releases.push(() => resolve({ attachments: [], diagnostics: [] })); }) });
+    api.weaver.contextProviders.add({ id: "controlled", displayName: "Controlled", surfaces: ["*"], sensitivity: "internal", collect: () => new Promise(resolve => { releases.push(() => resolve({ attachments: [], diagnostics: [] })); }) });
     const subscribeStream = ((_context, _url, emit) => { emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     let session!: ReturnType<typeof useWeaverSession>;
     function Harness() { session = useWeaverSession({ api, surface: { route: "/sample" }, client, subscribeStream }); return null; }
@@ -195,10 +195,10 @@ describe("WeaverSurface", () => {
   });
 
   it("stops an uncooperative collection and ignores its late diagnostics after a newer request", async () => {
-    const api = readyApi(); const client = readyClient(); const results: StudioAgentPromptResult[] = [];
-    api.agent.onPromptResult(result => results.push(result));
-    let release!: (value: StudioAgentContextCollection) => void; let collections = 0;
-    api.agent.contextProviders.add({ id: "controlled", displayName: "Controlled", surfaces: ["*"], sensitivity: "internal", collect: () => ++collections === 1 ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ attachments: [], diagnostics: [{ contributorId: "fresh", code: "fresh", message: "Current collection limitation", required: false }] }) });
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
+    let release!: (value: StudioWeaverContextCollection) => void; let collections = 0;
+    api.weaver.contextProviders.add({ id: "controlled", displayName: "Controlled", surfaces: ["*"], sensitivity: "internal", collect: () => ++collections === 1 ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ attachments: [], diagnostics: [{ contributorId: "fresh", code: "fresh", message: "Current collection limitation", required: false }] }) });
     const subscribeStream = ((_context, _url, emit) => { emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const element = (id: string) => <WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id, requestId: id, message: id }} />;
     const { container, rerender, unmount } = render(element("stopped-request"));
@@ -223,7 +223,7 @@ describe("WeaverSurface", () => {
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => ({ messageId: session === "agt_1" ? "old-message" : "fresh-message", status: "pending", streamUrl: `/_elsa/weaver/sessions/${session}/stream` }));
     let deliverDenial!: (value: Awaited<ReturnType<AgentClient["denyProposal"]>>) => void;
     client.denyProposal = client.approveProposal = vi.fn<AgentClient["denyProposal"]>(() => new Promise(resolve => { deliverDenial = resolve; }));
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value));
     const streams: string[] = []; const freshClose = vi.fn(); let emitFresh!: (event: AgentStreamEvent) => void;
     const subscribeStream: typeof import("../../agent/agentStream").subscribeAgentSessionStream = (_context, url, emit) => {
       streams.push(url);
@@ -304,7 +304,7 @@ describe("WeaverSurface", () => {
     client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     let deliver!: (value: Awaited<ReturnType<AgentClient["executeProposal"]>>) => void;
     client.executeProposal = vi.fn<AgentClient["executeProposal"]>(() => new Promise(resolve => { deliver = resolve; }));
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value)); let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
       if (++streams === 1) { emit({ type: "turn-started", turnId: "turn", maxSteps: 1 }); emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
       else emit({ type: "message-completed", messageId: "msg_1" });
@@ -323,11 +323,11 @@ describe("WeaverSurface", () => {
   it("refuses a late client202 after Stop before dispatch without replacing a newer turn", async () => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
     const mutate = vi.fn(async () => ({ outcome: "applied" as const, summary: "Must not run." }));
-    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
     let deliver!: (value: Awaited<ReturnType<AgentClient["executeProposal"]>>) => void;
     client.executeProposal = vi.fn<AgentClient["executeProposal"]>(() => new Promise(resolve => { deliver = resolve; }));
     client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "failed", executed: false }));
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value)); let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
       if (++streams === 1) { emit({ type: "turn-started", turnId: "turn", maxSteps: 1 }); emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
       else emit({ type: "message-started", messageId: "new", role: "assistant" });
@@ -385,7 +385,7 @@ describe("WeaverSurface", () => {
     const failure = new AgentExecutionError(409, "The reviewed invocation expired.", "weaver.proposal.expired", { proposalId: "proposal", approvalStatus: "expired", executed: false }, {});
     if (action === "deny") client.denyProposal = vi.fn(async () => { throw failure; });
     else client.approveProposal = vi.fn(async () => { throw failure; });
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value)); let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
       if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Review resource", summary: "Review the resource change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
       else emit({ type: "message-completed", messageId: "msg_1" });
@@ -404,7 +404,7 @@ describe("WeaverSurface", () => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
     const observed = { outcome: "applied" as const, summary: "Observed value 2.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
     const mutate = vi.fn(async () => observed);
-    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
     client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
     const receipts: string[] = []; let acceptedReceipt: string | null = null;
     client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async (_session, _id, receipt) => {
@@ -412,7 +412,7 @@ describe("WeaverSurface", () => {
       if (receipts.length <= losses) throw new Error("Response lost after the server accepted this exact receipt.");
       return { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Recorded owning receipt.", payload: observed.result } };
     });
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value)); let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
       if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change resource", summary: "Review resource change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
       else emit({ type: "message-completed", messageId: "msg_1" });
@@ -433,7 +433,7 @@ describe("WeaverSurface", () => {
   });
   it.each(["expired", "failed"])("drains an authoritative server %s refusal and releases the original caller without replay", async status => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
-    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
+    const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value));
     const toolResult = status === "failed" ? { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "The owning resource revision changed.", payload: { typeId: "weaver.lifecycle.refused", schemaVersion: "1", data: { applied: false } } } : null;
     const summary = status === "expired" ? "The reviewed invocation expired." : "The owning resource revision changed.";
     const envelope = { error: { code: `weaver.execution.${status}`, message: summary, statusCode: 409 }, data: { proposalId: "proposal", executed: false, status, resourceType: "sample", resourceId: "one", summary, clientInvocation: null, toolResult } };
@@ -625,12 +625,12 @@ describe("WeaverSurface", () => {
   });
   it("requires local review even in FullAuto and waits for observed acknowledgement before resuming", async () => {
     const api = readyApi(); const client = readyClient();
-    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: unknown[] = []; api.weaver.onPromptResult(result => results.push(result));
     client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api);
     let observe!: (value: { outcome: "applied"; summary: string; after: typeof invocation.target; result: { typeId: string; schemaVersion: string; data: { value: number } } }) => void;
     const execute = vi.fn(() => new Promise(resolve => { observe = resolve; })) as never;
-    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: execute });
+    api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: execute });
     client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
     client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value 2.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } }));
     let streams = 0;
@@ -659,9 +659,9 @@ describe("WeaverSurface", () => {
 
   it.each(["outcome-stream", "acknowledgement"])("settles a retained caller once after terminal %s failure without replay", async failure => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
-    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: unknown[] = []; api.weaver.onPromptResult(result => results.push(result));
     const toolResult = { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
-    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: async () => ({ outcome: "applied", summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: toolResult.payload }) });
+    api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: async () => ({ outcome: "applied", summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: toolResult.payload }) });
     client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => failure === "acknowledgement" ? { proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation } : { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult });
     client.acknowledgeClient = vi.fn(async () => { throw new Error("Acknowledgement transport lost."); });
     let streams = 0;
@@ -694,7 +694,7 @@ describe("WeaverSurface", () => {
 
   it("honors server review in FullAuto and continues a denial without executing or settling twice", async () => {
     const api = readyApi(); const client = readyClient();
-    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: unknown[] = []; api.weaver.onPromptResult(result => results.push(result));
     client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
     let streams = 0;
@@ -791,7 +791,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
 
   it("gives duplicate, conflicting and unchanged selections one deterministic disposition each", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1)); const update = deferred<AgentSessionPolicy>();
-    const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: StudioWeaverPromptResult[] = []; api.weaver.onPromptResult(result => results.push(result));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(() => update.promise);
     let session!: ReturnType<typeof useWeaverSession>;
     function Harness() { session = useWeaverSession({ api, surface: { route: "/sample" }, client, subscribeStream: completingStream }); return null; }
@@ -817,9 +817,9 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
 
   it("blocks module prompts and the composer while a change is unacknowledged, without resending them later", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1)); const update = deferred<AgentSessionPolicy>();
-    const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: StudioWeaverPromptResult[] = []; api.weaver.onPromptResult(result => results.push(result));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(() => update.promise);
-    const element = (prompt: (StudioAgentPromptRequest & { id: string }) | null) => <WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={completingStream} incomingPrompt={prompt} />;
+    const element = (prompt: (StudioWeaverPromptRequest & { id: string }) | null) => <WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={completingStream} incomingPrompt={prompt} />;
     const { container, rerender, unmount } = render(element(null));
     try {
       await flushPromises(); await establish(container);
@@ -956,7 +956,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
 
   it("refreshes after a policy-changed prompt, never resends it, and does not let an old retry relabel a newer readback", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("manual", 1));
-    const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: StudioWeaverPromptResult[] = []; api.weaver.onPromptResult(result => results.push(result));
     const prompt = deferred<Awaited<ReturnType<AgentClient["sendMessage"]>>>(); const retry = deferred<AgentSessionPolicy>();
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>()
       .mockResolvedValueOnce({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream" })
@@ -991,7 +991,7 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
 
   it("attributes a result to the policy that accepted its turn, not to a later selection", async () => {
     const api = readyApi(); const client = policyClient(sessionPolicy("full-auto", 2));
-    const results: StudioAgentPromptResult[] = []; api.agent.onPromptResult(result => results.push(result));
+    const results: StudioWeaverPromptResult[] = []; api.weaver.onPromptResult(result => results.push(result));
     client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/weaver/sessions/agt_1/stream", acceptedPolicy: { autonomyMode: "full-auto", revision: 2 } }));
     client.updateAutonomy = vi.fn<AgentClient["updateAutonomy"]>(async () => sessionPolicy("manual", 3));
     let emit!: (event: AgentStreamEvent) => void;
@@ -1016,11 +1016,11 @@ async function pendingConfirmationFixture(deferObservation: boolean, malformed =
   const observed = { outcome: "applied" as const, summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: malformed ? { invalid: () => {} } : { value: 2 } } };
   let observation!: (value: typeof observed) => void, accept!: (value: Awaited<ReturnType<AgentClient["acknowledgeClient"]>>) => void, reject!: (error: Error) => void;
   const mutate = vi.fn(() => deferObservation ? new Promise<typeof observed>(resolve => { observation = resolve; }) : Promise.resolve(observed));
-  api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+  api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
   client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
   const recorded = { proposalId: "proposal", approvalStatus: "executed" as const, executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Recorded owner receipt.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } };
   client.acknowledgeClient = malformed ? vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "uncertain", executed: false, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "Application is uncertain." } })) : vi.fn<AgentClient["acknowledgeClient"]>().mockImplementationOnce(() => new Promise((resolve, failed) => { accept = resolve; reject = failed; })).mockResolvedValue(recorded);
-  const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0; let finishNew!: () => void;
+  const results: unknown[] = []; api.weaver.onPromptResult(value => results.push(value)); let streams = 0; let finishNew!: () => void;
   const subscribeStream = ((_context, _url, emit) => {
     if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
     else if (malformed) emit({ type: "message-completed", messageId: "msg_1" });
@@ -1111,7 +1111,7 @@ function readyApi() {
     sdkVersion: "1.0.0",
     ...createEndpointContext("https://studio.example/")
   }, "https://foundation.example/");
-  api.agent.capabilities.add({
+  api.weaver.capabilities.add({
     id: "weaver.test",
     displayName: "Weaver test",
     description: "Test capability.",
@@ -1168,6 +1168,6 @@ async function flushPromises() {
   for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function preparedInvocation(api: ReturnType<typeof readyApi>): StudioAgentPreparedInvocation {
-  return { invocationId: "i", sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "actor", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: api.agent.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
+function preparedInvocation(api: ReturnType<typeof readyApi>): StudioWeaverPreparedInvocation {
+  return { invocationId: "i", sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "actor", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: api.weaver.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
 }

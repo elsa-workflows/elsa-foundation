@@ -102,8 +102,12 @@ public sealed class DecisionDataSelectionTests
             new() { ShapeLimits = limits });
         Assert.Empty(discovery.Findings);
         var source = Assert.Single(discovery.Sources, item => item.Id == "activity:evaluate:$result");
-        Assert.Null(source.Binding);
-        Assert.Equal("RuntimeScopeBindingUnavailable", source.ReasonCode);
+        // The server returns the whole result as a complete binding that declares no runtime scope.
+        var binding = Assert.IsType<JsonElement>(source.Binding!.Value);
+        Assert.Equal("ActivityResult", source.Binding.ExpressionType);
+        Assert.Equal("evaluate", binding.GetProperty("producerNodeId").GetString());
+        Assert.False(binding.TryGetProperty("producerScopeId", out _));
+        Assert.Null(source.ReasonCode);
         Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
         Assert.Contains(source.Shape.Members, member => member.SerializedName == "status");
         Assert.Equal("activity.shape.dynamic-json", Assert.Single(source.Shape.Members, member => member.SerializedName == "result").Shape.ReasonCode);

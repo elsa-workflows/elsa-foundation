@@ -7,6 +7,21 @@ public sealed record ActivityChildResultFacts(
     bool? MayRunConcurrently = null,
     bool? AreMutuallyExclusive = null)
 {
+    /// <summary>
+    /// Whether, within one run of this structure, an earlier run of the producer child can be among the runs that
+    /// led to the consumer child, beside the producer run that precedes it. A result binding that names only the
+    /// producer cannot tell those runs apart, so it is admitted only when this is <see langword="false"/>.
+    /// <see langword="null"/> means the structure has not said, which is treated as "it can".
+    /// </summary>
+    /// <remarks>
+    /// The answer follows from who schedules a child. A structure that schedules each child once per run, or each
+    /// pass of a loop itself, never links one run of a child to an earlier one: <see langword="false"/>. A structure
+    /// in which a completed child schedules the next one links every pass to the pass before it, so a child that
+    /// can be reached again from itself answers <see langword="true"/>. Repetition of the whole structure by an
+    /// enclosing one is the enclosing structure's to report, as <see cref="IsCyclicBackEdge"/> for the same child.
+    /// </remarks>
+    public bool? EarlierProducerRunCanReachConsumer { get; init; }
+
     internal static ActivityChildResultFacts FromCompletedBefore(
         IReadOnlyList<string>? completedBefore,
         string producerChildNodeId) =>
