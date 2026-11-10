@@ -670,53 +670,53 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Anthropic",
-          "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
+          "id": "Elsa.Agent.Anthropic",
+          "path": "Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Api",
-          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
+          "id": "Elsa.Agent.Api",
+          "path": "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.AzureOpenAI",
-          "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj"
+          "id": "Elsa.Agent.AzureOpenAI",
+          "path": "Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Design",
-          "path": "Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj"
+          "id": "Elsa.Agent.Design",
+          "path": "Extensions/Agent/src/Design/Elsa.Agent.Design.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists",
-          "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj"
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Inspection.Api",
-          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+          "id": "Elsa.Agent.Inspection.Api",
+          "path": "Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.OpenAI",
-          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
+          "id": "Elsa.Agent.OpenAI",
+          "path": "Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review.Api",
-          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+          "id": "Elsa.Agent.Review.Api",
+          "path": "Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review",
-          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+          "id": "Elsa.Agent.Review",
+          "path": "Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj"
         },
         {
           "type": "internal",
@@ -14039,68 +14039,68 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Anthropic",
-          "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
+          "id": "Elsa.Agent.Anthropic",
+          "path": "Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Api",
-          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
+          "id": "Elsa.Agent.Api",
+          "path": "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.AzureOpenAI",
-          "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj"
+          "id": "Elsa.Agent.AzureOpenAI",
+          "path": "Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Connections",
-          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+          "id": "Elsa.Agent.Connections",
+          "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Design",
-          "path": "Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj"
+          "id": "Elsa.Agent.Design",
+          "path": "Extensions/Agent/src/Design/Elsa.Agent.Design.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists",
-          "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj"
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Inspection.Api",
-          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+          "id": "Elsa.Agent.Inspection.Api",
+          "path": "Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.JsonSchema",
-          "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
+          "id": "Elsa.Agent.JsonSchema",
+          "path": "Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.OpenAI",
-          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
+          "id": "Elsa.Agent.OpenAI",
+          "path": "Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review.Api",
-          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+          "id": "Elsa.Agent.Review.Api",
+          "path": "Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review",
-          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+          "id": "Elsa.Agent.Review",
+          "path": "Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj"
         },
         {
           "type": "internal",
@@ -14697,8 +14697,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -18186,8 +18186,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -18390,8 +18390,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -20582,8 +20582,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "external",
@@ -22654,21 +22654,21 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj",
-      "name": "Elsa.Agent.Specialists.Anthropic",
+      "path": "Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
+      "name": "Elsa.Agent.Anthropic",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Anthropic",
+      "sub_domain": "Anthropic",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Anthropic",
+      "package_id": "Elsa.Agent.Anthropic",
       "line": "B",
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Connections",
-          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+          "id": "Elsa.Agent.Connections",
+          "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj"
         },
         {
           "type": "external",
@@ -22728,15 +22728,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj",
-      "name": "Elsa.Agent.Specialists.Api",
+      "path": "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "name": "Elsa.Agent.Api",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Api",
+      "sub_domain": "Api",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Api",
+      "package_id": "Elsa.Agent.Api",
       "line": "B",
       "edges": [
         {
@@ -22766,13 +22766,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Connections",
-          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+          "id": "Elsa.Agent.Connections",
+          "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "external",
@@ -22802,21 +22802,21 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj",
-      "name": "Elsa.Agent.Specialists.AzureOpenAI",
+      "path": "Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj",
+      "name": "Elsa.Agent.AzureOpenAI",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.AzureOpenAI",
+      "sub_domain": "AzureOpenAI",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.AzureOpenAI",
+      "package_id": "Elsa.Agent.AzureOpenAI",
       "line": "B",
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Connections",
-          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+          "id": "Elsa.Agent.Connections",
+          "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj"
         },
         {
           "type": "external",
@@ -22891,15 +22891,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj",
-      "name": "Elsa.Agent.Specialists.Connections",
+      "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj",
+      "name": "Elsa.Agent.Connections",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Connections",
+      "sub_domain": "Connections",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Connections",
+      "package_id": "Elsa.Agent.Connections",
       "line": "B",
       "edges": [
         {
@@ -22914,8 +22914,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "pinned-transitive",
@@ -22935,15 +22935,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj",
-      "name": "Elsa.Agent.Specialists.Core",
+      "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "name": "Elsa.Agent.Core",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Core",
+      "sub_domain": "Core",
       "role": "contract",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Core",
+      "package_id": "Elsa.Agent.Core",
       "line": "B",
       "edges": [
         {
@@ -22964,15 +22964,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj",
-      "name": "Elsa.Agent.Specialists.Design",
+      "path": "Extensions/Agent/src/Design/Elsa.Agent.Design.csproj",
+      "name": "Elsa.Agent.Design",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Design",
+      "sub_domain": "Design",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Design",
+      "package_id": "Elsa.Agent.Design",
       "line": "B",
       "edges": [
         {
@@ -22992,13 +22992,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.JsonSchema",
-          "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
+          "id": "Elsa.Agent.JsonSchema",
+          "path": "Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj"
         },
         {
           "type": "external",
@@ -23058,15 +23058,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj",
-      "name": "Elsa.Agent.Specialists",
+      "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
+      "name": "Elsa.Agent",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists",
+      "sub_domain": "(root)",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists",
+      "package_id": "Elsa.Agent",
       "line": "B",
       "edges": [
         {
@@ -23101,13 +23101,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.JsonSchema",
-          "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
+          "id": "Elsa.Agent.JsonSchema",
+          "path": "Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj"
         },
         {
           "type": "external",
@@ -23182,15 +23182,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj",
-      "name": "Elsa.Agent.Specialists.Inspection.Api",
+      "path": "Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj",
+      "name": "Elsa.Agent.Inspection.Api",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Inspection.Api",
+      "sub_domain": "Inspection.Api",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Inspection.Api",
+      "package_id": "Elsa.Agent.Inspection.Api",
       "line": "B",
       "edges": [
         {
@@ -23225,8 +23225,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "external",
@@ -23261,15 +23261,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj",
-      "name": "Elsa.Agent.Specialists.JsonSchema",
+      "path": "Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj",
+      "name": "Elsa.Agent.JsonSchema",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.JsonSchema",
+      "sub_domain": "JsonSchema",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.JsonSchema",
+      "package_id": "Elsa.Agent.JsonSchema",
       "line": "B",
       "edges": [
         {
@@ -23279,8 +23279,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "external",
@@ -23300,21 +23300,21 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj",
-      "name": "Elsa.Agent.Specialists.OpenAI",
+      "path": "Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj",
+      "name": "Elsa.Agent.OpenAI",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.OpenAI",
+      "sub_domain": "OpenAI",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.OpenAI",
+      "package_id": "Elsa.Agent.OpenAI",
       "line": "B",
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Connections",
-          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+          "id": "Elsa.Agent.Connections",
+          "path": "Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj"
         },
         {
           "type": "external",
@@ -23384,15 +23384,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj",
-      "name": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj",
+      "name": "Elsa.Agent.Persistence.EntityFrameworkCore",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Persistence.EntityFrameworkCore",
+      "sub_domain": "Persistence.EntityFrameworkCore",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Agent.Persistence.EntityFrameworkCore",
       "line": "B",
       "edges": [
         {
@@ -23412,8 +23412,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Core",
-          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "external",
@@ -23513,15 +23513,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj",
-      "name": "Elsa.Agent.Specialists.Review.Api",
+      "path": "Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj",
+      "name": "Elsa.Agent.Review.Api",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Review.Api",
+      "sub_domain": "Review.Api",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Review.Api",
+      "package_id": "Elsa.Agent.Review.Api",
       "line": "B",
       "edges": [
         {
@@ -23551,8 +23551,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review",
-          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+          "id": "Elsa.Agent.Review",
+          "path": "Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj"
         },
         {
           "type": "external",
@@ -23577,15 +23577,15 @@
       ]
     },
     {
-      "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj",
-      "name": "Elsa.Agent.Specialists.Review",
+      "path": "Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj",
+      "name": "Elsa.Agent.Review",
       "kind": "source",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Review",
+      "sub_domain": "Review",
       "role": "feature/implementation",
       "declared_target_framework": null,
       "packable": true,
-      "package_id": "Elsa.Agent.Specialists.Review",
+      "package_id": "Elsa.Agent.Review",
       "line": "B",
       "edges": [
         {
@@ -23676,11 +23676,11 @@
       ]
     },
     {
-      "path": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
-      "name": "Elsa.Agent.Specialists.ProviderTests",
+      "path": "Extensions/Agent/tests/ProviderTests/Elsa.Agent.ProviderTests.csproj",
+      "name": "Elsa.Agent.ProviderTests",
       "kind": "test",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.ProviderTests",
+      "sub_domain": "ProviderTests",
       "role": "test",
       "declared_target_framework": null,
       "packable": false,
@@ -23689,8 +23689,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "external",
@@ -23750,11 +23750,11 @@
       ]
     },
     {
-      "path": "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
-      "name": "Elsa.Agent.Specialists.Tests",
+      "path": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "name": "Elsa.Agent.Tests",
       "kind": "test",
       "domain": "Elsa.Agent",
-      "sub_domain": "Specialists.Tests",
+      "sub_domain": "Tests",
       "role": "test",
       "declared_target_framework": null,
       "packable": false,
@@ -23873,58 +23873,58 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Anthropic",
-          "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
+          "id": "Elsa.Agent.Anthropic",
+          "path": "Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Api",
-          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
+          "id": "Elsa.Agent.Api",
+          "path": "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.AzureOpenAI",
-          "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj"
+          "id": "Elsa.Agent.AzureOpenAI",
+          "path": "Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Design",
-          "path": "Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj"
+          "id": "Elsa.Agent.Design",
+          "path": "Extensions/Agent/src/Design/Elsa.Agent.Design.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists",
-          "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj"
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Inspection.Api",
-          "path": "Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj"
+          "id": "Elsa.Agent.Inspection.Api",
+          "path": "Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.JsonSchema",
-          "path": "Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj"
+          "id": "Elsa.Agent.JsonSchema",
+          "path": "Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.OpenAI",
-          "path": "Extensions/Agent/src/Specialists/OpenAI/Elsa.Agent.Specialists.OpenAI.csproj"
+          "id": "Elsa.Agent.OpenAI",
+          "path": "Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
-          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review.Api",
-          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+          "id": "Elsa.Agent.Review.Api",
+          "path": "Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Specialists.Review",
-          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+          "id": "Elsa.Agent.Review",
+          "path": "Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj"
         },
         {
           "type": "external",
