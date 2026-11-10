@@ -8,11 +8,11 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 /// </summary>
 /// <param name="Lease">The lease the borrower holds and commits under.</param>
 /// <param name="OwnersLease">
-/// The lease the borrow replaced, live or expired, when it recorded an owner: a drain that is running or that stopped
-/// without releasing. Null when the run had no owner.
+/// The lease of the run's owner, live or expired: a drain that is running, or that stopped without releasing. Null
+/// when the run had no owner.
 /// </param>
 /// <param name="OwnersHeartbeat">The heartbeat recorded with <paramref name="OwnersLease"/>.</param>
-internal sealed record BorrowedRunLease(
+internal sealed record BorrowedExecutionLease(
     RuntimeExecutionLease Lease,
     RuntimeExecutionLease? OwnersLease,
     RuntimeHeartbeat? OwnersHeartbeat);

@@ -73,7 +73,7 @@ public sealed class MigrateWorkflowAlterationHandler(
         // so it is not offered for exemption. The runtime's own probe applies the same rule from the stored lease;
         // withholding the fence here keeps the rule with a replacement probe too.
         var ownLease = _ownershipContextAccessor?.Current;
-        var exemptFence = ownLease is null || RuntimeExecutionOwnershipService.StandsInForAnOwner(ownLease) ? null : ownLease.ToFence();
+        var exemptFence = ownLease is null || BorrowedLeaseMark.StandsInForAnOwner(ownLease) ? null : ownLease.ToFence();
         var quiescence = await _quiescenceProbe.ProbeAsync(workflow.WorkflowExecutionId, exemptFence, cancellationToken);
         if (!quiescence.IsQuiescent)
             return Reject(quiescence.Findings.First().Code);

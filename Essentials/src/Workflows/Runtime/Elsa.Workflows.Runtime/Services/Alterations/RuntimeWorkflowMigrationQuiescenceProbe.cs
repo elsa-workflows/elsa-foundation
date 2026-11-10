@@ -125,7 +125,7 @@ public sealed class RuntimeWorkflowMigrationQuiescenceProbe(
     private static bool HasActiveLiveness(ExecutionLivenessState state, DateTimeOffset now, RuntimeExecutionFence? currentActorFence) =>
         // The caller's own lease is exempt, unless it was borrowed from an owner: then it stands in for that owner.
         state.ExecutionLease is { } lease && !lease.IsExpired(now) &&
-            (!Matches(lease, currentActorFence) || RuntimeExecutionOwnershipService.StandsInForAnOwner(lease)) ||
+            (!Matches(lease, currentActorFence) || BorrowedLeaseMark.StandsInForAnOwner(lease)) ||
         state.Heartbeat is { } heartbeat && (currentActorFence is null || !StringComparer.Ordinal.Equals(heartbeat.LeaseId, currentActorFence.LeaseId) || !StringComparer.Ordinal.Equals(heartbeat.OwnerId, currentActorFence.OwnerId)) ||
         state.Drain is { StopsNewWork: true } ||
         state.InterruptedExecution is not null ||

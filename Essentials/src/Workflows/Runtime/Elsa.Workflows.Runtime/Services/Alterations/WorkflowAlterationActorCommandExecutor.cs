@@ -26,7 +26,7 @@ public sealed class WorkflowAlterationActorCommandExecutor(
     private readonly IWorkflowSchedulerWorkQueue? _schedulerWorkQueue = schedulerWorkQueue;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly WorkflowAlterationJobExecutor _jobExecutor = jobExecutor ?? throw new ArgumentNullException(nameof(jobExecutor));
-    private readonly AlterationRunLease? _runLease;
+    private readonly AlterationLeaseRunner? _leaseRunner;
 
     /// <summary>
     /// The composition the runtime registers: the job reads the run and commits under the run's ownership lease.
@@ -40,14 +40,14 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         IActivityExecutionStateStore? activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue? schedulerWorkQueue,
         TimeProvider? timeProvider,
-        AlterationRunLease runLease)
+        AlterationLeaseRunner leaseRunner)
         : this(alterationStore, payloadProtector, workflowExecutionStateStore, jobExecutor, activityExecutionStateStore, schedulerWorkQueue, timeProvider)
     {
-        _runLease = runLease ?? throw new ArgumentNullException(nameof(runLease));
+        _leaseRunner = leaseRunner ?? throw new ArgumentNullException(nameof(leaseRunner));
     }
 
     /// <summary>Whether this executor runs its jobs under the target run's ownership lease.</summary>
-    internal bool HoldsRunLease => _runLease is not null;
+    internal bool RunsJobsUnderLease => _leaseRunner is not null;
 
     public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
@@ -84,14 +84,14 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (!StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, job.TenantPartition))
             throw new InvalidOperationException("The alteration plan tenant does not match its claimed target job.");
 
-        if (_runLease is null)
+        if (_leaseRunner is null)
         {
             await ExecuteClaimedAsync(job, plan, cancellationToken);
             return;
         }
 
         // Only now, so a duplicate of a finished job or a stale claim never touches the run's ownership.
-        await _runLease.RunAsync(
+        await _leaseRunner.RunAsync(
             envelope,
             leasedCancellation => ExecuteClaimedAsync(job, plan, leasedCancellation),
             cancellationToken);
