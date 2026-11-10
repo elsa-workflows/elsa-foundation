@@ -233,10 +233,10 @@ so a value an expression produced, once committed, does not change.
 - **D-6: idempotency belongs to the designer.** An effect outside Elsa's own state, such as an HTTP call or a .NET
   service call, cannot be rolled back by Elsa. The engine supplies stable invocation identities; the workflow designer
   owns idempotency (D-2). A call is never refused or skipped because of what it does.
-  - No function profile is required. If the D-2 details amendment (see *Follow-ups*) needs a classification for the
-    durability boundary of input evaluation, it defines one there, as a durability hint, never a prohibition. Without
-    one, that boundary treats every registered .NET function as possibly effectful. A classification never changes
-    whether a call runs: a recorded step is not run again at all, and an unrecorded one runs again completely.
+  - Functions carry no effect metadata — no profile, and not even an optional durability hint. The durability
+    boundary of input evaluation treats every registered .NET function as possibly effectful. A hint is reconsidered
+    only if measurements later show its cost matters, and even then it would only change where state is recorded,
+    never whether a call runs: a recorded step is not run again at all, and an unrecorded one runs again completely.
 
 *Unchanged by this amendment:*
 - the canonical serialized definition;
