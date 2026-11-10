@@ -15,10 +15,13 @@ internal sealed class RuntimeExecutionLeaseRunner(
 {
     public async ValueTask<T> RunAsync<T>(string executionId, WorkflowExecutionPartition partition,
         Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class =>
-        await RunAsync(await ownershipService.AcquireAsync(executionId, cancellationToken), partition, run, cancellationToken);
+        await RunAsync(await ownershipService.AcquireAsync(executionId, cancellationToken), releaseWhenDone: true, partition, run, cancellationToken);
 
-    /// <summary>Runs under a lease the caller already acquired, with the same heartbeat, release and failure precedence.</summary>
-    public async ValueTask<T> RunAsync<T>(RuntimeExecutionLease lease, WorkflowExecutionPartition partition,
+    /// <summary>
+    /// Runs under a lease the caller already acquired, with the same heartbeat and failure precedence. With
+    /// <paramref name="releaseWhenDone"/> off the lease is left to expire instead of being released.
+    /// </summary>
+    public async ValueTask<T> RunAsync<T>(RuntimeExecutionLease lease, bool releaseWhenDone, WorkflowExecutionPartition partition,
         Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class
     {
         using (ownershipContext.Push(lease))
@@ -42,15 +45,18 @@ internal sealed class RuntimeExecutionLeaseRunner(
                 catch (OperationCanceledException) when (renewalStop.IsCancellationRequested) { }
                 catch (Exception exception) { renewalFailure = exception; }
 
-                try
+                if (releaseWhenDone)
                 {
-                    var release = await ownershipService.ReleaseAsync(lease, CancellationToken.None);
-                    if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
-                }
-                catch (Exception exception)
-                {
-                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
+                    try
+                    {
+                        var release = await ownershipService.ReleaseAsync(lease, CancellationToken.None);
+                        if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                            releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
+                    }
+                    catch (Exception exception)
+                    {
+                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
+                    }
                 }
             }
 

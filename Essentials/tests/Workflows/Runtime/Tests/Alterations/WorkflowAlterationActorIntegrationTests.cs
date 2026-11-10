@@ -299,14 +299,14 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Authority = new WorkflowExecutionAuthoritySnapshot("runtime", "operator")
     };
 
-    private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowAlterationJobState job)
+    private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowAlterationJobState job, string? claimToken = null)
     {
         var command = new WorkflowExecutionCommand(
             "command-1",
             job.WorkflowExecutionId,
             WorkflowExecutionCommandKind.AlterWorkflow,
             Now,
-            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, job.Claim!.Token)),
+            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, claimToken ?? job.Claim!.Token)),
             new Dictionary<string, string>());
         return new WorkflowExecutionCommandEnvelope(
             "envelope-1",
@@ -321,10 +321,12 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
     private sealed class CompletingHandler(Func<ValueTask>? beforeStaging = null) : IWorkflowAlterationPreflightHandler
     {
         public int CallCount { get; private set; }
+        public bool SawAReplacedLease { get; private set; }
 
         public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default)
         {
             CallCount++;
+            SawAReplacedLease = context.ProjectedState.TryGetOriginal<ReplacedRunLease>(out _);
             if (beforeStaging is not null)
                 await beforeStaging();
             var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();

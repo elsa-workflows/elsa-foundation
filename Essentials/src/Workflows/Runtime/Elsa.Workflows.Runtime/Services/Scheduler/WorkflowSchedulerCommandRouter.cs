@@ -2,15 +2,11 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Alterations;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandExecutor
 {
-    internal const string AlterationWaitsForRunReason =
-        "The workflow execution's ownership record holds a lease, so the alteration waits for its next delivery.";
-
     private readonly IWorkflowSchedulerWorkQueue schedulerWorkQueue;
     private readonly IWorkflowSchedulerDrainPolicy schedulerDrainPolicy;
     private readonly IWorkflowDrainOrchestrator drainCoordinator;
@@ -99,18 +95,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             // error. Nil impact: one registration composes both this executor and the pump that is its only producer.
             if (alterationActorCommandExecutor is null)
                 throw new InvalidOperationException("Runtime alterations are not composed for this runtime host.");
-            if (alterationActorCommandExecutor is not WorkflowAlterationActorCommandExecutor leasedExecutor)
-            {
-                await alterationActorCommandExecutor.ExecuteAsync(envelope, cancellationToken);
-                return WorkflowExecutionCommandProcessResult.NoDrain;
-            }
-
-            // An alteration does not run while the run's ownership record holds a lease (#2667). It wrote nothing, so
-            // it is answered like the admission refusal above: the command keeps its idempotency key, and the pump's
-            // next delivery of the job, which carries the same key, reaches the executor instead of answering Duplicate.
-            return await leasedExecutor.TryExecuteAsync(envelope, cancellationToken)
-                ? WorkflowExecutionCommandProcessResult.NoDrain
-                : WorkflowExecutionCommandProcessResult.FromShed(AlterationWaitsForRunReason, retryAfter: null, workQueued: false);
+            await alterationActorCommandExecutor.ExecuteAsync(envelope, cancellationToken);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
         }
 
         var enqueuedWorkItem = await CreateWorkItemAsync(envelope, cancellationToken);

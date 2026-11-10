@@ -68,7 +68,13 @@ public sealed class MigrateWorkflowAlterationHandler(
         if (!compatibility.IsCompatible)
             return Reject(compatibility.Findings.First().Code);
 
-        var quiescence = await _quiescenceProbe.ProbeAsync(workflow.WorkflowExecutionId, _ownershipContextAccessor?.Current?.ToFence(), cancellationToken);
+        // The probe exempts the lease this alteration holds. When that lease replaced one already on the run, another
+        // owner was on the run and the probe can no longer see it, so the exemption is withheld and the alteration's
+        // own lease stands in for the replaced one: the probe reports ActiveExecutionFence, as it did for the original.
+        var ownFence = context.ProjectedState.TryGetOriginal<ReplacedRunLease>(out _)
+            ? null
+            : _ownershipContextAccessor?.Current?.ToFence();
+        var quiescence = await _quiescenceProbe.ProbeAsync(workflow.WorkflowExecutionId, ownFence, cancellationToken);
         if (!quiescence.IsQuiescent)
             return Reject(quiescence.Findings.First().Code);
 

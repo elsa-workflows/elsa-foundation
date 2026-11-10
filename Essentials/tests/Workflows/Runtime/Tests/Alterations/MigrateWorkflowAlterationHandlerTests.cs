@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
@@ -145,6 +146,65 @@ public sealed class MigrateWorkflowAlterationHandlerTests
 
         Assert.False(result.IsAccepted);
         Assert.Equal("WorkflowStateRevisionConflict", result.Failure!.Code);
+    }
+
+    // #2667: an alteration holds the run's lease, and the probe exempts that lease. When it replaced a lease already
+    // on the run, another owner was there, so the handler withholds the exemption and the probe reports the fence.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreflightAsync_GivesTheProbeItsOwnFence_UnlessItsLeaseReplacedOneOnTheRun(bool replacedALease)
+    {
+        var source = Executable("source");
+        var target = Executable("target");
+        var executables = new InMemoryWorkflowExecutableStore();
+        await executables.SaveAsync(source);
+        await executables.SaveAsync(target);
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await references.SaveAsync(Reference(target));
+        var probe = new RecordingQuiescenceProbe();
+        var ownership = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
+        var handler = new MigrateWorkflowAlterationHandler(
+            executables,
+            references,
+            new InMemoryBookmarkStateStore(),
+            new InMemoryActivityExecutionInspectionStore(),
+            probe,
+            ownership,
+            new WorkflowMigrationCompatibilityValidator(),
+            new WorkflowMigrationPlanner(),
+            TimeProvider.System);
+        var lease = new RuntimeExecutionLease("lease", "workflow", "owner", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), 2);
+        var plain = Context(Workflow(source.Identity), target.Identity, new Staging());
+        object[] states = [Workflow(source.Identity), new WorkflowAlterationActorCommandExecutor.WorkflowAlterationActivityExecutionProjection([])];
+        var context = new WorkflowAlterationPreflightContext(
+            plain.Job,
+            plain.Envelope,
+            0,
+            new WorkflowAlterationProjectedState(replacedALease ? [.. states, ReplacedRunLease.Instance] : states),
+            new Staging());
+
+        using (ownership.Push(lease))
+            await handler.PreflightAsync(context);
+
+        Assert.Equal(1, probe.Calls);
+        if (replacedALease)
+            Assert.Null(probe.Fence);
+        else
+            Assert.Equal(lease.LeaseId, probe.Fence!.LeaseId);
+    }
+
+    private sealed class RecordingQuiescenceProbe : IWorkflowMigrationQuiescenceProbe
+    {
+        public int Calls { get; private set; }
+        public RuntimeExecutionFence? Fence { get; private set; }
+
+        public ValueTask<WorkflowMigrationQuiescenceReport> ProbeAsync(string workflowExecutionId, RuntimeExecutionFence? currentActorFence, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            Fence = currentActorFence;
+            return ValueTask.FromResult(WorkflowMigrationQuiescenceReport.Quiescent());
+        }
     }
 
     private static MigrateWorkflowAlterationHandler Handler(
