@@ -211,30 +211,54 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await expect.poll(renderedOutcomeFont).toBeGreaterThan(previous);
   }
   await expect.poll(renderedOutcomeFont).toBeGreaterThanOrEqual(10);
-  const panTo = async (targets: Locator[]) => {
+  type Box = { x: number; y: number; width: number; height: number };
+  const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const panTo = async (targets: Locator[], avoidFloatingPanels = false) => {
     const pane = (await runCanvas.locator(".react-flow__pane").boundingBox())!;
+    // The zoom controls and MiniMap float over the pane; a target meant to be read must clear them, not just the pane edge.
+    const floatingPanels = avoidFloatingPanels
+      ? (await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()))).filter((box): box is Box => Boolean(box))
+      : [];
+    const unobscured = (box: Box, dx: number, dy: number) => {
+      const moved = { ...box, x: box.x + dx, y: box.y + dy };
+      return moved.x >= pane.x + 8 && moved.x + moved.width <= pane.x + pane.width - 8 && moved.y >= pane.y + 8 && moved.y + moved.height <= pane.y + pane.height - 8
+        && !floatingPanels.some(panel => overlaps(moved, panel));
+    };
     for (let gesture = 0; gesture < 6; gesture++) {
       const boxes = await Promise.all(targets.map(target => target.boundingBox()));
       if (boxes.some(box => !box)) throw new Error("Runtime graph target is unavailable");
       const left = Math.min(...boxes.map(box => box!.x));
       const right = Math.max(...boxes.map(box => box!.x + box!.width));
-      const delta = left < pane.x + 8 ? pane.x + 8 - left : right > pane.x + pane.width - 8 ? pane.x + pane.width - 8 - right : 0;
-      if (Math.abs(delta) < 1) break;
-      const distance = Math.sign(delta) * Math.min(Math.abs(delta), pane.width / 2 - 24);
-      const x = pane.x + pane.width / 2; const y = pane.y + pane.height - 12;
+      let dx = left < pane.x + 8 ? pane.x + 8 - left : right > pane.x + pane.width - 8 ? pane.x + pane.width - 8 - right : 0;
+      let dy = 0;
+      if (avoidFloatingPanels) {
+        // Pick the smallest ordinary pan that puts every target inside the pane and clear of every floating panel.
+        const top = Math.min(...boxes.map(box => box!.y));
+        const bottom = Math.max(...boxes.map(box => box!.y + box!.height));
+        const xs = [0, pane.x + 8 - left, pane.x + pane.width - 8 - right, ...floatingPanels.flatMap(panel => [panel.x + panel.width + 8 - left, panel.x - 8 - right])];
+        const ys = [0, pane.y + 8 - top, pane.y + pane.height - 8 - bottom, ...floatingPanels.flatMap(panel => [panel.y + panel.height + 8 - top, panel.y - 8 - bottom])];
+        const feasible = xs.flatMap(x => ys.map(y => ({ x, y }))).filter(shift => boxes.every(box => unobscured(box!, shift.x, shift.y)));
+        if (!feasible.length) throw new Error("Runtime graph targets have no unobscured position in the current pane");
+        ({ x: dx, y: dy } = feasible.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y))[0]!);
+      }
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) break;
+      const distanceX = Math.sign(dx) * Math.min(Math.abs(dx), pane.width / 2 - 24);
+      const distanceY = Math.sign(dy) * Math.min(Math.abs(dy), pane.height / 2 - 24);
+      const x = pane.x + pane.width / 2; const y = distanceY > 0 ? pane.y + 12 : pane.y + pane.height - 12;
       const before = await runCanvas.locator(".react-flow__viewport").getAttribute("style");
       await page.mouse.move(x, y); await page.mouse.down();
-      await page.mouse.move(x + distance, y, { steps: 8 }); await page.mouse.up();
+      await page.mouse.move(x + distanceX, y + distanceY, { steps: 8 }); await page.mouse.up();
       await expect.poll(() => runCanvas.locator(".react-flow__viewport").getAttribute("style")).not.toBe(before);
     }
     for (const target of targets) {
       await expect.poll(async () => {
         const box = await target.boundingBox();
-        return Boolean(box && box.x >= pane.x && box.x + box.width <= pane.x + pane.width && box.y >= pane.y && box.y + box.height <= pane.y + pane.height);
+        return Boolean(box && box.x >= pane.x && box.x + box.width <= pane.x + pane.width && box.y >= pane.y && box.y + box.height <= pane.y + pane.height
+          && !floatingPanels.some(panel => overlaps(box, panel)));
       }).toBe(true);
     }
   };
-  await panTo(await outcomeLabels.all());
+  await panTo(await outcomeLabels.all(), true);
   for (const label of ["Approve", "Reject", "Unmatched"]) await expect(outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) })).toBeVisible();
   await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ overviewFont, recoveredFont: await renderedOutcomeFont() }), contentType: "application/json" });
   await capture(page, info, "run-outcomes-readable");
