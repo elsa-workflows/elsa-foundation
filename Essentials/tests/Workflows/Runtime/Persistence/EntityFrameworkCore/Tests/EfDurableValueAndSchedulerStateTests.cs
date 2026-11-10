@@ -338,6 +338,28 @@ public sealed class EfDurableValueAndSchedulerStateTests
         }
     }
 
+    // #2667: a lease an alteration borrowed says in its metadata whether it stands in for an owner. The migration
+    // quiescence probe and the next borrower read that from the stored record.
+    [Fact]
+    public async Task Execution_liveness_persists_lease_metadata_across_restart()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
+        var lease = new RuntimeExecutionLease(
+            "lease-a", "workflow-a", "owner-a", now, now.AddMinutes(1), 1,
+            new Dictionary<string, string> { ["runtime.ownership.borrowed-from"] = "owner" });
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            await fixture.Liveness.SaveAsync(new ExecutionLivenessState(
+                "state-a", "workflow-a", lease, new RuntimeHeartbeat("heartbeat-a", "workflow-a", "owner-a", "lease-a", now), null, null));
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        IExecutionLivenessStateStore store = restarted.Liveness;
+        var read = Assert.Single(await store.ListAsync("workflow-a"));
+        Assert.Equal("owner", read.ExecutionLease!.Metadata["runtime.ownership.borrowed-from"]);
+    }
+
     [Fact]
     public async Task Execution_liveness_recovery_owner_filter_fences_route_candidates()
     {

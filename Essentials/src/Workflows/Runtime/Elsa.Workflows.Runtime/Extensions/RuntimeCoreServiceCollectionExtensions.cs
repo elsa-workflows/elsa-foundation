@@ -129,7 +129,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                     serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                     serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
                     serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
-                    serviceProvider.GetRequiredService<TimeProvider>())));
+                    serviceProvider.GetRequiredService<TimeProvider>(),
+                    serviceProvider.GetService<ILogger<AlterationRunLease>>())));
         services.TryAddScoped<WorkflowAlterationPlanService>();
         services.TryAddScoped<IWorkflowAlterationJobDispatcher, WorkflowAlterationJobDispatcher>();
         services.TryAddScoped<WorkflowAlterationTargetCaptureTask>();

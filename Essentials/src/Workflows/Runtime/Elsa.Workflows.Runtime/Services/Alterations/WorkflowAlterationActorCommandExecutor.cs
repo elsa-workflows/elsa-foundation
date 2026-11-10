@@ -86,14 +86,14 @@ public sealed class WorkflowAlterationActorCommandExecutor(
 
         if (_runLease is null)
         {
-            await ExecuteClaimedAsync(job, plan, replacedALease: false, cancellationToken);
+            await ExecuteClaimedAsync(job, plan, cancellationToken);
             return;
         }
 
         // Only now, so a duplicate of a finished job or a stale claim never touches the run's ownership.
         await _runLease.RunAsync(
             envelope,
-            (replacedALease, leasedCancellation) => ExecuteClaimedAsync(job, plan, replacedALease, leasedCancellation),
+            leasedCancellation => ExecuteClaimedAsync(job, plan, leasedCancellation),
             cancellationToken);
     }
 
@@ -101,7 +101,6 @@ public sealed class WorkflowAlterationActorCommandExecutor(
     private async ValueTask ExecuteClaimedAsync(
         WorkflowAlterationJobState job,
         WorkflowAlterationPlanState plan,
-        bool replacedALease,
         CancellationToken cancellationToken)
     {
         var workflow = await _workflowExecutionStateStore.FindAsync(job.WorkflowExecutionId, cancellationToken)
@@ -122,8 +121,7 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         var activeClaims = _schedulerWorkQueue is IWorkflowSchedulerWorkClaimInspection claimInspection
             ? await claimInspection.ListActiveClaimsAsync(workflow.WorkflowExecutionId, _timeProvider.GetUtcNow(), cancellationToken)
             : [];
-        object[] initialStates = [workflow, new WorkflowAlterationActivityExecutionProjection(activities, activeClaims)];
-        var projectedState = new WorkflowAlterationProjectedState(replacedALease ? [.. initialStates, ReplacedRunLease.Instance] : initialStates);
+        var projectedState = new WorkflowAlterationProjectedState([workflow, new WorkflowAlterationActivityExecutionProjection(activities, activeClaims)]);
         await _jobExecutor.ExecuteAsync(
             new WorkflowAlterationJobExecutionRequest(job, envelopes, projectedState),
             cancellationToken);

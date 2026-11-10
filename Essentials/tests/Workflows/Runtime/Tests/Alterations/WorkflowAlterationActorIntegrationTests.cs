@@ -318,17 +318,15 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             partition: new WorkflowExecutionPartition("tenant-a"));
     }
 
-    private sealed class CompletingHandler(Func<ValueTask>? beforeStaging = null) : IWorkflowAlterationPreflightHandler
+    private sealed class CompletingHandler(Func<CancellationToken, ValueTask>? beforeStaging = null) : IWorkflowAlterationPreflightHandler
     {
         public int CallCount { get; private set; }
-        public bool SawAReplacedLease { get; private set; }
 
         public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default)
         {
             CallCount++;
-            SawAReplacedLease = context.ProjectedState.TryGetOriginal<ReplacedRunLease>(out _);
             if (beforeStaging is not null)
-                await beforeStaging();
+                await beforeStaging(cancellationToken);
             var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();
             context.Staging.Stage(new CompleteWorkflowStagedChange(workflow with { Status = WorkflowExecutionStatus.Completed, CompletedAt = Now, UpdatedAt = Now }));
             return WorkflowAlterationPreflightResult.Accepted();

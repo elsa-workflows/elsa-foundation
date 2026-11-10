@@ -56,7 +56,9 @@ differs from the host id refuses the shell.
   departed, and confirms it with a fresh read, reclaims that host id's leases within the sweep. Reclaim releases
   placement and transport leases as compare-and-sets and makes the host id's executions recovery candidates at once;
   the recovery sweep re-drives them through `IRuntimeRecoveryCandidateSource`. Reclaim writes no execution lease and no
-  fencing token, so a member reclaimed from while alive is refused at its commit.
+  fencing token, so a member reclaimed from while alive is refused at its commit. An execution whose lease an
+  alteration is borrowing at that moment is listed under the alteration's host id instead. The alteration gives the
+  lease back under the departed host id when it is done, and the execution is recovered when that lease times out.
 - **Runnability.** Each shell publishes one runnability entry, derived from exactly the registries its checker reads, so
   other members can tell whether any active member could run waiting work. A host composes the report once with
   `AddWorkflowRuntimeRunnabilityReport()`, beside its membership provider.

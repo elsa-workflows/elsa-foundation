@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
-/// <summary>The existing native drain's lease/heartbeat/release boundary, shared with model dispatch.</summary>
+/// <summary>The native drain's lease/heartbeat/release boundary, shared with model dispatch and alterations.</summary>
 internal sealed class RuntimeExecutionLeaseRunner(
     IRuntimeExecutionOwnershipService ownershipService,
     IRuntimeExecutionOwnershipContextAccessor ownershipContext,
@@ -14,15 +14,18 @@ internal sealed class RuntimeExecutionLeaseRunner(
     TimeProvider timeProvider)
 {
     public async ValueTask<T> RunAsync<T>(string executionId, WorkflowExecutionPartition partition,
-        Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class =>
-        await RunAsync(await ownershipService.AcquireAsync(executionId, cancellationToken), releaseWhenDone: true, partition, run, cancellationToken);
+        Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class
+    {
+        var lease = await ownershipService.AcquireAsync(executionId, cancellationToken);
+        return await RunAsync(lease, () => ownershipService.ReleaseAsync(lease, CancellationToken.None), partition, run, cancellationToken);
+    }
 
     /// <summary>
-    /// Runs under a lease the caller already acquired, with the same heartbeat and failure precedence. With
-    /// <paramref name="releaseWhenDone"/> off the lease is left to expire instead of being released.
+    /// Runs under a lease the caller already acquired and ends it with <paramref name="release"/>, with the same
+    /// heartbeat and failure precedence as a lease this runner acquires itself.
     /// </summary>
-    public async ValueTask<T> RunAsync<T>(RuntimeExecutionLease lease, bool releaseWhenDone, WorkflowExecutionPartition partition,
-        Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class
+    public async ValueTask<T> RunAsync<T>(RuntimeExecutionLease lease, Func<ValueTask<RuntimeExecutionOwnershipTransitionResult>> release,
+        WorkflowExecutionPartition partition, Func<CancellationToken, ValueTask<T>> run, CancellationToken cancellationToken) where T : class
     {
         using (ownershipContext.Push(lease))
         using (var renewalStop = new CancellationTokenSource())
@@ -45,18 +48,15 @@ internal sealed class RuntimeExecutionLeaseRunner(
                 catch (OperationCanceledException) when (renewalStop.IsCancellationRequested) { }
                 catch (Exception exception) { renewalFailure = exception; }
 
-                if (releaseWhenDone)
+                try
                 {
-                    try
-                    {
-                        var release = await ownershipService.ReleaseAsync(lease, CancellationToken.None);
-                        if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                            releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
-                    }
-                    catch (Exception exception)
-                    {
-                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
-                    }
+                    var released = await release();
+                    if (!released.Succeeded && released.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", released.Status);
+                }
+                catch (Exception exception)
+                {
+                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
                 }
             }
 
