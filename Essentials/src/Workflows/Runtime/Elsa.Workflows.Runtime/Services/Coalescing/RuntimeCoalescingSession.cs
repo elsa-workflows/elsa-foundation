@@ -151,6 +151,9 @@ public sealed class RuntimeCoalescingSession
     /// <summary>What this session knows of the inspection projections the durable store holds for the run.</summary>
     internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; } = new();
 
+    /// <summary>The workflow execution state the drain read when it began, until this session has one of its own.</summary>
+    internal RuntimeCoalescingRunStateSnapshot RunStateSnapshot { get; } = new();
+
     public bool CoalesceDurableValueReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
@@ -264,6 +267,9 @@ public sealed class RuntimeCoalescingSession
             ActivityBaseline.RecordPossibleWrite(change.StateId);
         foreach (var change in changes.ActivityExecutionInspections)
             InspectionBaseline.RecordPossibleWrite(change.StateId);
+        // From here the store may hold a newer workflow execution state than the one the drain read when it began.
+        if (changes.WorkflowExecution is not null)
+            RunStateSnapshot.End();
     }
 
     /// <summary>
@@ -282,14 +288,34 @@ public sealed class RuntimeCoalescingSession
     }
 
     /// <summary>
-    /// Ends both empty baselines for good. A nested drain can write this run's rows while its own session is the
-    /// ambient one, which this session never sees. A session whose scope is gone, or whose drain was cancelled, no
-    /// longer has the drain's lease behind what it knows. Safe to call from a cancellation callback.
+    /// Lets this session answer a read of its run's workflow execution state with what the drain read when it
+    /// began, until the session has a state of its own or a write of that state is attempted. Only
+    /// <see cref="RuntimeCoalescingDrainScopeFactory"/> calls it, for the reason given on
+    /// <see cref="BeginEmptyBaselines"/>. An observation that contradicts the mode the session was created under,
+    /// or that belongs to another run, is not used.
     /// </summary>
-    internal void EndEmptyBaselines()
+    internal void BeginRunStateSnapshot(RuntimeRunStateObservation observed)
+    {
+        ArgumentNullException.ThrowIfNull(observed);
+        if (observed.State is null == HasDurableRecord)
+            return;
+        if (observed.State is { } state && !StringComparer.Ordinal.Equals(state.WorkflowExecutionId, WorkflowExecutionId))
+            return;
+
+        RunStateSnapshot.Begin(observed.State);
+    }
+
+    /// <summary>
+    /// Ends, for good, everything this session observed of the store when the drain began: both empty baselines and
+    /// the run state snapshot. A nested drain can write this run's rows while its own session is the ambient one,
+    /// which this session never sees. A session whose scope is gone, or whose drain was cancelled, no longer has the
+    /// drain's lease behind what it knows. Safe to call from a cancellation callback.
+    /// </summary>
+    internal void EndStartObservations()
     {
         ActivityBaseline.End();
         InspectionBaseline.End();
+        RunStateSnapshot.End();
     }
 
     /// <summary>

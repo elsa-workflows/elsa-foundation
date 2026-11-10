@@ -9,7 +9,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// <summary>
 /// Coalescing-aware overlay for <see cref="IWorkflowExecutionStateStore"/>. When an active coalescing session owns the
 /// target workflow execution, reads and writes go to the session's in-memory overlay; otherwise it is a byte-for-byte
-/// pass-through to the durable inner store (the default path is completely unaffected).
+/// pass-through to the durable inner store (the default path is completely unaffected). Before the session has a
+/// state of its own, <see cref="FindAsync"/> answers with the state the drain read when it began, if the session
+/// was given one, so a drain reads its run's state once.
 /// </summary>
 public sealed class CoalescingWorkflowExecutionStateStore(
     CoalescingInner<IWorkflowExecutionStateStore> inner,
@@ -17,17 +19,34 @@ public sealed class CoalescingWorkflowExecutionStateStore(
 {
     private readonly IWorkflowExecutionStateStore _inner = inner.Value;
 
-    public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
-        _inner.SaveAsync(state, cancellationToken);
+    public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
+    {
+        // A direct save goes past the working set, so what the drain read when it began no longer stands. It ends
+        // before the write: a save that fails may still land. Validating the state is left to the store.
+        if (state is not null)
+            EndRunStateSnapshot(state.WorkflowExecutionId);
+
+        return _inner.SaveAsync(state!, cancellationToken);
+    }
 
     public ValueTask<bool> IsDeletionTombstonedAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
         _inner.IsDeletionTombstonedAsync(workflowExecutionId, cancellationToken);
 
     public async ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
-            session.TryGetWorkflowExecution(workflowExecutionId, out var overlay))
-            return overlay;
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
+        {
+            if (session.TryGetWorkflowExecution(workflowExecutionId, out var overlay))
+                return overlay;
+
+            // The session has no state of its own yet. The drain read this row when it began, under the run's
+            // lease, and no write of it has been attempted since, so the store still holds what was read.
+            if (session.RunStateSnapshot.TryGet(out var observed))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return observed;
+            }
+        }
 
         return await _inner.FindAsync(workflowExecutionId, cancellationToken);
     }
@@ -43,8 +62,17 @@ public sealed class CoalescingWorkflowExecutionStateStore(
     public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
         _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
 
-    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-        _inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        EndRunStateSnapshot(workflowExecutionId);
+        return _inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private void EndRunStateSnapshot(string? workflowExecutionId)
+    {
+        if (sessionAccessor.Current is { } session && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, workflowExecutionId))
+            session.RunStateSnapshot.End();
+    }
 }
 
 /// <summary>

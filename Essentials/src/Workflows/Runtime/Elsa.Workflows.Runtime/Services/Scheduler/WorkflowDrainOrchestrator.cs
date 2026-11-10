@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
@@ -239,12 +240,25 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
         // The mode is resolved per execution: the mode the run recorded at its first commit, or before that the mode its
         // start carries, whichever command starts this drain.
-        var resolved = await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken);
+        // The default resolver reads the run's workflow execution state to find the mode. That read is made here,
+        // under the lease, so the drain's first segment starts from it and does not read the same row again. A
+        // replacement resolver says nothing about what it read, so the drain reads the state itself, as before.
+        ResolvedPersistenceMode resolved;
+        RuntimeRunStateObservation? observedRunState = null;
+        if (_persistenceModeResolver is RuntimePersistenceModeResolver defaultResolver)
+        {
+            (resolved, var runState) = await defaultResolver.ResolveWithRunStateAsync(envelope, cancellationToken);
+            observedRunState = new RuntimeRunStateObservation(runState);
+        }
+        else
+        {
+            resolved = await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken);
+        }
 
         // The scheduler loop owns each coalesced segment. A resume claim boundary ends one segment, dispatches
         // its durable item, and starts a fresh segment for subsequent replayable work under the same ownership lease.
         using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
-        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, IsYieldRedrive(envelope), cancellationToken);
+        var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, resolved, observedRunState, IsYieldRedrive(envelope), cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
     }
@@ -252,6 +266,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
         ResolvedPersistenceMode resolved,
+        RuntimeRunStateObservation? observedRunState,
         bool deliverFlushedContinuations,
         CancellationToken cancellationToken)
     {
@@ -282,7 +297,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var settledElsewhere = new HashSet<string>(StringComparer.Ordinal);
         var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
 
-        var (coalescingScope, pageReuseCancellation) = BeginSegment(resolved);
+        // Only the first segment starts from what was read when the drain began. A later segment starts after this
+        // drain may have committed, so it reads the state from the store.
+        var (coalescingScope, pageReuseCancellation) = BeginSegment(resolved, observedRunState);
         var claimDurably = false;
         try
         {
@@ -435,9 +452,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             stopReason: stopReason);
 
         // Begin and replace in this async context so the ambient accessor frame is visible to the next dispatch.
-        (IRuntimeCoalescingDrainScope Scope, CancellationTokenRegistration Cancellation) BeginSegment(ResolvedPersistenceMode mode)
+        (IRuntimeCoalescingDrainScope Scope, CancellationTokenRegistration Cancellation) BeginSegment(ResolvedPersistenceMode mode, RuntimeRunStateObservation? observed = null)
         {
-            var scope = _coalescingScopeFactory!.Begin(request.WorkflowExecutionId, mode);
+            // Only the default factory takes the observation: it is what ends the session's answers again.
+            var scope = observed is not null && _coalescingScopeFactory is RuntimeCoalescingDrainScopeFactory defaultFactory
+                ? defaultFactory.Begin(request.WorkflowExecutionId, mode, observed)
+                : _coalescingScopeFactory!.Begin(request.WorkflowExecutionId, mode);
             scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
             var registration = cancellationToken.Register(
                 static state =>
@@ -446,7 +466,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                     session.DisableDurableValuePageReuse();
                     // A failed lease heartbeat cancels the drain. From then on the lease no longer stands behind
                     // what the session knows, and a read without the drain's token would still be answered.
-                    session.EndEmptyBaselines();
+                    session.EndStartObservations();
                 },
                 scope.Session);
             return (scope, registration);
