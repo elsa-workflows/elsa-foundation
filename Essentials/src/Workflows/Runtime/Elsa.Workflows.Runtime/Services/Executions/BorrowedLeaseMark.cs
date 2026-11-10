@@ -10,27 +10,24 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 /// </summary>
 internal static class BorrowedLeaseMark
 {
-    private const string FromKey = "runtime.ownership.borrowed-from";
-    private const string FromNoOwner = "no-owner";
+    private const string FromKey = "runtime.ownership.borrowedFrom";
+    private const string FromNoOwner = "noOwner";
     private const string FromAnOwner = "owner";
-    private const string OwnerAcquiredAtKey = "runtime.ownership.owner-lease-acquired-at";
-    private const string OwnerExpiresAtKey = "runtime.ownership.owner-lease-expires-at";
+    private const string OwnerLeaseExpiresAtKey = "runtime.ownership.ownerLeaseExpiresAt";
 
     /// <summary>The mark of a lease borrowed while the run had no owner.</summary>
     public static IReadOnlyDictionary<string, string> ForNoOwner() =>
         new Dictionary<string, string> { [FromKey] = FromNoOwner };
 
     /// <summary>
-    /// The mark of a lease borrowed from an owner. It carries when the owner's lease was acquired and when it
-    /// expires, so the lease that is left on the record afterwards expires when the owner's would have, whichever
-    /// borrower leaves it.
+    /// The mark of a lease borrowed from an owner. It carries when the owner's lease expires, so that a later
+    /// borrower that finds this lease can leave the same expiry this borrower would have left.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> ForOwner((DateTimeOffset AcquiredAt, DateTimeOffset ExpiresAt) ownersLease) =>
+    public static IReadOnlyDictionary<string, string> ForOwner(DateTimeOffset ownersLeaseExpiresAt) =>
         new Dictionary<string, string>
         {
             [FromKey] = FromAnOwner,
-            [OwnerAcquiredAtKey] = Format(ownersLease.AcquiredAt),
-            [OwnerExpiresAtKey] = Format(ownersLease.ExpiresAt)
+            [OwnerLeaseExpiresAtKey] = ownersLeaseExpiresAt.ToString("O", CultureInfo.InvariantCulture)
         };
 
     /// <summary>
@@ -46,25 +43,15 @@ internal static class BorrowedLeaseMark
     public static bool StandsInForAnOwner(RuntimeExecutionLease lease) => Is(lease, FromAnOwner);
 
     /// <summary>
-    /// The times of the owner's lease that <paramref name="standIn"/> stands in for. A mark that cannot be read
-    /// falls back to the stand-in's own times, so a damaged record delays recovery instead of blocking the run.
+    /// When the lease of the owner that <paramref name="standIn"/> stands in for expires. A mark that cannot be read
+    /// falls back to the stand-in's own expiry, so a damaged record delays recovery instead of blocking the run.
     /// </summary>
-    public static (DateTimeOffset AcquiredAt, DateTimeOffset ExpiresAt) ReadOwnersLease(RuntimeExecutionLease standIn) =>
-        TryParse(standIn.Metadata, OwnerAcquiredAtKey, out var acquiredAt) &&
-        TryParse(standIn.Metadata, OwnerExpiresAtKey, out var expiresAt) &&
-        expiresAt > acquiredAt
-            ? (acquiredAt, expiresAt)
-            : (standIn.AcquiredAt, standIn.ExpiresAt);
+    public static DateTimeOffset ReadOwnersLeaseExpiry(RuntimeExecutionLease standIn) =>
+        standIn.Metadata.TryGetValue(OwnerLeaseExpiresAtKey, out var text) &&
+        DateTimeOffset.TryParseExact(text, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiresAt)
+            ? expiresAt
+            : standIn.ExpiresAt;
 
     private static bool Is(RuntimeExecutionLease lease, string from) =>
         lease.Metadata.TryGetValue(FromKey, out var value) && StringComparer.Ordinal.Equals(value, from);
-
-    private static string Format(DateTimeOffset value) => value.ToString("O", CultureInfo.InvariantCulture);
-
-    private static bool TryParse(IReadOnlyDictionary<string, string> metadata, string key, out DateTimeOffset value)
-    {
-        value = default;
-        return metadata.TryGetValue(key, out var text) &&
-            DateTimeOffset.TryParseExact(text, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out value);
-    }
 }

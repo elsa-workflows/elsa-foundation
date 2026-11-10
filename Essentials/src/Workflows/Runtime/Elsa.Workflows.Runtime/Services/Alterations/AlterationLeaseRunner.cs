@@ -18,8 +18,8 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <para>The lease is borrowed (<see cref="RuntimeExecutionOwnershipService.BorrowAsync"/>), because an alteration
 /// is not a drain and the ownership record must not present it as one. When the run has an owner, the borrowed lease
 /// stands in for that owner: the owner's heartbeat stays on the record, so the run is still listed under the owner
-/// for host reclaim and a migration is refused, and when the alteration is done the lease is left to expire when the
-/// owner's would have, so recovery finds the run no later than it would have.</para>
+/// for host reclaim and a migration is refused, and when the alteration is done the lease stays on the record with
+/// the expiry of the owner's lease, so recovery finds the run no later than it would have.</para>
 /// <para>Borrowing needs the runtime's own <see cref="RuntimeExecutionOwnershipService"/>. With a replacement
 /// <see cref="IRuntimeExecutionOwnershipService"/> the alteration runs without a lease.</para>
 /// </remarks>
@@ -32,8 +32,22 @@ internal sealed class AlterationLeaseRunner(
 {
     private static readonly object Completed = new();
     private static int _unfencedWarnings;
-    private readonly RuntimeExecutionLeaseRunner _leaseRunner = new(ownershipService, ownershipContext, heartbeatScopes, timeProvider);
+    private readonly RuntimeExecutionLeaseRunner _leaseRunner = new(
+        ownershipService,
+        ownershipContext,
+        RequireHeartbeatScopes(ownershipService, heartbeatScopes),
+        timeProvider);
     private readonly ILogger _logger = logger ?? NullLogger<AlterationLeaseRunner>.Instance;
+
+    // The rule the drain orchestrator applies: a renewal on scoped persistence needs an operation scope of its own.
+    private static IPersistenceOperationScopeFactory? RequireHeartbeatScopes(
+        IRuntimeExecutionOwnershipService ownershipService,
+        IPersistenceOperationScopeFactory? heartbeatScopes) =>
+        heartbeatScopes is null && ownershipService is RuntimeExecutionOwnershipService { RequiresIsolatedHeartbeatScope: true }
+            ? throw new InvalidOperationException(
+                "The default ownership service uses scoped persistence and requires heartbeat isolation. " +
+                "Construct the alteration lease runner with an IPersistenceOperationScopeFactory.")
+            : heartbeatScopes;
 
     /// <summary>Runs <paramref name="alteration"/> under the run's lease.</summary>
     public async ValueTask RunAsync(
@@ -79,12 +93,12 @@ internal sealed class AlterationLeaseRunner(
         }
         catch (RuntimeExecutionOwnershipLostException exception) when (committed)
         {
-            // The alteration committed under its fence, so the job is done. The exception says where the lease was
-            // lost: at a renewal, or at the return. Either the run has a new owner, or the return's write failed and
-            // the lease expires on its own.
+            // The alteration committed under its fence, so the job is done. The exception says what went wrong with
+            // the lease: a renewal or the return found the run taken, or the return's write failed. In the last case
+            // the lease stays on the record until it expires.
             _logger.LogWarning(
                 exception,
-                "The alteration of workflow execution {WorkflowExecutionId} committed, but its ownership lease was lost before it was returned.",
+                "The alteration of workflow execution {WorkflowExecutionId} committed, but its ownership lease was lost or could not be returned.",
                 envelope.WorkflowExecutionId);
         }
     }
