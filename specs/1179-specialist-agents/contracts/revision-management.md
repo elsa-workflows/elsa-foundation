@@ -54,6 +54,8 @@ Existing Workflow definition/draft/version stores and promotion commands, reusab
 
 Assess reusable-activity authoring as a third existing consumer before interface freeze. It may adapt to the capability but must not become Agent's editable source again. A future Rules/Decision-like source supplies typed content, validation, permissions and a compiler contribution while reusing revision/publication mechanics without Workflow graph inheritance. No new domain is admitted here.
 
+A source directory exposes metadata and an explicit editable-copy or retained-history navigation reference. It never selects the latest or published version implicitly. Source-scoped exact snapshot lookup and history retain the original copy reference after discard or replacement; copy-local CAS revision numbers do not establish chronological order across copies.
+
 ## Publication and failed-publication recovery
 
 For either adapter:

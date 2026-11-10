@@ -17,10 +17,10 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
-using Elsa.Agent;
-using Elsa.Agent.Api;
-using Elsa.Agent.GitHubCopilot;
-using Elsa.Agent.Workflows;
+using Elsa.Weaver;
+using Elsa.Weaver.Api;
+using Elsa.Weaver.GitHubCopilot;
+using Elsa.Weaver.Workflows;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
@@ -356,14 +356,14 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
-            typeof(FoundationAgentAbstractionsFeature).Assembly,
-            typeof(FoundationAgentApiFeature).Assembly,
-            typeof(FoundationWorkflowsAgentFeature).Assembly,
+            typeof(WeaverFeature).Assembly,
+            typeof(WeaverApiFeature).Assembly,
+            typeof(WeaverWorkflowsFeature).Assembly,
             // Runtime-side Weaver workflow contributions (spec 1193 slice F): Executable context and the read-only Executable tool.
-            typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
-            typeof(GitHubCopilotAgentFeature).Assembly,
-            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
-            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Weaver.Workflows.Runtime.WeaverWorkflowsRuntimeFeature).Assembly,
+            typeof(WeaverGitHubCopilotFeature).Assembly,
+            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists WeaverEntityFrameworkCore.
+            typeof(Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature).Assembly,
 
             // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which

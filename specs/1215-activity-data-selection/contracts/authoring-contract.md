@@ -121,6 +121,15 @@ an otherwise unauthorized resource. Use no-store responses and bounded in-memory
 purge that metadata on permission/session/backend changes. Log safe codes, not source paths, symbol names,
 authored documents or source text.
 
+The Foundation leaf does not adapt expression-shaped host metadata filters into neutral policy. When
+either `IExpressionAuthoringContextFilter` or `IExpressionAuthoringSymbolFilter` is configured, both
+neutral resource endpoints return `unavailable` with `activity-data.metadata-policy-unavailable`, after
+their available authentication/catalog authorization checks and before private draft or shape reads.
+The legacy expression surface continues to apply those filters. This is an explicit unavailable host
+composition, not permission to ignore restrictions or a claim of full neutral-filter support. A neutral
+policy adaptation needs normal contract review before chooser freeze; M3–M5 restricted-host acceptance
+must retain this distinction. No workflow/language identity is fabricated for an Activity Definition.
+
 Publication and every executable-producing/test-run path independently resolve the same source facts and
 validate the actual persisted/promoted candidate. A successful chooser response or matching client hash is
 not publication admission. Direct references and portable expression parameters receive the same causal,

@@ -235,9 +235,16 @@ def _job_name(block: str) -> str:
     return match.group(1).strip().strip('"') if match else ""
 
 
+MERGE_GROUP_TRIGGER = re.compile(r"^  merge_group:[ \t]*\n    types: \[checks_requested\][ \t]*$", re.M)
+
+
 def check_workflows(ci: str, ci_full: str) -> list[str]:
-    """A required context must never be skippable, and no labeled trigger may sit on a required workflow (research R8)."""
+    """A required context must never be skippable, the merge queue must get every required context, and no labeled
+    trigger may sit on a required workflow (research R8)."""
     problems = []
+    if not MERGE_GROUP_TRIGGER.search(ci.split("\njobs:\n", 1)[0]):
+        problems.append(f"{CI}: the required checks must also run on `merge_group: types: [checks_requested]`, or every "
+                        f"merge-queue entry waits for checks that never report")
     build = [block for block in _jobs(ci).values() if _job_name(block) == "Build & test" or "'Build & test'" in _job_name(block)]
     if len(build) != 1:
         problems.append(f"{CI}: expected exactly one job named `Build & test`, found {len(build)}")
@@ -268,8 +275,9 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = full[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && github.event_name == 'pull_request' }}")):
-            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}`")
+                "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")):
+            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}` on pull requests "
+                            f"and merge-queue entries")
         if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
     # #3708: the latest ready suite must execute all required contexts, not rename/skip
@@ -428,7 +436,7 @@ def self_test() -> int:
     check("job entry: keeps only test projects, with forward slashes",
           entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
 
-    good_ci = ("on:\n  pull_request:\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
+    good_ci = ("on:\n  pull_request:\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
                "  generated-maps:\n    name: Generated maps fresh\n"
                "  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]\n    if: ${{ !cancelled() }}\n")
@@ -439,9 +447,12 @@ def self_test() -> int:
                 "          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}\n"
                 "          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}\n"
                 "        run: python3 tools/ci/studio_gate.py\n")
-    good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
+    good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\n"
+                 "  merge_group:\n    types: [checks_requested]\njobs:\n  full-tier:\n"
                  "    name: \"${{ (needs.plan-full.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
                  "    if: ${{ !cancelled() }}\n    steps:\n      - run: if [[ \"$PLAN\" != success ]]; then exit 1; fi\n")
+    queue_full = good_full.replace("if: ${{ !cancelled() }}",
+                                   "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
     check("workflows: a skippable Build & test fails",
           bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
@@ -478,6 +489,16 @@ def self_test() -> int:
           not check_workflows(good_ci, "# There is no `labeled` trigger here.\n" + good_full))
     check("workflows: a labeled trigger fails",
           bool(check_workflows(good_ci, good_full.replace("ready_for_review]", "ready_for_review, labeled]"))))
+    check("workflows: a Full tier for pull requests and the merge queue passes", not check_workflows(good_ci, queue_full))
+    check("workflows: a Full tier for pull requests only fails",
+          bool(check_workflows(good_ci, queue_full.replace(" || github.event_name == 'merge_group'", ""))))
+    check("workflows: no merge_group trigger fails",
+          bool(check_workflows(good_ci.replace("  merge_group:\n    types: [checks_requested]\n", ""), good_full)))
+    check("workflows: a merge_group trigger without checks_requested fails",
+          bool(check_workflows(good_ci.replace("[checks_requested]", "[destroyed]"), good_full)))
+    check("workflows: a merge_group mention in a comment is not a trigger",
+          bool(check_workflows(good_ci.replace("  merge_group:\n    types: [checks_requested]\n",
+                                               "  # merge_group:\n  #   types: [checks_requested]\n"), good_full)))
     check("workflows: a Full tier that ignores a failed plan fails",
           bool(check_workflows(good_ci, good_full.replace("needs.plan-full.result != 'success' || ", ""))))
 

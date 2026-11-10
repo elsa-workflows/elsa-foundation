@@ -1,0 +1,75 @@
+#nullable enable
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext.WeaverDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverModelBuilderExtensions
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverMySqlDbContext
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverMySqlDbContext.WeaverMySqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverMySqlDbContext!>! options) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverPostgreSqlDbContext
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverPostgreSqlDbContext.WeaverPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverPostgreSqlDbContext!>! options) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext.WeaverSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext!>! options) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext.WeaverSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext!>! options) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.AgentEntityFrameworkCoreOptions() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.LeaseDuration.get -> System.TimeSpan
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.LeaseDuration.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.WeaverEntityFrameworkCoreFeature() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.LeaseSeconds.get -> int
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.LeaseSeconds.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.Schema.set -> void
+abstract Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext.ConfigureProvider(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule.HistoryModuleName = "ElsaWeaver" -> string!
+const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverMySqlDbContext.ExpectedProviderName = "MySql.EntityFrameworkCore" -> string!
+const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverPostgreSqlDbContext.ExpectedProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL" -> string!
+const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.SqlServer" -> string!
+const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
+override Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+static Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule.HistoryTableName.get -> string!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverModelBuilderExtensions.AddAgentModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentStores<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.TimeSpan? leaseDuration = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static readonly Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
+virtual Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial.Initial() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.PostgreSql.Initial
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.PostgreSql.Initial.Initial() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.SqlServer.Initial
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.SqlServer.Initial.Initial() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite.Initial
+Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite.Initial.Initial() -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void

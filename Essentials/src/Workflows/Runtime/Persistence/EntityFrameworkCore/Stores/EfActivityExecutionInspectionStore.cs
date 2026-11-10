@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed partial class EfActivityExecutionInspectionStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter, IRunRowPresenceProbe
 {
     private const string ContinuationPurpose = "elsa-runtime-activity-execution-inspection-summary-page-v1";
 
@@ -77,13 +77,39 @@ public sealed partial class EfActivityExecutionInspectionStore(
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(workflowExecutionId, activityExecutionId);
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scope = RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
         var id = ActivityExecutionEfSupport.CreateId("inspection", scope, workflowExecutionId, activityExecutionId);
         var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
             () => context.ActivityExecutionInspections.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
         return row is null ? null : ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
+    }
+
+    // Everything FindAsync refuses before it queries. The coalescing overlay runs the same checks for a read it
+    // answers without a query, so the two cannot drift apart.
+    private string RequireReadableRow(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateIdentity(workflowExecutionId, activityExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+    }
+
+    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken) =>
+        RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
+
+    // The predicate matches on the scope and workflow hashes, as the summary page does. A hash collision can only
+    // make another run's projections count as this run's, which answers true and costs the saving, never correctness.
+    // A row whose hash columns are corrupt is not counted, so for a run with no record a lookup of it can return
+    // nothing where FindAsync throws.
+    async ValueTask<bool> IRunRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "probing", workflowExecutionId,
+            () => context.ActivityExecutionInspections.AsNoTracking().AnyAsync(row =>
+                row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash, cancellationToken));
     }
 
     public async ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(ActivityExecutionInspectionSummaryPageQuery query, CancellationToken cancellationToken = default)

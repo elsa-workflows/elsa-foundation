@@ -12,7 +12,6 @@ import { readRunSelection } from "./runSelectionUrl";
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
 const WorkflowExecutables = lazy(() => import("./WorkflowExecutables").then(module => ({ default: module.WorkflowExecutables })));
-const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
 const WorkflowInstances = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstances })));
 const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstanceDetailsWorkbench })));
 
@@ -130,47 +129,6 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
-  const [location, setLocation] = useState(readExecutableInspectorLocation);
-
-  useEffect(() => {
-    const syncFromLocation = () => setLocation(readExecutableInspectorLocation());
-    window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
-
-  // Selecting a reference re-renders the same artifact from that reference's Layout Sidecar; the
-  // choice is part of the page address (?ref=) so it survives reload and can be shared.
-  const selectReference = useCallback((sourceReferenceId: string | null) => {
-    const url = new URL(window.location.href);
-
-    if (sourceReferenceId) {
-      url.searchParams.set("ref", sourceReferenceId);
-    } else {
-      url.searchParams.delete("ref");
-    }
-
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    setLocation(readExecutableInspectorLocation());
-  }, []);
-
-  return (
-    <WorkflowsPageFrame title="Executable Inspector" workbench>
-      <WorkflowLazyBoundary label="executable inspector">
-        <WorkflowExecutableInspectorWorkbench
-          context={context}
-          ai={ai}
-          weaver={weaver}
-          runInputEditors={runInputEditors}
-          artifactId={location.artifactId}
-          sourceReferenceId={location.sourceReferenceId}
-          onSelectReference={selectReference}
-        />
-      </WorkflowLazyBoundary>
-    </WorkflowsPageFrame>
-  );
-}
-
 export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame>
@@ -259,14 +217,6 @@ function readDefinitionIdFromUrl() {
 
 function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
-}
-
-function readExecutableInspectorLocation() {
-  const match = /^\/workflows\/executables\/([^/]+)$/.exec(window.location.pathname);
-  return {
-    artifactId: match ? decodeURIComponent(match[1]) : "",
-    sourceReferenceId: new URLSearchParams(window.location.search).get("ref")
-  };
 }
 
 function readWorkflowExecutionIdFromUrl(pathname = window.location.pathname) {

@@ -32,15 +32,16 @@ function sensitiveError() {
   return error;
 }
 
-async function exercise({ loginError, loginStatus = 200, deleteError, deleteStatus = 204 } = {}) {
+async function exercise({ loginError, loginStatus = 200, deleteError, deleteStatus = 204, cleanups = [] } = {}) {
   const page = {};
   const createdWorkflows = new WeakMap([[page, [{ id: "metadata-owned", url: "http://owned.invalid/templates", authorization: authMarker }]]]);
   const designerDefinitions = new WeakMap([[page, ["frame-owned", "sequence-owned"]]]);
+  const ownedCleanups = new WeakMap([[page, cleanups]]);
   const browserErrors = new WeakMap([[page, []]]);
   const assertions = (actual, message) => ({ toEqual: expected => assert.deepEqual(actual, expected, message) });
   const exports = {};
-  const hook = new Function("createdWorkflows", "designerDefinitions", "browserErrors", "expect", "process", "exports",
-    `${compiled.outputText}\nreturn exports.cleanup;`)(createdWorkflows, designerDefinitions, browserErrors, assertions,
+  const hook = new Function("createdWorkflows", "designerDefinitions", "ownedCleanups", "browserErrors", "expect", "process", "exports",
+    `${compiled.outputText}\nreturn exports.cleanup;`)(createdWorkflows, designerDefinitions, ownedCleanups, browserErrors, assertions,
       { env: { ELSA_WORKBENCH_URL: "http://owned.invalid" } }, exports);
   const attempts = [];
   let attachment;
@@ -111,4 +112,15 @@ test("non-Error transport failures cannot stringify arbitrary credential-bearing
   const result = await exercise({ deleteError: value });
   assert.ok(result.failure);
   assert.deepEqual(result.receipt.receipts.find(item => item.id === "frame-owned"), { id: "frame-owned", error: "request-failed" });
+});
+
+test("registered journey cleanup runs all callbacks and sanitizes failures", async () => {
+  const calls = [];
+  const result = await exercise({ cleanups: [
+    async () => { calls.push("failed"); throw sensitiveError(); },
+    async () => { calls.push("succeeded"); }
+  ] });
+  assert.deepEqual(calls, ["failed", "succeeded"]);
+  assert.ok(result.failure);
+  assert.ok(!result.failure.message.includes(cookieMarker) && !result.failure.message.includes(authMarker));
 });

@@ -32,6 +32,7 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
 
@@ -66,8 +67,13 @@ test.afterEach(async ({ page, request }, info) => {
       receipts.push({ id: item.id, error: "request-failed" });
     }
   }));
+  const cleanupFailures: string[] = [];
+  for (const cleanup of ownedCleanups.get(page) ?? []) {
+    try { await cleanup(); } catch { cleanupFailures.push("request-failed"); }
+  }
   await info.attach("owned-definition-cleanup", { body: JSON.stringify({ ownedIds: owned.map(item => item.id), receipts }), contentType: "application/json" });
   expect(receipts.filter(item => item.error || !item.status || item.status < 200 || item.status >= 300), "Every owned definition cleanup and login succeeds").toEqual([]);
+  expect(cleanupFailures, "Journey cleanup").toEqual([]);
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
@@ -82,6 +88,7 @@ test.beforeEach(async ({ page }, info) => {
   designerDefinitions.set(page, []);
   const errors: string[] = [];
   browserErrors.set(page, errors);
+  ownedCleanups.set(page, []);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
@@ -686,7 +693,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
 });
 
 test("save template toast", async ({ page }, info) => {
-  await templateToastJourney(page, info, capture);
+  await templateToastJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("workflow template metadata defaults", async ({ page }, info) => {

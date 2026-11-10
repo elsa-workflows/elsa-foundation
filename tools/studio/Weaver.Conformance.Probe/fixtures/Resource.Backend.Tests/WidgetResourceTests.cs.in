@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Acme.Home.Weaver;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core.Models;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Models;
 

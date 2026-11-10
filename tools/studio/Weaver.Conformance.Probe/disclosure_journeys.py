@@ -26,7 +26,7 @@ EXPECTED_CASES = {
 }
 # Both journeys retain context before their first provider entry. Receipt continuation must
 # re-admit that checkpoint history before it can reach the result-only authority boundary.
-EXPECTED_ERRORS = {phase: "agent.context.incomplete" for phase in ("accepted-message", "accepted-receipt")}
+EXPECTED_ERRORS = {phase: "weaver.context.incomplete" for phase in ("accepted-message", "accepted-receipt")}
 
 
 @contextmanager

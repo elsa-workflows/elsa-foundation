@@ -20,7 +20,7 @@ workflow-versions
 - negative controls: an unknown version and a version of another definition are refused at admission as unavailable, a
   comparison against another definition's version is refused at preparation, and an actor without design read is refused
   at admission;
-- deployment shape: with the Design-side agent feature (FoundationWorkflowsAgent) deselected, a workflows.version reference is
+- deployment shape: with the Design-side agent feature (WeaverWorkflows) deselected, a workflows.version reference is
   explicitly unavailable (the engine's agent.context.kind_unsupported); the feature is selected again afterwards;
 - in the actual packaged Studio (browser.mjs, workflow-version-history): the editor's version history discloses the selected
   version and its Explain action reads it.
@@ -32,7 +32,7 @@ workflow-executables
   completes, and the Executable reads back byte-equal;
 - negative controls: a bound hash that differs is stale, an unknown artifact is unavailable, and an actor without
   workflows/runtime:read is refused, each at admission;
-- deployment shape: with the Runtime-side agent feature (FoundationWorkflowsRuntimeAgent) deselected, a workflows.executable
+- deployment shape: with the Runtime-side agent feature (WeaverWorkflowsRuntime) deselected, a workflows.executable
   reference is explicitly unavailable; selected again afterwards;
 - in the actual packaged Studio (browser.mjs, workflow-executable-inspector): the Executable Inspector discloses the exact
   Executable and its Explain action reads it.
@@ -85,7 +85,7 @@ COMPUTED_BY = VERSION_TOOL
 MUTATING_TOOLS = frozenset({"workflow_apply_operation_batch", "workflow_set_designer_position", "workflow_library_assign_tags",
                             "workflow_library_set_favorite", "workflow_library_move_to_folder", "workflow_library_save_view",
                             "workflow_library_set_list_state", "workflow_create_dialog_prefill"})
-DESIGN_AGENT_FEATURE, RUNTIME_AGENT_FEATURE = "FoundationWorkflowsAgent", "FoundationWorkflowsRuntimeAgent"
+DESIGN_AGENT_FEATURE, RUNTIME_AGENT_FEATURE = "WeaverWorkflows", "WeaverWorkflowsRuntime"
 # Principals: the original "other" principal holds only the base Weaver grants (no workflows/design:read); the truth-seam
 # reader holds design read but not workflows/runtime:read.
 DESIGN_DENIED, RUNTIME_DENIED = 1, READER
@@ -100,7 +100,7 @@ TEXTS = {
     # The engine's own text for a context kind no installed module admits.
     "kind-unsupported": "No installed module admits the supplied context kind and owner.",
 }
-ADMISSION_REFUSAL = {"code": "agent.context.incomplete", "statusCode": 400}
+ADMISSION_REFUSAL = {"code": "weaver.context.incomplete", "statusCode": 400}
 VERSION_NATIVE = ("explain", "compare", "edit-refused", "unknown-version", "other-definition", "compare-other-definition", "design-denied",
                   "design-agent-absent")
 EXECUTABLE_NATIVE = ("explain", "edit-refused", "stale-hash", "unknown-artifact", "runtime-denied", "runtime-agent-absent")

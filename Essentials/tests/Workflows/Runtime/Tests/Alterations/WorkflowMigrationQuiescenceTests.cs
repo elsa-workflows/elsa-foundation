@@ -31,6 +31,42 @@ public sealed class WorkflowMigrationQuiescenceTests
     }
 
     [Fact]
+    public async Task ProbeAsync_WithoutAFence_RejectsALiveLease()
+    {
+        var liveness = new InMemoryExecutionLivenessStateStore();
+        await new RuntimeExecutionOwnershipService(liveness).AcquireAsync("workflow");
+
+        var result = await NewProbe(liveness).ProbeAsync("workflow", null);
+
+        Assert.Contains(result.Findings, finding => finding.Code == "ActiveExecutionFence");
+    }
+
+    // #2667: an alteration borrows the run's lease. Its own lease is exempt like any caller's, unless it took the run
+    // from an owner: then the lease stands in for that owner, and the run is not quiescent. The owner's heartbeat
+    // normally says so too. Here the owner's lease has none beside it, so only the lease's own mark is left to say it.
+    [Fact]
+    public async Task ProbeAsync_ExemptsTheCallersLease_UnlessItStandsInForAnOwner()
+    {
+        var liveness = new InMemoryExecutionLivenessStateStore();
+        var probe = NewProbe(liveness);
+        var alteration = new RuntimeExecutionOwnershipService(liveness);
+
+        var fromNoOwner = await alteration.BorrowAsync("workflow");
+        var withNoOwner = await probe.ProbeAsync("workflow", fromNoOwner.Lease.ToFence());
+        await alteration.ReturnAsync(fromNoOwner);
+        await new RuntimeExecutionOwnershipService(liveness).AcquireAsync("workflow");
+        var owned = Assert.Single(await liveness.ListAsync("workflow"));
+        await liveness.SaveAsync(new ExecutionLivenessState(
+            owned.ExecutionLivenessStateId, "workflow", owned.ExecutionLease, heartbeat: null, owned.Drain, owned.InterruptedExecution,
+            owned.PendingPostCommitIntentIds, owned.Metadata));
+        var fromAnOwner = await alteration.BorrowAsync("workflow");
+        var withAnOwner = await probe.ProbeAsync("workflow", fromAnOwner.Lease.ToFence());
+
+        Assert.True(withNoOwner.IsQuiescent);
+        Assert.Contains(withAnOwner.Findings, finding => finding.Code == "ActiveExecutionFence");
+    }
+
+    [Fact]
     public async Task ProbeAsync_RejectsRunningActivitiesAndSchedulerWork()
     {
         var activities = new InMemoryActivityExecutionStateStore();
@@ -87,11 +123,12 @@ public sealed class WorkflowMigrationQuiescenceTests
         Assert.Contains(claimed.Findings, finding => finding.Code == "ActiveSchedulerWorkClaim");
     }
 
-    private static RuntimeWorkflowMigrationQuiescenceProbe NewProbe(
+    internal static RuntimeWorkflowMigrationQuiescenceProbe NewProbe(
         IExecutionLivenessStateStore liveness,
         IActivityExecutionStateStore? activities = null,
         ISchedulerStateStore? scheduler = null,
-        IWorkflowSchedulerWorkQueue? queue = null) => new(
+        IWorkflowSchedulerWorkQueue? queue = null,
+        TimeProvider? timeProvider = null) => new(
         activities ?? new InMemoryActivityExecutionStateStore(),
         scheduler ?? new InMemorySchedulerStateStore(),
         liveness,
@@ -99,7 +136,7 @@ public sealed class WorkflowMigrationQuiescenceTests
         new EmptyOutboxStore(),
         new EmptyDispatchStore(),
         queue ?? new InMemoryWorkflowSchedulerWorkQueue(),
-        TimeProvider.System);
+        timeProvider ?? TimeProvider.System);
 
     private static ActivityExecutionState Activity(string activityId, ActivityExecutionStatus status) => new(
         new ActivityExecution(activityId, "workflow", "node", "node", "test", "1"),

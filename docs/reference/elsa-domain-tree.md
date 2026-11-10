@@ -12,7 +12,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | Domain | Purpose (one verb-led sentence) |
 |---|---|
 | `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, reusable-activity composition, runtime activity handling, and the built-in activity libraries. |
-| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. |
+| `Elsa.Agent` | Defines, publishes and runs user-defined agents as participants in authored processes (today the `Elsa.Agent.Specialists.*` packages, renamed under #4027). |
 | `Elsa.Api` | Exposes application APIs through the endpoint framework and publishes the client capability document. |
 | `Elsa.Attention` | Aggregates permission-scoped attention items from domain contributors behind one query endpoint. |
 | `Elsa.Caching` | Provides caching contracts and providers. |
@@ -35,6 +35,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | `Elsa.Serialization` | Serialises payloads and workflow models. |
 | `Elsa.Studio` | Persists Studio client state, currently per-user preferences. |
 | `Elsa.Tasks` | Schedules background work inside the host. |
+| `Elsa.Weaver` | Hosts the Studio assistant: Weaver sessions, proposals, audit and capabilities behind provider modules. |
 | `Elsa.Workflows.Dashboard` | Serves workflow run-health and portfolio queries from Runtime and Design projections. |
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. |
 | `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. |

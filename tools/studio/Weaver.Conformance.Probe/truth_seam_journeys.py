@@ -532,4 +532,4 @@ def synthetic_browser():
 
 def synthetic_registrations():
     """The minimal registrations shape the final gate checks; for synthetic self-tests only."""
-    return {"package": "Elsa.Agent.Workflows", "placeholders": [], "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"]}
+    return {"package": "Elsa.Weaver.Workflows", "placeholders": [], "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"]}

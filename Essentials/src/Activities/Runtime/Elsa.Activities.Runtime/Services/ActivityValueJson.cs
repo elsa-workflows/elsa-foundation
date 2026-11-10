@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Serialization;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -15,9 +15,5 @@ namespace Elsa.Activities.Runtime.Services;
 /// </remarks>
 internal static class ActivityValueJson
 {
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        NumberHandling = JsonNumberHandling.Strict
-    };
+    public static JsonSerializerOptions Options { get; } = ActivityValueJsonProfile.CreateOptions();
 }

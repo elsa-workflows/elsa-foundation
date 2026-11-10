@@ -71,7 +71,7 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
     async collect() { return { attachments: [...(controller.library?.snapshots.values() ?? [])], diagnostics: [] }; }
   });
   // The open Executable Inspector's exact Executable, bound to its Artifact Hash (spec 1193 FR-028). The Runtime-side server
-  // package (Elsa.Agent.Workflows.Runtime) admits it; a host without it reports the context kind as unsupported.
+  // package (Elsa.Weaver.Workflows.Runtime) admits it; a host without it reports the context kind as unsupported.
   agent.contextProviders.add({
     id: "workflows.executable-inspector", moduleId: "Elsa.Studio.Workflows", displayName: "Executable Inspector",
     surfaces: ["/workflows"], sensitivity: "internal",

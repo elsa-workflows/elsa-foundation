@@ -8,7 +8,7 @@ import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAtt
 
 // Every prompt and renderer below is registered under this package's own module identity, and names only tools and
 // result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt reads through the
-// Runtime-side workflow_read_executable (Elsa.Agent.Workflows.Runtime) and the explain-version prompt through
+// Runtime-side workflow_read_executable (Elsa.Weaver.Workflows.Runtime) and the explain-version prompt through
 // workflow_read_version (slice F); the explain-instance prompt reads one exact Run through the Runtime-side
 // workflow_read_run (slice G).
 const moduleId = "Elsa.Studio.Weaver.Workflows";

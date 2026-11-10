@@ -1,4 +1,4 @@
-using Elsa.Agent.Persistence.EntityFrameworkCore;
+using Elsa.Weaver.Persistence.EntityFrameworkCore;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -46,7 +46,7 @@ public sealed class EfModuleDescriptorTests
     // guard catches the exact drift the descriptor exists to prevent.
     private static readonly (string Name, Type Context, string HistoryModule)[] Expected =
     [
-        ("Agent", typeof(AgentDbContext), AgentEfModule.HistoryModuleName),
+        ("Weaver", typeof(WeaverDbContext), WeaverEfModule.HistoryModuleName),
         ("Specialists", typeof(SpecialistsDbContext), SpecialistsEfModule.HistoryModuleName),
         ("Secrets", typeof(SecretsDbContext), SecretsEfModule.HistoryModuleName),
         ("Connections", typeof(ConnectionsDbContext), ConnectionsEfModule.HistoryModuleName),
@@ -167,7 +167,7 @@ public sealed class EfModuleDescriptorTests
     private static readonly (Assembly Assembly, string ProjectDirectory)[] ModuleProjectDirectories =
     [
         (typeof(ActivitiesDesignDbContext).Assembly, "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore"),
-        (typeof(AgentDbContext).Assembly, "Extensions/Agent/src/Persistence/EntityFrameworkCore"),
+        (typeof(WeaverDbContext).Assembly, "Extensions/Weaver/src/Persistence/EntityFrameworkCore"),
         (typeof(ClusterMembershipDbContext).Assembly, "Essentials/src/Cluster/EntityFrameworkCore"),
         (typeof(ConnectionsDbContext).Assembly, "Essentials/src/Connections/Persistence/EntityFrameworkCore"),
         (typeof(SpecialistsDbContext).Assembly, "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore"),
