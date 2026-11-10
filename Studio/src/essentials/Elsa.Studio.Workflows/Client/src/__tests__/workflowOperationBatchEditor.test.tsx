@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAgentRegistry, type StudioAgentClientExecutionResult, type StudioAgentPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry, type StudioWeaverClientExecutionResult, type StudioWeaverPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { WorkflowBatchUndoControl } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
@@ -27,7 +27,7 @@ const details = { definition: { id: "definition-1", name: "Nested workflow" } } 
 const catalogByVersion = new Map(batchCatalog.map(item => [item.activityVersionId, item]));
 const context = { baseUrl: "https://owned-persistence.example/", http: {} } as unknown as StudioEndpointContext;
 const noop = () => {};
-let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
+let agent: ReturnType<typeof createWeaverRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, persistence: ReturnType<typeof useWorkflowPersistence>;
 let editingAllowed: boolean, root: Root, container: HTMLDivElement, sequence = 0;
 // When set, the editor's compare-and-replace is held back so a test can commit it after the observation deadline.
@@ -55,7 +55,7 @@ function load() {
 
 beforeEach(() => {
   vi.mocked(updateDraft).mockReset().mockImplementation(async (_context, snapshot) => snapshot);
-  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createWeaverRegistry(); controller = registerWorkflowAgent(agent);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load();
 });
@@ -108,14 +108,14 @@ describe("reviewed Operation Batch in the editor", () => {
   it.each(["content", "binding-race", "selection", "second-tab", "remount", "read-only"])("refuses a stale %s binding with zero change", async kind => {
     const invocation = request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]);
     let expected = structuredClone(doc.state.draft!);
-    let result: StudioAgentClientExecutionResult;
+    let result: StudioWeaverClientExecutionResult;
     if (kind === "content") {
       flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, layout: [{ nodeId: "b", x: 1, y: 2 }] })));
       expected = structuredClone(doc.state.draft!);
       result = await run(invocation);
     } else if (kind === "binding-race") {
       // A hand edit queued in the same tick reaches the reducer first: the compare-and-replace refuses.
-      let completion!: Promise<StudioAgentClientExecutionResult>;
+      let completion!: Promise<StudioWeaverClientExecutionResult>;
       flushSync(() => { doc.editDraft(({ draft }) => ({ ...draft!, layout: [{ nodeId: "b", x: 1, y: 2 }] })); completion = controller.execute!(invocation); });
       result = await completion;
       expected = structuredClone(doc.state.draft!);
@@ -142,7 +142,7 @@ describe("reviewed Operation Batch in the editor", () => {
   it.each(["select", "navigate"])("refuses a same-tick %s race at the reducer, comparing selection and scope frame", async race => {
     const invocation = request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]);
     const before = structuredClone(doc.state.draft!);
-    let completion!: Promise<StudioAgentClientExecutionResult>;
+    let completion!: Promise<StudioWeaverClientExecutionResult>;
     flushSync(() => {
       // Queued before the batch in the same tick: the binding check still sees the old render, the reducer does not.
       if (race === "select") doc.select("b");
@@ -516,7 +516,7 @@ function op<T extends Omit<FrozenWorkflowOperation, "index" | "risk">>(operation
   return { index: -1, risk, ...operation } as unknown as FrozenWorkflowOperation;
 }
 
-function request(operations: FrozenWorkflowOperation[], risk?: "reviewRequired" | "destructive"): StudioAgentPreparedInvocation {
+function request(operations: FrozenWorkflowOperation[], risk?: "reviewRequired" | "destructive"): StudioWeaverPreparedInvocation {
   const indexed = operations.map((operation, index) => ({ ...operation, index }));
   const batchRisk = indexed.some(item => item.risk === "destructive") ? "destructive" : "reviewRequired";
   const frozen: FrozenWorkflowBatch = { schemaVersion: "1", highComplexity: false, risk: batchRisk, operations: indexed };
@@ -527,8 +527,8 @@ function request(operations: FrozenWorkflowOperation[], risk?: "reviewRequired" 
     requiresApproval: true, client: controller.snapshot!.client!, expiresAt: new Date(Date.now() + 60_000).toISOString() };
 }
 
-async function run(invocation: StudioAgentPreparedInvocation) {
-  let completion!: Promise<StudioAgentClientExecutionResult>;
+async function run(invocation: StudioWeaverPreparedInvocation) {
+  let completion!: Promise<StudioWeaverClientExecutionResult>;
   flushSync(() => { completion = controller.execute!(invocation); });
   return completion;
 }
@@ -559,6 +559,6 @@ function outcome(card: { container: HTMLElement }) {
   return card.container.querySelector("[data-outcome]")?.getAttribute("data-outcome") ?? null;
 }
 
-function token(result: StudioAgentClientExecutionResult) {
+function token(result: StudioWeaverClientExecutionResult) {
   return (result.result!.data as { undoToken: string }).undoToken;
 }

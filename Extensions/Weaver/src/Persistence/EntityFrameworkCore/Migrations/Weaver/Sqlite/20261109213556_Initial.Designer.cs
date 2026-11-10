@@ -91,7 +91,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("__ElsaSchemaFinalization_ElsaWeaver", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentAuditOwnerRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverAuditOwnerRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -119,7 +119,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_audit_owners", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentAuditRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverAuditRow", b =>
                 {
                     b.Property<long>("Sequence")
                         .HasColumnType("INTEGER");
@@ -163,7 +163,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_audit", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentAuditSequenceRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverAuditSequenceRow", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
@@ -183,7 +183,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_audit_sequence", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverCallKeyRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -220,7 +220,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_call_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentContextRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverContextRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -249,7 +249,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_context", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentDisclosureSnapshotRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverDisclosureSnapshotRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -281,7 +281,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_disclosure_snapshots", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentMessageRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverMessageRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -320,7 +320,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_messages", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentProposalRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverProposalRow", b =>
                 {
                     b.Property<string>("ProposalId")
                         .HasMaxLength(128)
@@ -362,7 +362,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_proposals", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
@@ -447,45 +447,45 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.Sqlite
                     b.ToTable("elsa_weaver_sessions", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverCallKeyRow", b =>
                 {
-                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentContextRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverContextRow", b =>
                 {
-                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentDisclosureSnapshotRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverDisclosureSnapshotRow", b =>
                 {
-                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentMessageRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverMessageRow", b =>
                 {
-                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentProposalRow", b =>
+            modelBuilder.Entity("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverProposalRow", b =>
                 {
-                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.AgentSessionRow", null)
+                    b.HasOne("Elsa.Weaver.Persistence.EntityFrameworkCore.Entities.WeaverSessionRow", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)

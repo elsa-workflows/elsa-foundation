@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
+import type { ElsaStudioModuleApi, StudioWeaverPromptRequest, StudioWeaverSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
 import { AgentPromptStarters } from "../agent/AgentPromptStarters";
@@ -35,18 +35,18 @@ export function WeaverSurface({
   onPromptConsumed
 }: {
   api: ElsaStudioModuleApi;
-  surface: StudioAgentSurface;
+  surface: StudioWeaverSurface;
   variant: "dock" | "full";
   onClose?(): void;
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
   onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
-  incomingPrompt?: (StudioAgentPromptRequest & { id: string }) | null;
+  incomingPrompt?: (StudioWeaverPromptRequest & { id: string }) | null;
   onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
-  const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
-  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
+  const resultRenderers = useMemo(() => api.weaver.resultRenderers.list(), [api]);
+  const resultControls = useMemo(() => api.weaver.resultControls?.list() ?? [], [api]);
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;

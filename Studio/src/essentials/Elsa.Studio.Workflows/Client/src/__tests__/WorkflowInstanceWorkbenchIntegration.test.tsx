@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getIncidentRootCause, WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
 import type { ActivityExecutionBrowsePage } from "../api/runtime";
 import type {
@@ -1178,7 +1178,7 @@ function renderWorkbench(
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
-    ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
+    ai={{ promptActions: { list: () => [] } } as unknown as StudioWeaverRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
     initialInspectorTab={initialInspectorTab}

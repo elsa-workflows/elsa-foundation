@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createEndpointContext, StudioHttpError, type StudioAgentPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createEndpointContext, StudioHttpError, type StudioWeaverPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
 import { createAgentClient } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient";
 import type { subscribeAgentSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentStream";
@@ -15,7 +15,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaver.cs
 // running and a second tab in the same browser context sees the same server. Requests go through the real Studio
 // agent client; only the transport and the turn stream are simulated.
 type Message = { id: string; role: string; content: string; status: string; statusReason?: string };
-type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioAgentPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
+type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioWeaverPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
 type Session = { id: string; owner: string; workspace?: string; continuedFrom?: string; title: string; status: string; updatedAt: string; messages: Message[]; proposals: Proposal[]; paused?: boolean };
 type Store = { next: number; sessions: Session[]; log: string[] };
 
@@ -38,9 +38,9 @@ const backendSession = {
   refreshCapabilities: async () => { throw new Error("unused"); }
 } as unknown as StudioBackendSession;
 const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext(window.location.origin + "/") }, { backendBaseUrl: "https://fixture.example/", backendSession });
-api.agent.capabilities.add({ id: "weaver.fixture", displayName: "Fixture", description: "Fixture capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
+api.weaver.capabilities.add({ id: "weaver.fixture", displayName: "Fixture", description: "Fixture capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
 let releaseDelivery: (() => void) | null = null;
-api.agent.toolContracts.add({
+api.weaver.toolContracts.add({
   id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Move sample", description: "Move the sample in the open editor.", surfaces: ["*"],
   inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
   clientTargetAvailability: () => params.get("target") === "gone" ? { status: "unavailable", reason: "The sample editor that held this unsaved change is closed." } : { status: "available" },
@@ -131,7 +131,7 @@ function route(method: string, path: string, body: Record<string, unknown> = {})
     if (parts[2] === "deny") { proposal.status = "denied"; return done({ id: proposal.id, status: "denied" }); }
     if (parts[2] === "execute") {
       proposal.status = "awaitingClient";
-      proposal.preparedInvocation = { ...proposal.preparedInvocation!, client: { clientId: api.agent.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 300_000).toISOString() };
+      proposal.preparedInvocation = { ...proposal.preparedInvocation!, client: { clientId: api.weaver.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 300_000).toISOString() };
       return done({ proposalId: proposal.id, executed: false, status: "awaitingClient", resourceType: "sample", resourceId: "one", summary: "Delivered to the originating page.", clientInvocation: proposal.preparedInvocation });
     }
   }

@@ -11,21 +11,21 @@ Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext.WeaverSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext!>! options) -> void
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext.WeaverSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext!>! options) -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.AgentEntityFrameworkCoreOptions() -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.get -> string?
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.get -> string?
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.LeaseDuration.get -> System.TimeSpan
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.LeaseDuration.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.get -> bool
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.get -> string!
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.get -> string?
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.set -> void
-Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.WeaverEntityFrameworkCoreOptions() -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.LeaseDuration.get -> System.TimeSpan
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.LeaseDuration.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreRegistration
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionName.get -> string?
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConnectionName.set -> void
@@ -48,9 +48,9 @@ const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqlServerDbContext.Expec
 const Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
 override Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
 static Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule.HistoryTableName.get -> string!
-static Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverModelBuilderExtensions.AddAgentModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
-static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentStores<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.TimeSpan? leaseDuration = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverModelBuilderExtensions.AddWeaverModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreRegistration.AddWeaverEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection.WeaverEntityFrameworkCoreRegistration.AddWeaverStores<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.TimeSpan? leaseDuration = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static readonly Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
 virtual Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Weaver.Persistence.EntityFrameworkCore.Migrations.Weaver.MySql.Initial

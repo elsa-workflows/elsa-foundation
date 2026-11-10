@@ -18,7 +18,7 @@ public sealed partial class PermissionNamingTests
 
         // The sweep must have reached both trees, or an empty result would pass without checking anything.
         Assert.Contains(Elsa.Foundation.Identity.Core.Authorization.DefaultIdentityPermissionKeys.IdentityUsersManage, keys);
-        Assert.Contains(Elsa.Weaver.Api.Constants.AgentPermissionKeys.Use, keys);
+        Assert.Contains(Elsa.Weaver.Api.Constants.WeaverPermissionKeys.Use, keys);
         Assert.True(keys.Count >= 50, $"Only {keys.Count} contributed permission keys were found.");
         Assert.Empty(keys.Where(key => !IsResourceVerbName(key)).Order(StringComparer.Ordinal));
     }
