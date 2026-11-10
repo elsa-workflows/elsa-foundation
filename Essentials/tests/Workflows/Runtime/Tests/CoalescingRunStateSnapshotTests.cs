@@ -21,7 +21,8 @@ public sealed class CoalescingRunStateSnapshotTests
     private const string WorkflowExecutionId = "wfexec-1";
     private static readonly ResolvedPersistenceMode NoRecord = new(PersistenceMode.Balanced, RunHasRecord: false);
     private static readonly ResolvedPersistenceMode HasRecord = new(PersistenceMode.Balanced, RunHasRecord: true);
-    private static readonly RuntimeRunStateObservation NoState = new(State: null);
+    // An observation is used by one session, so each test that needs "read and found nothing" gets its own.
+    private static RunStateObservation NoState => new(state: null);
 
     [Fact]
     public async Task RunThatHadNoState_IsNotReadAgain()
@@ -38,7 +39,7 @@ public sealed class CoalescingRunStateSnapshotTests
     public async Task RunThatHadAState_IsAnsweredWithWhatTheDrainRead()
     {
         var read = NewRunState(WorkflowExecutionStatus.Running);
-        var fixture = new Fixture(HasRecord, new RuntimeRunStateObservation(read));
+        var fixture = new Fixture(HasRecord, new RunStateObservation(read));
         await fixture.Durable.Inner.SaveAsync(read);
 
         for (var again = 0; again < 3; again++)
@@ -135,7 +136,7 @@ public sealed class CoalescingRunStateSnapshotTests
     public async Task StateDeletedPastTheWorkingSet_IsReadFromTheStore()
     {
         var read = NewRunState(WorkflowExecutionStatus.Running);
-        var fixture = new Fixture(HasRecord, new RuntimeRunStateObservation(read));
+        var fixture = new Fixture(HasRecord, new RunStateObservation(read));
         await fixture.Durable.Inner.SaveAsync(read);
         Assert.Same(read, await fixture.RunStates.FindAsync(WorkflowExecutionId));
 
@@ -150,7 +151,7 @@ public sealed class CoalescingRunStateSnapshotTests
     public async Task StateDeletedPastTheWorkingSet_WhoseOutcomeIsUncertain_IsReadFromTheStore()
     {
         var read = NewRunState(WorkflowExecutionStatus.Running);
-        var fixture = new Fixture(HasRecord, new RuntimeRunStateObservation(read));
+        var fixture = new Fixture(HasRecord, new RunStateObservation(read));
         await fixture.Durable.Inner.SaveAsync(read);
         Assert.Same(read, await fixture.RunStates.FindAsync(WorkflowExecutionId));
         fixture.Durable.DeletesLandThenThrow = true;
@@ -225,7 +226,7 @@ public sealed class CoalescingRunStateSnapshotTests
         using var captured = accessor.Push(leftBehind);
         Assert.Same(neverStored, await runStates.FindAsync(WorkflowExecutionId));
 
-        await using var next = factory.Begin(WorkflowExecutionId, HasRecord, new RuntimeRunStateObservation(neverStored));
+        await using var next = factory.Begin(WorkflowExecutionId, HasRecord, new RunStateObservation(neverStored));
 
         Assert.Null(await runStates.FindAsync(WorkflowExecutionId));
         Assert.Equal(1, counter.FindCount);
@@ -311,13 +312,30 @@ public sealed class CoalescingRunStateSnapshotTests
         Assert.Equal(1, fixture.Durable.FindCount);
     }
 
+    // Only the drain's first session starts from what was read. A later session begins after the drain may have
+    // committed, so the same observation does not begin a second snapshot.
+    [Fact]
+    public async Task ObservationThatASessionAlreadyStartedFrom_IsNotUsedAgain()
+    {
+        var read = NewRunState(WorkflowExecutionStatus.Running);
+        var observed = new RunStateObservation(read);
+        var first = new Fixture(HasRecord, observed);
+        var later = new Fixture(HasRecord, observed);
+
+        Assert.Same(read, await first.RunStates.FindAsync(WorkflowExecutionId));
+        Assert.Null(await later.RunStates.FindAsync(WorkflowExecutionId));
+
+        Assert.Equal(0, first.Durable.FindCount);
+        Assert.Equal(1, later.Durable.FindCount);
+    }
+
     // What the drain read has to agree with the mode it was resolved under, and it has to be this run's state.
     [Fact]
     public async Task ObservationThatDoesNotFitTheSession_IsNotUsed()
     {
-        var stateWithoutARecord = new Fixture(NoRecord, new RuntimeRunStateObservation(NewRunState(WorkflowExecutionStatus.Running)));
+        var stateWithoutARecord = new Fixture(NoRecord, new RunStateObservation(NewRunState(WorkflowExecutionStatus.Running)));
         var recordWithoutAState = new Fixture(HasRecord, NoState);
-        var anotherRunsState = new Fixture(HasRecord, new RuntimeRunStateObservation(NewRunState(WorkflowExecutionStatus.Running, "wfexec-other")));
+        var anotherRunsState = new Fixture(HasRecord, new RunStateObservation(NewRunState(WorkflowExecutionStatus.Running, "wfexec-other")));
 
         foreach (var fixture in new[] { stateWithoutARecord, recordWithoutAState, anotherRunsState })
         {
@@ -425,7 +443,7 @@ public sealed class CoalescingRunStateSnapshotTests
     }
 
     // A session as the drain scope factory hands it out: begun with what the drain read, if anything.
-    private static RuntimeCoalescingSession NewSession(ResolvedPersistenceMode mode, RuntimeRunStateObservation? observed)
+    private static RuntimeCoalescingSession NewSession(ResolvedPersistenceMode mode, RunStateObservation? observed)
     {
         var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), innerOutboxStore: null, mode);
         if (observed is not null)
@@ -510,7 +528,7 @@ public sealed class CoalescingRunStateSnapshotTests
 
     private sealed class Fixture
     {
-        public Fixture(ResolvedPersistenceMode mode, RuntimeRunStateObservation? observed, bool commitsLandThenThrow = false)
+        public Fixture(ResolvedPersistenceMode mode, RunStateObservation? observed, bool commitsLandThenThrow = false)
         {
             Session = NewSession(mode, observed);
             var accessor = new FixedSessionAccessor(Session);

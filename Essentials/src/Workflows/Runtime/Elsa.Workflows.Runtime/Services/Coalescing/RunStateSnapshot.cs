@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// <see cref="Begin"/>, and nothing again after <see cref="End"/>. <see cref="End"/> can arrive from another thread
 /// (a cancellation callback, or a flow that captured the session), so all state is read and written under one lock.
 /// </remarks>
-internal sealed class RuntimeCoalescingRunStateSnapshot
+internal sealed class RunStateSnapshot
 {
     private readonly object _gate = new();
     private bool _begun;

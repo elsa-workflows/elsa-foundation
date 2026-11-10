@@ -26,14 +26,15 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     /// Begins a scope whose session starts from the workflow execution state the caller has just read for this run,
     /// under the run's lease, so the drain does not read it again before it has a state of its own.
     /// </summary>
-    internal IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode, RuntimeRunStateObservation? observedRunState)
+    internal IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode, RunStateObservation? observedRunState)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(mode);
 
         // The caller read the run's state through the registered store, which answers from an ambient session of the
         // same run when one has a state of its own. Such a session is one an earlier drain left behind in a flow that
-        // captured it, and its state may never have been stored. Then the read says nothing about the store.
+        // captured it, and its state may never have been stored. Then the read says nothing about the store. The
+        // caller's read and this call see the same ambient session, because nothing pushes one in between.
         if (sessionAccessor.Current is { } ambient && StringComparer.Ordinal.Equals(ambient.WorkflowExecutionId, workflowExecutionId))
             observedRunState = null;
 

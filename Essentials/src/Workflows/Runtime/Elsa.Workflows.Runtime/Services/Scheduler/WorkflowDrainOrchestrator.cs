@@ -244,11 +244,11 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // under the lease, so the drain's first session starts from it and does not read the same row again. A
         // replacement resolver says nothing about what it read, so the drain reads the state itself, as before.
         ResolvedPersistenceMode resolved;
-        RuntimeRunStateObservation? observedRunState = null;
+        RunStateObservation? observedRunState = null;
         if (_persistenceModeResolver is RuntimePersistenceModeResolver defaultResolver)
         {
             (resolved, var runState) = await defaultResolver.ResolveWithRunStateAsync(envelope, cancellationToken);
-            observedRunState = new RuntimeRunStateObservation(runState);
+            observedRunState = new RunStateObservation(runState);
         }
         else
         {
@@ -266,7 +266,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(
         RuntimeSchedulerDrainRequest request,
         ResolvedPersistenceMode resolved,
-        RuntimeRunStateObservation? observedRunState,
+        RunStateObservation? observedRunState,
         bool deliverFlushedContinuations,
         CancellationToken cancellationToken)
     {
@@ -452,7 +452,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             stopReason: stopReason);
 
         // Begin and replace in this async context so the ambient accessor frame is visible to the next dispatch.
-        (IRuntimeCoalescingDrainScope Scope, CancellationTokenRegistration Cancellation) BeginSegment(ResolvedPersistenceMode mode, RuntimeRunStateObservation? observed = null)
+        (IRuntimeCoalescingDrainScope Scope, CancellationTokenRegistration Cancellation) BeginSegment(ResolvedPersistenceMode mode, RunStateObservation? observed = null)
         {
             // Only the default factory takes the observation: it is what ends the session's answers again.
             var scope = observed is not null && _coalescingScopeFactory is RuntimeCoalescingDrainScopeFactory defaultFactory

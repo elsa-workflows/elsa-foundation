@@ -152,7 +152,7 @@ public sealed class RuntimeCoalescingSession
     internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; } = new();
 
     /// <summary>The workflow execution state the drain read when it began, until this session has one of its own.</summary>
-    internal RuntimeCoalescingRunStateSnapshot RunStateSnapshot { get; } = new();
+    internal RunStateSnapshot RunStateSnapshot { get; } = new();
 
     public bool CoalesceDurableValueReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
@@ -292,12 +292,14 @@ public sealed class RuntimeCoalescingSession
     /// Lets this session answer a read of its run's workflow execution state with what the drain read when it
     /// began, until the session has a state of its own or a write of that state is attempted. Only
     /// <see cref="RuntimeCoalescingDrainScopeFactory"/> calls it, for the reason given on
-    /// <see cref="BeginEmptyBaselines"/>. An observation that contradicts the mode the session was created under,
-    /// or that belongs to another run, is not used.
+    /// <see cref="BeginEmptyBaselines"/>. An observation that another session already started from, that
+    /// contradicts the mode this session was created under, or that belongs to another run, is not used.
     /// </summary>
-    internal void BeginRunStateSnapshot(RuntimeRunStateObservation observed)
+    internal void BeginRunStateSnapshot(RunStateObservation observed)
     {
         ArgumentNullException.ThrowIfNull(observed);
+        if (!observed.TryTake())
+            return;
         if (observed.State is null == HasDurableRecord)
             return;
         if (observed.State is { } state && !StringComparer.Ordinal.Equals(state.WorkflowExecutionId, WorkflowExecutionId))
