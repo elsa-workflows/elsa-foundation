@@ -89,6 +89,21 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Equal(1, fixture.DurableActivities.FindCount);
     }
 
+    // A direct save counts as possibly durable from the moment it is attempted, as a commit does. This save lands
+    // and then reports failure, as a lost acknowledgement does.
+    [Fact]
+    public async Task ActivitySavedPastTheWorkingSet_WhoseOutcomeIsUncertain_IsReadFromTheStore()
+    {
+        var fixture = new Fixture(NoRecord);
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        fixture.DurableActivities.SavesLandThenThrow = true;
+
+        await Assert.ThrowsAsync<IOException>(async () => await fixture.Activities.SaveAsync(NewActivityState("actexec-direct")));
+
+        Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-direct"));
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+    }
+
     // The rows of a commit count as possibly durable from the moment the write is attempted. This commit's write
     // lands and then reports failure, as a lost acknowledgement does.
     [Fact]
@@ -697,8 +712,14 @@ public sealed class CoalescingEmptyBaselineReadTests
         public IActivityExecutionStateStore Inner => inner;
         public int FindCount { get; private set; }
 
-        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(state, cancellationToken);
+        // Stands in for a save whose acknowledgement is lost after it landed.
+        public bool SavesLandThenThrow { get; set; }
+
+        public async ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
+        {
+            var saved = await inner.SaveAsync(state, cancellationToken);
+            return SavesLandThenThrow ? throw new IOException("The save's acknowledgement was lost.") : saved;
+        }
 
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
         {
@@ -865,7 +886,7 @@ public sealed class CoalescingEmptyBaselineReadTests
     private sealed class HeldLeaseOwnershipService : IRuntimeExecutionOwnershipService
     {
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new RuntimeExecutionLease("lease", workflowExecutionId, "owner", Now, DateTimeOffset.UtcNow.AddHours(1), 1));
+            ValueTask.FromResult(new RuntimeExecutionLease("lease", workflowExecutionId, "owner", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), 1));
 
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Applied, lease.FencingToken));
