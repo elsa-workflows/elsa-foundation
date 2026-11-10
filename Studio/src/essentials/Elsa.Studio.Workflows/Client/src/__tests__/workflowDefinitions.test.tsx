@@ -8,7 +8,7 @@ import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../workflow-editor/workflowDefinitionBrowseSession";
 import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
 import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
 
@@ -121,7 +121,7 @@ describe("workflow definition list", () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities"
       ? { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links, { rel: "workflow-templates", href: "design/workflows/templates" }] }, activityCapability] }
       : url.endsWith("design/workflows/templates") ? [template] : routeJson(url));
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const container = render(context(getJson), vi.fn(), weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
@@ -144,7 +144,7 @@ describe("workflow definition list", () => {
       if (url.endsWith("design/workflows/templates")) { await templatesRead; return [template]; }
       return routeJson(url);
     });
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const container = render(context(getJson), vi.fn(), weaver);
     const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
@@ -175,7 +175,7 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/tags")) { await tagsRead; return { items: [], permissions }; }
       return routeJson(url);
     });
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
@@ -201,7 +201,7 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/tags")) throw new Error("tags unavailable");
       return routeJson(url);
     });
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
@@ -218,7 +218,7 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/views")) throw new Error("views unavailable");
       return routeJson(url);
     });
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
@@ -238,7 +238,7 @@ describe("workflow definition list", () => {
       if (url.endsWith("design/activities/catalog")) { await catalogRead; return routeJson(url); }
       return routeJson(url);
     });
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const disclosed = recordDialogDisclosures(weaver);
     const container = render(context(getJson), vi.fn(), weaver);
@@ -256,7 +256,7 @@ describe("workflow definition list", () => {
   it("reopens a closed dialog through a Weaver revert with its own fresh catalog and templates, even after an authority reset (spec 1193 FR-023)", async () => {
     let revision = "t-r3";
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? templateCapabilities() : url.endsWith("design/workflows/templates") ? [savedTemplate(revision)] : routeJson(url));
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const weaver = registerWorkflowAgent(agent);
     const disclosed = recordDialogDisclosures(weaver, true);
     const first = context(getJson);

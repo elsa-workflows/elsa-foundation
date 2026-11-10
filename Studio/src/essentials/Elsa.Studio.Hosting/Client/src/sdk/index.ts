@@ -1601,15 +1601,15 @@ export const studioSlotIds = {
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
   settingEditors: "studio.setting-editors",
-  agentContextProviders: "studio.weaver.context-providers",
-  agentPromptStarters: "studio.weaver.prompt-starters",
-  agentPromptActions: "studio.weaver.prompt-actions",
-  agentCapabilities: "studio.weaver.capabilities",
-  agentActions: "studio.weaver.actions",
-  agentToolSlots: "studio.weaver.tool-slots",
-  agentToolContracts: "studio.weaver.tool-contracts",
-  agentResultRenderers: "studio.weaver.result-renderers",
-  agentResultControls: "studio.weaver.result-controls",
+  weaverContextProviders: "studio.weaver.context-providers",
+  weaverPromptStarters: "studio.weaver.prompt-starters",
+  weaverPromptActions: "studio.weaver.prompt-actions",
+  weaverCapabilities: "studio.weaver.capabilities",
+  weaverActions: "studio.weaver.actions",
+  weaverToolSlots: "studio.weaver.tool-slots",
+  weaverToolContracts: "studio.weaver.tool-contracts",
+  weaverResultRenderers: "studio.weaver.result-renderers",
+  weaverResultControls: "studio.weaver.result-controls",
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
@@ -1694,15 +1694,15 @@ export const studioSlots = {
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
-  agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
-  agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
-  agentPromptActions: defineStudioSlot({ id: studioSlotIds.agentPromptActions, kind: "weaver-prompt-action", title: "Weaver prompt actions", owner: hostSlotOwner() }),
-  agentCapabilities: defineStudioSlot({ id: studioSlotIds.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
-  agentActions: defineStudioSlot({ id: studioSlotIds.agentActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
-  agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
-  agentToolContracts: defineStudioSlot({ id: studioSlotIds.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
-  agentResultRenderers: defineStudioSlot({ id: studioSlotIds.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
-  agentResultControls: defineStudioSlot({ id: studioSlotIds.agentResultControls, kind: "weaver-result-control", title: "Weaver result controls", owner: hostSlotOwner() }),
+  weaverContextProviders: defineStudioSlot({ id: studioSlotIds.weaverContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
+  weaverPromptStarters: defineStudioSlot({ id: studioSlotIds.weaverPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
+  weaverPromptActions: defineStudioSlot({ id: studioSlotIds.weaverPromptActions, kind: "weaver-prompt-action", title: "Weaver prompt actions", owner: hostSlotOwner() }),
+  weaverCapabilities: defineStudioSlot({ id: studioSlotIds.weaverCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
+  weaverActions: defineStudioSlot({ id: studioSlotIds.weaverActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
+  weaverToolSlots: defineStudioSlot({ id: studioSlotIds.weaverToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
+  weaverToolContracts: defineStudioSlot({ id: studioSlotIds.weaverToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
+  weaverResultRenderers: defineStudioSlot({ id: studioSlotIds.weaverResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
+  weaverResultControls: defineStudioSlot({ id: studioSlotIds.weaverResultControls, kind: "weaver-result-control", title: "Weaver result controls", owner: hostSlotOwner() }),
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
@@ -2081,7 +2081,7 @@ export function createAiContributionApi(): StudioAiContributionApi {
   };
 }
 
-export function createAgentRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioWeaverRegistry {
+export function createWeaverRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioWeaverRegistry {
   const prompts = createAiContributionApi();
   const listeners = new Set<(available: boolean) => void>();
   let available = true;
@@ -2093,15 +2093,15 @@ export function createAgentRegistry(options: Pick<CreateStudioContributionRegist
       set(value) { if (value !== available) { available = value; for (const listener of listeners) listener(value); } },
       subscribe(listener) { listeners.add(listener); listener(available); return () => listeners.delete(listener); }
     },
-    contextProviders: createContributionRegistry<StudioWeaverContextProviderContribution>({ ...options, slot: studioSlots.agentContextProviders }),
-    promptActions: createContributionRegistry<StudioWeaverPromptActionContribution>({ ...options, slot: studioSlots.agentPromptActions }),
-    promptStarters: createContributionRegistry<StudioWeaverPromptStarterContribution>({ ...options, slot: studioSlots.agentPromptStarters }),
-    capabilities: createContributionRegistry<StudioWeaverCapabilityContribution>({ ...options, slot: studioSlots.agentCapabilities }),
-    actions: createContributionRegistry<StudioWeaverActionContribution>({ ...options, slot: studioSlots.agentActions }),
-    toolSlots: createContributionRegistry<StudioWeaverToolSlotContribution>({ ...options, slot: studioSlots.agentToolSlots }),
-    toolContracts: createContributionRegistry<StudioWeaverToolContractContribution>({ ...options, slot: studioSlots.agentToolContracts }),
-    resultRenderers: createContributionRegistry<StudioWeaverResultRendererContribution>({ ...options, slot: studioSlots.agentResultRenderers }),
-    resultControls: createContributionRegistry<StudioWeaverResultControlContribution>({ ...options, slot: studioSlots.agentResultControls })
+    contextProviders: createContributionRegistry<StudioWeaverContextProviderContribution>({ ...options, slot: studioSlots.weaverContextProviders }),
+    promptActions: createContributionRegistry<StudioWeaverPromptActionContribution>({ ...options, slot: studioSlots.weaverPromptActions }),
+    promptStarters: createContributionRegistry<StudioWeaverPromptStarterContribution>({ ...options, slot: studioSlots.weaverPromptStarters }),
+    capabilities: createContributionRegistry<StudioWeaverCapabilityContribution>({ ...options, slot: studioSlots.weaverCapabilities }),
+    actions: createContributionRegistry<StudioWeaverActionContribution>({ ...options, slot: studioSlots.weaverActions }),
+    toolSlots: createContributionRegistry<StudioWeaverToolSlotContribution>({ ...options, slot: studioSlots.weaverToolSlots }),
+    toolContracts: createContributionRegistry<StudioWeaverToolContractContribution>({ ...options, slot: studioSlots.weaverToolContracts }),
+    resultRenderers: createContributionRegistry<StudioWeaverResultRendererContribution>({ ...options, slot: studioSlots.weaverResultRenderers }),
+    resultControls: createContributionRegistry<StudioWeaverResultControlContribution>({ ...options, slot: studioSlots.weaverResultControls })
   };
 }
 

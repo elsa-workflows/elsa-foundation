@@ -249,7 +249,7 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return { type: "plan-updated", steps: normalizePlanSteps(payload) };
     case "progress": {
       // A provider notice (for example a conversation reset) is an explicit outcome, not transient progress. The server
-      // sends AgentProviderNotice(Code, Label): its label is the notice's text.
+      // sends WeaverProviderNotice(Code, Label): its label is the notice's text.
       const code = readString(payload, "code");
       if (code) return { type: "provider-notice", code, message: readString(payload, "label") || content || code };
       return { type: "progress", label: content || readString(payload, "label") || "Working…" };

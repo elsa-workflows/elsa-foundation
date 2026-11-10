@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
 import { useWorkflowPageAgent } from "../workflow-editor/useWorkflowLibraryAgent";
@@ -141,7 +141,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
   });
 
   it("applies an approved list change on its own page, returns the exact change in the receipt and reverts it", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     let state: WorkflowDefinitionBrowseLocation = location;
     function Page() {
@@ -183,7 +183,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
 
 describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
   it("keep their own contexts and handlers: unmounting one never removes the other's", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const states: Record<string, CreateWorkflowDraft> = {};
     function Dialog({ id }: { id: string }) {
@@ -218,7 +218,7 @@ describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
 
 describe("template editor working state (spec 1193 FR-024)", () => {
   it("is disclosed as its own resource with its persisted revision, never as a workflow definition", () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const draft = { id: "template-1", definitionId: "template-1", state: { rootActivity: { nodeId: "root", activityVersionId: flowchartActivity.activityVersionId, inputs: [], outputs: [] } },
       layout: [], activityPresentation: [], validationErrors: [] } as unknown as WorkflowDraft;

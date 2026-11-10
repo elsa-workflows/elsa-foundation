@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createAgentRegistry,
+  createWeaverRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -42,7 +42,7 @@ describe("secrets module", () => {
 
 function stubApi(): ElsaStudioModuleApi {
   const dashboardWidgets = createDashboardWidgetRegistry();
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
   return {
     host: {
       ...createEndpointContext("https://studio.example/"),

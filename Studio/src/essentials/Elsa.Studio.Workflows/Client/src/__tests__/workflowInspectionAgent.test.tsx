@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioWeaverContextAttachment, StudioWeaverRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
 import { useWorkflowInspectionContext } from "../workflow-editor/useWorkflowInspectionContext";
 import { WorkflowVersionHistory } from "../workflow-editor/WorkflowVersionHistory";
@@ -76,7 +76,7 @@ describe("run page context (spec 1193 FR-005, FR-029)", () => {
   });
 
   it("publishes the shown Run, follows the selected activity execution and withdraws it when unloaded or unmounted", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const host = mount();
     host.render(<Inspected kind="run" controller={controller} identity={{ workflowExecutionId: "run-1", activityExecutionId: null }} />);
@@ -99,7 +99,7 @@ describe("run page context (spec 1193 FR-005, FR-029)", () => {
 
 describe("Executable Inspector context (spec 1193 FR-028)", () => {
   it("publishes the loaded Executable bound to its hash, replaces it on a new hash and withdraws it when unloaded or unmounted", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const host = mount();
     host.render(<Inspected controller={controller} identity={{ artifactId: "a-1", artifactHash: "sha256:h1", sourceReferenceId: null }} />);
@@ -156,7 +156,7 @@ describe("Executable Inspector context (spec 1193 FR-028)", () => {
 
 describe("workflow version history context (spec 1193 FR-026)", () => {
   it("discloses the selected exact version, explains it with the context left to the page, and withdraws it on deselect", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const dispatchPrompt = vi.fn();
     agent.dispatchPrompt = dispatchPrompt;

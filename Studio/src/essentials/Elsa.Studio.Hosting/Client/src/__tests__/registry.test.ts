@@ -82,11 +82,11 @@ describe("studio registry", () => {
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
-    expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
-    expect(api.weaver.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
-    expect(api.weaver.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
-    expect(api.weaver.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
-    expect(api.weaver.promptActions.slot.id).toBe(studioSlotIds.agentPromptActions);
+    expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.weaverPromptStarters);
+    expect(api.weaver.toolSlots.slot.id).toBe(studioSlotIds.weaverToolSlots);
+    expect(api.weaver.toolContracts.slot.id).toBe(studioSlotIds.weaverToolContracts);
+    expect(api.weaver.resultRenderers.slot.id).toBe(studioSlotIds.weaverResultRenderers);
+    expect(api.weaver.promptActions.slot.id).toBe(studioSlotIds.weaverPromptActions);
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {

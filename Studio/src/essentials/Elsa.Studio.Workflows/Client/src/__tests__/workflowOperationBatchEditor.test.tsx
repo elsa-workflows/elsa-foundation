@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAgentRegistry, type StudioWeaverClientExecutionResult, type StudioWeaverPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry, type StudioWeaverClientExecutionResult, type StudioWeaverPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { WorkflowBatchUndoControl } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
@@ -27,7 +27,7 @@ const details = { definition: { id: "definition-1", name: "Nested workflow" } } 
 const catalogByVersion = new Map(batchCatalog.map(item => [item.activityVersionId, item]));
 const context = { baseUrl: "https://owned-persistence.example/", http: {} } as unknown as StudioEndpointContext;
 const noop = () => {};
-let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
+let agent: ReturnType<typeof createWeaverRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, persistence: ReturnType<typeof useWorkflowPersistence>;
 let editingAllowed: boolean, root: Root, container: HTMLDivElement, sequence = 0;
 // When set, the editor's compare-and-replace is held back so a test can commit it after the observation deadline.
@@ -55,7 +55,7 @@ function load() {
 
 beforeEach(() => {
   vi.mocked(updateDraft).mockReset().mockImplementation(async (_context, snapshot) => snapshot);
-  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createWeaverRegistry(); controller = registerWorkflowAgent(agent);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load();
 });

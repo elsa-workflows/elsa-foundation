@@ -1,5 +1,5 @@
 import {
-  createAgentRegistry,
+  createWeaverRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -15,7 +15,7 @@ import {
 
 /**
  * An honest, minimal implementation of `ElsaStudioModuleApi` built ENTIRELY from the
- * factories the SDK exports publicly (`createContributionRegistry`, `createAgentRegistry`,
+ * factories the SDK exports publicly (`createContributionRegistry`, `createWeaverRegistry`,
  * `createDialogController`, `createEndpointContext`). Nothing here is faked or `as any`-cast:
  * every registry is a real registry, `dialogs` is a real dialog controller, and `backend` is
  * a real endpoint context.
@@ -42,7 +42,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
   const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
   const dashboardWidgets = createDashboardWidgetRegistry();
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
 
   return {
     host,
