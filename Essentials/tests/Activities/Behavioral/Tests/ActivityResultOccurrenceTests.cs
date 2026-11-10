@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Activities.Behavioral.Infrastructure;
+using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -9,13 +11,18 @@ using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using DoActivity = Elsa.Activities.Do.Activities.Do;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+using ForActivity = Elsa.Activities.For.Activities.For;
+using ForEachActivity = Elsa.Activities.ForEach.Activities.ForEach;
+using WhileActivity = Elsa.Activities.While.Activities.While;
 
 namespace Elsa.Activities.Behavioral;
 
@@ -204,6 +211,125 @@ public sealed class ActivityResultOccurrenceTests
         Assert.Equal([produced[0], produced[0], produced[0], produced[0]], Reads(run, "node-e"));
     }
 
+    [Theory]
+    [InlineData("While", true)]
+    [InlineData("While", false)]
+    [InlineData("Do", true)]
+    [InlineData("Do", false)]
+    [InlineData("For", true)]
+    [InlineData("For", false)]
+    [InlineData("ForEach", true)]
+    [InlineData("ForEach", false)]
+    public async Task A_reader_in_a_loop_body_reads_the_producer_of_its_own_pass(string loop, bool declaresScope)
+    {
+        // The loop schedules every pass itself, so an earlier pass's body is never in a later pass's lineage.
+        await using var harness = NewHarness("Done", "Break");
+        var read = declaresScope ? Direct("node-p", "node-body") : ThroughParameter("node-p");
+        var endsItself = loop is "While" or "Do";
+        var body = Sequence("node-body", Stamp("node-p"), endsItself ? LoopingRead("node-c", read) : Read("node-c", read));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(LoopOver(loop, body)));
+
+        run.AssertWorkflowCompleted();
+        var produced = Occurrences(run, "node-p");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal(produced, Reads(run, "node-c"));
+    }
+
+    [Fact]
+    public async Task A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_reads_the_first_pass_result_when_it_declares_the_root_scope()
+    {
+        // Known defect, refused at publication as a cyclic back-edge. The Sequence completes on every pass, and a
+        // completed composite leads back to its last child, so the first pass's producer is in the second pass's
+        // lineage.
+        await using var harness = NewHarness("again", "done");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(SequenceOnLoop(Direct("node-p", "scope:root"))));
+
+        run.AssertWorkflowCompleted();
+        var produced = Occurrences(run, "node-p");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0], produced[0]], Reads(run, "node-c"));
+    }
+
+    [Fact]
+    public async Task A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_cannot_tell_the_passes_apart_without_a_scope()
+    {
+        // Known defect, refused at publication as a cyclic back-edge.
+        await using var harness = NewHarness("again", "done");
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(SequenceOnLoop(ThroughParameter("node-p"))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var produced = Occurrences(run, "node-p");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0]], Reads(run, "node-c"));
+        var blocked = await AssertBlockedAsync(harness, run, "node-c");
+        var failure = Assert.Throws<CausalActivityResultResolutionException>(() => ResolveWithoutScope(run, "node-p", blocked));
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Ambiguous, failure.Reason);
+        Assert.Equal(produced, failure.CandidateInvocationIds);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_reader_after_a_merge_node_reads_the_run_of_that_node_that_scheduled_it(bool declaresRootScope)
+    {
+        // A merge node runs once per arrival, without a loop. Each run schedules its own successor, so a reader's
+        // lineage holds only the run it follows.
+        await using var harness = NewHarness();
+        var read = declaresRootScope ? Direct("node-m", "scope:root") : ThroughParameter("node-m");
+        var root = Flowchart(
+            "node-flowchart",
+            [Probe("node-fork"), Probe("node-left"), Probe("node-right"), Stamp("node-m"), Read("node-r", read)],
+            [
+                Connect("node-fork", "node-left"), Connect("node-fork", "node-right"),
+                Connect("node-left", "node-m"), Connect("node-right", "node-m"), Connect("node-m", "node-r")
+            ],
+            startNodeId: "node-fork",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-m"] = new("merge") });
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        var produced = Occurrences(run, "node-m");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal(
+            produced.Order(StringComparer.Ordinal),
+            Completed(run, "node-r").Select(state => state.SchedulingActivityExecutionId).Order(StringComparer.Ordinal));
+        Assert.All(Completed(run, "node-r"), reader =>
+            Assert.Equal(reader.SchedulingActivityExecutionId, reader.InputSnapshot!.Values[ResultKey].InlineValue!.Value.GetString()));
+    }
+
+    // A -> S -> G, G -(again)-> A, G -(done)-> Z, where S is a Sequence of P then C, and C reads P.
+    private static ExecutableNode SequenceOnLoop(RuntimeInputBinding read) => Flowchart(
+        "node-flowchart",
+        [
+            Probe("node-a"), Sequence("node-s", Stamp("node-p"), Read("node-c", read)),
+            LoopingRead("node-g", Literal("loop gate")), Probe("node-z")
+        ],
+        [Connect("node-a", "node-s"), Connect("node-s", "node-g"), Connect("node-g", "node-a", "again"), Connect("node-g", "node-z", "done")],
+        startNodeId: "node-a");
+
+    // Two passes of the body: While and Do run until the body breaks, For and ForEach over two items.
+    private static ExecutableNode LoopOver(string loop, ExecutableNode body)
+    {
+        var (type, kind, version, slot, inputs) = loop switch
+        {
+            "While" => (typeof(WhileActivity), WhileActivity.StructureKind, WhileActivity.StructureSchemaVersion, WhileActivity.BodySlotName,
+                new Dictionary<string, object?> { ["Condition"] = true }),
+            "Do" => (typeof(DoActivity), DoActivity.StructureKind, DoActivity.StructureSchemaVersion, DoActivity.BodySlotName,
+                new Dictionary<string, object?> { ["Condition"] = true }),
+            "For" => (typeof(ForActivity), ForActivity.StructureKind, ForActivity.StructureSchemaVersion, ForActivity.BodySlotName,
+                new Dictionary<string, object?> { ["Start"] = 0, ["End"] = 2, ["Step"] = 1, ["EndInclusive"] = false }),
+            _ => (typeof(ForEachActivity), ForEachActivity.StructureKind, ForEachActivity.StructureSchemaVersion, ForEachActivity.BodySlotName,
+                new Dictionary<string, object?> { ["Collection"] = new[] { "first", "second" } })
+        };
+        return Nodes.Structural("node-loop", type, kind, version, new { body = body.ExecutableNodeId }, [new ExecutableChildSlot(slot, [body])], inputs);
+    }
+
     // A -> B -> C, C -(again)-> A, C -(done)-> Z. B produces, C reads B and decides whether to go round again.
     private static ExecutableNode Loop(RuntimeInputBinding read) => Flowchart(
         "node-flowchart",
@@ -255,6 +381,7 @@ public sealed class ActivityResultOccurrenceTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithFeature(services => new Expressions.ExpressionsFeature().ConfigureServices(services))
             .WithFeature(services => new Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services))
             .WithFeature(services => new Expressions.JavaScript.Jint.JintFeature().ConfigureServices(services))
@@ -364,6 +491,8 @@ public sealed class ActivityResultOccurrenceTests
 
     /// <summary>A reader that also closes a loop: it completes with the run's next scripted outcome.</summary>
     [ActivityOutcome("again")]
+    [ActivityOutcome(ActivityOutcomes.Done)]
+    [ActivityOutcome(ActivityOutcomes.Break)]
     [ActivityOutcome("done")]
     public sealed class LoopingReadActivity(LoopOutcomes outcomes) : Activity<ReadResult>
     {
