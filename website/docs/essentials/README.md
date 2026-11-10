@@ -6,6 +6,7 @@ For development and deeper operational guidance:
 
 - [Run the published Workbench and Studio images](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build) (Docker Compose guide).
 - [Build and run the backend from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md).
+- [Build and run Studio from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/docs/contributing/studio-source-quickstart.md) (monorepo `Studio/`, paired with a source-built Workbench).
 - [Choose a persistence mode](persistence-modes.md): how often a run is committed and what a crash costs.
 - [Undo completed steps with a compensation scope](compensation.md): run named steps and undo the completed ones, newest first, when a later step fails.
 - Read the [Architecture tour](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture-tour.md), then [How a workflow executes](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/how-a-workflow-executes.md).
