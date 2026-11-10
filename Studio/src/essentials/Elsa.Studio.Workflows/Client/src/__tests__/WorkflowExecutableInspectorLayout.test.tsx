@@ -3,7 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowExecutableInspectorPage, WorkflowExecutablesPage } from "../workflow-editor/pages";
+import { WorkflowExecutablesPage } from "../workflow-editor/pages";
+import { WorkflowExecutableInspectorPage } from "../workflow-editor/executableInspectorPage";
 import type { ExecutableInspectorIdentity } from "../workflow-editor/executableInspectorIdentity";
 
 vi.mock("../workflow-editor/WorkflowExecutableInspector", () => ({

@@ -1,4 +1,5 @@
 import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import "./executableInspector.css";
 
 export function WorkflowExecutableCanvasHeader({
   displayName,

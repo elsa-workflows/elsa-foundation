@@ -8,15 +8,10 @@ import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 import { readRunSelection } from "./runSelectionUrl";
-import {
-  formatExecutableInspectorPageTitle,
-  type ExecutableInspectorIdentity
-} from "./executableInspectorIdentity";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
 const WorkflowExecutables = lazy(() => import("./WorkflowExecutables").then(module => ({ default: module.WorkflowExecutables })));
-const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
 const WorkflowInstances = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstances })));
 const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstanceDetailsWorkbench })));
 
@@ -134,55 +129,6 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
-  const [location, setLocation] = useState(readExecutableInspectorLocation);
-  const [identity, setIdentity] = useState<ExecutableInspectorIdentity | null>(null);
-
-  useEffect(() => {
-    const syncFromLocation = () => {
-      setLocation(readExecutableInspectorLocation());
-      setIdentity(null);
-    };
-    window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
-
-  // Selecting a reference re-renders the same artifact from that reference's Layout Sidecar; the
-  // choice is part of the page address (?ref=) so it survives reload and can be shared.
-  const selectReference = useCallback((sourceReferenceId: string | null) => {
-    const url = new URL(window.location.href);
-
-    if (sourceReferenceId) {
-      url.searchParams.set("ref", sourceReferenceId);
-    } else {
-      url.searchParams.delete("ref");
-    }
-
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    setLocation(readExecutableInspectorLocation());
-  }, []);
-
-  const pageTitle = formatExecutableInspectorPageTitle(identity?.definitionName, location.artifactId, identity?.version);
-  const resolvedName = identity?.definitionName?.trim();
-
-  return (
-    <WorkflowsPageFrame title={pageTitle} eyebrow={resolvedName ? "Inspector" : undefined} workbench>
-      <WorkflowLazyBoundary label="executable inspector">
-        <WorkflowExecutableInspectorWorkbench
-          context={context}
-          ai={ai}
-          weaver={weaver}
-          runInputEditors={runInputEditors}
-          artifactId={location.artifactId}
-          sourceReferenceId={location.sourceReferenceId}
-          onSelectReference={selectReference}
-          onIdentityChange={setIdentity}
-        />
-      </WorkflowLazyBoundary>
-    </WorkflowsPageFrame>
-  );
-}
-
 export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame>
@@ -250,17 +196,16 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, eyebrow, children }: {
+function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
   title?: string;
   context?: React.ReactNode;
   workbench?: boolean;
   definitions?: boolean;
-  eyebrow?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      {title ? <StudioPageHeader title={title} eyebrow={eyebrow} headingLevel={2} actions={context} /> : null}
+      {title ? <StudioPageHeader title={title} headingLevel={2} actions={context} /> : null}
       {children}
     </section>
   );
@@ -272,14 +217,6 @@ function readDefinitionIdFromUrl() {
 
 function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
-}
-
-function readExecutableInspectorLocation() {
-  const match = /^\/workflows\/executables\/([^/]+)$/.exec(window.location.pathname);
-  return {
-    artifactId: match ? decodeURIComponent(match[1]) : "",
-    sourceReferenceId: new URLSearchParams(window.location.search).get("ref")
-  };
 }
 
 function readWorkflowExecutionIdFromUrl(pathname = window.location.pathname) {
