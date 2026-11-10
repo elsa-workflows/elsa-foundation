@@ -1,11 +1,9 @@
 # Background Execution Eligibility Is One Set Of Criteria, Declared By The Activity And Enforced In One Place
 
-Status: proposed (2026-10-28). Joey Barten (@j03y-nxxbz) drafted it from analysis A-2 on epic
-[#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052). Acceptance needs agreement with Sipke Schoorstra
-(@sfmskywalker) and Frans van Ek (@FransVanEk).
+Status: proposed. It follows from analysis A-2.
 
-Part of epic #3052. It records the eligibility rules of spec 241
-([native durable background activities](../../specs/241-native-durable-offload/spec.md), #2914) as an architecture
+It records the eligibility rules of spec 241
+([native durable background activities](../../specs/241-native-durable-offload/spec.md)) as an architecture
 decision, adds three criteria, and requires the rules to live in one place. It depends on
 [ADR 0092](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) (proposed) for how a background step's
 reads and writes are protected.
@@ -87,19 +85,17 @@ hold. The **Check** column says who must guarantee it under this ADR; the **Toda
 background step would need does not exist yet, and they are refused clearly until it does, never by silently
 returning missing values. Each names what lifts it:
 
-- **C3** lifts with the ADR 0046 value model, where `Any` is plain JSON with a defined adapter
-  ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), spec S-8).
+- **C3** lifts with the ADR 0046 value model, where `Any` is plain JSON with a defined adapter (spec S-8).
 - **C5** lifts with a worker transport that carries protection (encryption and redaction) symmetrically for inputs,
   results, projections and session data. Secret references resolve at worker activation; secret material does not
   enter ordinary persisted snapshots because a step moves to a worker.
 - **C9** lifts with a variable session for background steps through the ADR 0092 mechanism, with isolation, read
   recording and atomic finalization on the coordinator. A-3 is agreed in direction: writes are a general capability
-  (folded into the ADR 0090 amendment,
-  [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)).
+  (folded into the ADR 0090 amendment).
 
 When one lifts, the criterion changes in this ADR, not elsewhere. Nothing changes in behaviour today. Placement stays
-the workflow author's choice within what the host supports (decision 5). This follows @sfmskywalker's position of
-29 October: support based on capability, not blanket bans on sessions, `Any` or sensitive values.
+the workflow author's choice within what the host supports (decision 5). The principle is support based on
+capability, not blanket bans on sessions, `Any` or sensitive values.
 
 ### 3. The enforced criteria live in one place
 
@@ -157,19 +153,3 @@ cancellation. They stay declarations, with documentation as the guardrail.
 **Allow variable access from the worker now.** Waits for A-3 and ADR 0090. A worker reading variables would read
 state that can be older than the coordinator's; ADR 0092's lost-update rule would cover the write side, but the
 question of whether it should exist belongs to A-3.
-
-## Questions for the reviewers
-
-@sfmskywalker @FransVanEk:
-
-1. **Criteria instead of a list** (decision 1). Agree?
-2. **The new criteria C7, C8 and C9.** Are they right, and is anything missing? For example, a bound on how long a body
-   may run, or a rule about which services a body may use.
-3. **One place** (decision 3). Any reason the publish and run-time checks must stay separate lists?
-4. **Limits of today's support** (changed 30 October). C3, C5 and C9 are refused until the support they name exists.
-   Sipke, does this match your capability-based position, and is the list of what lifts each one right?
-5. **Provider order.** Must a background result be applied in the same order on every provider, or is the order
-   between unordered branches undefined anyway (D-8) and only the write history needs to show it?
-6. **Inputs.** Results must be durable and not hidden (C4, C5), but the input snapshot that travels to the worker is
-   not checked the same way. Should there be an input-side criterion, or is the asymmetry intended (inputs stay inside
-   the admission record, under the same protection as any committed snapshot)?
