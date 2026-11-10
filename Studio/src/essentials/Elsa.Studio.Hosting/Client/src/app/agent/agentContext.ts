@@ -52,7 +52,7 @@ export async function collectAgentContext(
       candidateIds.add(item.id);
     }
     if (attachments.length + snapshot.length > MAX_ATTACHMENTS || snapshot.some(item => (item.summary?.length ?? 0) > MAX_SUMMARY_LENGTH || (JSON.stringify(item.content)?.length ?? 0) > MAX_CONTENT_LENGTH)) {
-      diagnostics.push({ contributorId, code: "agent.context.budget_exceeded", message: "Context exceeds the supported candidate budget; contribute a bounded snapshot or an authorized detail tool.", required });
+      diagnostics.push({ contributorId, code: "weaver.context.budget_exceeded", message: "Context exceeds the supported candidate budget; contribute a bounded snapshot or an authorized detail tool.", required });
       return;
     }
     attachments.push(...snapshot);
@@ -74,7 +74,7 @@ export async function collectAgentContext(
       return { collection: await Promise.race([Promise.resolve().then(() => { signal?.throwIfAborted(); return provider.collect({ surface, mode, sessionId, signal: controller.signal }); }), interrupted]) };
     } catch {
       signal?.throwIfAborted();
-      diagnostics.push({ contributorId: provider.id, code: deadline ? "agent.context.deadline" : "agent.context.contributor_failed", message: deadline ? "Context contributor did not finish within its deadline." : "Context contributor could not provide evidence.", required: provider.required === true });
+      diagnostics.push({ contributorId: provider.id, code: deadline ? "weaver.context.deadline" : "weaver.context.contributor_failed", message: deadline ? "Context contributor did not finish within its deadline." : "Context contributor could not provide evidence.", required: provider.required === true });
       return null;
     } finally {
       if (timer !== undefined) clearTimeout(timer);

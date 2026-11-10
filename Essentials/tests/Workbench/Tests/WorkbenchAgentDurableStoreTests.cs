@@ -16,7 +16,7 @@ namespace Elsa.Workbench.Tests;
 /// </summary>
 public sealed class WorkbenchAgentDurableStoreTests : IDisposable
 {
-    private const string Feature = "FoundationAgentEntityFrameworkCore";
+    private const string Feature = "WeaverEntityFrameworkCore";
     private const string AdminUsername = "admin";
     private const string AdminPassword = "Password123!";
 
@@ -52,7 +52,7 @@ public sealed class WorkbenchAgentDurableStoreTests : IDisposable
         // The owner list is answered by the store's own query, so it needs the migrated SQLite tables. The in-memory
         // default would answer too, which is why the database file must also exist and hold the migrated schema.
         using var client = await SignedInClientAsync(workbench);
-        using var list = await client.GetAsync("/_elsa/agent/sessions?take=1");
+        using var list = await client.GetAsync("/_elsa/weaver/sessions?take=1");
         Assert.True(list.StatusCode == HttpStatusCode.OK, $"The session list failed with {(int)list.StatusCode}: {await list.Content.ReadAsStringAsync()}");
         Assert.NotNull((await list.Content.ReadFromJsonAsync<JsonNode>())!["data"]!["items"]!.AsArray());
         Assert.True(File.Exists(database) && new FileInfo(database).Length > 0, "The configured SQLite database was not created and migrated.");

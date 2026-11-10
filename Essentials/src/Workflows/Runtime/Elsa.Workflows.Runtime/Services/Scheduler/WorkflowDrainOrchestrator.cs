@@ -440,7 +440,14 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             var scope = _coalescingScopeFactory!.Begin(request.WorkflowExecutionId, mode);
             scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
             var registration = cancellationToken.Register(
-                static state => ((RuntimeCoalescingSession)state!).DisableDurableValuePageReuse(),
+                static state =>
+                {
+                    var session = (RuntimeCoalescingSession)state!;
+                    session.DisableDurableValuePageReuse();
+                    // A failed lease heartbeat cancels the drain. From then on the lease no longer stands behind
+                    // what the session knows, and a read without the drain's token would still be answered.
+                    session.EndEmptyBaselines();
+                },
                 scope.Session);
             return (scope, registration);
         }

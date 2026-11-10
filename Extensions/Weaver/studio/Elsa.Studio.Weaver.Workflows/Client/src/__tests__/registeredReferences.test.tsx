@@ -7,12 +7,12 @@ import { registerWorkflowAgent } from "../../../../../../../Studio/src/essential
 import server from "./workflowAgentRegistrations.json";
 
 // Spec 1193 SC-007 (FR-019): over the composed Studio contributions of both Workflows packages and the server registrations
-// of Elsa.Agent.Workflows (workflowAgentRegistrations.json, which Elsa.Agent.Tests holds equal to the composed server), every
+// of Elsa.Weaver.Workflows (workflowAgentRegistrations.json, which Elsa.Weaver.Tests holds equal to the composed server), every
 // prompt, guidance text and renderer references only registered tools and result kinds, and each contribution is registered
 // under its own package's module identity.
 const workflowsModule = "Elsa.Studio.Workflows";
 const weaverWorkflowsModule = "Elsa.Studio.Weaver.Workflows";
-// The Design-side module (Elsa.Agent.Workflows) and the Runtime-side package (Elsa.Agent.Workflows.Runtime, spec 1193 slices F
+// The Design-side module (Elsa.Weaver.Workflows) and the Runtime-side package (Elsa.Weaver.Workflows.Runtime, spec 1193 slices F
 // and G, with its Executable and Run sources) register under the same Studio module identity; a combined host composes both.
 const allTools = [...server.tools, ...server.runtime.tools];
 const toolNames = new Set(allTools.map(tool => tool.name));

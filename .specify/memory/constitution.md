@@ -1,4 +1,10 @@
 <!--
+SYNC IMPACT REPORT — 6.4.0 -> 6.5.0 (2026-11-09)
+MINOR: admits optional Elsa.Weaver to §E2.1 (the Studio assistant: sessions, proposals, audit and provider modules, today the eight packages moved from Elsa.Agent.*) and fixes Elsa.Agent as the domain of user-defined agents (ADR 0094 amendment of 2026-11-09, issue #4027). §E6 R8 names both reservations and its exception list follows the moved Elsa.Weaver.Api. No other domain purpose, package boundary or framework pin changes.
+Authority: Sipke Schoorstra decided the roots, the clean break and the sequencing in the owning session on 2026-11-09 (https://github.com/elsa-workflows/elsa-foundation/issues/4027); the program lead records the admission under the standing delegated authority, as for Etl, Rules and Decisions.
+Propagation: docs/reference/elsa-domain-tree.md, docs/reference/elsa-naming.md, docs/reference/elsa3-permission-mapping.md, docs/reference/package-renames.md, ADR 0094, glossary. Spec Kit templates pin no domain names and require no change. Framework remains v6.1.0.
+-->
+<!--
 SYNC IMPACT REPORT — 6.3.0 -> 6.4.0 (2026-11-05)
 MINOR: admits optional Elsa.Decisions to §E2.1 for #3602/spec1195, ADR0095. Its purpose is versioned input-to-result business decisions with actual explanations. Existing Rules finite-inference semantics and the shared execution authority remain unchanged.
 Authority: Sipke Schoorstra explicitly approved the separate domain and necessary constitutional amendment in the owning session on 2026-11-05; approval receipt: https://github.com/elsa-workflows/elsa-foundation/issues/3602#issuecomment-6670626201. This is owner-authorized admission, not a multi-architect consensus claim.
@@ -48,7 +54,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.4.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-11-05 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
+**Version:** 6.5.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-11-09 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 
@@ -74,7 +80,7 @@ The framework Gate index applies. Elsa-specific gates with an automated check (t
 
 ### §E2.1 The Elsa domain tree
 
-The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Decisions`, `Elsa.Diagnostics`, `Elsa.Etl`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Rules`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) (published on the `generated-maps` branch). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
+The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Decisions`, `Elsa.Diagnostics`, `Elsa.Etl`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Rules`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Weaver`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) (published on the `generated-maps` branch). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 
@@ -142,9 +148,9 @@ Every activity the design-time picker can show is a persisted `ActivityDefinitio
 - **R5** Concrete domain nouns over borrowed infra metaphors; kept jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
 - **R6** One concept, one head noun; the head makes the distinction.
 - **R7** Default-implementation prefixes `Default…`, `InMemory…`, `Noop…` and the provider prefix `Ef…`.
-- **R8** `Agent` is reserved for the AI-assistant domain; workflow-execution roles use `Actor`/`Worker`/`Host`.
+- **R8** `Agent` is reserved for user-defined agents (the `Elsa.Agent` domain) and `Weaver` for the Studio assistant (the `Elsa.Weaver` domain); workflow-execution roles use `Actor`/`Worker`/`Host`.
 
-**Exceptions:** provenance `Source…` names, OpenTelemetry `ActivitySource` mirrors and the existing origin-value `…Source` types; the serialized single-payload `…Response` types in `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api`; older `…State` enums with serialized values; the scheduler `…WorkHandler` family. New and renamed types conform or record an explicit exception. **Protected names (NM-14):** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope` and `Slot` are exempt from shortening pressure.
+**Exceptions:** provenance `Source…` names, OpenTelemetry `ActivitySource` mirrors and the existing origin-value `…Source` types; the serialized single-payload `…Response` types in `Elsa.Weaver.Api` and `Elsa.Foundation.Identity.Api`; older `…State` enums with serialized values; the scheduler `…WorkHandler` family. New and renamed types conform or record an explicit exception. **Protected names (NM-14):** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope` and `Slot` are exempt from shortening pressure.
 
 ## §E7 CI test tiers
 

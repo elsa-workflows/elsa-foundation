@@ -26,7 +26,7 @@ from runtime import Http, normal_sign_in, private_json, RUNTIME_ENVIRONMENT
 HOME_PREFERENCES_PATH = "/_elsa/studio/preferences/home-layout"
 NATIVE_HOME = "/_elsa/studio/home-layout"
 HOST_HEADER = "X-Elsa-Studio-Host-Id"
-BASE_GRANTS = ["agent:use", "agent/proposals:manage", "agent/audit:read", "studio/preferences:read", "studio/preferences:write"]
+BASE_GRANTS = ["weaver:use", "weaver/proposals:manage", "weaver/audit:read", "studio/preferences:read", "studio/preferences:write"]
 
 
 def atomic_json(path, value):

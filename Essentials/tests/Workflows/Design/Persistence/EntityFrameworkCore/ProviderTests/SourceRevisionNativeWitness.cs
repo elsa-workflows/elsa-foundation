@@ -34,6 +34,7 @@ internal static class SourceRevisionNativeWitness
             var agents = new EfAgentSources<WorkflowsDesignDbContext>(db, access);
             await agents.CreateAsync("writer", "draft", "Copywriter", content);
             await agents.CreateAsync("WRITER", "draft", "Other writer", content);
+            await agents.CreateAsync("writer ", "draft", "Padded identity", content);
             Assert.Equal(2, (await agents.ListAsync("writer", 0, 1)).Total);
             Assert.Empty((await agents.ListAsync("writer", 9, 1)).Items);
             Assert.Equal(0, (await new EfAgentSources<WorkflowsDesignDbContext>(db, new Access(tenant + "-other")).ListAsync(null, 0, 10)).Total);
@@ -76,7 +77,9 @@ internal static class SourceRevisionNativeWitness
         await using (var db = create(fixture.ConnectionString))
         {
             var store = new EfSourceRevisions(db, scope);
-            await store.DiscardAsync("writer", "draft", 2);
+            await store.CaptureAsync("writer", "draft", 2, "retained-history");
+            await new EfAgentSources<WorkflowsDesignDbContext>(db, access).SaveAsync("writer", "draft", 2, "Copywriter", content with { Instructions = "edited after capture" });
+            await store.DiscardAsync("writer", "draft", 3);
             await store.UnpinAsync("writer", "draft", snapshotId, "capture:review");
         }
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,7 +97,62 @@ internal static class SourceRevisionNativeWitness
             if (delete.Result is null) { Assert.False(exists); Assert.False(pinned); Assert.NotNull(pin.Result); }
             var retainedCopy = await check.Set<SourceWorkingCopy>().SingleAsync(x => x.Key == EfSourceRevisions.CopyKey(scope, "writer", "draft"));
             Assert.True(retainedCopy.Discarded);
-            Assert.Contains("winner", retainedCopy.Content);
+            Assert.Contains("edited after capture", retainedCopy.Content);
+            var agents = new EfAgentSources<WorkflowsDesignDbContext>(check, access);
+            var directory = await agents.ListDefinitionsAsync(null, 0, 10);
+            Assert.Equal(3, directory.Total);
+            Assert.Equal(3, directory.Items.Count);
+            Assert.Null(Assert.Single(directory.Items, x => x.AgentId == "writer").DraftId);
+            Assert.Equal("draft", Assert.Single(directory.Items, x => x.AgentId == "WRITER").DraftId);
+            Assert.Equal("draft", Assert.Single(directory.Items, x => x.AgentId == "writer ").DraftId);
+            var historical = await agents.ListDefinitionsAsync("Copywriter", 0, 10);
+            Assert.Equal(1, historical.Total);
+            Assert.Equal("writer", Assert.Single(historical.Items).AgentId);
+            Assert.Null(Assert.Single(historical.Items).DraftId);
+            await agents.CreateAsync("writer", "new-draft", "Recreated writer", content);
+            var matchedHistory = await agents.ListDefinitionsAsync("Copywriter", 0, 1);
+            Assert.Equal(1, matchedHistory.Total);
+            var current = Assert.Single(matchedHistory.Items);
+            Assert.Equal("writer", current.AgentId);
+            Assert.Equal("new-draft", current.DraftId);
+            Assert.Equal("Recreated writer", current.Name);
+            var beyond = await agents.ListDefinitionsAsync(null, 3, 1);
+            Assert.Equal(3, beyond.Total); Assert.Empty(beyond.Items);
+            var boundary = new string('x', 255);
+            await agents.CreateAsync(boundary, "draft", "Boundary identity", content);
+            await agents.CreateAsync(boundary + " ", "draft", "Boundary padded identity", content);
+            var boundaryPage = await agents.ListDefinitionsAsync("Boundary", 0, 10);
+            Assert.Equal(2, boundaryPage.Total);
+            Assert.Contains(boundaryPage.Items, x => x.AgentId == boundary);
+            Assert.Contains(boundaryPage.Items, x => x.AgentId == boundary + " ");
+            var shared = new EfSourceRevisions(check, scope);
+            var newRevision = await agents.CaptureAsync("writer", "new-draft", 0, "new-copy-review");
+            var paddedRevision = await agents.CaptureAsync("writer ", "draft", 0, "padded-review");
+            var history = await agents.SourceHistoryAsync("writer");
+            Assert.Equal(history.Total, history.Items.Count);
+            Assert.Contains(history.Items, x => x.Id == newRevision.Id && x.SourceCopyId == "new-draft");
+            var original = Assert.Single(history.Items, x => x.OperationId == "retained-history");
+            Assert.Equal("draft", original.SourceCopyId);
+            Assert.Equal("winner", original.Content.Instructions);
+            Assert.Equal("winner", (await agents.FindSourceRevisionAsync("writer", original.Id))!.Content.Instructions);
+            Assert.Null(await agents.FindSourceRevisionAsync("writer", paddedRevision.Id));
+            Assert.Null(await agents.FindSourceRevisionAsync("writer ", original.Id));
+            Assert.Null(await shared.FindSourceSnapshotAsync("writer", original.Id + " "));
+            var beyondHistory = await agents.SourceHistoryAsync("writer", history.Total, 1);
+            Assert.Equal(history.Total, beyondHistory.Total); Assert.Empty(beyondHistory.Items);
+
+            // Authority is deliberately outside ScopeHash; foreign ownership must be
+            // excluded in SQL before counts/pages, including SQL Server padded equality.
+            var foreign = new EfSourceRevisions(check, scope with { Authority = scope.Authority + " " });
+            await foreign.CreateAsync("writer", "foreign-authority", "Private writer", "foreign/1", "private instructions");
+            var foreignSnapshot = await foreign.CaptureAsync("writer", "foreign-authority", 0, "foreign-review");
+            Assert.Null(await agents.FindSourceRevisionAsync("writer", foreignSnapshot.Key));
+            Assert.Equal(history.Total, (await agents.SourceHistoryAsync("writer", 0, 1)).Total);
+            Assert.Equal(history.Total, (await agents.SourceHistoryAsync("writer", history.Total, 1)).Total);
+            var ownDirectory = await agents.ListDefinitionsAsync(null, 0, 10);
+            Assert.Equal(5, ownDirectory.Total);
+            Assert.DoesNotContain(ownDirectory.Items, x => x.Name == "Private writer");
+            Assert.Equal(0, (await agents.ListDefinitionsAsync("Private writer", 0, 10)).Total);
         }
 
         async Task<SourceRevisionException?> Compete(bool retain)

@@ -273,11 +273,11 @@ class VersionTurnTests(unittest.TestCase):
                                              check_item=check, text=text)
 
     def test_admission_refusals_name_their_own_cause(self):
-        value = {"error": {"code": "agent.context.incomplete", "message": TEXTS["version-not-found"]}}
-        self.assertEqual("agent.context.incomplete", require_admission_refused(Response(400, value), TEXTS["version-not-found"])["code"])
+        value = {"error": {"code": "weaver.context.incomplete", "message": TEXTS["version-not-found"]}}
+        self.assertEqual("weaver.context.incomplete", require_admission_refused(Response(400, value), TEXTS["version-not-found"])["code"])
         for response, text in ((Response(200, value), TEXTS["version-not-found"]), (Response(400, value), TEXTS["version-denied"]),
                                (Response(503, value), TEXTS["version-not-found"]),
-                               (Response(400, {"error": {"code": "agent.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
+                               (Response(400, {"error": {"code": "weaver.policyDenied", "message": TEXTS["version-not-found"]}}), TEXTS["version-not-found"])):
             with self.assertRaises(RuntimeError): require_admission_refused(response, text)
 
 

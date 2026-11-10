@@ -32,7 +32,7 @@ import urllib.request
 from artifacts import REPO, check, sha
 from runtime import private_json
 
-PREFIX = "/_elsa/agent"
+PREFIX = "/_elsa/weaver"
 TURN_TERMINALS = frozenset({"completed", "toolApprovalRequested", "turnCancelled", "error"})
 CREDENTIALS = {"authorization", "proxy-authorization", "cookie", "set-cookie", "password", "apikey",
                "githubtoken", "runtimeconnectiontoken", "accesstoken", "refreshtoken", "clientsecret"}

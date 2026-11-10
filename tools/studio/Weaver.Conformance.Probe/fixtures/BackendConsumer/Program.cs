@@ -7,9 +7,9 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Nuplane;
-using Elsa.Agent.Anthropic.Services;
-using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.GitHubCopilot.Services;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.GitHubCopilot.Services;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -119,15 +119,15 @@ builder.Services.AddCShellsAspNetCore(shells => shells.WithHostAssemblies()
         typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature).Assembly,
         typeof(Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
-        typeof(Elsa.Agent.FoundationAgentAbstractionsFeature).Assembly,
-        typeof(Elsa.Agent.Api.FoundationAgentApiFeature).Assembly,
-        typeof(Elsa.Agent.Workflows.FoundationWorkflowsAgentFeature).Assembly,
+        typeof(Elsa.Weaver.WeaverFeature).Assembly,
+        typeof(Elsa.Weaver.Api.WeaverApiFeature).Assembly,
+        typeof(Elsa.Weaver.Workflows.WeaverWorkflowsFeature).Assembly,
         // Spec 1193 slice F: the Runtime-side Weaver workflows package (the Executable context and read tool).
-        typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
-        typeof(Elsa.Agent.GitHubCopilot.GitHubCopilotAgentFeature).Assembly,
-        typeof(Elsa.Agent.Anthropic.AnthropicAgentFeature).Assembly,
+        typeof(Elsa.Weaver.Workflows.Runtime.WeaverWorkflowsRuntimeFeature).Assembly,
+        typeof(Elsa.Weaver.GitHubCopilot.WeaverGitHubCopilotFeature).Assembly,
+        typeof(Elsa.Weaver.Anthropic.WeaverAnthropicFeature).Assembly,
         // #3441: discoverable, enabled only when the restart inventory configures durable recovery.
-        typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
+        typeof(Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature).Assembly,
         typeof(Elsa.Secrets.Features.SecretsFeature).Assembly,
         typeof(Elsa.Modularity.Api.ModularityApiFeature).Assembly)
     .WithNuplaneFeatureDiscovery(integration => { integration.Enabled = true; integration.RefreshTrigger = NuplaneRefreshTrigger.ChangedOrPending; integration.AutoReload = true; })
@@ -201,7 +201,7 @@ await app.WaitForShutdownAsync();
 
 static object WorkflowAgentObservation(IServiceProvider services)
 {
-    var assembly = typeof(Elsa.Agent.Workflows.FoundationWorkflowsAgentFeature).Assembly;
+    var assembly = typeof(Elsa.Weaver.Workflows.WeaverWorkflowsFeature).Assembly;
     string[] catalogs;
     try { catalogs = services.GetServices<Elsa.Activities.Design.Core.Contracts.IActivityAuthoringCatalog>().Select(item => item.GetType().Name).ToArray(); }
     catch (Exception failure) { catalogs = ["unresolvable:" + failure.GetType().Name]; }

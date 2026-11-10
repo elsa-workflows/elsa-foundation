@@ -166,7 +166,7 @@ UNOFFERED_FRAMES = {
     "copilot": ["started", "contextAdmitted", "error"],
     "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "error"],
 }
-UNOFFERED_ERROR = {"copilot": "agent.provider.github_copilot.turn_failed", "anthropic": "agent.provider.anthropic.turn_failed"}
+UNOFFERED_ERROR = {"copilot": "weaver.provider.github_copilot.turn_failed", "anthropic": "weaver.provider.anthropic.turn_failed"}
 UNOFFERED_MESSAGE = "The commanded tool is not uniquely advertised by the actual adapter."
 # How each adapter hands a refused tool outcome back: Copilot's function returns, Anthropic continues with the results.
 OUTCOME_ROWS = {"copilot": ".return", "anthropic": ".continuation"}

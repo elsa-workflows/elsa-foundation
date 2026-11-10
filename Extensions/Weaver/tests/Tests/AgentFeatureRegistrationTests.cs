@@ -1,0 +1,148 @@
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Extensions;
+using Elsa.Weaver.Core.Models;
+using Elsa.Weaver.Core.Services;
+using Elsa.Weaver.GitHubCopilot;
+using Elsa.Weaver.GitHubCopilot.Services;
+using Elsa.Weaver.Workflows;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Elsa.Weaver.Tests;
+
+public sealed class AgentFeatureRegistrationTests
+{
+    [Fact]
+    public async Task Github_copilot_feature_registers_provider_facade()
+    {
+        using var provider = AgentTestServices.Create(services => new WeaverGitHubCopilotFeature().ConfigureServices(services));
+        using var scope = provider.CreateScope();
+        var agentProvider = Assert.Single(scope.ServiceProvider.GetServices<IAgentProvider>());
+        Assert.IsType<WeaverGitHubCopilotProvider>(agentProvider);
+        var diagnostics = await agentProvider.GetDiagnosticsAsync();
+        Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
+        Assert.Equal(AgentProviderRiskProfile.ReviewRequired, diagnostics.RiskProfile);
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
+        Assert.Contains(AgentProviderOperation.Streaming, diagnostics.SupportedOperations);
+    }
+
+    [Fact]
+    public void Workflow_agent_feature_registers_capabilities_and_context()
+    {
+        using var root = AgentTestServices.Create(services => new WeaverWorkflowsFeature().ConfigureServices(services));
+        using var scope = root.CreateScope();
+        var provider = scope.ServiceProvider;
+
+        Assert.Contains(provider.GetServices<IAgentCapabilityProvider>(), x => x.GetCapabilitiesAsync().AsTask().Result.Any(c => c.Id == "workflow.explain"));
+        Assert.Contains(provider.GetServices<IAgentContextProvider>(), x => x.ScopeKind == "workflow");
+    }
+
+    [Fact]
+    public async Task Deterministic_provider_streams_contract_events_without_external_sdk()
+    {
+        var provider = new DeterministicAgentProvider();
+        var diagnostics = await provider.GetDiagnosticsAsync();
+        var session = new AgentSession(
+            "session-1",
+            "Test session",
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            DeterministicAgentProvider.Id,
+            "explain",
+            AgentPolicy.Default,
+            AgentSessionStatus.Active,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null,
+            new Dictionary<string, string>());
+
+        Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
+        Assert.Equal(AgentProviderRiskProfile.ReadOnly, diagnostics.RiskProfile);
+        Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
+
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in provider.ContinueTurnAsync(AgentTurnContext.ForMessage(session.Id, "Hello", [])))
+            events.Add(item);
+
+        // The provider yields only content; the orchestrator owns turn lifecycle (Started/StepStarted/Completed).
+        var delta = Assert.Single(events);
+        Assert.Equal(AgentStreamEventKind.MessageDelta, delta.Kind);
+        Assert.Equal("Deterministic agent provider response.", delta.Content);
+    }
+
+    [Fact]
+    public async Task Orchestrator_sends_latest_user_message_and_context_to_provider()
+    {
+        var provider = new CapturingAgentProvider();
+        var source = new AgentTestContextSource("feature.fixture.context", "feature.fixture",
+            [new("ctx-1", "feature.fixture", "resource-1", "Selected resource", "test.context", AgentContextSensitivity.Internal,
+                "selection", "Selected resource summary.", null, new Dictionary<string, string>()) { ModuleId = "feature.fixture" }]);
+        using var sp = AgentTestServices.Create(services =>
+        {
+            services.AddSingleton<IAgentProvider>(provider);
+            services.AddSingleton<IAgentContextProvider>(source);
+        });
+        using var scope = sp.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            provider.ProviderId,
+            "explain",
+            "Test session",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+            new(session.Id, source.ScopeKind, new Dictionary<string, string>()));
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var context = collected.Value!.Attachments;
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Explain this workflow.",
+            AgentMessageStatus.Pending,
+            "workflow.explain",
+            context.Select(item => item.Id).ToArray(),
+            context));
+
+        await foreach (var _ in streaming.StreamAsync(session.Id))
+        {
+        }
+
+        Assert.NotNull(provider.LastMessage);
+        Assert.Equal("Explain this workflow.", provider.LastMessage!.Content);
+        Assert.Single(provider.LastMessage.Context);
+    }
+
+    private sealed class CapturingAgentProvider : IAgentProvider
+    {
+        public string ProviderId => "capturing-test";
+
+        public AgentProviderMessage? LastMessage { get; private set; }
+
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>()));
+
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            LastMessage = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
+            yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+        }
+
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentToolApprovalResult(request.Approved, string.Empty));
+
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderDiagnostics(
+                ProviderId,
+                true,
+                "available",
+                AgentProviderKind.ProviderSdkBinding,
+                [AgentProviderOperation.Chat, AgentProviderOperation.Streaming],
+                AgentProviderRiskProfile.ReadOnly,
+                new Dictionary<string, string>()));
+    }
+}
