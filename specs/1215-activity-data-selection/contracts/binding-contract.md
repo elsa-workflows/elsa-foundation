@@ -20,14 +20,31 @@ is forbidden because older compilers/readers can silently ignore such a field.
 | `VariableMember` | `referenceKey`, `declaringScopeId`, `memberPath` |
 | `ActivityResultMember` | `producerNodeId`, `projectionKey`, `memberPath`; existing producer `isOptional` defaults to false |
 
-`producerScopeId` is optional and legacy on both `ActivityResult` and `ActivityResultMember` (#4053). The
-server never writes it: the binding it returns for a browsed producer names only the producer and its
-projection, and is returned only where publication admits it unchanged. A document that declares a scope
-keeps it, its bytes and its hash, and a declared scope must still be a nonblank string. Without a scope the
-producer is identified by causal lineage and branch and iteration frames alone, so publication refuses a
-scope-free binding with `ValueFlow/EarlierProducerRun` unless the owning structure states that no earlier run
-of the producer can lead to the consumer. Bindings that declare a scope, and portable expression parameters,
-keep their existing rules (#4056).
+`producerScopeId` is optional and legacy on both `ActivityResult` and `ActivityResultMember`. The
+data-selection analyzer never writes it: the binding it returns for a browsed producer names only the
+producer and its projection. The code-first builder still writes one (#4056). A document that declares a
+scope keeps it, its bytes and its hash, and a declared scope must still be a nonblank string.
+
+**Admission of a scope-free direct binding.** Without a scope the producer is identified by causal lineage
+and branch and iteration frames alone. The analyzer makes one decision per read, used both to offer a
+binding and to admit a stored one, so a binding the client stores unchanged is one publication accepts.
+Beside the rules every activity-result read has (producer present and unambiguous, no crossing out of a
+structured scope without an explicit return, no cyclic back-edge, a declared projection), it is admitted
+only when all of these hold:
+
+1. The producer is definitely available at the consumer, unless the binding says `isOptional: true`.
+2. A whole `$result` read names a producer that declares a typed result.
+3. The structure that holds both producer and consumer as direct-child subtrees states
+   `EarlierProducerRunCanReachConsumer = false` for that pair of children.
+4. Every structure above it states `EarlierProducerRunCanReachConsumer = false` for its child that holds
+   both, asked with that child as producer and consumer. Repeating that child would bring an earlier
+   producer run into the consumer's lineage, as a Sequence on a Flowchart or BPMN loop shows.
+
+A structure that leaves the fact unset counts as "an earlier run can reach the consumer", so a third-party
+structure, a Flowchart whose analysis cannot be built and a BPMN process with a gateway all refuse. When 3 or
+4 fails, a stored binding is refused as `ValueFlow/EarlierProducerRun` before any publication write; when 1
+fails, as `ValueFlow/UnavailableProducer`; when 2 fails, as `ActivityData/UnknownProjection`. Bindings that
+declare a scope, and portable expression parameters, keep their existing rules (#4056).
 
 Authored input example under this contract, effective on M2 approval/merge:
 
