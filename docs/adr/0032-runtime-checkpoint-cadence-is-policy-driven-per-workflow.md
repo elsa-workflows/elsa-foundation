@@ -19,10 +19,11 @@ The accepted status above does not ratify this proposal.
   identity and recovery cause. Flush successful results/read dependencies before advancing; on fault/cancellation
   persist the applicable recovery record. The before/after boundaries for a possibly effectful activity evaluation
   are mandatory too. No persistence mode can defer or skip those boundaries.
-- Retain optional effect metadata for diagnostics/durability, with unknown effects conservative and calls never
-  prohibited, skipped or deduplicated on that basis. Declared repeatable evaluations may be batched. Adjacent
-  boundaries may share a physical commit that establishes every required recovery fact. A logical evaluation
-  transaction does not itself require one physical flush per callback.
+- How a registered function is classified is not decided by this amendment: either every registered function is
+  possibly effectful, or only a function its host declares effectful is. ADR 0045's proposed contract states both
+  rules. Under either, classification never prohibits, skips or deduplicates a call. Repeatable evaluations may be
+  batched. Adjacent boundaries may share a physical commit that establishes every required recovery fact. A logical
+  evaluation transaction does not itself require one physical flush per callback.
 - Mode names/default remain [ADR 0080 D2's](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default)
   `Durable`, `Balanced` (default) and `Ephemeral`. This proposal extends mandatory-boundary handling, not the historical
   `Immediate`/`Coalesced` configuration. An effect boundary can create a durable record in an otherwise ephemeral
