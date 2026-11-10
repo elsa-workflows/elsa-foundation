@@ -752,6 +752,11 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
    * Review & publish. Omission means this contribution does not add draft-validation issues.
    */
   collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+  /**
+   * When true, this contribution reads other inputs of the activity (`context.activity`, `inputValues`).
+   * The properties panel then refreshes its row when a sibling input changes; other rows keep their memo.
+   */
+  readsActivityContext?: true;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }

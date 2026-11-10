@@ -1249,8 +1249,8 @@ function PropertyRow({
 const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
 
 /**
- * Reuse a row across a sibling input edit unless the row reads the activity: through a property editor
- * contribution it resolved, or through an expression editor that opted into activity context.
+ * Reuse a row across a sibling input edit unless the row reads the activity: through a property editor or an
+ * expression editor contribution that opted into activity context (`readsActivityContext`).
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (
@@ -1291,8 +1291,8 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
   const propertyName = getInputPropertyName(previous.input);
   if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
   if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
-  // A row that resolved a property editor contribution receives the activity and its literal inputs as context.
-  if (resolvesPropertyEditor(previous) || resolvesPropertyEditor(next)) return false;
+  // Property editor contributions that opted into activity context read sibling inputs, such as FormId with FormVersion.
+  if (resolvesActivityContextEditor(previous) || resolvesActivityContextEditor(next)) return false;
   // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
   return !expressionEditorReadsActivity(previous) && !expressionEditorReadsActivity(next);
 }
@@ -1920,16 +1920,19 @@ function readLiteralInputValues(activity: ActivityNode, activityDescriptor: Stud
     .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)]));
 }
 
-function resolvesPropertyEditor(props: PropertyRowProps) {
-  if (props.editors.length === 0) return false;
-  return !!resolveEditor(props.editors, props.input, {
+// The row resolves with its live dynamic options and editor-disabled state, which the comparator cannot see.
+// Any opted-in contribution that supports this input under either read-only state counts, so the row errs toward refreshing.
+function resolvesActivityContextEditor(props: PropertyRowProps) {
+  const contextual = props.editors.filter(editor => editor.readsActivityContext === true);
+  if (contextual.length === 0) return false;
+  const context = {
     activity: props.activity,
     activityId: props.activity.nodeId,
     expressionDescriptors: props.expressionDescriptors,
-    readOnly: props.readOnly,
     inputValues: readLiteralInputValues(props.activity, props.activityDescriptor),
     setLiteralInputs: () => undefined
-  });
+  };
+  return contextual.some(editor => editor.supports(props.input, { ...context, readOnly: false }) || editor.supports(props.input, { ...context, readOnly: true }));
 }
 
 function resolveEditor(

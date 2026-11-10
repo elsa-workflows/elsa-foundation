@@ -149,7 +149,7 @@ function propertyLabels(container: HTMLElement) {
 
 it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
   const onChange = vi.fn();
-  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true,
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
     supports: descriptor => descriptor.name === "FormId", component: props => <button type="button" aria-label="Pin form" onClick={() => props.context.setLiteralInputs?.({ FormId: "purchase", FormVersion: "2" })}>{String(props.context.inputValues?.FormVersion ?? "unset")}</button>
   }];
   const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: activity(), editors, onChange });
@@ -162,7 +162,7 @@ it("commits related literal inputs atomically and refreshes contributed editors 
 });
 
 it("refreshes a contributed editor when only a sibling literal input changes", async () => {
-  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true,
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
     supports: descriptor => descriptor.name === "FormId", component: props => <output aria-label="Pinned version">{String(props.context.inputValues?.FormVersion ?? "unset")}</output>
   }];
   const literal = (value: string) => ({ typeName: "System.String", expression: { type: "Literal", value } });
@@ -1228,8 +1228,12 @@ describe("activity property organization", () => {
           surfaces: { inline: ScriptEditor }
         }
       ],
-      // Real hosts always register contributions; one that serves no row on this activity must not defeat the memo.
-      editors: [{ id: "test.unrelated-property-editor", supports: descriptor => descriptor.uiHint === "test-unrelated", component: () => null }],
+      // Real hosts register the built-in editors, whose text fallback supports every input. Only a contribution that opted
+      // into activity context and supports this row may defeat the memo.
+      editors: [
+        ...builtInPropertyEditors,
+        { id: "test.unrelated-property-editor", readsActivityContext: true, supports: descriptor => descriptor.uiHint === "test-unrelated", component: () => null }
+      ],
       activity: current
     });
     await nextFrame();
