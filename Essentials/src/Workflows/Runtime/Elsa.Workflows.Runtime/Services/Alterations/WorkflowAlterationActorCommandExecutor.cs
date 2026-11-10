@@ -10,6 +10,11 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// Actor-only boundary for a claimed alteration job. The transport command carries only job/claim identifiers; this
 /// executor resolves protected plan envelopes and the target workflow state after the actor has serialized the target.
 /// </summary>
+/// <remarks>
+/// An executor built with this constructor takes no ownership lease on the run, so its checkpoint is not fenced: it
+/// is for a caller that serializes and fences the run itself. The executor the runtime registers runs each job under
+/// a borrowed execution lease (#2667).
+/// </remarks>
 public sealed class WorkflowAlterationActorCommandExecutor(
     IWorkflowAlterationStore alterationStore,
     IWorkflowAlterationPayloadProtector payloadProtector,

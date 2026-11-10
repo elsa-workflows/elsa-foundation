@@ -72,8 +72,8 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     /// Ends a borrow. A lease borrowed from no owner is released. A lease that stands in for an owner is not
     /// released, because that would erase the record of an owner whose work may need recovery. It stays on the
     /// record under a new fencing token, and expires when the owner's lease would have, or at once if that lease
-    /// had already expired, so recovery finds the run no later than it would have. The owner's heartbeat is still
-    /// beside it. The owner itself, if it is still running, stays fenced out.
+    /// had already expired, so recovery finds the run no later than the owner's lease expiry. The owner's heartbeat
+    /// is still beside it. The owner itself, if it is still running, stays fenced out.
     /// Returns <see cref="RuntimeExecutionOwnershipTransitionStatus.Stale"/> without writing when the run has been
     /// taken from the borrower.
     /// </summary>

@@ -106,6 +106,9 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Assert.Equal(
             RuntimeExecutionOwnershipTransitionStatus.Stale,
             (await harness.OwnershipOf("node-alteration").HeartbeatAsync(duringTheBorrow.ExecutionLease)).Status);
+        // Recovery is due at that expiry. Its other limit, the lease's age, now counts from the borrow.
+        var sweep = new RuntimeRecoveryScanRequest(drainLease.ExpiresAt, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5), limit: 10);
+        Assert.Equal(drainLease.ExpiresAt, RuntimeRecoveryCandidateSelector.GetEligibleAt(record, sweep));
     }
 
     // An expired lease is how recovery finds a run whose owner stopped mid-drain: the run is a recovery candidate now.
@@ -118,9 +121,11 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         ExecutionLivenessState? duringTheBorrow = null;
         LeasedHarness? harness = null;
         harness = await LeasedHarness.CreateAsync(new CompletingHandler(async _ => duringTheBorrow = await harness!.OwnershipRecordAsync()));
-        await harness.OwnershipOf("node-dead").AcquireAsync("workflow-1");
-        harness.Time.Advance(TimeSpan.FromMinutes(2));
+        var deadLease = await harness.OwnershipOf("node-dead").AcquireAsync("workflow-1");
+        // To the instant the owner's lease expires: the earliest moment it counts as expired.
+        harness.Time.Advance(LeaseDuration);
         var now = harness.Time.GetUtcNow();
+        Assert.Equal(now, deadLease.ExpiresAt);
         var sweep = new RuntimeRecoveryScanRequest(now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5), limit: 10);
         Assert.Single(RuntimeRecoveryCandidateSelector.Select([await harness.OwnershipRecordAsync()], sweep));
 
