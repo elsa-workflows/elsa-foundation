@@ -218,7 +218,7 @@ work may use only the version actually agreed. Agreement and merge remain separa
 
 **Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
 whoever writes it, including an architect working outside the board. Its PR is opened as a draft against the
-initiative branch (against `main` once the initiative has landed), says `Part of #N`, and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
+initiative branch, says `Part of #N`, and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
 PR closes. Missing a link does not exempt a board topic: add the link and apply the same gate. Bot review checks
 the change, never architectural agreement. A manual merge follows the same agreement rule.
 
@@ -308,8 +308,10 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
   pointer comment, and the coordinator records them at the next sync.
 - **Accepted text is amended in place.** Until it lands, an agreed ADR or spec that must change is edited on the branch
   through an amendment PR that follows the agreement rule. No superseding ADR is written for something `main` has never
-  seen. After landing, the branch is gone: later changes to the initiative's ADRs and specs are PRs to `main` under the
-  agreement rule, and the normal supersede rules apply.
+  seen. Landing closes the initiative: once its branch has landed and been archived, its ADRs and specs are ordinary
+  `main` documents that change under the repository's normal rules — the initiative's agreement rule no longer applies,
+  and no further proposals are opened against it. Resuming coordinated work on the topic means starting a new
+  initiative, not reopening a closed one.
 - **Numbers are reserved on the board.** When a proposal is drafted, the coordinator reserves the next free ADR or spec
   number (across `main`, every `initiative/*` branch and all open PRs) and records it on the proposal's board row.
   Proposal PRs do not edit `docs/adr/README.md`; the coordinator updates the index on the branch after each merge. A
