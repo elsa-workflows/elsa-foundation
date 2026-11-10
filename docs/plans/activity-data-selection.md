@@ -260,7 +260,7 @@ and the org-wide [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob
 claims and delivery. This proposal does not create initiative membership for #3094. A future change that
 belongs to an existing initiative follows that initiative's agreement rules for that specific change.
 
-Planning considered framework constitution v6.1.0 and Elsa constitution v6.3.0: preserve module boundaries,
+Planning considered framework constitution v6.1.0 and Elsa constitution v6.4.0: preserve module boundaries,
 artifact-only execution, explicit value roles and meaningful risk-based tests. No exception is proposed.
 Draft/provisional framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 remain unratified; this proposal
 does not ratify them. Recheck affected gates during the formal spec/plan review.

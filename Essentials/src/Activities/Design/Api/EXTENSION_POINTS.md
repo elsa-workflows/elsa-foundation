@@ -100,6 +100,38 @@ projection reads these declarations without running a migration.
 
 ## Sources and reconciliation
 
+### `IActivitySerializedShapeSource` *(Core — `Elsa.Activities.Design.Core`)*
+
+Provider-owned, bounded outgoing serialized metadata for admitted source contracts:
+`DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
+and `DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
+both return `ValueTask<ActivitySerializedShape?>`. Resource/catalog/disclosure authorization remains with
+the caller. Null declines ownership; a matching opaque/missing contract returns Unknown/Unavailable;
+multiple matching owners are refused. Providers must not instantiate business values, getters,
+attributes/converters or install Runtime aliases to discover fields.
+
+`ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is
+the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets and
+the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
+without named Output rows, and reports profile-unbound declared input/variable types honestly. Shared
+Workflows Design analysis consumes these facts in API and endpoint-free hosts.
+
+### Mandatory shared draft analysis
+
+`ActivitiesDesignApiFeature` depends on `WorkflowDesignValidations` and wraps the one configured
+`IActivityDraftValidator` with scoped `ActivityDataSelectionDraftValidator`. The inner validator's
+lifetime is preserved through a keyed registration; provider diagnostics remain, then the same scoped
+analysis authority validates the actual provider-owned graph through
+`IActivityDataSelectionDocumentProjector`. Missing/ambiguous analyzer or replaced/ambiguous wrapper
+fails composition; no optional validation skip is supported. The endpoint-free compiler independently
+admits executable material before writes.
+
+`DataSelectionDraftValidationRegistration : IStartupTask` validates the final wrapper registration
+once per shell activation when Tasks executes startup tasks. It also checks on registration and every
+wrapper resolution, including hosts without the Tasks runner. Copied shells inspect their own service
+collection; no recurring/background task is added. The source-context endpoint performs bounded,
+authorized, no-store read analysis and never saves a proposed snapshot while browsing.
+
 Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md). Persistence-specific seams are documented in their own catalog:
 
 - [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)

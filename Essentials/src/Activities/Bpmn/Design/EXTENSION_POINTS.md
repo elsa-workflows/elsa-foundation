@@ -6,6 +6,12 @@
 - Contributor: internal `BpmnStructureHandler`, singleton enumerable registration by `ActivitiesBpmnDesignFeature`.
 - Classification: cross-domain contribution, keyed by the frozen structure kind/schema. It projects
   bound children, scoped variables and typed Decision outcomes, then lowers/remaps the compiled graph.
+- `AssessChildResult` and `ChildrenCompletedBefore` supply order for a single fully connected,
+  acyclic, unconditional ordinary start → bound `task` chain → ordinary end. They use sequence-flow
+  order, not the authored activity array. Shared source analysis and mandatory headless publication
+  consume these facts. Other task families, branches, multiple entries, events/listeners, loops,
+  compensation, transactions and subprocess/call boundaries remain unknown; no generic admission
+  rule or runtime occurrence semantics are relaxed.
 - Repeated feature composition retains one implementation. Runtime-only feature registration supplies no handler.
 
 ## Published model references
