@@ -221,8 +221,7 @@ third write form, with `context.Variables.Set` as an exception to the sentence b
 invocation contract returns that transition directly; it does
 not publish successful values or outcomes through mutable execution-context `Set` methods.
 
-**Amendment (epic #3052, decision D-4, 2026-10-27): activities select their outcomes explicitly, several per
-completion.** A successful completion carries an *outcome selection* instead of exactly one outcome.
+**Amendment (decision D-4): activities select their outcomes explicitly, several per completion.** A successful completion carries an *outcome selection* instead of exactly one outcome.
 
 - **A selection** is one of three things:
   - unspecified, which means `Done` (see *The `Done` rule*);
@@ -292,7 +291,7 @@ completion.** A successful completion carries an *outcome selection* instead of 
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
     and inspection treat a node that may select several outcomes as an inclusive fork.
-  - This replaces the "one outcome per completion" invariant proposed in issue #3285.
+  - This replaces the "one outcome per completion" invariant that was proposed before this amendment.
 
 *Effect on Elsa 3 conversion.* These become convertible:
 - Elsa 3's `setOutcome` / `setOutcomes`;
