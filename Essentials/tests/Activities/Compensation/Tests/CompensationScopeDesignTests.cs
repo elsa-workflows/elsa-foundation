@@ -77,6 +77,14 @@ public sealed class CompensationScopeDesignTests : IDisposable
         Assert.Equal(["deliver", "reserve"], _structureService.ChildrenCompletedBefore(node, "confirm"));
         Assert.Empty(_structureService.ChildrenCompletedBefore(node, "reserve")!);
         Assert.Null(_structureService.ChildrenCompletedBefore(node, "elsewhere"));
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "deliver", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "confirm").Availability);
+        var handlerResult = _structureService.AssessChildResult(node, "cancel", "confirm");
+        Assert.Equal(ActivityChildResultAvailability.Unknown, handlerResult.Availability);
+        Assert.Null(handlerResult.MayRunConcurrently);
+        Assert.Null(handlerResult.IsCyclicBackEdge);
     }
 
     [Fact]
