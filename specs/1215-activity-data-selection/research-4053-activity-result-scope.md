@@ -2,8 +2,10 @@
 
 **Status:** Design note for review. No product code changes. Baseline `aa85848627` (main, 10 Nov 2026).
 **Issue:** [#4053](https://github.com/elsa-workflows/elsa-foundation/issues/4053), part of [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882); blocks [#3094](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
-**Method:** reading code only. Nothing here was executed. Claims about run-time outcomes that no existing
-test covers are marked **(read, not run)** and listed again in [section 8](#8-not-established-by-reading).
+**Method:** reading code, then real-engine runs for the run-time claims. The runs are
+`Essentials/tests/Activities/Behavioral/Tests/ActivityResultOccurrenceTests.cs` (`OccurrenceTests` below);
+each pins current behaviour on main. A claim marked **(run)** names its test; one still marked
+**(read, not run)** is listed in [section 8](#8-not-established).
 
 Path prefixes used below:
 
@@ -24,12 +26,15 @@ Path prefixes used below:
 - The only value an author can know in advance is Flowchart's root constant `scope:root`. Loop, race and
   reusable-boundary scopes are generated at run time.
 - I found no workflow where the declared scope selects the right occurrence and dropping it selects a wrong
-  one. In a Flowchart loop it selects the first pass's stale result, where no scope would fail as Ambiguous.
+  one. In a Flowchart loop it selects the first pass's stale result, where no scope fails as Ambiguous.
+- A scope-free read is not safe by itself either: in a looping Flowchart nested in a loop it also reads the
+  stale first-pass result, silently. The refusal in the recommendation is therefore required, not optional.
 - Recommendation: new direct bindings carry no scope (design B), and the owning structure supplies one new
   static fact, "this producer can run again before the consumer", so that such reads are not offered and
   are refused at publish. Existing documents with a scope are left exactly as they are.
-- One acceptance line of #4053 needs the owner's reading: a producer *inside* a Flowchart loop cannot be
-  made to resolve correctly by any choice about scope. See [section 6](#6-recommendation).
+- One acceptance line of #4053 needed the owner's reading: a producer *inside* a Flowchart loop cannot be
+  made to resolve correctly by any choice about scope. See [section 6](#6-recommendation). The owner accepted
+  that limit for this leaf on #4053.
 
 ## 1. What `producerScopeId` is compared with
 
@@ -104,13 +109,16 @@ C.input  <-  ActivityResult { producerNodeId: B, projectionKey: $result, produce
 - Candidates for B: B1 (`scope:root`, no iteration) and B2 (`scope:n`, `A:1`). B1 passes the frame check
   because a producer without an iteration frame is visible to every consumer (`CausalActivityResultResolver.cs:158-159`).
 - With the declared `scope:root`: B2 is excluded, B1 is returned. **C2 silently reads the first pass's
-  result.** (read, not run)
-- With no declared scope: B1 and B2 both remain, so the read fails as **Ambiguous**. (read, not run)
+  result** and the run completes. (run: `A_loop_reader_that_declares_the_root_scope_reads_the_first_pass_result_on_the_second_pass`)
+- With no declared scope: B1 and B2 both remain, so the read fails as **Ambiguous** with exactly those two
+  candidates. (run: `A_loop_reader_without_a_scope_cannot_tell_the_two_passes_apart_on_the_second_pass`)
 
-Neither outcome is right. The scope turns a loud failure into a silent stale value. The existing unit test
-`Resolve_UsesProducerStructuralFrameWithinCausalLineage` pins the mechanism with hand-built states
-(`Essentials/tests/Workflows/Runtime/Tests/CausalActivityResultResolverTests.cs:37-47`); I found no test that
-reaches it through a real Flowchart.
+Neither outcome is right. The scope turns a loud failure into a silent stale value.
+
+A failed read is not a workflow fault. The reader's start work item is poisoned: the reader stays
+`Scheduled`, one blocking incident is raised on it, and the run stays `Running`, waiting for intervention.
+For a read through an expression parameter the incident says only that a result resolution failed; the
+reason is redacted. (run: every `OccurrenceTests` case that asserts a blocked reader)
 
 **I could not construct a workflow where the declared scope yields the right occurrence and its absence
 does not.** The argument:
@@ -121,14 +129,44 @@ does not.** The argument:
   root-scope occurrence is then always the oldest one.
 - Inside a closed reusable body the check is already skipped.
 
-The same reading shows three cases where the declared scope makes a valid read fail (all read, not run):
+The declared scope also makes valid reads fail:
 
-- A producer that first runs after a loop-back or under a first-wins fork has a generated scope, so no
-  authored value matches it: Unavailable.
-- A reusable boundary read by a sibling at workflow level has its own execution id as its scope
-  (`WorkflowScheduleActivitySchedulerWorkHandler.cs:227-228`): Unavailable for every authored value.
+- A producer under a first-wins fork runs in a generated scope (`scope:3` in the run), so a reader that
+  declares `scope:root` gets Unavailable; the same read without a scope resolves. (run:
+  `A_result_produced_under_a_first_wins_fork_is_unavailable_to_a_reader_that_declares_the_root_scope`,
+  `..._resolves_for_a_reader_without_a_scope`)
+- A node that carries placement's reusable-activity identity has its own execution id as its scope
+  (`WorkflowScheduleActivitySchedulerWorkHandler.cs:227-228`). A sibling that declares any scope gets
+  Unavailable; without a scope it resolves. (run:
+  `The_result_of_a_placed_reusable_activity_is_unavailable_to_a_sibling_that_declares_a_scope`,
+  `..._resolves_for_a_sibling_without_a_scope`)
 - The Elsa 3 importer writes the enclosing container's node id (section 4). For a producer in a Flowchart
-  that is not `scope:root`: Unavailable.
+  that is not `scope:root`, so the read should be Unavailable for the same reason as the first-wins case.
+  (read, not run: importer output was not executed)
+
+Two controls behave as section 1 predicts. In a Sequence any declared scope resolves, because the producer
+has none (run: `A_sequence_reader_resolves_its_prior_sibling_whatever_scope_it_declares`). A producer that
+runs once before a looping Flowchart resolves on every pass, with or without a scope (run:
+`A_loop_reader_resolves_a_producer_that_ran_once_before_the_flowchart_on_every_pass`).
+
+**A scope-free read can be silently stale too.** Loops cannot nest inside one Flowchart: a loop-back target
+may have no other inbound connection (`FC/Internal/FlowchartReachabilityAnalyzer.cs:17-27`), so a loop head is
+always an entry. They nest as a looping Flowchart placed in an outer loop:
+
+```text
+Outer, start A:   A -> B -> Inner -> G,   G -(again)-> A,   G -(done)-> Z
+Inner, start D:   D -> E,   E -(again)-> D          E reads B
+```
+
+- Inner's nodes inherit the outer scope but carry only Inner's own iteration key, and none on Inner's first
+  pass.
+- On the second outer pass B2 has the outer key `A:1`. E's frame is either absent or `D:1`, so B2 never
+  matches it; B1 has no frame and always does.
+- E reads B1 on all four of its runs, directly with `scope:root` and through a parameter alike, and the run
+  completes. (run: `A_reader_in_a_looping_flowchart_nested_in_a_loop_always_reads_the_outer_first_pass_result`)
+
+So "no scope" fails loudly only in the single-level loop. Both loop cases are wrong for the same reason:
+the producer runs again inside one activation of the structure that owns it.
 
 ## 3. How portable parameters resolve without a scope
 
@@ -148,7 +186,8 @@ Its resolver overload passes `producerScopeId: null` (`CausalActivityResultResol
 Publication validates nothing about a direct binding's scope: the analyzer only echoes it
 (`ActivityDataSelectionAnalyzer.cs:294-295`). So today the direct and portable forms have identical static
 guarantees, and the direct form adds one unvalidated run-time comparison. The portable form has the same
-loop weakness as section 2: Ambiguous from the second pass (read, not run).
+loop weakness as section 2: Ambiguous from the second pass of a single loop, and silently stale in the
+nested case (both run).
 
 ## 4. Who writes `producerScopeId` today
 
@@ -242,15 +281,17 @@ binding contract's `ActivityResult` and `ActivityResultMember` rows mark `produc
 legacy; the authoring contract states that the server returns the complete binding.
 
 **Loops and reusable bodies.** Producer before the loop, race-scope producers and reusable boundaries read
-by a sibling all resolve, because the lineage holds one candidate. Reusable bodies are unchanged. A producer
-on a loop fails as Ambiguous from the second pass: louder than today, still not working.
+by a sibling all resolve, because the lineage holds one candidate (run, section 2). Reusable bodies are
+unchanged. A producer on a loop fails as Ambiguous from the second pass, and in the nested case reads the
+stale first-pass result without failing (run, section 2). B alone is therefore not safe to ship.
 
 **The guard test.** Its intent survives and gets stricter: the server still invents no scope, and now returns
 a binding that has none. The focused-query half (a supplied scope is echoed, never rewritten) stays.
 
 **Failure modes.** New bindings lose the run-time scope comparison, so publication is their only structural
 guard beyond lineage and frames; section 2 argues that the comparison guards nothing an author can state. A
-loop read still publishes and fails at run time unless it is refused statically (hybrid below). An executable
+loop read still publishes, and then blocks or reads a stale value at run time, unless it is refused
+statically (hybrid below). An executable
 with a scope-free reference loaded by an older runtime: see section 8.
 
 **Tests.** Reference and hash controls for both shapes; compiler and validator acceptance; publisher
@@ -260,7 +301,9 @@ boundary and reusable body; unchanged compensation and legacy-scope regressions.
 ### Hybrid: B, plus one structure-owned fact that refuses repeating producers
 
 B alone leaves the loop read publishable and broken. The missing guarantee is static and belongs to the
-structure: whether the producer can run again within one activation before the consumer runs.
+structure: whether the producer can run again within one activation of the structure that owns it. The
+fact is assessed where the producer lives, whatever the consumer's depth: in the nested example B is on
+the outer cycle, so E's read is refused although E sits in another Flowchart.
 
 - `DC/Models/ActivityChildResultFacts.cs`: add `ProducerMayRepeat` (`bool?`, as an init property so the
   positional record keeps its shape). `FlowchartChildResultAnalysis.Assess` sets it from the reachability it
@@ -282,8 +325,8 @@ Correctness:
 
 - Every offered binding resolves to the single causal occurrence, in every structure, with nothing for the
   client to derive and nothing wrong to express.
-- It removes three ways a valid read fails today (race producer, reusable boundary, imported Flowchart) and
-  never produces the stale loop read for a new binding.
+- It removes the ways a valid read fails today (race producer, reusable boundary; imported Flowchart by
+  reading) and refuses both stale loop reads the runs found, single-level and nested.
 - Where the runtime cannot identify the right occurrence, the read is refused at authoring and at publish
   instead of at run time.
 
@@ -296,12 +339,13 @@ Architectural fit:
 **Strongest argument against.** It does not let an author read "the page fetched in this pass" from a
 producer inside a Flowchart loop, which is the most common loop pattern and exactly the variable ceremony
 #3094 wants to remove. #4053's first acceptance line names "a Flowchart loop scope". Under this
-recommendation that line holds for a consumer in a loop scope reading a producer before the loop; a producer
-on the loop is refused, not resolved. Making it resolve needs an occurrence rule for loop passes (the first
-pass has no iteration frame; nested Flowchart loops overwrite the outer iteration key,
-`FC/Internal/FlowchartScopeResolver.cs:31-47`). That is a runtime semantics change against ADR 0045's "cyclic
-back-edges carry data through explicit state transfer rather than a latest-output lookup" (`:160`) and
-should be its own decision. A second, smaller objection: new bindings rely on publication alone for
+recommendation that line holds for a consumer in a loop scope reading a producer that ran before the
+Flowchart (run, section 2; nothing can precede a loop head inside the same Flowchart); a producer on the
+loop is refused, not resolved. Making it resolve needs an occurrence rule for loop passes: the first pass
+has no iteration frame, and a nested Flowchart's nodes do not carry the outer iteration key. That is a
+runtime semantics change against ADR 0045's "cyclic back-edges carry data through explicit state transfer
+rather than a latest-output lookup" (`:160`) and should be its own decision. The owner accepted the limit
+for this leaf. A second, smaller objection: new bindings rely on publication alone for
 structural admission, as portable parameters already do.
 
 **Why not A.** It cannot return a binding for loop, race or reusable-boundary producers at all, it freezes
@@ -316,9 +360,8 @@ reason), `tasks.md`, and the Validations and Design API `EXTENSION_POINTS.md` en
 
 One PR, in this order:
 
-1. **Characterise first.** Real-run tests for the four read-not-run claims: loop read with and without a
-   scope, race-scope producer, reusable boundary read by a sibling, legacy scope in a Sequence. Adjust this
-   note if any disagrees.
+1. **Characterise first.** Done: `OccurrenceTests`, 14 cases. Every claim that was run held; the nested
+   case added a finding (section 2). The tests marked "known defect" change with steps 4 and 5.
 2. **Runtime model.** Nullable `ProducerScopeId`, constructor overload, public API file, hash controls for
    both shapes. No resolver change.
 3. **Publishing.** Optional scope in `RuntimeInputBindingCompiler`; null guard in `PlacedReferenceRemapper`;
@@ -332,13 +375,17 @@ One PR, in this order:
    e2e stay green unmodified.
 7. **Contracts.** The spec and catalog updates above.
 
-## 8. Not established by reading
+## 8. Not established
 
-- Every run-time outcome in section 2 for real Flowcharts: the stale loop read, Ambiguous without a scope,
-  and Unavailable for race-scope producers. The mechanism is pinned only with hand-built states.
-- That a workflow-level sibling cannot read a reusable boundary's result with any authored scope. I found no
-  test that binds one directly.
-- That Elsa 3 imports with a result read inside a Flowchart fail at run time. Importer tests do not execute.
+- That Elsa 3 imports with a result read inside a Flowchart fail at run time. Importer tests do not execute;
+  the claim rests on the importer's value (section 4) and the first-wins run.
+- A Graph Activity boundary as the producer. The run uses a leaf that carries the metadata placement writes
+  on a boundary (`activity.definitionVersionId`), which is the only thing that opens the scope; a real
+  placed graph with an output mapping was not run.
+- Publication. The runs execute hand-built executables, as the shared harness does, so the static
+  admission described in section 3 was read, not run, for these shapes.
+- A producer that first runs after a loop-back, as opposed to under a first-wins fork. It needs a node that
+  is skipped on the first pass; the generated-scope mechanism is the one the first-wins run exercises.
 - How an older runtime loads an executable whose reference has no scope. The constructor throws on a null
   scope (`RTC/Models/RuntimeInputBinding.cs:207`); I did not read the artifact deserializer to confirm that
   this is the path taken and that it fails before any activity runs.
@@ -346,4 +393,3 @@ One PR, in this order:
   views (`Essentials/src/Workflows/Runtime/Api/Models/WorkflowExecutableInspectionViews.cs:133`).
 - Whether every structure with a custom `AssessChildResult` outside this repository should be treated as
   "may repeat" when it leaves the new fact unset. The recommendation treats unset as not admissible.
-- Nested Flowchart loops beyond the reading in section 6.
