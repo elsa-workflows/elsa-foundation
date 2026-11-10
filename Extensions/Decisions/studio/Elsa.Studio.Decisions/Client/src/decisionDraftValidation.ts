@@ -4,9 +4,11 @@ import {
   extraDecisionInputs,
   invalidDecisionInputs,
   isScalar,
+  isStructuredDecisionInputsSyntax,
   mismatchedDecisionInputs,
   parseDecisionPin,
   readDecisionInputs,
+  readDecisionInputsSyntax,
   readDecisionPin
 } from "./decisionInputs";
 import { failureMessage, getDecision, version } from "./decisionsApi";
@@ -86,6 +88,10 @@ export async function collectEvaluateDecisionValidation(
     });
   }
   if (!loaded.table) return issues;
+  // JavaScript / Liquid / Variable (and other non-map syntaxes) are not the guided Object/Literal
+  // Inputs editor. Their expression.value is a script or name, not a DecisionValue map, so treating
+  // it as {} would false-report MissingInput and block Review with no inline way to clear it.
+  if (!isStructuredDecisionInputsSyntax(readDecisionInputsSyntax(activity))) return issues;
   const values = asDecisionValueMap(readDecisionInputs(activity));
   const extras = extraDecisionInputs(values, loaded.table.inputs);
   if (extras.length) {
@@ -100,7 +106,7 @@ export async function collectEvaluateDecisionValidation(
   if (missing.length) {
     issues.push({
       type: "Decision/MissingInput",
-      message: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} missing from this table. Runtime will refuse MissingInput.`,
+      message: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} missing from Inputs. Runtime will refuse MissingInput.`,
       path: decisionValidationPath(nodeId, "Inputs")
     });
   }

@@ -11,7 +11,17 @@ export function isDecisionInputsDescriptor(descriptor: Pick<StudioActivityInputD
 }
 
 export function isDecisionInputsContext(context: Pick<StudioExpressionEditorContext, "syntax" | "descriptor">): boolean {
-  return (context.syntax === "Object" || context.syntax === "Literal") && isDecisionInputsDescriptor(context.descriptor);
+  return isStructuredDecisionInputsSyntax(context.syntax) && isDecisionInputsDescriptor(context.descriptor);
+}
+
+export function isStructuredDecisionInputsSyntax(syntax: string): boolean {
+  return syntax === "" || syntax === "Object" || syntax === "Literal";
+}
+
+export function readDecisionInputsSyntax(activity: unknown): string {
+  if (!activity || typeof activity !== "object") return "";
+  const record = activity as Record<string, unknown>;
+  return readWrappedSyntax(record.Inputs) || readWrappedSyntax(record.inputs);
 }
 
 export function parseDecisionPin(value: string): { assetId: string; selection: string } | null {
@@ -45,18 +55,6 @@ export function asDecisionValueMap(value: unknown): Record<string, Scalar> {
     if (isScalar(item)) result[key] = item;
   }
   return result;
-}
-
-export function seedDecisionInputs(value: unknown, clauses: Clause[]): Record<string, Scalar> | null {
-  const current = asDecisionValueMap(value);
-  const next = { ...current };
-  let changed = false;
-  for (const clause of clauses) {
-    if (isScalar(next[clause.name])) continue;
-    next[clause.name] = initial(clause.type);
-    changed = true;
-  }
-  return changed ? next : null;
 }
 
 export function extraDecisionInputs(value: Record<string, Scalar>, clauses: Clause[]): Array<{ name: string; value: Scalar }> {
@@ -103,6 +101,14 @@ function readWrappedValue(value: unknown): unknown {
     return (value as { expression?: { value?: unknown } }).expression?.value;
   }
   return value;
+}
+
+function readWrappedSyntax(value: unknown): string {
+  if (value && typeof value === "object" && "expression" in value) {
+    const type = (value as { expression?: { type?: unknown } }).expression?.type;
+    return typeof type === "string" ? type : "";
+  }
+  return "";
 }
 
 export function mismatchedDecisionInputs(value: Record<string, Scalar>, clauses: Clause[]): Array<{ name: string; storedKind: Scalar["kind"]; tableType: string }> {

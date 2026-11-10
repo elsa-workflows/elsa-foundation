@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
@@ -736,6 +736,7 @@ function PropertyRow({
     discardedBindingCount: number;
   } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const portalThemeRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
   const conversionToggleRef = useRef<HTMLButtonElement>(null);
   const transitionDescriptionId = useId();
@@ -749,6 +750,18 @@ function PropertyRow({
     : "";
   const latestProperty = useRef({ activity, input, onChange });
   latestProperty.current = { activity, input, onChange };
+
+  useLayoutEffect(() => {
+    if (!expanded) return;
+    const source = rowRef.current?.closest(workflowThemeScopeSelector) ?? null;
+    const apply = () => copyThemeCustomProperties(source, portalThemeRef.current);
+    apply();
+    const observer = new MutationObserver(apply);
+    const root = (rowRef.current?.ownerDocument ?? document).documentElement;
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-theme-material", "data-workspace-style"] });
+    if (source) observer.observe(source, { attributes: true, attributeFilter: ["class", "style"] });
+    return () => observer.disconnect();
+  }, [expanded]);
 
   // A change that leaves the row unexpandable has already closed the expanded editor (`expanded`). Drop the request
   // so it does not reopen by itself, and bring focus back to the row only when focus went with the editor: focus
@@ -1181,18 +1194,13 @@ function PropertyRow({
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
       {/* User interaction opens this after rowRef mounts. The overlay is position:fixed and must
-          escape inspector overflow, so the portal target is the owner document body. Embedders
-          stamp --wf-* / host tokens on .wf-tokens, .wf-editor, or .wf-page; copy those custom
+          escape inspector overflow, so every expanded property-editor dialog portals to the owner
+          document body for every Studio embedder, not only Decisions Inputs. Embedders stamp
+          --wf-* / host tokens on .wf-tokens, .wf-editor, or .wf-page; copy those custom
           properties onto this wrapper so the dialog keeps the embedder palette instead of
           document fallbacks. */}
       {expanded ? createPortal(
-        <div
-          className="wf-tokens"
-          ref={node => copyThemeCustomProperties(
-            rowRef.current?.closest(workflowThemeScopeSelector) ?? null,
-            node
-          )}
-        >
+        <div className="wf-tokens" ref={portalThemeRef}>
           <ExpandedPropertyEditor
             input={input}
             dictionarySessionScope={dictionarySessionScope}
@@ -1289,23 +1297,35 @@ function expressionEditorReadsActivity(props: PropertyRowProps) {
 
 const workflowThemeScopeSelector = ".wf-tokens, .wf-editor, .wf-page";
 
+function isCopiedThemeCustomProperty(name: string) {
+  return name.startsWith("--wf-") || name.startsWith("--studio-") || name.startsWith("--xy-");
+}
+
 function copyThemeCustomProperties(source: Element | null, target: HTMLElement | null) {
   if (!source || !target || source === target) return;
+  const next = new Map<string, string>();
   const styles = getComputedStyle(source);
-  let copied = 0;
   for (let index = 0; index < styles.length; index++) {
     const name = styles.item(index);
-    if (!name.startsWith("--")) continue;
+    if (!isCopiedThemeCustomProperty(name)) continue;
     const value = styles.getPropertyValue(name);
-    if (value === "") continue;
-    target.style.setProperty(name, value);
-    copied += 1;
+    if (value !== "") next.set(name, value);
   }
-  if (copied > 0 || !(source instanceof HTMLElement)) return;
-  const inline = source.style;
-  for (let index = 0; index < inline.length; index++) {
-    const name = inline.item(index);
-    if (name.startsWith("--")) target.style.setProperty(name, inline.getPropertyValue(name));
+  if (next.size === 0 && source instanceof HTMLElement) {
+    const inline = source.style;
+    for (let index = 0; index < inline.length; index++) {
+      const name = inline.item(index);
+      if (!isCopiedThemeCustomProperty(name)) continue;
+      const value = inline.getPropertyValue(name);
+      if (value !== "") next.set(name, value);
+    }
+  }
+  for (let index = target.style.length - 1; index >= 0; index--) {
+    const name = target.style.item(index);
+    if (isCopiedThemeCustomProperty(name) && !next.has(name)) target.style.removeProperty(name);
+  }
+  for (const [name, value] of next) {
+    if (target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
   }
 }
 

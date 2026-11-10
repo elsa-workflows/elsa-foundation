@@ -129,7 +129,7 @@ export function DecisionInputsEditor({
     {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it before Review &amp; publish; these fields follow the current draft table.</StudioAlert> : null}
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
     {missing.length ? <StudioAlert tone="danger">
-      {missing.join(", ")} {missing.length === 1 ? "is" : "are"} missing from this table.
+      {missing.join(", ")} {missing.length === 1 ? "is" : "are"} missing from Inputs.
       {" "}Runtime will refuse MissingInput. Enter or confirm a value before Review &amp; publish.
     </StudioAlert> : null}
     {invalids.length ? <StudioAlert tone="danger">

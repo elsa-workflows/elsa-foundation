@@ -16,6 +16,7 @@ From `Studio/` with the decision-inputs Playwright project:
 | 14 | same, then pin `@latest` and **Publish table with region** | After **window focus**, picker lists **Version 3**, `region` is visible, authored JSON has no `region`, amount stays `kind:number`, footer + Review **MissingInput**. |
 | 18 | same as 14, then edit **customerCategory** to `VIP` | JSON still has no `region`. MissingInput remains. Save / reselect `@latest` / remount / reload must not write `region:{kind:string,value:""}`. `{}` stays unset. |
 | 20 | `/?mode=decision-inputs&theme=light` | Untouched fields: kind **Not set**, inline MissingInput, Review blocked. Confirm Number writes explicit `0`. Fill `950` / `Standard`. Remount keeps authored values. Reload of empty `{}` stays unset. |
+| 21 | same, then switch Inputs syntax to **JavaScript** | Guided amount field unmounts. MissingInput leaves the inspector and Review. Review Ready. A Variable/Liquid binding has the same collector skip. |
 | 19 | Version picker: start versions GET for table A, immediately select table B | Late A must not replace B's list or write `B@A-version`. |
 | 15 | `/?mode=decision-inputs&theme=light&failOnce=1` | Review blocked on lookup; Recover lookup; Review Ready. |
 | 16 | `/?mode=decision-inputs&theme=light&unrelated=1` | Notify activity, `ops@example.com`, Review Ready, no `/ops` lookup. |
@@ -78,6 +79,10 @@ Isolated: Playwright item 14 test continues into customerCategory VIP, reselect,
 ## 20 — unset until confirmed
 
 Open Evaluate Decision on a published table with empty Inputs `{}`. Amount and customerCategory must show **Not set**, inline MissingInput, and Review blocked. Confirm Number to write `{kind:number,value:"0"}`. Enter `950` / `Standard`. Remount keeps those values. Reload of the empty fixture must not seed `0` / `false` / `""`.
+
+## 21 — dynamic Inputs expression (JavaScript / Liquid / Variable)
+
+Switch Evaluate Decision Inputs from Object/Literal to **JavaScript** (confirm Replace value). The guided clause fields unmount. Inspector and Review must not report MissingInput, and Review must be Ready. The collector skips map membership for any non-Object/Literal syntax; UnpublishedLatest on the Decision pin still blocks. Isolated Playwright covers the JavaScript switch; composed host should still recheck live.
 
 ## 19 — rapid A/B deferred versions
 

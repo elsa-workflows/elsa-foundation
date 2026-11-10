@@ -6,7 +6,8 @@ import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import {
   collectEvaluateDecisionValidation,
   evaluateDecisionActivityType,
-  loadDecisionTable
+  loadDecisionTable,
+  missingDecisionInputs
 } from "../decisionDraftValidation";
 import {
   asDecisionValueMap,
@@ -22,7 +23,6 @@ import {
   readDecisionInputs,
   readDecisionPin,
   removeDecisionInputs,
-  seedDecisionInputs,
   writtenDecisionInput
 } from "../decisionInputs";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
@@ -78,22 +78,22 @@ function collect(api: ReturnType<typeof stubApi>, activity: unknown) {
   return collectEvaluateDecisionValidation(api, activity, evaluateContext);
 }
 
-describe("decision input seeding helpers", () => {
-  it("reads a wrapped Decision pin and seeds missing tagged clauses without rewriting existing values", () => {
+describe("decision input helpers", () => {
+  it("reads a wrapped Decision pin and reports missing tagged clauses without rewriting existing values", () => {
     expect(parseDecisionPin("approval@v1")).toEqual({ assetId: "approval", selection: "v1" });
     expect(readDecisionPin({ Decision: { expression: { type: "Literal", value: "approval@v1" } } })).toBe("approval@v1");
     const table = parseTable(editTable(newDecisionXml(), { kind: "add-clause", output: false }));
-    const seeded = seedDecisionInputs({ amount: { kind: "number", value: "950" } }, table.inputs)!;
-    expect(seeded.amount).toEqual({ kind: "number", value: "950" });
-    expect(seeded[table.inputs[1].name]?.kind).toBe("string");
-    expect(seedDecisionInputs(seeded, table.inputs)).toBeNull();
-    expect(extraDecisionInputs({ ...seeded, leftover: { kind: "string", value: "x" } }, table.inputs)).toEqual([{ name: "leftover", value: { kind: "string", value: "x" } }]);
+    const authored = { amount: { kind: "number" as const, value: "950" } };
+    expect(missingDecisionInputs(authored, table.inputs)).toEqual([table.inputs[1].name]);
+    expect(extraDecisionInputs({ ...authored, leftover: { kind: "string", value: "x" } }, table.inputs)).toEqual([{ name: "leftover", value: { kind: "string", value: "x" } }]);
   });
 
   it("claims Evaluate Decision Inputs under Object or Literal and parses tagged JSON immediately", () => {
     expect(isDecisionInputsContext({ syntax: "Object", descriptor })).toBe(true);
     expect(isDecisionInputsContext({ syntax: "Literal", descriptor })).toBe(true);
     expect(isDecisionInputsContext({ syntax: "JavaScript", descriptor })).toBe(false);
+    expect(isDecisionInputsContext({ syntax: "Liquid", descriptor })).toBe(false);
+    expect(isDecisionInputsContext({ syntax: "Variable", descriptor })).toBe(false);
     expect(isDecisionInputsContext({ syntax: "Object", descriptor: { name: "Headers", typeName: "System.String" } })).toBe(false);
     expect(parseDecisionInputsJson('{"amount":{"kind":"number","value":"950"}}')).toEqual({ valid: true, value: { amount: { kind: "number", value: "950" } } });
     expect(parseDecisionInputsJson("[1]").valid).toBe(false);
@@ -401,6 +401,26 @@ describe("Evaluate Decision draft validation collection", () => {
     }));
     expect(explicitZero.map(item => item.type)).not.toContain("Decision/MissingInput");
     expect(explicitZero.map(item => item.type)).not.toContain("Decision/InvalidValue");
+    expect(missing.some(item => item.message.includes("missing from Inputs"))).toBe(true);
+  });
+
+  it("does not treat a JavaScript, Liquid, or Variable Inputs binding as missing table values", async () => {
+    const api = stubApi();
+    api.backend.http.getJson.mockImplementation(async path => {
+      if (path.endsWith("/versions/v1")) return published;
+      return { ...asset, publishedVersionId: null, xml: asset.xml };
+    });
+    for (const type of ["JavaScript", "Liquid", "Variable"] as const) {
+      const issues = await collect(api, evaluateActivity({
+        Inputs: { expression: { type, value: type === "Variable" ? "decisionInputs" : "getDecisionInputs()" } }
+      }));
+      expect(issues).toEqual([]);
+    }
+    const unpublished = await collect(api, evaluateActivity({
+      Decision: { expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: { expression: { type: "JavaScript", value: "getDecisionInputs()" } }
+    }));
+    expect(unpublished.map(item => item.type)).toEqual(["Decision/UnpublishedLatest"]);
   });
 
   it("does not treat a custom activity Decision mailbox as a table pin", async () => {

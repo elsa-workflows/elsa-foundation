@@ -265,6 +265,25 @@ test("closing the expanded Inputs editor keeps the inline InvalidValue row error
   await capture(page, testInfo, "3979-expanded-close-keeps-invalid");
 });
 
+test("JavaScript Inputs binding does not report MissingInput or block Review", async ({ page }, testInfo) => {
+  const inspector = await openInspector(page);
+  await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();
+  await inspector.getByRole("button", { name: /Inputs expression syntax: (Object|Literal)/ }).click();
+  await page.getByRole("option", { name: "JavaScript", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Confirm expression type change" });
+  if (await confirm.isVisible().catch(() => false)) {
+    await confirm.getByRole("button", { name: /Replace value/ }).click();
+  }
+  await expect(inspector.getByRole("button", { name: "Inputs expression syntax: JavaScript" })).toBeVisible();
+  await expect(inspector.getByLabel("amount", { exact: true })).toHaveCount(0);
+  await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toHaveCount(0);
+  await expect(page.locator(".wf-validation")).toHaveText("No validation errors");
+  await inspector.getByRole("button", { name: "Review & publish", exact: true }).click();
+  await expect(page.getByTestId("review-status")).toHaveText("ready");
+  await expect(page.getByRole("dialog", { name: "Review and publish" })).not.toContainText("MissingInput");
+  await capture(page, testInfo, "3979-javascript-inputs-does-not-block");
+});
+
 test("confirming Number writes explicit 0 and remount preserves authored values", async ({ page }, testInfo) => {
   const inspector = await openInspector(page);
   await expect(inspector.getByRole("alert").filter({ hasText: "MissingInput" })).toBeVisible();

@@ -1954,6 +1954,13 @@ describe("activity property organization", () => {
     expect(portalRoot).not.toBe(container);
     expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(12, 34, 56)");
     expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("rgb(210, 220, 230)");
+    container.style.setProperty("--wf-text", "rgb(9, 8, 7)");
+    container.style.removeProperty("--wf-panel");
+    document.documentElement.setAttribute("data-theme", "dark");
+    return vi.waitFor(() => {
+      expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(9, 8, 7)");
+      expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("");
+    }).finally(() => document.documentElement.removeAttribute("data-theme"));
   });
 });
 
