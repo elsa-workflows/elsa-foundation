@@ -25,6 +25,7 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
@@ -36,6 +37,12 @@ test.afterEach(async ({ page }) => {
     const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
     expect(removed.ok()).toBe(true);
   }
+  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
+  const cleanupFailures: string[] = [];
+  for (const cleanup of ownedCleanups.get(page) ?? []) {
+    try { await cleanup(); } catch (error) { cleanupFailures.push(String(error)); }
+  }
+  expect(cleanupFailures, "Journey cleanup").toEqual([]);
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
@@ -49,6 +56,7 @@ test.beforeEach(async ({ page }, info) => {
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
+  ownedCleanups.set(page, []);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
@@ -355,7 +363,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
 });
 
 test("save template toast", async ({ page }, info) => {
-  await templateToastJourney(page, info, capture);
+  await templateToastJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("workflow template metadata defaults", async ({ page }, info) => {

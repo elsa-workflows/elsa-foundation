@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="Mode">The effective mode.</param>
 /// <param name="RunHasRecord">
 /// Whether the durable store already holds the run's workflow row when the drain begins. An Ephemeral run that has a
-/// record always gets its completion committed, so a stored run is never left looking unfinished.
+/// record always gets its completion committed, so a stored run is never left looking unfinished. A run that has no
+/// record may still have rows in other stores, so the absence of a record proves nothing about them.
 /// </param>
 public sealed record ResolvedPersistenceMode(PersistenceMode Mode, bool RunHasRecord);
