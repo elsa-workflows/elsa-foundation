@@ -50,6 +50,12 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
     public async ValueTask<bool> TryWriteAsync(HttpContext context, Exception exception)
     {
         var metadata = context.GetEndpoint()?.Metadata;
+        if (ActivityDataSelectionPublicationProblems.TryFind(exception, out var sourceRefusal))
+        {
+            await ActivityPublishingProblems.WriteAsync(context.Response,
+                ActivityDataSelectionPublicationProblems.Create(sourceRefusal, context), context.RequestAborted);
+            return true;
+        }
         if (metadata?.GetMetadata<ActivityProblemEndpointMetadata>() is { } activity)
         {
             if (exception is ActivityPublicationRejectedException rejected)

@@ -4,6 +4,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Acme.Specialists.Design" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Publishing.Api" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Events" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Workflows.Design.Validations" Version="__VERSION__" />
     <PackageReference Include="Elsa.Activities.Design.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />

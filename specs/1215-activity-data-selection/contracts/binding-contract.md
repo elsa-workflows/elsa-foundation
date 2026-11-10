@@ -253,6 +253,13 @@ authored documents during publication.
 
 ## 7. Existing expressions and graph operations
 
+Headless expression callers supply plain source text, an owned `ExpressionDefinition`, or a `JsonElement`
+representing the portable contract. Structured CLR payloads (including dictionaries, anonymous objects
+and `JsonObject`) are explicitly refused before executable production: metadata admission cannot safely
+serialize arbitrary authored CLR values or invoke their getters to discover hidden portable parameters.
+Callers needing JSON submit it as `JsonElement`; literal/object business values retain their existing
+value-writing behavior. Every admitted portable parameter still receives the same static source checks.
+
 For explicit transformations, retain existing whole-source portable parameters and let the installed
 syntax adapter insert escaped member access. Direct selection does not become generated JavaScript,
 and new portable parameter discriminants are not required. Validate every parameter's source identity,

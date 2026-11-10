@@ -15,14 +15,19 @@ internal static class ExpressionToolingApiHandlers
     public static ValueTask<ExpressionAuthoringAuthorization> AuthorizationAsync(
         HttpContext context,
         IExpressionAuthoringAuthorizationPolicy policy,
+        CancellationToken cancellationToken) => AuthorizationAsync(context.User, policy, cancellationToken);
+
+    internal static ValueTask<ExpressionAuthoringAuthorization> AuthorizationAsync(
+        ClaimsPrincipal principal,
+        IExpressionAuthoringAuthorizationPolicy policy,
         CancellationToken cancellationToken)
     {
-        var subjectId = context.User.FindFirstValue("sub") ?? context.User.Identity?.Name;
+        var subjectId = principal.FindFirstValue("sub") ?? principal.Identity?.Name;
         // Token-instance identifiers/timestamps rotate on Studio's per-request bearer exchange, not on
         // permission changes. Authentication still validates each token's lifetime and revocation before
         // these handlers run. Keep every other claim (including private scopes/audiences/presenters) so
         // subject, tenant, grants and host-policy changes continue to invalidate authoring contexts.
-        var permissionRevision = Revision(context.User.Claims
+        var permissionRevision = Revision(principal.Claims
             .Where(claim => claim.Type is not ("jti" or "iat" or "nbf" or "exp" or "oi_tkn_id" or "oi_crt_dt" or "oi_exp_dt"))
             .Select(claim => $"{claim.Type}\u001f{claim.Value}")
             .OrderBy(value => value, StringComparer.Ordinal));

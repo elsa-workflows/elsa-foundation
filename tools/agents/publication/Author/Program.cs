@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Acme.Specialists.Design;
 using Acme.Specialists.Runtime;
@@ -43,9 +44,19 @@ var sources = new EfWorkflowExecutableSourceReferenceStore(runtime, access, code
 var receipts = new EfActivityPublicationReceiptStore(publishing, access);
 var commit = new EfActivityPublicationCommand(receipts, templates, sources, stores, access);
 var provider = new SpecialistProvider();
+var admissionServices = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+admissionServices.AddLogging();
+new Elsa.Events.EventsFeature().ConfigureServices(admissionServices);
+new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(admissionServices);
+admissionServices.AddSingleton<IActivityDefinitionLookup>(new Elsa.Activities.Design.Persistence.Core.Services.ActivityDefinitionLookup(stores, stores));
+await using var admissionRoot = admissionServices.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+await using var admissionScope = admissionRoot.CreateAsyncScope();
 var compiler = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([provider]),
     new ActivityTemplateDependencyDiscovererRegistry([provider]), stores, stores, templates,
-    new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System);
+    new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System,
+    admissionScope.ServiceProvider.GetServices<Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionDocumentProjector>(),
+    admissionScope.ServiceProvider.GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionAnalyzer>(),
+    admissionScope.ServiceProvider.GetRequiredService<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService>());
 var validator = new ActivityDraftValidator(new ActivityProviderRegistry([provider]), new ActivityContractAuthoringValidator(new Capabilities()), TimeProvider.System);
 var publisher = new ActivityDefinitionPublisher(stores, stores, stores, stores, stores, stores, validator,
     new ActivityVersionDiffer(), compiler, access, commit, new SingleProcessLock(), new Ids(), TimeProvider.System,
