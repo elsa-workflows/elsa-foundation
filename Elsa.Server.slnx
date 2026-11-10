@@ -1,15 +1,16 @@
 <Solution>
   <Folder Name="/Extensions/" />
   <Folder Name="/Extensions/Agent/" />
-  <Folder Name="/Extensions/Agent/src/">
-    <Project Path="Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj" />
-    <Project Path="Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
-    <Project Path="Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
-    <Project Path="Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
-    <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+  <Folder Name="/Extensions/Weaver/" />
+  <Folder Name="/Extensions/Weaver/src/">
+    <Project Path="Extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj" />
+    <Project Path="Extensions/Weaver/src/Anthropic/Elsa.Weaver.Anthropic.csproj" />
+    <Project Path="Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj" />
+    <Project Path="Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj" />
+    <Project Path="Extensions/Weaver/src/GitHubCopilot/Elsa.Weaver.GitHubCopilot.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Persistence/">
-    <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+  <Folder Name="/Extensions/Weaver/src/Persistence/">
+    <Project Path="Extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/src/Specialists/">
     <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
@@ -32,19 +33,19 @@
   <Folder Name="/Extensions/Agent/src/Specialists/Persistence/">
     <Project Path="Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Workflows/">
-    <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/Elsa.Agent.Workflows.csproj" />
-    <Project Path="Extensions/Agent/src/Workflows/Runtime/Elsa.Agent.Workflows.Runtime.csproj" />
+  <Folder Name="/Extensions/Weaver/src/Workflows/">
+    <Project Path="Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj" />
+    <Project Path="Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/tests/">
-    <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/">
+    <Project Path="Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/tests/Persistence/">
-    <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
-    <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/Persistence/">
+    <Project Path="Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj" />
+    <Project Path="Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/tests/Workflows/Runtime/">
-    <Project Path="Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/Workflows/Runtime/">
+    <Project Path="Extensions/Weaver/tests/Workflows/Runtime/Tests/Elsa.Weaver.Workflows.Runtime.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/Specialists/">
     <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />

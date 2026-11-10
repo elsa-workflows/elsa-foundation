@@ -34,11 +34,11 @@ const region=document.querySelector('section'),wrapper=document.querySelector('.
 document.querySelector('#launch').addEventListener('click',()=>{region.hidden=false;});
 button.addEventListener('click',()=>{menu.hidden=!menu.hidden;});
 menu.querySelector('button').addEventListener('click',()=>{menu.hidden=true;if(scenario==='ignored')return;mode='full-auto';button.textContent='Autopilot';wrapper.dataset.autonomyState='requested';});
-document.querySelector('#send').addEventListener('click',()=>fetch('/_elsa/agent/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({autonomyMode:mode})}));
+document.querySelector('#send').addEventListener('click',()=>fetch('/_elsa/weaver/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({autonomyMode:mode})}));
 </script>`;
 const server=createServer((request,response)=>{
  if(request.method==='GET'&&request.url==='/resource'){response.setHeader('Content-Type','text/html');response.end(html);return;}
- if(request.method==='POST'&&request.url==='/_elsa/agent/sessions'){let body='';request.on('data',c=>body+=c);request.on('end',()=>{
+ if(request.method==='POST'&&request.url==='/_elsa/weaver/sessions'){let body='';request.on('data',c=>body+=c);request.on('end',()=>{
   const requested=JSON.parse(body).autonomyMode;
   response.setHeader('Content-Type','application/json');
   response.end(JSON.stringify({data:{sessionId:'s1',policy:{autonomyMode:SCENARIO==='clamped'?'manual':requested,maxAutonomyMode:'full-auto',
@@ -49,7 +49,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const backend='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext(),page=await context.newPage();
-const requests=SCENARIO==='early'?[{url:backend+'/_elsa/agent/sessions',method:'POST'}]:[],retained=[],result={evidence:[]};
+const requests=SCENARIO==='early'?[{url:backend+'/_elsa/weaver/sessions',method:'POST'}]:[],retained=[],result={evidence:[]};
 const dock=()=>page.getByRole('region',{name:'Weaver assistant',exact:true});
 const need=(condition,message)=>{if(!condition)throw new Error(message);};
 const responseFor=suffix=>page.waitForResponse(response=>response.url().endsWith(suffix)&&response.request().method()==='POST',{timeout:5000});

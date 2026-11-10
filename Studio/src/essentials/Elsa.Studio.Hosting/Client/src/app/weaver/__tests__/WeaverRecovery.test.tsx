@@ -112,13 +112,13 @@ describe("Weaver session recovery", () => {
     expect(view.subscribe).not.toHaveBeenCalled();
     click(buttonIn(messageItem(view.container, "m1"), "Start"));
     expect(view.subscribe).toHaveBeenCalledTimes(1);
-    expect(view.subscribe.mock.calls[0][1]).toBe(`/_elsa/agent/sessions/${sessionId}/stream`);
-    view.emit({ type: "provider-notice", code: "agent.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." });
+    expect(view.subscribe.mock.calls[0][1]).toBe(`/_elsa/weaver/sessions/${sessionId}/stream`);
+    view.emit({ type: "provider-notice", code: "weaver.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." });
     view.emit({ type: "message-delta", messageId: "m1:reply", content: "Done." });
     view.emit({ type: "message-completed", messageId: "m1:reply" });
     await settle(() => expect(view.container.textContent).toContain("Done."));
     expect(server.client.sendMessage).not.toHaveBeenCalled();
-    expect(view.container.querySelector('[data-notice="agent.provider.github_copilot.conversation_reset"]')?.textContent).toContain("could not resume");
+    expect(view.container.querySelector('[data-notice="weaver.provider.github_copilot.conversation_reset"]')?.textContent).toContain("could not resume");
     expect(view.container.textContent).toContain("Done.");
     expect(buttonsIn(messageItem(view.container, "m1"))).toEqual([]);
     view.unmount();
@@ -284,7 +284,7 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     const sessionId = server.seed("ada", [message("m1", "user", "Earlier question", "completed")]);
     localStorage.setItem(weaverSessionScope(readyApi("ada"))!.storageKey, sessionId);
-    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "agent.session.owned_elsewhere", null, 12));
+    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 12));
     const view = mount(server, "ada");
     await settle(() => expect(view.container.querySelector('[data-kind="owned-elsewhere"]')?.textContent).toContain("Try again in about 12 seconds."));
     expect(localStorage.getItem(weaverSessionScope(readyApi("ada"))!.storageKey)).toBe(sessionId);
@@ -323,7 +323,7 @@ describe("Weaver session recovery", () => {
     await settle(() => expect(view.subscribe).toHaveBeenCalledTimes(1));
     const limited = server.lastSessionId();
     const message = `Session limit reached: this conversation has recorded ${bound}. Continue in a new session; nothing recorded here was discarded.`;
-    view.emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit, message });
+    view.emit({ type: "error", code: "weaver.context.disclosure_budget_exceeded", limit, message });
     const notice = view.container.querySelector('[data-kind="limit"]');
     // The bound comes from the server; Studio adds only what the continuation carries over.
     expect(notice?.getAttribute("data-limit")).toBe(limit);
@@ -352,7 +352,7 @@ describe("Weaver session recovery", () => {
     typeAndSend(view.container, "Attach the whole export");
     await settle(() => expect(view.subscribe).toHaveBeenCalledTimes(1));
     // A single disclosure larger than any session can record: the stream parser keeps only the session limits.
-    view.emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", message: "This context is larger than one session can record." });
+    view.emit({ type: "error", code: "weaver.context.disclosure_budget_exceeded", message: "This context is larger than one session can record." });
     await settle(() => expect(view.container.textContent).toContain("This context is larger than one session can record."));
     expect(view.container.querySelector('[data-kind="limit"]')).toBeNull();
     expect(buttonIn(view.container, "Continue in a new session")).toBeNull();
@@ -392,7 +392,7 @@ describe("Weaver recovery with session autonomy", () => {
     expect(server.client.updateAutonomy).toHaveBeenCalledWith(sessionId, { autonomyMode: "full-auto", expectedRevision: 1 });
 
     // The statement is refused, so the session is reread; the reread still shows revision 1.
-    refuseResolution(new AgentApiError(409, "Not uncertain.", "agent.invocation.not_uncertain", null));
+    refuseResolution(new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
     await settle(() => expect(view.container.querySelector('[data-kind="action-refused"]')).not.toBeNull());
     expect(server.client.getSession).toHaveBeenCalledTimes(2);
     expect(autonomyState(view.container)).toBe("pending");
@@ -415,8 +415,8 @@ describe("Weaver recovery with session autonomy", () => {
     const view = mount(server, "ada");
     await settle(() => expect(resolveGroup(view.container)).not.toBeNull());
     // A refused statement rereads the session; that reread finds the session busy elsewhere and offers Try again.
-    server.client.resolveClientInvocation.mockRejectedValueOnce(new AgentApiError(409, "Not uncertain.", "agent.invocation.not_uncertain", null));
-    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "agent.session.owned_elsewhere", null, 5));
+    server.client.resolveClientInvocation.mockRejectedValueOnce(new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
+    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 5));
     click(buttonIn(resolveGroup(view.container), "It was not applied"));
     await settle(() => expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Try again")?.disabled).toBe(false));
     expect(buttonIn(messageItem(view.container, "m1"), "Withdraw")?.disabled).toBe(false);
@@ -476,18 +476,18 @@ describe("Weaver recovery through the real agent client", () => {
     const http = {
       async getJson(path: string) {
         requests.push(`GET ${path}`);
-        if (path === "/_elsa/agent/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"],
+        if (path === "/_elsa/weaver/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"],
           capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
           provider: { providerId: "wire", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
           policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
-        if (path.startsWith("/_elsa/agent/sessions?")) return { data: { items: [{ id: session.id, title: session.title, status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: null, pendingReviewCount: 2, recoveryState: null }], next: null } };
-        if (path === `/_elsa/agent/sessions/${session.id}`) return { data: { sessionId: session.id, status: session.status, title: session.title, policy: session.policy, messages: session.messages } };
-        if (path === `/_elsa/agent/sessions/${session.id}/proposals`) return { data: [proposal] };
+        if (path.startsWith("/_elsa/weaver/sessions?")) return { data: { items: [{ id: session.id, title: session.title, status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: null, pendingReviewCount: 2, recoveryState: null }], next: null } };
+        if (path === `/_elsa/weaver/sessions/${session.id}`) return { data: { sessionId: session.id, status: session.status, title: session.title, policy: session.policy, messages: session.messages } };
+        if (path === `/_elsa/weaver/sessions/${session.id}/proposals`) return { data: [proposal] };
         throw new Error(`Unexpected GET ${path}`);
       },
       async postJson(path: string) {
         requests.push(`POST ${path}`);
-        if (path === `/_elsa/agent/sessions/${session.id}/messages`) return { data: { message: { id: "w3", status: "pending", context: [],
+        if (path === `/_elsa/weaver/sessions/${session.id}/messages`) return { data: { message: { id: "w3", status: "pending", context: [],
           acceptedPolicy: { autonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 2 } }, warnings: [] } };
         throw new Error(`Unexpected POST ${path}`);
       },
@@ -496,7 +496,7 @@ describe("Weaver recovery through the real agent client", () => {
     const wire = { message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." };
     const fetch = vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: wire.message, statusCode: 409, limit: "bytes" } })}\n\n`));
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ kind: "error", error: { code: "weaver.context.disclosure_budget_exceeded", message: wire.message, statusCode: 409, limit: "bytes" } })}\n\n`));
         controller.close();
       }
     }), { status: 200 }));
@@ -529,13 +529,13 @@ describe("Weaver recovery through the real agent client", () => {
     expect(notice?.textContent).toContain(wire.message);
     expect(buttonIn(notice, "Continue in a new session")).not.toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe(`https://primary.example/_elsa/agent/sessions/${session.id}/stream`);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe(`https://primary.example/_elsa/weaver/sessions/${session.id}/stream`);
     expect(requests).toEqual([
-      "GET /_elsa/agent/bootstrap",
-      "GET /_elsa/agent/sessions?workspace=studio%3Aprimary&take=20",
-      `GET /_elsa/agent/sessions/${session.id}`,
-      `GET /_elsa/agent/sessions/${session.id}/proposals`,
-      `POST /_elsa/agent/sessions/${session.id}/messages`
+      "GET /_elsa/weaver/bootstrap",
+      "GET /_elsa/weaver/sessions?workspace=studio%3Aprimary&take=20",
+      `GET /_elsa/weaver/sessions/${session.id}`,
+      `GET /_elsa/weaver/sessions/${session.id}/proposals`,
+      `POST /_elsa/weaver/sessions/${session.id}/messages`
     ]);
     flushSync(() => root.unmount());
     container.remove();
@@ -549,11 +549,11 @@ describe("Weaver recovery through the real agent client", () => {
   ] as const)("states what a server restart does to conversations when bootstrap reports %s", async (recovery, note) => {
     const http = {
       async getJson(path: string) {
-        if (path === "/_elsa/agent/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"], ...(recovery ? { recovery } : {}),
+        if (path === "/_elsa/weaver/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"], ...(recovery ? { recovery } : {}),
           capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
           provider: { providerId: "wire", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
           policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
-        if (path.startsWith("/_elsa/agent/sessions?")) return { data: { items: [], next: null } };
+        if (path.startsWith("/_elsa/weaver/sessions?")) return { data: { items: [], next: null } };
         throw new Error(`Unexpected GET ${path}`);
       },
       async postJson(path: string) { throw new Error(`Unexpected POST ${path}`); },
@@ -579,14 +579,14 @@ describe("Weaver recovery through the real agent client", () => {
     const http = {
       async getJson(path: string) {
         requests.push(`GET ${path}`);
-        if (path === "/_elsa/agent/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"],
+        if (path === "/_elsa/weaver/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"],
           capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
           provider: { providerId: "wire", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
           policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
-        if (path.startsWith("/_elsa/agent/sessions?")) return { data: { items: [{ id, title: "Limited session", status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: null, pendingReviewCount: 0, recoveryState: "limit-reached:snapshots" }], next: null } };
-        if (path === `/_elsa/agent/sessions/${id}`) return { data: { sessionId: id, status: "active", title: "Limited session", policy, limitReached: "snapshots",
+        if (path.startsWith("/_elsa/weaver/sessions?")) return { data: { items: [{ id, title: "Limited session", status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: null, pendingReviewCount: 0, recoveryState: "limit-reached:snapshots" }], next: null } };
+        if (path === `/_elsa/weaver/sessions/${id}`) return { data: { sessionId: id, status: "active", title: "Limited session", policy, limitReached: "snapshots",
           messages: [{ id: "l1", role: "user", content: "A long conversation", status: "completed", acceptedPolicyRevision: 1 }] } };
-        if (path === `/_elsa/agent/sessions/${id}/proposals`) return { data: [] };
+        if (path === `/_elsa/weaver/sessions/${id}/proposals`) return { data: [] };
         throw new Error(`Unexpected GET ${path}`);
       },
       async postJson(path: string) { throw new Error(`Unexpected POST ${path}`); },
@@ -612,10 +612,10 @@ describe("Weaver recovery through the real agent client", () => {
     expect(container.textContent).toContain("A long conversation");
     expect(fetch).not.toHaveBeenCalled();
     expect(requests).toEqual([
-      "GET /_elsa/agent/bootstrap",
-      "GET /_elsa/agent/sessions?workspace=studio%3Aprimary&take=20",
-      `GET /_elsa/agent/sessions/${id}`,
-      `GET /_elsa/agent/sessions/${id}/proposals`
+      "GET /_elsa/weaver/bootstrap",
+      "GET /_elsa/weaver/sessions?workspace=studio%3Aprimary&take=20",
+      `GET /_elsa/weaver/sessions/${id}`,
+      `GET /_elsa/weaver/sessions/${id}/proposals`
     ]);
     flushSync(() => root.unmount());
     container.remove();
@@ -628,7 +628,7 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
   const sessions = new Map<string, Recorded>();
   const writes: string[] = [];
   let next = 0;
-  const notFound = () => new AgentApiError(404, "Agent session was not found.", "agent.session.not_found", null);
+  const notFound = () => new AgentApiError(404, "Agent session was not found.", "weaver.session.not_found", null);
   const owned = (id: string) => { const recorded = sessions.get(id); if (!recorded || recorded.owner !== "ada") throw notFound(); return recorded; };
   const seed = (owner: string, messages: AgentRecordedMessage[] = [], proposals: AgentRecordedProposal[] = []) => {
     const id = `agt_${++next}`;
@@ -651,7 +651,7 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
     updateAutonomy: vi.fn<AgentClient["updateAutonomy"]>(),
     sendMessage: vi.fn<AgentClient["sendMessage"]>(async (id, request) => {
       owned(id).detail.messages.push(message(`msg_${owned(id).detail.messages.length + 1}`, "user", request.message, "pending")); writes.push("send");
-      return { messageId: "msg_1", status: "pending", streamUrl: `/_elsa/agent/sessions/${id}/stream` };
+      return { messageId: "msg_1", status: "pending", streamUrl: `/_elsa/weaver/sessions/${id}/stream` };
     }),
     approveProposal: vi.fn<AgentClient["approveProposal"]>(async proposalId => ({ proposalId, approvalStatus: "approved" })),
     denyProposal: vi.fn<AgentClient["denyProposal"]>(async proposalId => ({ proposalId, approvalStatus: "denied" })),
@@ -669,22 +669,22 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
     submitFeedback: vi.fn<AgentClient["submitFeedback"]>(async () => {}),
     cancelTurn: vi.fn<AgentClient["cancelTurn"]>(async () => {}),
     listSessions: vi.fn<AgentClient["listSessions"]>(async () => {
-      if (options.listUnsupported) throw new AgentApiError(409, "Unsupported.", "agent.session.query_unsupported", null);
+      if (options.listUnsupported) throw new AgentApiError(409, "Unsupported.", "weaver.session.query_unsupported", null);
       return { items: [...sessions].filter(([, item]) => item.owner === "ada").reverse().map(([id, item]) => ({ id, title: item.detail.title, status: item.detail.status, updatedAt: "2026-11-02T10:00:00Z", pendingReviewCount: item.proposals.filter(p => p.status === "awaiting-approval").length })) };
     }),
     listProposals: vi.fn<AgentClient["listProposals"]>(async id => structuredClone(owned(id).proposals)),
     withdrawMessage: vi.fn<AgentClient["withdrawMessage"]>(async (id, messageId) => {
       const recorded = owned(id).detail.messages.find(item => item.id === messageId);
-      if (!recorded) throw new AgentApiError(404, "Not found.", "agent.message.not_found", null);
-      if (recorded.status !== "pending") throw new AgentApiError(409, "Not pending.", "agent.message.not_pending", null);
+      if (!recorded) throw new AgentApiError(404, "Not found.", "weaver.message.not_found", null);
+      if (recorded.status !== "pending") throw new AgentApiError(409, "Not pending.", "weaver.message.not_pending", null);
       Object.assign(recorded, { status: "cancelled", statusReason: "withdrawn" }); writes.push("withdraw");
       return structuredClone(recorded);
     }),
     resolveClientInvocation: vi.fn<AgentClient["resolveClientInvocation"]>(async (id, invocationId, claim) => {
       const proposal = owned(id).proposals.find(p => p.preparedInvocation?.invocationId === invocationId);
-      if (!proposal) throw new AgentApiError(404, "Not found.", "agent.invocation.not_found", null);
-      if (proposal.status !== "uncertain") throw new AgentApiError(409, "Not uncertain.", "agent.invocation.not_uncertain", null);
-      if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) throw new AgentApiError(409, "Conflict.", "agent.invocation.resolution_conflict", null);
+      if (!proposal) throw new AgentApiError(404, "Not found.", "weaver.invocation.not_found", null);
+      if (proposal.status !== "uncertain") throw new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null);
+      if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) throw new AgentApiError(409, "Conflict.", "weaver.invocation.resolution_conflict", null);
       proposal.ownerResolution = { claim, actorId: "ada" }; writes.push("resolve");
       return structuredClone(proposal);
     })

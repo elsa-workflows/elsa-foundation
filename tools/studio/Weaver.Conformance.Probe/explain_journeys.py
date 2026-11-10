@@ -67,7 +67,7 @@ MAX_DIAGNOSTICS, MAX_MESSAGE, MAX_CONTENT, CONTENT_BUDGET = 64, 1024, 2048, 1638
 # Each turn and the node the editor has selected for it.
 TURNS = {"explain": LITERAL_NODE, "validation": "b", "expression": "inner", "secret-reference": SECRET_NODE}
 CONTROL = "credential-disclosed"
-CONTROL_ERROR = {"code": "agent.context.incomplete", "statusCode": 400,
+CONTROL_ERROR = {"code": "weaver.context.incomplete", "statusCode": 400,
                  "message": "The selected activity's property context does not match the activity's declared inputs, so the snapshot was not admitted."}
 
 # Each actual adapter's own frame order for a read tool that completes. The engine's own loop (AgentTurnServices) emits it:

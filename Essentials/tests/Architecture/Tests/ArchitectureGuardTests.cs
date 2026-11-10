@@ -555,6 +555,7 @@ public sealed partial class ArchitectureGuardTests
     [
         ("Elsa3.", "Elsa3"),
         ("Elsa.Agent.", "Agent"),
+        ("Elsa.Weaver.", "Weaver"),
         ("Elsa.Etl.", "Etl"),
         ("Elsa.Rules.", "Rules"),
         ("Elsa.Decisions.", "Decisions"),

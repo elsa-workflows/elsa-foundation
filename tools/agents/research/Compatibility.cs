@@ -3,10 +3,10 @@ using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
-using Elsa.Agent.Anthropic;
-using Elsa.Agent.Anthropic.Services;
-using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.GitHubCopilot;
+using Elsa.Weaver.Anthropic;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.GitHubCopilot;
 using Elsa.Events;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -14,7 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 var observations = new List<string>();
-foreach (var leaf in new[] { typeof(AnthropicAgentFeature), typeof(GitHubCopilotAgentFeature) })
+foreach (var leaf in new[] { typeof(WeaverAnthropicFeature), typeof(WeaverGitHubCopilotFeature) })
 {
     var services = new ServiceCollection();
     services.AddLogging();
@@ -29,7 +29,7 @@ foreach (var leaf in new[] { typeof(AnthropicAgentFeature), typeof(GitHubCopilot
     scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
     scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
     observations.Add(leaf.Name + " activated and resolves current Agent contracts");
-    if (leaf == typeof(AnthropicAgentFeature))
+    if (leaf == typeof(WeaverAnthropicFeature))
     {
         using var unusedClient = scope.ServiceProvider.GetRequiredService<IAnthropicChatClientFactory>().Create("fixture-unused", "fixture-model");
         observations.Add("Current Anthropic SDK factory constructs IChatClient under resolved abstractions without network calls");

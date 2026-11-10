@@ -72,7 +72,7 @@ public sealed class FeatureCompositionTests
                 "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence",
                 "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
             ]),
-        new("A shell runs exactly one agent harness.", ["AnthropicAgent"], ["GitHubCopilotAgent"]),
+        new("A shell runs exactly one agent harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["SpecialistsEntityFrameworkCore"]),
     ];

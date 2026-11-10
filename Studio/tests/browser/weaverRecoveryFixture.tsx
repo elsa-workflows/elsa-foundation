@@ -53,7 +53,7 @@ function refuse(status: number, code: string, message: string): never {
 
 function owned(store: Store, id: string) {
   const session = store.sessions.find(item => item.id === id);
-  if (!session || session.owner !== user) refuse(404, "agent.session.not_found", `Agent session '${id}' was not found.`);
+  if (!session || session.owner !== user) refuse(404, "weaver.session.not_found", `Agent session '${id}' was not found.`);
   return session;
 }
 
@@ -62,7 +62,7 @@ function proposalOf(store: Store, proposalId: string) {
     const proposal = session.proposals.find(item => item.id === proposalId);
     if (proposal && session.owner === user) return { session, proposal };
   }
-  return refuse(404, "agent.proposal.not_found", "Not found.");
+  return refuse(404, "weaver.proposal.not_found", "Not found.");
 }
 
 function details(session: Session) {
@@ -96,23 +96,23 @@ function route(method: string, path: string, body: Record<string, unknown> = {})
     if (rest.length === 0) return { data: details(session) };
     if (rest[0] === "proposals") return { data: session.proposals };
     if (rest[0] === "messages" && rest.length === 1) {
-      if (session.messages.some(item => item.role === "user" && (item.status === "pending" || item.status === "streaming"))) refuse(409, "agent.message.delivery_conflict", "Another prompt is pending.");
+      if (session.messages.some(item => item.role === "user" && (item.status === "pending" || item.status === "streaming"))) refuse(409, "weaver.message.delivery_conflict", "Another prompt is pending.");
       const message = { id: `msg_${store.next}_${session.messages.length + 1}`, role: "user", content: String(body.content ?? body.message), status: "pending" };
       session.messages.push(message); store.log.push("message");
       return done({ message: { id: message.id, status: "pending", context: [] }, warnings: [] });
     }
     if (rest[0] === "messages" && rest[2] === "withdraw") {
-      const message = session.messages.find(item => item.id === rest[1]) ?? refuse(404, "agent.message.not_found", "Not found.");
-      if (message.status !== "pending") refuse(409, "agent.message.not_pending", "The prompt already started.");
+      const message = session.messages.find(item => item.id === rest[1]) ?? refuse(404, "weaver.message.not_found", "Not found.");
+      if (message.status !== "pending") refuse(409, "weaver.message.not_pending", "The prompt already started.");
       Object.assign(message, { status: "cancelled", statusReason: "withdrawn" }); store.log.push("withdraw");
       return done(message);
     }
     if (rest[0] === "client-invocations") {
-      const proposal = session.proposals.find(item => item.preparedInvocation?.invocationId === rest[1]) ?? refuse(404, "agent.invocation.not_found", "Not found.");
+      const proposal = session.proposals.find(item => item.preparedInvocation?.invocationId === rest[1]) ?? refuse(404, "weaver.invocation.not_found", "Not found.");
       if (rest[2] === "resolution") {
-        if (proposal.status !== "uncertain") refuse(409, "agent.invocation.not_uncertain", "Not uncertain.");
+        if (proposal.status !== "uncertain") refuse(409, "weaver.invocation.not_uncertain", "Not uncertain.");
         const claim = String(body.claim);
-        if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) refuse(409, "agent.invocation.resolution_conflict", "A different statement is recorded.");
+        if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) refuse(409, "weaver.invocation.resolution_conflict", "A different statement is recorded.");
         proposal.ownerResolution = { claim, actorId: user }; store.log.push(`resolve:${claim}`);
         return done(proposal);
       }
@@ -167,7 +167,7 @@ const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEv
     if (prompt.content.includes("[limit]")) {
       // The documented session limit: the turn stops before the provider, and everything recorded stays.
       prompt.status = "failed"; write(store);
-      emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." });
+      emit({ type: "error", code: "weaver.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." });
       return;
     }
     if (prompt.content.includes("[drop]")) {
