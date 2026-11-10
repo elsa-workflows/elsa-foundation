@@ -53,7 +53,14 @@ specific target/host contract reason; a visually similar but ineligible control 
 The source browser has activity results, workflow inputs, scoped variables and any current-item sources
 explicitly exposed by the owning structure. Identity is independent of the display label:
 
-- Activity results retain producer node, declared output/projection and structural/causal identity.
+- Activity results retain producer node, declared output/projection and structural/causal identity. The
+  server returns the complete binding for each activity result the author can browse; the client stores it
+  unchanged and never derives a producer scope (#4053). A result the server lists without a binding carries
+  exactly one reason code, availability first: `ConditionalOccurrence`, `AvailabilityUnknown`,
+  `UnavailableProducer`, `EarlierProducerRun` (the owning structure does not state that no earlier run of the
+  producer can lead to this input, as on a Flowchart cycle) or `NoTypedResult` (the producer declares no typed
+  whole result). Its identity stays inspectable, and expression authoring may still bind it as a portable
+  parameter.
 - Workflow inputs retain their stable input identity; display-name edits do not rebind them.
 - Variables retain declaration identity and lexical scope; same-name/shadowed variables remain distinct.
 - Current item is a structure-owned projection of an existing value role with iteration scope. The

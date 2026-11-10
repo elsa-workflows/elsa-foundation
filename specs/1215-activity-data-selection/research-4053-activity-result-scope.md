@@ -1,6 +1,8 @@
 # Research: the scope in an activity-result binding (#4053)
 
-**Status:** Design note for review. No product code changes. Baseline `aa85848627` (main, 10 Nov 2026).
+**Status:** Design accepted by Code Review's design review (PR #4055, round 1), with the changes in
+[section 9](#9-design-review-and-what-changed); implemented on the same branch. Baseline `aa85848627` (main,
+10 Nov 2026). The fact the review called `ProducerMayRepeat` is named `EarlierProducerRunCanReachConsumer`.
 **Issue:** [#4053](https://github.com/elsa-workflows/elsa-foundation/issues/4053), part of [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882); blocks [#3094](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
 **Method:** reading code, then real-engine runs for the run-time claims. The runs are
 `Essentials/tests/Activities/Behavioral/Tests/ActivityResultOccurrenceTests.cs` (`OccurrenceTests` below);
@@ -30,8 +32,9 @@ Path prefixes used below:
 - A scope-free read is not safe by itself either: in a looping Flowchart nested in a loop it also reads the
   stale first-pass result, silently. The refusal in the recommendation is therefore required, not optional.
 - Recommendation: new direct bindings carry no scope (design B), and the owning structure supplies one new
-  static fact, "this producer can run again before the consumer", so that such reads are not offered and
-  are refused at publish. Existing documents with a scope are left exactly as they are.
+  static fact, "an earlier run of the producer can be among the runs that led to the consumer", so that
+  such reads are not offered and are refused at publish. Existing documents with a scope are left exactly
+  as they are.
 - One acceptance line of #4053 needed the owner's reading: a producer *inside* a Flowchart loop cannot be
   made to resolve correctly by any choice about scope. See [section 6](#6-recommendation). The owner accepted
   that limit for this leaf on #4053.
@@ -301,25 +304,36 @@ boundary and reusable body; unchanged compensation and legacy-scope regressions.
 ### Hybrid: B, plus one structure-owned fact that refuses repeating producers
 
 B alone leaves the loop read publishable and broken. The missing guarantee is static and belongs to the
-structure: whether the producer can run again within one activation of the structure that owns it. The
-fact is assessed where the producer lives, whatever the consumer's depth: in the nested example B is on
-the outer cycle, so E's read is refused although E sits in another Flowchart.
+structure. It is defined by what the resolver needs, not by "can run again": **within one run of the
+structure, can an earlier run of the producer child be among the runs that led to the consumer child?**
+A While body runs again, but the loop schedules every pass itself (`ControlFlow/While/Activities/While.cs:113-130`),
+so an earlier pass never enters a later pass's lineage; in a Flowchart each node run is scheduled by the run
+that just completed, which carries the earlier pass into the lineage. The fact is assessed at the lowest
+structure that contains both, where the producer is a direct child (a producer deeper than that is already
+refused as `ValueFlow/ScopeBoundary`): in the nested example B is on the outer cycle, so E's read is refused
+although E sits in another Flowchart.
 
-- `DC/Models/ActivityChildResultFacts.cs`: add `ProducerMayRepeat` (`bool?`, as an init property so the
-  positional record keeps its shape). `FlowchartChildResultAnalysis.Assess` sets it from the reachability it
-  already computes: the producer can reach itself (`FC/Internal/FlowchartChildResultAnalysis.cs:25,38-58`).
-  The `ChildrenCompletedBefore` adapter sets `false` for a declared prior child
-  (`DC/Models/ActivityChildResultFacts.cs:10-15`), which covers Sequence and compensation without touching
-  `CompensationScopeStructureHandler`.
-- Analyzer: a scope-free direct binding is admitted only when the fact is `false`. A repeating or unknown
-  producer is listed with `binding: null` and a reason code, and a stored scope-free binding to it gets a
-  finding, so publication refuses it before any write.
-- Bindings that carry a scope, and portable parameters, keep today's rules.
+- `DC/Models/ActivityChildResultFacts.cs`: `EarlierProducerRunCanReachConsumer` (`bool?`, an init property so
+  the positional record keeps its shape). `null` means the structure has not said and is treated as "it can".
+- Every in-repo `AssessChildResult` sets it explicitly. Sequence, Flowchart (`FlowchartChildResultAnalysis`)
+  and BPMN (`BpmnLinearChildResultAnalysis`) build their facts themselves and do not use the
+  `ChildrenCompletedBefore` adapter, so each sets it. Flowchart answers whether the producer can reach itself;
+  Sequence, the proven linear BPMN chain and compensation answer `false`. If, Switch, Parallel and the four
+  loops used the interface default and now override it with unchanged availability (`Unknown`) and `false`.
+  BPMN shapes the linear analysis cannot prove keep `Unknown` with the fact unset.
+- Analyzer: a scope-free direct binding is admitted only when the fact is `false`. A producer whose fact is
+  `true` or unset is listed with `binding: null` and the reason `EarlierProducerRun`, and a stored scope-free
+  binding to it gets `ValueFlow/EarlierProducerRun`, so publication refuses it before any write.
+- Bindings that carry a scope, and portable parameters, keep today's rules (#4056).
+- Repetition of an enclosing structure is not this fact's job. It is caught by the analyzer's ancestor walk,
+  which already refuses a read as a cyclic back-edge when any enclosing structure says its child below both
+  producer and consumer can reach itself (section 9, point c).
 
 ## 6. Recommendation
 
-**The hybrid.** New bindings have no scope; the Flowchart handler reports repeating producers; the analyzer
-offers and admits a direct binding only when the producer is definitely available and does not repeat.
+**The hybrid.** New bindings have no scope; every structure handler states whether an earlier producer run
+can reach the consumer; the analyzer offers and admits a scope-free direct binding only when the producer is
+definitely available and the owning structure says no earlier run can reach the consumer.
 
 Correctness:
 
@@ -333,8 +347,10 @@ Correctness:
 Architectural fit:
 
 - The structure supplies a control-flow fact it already computes; no private engine id enters a contract.
-- One public API change, additive, in a package that already tracks it. No new package, wire discriminant,
-  store or resolver rule.
+- One public API change, in `RuntimeActivityResultReference` of a package that already tracks it: the scope
+  becomes nullable and a two-argument constructor is added. No new package, wire discriminant, store or
+  resolver rule. `CausalActivityResultResolutionException` needs no change: the resolver already passes a
+  null declared scope to it as an empty string (`CausalActivityResultResolver.cs:193,211`).
 
 **Strongest argument against.** It does not let an author read "the page fetched in this pass" from a
 producer inside a Flowchart loop, which is the most common loop pattern and exactly the variable ceremony
@@ -353,26 +369,28 @@ structural admission, as portable parameters already do.
 
 ## 7. Governance and task breakdown
 
-No ADR amendment. Update `contracts/binding-contract.md` (section 1 table and the sentence on picker
-output), `contracts/authoring-contract.md` (server returns the complete binding; the repeating-producer
-reason), `tasks.md`, and the Validations and Design API `EXTENSION_POINTS.md` entries that describe
-`RuntimeScopeBindingUnavailable`.
+No ADR amendment. Update `contracts/binding-contract.md` (section 1 table, its example and the sentence on
+picker output), `contracts/authoring-contract.md` (server returns the complete binding; reason codes),
+`tasks.md`, and the Validations and Design API `EXTENSION_POINTS.md` entries.
 
-One PR, in this order:
+One PR, in this order. Receipts are in [tasks.md](tasks.md) under #4053.
 
-1. **Characterise first.** Done: `OccurrenceTests`, 14 cases. Every claim that was run held; the nested
-   case added a finding (section 2). The tests marked "known defect" change with steps 4 and 5.
-2. **Runtime model.** Nullable `ProducerScopeId`, constructor overload, public API file, hash controls for
-   both shapes. No resolver change.
+1. **Characterise first.** `OccurrenceTests`; every claim that was run held, and the nested case added a
+   finding (section 2). Each case now also runs the direct form without a scope. No known-defect test flips:
+   #4053 changes no resolver rule, so scoped documents and parameters behave as before (#4056), and the
+   direct form is refused at publication in every known-defect shape.
+2. **Runtime model.** Nullable `ProducerScopeId` with `[JsonIgnore(WhenWritingNull)]`, the two-argument
+   constructor, `[JsonConstructor]` on the full one, public API file, hash and stored-form controls for both
+   shapes. No resolver change.
 3. **Publishing.** Optional scope in `RuntimeInputBindingCompiler`; null guard in `PlacedReferenceRemapper`;
-   template and executable hash controls.
-4. **Structure fact.** `ProducerMayRepeat` on `ActivityChildResultFacts`; Flowchart and the
-   completed-before adapter supply it; handler tests.
+   template and executable hash controls whose expected values were computed on `6cf153dc94`.
+4. **Structure fact.** `EarlierProducerRunCanReachConsumer` set by every in-repo handler; handler tests; an
+   architecture guard over compiled code.
 5. **Analysis.** Scope-free direct binding in `ActivityDataReadBinding`; analyzer returns it for admissible
-   browsed producers and refuses repeating ones; rewrite the guard test; endpoint tests for both resource
-   kinds; publisher no-write refusal.
-6. **Regressions.** Compensation own/prior forward-result visibility, the #3089 restart test and the rules
-   e2e stay green unmodified.
+   browsed producers and refuses others; guard test rewritten; endpoint tests for both resource kinds;
+   publisher no-write refusal.
+6. **Regressions.** Compensation own/prior forward-result visibility, the #3089 restart test and existing
+   scoped-binding tests stay green unmodified.
 7. **Contracts.** The spec and catalog updates above.
 
 ## 8. Not established
@@ -382,14 +400,98 @@ One PR, in this order:
 - A Graph Activity boundary as the producer. The run uses a leaf that carries the metadata placement writes
   on a boundary (`activity.definitionVersionId`), which is the only thing that opens the scope; a real
   placed graph with an output mapping was not run.
-- Publication. The runs execute hand-built executables, as the shared harness does, so the static
-  admission described in section 3 was read, not run, for these shapes.
+- Publication of the run shapes. The runs execute hand-built executables, as the shared harness does.
+  Publication of a scope-free binding is run separately, through the real publisher, for a linear and a
+  cyclic Flowchart (`PublishWorkflowRequestHandlerTests`) and through the analyzer for each shape's structure
+  facts; one workflow was not taken through both publication and a run.
 - A producer that first runs after a loop-back, as opposed to under a first-wins fork. It needs a node that
   is skipped on the first pass; the generated-scope mechanism is the one the first-wins run exercises.
-- How an older runtime loads an executable whose reference has no scope. The constructor throws on a null
-  scope (`RTC/Models/RuntimeInputBinding.cs:207`); I did not read the artifact deserializer to confirm that
-  this is the path taken and that it fails before any activity runs.
-- Whether a null `ProducerScopeId` is written as `null` or omitted in the stored artifact and inspection
-  views (`Essentials/src/Workflows/Runtime/Api/Models/WorkflowExecutableInspectionViews.cs:133`).
-- Whether every structure with a custom `AssessChildResult` outside this repository should be treated as
-  "may repeat" when it leaves the new fact unset. The recommendation treats unset as not admissible.
+- Resolved by reading: how an older runtime loads an executable whose reference has no scope. The stored
+  executable is read by `RuntimeArtifactJson.Deserialize`, and the old reference constructor calls
+  `ThrowIfNullOrWhiteSpace` on the missing scope. That `ArgumentNullException` is an `ArgumentException`, which
+  `EfWorkflowExecutableStore.Read` turns into `InvalidDataException("The persisted workflow executable payload
+  is corrupt.")` (`Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs:1031-1042`).
+  The executable never loads, so no activity of it runs. The old reader reports a corrupt payload rather
+  than a friendly incompatibility; that is refusal, not a wrong read. Not run against an old build.
+- Resolved: a null `ProducerScopeId` is omitted. `[JsonIgnore(Condition = WhenWritingNull)]` on the property
+  applies to every serializer that reads the type's metadata: the stored executable (`RuntimeArtifactJson`,
+  web defaults) and the inspection views, whose `WorkflowExecutableInputBindingView.ActivityResult` is the same
+  `RuntimeActivityResultReference` (`Essentials/src/Workflows/Runtime/Api/Models/WorkflowExecutableInspectionViews.cs:133`).
+  A scoped reference keeps its member and its bytes; a reference read back without the member has a null
+  scope (`[JsonConstructor]` on the full constructor; pinned by `ScopedActivityResultHashTests` with web
+  options, not through the EF store itself).
+- Resolved: a structure outside this repository that leaves the fact unset is treated as "an earlier run can
+  reach the consumer", so its children's results are listed without a binding (fail closed). In-repo
+  handlers are held to stating it by `StructureHandlerOccurrenceFactGuardTests`.
+
+## 9. Design review and what changed
+
+Code Review's design review of this note (PR #4055, round 1) was accepted in full. Each point and what the
+implementation does about it:
+
+**a. Sequence and BPMN do not use the completed-before adapter (blocker).** Correct: Sequence
+(`Essentials/src/Activities/Sequence/Internal/SequenceStructureHandler.cs`), Flowchart
+(`FC/Internal/FlowchartChildResultAnalysis.cs`) and BPMN (`Essentials/src/Activities/Bpmn/Design/Internal/BpmnLinearChildResultAnalysis.cs`)
+build their facts themselves, and section 5's claim that the adapter covers Sequence was wrong. Every in-repo
+handler now sets the fact in its own `AssessChildResult`: Sequence, linear BPMN and compensation `false`,
+Flowchart from reachability to self, and If, Switch, Parallel and the loops `false` with unchanged
+`Unknown` availability. For each `false` the property holds:
+
+- If and Switch schedule the one chosen branch themselves, once per run.
+- The loops schedule every pass themselves (`schedulingActivityExecutionId` is the loop, for example
+  `ControlFlow/While/Activities/While.cs:126`), so an earlier pass never enters a later pass's lineage (run:
+  `A_reader_in_a_loop_body_reads_the_producer_of_its_own_pass`, While, Do, For and ForEach, all three forms).
+- Parallel schedules every branch itself under its own branch id (`ControlFlow/Parallel/Activities/Parallel.cs:166-191`).
+  A sibling branch's run is never in another branch's lineage at all, and its branch frame would not match
+  either, so the producer is unavailable rather than ambiguous: the statement is true, and availability stays
+  `Unknown`, so no binding is offered between branches anyway.
+- Compensation runs each step once and a handler after its own step; `CompensationScopeStructureHandler`
+  only gains the explicit fact, with the availability its adapter gave before.
+- BPMN shapes the linear analysis cannot prove keep `Unknown` with the fact unset.
+
+`StructureHandlerOccurrenceFactGuardTests` (Architecture) reads compiled code: every concrete
+`IActivityStructureHandler` in the packable libraries (`RuntimeLibraries.Assemblies`, kept complete by
+`FeatureCompositionTests`) must declare its own `AssessChildResult`, and it or a same-assembly method it calls
+must call the fact's setter. A behavioural sweep would need a meaningful structure payload per handler, which
+only each handler's own tests can build; those tests pin the values, the guard pins that every handler answers.
+
+**b. Define the fact by the lineage property.** Adopted, and the name says it: the fact answers whether an
+earlier run of the producer child can be among the runs that led to the consumer child (section 5). Flowchart
+answers `true` exactly when the producer can reach itself, because each node run is scheduled by the run that
+just completed (`FC/Internal/FlowchartExecutionEngine.cs:57,121`). For, ForEach and Do bodies were added to the
+characterisation runs.
+
+**c. The hybrid depends on the ancestor walk.** It does. When producer and consumer sit together inside a
+structure that a Flowchart cycle runs again (a Sequence on a loop), the lowest common structure is the
+Sequence, which truthfully answers `false`. The earlier pass is caught only by
+`ActivityDataSelectionGraph.IsBackEdge` (`VAL/Internal/ActivityDataSelectionGraph.cs:81-90`): it walks every
+enclosing structure and asks it about the child below both, and Flowchart's same-child branch
+(`FC/Internal/FlowchartChildResultAnalysis.cs:23-25`) answers reachability to self, the same question the new
+fact asks. So the scope-free read is refused as `ValueFlow/CyclicBackEdge` there, like every other form. Pinned
+by the analyzer test `A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge`
+and the real runs `A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_*`. An enclosing structure
+from outside this repository that repeats a child but leaves `IsCyclicBackEdge` unset would not be caught;
+that was already true of scoped bindings and is not widened here.
+
+**d. Can a Flowchart node run more than once without a cycle?** Yes: a `merge` node never waits, so it runs
+once per arrival. Reachability to self is still sufficient. Every Flowchart child run has exactly one
+scheduler, the run that completed before it (`FlowchartExecutionEngine.cs:121`), and a Flowchart is not in its
+running children's lineage through completion until it completes. Two runs of the merge node therefore share
+no lineage, and a reader after it has exactly one of them behind it. Pinned by
+`A_reader_after_a_merge_node_reads_the_run_of_that_node_that_scheduled_it` (all three forms) and the handler
+test `A_merge_node_that_runs_once_per_arrival_has_no_earlier_run_behind_its_reader`.
+
+**e. Non-blocking points.**
+
+- Code-first builder: `ActivityResultSource` (`DC/Authoring/WorkflowValue.cs:65-83`) keeps writing a scope,
+  and portable parameters keep today's rules. Both remain on today's behaviour, with the loop weaknesses of
+  section 2, and are tracked by #4056 together with the scoped direct form. The builder is unchanged.
+- The binding contract's table row and its example no longer carry a scope (`contracts/binding-contract.md`).
+- `CausalActivityResultResolutionException` needs no change (section 6).
+
+**Reason codes.** A browsed producer the analyzer lists without a binding carries one reason, availability
+first: `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
+owning structure does not say no earlier run can reach the consumer), then `NoTypedResult` (the producer
+declares no typed whole result, which publication refuses as `ActivityData/UnknownProjection`; before this
+change every browsed result was listed without a binding, so this state had no code of its own).
+`RuntimeScopeBindingUnavailable` is retired.
