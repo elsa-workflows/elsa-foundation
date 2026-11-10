@@ -136,6 +136,7 @@ Follow-on to [#4039](https://github.com/elsa-workflows/elsa-foundation/pull/4039
 | Field | Value |
 |---|---|
 | Base `origin/main` | `d3ab41003465c0cadb9a47cd05dcdd4750f3adc7` (CI push green; contains #4039 `3da38eb53`) |
+| Measured tree | `e0dc8e14bfc46ee682d6cbf7c8ba7164fa26a8de` (`exec-core/g3-overhead-counts-2`) |
 | OS | Ubuntu 24.04.5 LTS (`Linux cursor 6.12.113+ x86_64`) |
 | .NET | SDK 10.0.403, host 10.0.14 |
 | Provider | SQLite |
