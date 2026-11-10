@@ -18,7 +18,13 @@ Errors (exit code 1):
     judges whether the alternatives are good, and it runs only on ADRs this branch adds, not on a pre-existing ADR it
     merely amends. A heading or list quoted inside a fenced code block does not count. Specs do not carry their own
     section: they refer to the alternatives in the ADRs they apply.
-Warnings (exit code 0): `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
+  - timeless: a line this branch adds to an ADR @-mentions a person (`@login`). The document records the decision,
+    never who holds a position or must act; names and routing belong on the PR and the board.
+Warnings (exit code 0):
+  - timeless: a line this branch adds to an ADR carries a PR or issue reference (`#1234`, a GitHub pull or issue
+    URL), a dated heading, or an open-questions heading. These belong in the PR description. They are reported for
+    the author to move, not failed, because an ADR may cite an issue as durable evidence.
+  - `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
 match no ADR in the tree. A reference can name a number the board has reserved but that is not drafted yet, so it is
 reported, not failed.
 
@@ -49,6 +55,10 @@ ADR_ALTERNATIVES_HEADING = re.compile(
     r"^(?P<hashes>#+)[ \t]*(?:alternatives|options)[ \t]+considered\b.*$", re.IGNORECASE | re.MULTILINE)
 ADR_ALTERNATIVES_BOLD = re.compile(
     r"^[ \t>*-]*\*\*[ \t]*(?:alternatives|options)[ \t]+considered\b", re.IGNORECASE | re.MULTILINE)
+MENTION = re.compile(r"(?<![\w.`/])@(?P<login>[A-Za-z0-9][A-Za-z0-9-]{0,38})\b")
+ISSUE_REFERENCE = re.compile(r"(?<![\w&/])#\d{3,6}\b|github\.com/[\w.-]+/[\w.-]+/(?:pull|issues)/\d+")
+DATED_HEADING = re.compile(r"^#+\s.*\b20\d\d-\d\d-\d\d\b")
+OPEN_QUESTIONS_HEADING = re.compile(r"^#+\s.*\b(?:open questions|questions for (?:the )?reviewers)\b", re.IGNORECASE)
 STATUS_WINDOW = 25  # lines from the top of an ADR in which its status must appear
 REFERENCE_SCOPE = ("docs", "specs", "CONTEXT.md", ".specify/memory")
 
@@ -153,10 +163,32 @@ def unresolved_references(path: str, text: str, adr_numbers: set[str]) -> list[s
     return [f"reference: {path} cites ADR {number}, which is not in docs/adr/" for number in sorted(cited - adr_numbers)]
 
 
-def check(tree: dict[str, str], changed: set[str], base_paths: list[str]) -> tuple[list[str], list[str]]:
+def strip_inline_code(line: str) -> str:
+    return re.sub(r"`[^`]*`", "", line)
+
+
+def timeless_findings(path: str, added: list[str]) -> tuple[list[str], list[str]]:
+    """Errors and warnings for the lines a branch adds to an ADR: the document stays name-free and timeless."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    for line in strip_fenced_code("\n".join(added) + "\n").splitlines():
+        prose = strip_inline_code(line)
+        for mention in MENTION.finditer(prose):
+            errors.append(f"timeless: {path} mentions @{mention['login']}; names belong on the PR and the board")
+        if ISSUE_REFERENCE.search(prose):
+            warnings.append(f"timeless: {path} links a PR or issue ({line.strip()[:80]}); move it to the PR description")
+        if DATED_HEADING.match(line):
+            warnings.append(f"timeless: {path} has a dated heading ({line.strip()[:80]})")
+        if OPEN_QUESTIONS_HEADING.match(line):
+            warnings.append(f"timeless: {path} has an open-questions heading; open questions live in the PR description")
+    return errors, warnings
+
+
+def check(tree: dict[str, str], changed: set[str], base_paths: list[str],
+          added: dict[str, list[str]] | None = None) -> tuple[list[str], list[str]]:
     """tree maps every path in scope to its text (empty for files that are not read); changed is the paths new or
-    changed since the fork point; base_paths is the docs/adr and specs paths at the fork point. Returns
-    (errors, warnings)."""
+    changed since the fork point; base_paths is the docs/adr and specs paths at the fork point; added maps an ADR
+    path to the lines this branch added to it. Returns (errors, warnings)."""
     paths = sorted(tree)
     errors = collisions(paths, base_paths, adr_number, "ADR") + collisions(paths, base_paths, spec_number, "spec")
     warnings: list[str] = []
@@ -174,6 +206,9 @@ def check(tree: dict[str, str], changed: set[str], base_paths: list[str]) -> tup
                 alternatives = adr_alternatives_error(path, text)
                 if alternatives:
                     errors.append(alternatives)
+            timeless_errors, timeless_warnings = timeless_findings(path, (added or {}).get(path, []))
+            errors.extend(timeless_errors)
+            warnings.extend(timeless_warnings)
         elif spec_number(path) and path.endswith("/spec.md"):
             error = spec_status_error(path, text)
             if error:
@@ -188,7 +223,24 @@ def git_lines(root: Path, *args: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def load(root: Path, base: str) -> tuple[dict[str, str], set[str], list[str]]:
+def added_lines(root: Path, fork_point: str, untracked: list[str]) -> dict[str, list[str]]:
+    """The lines this branch adds to each ADR since the fork point, including uncommitted and untracked ones."""
+    added: dict[str, list[str]] = {}
+    result = subprocess.run(["git", "diff", "-U0", "--no-renames", fork_point, "--", "docs/adr"], cwd=root,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    path = None
+    for line in result.stdout.splitlines():
+        if line.startswith("+++ "):
+            path = line[6:] if line.startswith("+++ b/") else None
+        elif path and line.startswith("+"):
+            added.setdefault(path, []).append(line[1:])
+    for path in untracked:
+        if adr_number(path):
+            added[path] = (root / path).read_text(encoding="utf-8", errors="replace").splitlines()
+    return added
+
+
+def load(root: Path, base: str) -> tuple[dict[str, str], set[str], list[str], dict[str, list[str]]]:
     fork_point = git_lines(root, "merge-base", base, "HEAD")[0]
     numbered = ("docs/adr", "specs")
     tracked = git_lines(root, "ls-files", *numbered)
@@ -203,7 +255,7 @@ def load(root: Path, base: str) -> tuple[dict[str, str], set[str], list[str]]:
             tree[path] = full.read_text(encoding="utf-8", errors="replace")
         elif full.is_file() and path.startswith(numbered):
             tree.setdefault(path, "")
-    return tree, changed, base_paths
+    return tree, changed, base_paths, added_lines(root, fork_point, untracked)
 
 
 def self_test() -> int:
@@ -280,9 +332,23 @@ def self_test() -> int:
          {"docs/adr/0093-a.md"}, [], 0, 0),
         ("deleted file", {"docs/adr/0091-a.md": ""}, {"docs/adr/0090-gone.md"}, [], 0, 0),
     ]
+    amended = "docs/adr/0045-a.md"
+    timeless = [
+        ("added mention fails", ["Agreed with @sfmskywalker."], 1, 0),
+        ("mention in code or email passes", ["Use `@scope/pkg` or mail a@b.io."], 0, 0),
+        ("issue link warns", ["This replaces routing by return value (#1114)."], 0, 1),
+        ("pr url warns", ["See https://github.com/o/r/pull/3389."], 0, 1),
+        ("dated heading warns", ["## Amendment (2026-10-27)"], 0, 1),
+        ("open questions heading warns", ["## Questions for the reviewers"], 0, 1),
+        ("timeless prose passes", ["An empty selection sends a dead arrival on every outgoing connection."], 0, 0),
+        ("fenced mention passes", ["```", "@example", "```"], 0, 0),
+    ]
+    for name, lines, want_errors, want_warnings in timeless:
+        cases.append((name, {amended: adr_ok}, {amended}, [amended], want_errors,
+                      want_warnings, {amended: lines}))
     failures = 0
-    for name, tree, changed, base_paths, want_errors, want_warnings in cases:
-        errors, warnings = check(tree, changed, base_paths)
+    for name, tree, changed, base_paths, want_errors, want_warnings, *rest in cases:
+        errors, warnings = check(tree, changed, base_paths, rest[0] if rest else None)
         if len(errors) != want_errors or len(warnings) != want_warnings:
             failures += 1
             print(f"check_decision_docs self-test '{name}': got {errors} / {warnings}", file=sys.stderr)
@@ -304,13 +370,13 @@ def main() -> int:
 
     try:
         root = Path(git_lines(Path(args.root), "rev-parse", "--show-toplevel")[0])
-        tree, changed, base_paths = load(root, args.base)
+        tree, changed, base_paths, added = load(root, args.base)
     except (subprocess.CalledProcessError, OSError, IndexError) as error:
         print(f"check_decision_docs: could not read the repository at {args.root} against {args.base}: {error}",
               file=sys.stderr)
         return 2
 
-    errors, warnings = check(tree, changed, base_paths)
+    errors, warnings = check(tree, changed, base_paths, added)
     for line in errors:
         print(f"ERROR {line}")
     for line in warnings:

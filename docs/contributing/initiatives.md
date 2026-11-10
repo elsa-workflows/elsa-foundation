@@ -163,7 +163,10 @@ a different thing. Keeping them in their places is what makes a proposal cheap t
 the wider initiative.
 - **The document** — the ADR or spec text — records only the decision and how it was reached: the problem it solves,
   what it enables, the alternatives weighed, and the context of its time and place. It is written to be read years
-  later. It carries **no personal names and no "who is needed where"**: nothing that is only true now.
+  later. It carries **no personal names and no "who is needed where"**: nothing that is only true now. That also
+  rules out `@` mentions, positions attributed to a person ("X's position"), dated amendment headings, PR and issue
+  links, provenance lines ("found by spec N, Q5") and an open-questions section: those belong in the PR description.
+  The gate's deterministic checks fail an added `@` mention and warn on the rest in an ADR.
 - **The PR and the issue are the forum.** Discussion, questions, counter-proposals and the live state of the proposal
   live here. The document is **deduced from** the forum, not edited in lockstep with it, and not everything on the
   forum reaches the document. The **title stays stable and general** — it names the topic, not a mechanism that may
@@ -355,8 +358,9 @@ out.
    that changes the document has its prepared edit applied. A stale title or description, or a finding left as a
    comment only, blocks the merge until the drafter reconciles it.
 4. **Run the deterministic checks** in that same checkout: `python tools/initiatives/check_decision_docs.py`. They find
-   duplicate ADR or spec numbers, malformed status lines and a newly added ADR with no **Alternatives considered**
-   section, and show which ADR references do not resolve.
+   duplicate ADR or spec numbers, malformed status lines, a newly added ADR with no **Alternatives considered**
+   section and an `@` mention added to an ADR, and show which ADR references do not resolve and which added ADR
+   lines carry a PR or issue link, a dated heading or an open-questions heading (the document stays timeless).
 5. **Review independently and verify.** Independent reviewers do steps 2 and 3 without seeing each other's output, and a
    fresh reviewer verifies every finding against the text. A finding names both passages and the kind of problem:
    *contradiction*, *ambiguity*, *overlap*, *stale reference* or *number collision*. Unverified findings are dropped.
