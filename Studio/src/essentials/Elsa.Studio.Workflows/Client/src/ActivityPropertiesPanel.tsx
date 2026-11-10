@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
@@ -27,6 +27,7 @@ import type {
   StudioExpressionDescriptor,
   StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
+import { objectExpressionEditorId } from "./objectExpressionEditor";
 import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
@@ -621,8 +622,9 @@ function PropertyRow({
     onToolingAuthorizationConfirmed
   );
   // A value whose shape disagrees with the editor is left to the generic Object editor — routing it here
-  // would let that editor coerce the authored value away on first edit.
-  const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
+  // would let that editor coerce the authored value away on first edit. A module-owned expression editor
+  // that claims this input (not the generic Object JSON editor) replaces the dictionary table.
+  const genericDictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
     && !conflictsWithStructuredEditor("dictionary", value)
     ? describeDictionaryForInput(effectiveInput)
     : null;
@@ -663,6 +665,8 @@ function PropertyRow({
   const inlineExpressionEditor = inlineExpressionContext
     ? currentRequiresAdmission ? admittedExpressionEditor : resolveExpressionEditor(expressionEditors, inlineExpressionContext)
     : null;
+  const moduleOwnedStructured = replacesGenericDictionaryEditor(inlineExpressionEditor, syntax);
+  const dictionaryType = moduleOwnedStructured ? null : genericDictionaryType;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
   const inlineDiagnosticProvider = inlineExpressionContext
     ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
@@ -701,13 +705,13 @@ function PropertyRow({
   // block picker above the list, while dictionaries use a separate toolbar that keeps the picker clear
   // of their table. `uiHint: "singleline"` is common on list inputs, so gating on the collection itself
   // (not the hint) is what keeps the two features from colliding.
-  const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
+  const structuredCollectionType = !moduleOwnedStructured && editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
     ? describeCollectionForInput(effectiveInput)
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   // Reference contributions own their picker, labels and feedback. A literal's single-line hint
   // must not put overlaid text-field chrome across that whole reference editor.
-  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && (
+  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && !moduleOwnedStructured && (
     editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
@@ -715,6 +719,7 @@ function PropertyRow({
   const canExpandEditor = Boolean(wrapped && !secretOnly && !valueMasked && (
     dictionaryType != null ||
     editingMode === "text" ||
+    (moduleOwnedStructured && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
   ));
@@ -731,6 +736,7 @@ function PropertyRow({
     discardedBindingCount: number;
   } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const portalThemeRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
   const conversionToggleRef = useRef<HTMLButtonElement>(null);
   const transitionDescriptionId = useId();
@@ -744,6 +750,18 @@ function PropertyRow({
     : "";
   const latestProperty = useRef({ activity, input, onChange });
   latestProperty.current = { activity, input, onChange };
+
+  useLayoutEffect(() => {
+    if (!expanded) return;
+    const source = rowRef.current?.closest(workflowThemeScopeSelector) ?? null;
+    const apply = () => copyThemeCustomProperties(source, portalThemeRef.current);
+    apply();
+    const observer = new MutationObserver(apply);
+    const root = (rowRef.current?.ownerDocument ?? document).documentElement;
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-theme-material", "data-workspace-style"] });
+    if (source) observer.observe(source, { attributes: true, attributeFilter: ["class", "style"] });
+    return () => observer.disconnect();
+  }, [expanded]);
 
   // A change that leaves the row unexpandable has already closed the expanded editor (`expanded`). Drop the request
   // so it does not reopen by itself, and bring focus back to the row only when focus went with the editor: focus
@@ -944,6 +962,7 @@ function PropertyRow({
         setExpandRequested(true);
       }}
       onChange={setRaw}
+      onValidationChange={hasError => reportEditorValidation("expression", hasError)}
     />
   ) : null;
   // A secret-only input never falls back to a text or literal editor: without a secret picker it shows the
@@ -1174,33 +1193,39 @@ function PropertyRow({
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
-      {/* User interaction opens this after rowRef mounts. Embedders scope theme tokens with
-          .wf-tokens; without a resource scope the dialog inherits the document theme. */}
-      {expanded && rowRef.current ? createPortal(
-        <ExpandedPropertyEditor
-          input={input}
-          dictionarySessionScope={dictionarySessionScope}
-          value={editorValue}
-          syntax={syntax}
-          editingMode={editingMode}
-          descriptors={expressionDescriptors}
-          getUnavailableReason={getUnavailableReason}
-          activity={activity}
-          propertyEditors={editors}
-          expressionEditors={expressionEditors}
-          validationScopeKey={disclosureSignalKey}
-          onValidationChange={reportEditorValidation}
-          onDisclosureFallbackChange={reportEditorFallback}
-          expressionContext={makeExpressionContext(syntax, "expanded")}
-          disabled={readOnly}
-          wrapped={wrapped}
-          conversionProfiles={conversionProfiles}
-          onChange={setRaw}
-          onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
-          onSyntaxChange={setSyntax}
-          onClose={closeExpanded}
-        />,
-        rowRef.current.closest(".wf-tokens, .wf-editor, .wf-page") ?? rowRef.current.ownerDocument.body
+      {/* User interaction opens this after rowRef mounts. The overlay is position:fixed and must
+          escape inspector overflow, so every expanded property-editor dialog portals to the owner
+          document body for every Studio embedder, not only Decisions Inputs. Embedders stamp
+          --wf-* / host tokens on .wf-tokens, .wf-editor, or .wf-page; copy those custom
+          properties onto this wrapper so the dialog keeps the embedder palette instead of
+          document fallbacks. */}
+      {expanded ? createPortal(
+        <div className="wf-tokens" ref={portalThemeRef}>
+          <ExpandedPropertyEditor
+            input={input}
+            dictionarySessionScope={dictionarySessionScope}
+            value={editorValue}
+            syntax={syntax}
+            editingMode={editingMode}
+            descriptors={expressionDescriptors}
+            getUnavailableReason={getUnavailableReason}
+            activity={activity}
+            propertyEditors={editors}
+            expressionEditors={expressionEditors}
+            validationScopeKey={disclosureSignalKey}
+            onValidationChange={reportEditorValidation}
+            onDisclosureFallbackChange={reportEditorFallback}
+            expressionContext={makeExpressionContext(syntax, "expanded")}
+            disabled={readOnly}
+            wrapped={wrapped}
+            conversionProfiles={conversionProfiles}
+            onChange={setRaw}
+            onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
+            onSyntaxChange={setSyntax}
+            onClose={closeExpanded}
+          />
+        </div>,
+        (rowRef.current?.ownerDocument ?? document).body
       ) : null}
     </div>
   );
@@ -1250,8 +1275,58 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
 
   if (previous.activity === next.activity) return true;
   const propertyName = getInputPropertyName(previous.input);
-  return Object.is(previous.activity[propertyName], next.activity[propertyName]) &&
-    hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs);
+  if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
+  if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
+  // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
+  return !expressionEditorReadsActivity(previous);
+}
+
+function expressionEditorReadsActivity(props: PropertyRowProps) {
+  const syntax = props.input.isWrapped === false
+    ? undefined
+    : readWrappedInput(props.activity, props.input).expression.type;
+  if (!syntax) return false;
+  return props.expressionEditors.some(editor => editor.readsActivityContext === true && editor.supports({
+    syntax,
+    surface: "inline",
+    descriptor: props.input,
+    activity: props.activity,
+    expressionDescriptors: props.expressionDescriptors
+  }));
+}
+
+const workflowThemeScopeSelector = ".wf-tokens, .wf-editor, .wf-page";
+
+function isCopiedThemeCustomProperty(name: string) {
+  return name.startsWith("--wf-") || name.startsWith("--studio-") || name.startsWith("--xy-");
+}
+
+function copyThemeCustomProperties(source: Element | null, target: HTMLElement | null) {
+  if (!source || !target || source === target) return;
+  const next = new Map<string, string>();
+  const styles = getComputedStyle(source);
+  for (let index = 0; index < styles.length; index++) {
+    const name = styles.item(index);
+    if (!isCopiedThemeCustomProperty(name)) continue;
+    const value = styles.getPropertyValue(name);
+    if (value !== "") next.set(name, value);
+  }
+  if (next.size === 0 && source instanceof HTMLElement) {
+    const inline = source.style;
+    for (let index = 0; index < inline.length; index++) {
+      const name = inline.item(index);
+      if (!isCopiedThemeCustomProperty(name)) continue;
+      const value = inline.getPropertyValue(name);
+      if (value !== "") next.set(name, value);
+    }
+  }
+  for (let index = target.style.length - 1; index >= 0; index--) {
+    const name = target.style.item(index);
+    if (isCopiedThemeCustomProperty(name) && !next.has(name)) target.style.removeProperty(name);
+  }
+  for (const [name, value] of next) {
+    if (target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
+  }
 }
 
 function hasSameActivityMetadata(
@@ -1324,6 +1399,7 @@ function ExpandedPropertyEditor({
   const useTextFallback = editingMode === "text";
   const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
     && !conflictsWithStructuredEditor("dictionary", value)
+    && !replacesGenericDictionaryEditor(expressionEditor, syntax)
     ? describeDictionaryForInput(input)
     : null;
   const fallbackHint = useTextFallback && !ExpressionEditorComponent
@@ -1392,6 +1468,7 @@ function ExpandedPropertyEditor({
               initialFocus
               context={expressionContext}
               onChange={onChange}
+              onValidationChange={hasError => onValidationChange("expression-expanded", hasError)}
             />
           ) : useTextFallback || editingMode === "literal" ? (
             <>
@@ -1810,6 +1887,13 @@ function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): Luci
   if (descriptor?.editingMode === "reference") return Cable;
   if (descriptor?.editingMode === "literal") return Type;
   return Code2;
+}
+
+function replacesGenericDictionaryEditor(
+  editor: StudioExpressionEditorContribution | null | undefined,
+  syntax: string
+) {
+  return !!editor && editor.id !== objectExpressionEditorId && (syntax === "Object" || syntax === "Literal");
 }
 
 function resolveEditor(
