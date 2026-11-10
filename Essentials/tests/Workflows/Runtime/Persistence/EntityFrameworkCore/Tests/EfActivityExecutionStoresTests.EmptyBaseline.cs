@@ -62,6 +62,60 @@ public sealed partial class EfActivityExecutionStoresTests
         Assert.Equal(6, fixture.Commands.Count);
     }
 
+    // The overlay answers these reads without a query. Each is still refused as the store's own read refuses it:
+    // an id the schema cannot hold, a blank id, a cancelled read, and an access context with no ordinary scope.
+    [Fact]
+    public async Task A_read_answered_without_a_query_is_refused_as_the_stores_own_read_is()
+    {
+        await using var fixture = await EmptyBaselineFixture.CreateAsync("tenant-a");
+        var overlay = fixture.Overlay("wf");
+        Assert.Null(await overlay.Activities.FindAsync("wf", "a"));
+        Assert.Null(await overlay.Inspections.FindAsync("wf", "a"));
+        fixture.Commands.Clear();
+        var tooLong = new string('a', RuntimeActivityExecutionEfModule.IdentityMaximumLength + 1);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Activities.FindAsync("wf", tooLong));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Inspections.FindAsync("wf", tooLong));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Activities.FindAsync("wf", " "));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Inspections.FindAsync("wf", " "));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await overlay.Activities.FindAsync("wf", "b", cancelled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await overlay.Inspections.FindAsync("wf", "b", cancelled.Token));
+        fixture.Access.Current = PersistenceAccessContext.Global;
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await overlay.Activities.FindAsync("wf", "b"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await overlay.Inspections.FindAsync("wf", "b"));
+
+        // The store's own reads refuse the same way, and none of it reached the database.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.State.FindAsync("wf", "b"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Inspection.FindAsync("wf", "b"));
+        Assert.Empty(fixture.Commands);
+    }
+
+    // What the probe found under one scope says nothing about another scope's rows of the same run id.
+    [Fact]
+    public async Task A_read_under_another_scope_than_the_probe_is_read_from_the_store()
+    {
+        await using var fixture = await EmptyBaselineFixture.CreateAsync("tenant-a");
+        await using (var otherScope = await fixture.ReopenAsync("tenant-b"))
+        {
+            await otherScope.State.SaveAsync(State("wf", "a", 1));
+            await otherScope.Inspection.SaveAsync(Projection("wf", "a", 1, "a"));
+        }
+
+        await using var scoped = await fixture.ReopenAsync("tenant-a");
+        var overlay = scoped.Overlay("wf");
+        Assert.Null(await overlay.Activities.FindAsync("wf", "a"));
+        Assert.Null(await overlay.Inspections.FindAsync("wf", "a"));
+        scoped.Commands.Clear();
+
+        scoped.Access.Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"));
+        Assert.NotNull(await overlay.Activities.FindAsync("wf", "a"));
+        Assert.NotNull(await overlay.Inspections.FindAsync("wf", "a"));
+
+        Assert.Equal(2, scoped.Commands.Count);
+    }
+
     private sealed record EmptyBaselineOverlay(
         CoalescingActivityExecutionStateStore Activities,
         CoalescingActivityExecutionInspectionStore Inspections);
@@ -78,7 +132,7 @@ public sealed partial class EfActivityExecutionStoresTests
             this.context = context;
             this.ownsConnection = ownsConnection;
             Commands = commands;
-            var accessor = new Accessor(scope);
+            var accessor = Access = new SwitchableAccessor(scope);
             var codec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(
                 new RuntimeRecoveryContinuationOptions { SigningKey = "ef-empty-baseline-test-signing-key-32" }));
             State = new EfActivityExecutionStateStore(context, accessor, codec);
@@ -86,6 +140,7 @@ public sealed partial class EfActivityExecutionStoresTests
         }
 
         public List<string> Commands { get; }
+        public SwitchableAccessor Access { get; }
         public EfActivityExecutionStateStore State { get; }
         public EfActivityExecutionInspectionStore Inspection { get; }
 
@@ -154,6 +209,11 @@ public sealed partial class EfActivityExecutionStoresTests
             commands.Add(command.CommandText);
             return base.ScalarExecutingAsync(command, eventData, result, cancellationToken);
         }
+    }
+
+    private sealed class SwitchableAccessor(string scope) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; set; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
     }
 
     private sealed class FixedSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor

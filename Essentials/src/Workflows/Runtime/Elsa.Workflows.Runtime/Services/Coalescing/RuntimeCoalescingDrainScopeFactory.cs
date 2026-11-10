@@ -26,6 +26,9 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
+        // The nested drain can write the parent run's rows past the parent's session. The default accessor ends the
+        // parent's empty baselines on push; this also covers a host that replaced the accessor.
+        sessionAccessor.Current?.EndEmptyBaselines();
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:

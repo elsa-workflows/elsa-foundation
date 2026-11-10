@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Xunit;
 
@@ -171,7 +172,8 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Equal(2, durableInspections.FindCount);
     }
 
-    // A store refuses a blank id and a cancelled read before it reads. A read the session answers refuses them too.
+    // Before it reads, a store refuses a blank id, a cancelled read and an access context it does not admit. A read
+    // the session answers is refused by the same store, with the same exception.
     [Fact]
     public async Task ReadTheSessionAnswers_StillRefusesWhatTheStoreWouldRefuse()
     {
@@ -185,6 +187,81 @@ public sealed class CoalescingEmptyBaselineReadTests
         await Assert.ThrowsAnyAsync<ArgumentException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, " "));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2", cancelled.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-2", cancelled.Token));
+
+        var refusal = new InvalidOperationException("The store does not admit this access context.");
+        fixture.DurableActivities.Refusal = refusal;
+        fixture.DurableInspections.Refusal = refusal;
+        Assert.Same(refusal, await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2")));
+        Assert.Same(refusal, await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-2")));
+        Assert.Equal(0, fixture.DurableActivities.FindCount);
+        Assert.Equal(0, fixture.DurableInspections.FindCount);
+    }
+
+    // The probe saw one persistence scope. A read under another scope is not answered from what it found there.
+    [Fact]
+    public async Task ReadUnderAnotherScopeThanTheProbe_IsReadFromTheStore()
+    {
+        var fixture = new Fixture(NoRecord);
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+
+        fixture.DurableActivities.Scope = "scope-b";
+        fixture.DurableInspections.Scope = "scope-b";
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
+
+        // Back under the probed scope the session answers again, without a second probe.
+        fixture.DurableActivities.Scope = "scope-a";
+        fixture.DurableInspections.Scope = "scope-a";
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-3"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-3"));
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
+        Assert.Equal(1, fixture.DurableActivities.ProbeCount);
+        Assert.Equal(1, fixture.DurableInspections.ProbeCount);
+    }
+
+    // The session accessor is a replacement contract. A replacement that only keeps the stack does not tell the
+    // parent session anything, so the drain scope factory ends what the parent knows before it pushes a nested drain.
+    [Fact]
+    public async Task NestedDrainBegunThroughTheFactory_EndsWhatTheParentKnows_WhateverAccessorIsRegistered()
+    {
+        var accessor = new StackOnlySessionAccessor();
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+        var factory = new RuntimeCoalescingDrainScopeFactory(
+            accessor,
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+            new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
+            new PersistenceModeOptions(),
+            TimeProvider.System);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+
+        await using var parent = factory.Begin(WorkflowExecutionId, NoRecord);
+        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Equal(0, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.FindCount);
+
+        await using (factory.Begin("wfexec-child", NoRecord))
+        {
+            var unseen = NewActivityState("actexec-unseen");
+            await durableActivities.Inner.SaveAsync(unseen);
+            await durableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
+        }
+
+        Assert.Same(parent.Session, accessor.Current);
+        Assert.NotNull(await activities.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.NotNull(await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Equal(2, durableActivities.FindCount);
+        Assert.Equal(2, durableInspections.FindCount);
     }
 
     [Fact]
@@ -342,6 +419,12 @@ public sealed class CoalescingEmptyBaselineReadTests
         // Stands in for a probe that ran before an uncertain write became visible.
         public bool ReportEmptyOnce { get; set; }
 
+        public string Scope { get; set; } = "scope-a";
+        public Exception? Refusal { get; set; }
+
+        public string ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken = default) =>
+            StoreRefusals.ResolveReadScope(rowId, Refusal, Scope, cancellationToken);
+
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
@@ -360,6 +443,11 @@ public sealed class CoalescingEmptyBaselineReadTests
         public InMemoryActivityExecutionInspectionStore Inner { get; } = new();
         public int FindCount { get; private set; }
         public int ProbeCount { get; private set; }
+        public string Scope { get; set; } = "scope-a";
+        public Exception? Refusal { get; set; }
+
+        public string ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken = default) =>
+            StoreRefusals.ResolveReadScope(rowId, Refusal, Scope, cancellationToken);
 
         public ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
         {
@@ -374,6 +462,36 @@ public sealed class CoalescingEmptyBaselineReadTests
         {
             ProbeCount++;
             return (await Inner.ListAllSummariesAsync(workflowExecutionId, cancellationToken)).Count > 0;
+        }
+    }
+
+    // What a store checks before a point read queries, in the order the EF stores check it.
+    private static class StoreRefusals
+    {
+        public static string ResolveReadScope(string rowId, Exception? refusal, string scope, CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(rowId);
+            cancellationToken.ThrowIfCancellationRequested();
+            return refusal is null ? scope : throw refusal;
+        }
+    }
+
+    // A replacement accessor that keeps the stack and nothing else.
+    private sealed class StackOnlySessionAccessor : IRuntimeCoalescingSessionAccessor
+    {
+        private readonly Stack<RuntimeCoalescingSession?> _stack = new();
+
+        public RuntimeCoalescingSession? Current => _stack.Count == 0 ? null : _stack.Peek();
+
+        public IDisposable Push(RuntimeCoalescingSession? session)
+        {
+            _stack.Push(session);
+            return new Pop(_stack);
+        }
+
+        private sealed class Pop(Stack<RuntimeCoalescingSession?> stack) : IDisposable
+        {
+            public void Dispose() => stack.Pop();
         }
     }
 

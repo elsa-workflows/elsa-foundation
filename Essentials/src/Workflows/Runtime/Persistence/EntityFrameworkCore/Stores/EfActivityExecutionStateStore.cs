@@ -73,14 +73,24 @@ public sealed class EfActivityExecutionStateStore(
 
     public async ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(workflowExecutionId, activityExecutionId);
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scope = RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
         var id = ActivityExecutionEfSupport.CreateId("state", scope, workflowExecutionId, activityExecutionId);
         var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
             () => context.ActivityExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
         return row is null ? null : ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
     }
+
+    // Everything FindAsync refuses before it queries. The coalescing overlay runs the same checks for a read it
+    // answers without a query, so the two cannot drift apart.
+    private string RequireReadableRow(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateIdentity(workflowExecutionId, activityExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+    }
+
+    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken) =>
+        RequireReadableRow(workflowExecutionId, rowId, cancellationToken);
 
     public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {

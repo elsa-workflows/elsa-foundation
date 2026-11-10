@@ -47,7 +47,12 @@ public sealed class CoalescingWorkflowExecutionStateStore(
         _inner.DeleteAsync(workflowExecutionId, cancellationToken);
 }
 
-/// <summary>Coalescing-aware overlay for <see cref="IActivityExecutionStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
+/// <summary>
+/// Coalescing-aware overlay for <see cref="IActivityExecutionStateStore"/>. See
+/// <see cref="CoalescingWorkflowExecutionStateStore"/>. For a run with no durable record whose store can be probed
+/// (<see cref="IRunRowPresenceProbe"/>) and holds none of its rows, <see cref="FindAsync"/> does not read a row the
+/// session has not sent to the store.
+/// </summary>
 public sealed class CoalescingActivityExecutionStateStore(
     CoalescingInner<IActivityExecutionStateStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore
@@ -74,22 +79,17 @@ public sealed class CoalescingActivityExecutionStateStore(
                 return overlay;
 
             // A run with no durable record is probed once. If the store holds none of its rows, a row this session
-            // has not sent there cannot exist, so a newly scheduled activity costs no read.
+            // has not sent there cannot exist, so a newly scheduled activity costs no read. A store that cannot be
+            // probed has every row read from it.
             var baseline = session.ActivityBaseline;
-            if (baseline.NeedsProbe)
+            if (_presenceProbe is { } probe && !baseline.HasEnded)
             {
-                if (_presenceProbe is { } probe)
-                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken));
-                else
-                    baseline.End();
-            }
-
-            if (baseline.IsKnownAbsent(activityExecutionId))
-            {
-                // What every store checks before it reads, so skipping the read does not skip the refusal.
-                ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
-                cancellationToken.ThrowIfCancellationRequested();
-                return null;
+                // The store's own refusals come first, so a read answered here refuses what the store refuses.
+                var scope = probe.ResolveReadScope(workflowExecutionId, activityExecutionId, cancellationToken);
+                if (baseline.NeedsProbe)
+                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken), scope);
+                if (baseline.IsKnownAbsent(activityExecutionId, scope))
+                    return null;
             }
         }
 
@@ -513,19 +513,14 @@ public sealed class CoalescingActivityExecutionInspectionStore(
                 return recorded;
 
             var baseline = session.InspectionBaseline;
-            if (baseline.NeedsProbe)
+            if (_presenceProbe is { } probe && !baseline.HasEnded)
             {
-                if (_presenceProbe is { } probe)
-                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken));
-                else
-                    baseline.End();
-            }
-
-            if (baseline.IsKnownAbsent(activityExecutionId))
-            {
-                ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
-                cancellationToken.ThrowIfCancellationRequested();
-                return null;
+                // The store's own refusals come first, so a read answered here refuses what the store refuses.
+                var scope = probe.ResolveReadScope(workflowExecutionId, activityExecutionId, cancellationToken);
+                if (baseline.NeedsProbe)
+                    baseline.RecordProbe(!await probe.HasAnyAsync(workflowExecutionId, cancellationToken), scope);
+                if (baseline.IsKnownAbsent(activityExecutionId, scope))
+                    return null;
             }
         }
 

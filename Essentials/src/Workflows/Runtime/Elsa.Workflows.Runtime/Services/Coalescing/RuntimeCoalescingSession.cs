@@ -255,6 +255,8 @@ public sealed class RuntimeCoalescingSession
     /// <summary>
     /// Records the activity execution rows and inspection projections a commit is about to send to the durable store,
     /// so neither empty baseline answers for them again. Call it before the write: a write that fails may still land.
+    /// A change's id is the id its state carries: <see cref="RuntimeCheckpointStateChangeSet"/> refuses a change
+    /// where the two differ, so recording the change's id records the row whichever of the two a store keys it by.
     /// </summary>
     internal void RecordPossibleDurableWrites(RuntimeCheckpointStateChangeSet changes)
     {
