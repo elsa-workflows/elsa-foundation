@@ -48,7 +48,7 @@ builder.Services.AddCors(options => options.AddPolicy("OwnedStudio", policy => p
 builder.Services.AddHttpContextAccessor();
 
 var contracts = new Assembly[] {
-    typeof(IShellFeature).Assembly, typeof(IWebShellFeature).Assembly, typeof(IAgentTool).Assembly,
+    typeof(IShellFeature).Assembly, typeof(IWebShellFeature).Assembly, typeof(IWeaverTool).Assembly,
     typeof(IPermissionContributor).Assembly, typeof(IStudioPreferenceService).Assembly,
     typeof(IGitHubCopilotClientFactory).Assembly, typeof(IAnthropicChatClientFactory).Assembly,
     typeof(IChatClient).Assembly, typeof(IServiceCollection).Assembly
@@ -167,10 +167,10 @@ app.MapGet("/__qualification/generation", async (IShellRegistry registry, Cancel
     if (featureStore.GetType() != typeof(JsonShellFeatureConfigurationStore) || shellReloader.GetType() != typeof(ShellReloader)
         || RootFeatureStoreGuard.UseCount != 0 || RootShellReloadGuard.UseCount != 0)
         throw new InvalidOperationException("The actual ModularityApi shell must own feature configuration and reload; root guards must remain unused.");
-    var tools = await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync(cancellationToken);
+    var tools = await scope.ServiceProvider.GetRequiredService<IWeaverToolRegistry>().ListAsync(cancellationToken);
     return new {
         generation = generations.GetValue(shell, _ => new(Guid.NewGuid().ToString("N"))).Id,
-        contextSources = scope.ServiceProvider.GetServices<IAgentContextProvider>().Select(source => new { source.Descriptor.Id, source.Descriptor.ModuleId, assembly = source.GetType().Assembly.GetName().Name }),
+        contextSources = scope.ServiceProvider.GetServices<IWeaverContextProvider>().Select(source => new { source.Descriptor.Id, source.Descriptor.ModuleId, assembly = source.GetType().Assembly.GetName().Name }),
         tools = tools.Select(tool => new { tool.Descriptor.Name, tool.Descriptor.ModuleId, tool.Descriptor.ContractVersion, assembly = tool.GetType().Assembly.GetName().Name }),
         featureConfiguration = new {
             store = new { type = featureStore.GetType().FullName, assembly = featureStore.GetType().Assembly.FullName },

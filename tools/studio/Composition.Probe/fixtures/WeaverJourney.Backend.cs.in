@@ -23,10 +23,10 @@ public class WeaverJourneyBackendFeature : IWebShellFeature
     {
         if (!Path.IsPathFullyQualified(StateFile)) throw new InvalidOperationException("The owned fixture requires an absolute StateFile.");
         services.AddSingleton(new NoteStore(StateFile));
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentProvider, ScriptedProvider>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, NoteContextSource>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, NoteCapabilities>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, SetNoteTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, ScriptedProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverContextProvider, NoteContextSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverCapabilityProvider, NoteCapabilities>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, SetNoteTool>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, NotePermissions>());
     }
 
@@ -54,31 +54,31 @@ internal static class NoteContract
     internal const string ReadPermission = "weaver/journey:read";
     internal const string ManagePermission = "weaver/journey:manage";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    internal static AgentResourceTarget Target(NoteState state) => new(Module, ResourceType, state.Id, state.Revision);
-    internal static AgentPayload Payload(NoteState state, string? beforeValue = null) => new(ResultType, "1",
+    internal static WeaverResourceTarget Target(NoteState state) => new(Module, ResourceType, state.Id, state.Revision);
+    internal static WeaverPayload Payload(NoteState state, string? beforeValue = null) => new(ResultType, "1",
         JsonSerializer.SerializeToElement(new { state.Id, state.Value, state.Revision, state.WriteCount, beforeValue }, Json));
 }
 
 /// <summary>Only a generic tool-call protocol: no resource/tool-name branches or substitute orchestration.</summary>
-internal sealed class ScriptedProvider : IAgentProvider
+internal sealed class ScriptedProvider : IWeaverProvider
 {
     public string ProviderId => "weaver-journey-scripted";
-    public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string> { ["evidenceCategory"] = "deterministic" }));
-    public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentProviderDiagnostics(ProviderId, true, "Owned deterministic protocol fixture", AgentProviderKind.ProviderSdkBinding,
-            [AgentProviderOperation.Chat, AgentProviderOperation.Streaming], AgentProviderRiskProfile.ReviewRequired,
+    public Task<WeaverProviderSession> CreateSessionAsync(WeaverSession session, CancellationToken cancellationToken = default)
+        => Task.FromResult(new WeaverProviderSession(session.Id, ProviderId, new Dictionary<string, string> { ["evidenceCategory"] = "deterministic" }));
+    public Task<WeaverProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new WeaverProviderDiagnostics(ProviderId, true, "Owned deterministic protocol fixture", WeaverProviderKind.ProviderSdkBinding,
+            [WeaverProviderOperation.Chat, WeaverProviderOperation.Streaming], WeaverProviderRiskProfile.ReviewRequired,
             new Dictionary<string, string> { ["evidenceCategory"] = "deterministic", ["liveProvider"] = "false" }));
-    public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentToolApprovalResult(false, "Approval belongs to the ordinary Elsa review lifecycle."));
-    public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public Task<WeaverToolApprovalResult> ApproveToolAsync(WeaverProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+        => Task.FromResult(new WeaverToolApprovalResult(false, "Approval belongs to the ordinary Elsa review lifecycle."));
+    public async IAsyncEnumerable<WeaverStreamEvent> ContinueTurnAsync(WeaverTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
         if (context.PendingToolResults.Count > 0)
         {
-            yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.MessageDelta,
-                "Owning module completion: " + JsonSerializer.Serialize(context.PendingToolResults, NoteContract.Json), null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
+            yield return new(Guid.NewGuid().ToString("N"), WeaverStreamEventKind.MessageDelta,
+                "Owning module completion: " + JsonSerializer.Serialize(context.PendingToolResults, NoteContract.Json), null, null, DateTimeOffset.UtcNow, WeaverResultKind.Message);
             yield break;
         }
         string? toolName = null;
@@ -95,12 +95,12 @@ internal sealed class ScriptedProvider : IAgentProvider
         var descriptor = context.AvailableTools.SingleOrDefault(item => item.Name == toolName);
         if (descriptor is null || arguments is null)
         {
-            yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null,
-                new("weaver.fixture.protocol_invalid", "Send an installed tool name and object arguments in the documented JSON protocol."), DateTimeOffset.UtcNow, AgentResultKind.Error);
+            yield return new(Guid.NewGuid().ToString("N"), WeaverStreamEventKind.Error, null, null,
+                new("weaver.fixture.protocol_invalid", "Send an installed tool name and object arguments in the documented JSON protocol."), DateTimeOffset.UtcNow, WeaverResultKind.Error);
             yield break;
         }
-        yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.ToolCallRequested, null, null, null, DateTimeOffset.UtcNow, null,
-            new AgentToolCallRequest(Guid.NewGuid().ToString("N"), descriptor.Name, arguments, descriptor.Risk, descriptor.Mutability == AgentToolMutability.Mutating));
+        yield return new(Guid.NewGuid().ToString("N"), WeaverStreamEventKind.ToolCallRequested, null, null, null, DateTimeOffset.UtcNow, null,
+            new WeaverToolCallRequest(Guid.NewGuid().ToString("N"), descriptor.Name, arguments, descriptor.Risk, descriptor.Mutability == WeaverToolMutability.Mutating));
     }
 }
 
@@ -159,20 +159,20 @@ internal sealed class NotePermissions : IPermissionContributor
     ];
 }
 
-internal sealed class NoteCapabilities : IAgentCapabilityProvider
+internal sealed class NoteCapabilities : IWeaverCapabilityProvider
 {
-    public ValueTask<IReadOnlyCollection<AgentCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<IReadOnlyCollection<AgentCapability>>([
+    public ValueTask<IReadOnlyCollection<WeaverCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+        => ValueTask.FromResult<IReadOnlyCollection<WeaverCapability>>([
             new("weaver.journey.edit", NoteContract.Module, "Edit qualification note", "Reviews and writes the module-owned note file.",
-                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, [NoteContract.Scope], [NoteContract.ManagePermission], [NoteContract.ContextKind]) { Modes = ["build"] }
+                WeaverCapabilityKind.Proposal, WeaverRisk.ReviewRequired, [NoteContract.Scope], [NoteContract.ManagePermission], [NoteContract.ContextKind]) { Modes = ["build"] }
         ]);
 }
 
-internal sealed class NoteContextSource(NoteStore store, IAgentSessionService sessions, IAgentToolAuthorizer authorizer) : IAgentContextProvider
+internal sealed class NoteContextSource(NoteStore store, IWeaverSessionService sessions, IWeaverToolAuthorizer authorizer) : IWeaverContextProvider
 {
-    public AgentContextProviderDescriptor Descriptor { get; } = new(NoteContract.ContextSourceId, NoteContract.Module, "weaver-journey",
+    public WeaverContextProviderDescriptor Descriptor { get; } = new(NoteContract.ContextSourceId, NoteContract.Module, "weaver-journey",
         [NoteContract.ContextKind], ["1"], [NoteContract.ResourceType]);
-    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> CollectAsync(WeaverContextRequest request, CancellationToken cancellationToken = default)
     {
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return Refused("session_denied", "A current note session with an authenticated actor and tenant is required.");
@@ -187,16 +187,16 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
                 supplied.ModuleId != target.ModuleId || supplied.ResourceType != target.ResourceType || supplied.ResourceId != target.ResourceId || supplied.Revision != target.Revision)
                 return new([], [new(Descriptor.Id, "weaver.note.context_stale", "The supplied note reference does not match the owning file's current revision.", true)]);
         // Referenced resource data retains every caller restriction, even when the module rereads it.
-        var sensitivity = request.CallerAttachments.Select(caller => caller.Sensitivity == AgentContextSensitivity.SecretRedacted
-            ? AgentContextSensitivity.Secret : caller.Sensitivity).Append(AgentContextSensitivity.Internal).Max();
-        var attachment = new AgentContextAttachment("weaver-journey:note:" + note.Revision, NoteContract.ContextKind, note.Id, "Owned qualification note", NoteContract.ContextKind,
+        var sensitivity = request.CallerAttachments.Select(caller => caller.Sensitivity == WeaverContextSensitivity.SecretRedacted
+            ? WeaverContextSensitivity.Secret : caller.Sensitivity).Append(WeaverContextSensitivity.Internal).Max();
+        var attachment = new WeaverContextAttachment("weaver-journey:note:" + note.Revision, NoteContract.ContextKind, note.Id, "Owned qualification note", NoteContract.ContextKind,
             sensitivity, "resource", "The owning file supplied this note and revision.", JsonSerializer.SerializeToElement(note, NoteContract.Json), new Dictionary<string, string>())
-        { ModuleId = NoteContract.Module, SchemaVersion = "1", Target = target, Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = [NoteContract.Scope] };
-        return new([attachment], request.CallerAttachments.Select(caller => new AgentContributionDiagnostic(
-            sensitivity >= AgentContextSensitivity.SecretRedacted ? Descriptor.Id : Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
+        { ModuleId = NoteContract.Module, SchemaVersion = "1", Target = target, Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = [NoteContract.Scope] };
+        return new([attachment], request.CallerAttachments.Select(caller => new WeaverContributionDiagnostic(
+            sensitivity >= WeaverContextSensitivity.SecretRedacted ? Descriptor.Id : Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
     }
 
-    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> AdmitDisclosureAsync(WeaverContextDisclosureRequest request, CancellationToken cancellationToken = default)
     {
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return Refused("session_denied", "A current note session with an authenticated actor and tenant is required.");
@@ -205,10 +205,10 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
         foreach (var item in request.Context)
         {
             if (item.ContributorId != Descriptor.Id || item.ModuleId != NoteContract.Module || item.ContentType != NoteContract.ContextKind
-                || item.SchemaVersion != "1" || item.Origin != AgentContextOrigin.AuthoritativeRead) return InvalidDisclosure();
+                || item.SchemaVersion != "1" || item.Origin != WeaverContextOrigin.AuthoritativeRead) return InvalidDisclosure();
             // The engine removes target/content/scopes when it redacts a Secret attachment.
             // Current read authority still applies to disclosure of that retained placeholder.
-            if (item.Sensitivity == AgentContextSensitivity.SecretRedacted)
+            if (item.Sensitivity == WeaverContextSensitivity.SecretRedacted)
             {
                 if (item.Content is not null || item.Target is not null || item.AgentScopes.Count != 0) return InvalidDisclosure();
                 continue;
@@ -232,22 +232,22 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
             : new(request.Context, []);
     }
 
-    private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
+    private async Task<WeaverSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
     {
         var session = await sessions.FindAsync(sessionId, cancellationToken);
-        return session is { Status: AgentSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
+        return session is { Status: WeaverSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
             && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
     }
 
-    private async Task<bool> CanReadAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
+    private async Task<bool> CanReadAsync(WeaverSession session, WeaverResourceTarget? target, CancellationToken cancellationToken)
     {
-        var read = SetNoteTool.ToolDescriptor with { Mutability = AgentToolMutability.ReadOnly, Risk = AgentRisk.ReadOnly,
+        var read = SetNoteTool.ToolDescriptor with { Mutability = WeaverToolMutability.ReadOnly, Risk = WeaverRisk.ReadOnly,
             RequiredPermissions = [NoteContract.ReadPermission] };
         return (await authorizer.AuthorizeAsync(read, session.ActorId, session.TenantId,
             target ?? new(NoteContract.Module, NoteContract.ResourceType, NoteContract.NoteId, null), cancellationToken)).Allowed;
     }
 
-    private static bool OwnTarget(AgentResourceTarget? target) => target is
+    private static bool OwnTarget(WeaverResourceTarget? target) => target is
         { ModuleId: NoteContract.Module, ResourceType: NoteContract.ResourceType, ResourceId: NoteContract.NoteId, Revision: { } revision }
         && long.TryParse(revision, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number >= 1;
 
@@ -266,7 +266,7 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
         catch (NotSupportedException) { return false; }
     }
 
-    private static bool OwnResult(AgentToolResult result)
+    private static bool OwnResult(WeaverToolResult result)
     {
         if (result.ToolName != NoteContract.ToolName || string.IsNullOrWhiteSpace(result.ToolCallId)
             || result.Access is not { ModuleId: NoteContract.Module, ContractVersion: "1", DisclosureSourceId: NoteContract.ContextSourceId } access
@@ -276,54 +276,54 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
             return payload.Data.ValueKind == JsonValueKind.Object && payload.Data.EnumerateObject().Count() == 2
                 && payload.Data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String
                 && status.GetString() is "denied" or "refused" or "uncertain"
-                && payload.Data.TryGetProperty(nameof(AgentPreparedToolInvocation.InvocationId), out var invocationId)
+                && payload.Data.TryGetProperty(nameof(WeaverPreparedToolInvocation.InvocationId), out var invocationId)
                 && invocationId.ValueKind == JsonValueKind.String && invocationId.GetString() == access.InvocationId;
         return result.Succeeded && payload.TypeId == NoteContract.ResultType && TryReadState(payload.Data, out var observed)
-            && result.Receipt is { Scope: AgentEffectScope.ServerPersisted } receipt && receipt.InvocationId == access.InvocationId
+            && result.Receipt is { Scope: WeaverEffectScope.ServerPersisted } receipt && receipt.InvocationId == access.InvocationId
             && receipt.Before == access.Target && receipt.After == NoteContract.Target(observed!)
             && long.Parse(receipt.After.Revision!, CultureInfo.InvariantCulture) - 1 == long.Parse(receipt.Before.Revision!, CultureInfo.InvariantCulture)
             && receipt.Evidence.TypeId == payload.TypeId && receipt.Evidence.SchemaVersion == payload.SchemaVersion
             && receipt.Evidence.Data.GetRawText() == payload.Data.GetRawText();
     }
 
-    private AgentContextContribution Refused(string code, string message) => new([], [new(Descriptor.Id, "weaver.note." + code, message, true)]);
-    private AgentContextContribution ReadDenied() => Refused("context_denied", "Current permission to read the owned note is required.");
-    private AgentContextContribution InvalidDisclosure() => Refused("disclosure_invalid", "The retained evidence does not match this source's supported note, schema and original tool contract.");
+    private WeaverContextContribution Refused(string code, string message) => new([], [new(Descriptor.Id, "weaver.note." + code, message, true)]);
+    private WeaverContextContribution ReadDenied() => Refused("context_denied", "Current permission to read the owned note is required.");
+    private WeaverContextContribution InvalidDisclosure() => Refused("disclosure_invalid", "The retained evidence does not match this source's supported note, schema and original tool contract.");
 }
 
-internal sealed class SetNoteTool(NoteStore store, IAgentToolAuthorizer authorizer) : IAgentTool
+internal sealed class SetNoteTool(NoteStore store, IWeaverToolAuthorizer authorizer) : IWeaverTool
 {
-    internal static readonly AgentToolDescriptor ToolDescriptor = new(NoteContract.ToolName, "Set owned note", "Reviews one change to the qualification module's own revisioned note file.",
-        AgentToolMutability.Mutating, AgentRisk.ReviewRequired, """{"type":"object","required":["value"],"properties":{"value":{"type":"string","maxLength":256}},"additionalProperties":false}""",
+    internal static readonly WeaverToolDescriptor ToolDescriptor = new(NoteContract.ToolName, "Set owned note", "Reviews one change to the qualification module's own revisioned note file.",
+        WeaverToolMutability.Mutating, WeaverRisk.ReviewRequired, """{"type":"object","required":["value"],"properties":{"value":{"type":"string","maxLength":256}},"additionalProperties":false}""",
         [NoteContract.ManagePermission], [NoteContract.Scope])
     { ModuleId = NoteContract.Module, ContractVersion = "1", DisclosureSourceId = NoteContract.ContextSourceId,
         ResultType = NoteContract.ResultType, ResultSchemaVersion = "1", ResultRendererId = "weaver.journey.note-result" };
-    public AgentToolDescriptor Descriptor => ToolDescriptor;
-    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public WeaverToolDescriptor Descriptor => ToolDescriptor;
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         if (invocation.Arguments.Count != 1 || !invocation.Arguments.TryGetValue("value", out var raw))
-            return AgentResult<AgentToolPreparation>.Failure("weaver.note.value_invalid", "Exactly one note value is required.");
+            return WeaverResult<WeaverToolPreparation>.Failure("weaver.note.value_invalid", "Exactly one note value is required.");
         var value = raw is JsonElement { ValueKind: JsonValueKind.String } json ? json.GetString() : raw as string;
-        if (value is null || value.Length > 256) return AgentResult<AgentToolPreparation>.Failure("weaver.note.value_invalid", "The note value must be a string of at most 256 characters.");
+        if (value is null || value.Length > 256) return WeaverResult<WeaverToolPreparation>.Failure("weaver.note.value_invalid", "The note value must be a string of at most 256 characters.");
         var snapshot = invocation.Context.SingleOrDefault(item => item.ModuleId == NoteContract.Module && item.ContentType == NoteContract.ContextKind);
-        if (snapshot?.Origin != AgentContextOrigin.AuthoritativeRead || snapshot.Target is not { } target)
-            return AgentResult<AgentToolPreparation>.Failure("weaver.note.context_required", "An authoritative module-owned note snapshot is required.", 409);
+        if (snapshot?.Origin != WeaverContextOrigin.AuthoritativeRead || snapshot.Target is not { } target)
+            return WeaverResult<WeaverToolPreparation>.Failure("weaver.note.context_required", "An authoritative module-owned note snapshot is required.", 409);
         var current = await store.ReadAsync(cancellationToken);
-        if (target != NoteContract.Target(current)) return AgentResult<AgentToolPreparation>.Failure("weaver.note.stale", "The owned note changed before preparation.", 409);
+        if (target != NoteContract.Target(current)) return WeaverResult<WeaverToolPreparation>.Failure("weaver.note.stale", "The owned note changed before preparation.", 409);
         var access = await authorizer.AuthorizeAsync(Descriptor, invocation.ActorId, invocation.TenantId, target, cancellationToken);
-        if (!access.Allowed) return AgentResult<AgentToolPreparation>.Failure("weaver.note.permission_denied", "Current note-management permission is required.", 403);
-        return AgentResult<AgentToolPreparation>.Success(new(target, JsonSerializer.SerializeToElement(new { value }, NoteContract.Json), AgentRisk.ReviewRequired,
+        if (!access.Allowed) return WeaverResult<WeaverToolPreparation>.Failure("weaver.note.permission_denied", "Current note-management permission is required.", 403);
+        return WeaverResult<WeaverToolPreparation>.Success(new(target, JsonSerializer.SerializeToElement(new { value }, NoteContract.Json), WeaverRisk.ReviewRequired,
             new(NoteContract.ResultType, "1", JsonSerializer.SerializeToElement(new { current.Id, value, current.Revision, beforeValue = current.Value }, NoteContract.Json)), RequiresApproval: true));
     }
-    public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         if (invocation.Target is not { ModuleId: NoteContract.Module, ResourceType: NoteContract.ResourceType, ResourceId: NoteContract.NoteId, Revision: not null } target ||
             !invocation.Arguments.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.String || value.GetString() is not { Length: <= 256 } text)
-            return AgentResult<AgentToolResult>.Failure("weaver.note.prepared_invalid", "The prepared note mutation is invalid.");
+            return WeaverResult<WeaverToolResult>.Failure("weaver.note.prepared_invalid", "The prepared note mutation is invalid.");
         var observed = await store.UpdateAsync(target.Revision!, text, cancellationToken);
-        if (observed is null) return AgentResult<AgentToolResult>.Failure("weaver.note.stale", "The owning note changed after review; no write occurred.", 409);
+        if (observed is null) return WeaverResult<WeaverToolResult>.Failure("weaver.note.stale", "The owning note changed after review; no write occurred.", 409);
         var payload = NoteContract.Payload(observed);
-        return AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "The owning module wrote and reread the note file.", payload)
-        { Receipt = new(invocation.InvocationId, target, NoteContract.Target(observed), AgentEffectScope.ServerPersisted, payload) });
+        return WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "The owning module wrote and reread the note file.", payload)
+        { Receipt = new(invocation.InvocationId, target, NoteContract.Target(observed), WeaverEffectScope.ServerPersisted, payload) });
     }
 }

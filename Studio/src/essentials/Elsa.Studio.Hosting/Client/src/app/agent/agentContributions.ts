@@ -1,10 +1,10 @@
 import type {
   ElsaStudioModuleApi,
-  StudioAgentCapabilityContribution,
-  StudioAgentPromptStarterContribution,
-  StudioAgentSurface,
-  StudioAgentToolContractContribution,
-  StudioAgentToolSlotContribution
+  StudioWeaverCapabilityContribution,
+  StudioWeaverPromptStarterContribution,
+  StudioWeaverSurface,
+  StudioWeaverToolContractContribution,
+  StudioWeaverToolSlotContribution
 } from "../../sdk";
 
 export interface AgentContributionFilterOptions {
@@ -29,10 +29,10 @@ export interface AgentContributionPolicy {
 
 export function getActiveAgentCapabilities(
   api: ElsaStudioModuleApi,
-  surface: StudioAgentSurface,
+  surface: StudioWeaverSurface,
   options: AgentContributionFilterOptions = {}
 ) {
-  return api.agent.capabilities
+  return api.weaver.capabilities
     .list()
     .filter(capability => matchesSurface(capability.surfaces, surface.route))
     .filter(capability => isModuleEnabled(capability.moduleId, options))
@@ -42,12 +42,12 @@ export function getActiveAgentCapabilities(
 
 export function getActivePromptStarters(
   api: ElsaStudioModuleApi,
-  surface: StudioAgentSurface,
-  capabilities: StudioAgentCapabilityContribution[] = getActiveAgentCapabilities(api, surface),
+  surface: StudioWeaverSurface,
+  capabilities: StudioWeaverCapabilityContribution[] = getActiveAgentCapabilities(api, surface),
   options: AgentContributionFilterOptions = {}
 ) {
   const capabilityIds = new Set(capabilities.map(capability => capability.id));
-  return api.agent.promptStarters
+  return api.weaver.promptStarters
     .list()
     .filter(prompt => matchesSurface(prompt.surfaces, surface.route))
     .filter(prompt => isModuleEnabled(prompt.moduleId, options))
@@ -57,10 +57,10 @@ export function getActivePromptStarters(
 
 export function getActiveAgentToolSlots(
   api: ElsaStudioModuleApi,
-  surface: StudioAgentSurface,
+  surface: StudioWeaverSurface,
   options: AgentContributionFilterOptions = {}
 ) {
-  return api.agent.toolSlots
+  return api.weaver.toolSlots
     .list()
     .filter(slot => matchesSurface(slot.surfaces, surface.route))
     .filter(slot => isModuleEnabled(slot.moduleId, options))
@@ -69,14 +69,14 @@ export function getActiveAgentToolSlots(
 
 export function getActiveAgentToolContracts(
   api: ElsaStudioModuleApi,
-  surface: StudioAgentSurface,
+  surface: StudioWeaverSurface,
   options: AgentContributionFilterOptions = {}
 ) {
   const slots = getActiveAgentToolSlots(api, surface, options);
   const slotIds = new Set(slots.map(slot => slot.id));
   const slotRank = new Map(slots.map((slot, index) => [slot.id, index]));
 
-  return api.agent.toolContracts
+  return api.weaver.toolContracts
     .list()
     .filter(contract => slotIds.has(contract.slotId))
     .filter(contract => matchesSurface(contract.surfaces, surface.route))
@@ -91,17 +91,17 @@ export function matchesSurface(surfaces: readonly string[], route: string) {
   return surfaces.includes("*") || surfaces.some(surface => route === surface || route.startsWith(`${surface}/`));
 }
 
-function byOrderThenLabel(left: StudioAgentPromptStarterContribution, right: StudioAgentPromptStarterContribution) {
+function byOrderThenLabel(left: StudioWeaverPromptStarterContribution, right: StudioWeaverPromptStarterContribution) {
   return (left.order ?? 500) - (right.order ?? 500) || left.label.localeCompare(right.label);
 }
 
-function byOrderThenDisplayName(left: StudioAgentToolSlotContribution, right: StudioAgentToolSlotContribution) {
+function byOrderThenDisplayName(left: StudioWeaverToolSlotContribution, right: StudioWeaverToolSlotContribution) {
   return (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName);
 }
 
 function bySlotThenOrderThenDisplayName(
-  left: StudioAgentToolContractContribution,
-  right: StudioAgentToolContractContribution,
+  left: StudioWeaverToolContractContribution,
+  right: StudioWeaverToolContractContribution,
   slotRank: ReadonlyMap<string, number>
 ) {
   return (slotRank.get(left.slotId) ?? 500) - (slotRank.get(right.slotId) ?? 500)
@@ -148,7 +148,7 @@ function isCapabilityAllowed(capabilityId: string, policy: AgentContributionPoli
   return !policy.allowedCapabilityIds || policy.allowedCapabilityIds.includes(capabilityId);
 }
 
-function isToolAvailable(contract: StudioAgentToolContractContribution) {
+function isToolAvailable(contract: StudioWeaverToolContractContribution) {
   return !contract.availability || contract.availability.status === "available";
 }
 

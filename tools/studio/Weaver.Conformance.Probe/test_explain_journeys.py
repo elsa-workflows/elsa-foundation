@@ -46,7 +46,7 @@ def attachment_for(turn="explain", canary=CANARY):
 
 
 def server_admission(attachment):
-    """The server's admitted projection of the parts the driver compares, as WorkflowAgentSnapshot.TryRead writes them."""
+    """The server's admitted projection of the parts the driver compares, as WorkflowWeaverSnapshot.TryRead writes them."""
     content = copy.deepcopy(attachment["content"])
     for key in ("selectedActivityType", "inspectedNodeId"):
         content.pop(key, None)

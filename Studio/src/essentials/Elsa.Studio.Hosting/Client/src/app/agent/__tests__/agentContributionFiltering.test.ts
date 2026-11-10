@@ -16,7 +16,7 @@ describe("agent contribution filtering", () => {
       ...createEndpointContext("https://studio.example/")
     });
 
-    api.agent.capabilities.add({
+    api.weaver.capabilities.add({
       id: "workflow.explain",
       displayName: "Explain workflow",
       description: "Explain the workflow.",
@@ -24,14 +24,14 @@ describe("agent contribution filtering", () => {
       risk: "read-only",
       surfaces: ["/workflows"]
     });
-    api.agent.promptStarters.add({
+    api.weaver.promptStarters.add({
       id: "workflow.prompt",
       label: "Explain",
       prompt: "Explain this workflow.",
       surfaces: ["/workflows"],
       requiredCapabilities: ["workflow.explain"]
     });
-    api.agent.promptStarters.add({
+    api.weaver.promptStarters.add({
       id: "missing.prompt",
       label: "Missing",
       prompt: "Missing capability.",
@@ -51,7 +51,7 @@ describe("agent contribution filtering", () => {
       ...createEndpointContext("https://studio.example/")
     });
 
-    api.agent.capabilities.add({
+    api.weaver.capabilities.add({
       id: "workflow.explain",
       moduleId: "workflows",
       displayName: "Explain workflow",
@@ -61,7 +61,7 @@ describe("agent contribution filtering", () => {
       surfaces: ["/workflows"],
       requiredPermissions: ["workflows.read"]
     });
-    api.agent.capabilities.add({
+    api.weaver.capabilities.add({
       id: "workflow.admin",
       moduleId: "workflows",
       displayName: "Admin workflow",
@@ -71,7 +71,7 @@ describe("agent contribution filtering", () => {
       surfaces: ["/workflows"],
       requiredPermissions: ["workflows.admin"]
     });
-    api.agent.capabilities.add({
+    api.weaver.capabilities.add({
       id: "module.disabled",
       moduleId: "disabled-module",
       displayName: "Disabled",
@@ -80,7 +80,7 @@ describe("agent contribution filtering", () => {
       risk: "read-only",
       surfaces: ["/workflows"]
     });
-    api.agent.promptStarters.add({
+    api.weaver.promptStarters.add({
       id: "workflow.prompt",
       moduleId: "workflows",
       label: "Explain",
@@ -88,7 +88,7 @@ describe("agent contribution filtering", () => {
       surfaces: ["/workflows"],
       requiredCapabilities: ["workflow.explain"]
     });
-    api.agent.promptStarters.add({
+    api.weaver.promptStarters.add({
       id: "disabled.prompt",
       moduleId: "disabled-module",
       label: "Disabled",
@@ -117,7 +117,7 @@ describe("agent contribution filtering", () => {
       ...createEndpointContext("https://studio.example/")
     });
 
-    api.agent.toolSlots.add({
+    api.weaver.toolSlots.add({
       id: "extension.tools",
       moduleId: "extensions",
       displayName: "Extension tools",
@@ -125,7 +125,7 @@ describe("agent contribution filtering", () => {
       invocationModes: ["read-only", "proposal"],
       order: 20
     });
-    api.agent.toolSlots.add({
+    api.weaver.toolSlots.add({
       id: "workflow.tools",
       moduleId: "workflows",
       displayName: "Workflow tools",
@@ -133,7 +133,7 @@ describe("agent contribution filtering", () => {
       invocationModes: ["read-only", "direct", "proposal"],
       order: 10
     });
-    api.agent.toolSlots.add({
+    api.weaver.toolSlots.add({
       id: "workflow.audit.tools",
       moduleId: "workflows",
       displayName: "Workflow audit tools",
@@ -142,7 +142,7 @@ describe("agent contribution filtering", () => {
       order: 5
     });
 
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "workflow.repair",
       slotId: "workflow.tools",
       moduleId: "workflows",
@@ -159,7 +159,7 @@ describe("agent contribution filtering", () => {
       invocationModes: ["proposal"],
       resultRendererIds: ["workflow.diff"]
     });
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "workflow.inspect",
       slotId: "workflow.tools",
       moduleId: "workflows",
@@ -175,7 +175,7 @@ describe("agent contribution filtering", () => {
       availability: { status: "available" },
       invocationModes: ["read-only"]
     });
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "workflow.audit.inspect",
       slotId: "workflow.audit.tools",
       moduleId: "workflows",
@@ -191,7 +191,7 @@ describe("agent contribution filtering", () => {
       availability: { status: "available" },
       invocationModes: ["read-only"]
     });
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "workflow.disabled",
       slotId: "workflow.tools",
       moduleId: "workflows",
@@ -205,7 +205,7 @@ describe("agent contribution filtering", () => {
       availability: { status: "policy-denied", reason: "Disabled by host policy." },
       invocationModes: ["privileged"]
     });
-    api.agent.toolContracts.add({
+    api.weaver.toolContracts.add({
       id: "extension.inspect",
       slotId: "extension.tools",
       moduleId: "extensions",

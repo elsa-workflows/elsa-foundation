@@ -54,7 +54,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     @staticmethod
     def domain_policy(mode):
-        """The whole domain AgentPolicy (camelCase enums) that must never reach the client."""
+        """The whole domain WeaverPolicy (camelCase enums) that must never reach the client."""
         names = {"manual": "manual", "full-auto": "fullAuto"}
         return {"id": "default", "enabled": True, "contextVisibility": True, "maxContextSensitivity": "sensitive",
                 "allowedContextKinds": ["*"], "autonomyMode": names[mode], "maxAutonomyMode": "fullAuto",

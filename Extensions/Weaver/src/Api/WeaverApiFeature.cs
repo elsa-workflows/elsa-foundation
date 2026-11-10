@@ -36,5 +36,5 @@ public class WeaverApiFeature : WeaverFeature, IWebShellFeature
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
-        AgentApi.MapAgentApi(endpoints);
+        WeaverApi.MapWeaverApi(endpoints);
 }

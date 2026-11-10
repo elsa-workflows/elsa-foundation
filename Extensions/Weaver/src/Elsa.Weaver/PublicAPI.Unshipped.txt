@@ -1,9 +1,9 @@
 #nullable enable
-Elsa.Weaver.Extensions.AgentServiceCollectionExtensions
+Elsa.Weaver.Extensions.WeaverServiceCollectionExtensions
 Elsa.Weaver.WeaverFeature
 Elsa.Weaver.WeaverFeature.WeaverFeature() -> void
-static Elsa.Weaver.Extensions.AgentServiceCollectionExtensions.AddWeaver(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Extensions.WeaverServiceCollectionExtensions.AddWeaver(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 virtual Elsa.Weaver.WeaverFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
-Elsa.Weaver.Extensions.AgentPersistenceSelection
-static Elsa.Weaver.Extensions.AgentPersistenceSelection.SelectAgentAuditStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, TStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static Elsa.Weaver.Extensions.AgentPersistenceSelection.SelectAgentSessionRecordStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Weaver.Core.Contracts.IAgentSessionRecordStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Weaver.Extensions.WeaverPersistenceSelection
+static Elsa.Weaver.Extensions.WeaverPersistenceSelection.SelectWeaverAuditStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, TStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Extensions.WeaverPersistenceSelection.SelectWeaverSessionRecordStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Weaver.Core.Contracts.IWeaverSessionRecordStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

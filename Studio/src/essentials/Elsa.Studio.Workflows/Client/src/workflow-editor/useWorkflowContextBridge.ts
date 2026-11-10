@@ -159,8 +159,8 @@ export interface WorkflowSnapshotOptions {
  * definition and version (never their bodies), and the selected activity's declared properties with withheld credentials.
  *
  * The size guard keeps the content inside the effective admission bound: the host's 32 KiB per-attachment budget on the
- * server's admitted projection (`AgentContextServices`), which is tighter than the module's own 64 KiB bound on what the
- * editor sends (`WorkflowAgentSnapshot`). Parts are left out in this order, each only while the content is still over:
+ * server's admitted projection (`WeaverContextServices`), which is tighter than the module's own 64 KiB bound on what the
+ * editor sends (`WorkflowWeaverSnapshot`). Parts are left out in this order, each only while the content is still over:
  * the selected activity's property context, then the diagnostics (their count stays in `diagnosticsOmitted`), then the
  * structure (explanation keeps working; an Operation Batch then says the structure is required).
  */
@@ -193,10 +193,10 @@ export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVers
   return content;
 }
 
-/** The server's bound on `workflow.definition` content (`WorkflowAgentSnapshot`), in UTF-16 code units of its JSON text. */
+/** The server's bound on `workflow.definition` content (`WorkflowWeaverSnapshot`), in UTF-16 code units of its JSON text. */
 export const workflowSnapshotContentLimit = 65536;
 /**
- * The host's bound on one context attachment's content (`AgentContextServices`: `JsonSerializer.Serialize(content).Length`
+ * The host's bound on one context attachment's content (`WeaverContextServices`: `JsonSerializer.Serialize(content).Length`
  * over the admitted projection, at most 32,768), which every admitted workflow snapshot must also fit.
  */
 export const workflowContextCandidateBudget = 32768;

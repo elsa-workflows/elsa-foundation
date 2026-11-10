@@ -3,16 +3,16 @@
 `Elsa.Weaver.Persistence.EntityFrameworkCore` is the opt-in durable backing for Weaver sessions
 ([#3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441),
 [spec 1189](../../../../../specs/1189-weaver-recovery/spec.md)). It implements the Preview
-`IAgentSessionRecordStore` and replaces the audit sink, reader and ownership together. The default
+`IWeaverSessionRecordStore` and replaces the audit sink, reader and ownership together. The default
 session owner is not replaced: it writes through this store and hydrates from it, so session policy,
 autonomy and durable recovery stay supported. Replacing a lifecycle service (session, streaming, invoker or
-proposal) or `IAgentTurnStateStore` while this store is selected fails shell activation
-(`AgentDurableRecoveryValidator`), because such a composition cannot recover what it records. The package carries EF Core and Relational APIs; the
+proposal) or `IWeaverTurnStateStore` while this store is selected fails shell activation
+(`WeaverDurableRecoveryValidator`), because such a composition cannot recover what it records. The package carries EF Core and Relational APIs; the
 host supplies its selected engine. Enable shell feature `WeaverEntityFrameworkCore` (it
 depends on `Weaver` and `Secrets`), or register directly:
 
 ```csharp
-services.AddAgentEntityFrameworkCore(new()
+services.AddWeaverEntityFrameworkCore(new()
 {
     Provider = "Sqlite",
     ConnectionString = "Data Source=agent.db"
@@ -21,19 +21,19 @@ services.AddAgentEntityFrameworkCore(new()
 
 SQLite, SQL Server, Npgsql PostgreSQL and Oracle MySQL have separate context/migration sets under
 `Migrations/Agent/<Provider>/`. The module uses the shared EF startup policy, named connections,
-schema selection and pooling. The stable history module is `ElsaAgent`.
+schema selection and pooling. The stable history module is `ElsaWeaver`.
 
 ## Selection
 
-The store and the audit trio are chosen through `SelectAgentSessionRecordStore` and
-`SelectAgentAuditStore` (`Elsa.Weaver.Extensions.AgentPersistenceSelection`). A selection replaces
+The store and the audit trio are chosen through `SelectWeaverSessionRecordStore` and
+`SelectWeaverAuditStore` (`Elsa.Weaver.Extensions.WeaverPersistenceSelection`). A selection replaces
 only the process-local default, whichever of the two registrations runs first. A second selection,
 or a selection over a store registered some other way, throws at registration; the
-`AgentRegistrationValidator` still refuses two record stores or two of any audit facet at shell
+`WeaverRegistrationValidator` still refuses two record stores or two of any audit facet at shell
 activation.
 
-An application can instead call `modelBuilder.AddAgentModel(Database.ProviderName!)` in its own
-`DbContext`, then `services.AddAgentStores<ApplicationDbContext>()`. Its host owns migrations.
+An application can instead call `modelBuilder.AddWeaverModel(Database.ProviderName!)` in its own
+`DbContext`, then `services.AddWeaverStores<ApplicationDbContext>()`. Its host owns migrations.
 Every operation resolves a fresh scoped context and commits independently; it never flushes pending
 application changes or enlists in an application transaction.
 
@@ -42,10 +42,10 @@ application changes or enlists in an application transaction.
 | Table | Holds |
 | --- | --- |
 | `elsa_weaver_sessions` | Owner columns (actor, tenant, workspace), list columns (title, status, update and expiry time), policy revision, `ContinuedFrom`, the reached session limit, owner token, fence, lease and version; the protected session, paused turn and the audit records a recovery settlement still owes |
-| `elsa_weaver_messages` | One protected `AgentMessageRecord` per message, with role, status and status reason |
+| `elsa_weaver_messages` | One protected `WeaverMessageRecord` per message, with role, status and status reason |
 | `elsa_weaver_disclosure_snapshots` | Each distinct snapshot once per session: digest, size and the protected canonical text |
 | `elsa_weaver_context` | Each context attachment once per session, protected, keyed by the SHA-256 of its identity |
-| `elsa_weaver_proposals` | One protected `AgentProposalRecord` per proposal, with status, prepared deadline and its record version |
+| `elsa_weaver_proposals` | One protected `WeaverProposalRecord` per proposal, with status, prepared deadline and its record version |
 | `elsa_weaver_call_keys` | The call, invocation, turn-mutation and call-input keys, keyed by SHA-256 of the key |
 | `elsa_weaver_audit`, `elsa_weaver_audit_owners` | Protected audit records and the first-wins owner association that scopes audit queries |
 | `elsa_weaver_audit_sequence` | One counter row that allocates audit append positions |
@@ -91,9 +91,9 @@ never part of a record; the store records only the owner's Core records.
 
 A row whose ciphertext does not authenticate, whose JSON does not decode, whose plain columns disagree
 with its protected record, or whose schema version this build does not read makes hydration fail with
-`AgentSessionUnavailableException` (`weaver.session.unavailable_state`, reason `unreadable`, the cause
+`WeaverSessionUnavailableException` (`weaver.session.unavailable_state`, reason `unreadable`, the cause
 kept as the inner exception); nothing is settled or changed. A provider failure leaves the store as an
-`AgentContributionException` naming the session and operation, with the original exception inside.
+`WeaverContributionException` naming the session and operation, with the original exception inside.
 
 ## Tests
 
