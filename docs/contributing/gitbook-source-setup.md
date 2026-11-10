@@ -18,7 +18,7 @@ The owner published the site and enabled Git Sync on 11 October 2026, then confi
 
 The authenticated overview reported **Published / Public / Synced**. All seven pages, code blocks and the workflow diagram were visually checked on the GitBook domain. Separate direct HTTPS checks verified all seven pages, canonical URLs and image endpoints on the custom domain. Full plan entitlements, multi-space limits and external-contributor preview access remain unverified.
 
-Evidence: [hosted checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113578105), [custom-domain checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113922514). Source preparation landed through #2641 and #2643; the latter merged as `d4d7b6bbcc814d3b8229c933931115ccefe116ec`. These observations do not prove every later revision has synced.
+Evidence: [hosted checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113578105), [custom-domain checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113922514). Source preparation landed through #2641 and #2643; the latter merged as `d4d7b6bbcc814d3b8229c933931115ccefe116ec`. Later owner merges delivered seven live edit links in #2645, consolidated source navigation in #2644, and the Essentials link repair in #2647. The [latest docs merge receipt](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6115663867) verifies `4f6d6350cf384ed6a7cc8e48d4deb919c388857f` and GitBook revision `GmUW2frzOajzMSDMCj8K`; it does not prove every later revision has synced.
 
 ## Source mapping and navigation
 
@@ -26,7 +26,7 @@ Site Git Sync reads `gitbook-docs.yaml` at the repository root. It maps the defa
 
 The logical mapping key `elsa-4-docs` is permanent after the first sync. Changing a live key can replace its space; it is not a rollback mechanism. Review any GitBook-generated configuration changes through the content review path.
 
-Link to canonical source guides instead of copying their explanations. Current-development source links must describe the actual `main` tree. During Foundation/Studio consolidation, update them only after the new paths land and their targets are verified. Preserve immutable quickstart links and image digests: they document a specific historical pair and environment.
+Link to canonical source guides instead of copying their explanations. Current-development source links must describe the actual `main` tree. Foundation/Studio consolidation landed in #2644. Current source roots include `Essentials/`, `Extensions/` and `Studio/`. Prefer explicit existing file links: GitBook rewrote the valid `Essentials/src` directory URL to a nonexistent `Essentials/src/README.md`; #2647 fixed that link using the repository overview. Check the actual served preview anchor as well as the authored target. Preserve immutable quickstart links and image digests: they document a specific historical pair and environment.
 
 GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration) explains YAML mapping and `SUMMARY.md` navigation.
 
@@ -83,8 +83,9 @@ Before proposing a change, validate `gitbook-docs.yaml` against its schema, veri
 | Initial live sync, seven-page rendering and custom-domain HTTPS | Observed; checkpoint links above |
 | Same-repository PR preview update/revert | Served-HTML update/revert observed in #2645; fresh visual check pending |
 | External-fork preview and outside-contributor access | Unverified; fork previews observed disabled |
-| Direct owning-repository edit links | Seven targets served in #2645 preview; live proof pending merge/sync |
+| Direct owning-repository edit links | Seven targets verified live after #2645; preserved through #2644 and #2647 |
 | GitBook-originated write-back and enforced review | Unverified; effective `main` rules do not require PR approval |
 | Published content revert / DNS recovery | Procedures prepared; not exercised |
+| Maintenance ownership and interim limits | Owner acceptance pending; do not equate a live site with an accepted operational handover |
 
 Keep #2498 open while required proof is unresolved. Record restrictions and failures beside passes; do not relabel unavailable hosted checks as successful local validation.

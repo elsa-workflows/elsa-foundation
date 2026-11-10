@@ -251,7 +251,10 @@ public sealed partial class SpecialistPublicationTests
         public RuntimeDurableValueStorageDriverRegistry Drivers { get; } = new([new JsonRuntimeDurableValueStorageDriver()]);
         public ActivityTemplateCompiler Compiler => new(new ActivityTemplateProviderCompilerRegistry(Services.GetServices<IActivityTemplateProviderCompiler>()),
             new ActivityTemplateDependencyDiscovererRegistry(Services.GetServices<IActivityTemplateDependencyDiscoverer>()), stores, stores, templates,
-            new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System);
+            new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System,
+            Services.GetServices<Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionDocumentProjector>(),
+            Services.GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionAnalyzer>(),
+            Services.GetRequiredService<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService>());
         public ActivityDefinitionPublisher Publisher => NewPublisher(true, true);
         public ActivityDefinitionPublisher NewPublisher(bool runtimeInstalled, bool storageInstalled) => new(stores, stores, stores, stores, stores, stores,
             new ActivityDraftValidator(new ActivityProviderRegistry(Services.GetServices<IActivityProvider>()), new ActivityContractAuthoringValidator(new Capabilities()), TimeProvider.System),
@@ -309,6 +312,9 @@ public sealed partial class SpecialistPublicationTests
             var model = new MetadataModel();
             var services = new ServiceCollection();
             services.AddLogging();
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
+            new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+            services.AddSingleton<IActivityDefinitionLookup>(new Elsa.Activities.Design.Persistence.Core.Services.ActivityDefinitionLookup(stores, stores));
             services.AddWorkflowRuntime();
             new ActivitiesRuntimeFeature().ConfigureServices(services);
             new SerializationFeature().ConfigureServices(services);

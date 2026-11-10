@@ -1006,7 +1006,6 @@ function studioRegistry() {
       name: "studio-local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
@@ -1064,7 +1063,6 @@ function serverRegistry() {
       name: "local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
@@ -1142,7 +1140,6 @@ function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePacka
       name: "local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }

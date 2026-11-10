@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Primitives.Models;
 using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -14,6 +15,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Services;
@@ -30,12 +33,68 @@ public sealed class ActivityTemplateCompiler(
     IActivityDefinitionVersionStore activityVersions,
     IExecutableActivityTemplateReader templates,
     IActivityTemplateAdmissionPolicy admissionPolicy,
-    TimeProvider timeProvider) : IActivityTemplateCompiler
+    TimeProvider timeProvider,
+    IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
+    IActivityDataSelectionAnalyzer dataAnalyzer,
+    IActivityStructureService? activityStructures = null) : IActivityTemplateCompiler
 {
+    // Retain the source-analysis constructor while the owning structure projection is added.
+    public ActivityTemplateCompiler(
+        IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications,
+        IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates,
+        IActivityTemplateAdmissionPolicy admissionPolicy,
+        TimeProvider timeProvider,
+        IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
+        IActivityDataSelectionAnalyzer dataAnalyzer)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
+            timeProvider, dataProjectors, dataAnalyzer, null)
+    {
+    }
+
+    // Preserve the existing binary constructor. Legacy callers must supply the shared authority
+    // before compiling; absence fails closed rather than restoring the former admission gap.
+    public ActivityTemplateCompiler(
+        IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications,
+        IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates,
+        IActivityTemplateAdmissionPolicy admissionPolicy,
+        TimeProvider timeProvider)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
+            timeProvider, [], null!)
+    {
+    }
+
     public async ValueTask<ActivityTemplateCompilerResult> CompileAsync(
         ActivityTemplateCompilerRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        try
+        {
+            return await CompileCoreAsync(request, cancellationToken);
+        }
+        catch (ActivityDataSelectionRejectedException exception)
+        {
+            throw new ActivityDataSelectionRejectedException(exception.Findings)
+            {
+                ResourceKind = request.Candidate.SubjectKind,
+                ResourceId = request.Candidate.Id,
+                ProviderKey = request.Candidate.Provider.ProviderKey
+            };
+        }
+    }
+
+    private async ValueTask<ActivityTemplateCompilerResult> CompileCoreAsync(
+        ActivityTemplateCompilerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var document = await ValidateDataSelectionAsync(request, cancellationToken);
+        var projected = document is not null;
         var subject = Subject(request);
         var diagnostics = new List<ActivityDiagnostic>();
         var resolved = new List<ActivityResolvedDependency>();
@@ -214,6 +273,13 @@ public sealed class ActivityTemplateCompiler(
             resolved,
             provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
+        if (!projected && compilation.Occurrences.Count != 0)
+            throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ProviderProjectionMissing",
+                "The activity provider must expose its authored graph for source-read validation.")]);
+        if (compilation.ExecutableRoot is not null)
+            ActivityTemplateDataSelectionGuard.Validate(compilation.ExecutableRoot, projected,
+                ActivityTemplatePlacer.DescribeTemplateDataSelectionFacts(compilation.ExecutableRoot,
+                    request.Candidate.Contract.Inputs.Select(x => x.Name), document, activityStructures));
 
         if (!StringComparer.Ordinal.Equals(compilation.ProviderFingerprint, provider.CompilerFingerprint))
         {
@@ -449,6 +515,41 @@ public sealed class ActivityTemplateCompiler(
         {
             ProviderCompatibilityChanges = compilation.ProviderCompatibilityChanges
         };
+    }
+
+    private async ValueTask<ActivityDataSelectionDocument?> ValidateDataSelectionAsync(ActivityTemplateCompilerRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (dataAnalyzer is null)
+            throw new InvalidOperationException("Activity compilation requires the shared activity data selection analyzer.");
+        var revision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
+        {
+            request.Candidate.SubjectKind, request.Candidate.Id, request.Candidate.Revision,
+            request.Candidate.Provider, request.Candidate.Contract
+        });
+        ActivityDataSelectionDocument? document = null;
+        foreach (var projector in dataProjectors)
+        {
+            var candidate = await projector.TryProjectAsync(request.Candidate.Provider, request.Candidate.Contract,
+                request.Candidate.Id, revision, cancellationToken);
+            if (candidate is null)
+                continue;
+            if (document is not null)
+                throw new InvalidOperationException("Multiple providers claimed the activity data selection document.");
+            if (!StringComparer.Ordinal.Equals(candidate.ResourceId, request.Candidate.Id) ||
+                !StringComparer.Ordinal.Equals(candidate.ContractRevision, revision))
+                throw new InvalidOperationException("The activity data selection document does not match the actual candidate.");
+            document = candidate;
+        }
+        if (document is null)
+            return null;
+        var analysis = await dataAnalyzer.AnalyzeAsync(document, cancellationToken: cancellationToken);
+        if (!StringComparer.Ordinal.Equals(analysis.ContractRevision, revision))
+            throw new InvalidOperationException("Activity data selection analysis does not match the actual candidate.");
+        var errors = analysis.Findings.Where(x => StringComparer.Ordinal.Equals(x.Severity, ValidationSeverities.Error)).ToArray();
+        if (errors.Length != 0)
+            throw new ActivityDataSelectionRejectedException(errors);
+        return document;
     }
 
     private static bool TryReadDeclaredStructure(
