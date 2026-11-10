@@ -269,7 +269,11 @@ The source record stays visible before the next sync. The pointer looks like thi
   and no finding that changes a document is left as a comment only — it offers the drafter the prepared edit wherever
   one is missing.
 
-**Check-in.** "Where am I needed on #N?" reads three things:
+**Check-in.** A session doing initiative work first checks out the **initiative branch** (`git fetch origin`, then
+work from `origin/initiative/<n>-<slug>`, named in the board header), not `main`: that branch is the initiative's
+current knowledge base — every agreed ADR, spec and amendment — and every open proposal is reviewed against it, so a
+participant left on `main` reads stale decision artifacts that predate the initiative. Then "Where am I needed on
+#N?" reads three things:
 - the board;
 - the pointer comments the coordinator has not handled yet;
 - the person's open review requests on PRs linked to the initiative (linked by the boundary rule above).
@@ -282,7 +286,10 @@ Every initiative has one integration branch in this repository, `initiative/<n>-
 initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
 else: ADRs and ADR amendments; spec, plan and tasks; and the CONTEXT, glossary or constitution edits those decisions
 imply. It holds no production code. Because every proposal is checked against everything already on it, the branch is
-the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place.
+the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place. Everyone
+taking part works from it — authors cut their proposal branches from it, and reviewers and the coordinator check it
+out to see the agreed decisions a proposal builds on — not from `main`, which does not carry them until the
+initiative lands.
 
 Work outside the initiative is unaffected. Every rule in this section applies only to **initiative proposals**: PRs
 whose base is an `initiative/*` branch, or the branch of a proposal stacked on one.
