@@ -12,7 +12,7 @@ This package uses the official Azure OpenAI SDK independently of Weaver's select
   a scoped model factory or connection resolver.
 - `IAgentModelCapabilitiesSource` and `IAgentModelClientFactory` are intra-domain Agent
   contributions for the exact `azure-openai` key, registered scoped; their canonical ports are in
-  [Agents Core](../Core/EXTENSION_POINTS.md).
+  [Agent Core](../Core/EXTENSION_POINTS.md).
 
 The optional `AgentRuntime.StreamResponses` host setting uses the qualified `stream1` profile
 through MAF. Completion/refusal checks precede accepted result/history; partial output and interrupted

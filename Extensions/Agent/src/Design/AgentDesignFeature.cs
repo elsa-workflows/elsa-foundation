@@ -13,7 +13,7 @@ namespace Elsa.Agent.Design;
 [ManifestFeatureCategory("Agent")]
 [ManifestFeatureCategory("Design")]
 [ShellFeature(name: "AgentDesign", DisplayName = "Agents (Design)",
-    Description = "Publishes agent agents as native versioned activities.",
+    Description = "Publishes agents as native versioned activities.",
     DependsOn = new object[] { "ActivitiesDesignApi", "WorkflowsPublishing" })]
 public class AgentDesignFeature : IShellFeature
 {

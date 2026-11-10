@@ -13,7 +13,7 @@ function registered() {
   return { routes, featureAreas, activityEditors, relatedLinks };
 }
 
-describe("agent agents module", () => {
+describe("agent module", () => {
   it("adds the Agents area behind the generic activity design capability", () => {
     const { featureAreas } = registered();
 

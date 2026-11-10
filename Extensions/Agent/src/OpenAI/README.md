@@ -24,4 +24,4 @@ Follow the [Studio example](../../../../specs/1179-specialist-agents/openai-prov
   connection-type contribution without capturing a scoped model factory or resolver.
 - `IAgentModelCapabilitiesSource` and `IAgentModelClientFactory` are intra-domain Agent
   contributions for the exact `openai` key, registered scoped; their canonical ports are in
-  [Agents Core](../Core/EXTENSION_POINTS.md).
+  [Agent Core](../Core/EXTENSION_POINTS.md).

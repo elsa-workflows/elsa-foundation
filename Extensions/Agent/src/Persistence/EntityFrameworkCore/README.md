@@ -78,7 +78,7 @@ settlement and content retention remain part of M3. A fresh service provider/con
 recovery; it is not independent-process or live-model qualification.
 
 See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with
-`bash tools/ef/generate-module-migrations.sh 'Agents.*DbContext'`; temporarily remove the generated
+`bash tools/ef/generate-module-migrations.sh 'Agent.*DbContext'`; temporarily remove the generated
 migration API entries while their types are absent, then restore the API baseline and build normally.
 
 A runtime acceptance attempt whose acknowledgement is lost can be reconciled through an authoritative
@@ -121,7 +121,7 @@ only 1.0.0 must refuse activation. Keep a compatible reader/worker installed for
 work; disabling new operations is independent of unloading that reader. A rejected older host must
 leave protected acceptance, conversation and native/source state intact. Resume recovery with the
 compatible runtime, or follow the owning runtime's documented backup/restore process for a downgrade;
-no reverse migration or arbitrary binary rollback is supplied by Agents.
+no reverse migration or arbitrary binary rollback is supplied by this module.
 
 The [package compatibility witness](../../../../../tools/agents/conformance/README.md) distinguishes
 a named unchanged-format bidirectional pair from an upgrade with an explicit schema rollback refusal.
