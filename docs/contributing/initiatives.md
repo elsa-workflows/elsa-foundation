@@ -98,12 +98,14 @@ No activation by a program goal is needed for any phase.
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
 this page, needs an authorized role, a scope, a reason and a record on the PR.
 
-**Alternatives.** Every ADR and ADR amendment records, in an **Alternatives considered** section, the alternatives
-its author weighed and why each was not chosen, including doing nothing. The section exposes the angles the author
-used, so a reviewer can judge whether every real option was seen — or whether none of them addresses the actual
-problem. A spec does not repeat this: it refers to the alternatives in the ADRs it applies, and records only a design
-choice of its own in its `research.md`. The pre-merge gate's deterministic checks fail an ADR that carries no such
-section.
+**Alternatives.** Every ADR records, in an **Alternatives considered** section, the alternatives its author weighed
+and why each was not chosen, including doing nothing. The section exposes the angles the author used, so a reviewer
+can judge whether every real option was seen — or whether none of them addresses the actual problem. A spec does not
+repeat this: it refers to the alternatives in the ADRs it applies, and may note a design choice of its own in its
+`research.md` — guidance for the author and reviewers, not a checked field. The pre-merge gate's deterministic checks
+fail a **newly added** ADR that carries no such section. They do not force one onto a pre-existing ADR the branch
+merely amends — a status-only or supersession edit backfills nothing; whether a material amendment must extend the
+section is a judgement for the reviewers.
 
 **Review.** The PR requests every non-author approver in its plan, so GitHub notifies them at once. Small points are
 settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting. If disagreement
@@ -344,8 +346,8 @@ out.
    that changes the document has its prepared edit applied. A stale title or description, or a finding left as a
    comment only, blocks the merge until the drafter reconciles it.
 4. **Run the deterministic checks** in that same checkout: `python tools/initiatives/check_decision_docs.py`. They find
-   duplicate ADR or spec numbers, malformed status lines and an ADR with no **Alternatives considered** section, and
-   show which ADR references do not resolve.
+   duplicate ADR or spec numbers, malformed status lines and a newly added ADR with no **Alternatives considered**
+   section, and show which ADR references do not resolve.
 5. **Review independently and verify.** Independent reviewers do steps 2 and 3 without seeing each other's output, and a
    fresh reviewer verifies every finding against the text. A finding names both passages and the kind of problem:
    *contradiction*, *ambiguity*, *overlap*, *stale reference* or *number collision*. Unverified findings are dropped.

@@ -12,10 +12,11 @@ Errors (exit code 1):
   - status line: a new or changed ADR has no status (a `Status:` line, a `status:` front-matter key, or a
     `## Status` heading followed by a value), or a new or changed spec.md has no `**Status**:` line holding exactly
     one spec-lifecycle value, optionally followed by ` — ` and prose.
-  - alternatives: a new or changed ADR has no `Alternatives considered` (or `Options considered`) section, or that
+  - alternatives: a newly added ADR has no `Alternatives considered` (or `Options considered`) section, or that
     section is empty. The heading may be a hash heading (`## Alternatives considered`) or a bold run-in label
-    (`**Alternatives considered.**`). This is a presence check, like the status line; it never judges whether the
-    alternatives are good. Specs do not carry their own section: they refer to the alternatives in the ADRs they apply.
+    (`**Alternatives considered.**`) with content after it. This is a presence check, like the status line; it never
+    judges whether the alternatives are good, and it runs only on ADRs this branch adds, not on a pre-existing ADR it
+    merely amends. Specs do not carry their own section: they refer to the alternatives in the ADRs they apply.
 Warnings (exit code 0): `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
 match no ADR in the tree. A reference can name a number the board has reserved but that is not drafted yet, so it is
 reported, not failed.
@@ -92,11 +93,29 @@ def spec_status_error(path: str, text: str) -> str | None:
     return None
 
 
+def bold_label_has_content(text: str, start: int) -> bool:
+    """Whether a bold run-in alternatives label has content: on its own line after the label, or on a
+    following line before the next heading. `start` is the end of the label match."""
+    line_end = text.find("\n", start)
+    rest_of_line = text[start:] if line_end == -1 else text[start:line_end]
+    if re.search(r"[0-9A-Za-z]", rest_of_line):
+        return True  # content on the label's own line, e.g. **Alternatives considered.** We chose X
+    if line_end == -1:
+        return False
+    for line in text[line_end + 1:].splitlines():
+        if not line.strip():
+            continue
+        return re.match(r"^#+\s", line) is None  # content unless the next thing is a new heading
+    return False
+
+
 def adr_alternatives_error(path: str, text: str) -> str | None:
-    if ADR_ALTERNATIVES_BOLD.search(text):
-        return None  # a bold run-in label (e.g. **Alternatives considered.**); its content is on or after the line
+    if any(bold_label_has_content(text, bold.end()) for bold in ADR_ALTERNATIVES_BOLD.finditer(text)):
+        return None  # a bold run-in label (e.g. **Alternatives considered.**) that carries content
     match = ADR_ALTERNATIVES_HEADING.search(text)
     if match is None:
+        if ADR_ALTERNATIVES_BOLD.search(text):
+            return f"alternatives: {path} has an empty 'Alternatives considered' section"
         return f"alternatives: {path} has no 'Alternatives considered' section"
     level = len(match["hashes"])
     for line in text[match.end():].splitlines():
@@ -122,14 +141,20 @@ def check(tree: dict[str, str], changed: set[str], base_paths: list[str]) -> tup
     paths = sorted(tree)
     errors = collisions(paths, base_paths, adr_number, "ADR") + collisions(paths, base_paths, spec_number, "spec")
     warnings: list[str] = []
+    base_set = set(base_paths)
     adr_numbers = {found[0] for found in map(adr_number, paths) if found}
     for path in sorted(changed):
         if path not in tree:
             continue  # deleted
         text = tree[path]
         if adr_number(path):
-            errors.extend(error for error in (adr_status_error(path, text), adr_alternatives_error(path, text))
-                          if error)
+            status = adr_status_error(path, text)
+            if status:
+                errors.append(status)
+            if path not in base_set:  # the section is required only on ADRs this branch adds, not on amendments
+                alternatives = adr_alternatives_error(path, text)
+                if alternatives:
+                    errors.append(alternatives)
         elif spec_number(path) and path.endswith("/spec.md"):
             error = spec_status_error(path, text)
             if error:
@@ -210,6 +235,15 @@ def self_test() -> int:
         ("bold options list item",
          {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n- **Options considered:** X vs Y.\n"},
          {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("empty bold alternatives label",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n**Alternatives considered.**\n\n## Next steps\n\nx\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("modified legacy adr without section",
+         {"docs/adr/0003-a.md": "# ADR\n\nStatus: accepted\n\nClarified a stale reference.\n"},
+         {"docs/adr/0003-a.md"}, ["docs/adr/0003-a.md"], 0, 0),
+        ("new adr without section still fails",
+         {"docs/adr/0094-a.md": "# ADR\n\nStatus: accepted\n\nNo alternatives here.\n"},
+         {"docs/adr/0094-a.md"}, [], 1, 0),
         ("bad spec status", {"specs/1208-x/spec.md": "**Status**: Pending\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("spec status prefix only", {"specs/1208-x/spec.md": "**Status**: Drafting\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("missing spec status", {"specs/1208-x/spec.md": "# Spec\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
