@@ -2518,3 +2518,91 @@ virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.<Clone>$() -> E
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.EqualityContract.get -> System.Type!
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.Equals(Elsa.Activities.Design.Core.Models.ActivityArgumentState? other) -> bool
 virtual Elsa.Activities.Design.Core.Models.ActivityArgumentState.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Activities.Design.Core.Contracts.IActivitySerializedShapeSource
+Elsa.Activities.Design.Core.Contracts.IActivitySerializedShapeSource.DescribeDeclaredTypeAsync(Elsa.Primitives.Models.TypeReference! declaredType, string! ownerContractIdentity, System.Collections.Immutable.ImmutableArray<string!> memberPath, Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits! limits, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.ActivitySerializedShape?>
+Elsa.Activities.Design.Core.Contracts.IActivitySerializedShapeSource.DescribeResultAsync(Elsa.Activities.Design.Core.Contracts.IActivityDefinitionVersion! admittedVersion, string! projectionKey, System.Collections.Immutable.ImmutableArray<string!> memberPath, Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits! limits, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.ActivitySerializedShape?>
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.<Clone>$() -> Elsa.Activities.Design.Core.Models.ActivitySerializedMember!
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.ActivitySerializedMember(string! SerializedName, string! DisplayName, Elsa.Activities.Design.Core.Models.ActivitySerializedShape! Shape) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.Deconstruct(out string! SerializedName, out string! DisplayName, out Elsa.Activities.Design.Core.Models.ActivitySerializedShape! Shape) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.DisplayName.get -> string!
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.DisplayName.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.Equals(Elsa.Activities.Design.Core.Models.ActivitySerializedMember? other) -> bool
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.SerializedName.get -> string!
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.SerializedName.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.Shape.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedShape!
+Elsa.Activities.Design.Core.Models.ActivitySerializedMember.Shape.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedPresence
+Elsa.Activities.Design.Core.Models.ActivitySerializedPresence.Optional = 2 -> Elsa.Activities.Design.Core.Models.ActivitySerializedPresence
+Elsa.Activities.Design.Core.Models.ActivitySerializedPresence.Required = 1 -> Elsa.Activities.Design.Core.Models.ActivitySerializedPresence
+Elsa.Activities.Design.Core.Models.ActivitySerializedPresence.Unknown = 0 -> Elsa.Activities.Design.Core.Models.ActivitySerializedPresence
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.<Clone>$() -> Elsa.Activities.Design.Core.Models.ActivitySerializedShape!
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ActivitySerializedShape(Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState State, Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind Kind, Elsa.Primitives.Models.TypeReference? Type, string! SourceContractRevision, string! ProfileRevision, string! MetadataRevision) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Deconstruct(out Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState State, out Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind Kind, out Elsa.Primitives.Models.TypeReference? Type, out string! SourceContractRevision, out string! ProfileRevision, out string! MetadataRevision) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Element.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedShape?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Element.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Equals(Elsa.Activities.Design.Core.Models.ActivitySerializedShape? other) -> bool
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsCredential.get -> bool?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsCredential.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsNullable.get -> bool?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsNullable.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsSensitive.get -> bool?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.IsSensitive.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Kind.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Kind.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.MapValue.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedShape?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.MapValue.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Members.get -> System.Collections.Immutable.ImmutableArray<Elsa.Activities.Design.Core.Models.ActivitySerializedMember!>
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Members.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.MetadataRevision.get -> string!
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.MetadataRevision.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Presence.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedPresence
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Presence.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ProfileRevision.get -> string!
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ProfileRevision.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ReasonCode.get -> string?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ReasonCode.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Representation.get -> Elsa.Primitives.Models.ValueRepresentation?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Representation.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.SourceContractRevision.get -> string!
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.SourceContractRevision.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.State.get -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.State.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Type.get -> Elsa.Primitives.Models.TypeReference?
+Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Type.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.<Clone>$() -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits!
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.ActivitySerializedShapeLimits(int MaximumDepth = 4, int MaximumMembers = 128) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.Deconstruct(out int MaximumDepth, out int MaximumMembers) -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.Equals(Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits? other) -> bool
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumDepth.get -> int
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumDepth.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumMembers.get -> int
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumMembers.init -> void
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Known = 0 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Truncated = 2 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Unavailable = 3 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Unknown = 1 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind.Collection = 4 -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind.Map = 3 -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind.Object = 2 -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind.Scalar = 1 -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind.Unknown = 0 -> Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind
+override Elsa.Activities.Design.Core.Models.ActivitySerializedMember.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.ActivitySerializedMember.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.ActivitySerializedMember.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShape.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShape.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShape.ToString() -> string!
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.Equals(object? obj) -> bool
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.GetHashCode() -> int
+override Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.ToString() -> string!
+static Elsa.Activities.Design.Core.Models.ActivitySerializedMember.operator !=(Elsa.Activities.Design.Core.Models.ActivitySerializedMember? left, Elsa.Activities.Design.Core.Models.ActivitySerializedMember? right) -> bool
+static Elsa.Activities.Design.Core.Models.ActivitySerializedMember.operator ==(Elsa.Activities.Design.Core.Models.ActivitySerializedMember? left, Elsa.Activities.Design.Core.Models.ActivitySerializedMember? right) -> bool
+static Elsa.Activities.Design.Core.Models.ActivitySerializedShape.operator !=(Elsa.Activities.Design.Core.Models.ActivitySerializedShape? left, Elsa.Activities.Design.Core.Models.ActivitySerializedShape? right) -> bool
+static Elsa.Activities.Design.Core.Models.ActivitySerializedShape.operator ==(Elsa.Activities.Design.Core.Models.ActivitySerializedShape? left, Elsa.Activities.Design.Core.Models.ActivitySerializedShape? right) -> bool
+static Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.operator !=(Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits? left, Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits? right) -> bool
+static Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.operator ==(Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits? left, Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits? right) -> bool
