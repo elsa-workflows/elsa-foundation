@@ -93,13 +93,13 @@ Publication normalizes every input to a concrete binding. Required omissions fai
 pinned defaults and optional `null` values become explicit literal bindings. Missing dynamic values
 never silently become `default(T)`.
 
-**Amendment (epic #3052, decisions D-10 and D-11, 2026-10-27): null, omitted values and `undefined`.**
+**Amendment: null, omitted values and `undefined`.**
 These rules apply to native and imported workflows alike. Where a workflow needs Elsa 3 behaviour, it says so through
 a visible policy, never through where it came from.
 
 - **Scope.** These rules apply to declared members: activity inputs and workflow-request members. Inside a JSON value
-  (`Any`), a missing property and a `null` property stay distinct, because the data is stored as received (A-1 P2,
-  [ADR 0091](https://github.com/elsa-workflows/elsa-foundation/pull/3408) decisions 3 and 8).
+  (`Any`), a missing property and a `null` property stay distinct, because the data is stored as received (ADR 0091,
+  decisions 3 and 8).
 - **Requiredness and nullability are separate properties** of an activity input and of a workflow-request member. A
   member can be required and nullable, or optional and non-nullable.
 - **Explicit `null` is a value, not an absence.** It is accepted for every nullable target: activity inputs,
@@ -112,7 +112,6 @@ a visible policy, never through where it came from.
   - **A type without a non-null default** (for example a non-nullable `String`, or a JSON object) leaves the policy
     nothing to substitute, so `null` for such a target still fails with `VF-ACT-004`. Where an activity handles
     `null` correctly, its input is declared nullable instead; the policy never works around an activity's contract.
-    Found by the implementing spec ([#3726](https://github.com/elsa-workflows/elsa-foundation/pull/3726), Q5).
 - **An omitted member.** Requiredness is checked first: an omitted *required* member fails even when a declared
   default exists — a declared default never satisfies a required member. Declared defaults apply only to omitted
   *optional* members, which take their declared default first.
@@ -132,16 +131,16 @@ a visible policy, never through where it came from.
     difference between null and missing; if the `undefined` leaves the script, the boundary rule below applies
     visibly. In Liquid a missing value is nil, and the recorded warning carries the difference. Under the current
     ADR 0089, computed reads are refused at publish.
-- **`undefined` (D-11).** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
+- **`undefined`.** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
   binding whose result is `undefined` is an error ([ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)),
   and an object property whose value is `undefined` is dropped, with a diagnostic, because a lossy conversion is
-  declared, never silent (A-1 P6). An `undefined` **array element or sparse hole** instead becomes a `null`
+  declared, never silent. An `undefined` **array element or sparse hole** instead becomes a `null`
   placeholder, with a path diagnostic, so positions are preserved — dropping it would shift every later index; this
   holds under either policy, because an array's positions can never shift. An element that was already explicit `null`
   needs no conversion diagnostic, and a string an explicit `JSON.stringify` produced is unchanged. `NaN` and
   `Infinity` become `null`, also with a diagnostic. The JavaScript adapter
-  contract in the ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V8) holds
-  these rules. A workflow may select the *undefined-as-null* policy:
+  contract in the [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) amendment holds these
+  rules. A workflow may select the *undefined-as-null* policy:
   - an `undefined` result materializes as `null`;
   - an `undefined`-valued object property is kept as `null`, at every depth;
   - the policy acts only at the boundary. It does not change JavaScript's own semantics, and it does not rewrite a
@@ -160,7 +159,8 @@ a visible policy, never through where it came from.
     every workflow it converts.
   - A converted workflow that is later edited, exported or run on a host without the converter keeps behaving the
     same.
-  - This replaces the converted-definition marker considered for issues #3170 and #3172.
+  - This replaces the alternative of a converted-definition marker, under which converted workflows would run under
+    different rules than native ones.
 
 ### 3. Materialize and pin inputs before activation
 
