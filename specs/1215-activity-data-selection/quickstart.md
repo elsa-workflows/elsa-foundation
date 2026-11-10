@@ -15,7 +15,8 @@ Read [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and
 [backend e2e lifecycle instructions](../../e2e-tests/README.md). Preserve the machine's build-slot wrapper;
 target affected projects and inspect `uptime` before attributing timing failures to product behavior.
 
-The existing composed runner exposes only `--output` (plus help). From the repository root:
+The composed runner supports `--output` and optional `--journey` (plus help). The default retains the
+complete capture/journey inventory, including Decisions. From the repository root:
 
 ```bash
 python3 tools/ux-acceptance/run.py --help
@@ -32,8 +33,9 @@ reuse a developer's store/provider secrets. No external customer service or mode
 Add the production feature journey to `Studio/tests/acceptance/journeys.spec.ts` and its required capture
 names to `tools/ux-acceptance/run.py`'s `CAPTURES` inventory. Keep exact expected project/journey matching,
 one successful execution, zero retries and required artifact checks. Passing the existing unrelated
-journeys does not qualify data selection. Do not invent `--journey`, `--minimal` or `--restart` flags for
-this runner: normal/minimal/restart variants need reviewed owned-host integration in the affected proof
+journeys does not qualify data selection. A scoped `--journey` run supports iteration but does not replace
+the complete M5 inventory. Do not invent `--minimal` or `--restart` flags for this runner:
+normal/minimal/restart variants need reviewed owned-host integration in the affected proof
 infrastructure, with their actual entrypoints recorded in the final receipt.
 
 The existing four profiles are desktop-light/desktop-dark at 1440×1000 and narrow-light/narrow-dark at

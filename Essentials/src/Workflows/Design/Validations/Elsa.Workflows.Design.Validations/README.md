@@ -16,6 +16,29 @@ Per framework §2.22 — this README documents what the feature registers.
 ## Activation
 
 `WorkflowDesignValidationsFeature : IShellFeature` — named `WorkflowDesignValidations`.
+It declares `DependsOn = Events`. Library/test hosts that call `ConfigureServices` directly must
+also compose `EventsFeature`; the shared analyzer requires the canonical inline publisher.
+
+## Shared activity data analysis
+
+The feature installs one scoped `IActivityDataSelectionAnalyzer` with `TryAddScoped`. Discovery,
+draft diagnostics and headless publication/test-run admission consume the same authority over the
+actual canonical candidate. `ValueFlowValidator` retains separate concurrent-write policy while
+structure handlers own entry/order/join/backedge facts. Providers can contribute their exact closed
+body through `IActivityDataSelectionDocumentProjector`; Graph Design ships that cross-domain projection.
+
+Catalog-backed target analysis publishes `InputConstraintsCollecting` inline (Sequential).
+The single internal `CollectInputConstraints` handler aggregates
+`IActivityInputSourceConstraintProvider` results; the analyzer intersects them with credential and
+connection restrictions before returning target/source facts. Decisions contributes its fixed selector
+rule. Null contributions add nothing; failures propagate. Metadata discovery writes no state and does
+not evaluate a producer or expression. See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for signatures,
+replacement/cardinality rules and source/shape ownership.
+
+The composed `DraftValidating` handler keeps one credential/connection refusal per input and retains
+the existing whole-variable validator's rule ID when the shared analyzer reports the same unresolved
+reference. Direct analysis/publication still receives its complete admission findings; independent
+portable-parameter failures are not collapsed by a blanket path/type deduplication.
 
 ## Settings
 
@@ -103,8 +126,10 @@ declare `DependsOn` on this feature, and so does `Elsa3ImportJsonActivities`. A 
 
 ## Tasks registered
 
-None (no startup / recurring / scheduled tasks). The feature registers one shell initializer, the
-`ICredentialLiteralValidator` composition check above.
+No startup-task, recurring-task or scheduled-task registrations. Two Prepare-phase shell initializers
+validate the final composition once per shell activation: the `ICredentialLiteralValidator` check and
+`DataSelectionAnalyzerCompositionCheck` (exactly one scoped analyzer). Copied shells validate their
+own descriptor inventory. Constraint collection runs on target analysis, not on a timer.
 
 ## Notes
 

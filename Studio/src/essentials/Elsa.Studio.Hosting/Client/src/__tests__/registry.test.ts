@@ -267,7 +267,7 @@ describe("studio registry", () => {
     // Collection scope: an option set is owned by the multi-select; without options nothing claims it, so
     // the property panel falls back to its repeater. Element scope is unaffected by either rule.
     const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
-    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: ["a", "b"] } });
+    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: [{ label: "a", value: "a" }, { label: "b", value: "b" }] } });
     expect(resolveEditor(api.propertyEditors.list(), optionInput, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), { ...optionInput, uiHint: "checklist" }, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1", uiHint: "checklist" }), collectionContext)?.id).toBe("studio.property.multiselect");
@@ -460,7 +460,7 @@ describe("studio registry", () => {
   });
 
   it("creates a backend client that can target a separate base url", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -490,7 +490,7 @@ describe("studio registry", () => {
   });
 
   it("posts json through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -509,7 +509,7 @@ describe("studio registry", () => {
   });
 
   it("supports put, delete, and form requests through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response("", { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createEndpointContext("https://foundation.example/").http;
     const form = new FormData();

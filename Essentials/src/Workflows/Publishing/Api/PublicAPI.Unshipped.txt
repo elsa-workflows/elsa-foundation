@@ -312,6 +312,8 @@ Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView.UpdatedAt.in
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.<Clone>$() -> Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView!
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.ActivityPublishingDiagnosticView(string! Code, string! Severity, string! Message, Elsa.Activities.Design.Core.Models.ActivityDiagnosticSubject! Subject, Elsa.Activities.Design.Core.Models.ActivityDiagnosticLocation? Location, string? Remediation, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
+Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.AuthoredPath.get -> string?
+Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.AuthoredPath.init -> void
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.Code.get -> string!
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.Code.init -> void
 Elsa.Workflows.Publishing.Api.Models.ActivityPublishingDiagnosticView.Deconstruct(out string! Code, out string! Severity, out string! Message, out Elsa.Activities.Design.Core.Models.ActivityDiagnosticSubject! Subject, out Elsa.Activities.Design.Core.Models.ActivityDiagnosticLocation? Location, out string? Remediation, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
