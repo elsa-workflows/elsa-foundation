@@ -31,7 +31,7 @@ describe("shell-owned Weaver intent", () => {
     const client: clients.AgentClient = {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
       createSession: vi.fn<clients.AgentClient["createSession"]>(async () => ({ sessionId: "same-tick-session", status: "active", contextAttachments: [] })),
-      sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async () => ({ messageId: "same-tick-message", status: "pending", streamUrl: "/_elsa/agent/sessions/same-tick-session/stream" })),
+      sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async () => ({ messageId: "same-tick-message", status: "pending", streamUrl: "/_elsa/weaver/sessions/same-tick-session/stream" })),
       listSessions: vi.fn(), listProposals: vi.fn(), withdrawMessage: vi.fn(), resolveClientInvocation: vi.fn(),
       getSession: vi.fn(), updateAutonomy: vi.fn(),
       approveProposal: vi.fn(), denyProposal: vi.fn(), executeProposal: vi.fn(), acknowledgeClient: vi.fn(), submitFeedback: vi.fn(), cancelTurn: vi.fn()
@@ -39,7 +39,7 @@ describe("shell-owned Weaver intent", () => {
     vi.spyOn(clients, "createAgentClient").mockReturnValue(client);
     vi.spyOn(streams, "subscribeAgentSessionStream").mockImplementation((_context, _url, emit) => { emit({ type: "message-completed", messageId: "same-tick-message" }); return { close() {} }; });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.agent",contractVersion:"1",links:[]}]});
+      if (String(input).endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.weaver",contractVersion:"1",links:[]}]});
       if (String(input).includes("/_elsa/studio/modules")) return Response.json({ hostVersion: "1.0.0", sdkVersion: "1.0.0", modules: [], diagnostics: [] });
       if (String(input).includes("/_elsa/module-management/registry")) return Response.json({ modules: [], diagnostics: [] });
       return Response.json({ status: "Healthy" });
@@ -71,7 +71,7 @@ describe("shell-owned Weaver intent", () => {
     const client: clients.AgentClient = {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read.", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], provider: { providerId: "protocol", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} }, policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
       createSession: vi.fn<clients.AgentClient["createSession"]>(async () => ({ sessionId: crypto.randomUUID(), status: "active", contextAttachments: [] })),
-      sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async session => ({ messageId: "message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` })),
+      sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async session => ({ messageId: "message", status: "pending", streamUrl: `/_elsa/weaver/sessions/${session}/stream` })),
       listSessions: vi.fn(), listProposals: vi.fn(), withdrawMessage: vi.fn(), resolveClientInvocation: vi.fn(),
       getSession: vi.fn(), updateAutonomy: vi.fn(),
       approveProposal: vi.fn(), denyProposal: vi.fn(), executeProposal: vi.fn(), acknowledgeClient: vi.fn(), submitFeedback: vi.fn(), cancelTurn: vi.fn()
@@ -83,7 +83,7 @@ describe("shell-owned Weaver intent", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.agent",contractVersion:"1",links:[]}]});
+      if (url.endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.weaver",contractVersion:"1",links:[]}]});
       if (url.includes("/_elsa/studio/modules")) return Response.json({ hostVersion: "1.0.0", sdkVersion: "1.0.0", modules: [], diagnostics: [] });
       if (url.includes("/_elsa/module-management/registry")) return Response.json({ modules: [], diagnostics: [] });
       return Response.json({ status: "Healthy" });

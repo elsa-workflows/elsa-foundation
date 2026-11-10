@@ -1166,68 +1166,6 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Events.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.agent.anthropic": {
-        "type": "Project",
-        "dependencies": {
-          "Anthropic": "[12.32.0, )",
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
-        }
-      },
-      "elsa.agent.api": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
-          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
-          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
-        }
-      },
-      "elsa.agent.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
-        }
-      },
-      "elsa.agent.githubcopilot": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "GitHub.Copilot.SDK": "[1.0.4, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
-        }
-      },
-      "elsa.agent.persistence.entityframeworkcore": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
-          "Elsa.Secrets.Core": "[4.0.0-dev, )",
-          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
-        }
-      },
       "elsa.agent.specialists": {
         "type": "Project",
         "dependencies": {
@@ -1371,25 +1309,6 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
-        }
-      },
-      "elsa.agent.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.agent.workflows.runtime": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.api.aspnetcore": {
@@ -2385,6 +2304,87 @@
           "Cronos": "[0.13.0, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.weaver": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.weaver.anthropic": {
+        "type": "Project",
+        "dependencies": {
+          "Anthropic": "[12.32.0, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
+        }
+      },
+      "elsa.weaver.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.weaver.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
+        }
+      },
+      "elsa.weaver.githubcopilot": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )",
+          "GitHub.Copilot.SDK": "[1.0.4, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
+        }
+      },
+      "elsa.weaver.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.weaver.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.weaver.workflows.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.dashboard": {

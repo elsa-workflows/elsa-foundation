@@ -1,6 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Agent.Core.Contracts;
+using Elsa.Weaver.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -11,7 +11,7 @@ using Microsoft.Extensions.Hosting;
 namespace Acme.Home.Weaver;
 
 [ShellFeature("AcmeHomeWidget", DisplayName = "Acme status card Weaver contribution",
-    DependsOn = new object[] { "FoundationAgentApi", "StudioPreferences" })]
+    DependsOn = new object[] { "WeaverApi", "StudioPreferences" })]
 public class AcmeHomeWidgetFeature : IWebShellFeature
 {
     // Trusted operator configuration. Neither model arguments nor request headers select this key.

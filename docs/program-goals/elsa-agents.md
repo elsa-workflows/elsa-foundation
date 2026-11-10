@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Users define reusable specialists such as Copywriter and Proofreader, test them, publish immutable
+Users define reusable agents such as Copywriter and Proofreader ("specialist" is the historical name; the packages are renamed under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027)), test them, publish immutable
 versions and use them as discoverable activities in native Elsa workflows and Elsa-powered BPMN.
 Explicit input/output contracts make their results usable by the enclosing process. Fresh calls are
 the default; conversation continuity is an explicit optional capability, distinct from cross-run memory.

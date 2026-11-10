@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Acme.Home.Weaver;
-using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core;

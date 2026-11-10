@@ -202,7 +202,7 @@ export const workflowSnapshotContentLimit = 65536;
 export const workflowContextCandidateBudget = 32768;
 /**
  * Headroom below the host budget. The estimate (`admittedSnapshotLength`) equals the host's measure on the shared fixture
- * (`workflowExplainSnapshot.json`, held equal by Elsa.Agent.Tests); this covers number formatting the two may differ on.
+ * (`workflowExplainSnapshot.json`, held equal by Elsa.Weaver.Tests); this covers number formatting the two may differ on.
  */
 const workflowCandidateMargin = 256;
 /** Headroom for differences between this serialization and the raw text the server bounds at 64 KiB. */
