@@ -272,7 +272,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Proofread a supplied text.");
   await capture(page, info, "agent-create");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await expect(instructions).toBeVisible();
   await instructions.fill("Proofread the supplied text and return concise suggestions.");
@@ -280,7 +280,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
   await page.reload();
   await expect(instructions).toHaveValue("Proofread the supplied text and return concise suggestions.");
-  const advanced = editor.locator("details.agent-specialist-advanced");
+  const advanced = editor.locator("details.agent-advanced");
   await expect(advanced).not.toHaveAttribute("open");
   await page.getByRole("tab", { name: "Designer", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "agent-designer");
@@ -650,7 +650,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await instructions.fill("");
   await instructions.press("Tab");

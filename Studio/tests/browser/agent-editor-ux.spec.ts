@@ -5,13 +5,13 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 1100 });
     const url = `/?mode=activity-authoring&provider=agent&theme=${theme}`;
     await page.goto(url);
-    const editor = page.getByTestId("specialist-editor");
+    const editor = page.getByTestId("agent-editor");
     await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toBeVisible();
-    const advanced = editor.locator("details.agent-specialist-advanced");
+    const advanced = editor.locator("details.agent-advanced");
     await expect(advanced).not.toHaveAttribute("open");
     await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeEnabled();
     if (width >= 1440) {
-      const [instructions, model] = await editor.locator(".agent-specialist-instructions, .agent-specialist-model").evaluateAll(elements => elements.map(element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width }; }));
+      const [instructions, model] = await editor.locator(".agent-instructions, .agent-model").evaluateAll(elements => elements.map(element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width }; }));
       expect(model.x).toBeGreaterThan(instructions.x + instructions.width);
       expect(Math.abs(model.y - instructions.y)).toBeLessThan(20);
     }
@@ -56,7 +56,7 @@ test("rejected informational validation stays truthful and compact", async ({ pa
 test("module-owned icons reach all three main navigation entries", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/?mode=activity-authoring&provider=agent");
-  await expect(page.getByTestId("specialist-editor")).toBeVisible();
+  await expect(page.getByTestId("agent-editor")).toBeVisible();
   for (const [name, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
     const entry = page.getByRole("link", { name, exact: true });
     // Named groups start open; preserved user choices can still close a section.
@@ -67,8 +67,8 @@ test("module-owned icons reach all three main navigation entries", async ({ page
 
 test("saved invalid limits are revealed and read-only settings remain inspectable", async ({ page }) => {
   await page.goto("/?mode=activity-authoring&provider=agent&invalid-limits");
-  const editor = page.getByTestId("specialist-editor");
-  const advanced = editor.locator(".agent-specialist-advanced");
+  const editor = page.getByTestId("agent-editor");
+  const advanced = editor.locator(".agent-advanced");
   await expect(advanced).toHaveAttribute("open");
   await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toHaveAttribute("aria-invalid", "true");
   await page.goto("/?mode=activity-authoring&provider=agent&read-only");
@@ -83,7 +83,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
   test(`blocked publication explains corrections and focuses settings at ${width}px ${theme}`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?mode=activity-authoring&provider=agent&publication-blocked&theme=${theme}`);
-    const editor = page.getByTestId("specialist-editor");
+    const editor = page.getByTestId("agent-editor");
     const trigger = page.locator(".ad-publication-toolbar-trigger");
     await trigger.click();
     const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
@@ -92,7 +92,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(2);
     await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(1);
     await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeDisabled();
-    await expect(dialog.getByText("specialist.manifest.model", { exact: true })).toBeHidden();
+    await expect(dialog.getByText("agent.manifest.model", { exact: true })).toBeHidden();
     await page.screenshot({ path: info.outputPath("blocked.png"), fullPage: true });
     await blockers.getByRole("button", { name: "Edit instructions", exact: true }).press("Enter");
     const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
