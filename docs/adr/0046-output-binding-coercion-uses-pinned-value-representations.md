@@ -122,11 +122,13 @@ read-modify-write under [ADR 0092](https://github.com/elsa-workflows/elsa-founda
 - **Arrays are real JavaScript arrays.** A changed array is written as a whole for now. A later array compare that
   matches unchanged elements to their original positions, as a text diff does, can write those elements from their
   original text, without changing this rule.
-- **Lost precision is reported exactly.** At conversion Elsa knows which numbers lost digits: the JavaScript number,
-  written as JSON, differs from the original. When such a value reaches anything the step writes (copied, returned, or
-  inside a replaced array), a warning names the path and both values. A script that computes with such a value gets
-  the same warning, because the result may not change when it should (`9007199254740993 + 1` is still
-  `9007199254740992`).
+- **Lost precision at a write is refused, not just reported.** At conversion Elsa knows which numbers lost digits: the
+  JavaScript number, written as JSON, differs from the original. When such a value reaches anything the step **writes**
+  (copied, returned, or inside a replaced array), the write is **refused by default with a diagnostic** naming the path
+  and both values; a warning alone is insufficient, because silent precision loss corrupts data. A designer who intends
+  the loss accepts it explicitly to allow the write (the implementing spec defines how). A script that only **computes**
+  with such a value, without writing it, still gets a warning — the engine cannot prevent a lossy computation
+  (`9007199254740993 + 1` is still `9007199254740992`), only its silent persistence.
 - **The cost is accepted by default.** Each variable the script reads is converted once and walked once at commit:
   linear in the data the script receives. Integrity comes before performance in the default; a faster implementation
   may come later through V12, only if it behaves identically.
@@ -200,7 +202,7 @@ the opt-in.
 | Value | Today | Rule |
 |---|---|---|
 | Integer within ±2^53 | exact | Keep |
-| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their exact text: only changed paths are written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write gives a warning (V9). Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
+| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their exact text: only changed paths are written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the designer explicitly accepts the loss. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
 | `0.1 + 0.2` | `0.30000000000000004` | Stated: script arithmetic is double arithmetic |
 | `2.0`, `1e21` | come back as `2`, `1e+21` | Stated: the notation may change, the number does not |
 | Dates | ISO 8601 strings | Stay strings; a JavaScript `Date` (once D-1 enables it) leaves as UTC (`…Z`) |
@@ -224,8 +226,10 @@ This section owns every date and time-zone rule. ADR 0045 §5
 injectable clock) and point here.
 
 **The rule.** A date means the same instant on every server.
-- **`DateTime`** is normalized to UTC at every adapter. A value without an offset (`"2026-10-28T09:15:00"`) is read as
-  UTC; a value with `Z` or an offset is converted to UTC. It is written out with `Z`.
+- **`DateTime`** is normalized to UTC at every adapter. A value with `Z` or an offset is converted to UTC and written
+  out with `Z`. A value without an offset (`"2026-10-28T09:15:00"`) is **not silently read as UTC**: it needs an
+  explicitly configured interpretation — a declared source time zone, or an explicit assume-UTC policy — before it
+  becomes an instant. Without one, the conversion is refused with a diagnostic rather than guessing.
 - **`DateTimeOffset`** keeps its offset. A value without an offset gets `+00:00`. An activity that needs the offset
   declares `DateTimeOffset`.
 - **`DateOnly`** takes the date as written. A value with a time and an offset takes its date in UTC.
@@ -359,8 +363,8 @@ V9 and V12 as changed on 3 November, wait for @sfmskywalker.
 3. **Dates for converted Elsa 3 workflows.** Refuse a date without an offset unless the source time zone is set, and
    convert it with that zone's offset when it is (*Dates*)? Or only warn?
 4. **Numbers in scripts** (changed on 3 November). Copy, compare, patch (V9): untouched values keep their exact text,
-   a number the script reads is a double, arrays are real JavaScript arrays, and a lost digit that reaches a write gives
-   a warning naming the path. This replaces the JSON-backed view, which needed a custom Jint object for every value and
+   a number the script reads is a double, arrays are real JavaScript arrays, and a lost digit that reaches a write is
+   refused by default with a diagnostic naming the path (the designer explicitly accepts to allow it). This replaces the JSON-backed view, which needed a custom Jint object for every value and
    could not give real arrays. `BigInt` is no way out: `JSON.stringify` throws on it, and mixing it with numbers
    throws. Agreed?
 5. @sfmskywalker: `Object` retired in favour of one dynamic kind, alias `Any`, shown in Studio as JSON, with the spec
