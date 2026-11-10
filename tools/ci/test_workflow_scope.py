@@ -70,6 +70,24 @@ class WorkflowScopeTests(unittest.TestCase):
             self.assertIn('--no-renames', run.call_args.args[0])
             self.assertIn('-z', run.call_args.args[0])
 
+    def test_merge_group_scopes_like_a_ready_pull_request(self):
+        event = {'action': 'checks_requested', 'merge_group': {'base_sha': 'b' * 40, 'head_sha': 'a' * 40}}
+        for paths in (['docs/glossary/root.md'], ['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
+                      ['tools/contributor-pair-proof/run.mjs'], ['.github/workflows/ci.yml'], None):
+            with self.subTest(paths=paths):
+                ready_push = self.selected('pull_request', paths, action='synchronize', pull_request={'draft': False})
+                self.assertEqual(ready_push, self.selected('merge_group', paths, **event))
+        self.assertFalse(any(self.selected('merge_group', ['docs/glossary/root.md'], **event).values()))
+
+    def test_merge_group_diffs_its_base_to_its_head(self):
+        event = {'merge_group': {'base_sha': 'b' * 40, 'head_sha': 'a' * 40}}
+        with patch.object(scope.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = 'docs/x.md\0'
+            self.assertEqual(['docs/x.md'], scope.changed_paths('merge_group', event, 'a' * 40))
+            self.assertIn(f"{'b' * 40}...{'a' * 40}", run.call_args.args[0])
+        self.assertIsNone(scope.changed_paths('merge_group', {}, 'a' * 40))
+
     def test_manual_suites_are_isolated(self):
         for suite in [*self.patterns, 'studio-order']:
             with self.subTest(suite=suite):

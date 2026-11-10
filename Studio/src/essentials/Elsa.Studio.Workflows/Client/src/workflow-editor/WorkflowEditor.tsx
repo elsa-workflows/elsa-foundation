@@ -1341,11 +1341,15 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} executionControls={renderedTestRun ? <AttachedTestRunControls
-        canvas={{ ...runCanvas,
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} executionControls={renderedTestRun ? <AttachedTestRunControls canvas={{ ...runCanvas,
           attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); } },
-          detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }}
-      /> : null} />
+          detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }} /> : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
+          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
+          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
+          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
+          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
+          {restoration.message ? <span role="status">{restoration.message}</span> : null}
+        </div> : null} />
     },
     {
       id: "test-drive",
@@ -1427,13 +1431,7 @@ export function WorkflowEditor({
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
         runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
-        runStatus={!renderedTestRun && restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
-          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
-          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
-          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
-          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
-          {restoration.message ? <span role="status">{restoration.message}</span> : null}
-        </div> : null}
+
         moreActions={documentAdapter ? [{ label: "Document", actions: [{ label: "Save a copy", icon: <Boxes size={15} />, onSelect: () => setSaveTemplateOpen(true) }, { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson }] }] : [
           ...(templatesAvailable ? [{ label: "Templates", actions: [{ label: "Save as template", icon: <Boxes size={15} />, disabled: busy, onSelect: () => setSaveTemplateOpen(true) }] }] : []),
           {
@@ -1777,6 +1775,7 @@ export function WorkflowEditor({
           ariaLabel: "Inspector panel",
           tabLabel: "Inspector panel tabs",
           tabs: rightPanelTabs,
+          keepMountedTabIds: runCanvas.attached ? ["inspector", "runtime"] : [],
           activeTabId: activeRightPanel.id,
           onSelect: setActiveRightPanelId
         }}

@@ -68,7 +68,7 @@ async function settle() {
 }
 
 function click(label: string) {
-  const button = [...container.querySelectorAll("button")].find(item => item.textContent === label);
+  const button = [...container.querySelectorAll("button")].find(item => (item.getAttribute("aria-label") ?? item.textContent) === label);
   expect(button).toBeDefined();
   flushSync(() => button!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
@@ -282,6 +282,7 @@ describe("execution attached to the editor canvas", () => {
     expect(api.instance).not.toHaveBeenCalled();
     expect(latest.nodes).toBe(nodes);
     expect(container.querySelector("[aria-label='Execution controls']")?.textContent).toBe("");
+    expect(container.querySelector('button[aria-label="Refresh execution"]')).toBeNull();
   });
 
   it("captures the dispatched snapshot before awaiting the server, without saving or publishing", async () => {
