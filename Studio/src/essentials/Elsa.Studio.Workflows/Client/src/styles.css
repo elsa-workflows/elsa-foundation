@@ -4719,7 +4719,8 @@
   margin: 0;
 }
 
-.wf-inspector > .wf-muted {
+.wf-inspector > .wf-muted,
+.wf-workbench-panel-content > .wf-muted {
   margin: 0;
   padding: 12px;
 }

@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
@@ -100,6 +101,15 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         .AddScheme<AuthenticationSchemeOptions, ForgedExternalAuthenticationHandler>(
                             ForgedExternalAuthenticationHandler.AuthenticationSchemeName, _ => { });
 
+                    // Model the normalized external bearer the OIDC module publishes: a provider's own subject and
+                    // tenant with the trusted marker and no Elsa user. The exchange accepts it as an interactive scheme.
+                    services.AddNormalizedAuthenticationType(NormalizedExternalAuthenticationHandler.AuthenticationSchemeName);
+                    services.AddAuthentication()
+                        .AddScheme<AuthenticationSchemeOptions, NormalizedExternalAuthenticationHandler>(
+                            NormalizedExternalAuthenticationHandler.AuthenticationSchemeName, _ => { });
+                    services.Configure<FoundationIdentityApiOptions>(options =>
+                        options.InteractiveAuthSchemes = [.. options.InteractiveAuthSchemes, NormalizedExternalAuthenticationHandler.AuthenticationSchemeName]);
+
                     // Workstream C: the provider-agnostic Api surface (token endpoint lives here).
                     services.AddFoundationIdentityApi();
 
@@ -160,6 +170,41 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     {
         await _host.StopAsync();
         _host.Dispose();
+    }
+}
+
+/// <summary>
+/// A normalized external bearer, as <c>OidcBearerNormalizationEvents</c> publishes one: the provider's own subject,
+/// the tenant, the provider and one trusted marker, and no Elsa user. The token names the provider and the subject.
+/// </summary>
+internal sealed class NormalizedExternalAuthenticationHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string AuthenticationSchemeName = "Elsa.Identity.Test.NormalizedExternal";
+    private const string Prefix = "normalized-external:";
+
+    public static string Token(string provider, string subject) => $"{Prefix}{provider}:{subject}";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith($"Bearer {Prefix}", StringComparison.Ordinal))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var parts = authorization[("Bearer ".Length + Prefix.Length)..].Split(':', 2);
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, parts[1]),
+            new Claim("sub", parts[1]),
+            new Claim(IdentityClaimTypes.TenantId, AspNetCoreIdentityDefaults.DefaultTenantId),
+            new Claim(IdentityClaimTypes.Provider, parts[0]),
+            new Claim(IdentityClaimTypes.Normalized, "v1")
+        ], AuthenticationSchemeName);
+        return Task.FromResult(AuthenticateResult.Success(
+            new AuthenticationTicket(new ClaimsPrincipal(identity), AuthenticationSchemeName)));
     }
 }
 
