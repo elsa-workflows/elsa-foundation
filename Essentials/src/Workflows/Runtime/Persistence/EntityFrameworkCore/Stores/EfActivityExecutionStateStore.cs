@@ -103,7 +103,9 @@ public sealed class EfActivityExecutionStateStore(
     }
 
     // The predicate matches on the scope and workflow hashes, as CountAsync does. A hash collision can only make
-    // another run's rows count as this run's, which answers true and costs the saving, never correctness.
+    // another run's rows count as this run's, which answers true and costs the saving, never correctness. A row
+    // whose hash columns are corrupt is not counted, so for a run with no record a lookup of it can return nothing
+    // where FindAsync throws.
     async ValueTask<bool> IRunRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         ValidateWorkflow(workflowExecutionId);

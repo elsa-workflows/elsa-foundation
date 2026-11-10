@@ -394,6 +394,32 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Equal(2, durableInspections.FindCount);
     }
 
+    // The session can be ended from another thread while its probe is still running: a failed lease heartbeat
+    // cancels the drain, and the cancellation callback ends the session. A probe that then comes back "empty" must
+    // not make the session answer.
+    [Fact]
+    public async Task SessionEndedWhileItsProbeIsInFlight_ReadsTheRowFromTheStore()
+    {
+        var fixture = new Fixture(NoRecord);
+        var late = NewActivityState("actexec-late");
+        await fixture.DurableActivities.Inner.SaveAsync(late);
+        await fixture.DurableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(late, "checkpoint-late", Now));
+        // The probe ran before the row became visible, and the session was ended before the probe returned.
+        fixture.DurableActivities.ReportEmptyOnce = true;
+        fixture.DurableInspections.ReportEmptyOnce = true;
+        fixture.DurableActivities.DuringProbe = fixture.Session.EndEmptyBaselines;
+        fixture.DurableInspections.DuringProbe = fixture.Session.EndEmptyBaselines;
+
+        Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-late"));
+        Assert.NotNull(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-late"));
+
+        Assert.Equal(1, fixture.DurableActivities.ProbeCount);
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+        // The activity read ended both baselines, so the inspection store was not probed at all.
+        Assert.Equal(0, fixture.DurableInspections.ProbeCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
+    }
+
     // A probe that cannot tell must throw. The session then knows nothing: the read fails as a failed lookup would,
     // and the next read asks again.
     [Fact]
@@ -645,6 +671,9 @@ public sealed class CoalescingEmptyBaselineReadTests
         public bool ReportEmptyOnce { get; set; }
 
         public Exception? ProbeFailsOnce { get; set; }
+
+        // Runs while the probe is in flight.
+        public Action? DuringProbe { get; set; }
         public string Scope { get; set; } = "scope-a";
         public Exception? Refusal { get; set; }
 
@@ -654,6 +683,7 @@ public sealed class CoalescingEmptyBaselineReadTests
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
+            DuringProbe?.Invoke();
             if (ProbeFailsOnce is { } failure)
             {
                 ProbeFailsOnce = null;
@@ -683,6 +713,9 @@ public sealed class CoalescingEmptyBaselineReadTests
 
         public Exception? ProbeFailsOnce { get; set; }
 
+        // Runs while the probe is in flight.
+        public Action? DuringProbe { get; set; }
+
         public string ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
             StoreRefusals.ResolveReadScope(activityExecutionId, Refusal, Scope, cancellationToken);
 
@@ -698,6 +731,7 @@ public sealed class CoalescingEmptyBaselineReadTests
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
+            DuringProbe?.Invoke();
             if (ProbeFailsOnce is { } failure)
             {
                 ProbeFailsOnce = null;
@@ -714,7 +748,7 @@ public sealed class CoalescingEmptyBaselineReadTests
         }
     }
 
-    // What a store checks before a point read queries, in the order the EF stores check it.
+    // What a store checks of the row id and the token before a point read queries.
     private static class StoreRefusals
     {
         public static string ResolveReadScope(string rowId, Exception? refusal, string scope, CancellationToken cancellationToken)

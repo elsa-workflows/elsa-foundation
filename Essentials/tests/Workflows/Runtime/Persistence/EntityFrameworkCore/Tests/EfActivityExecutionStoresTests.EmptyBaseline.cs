@@ -16,7 +16,8 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 // The EF activity stores behind the coalescing overlay, for a run that has no durable record. The stores are probed
-// through the overlay, which is the only caller the probe has, and the cost is counted in commands on the wire.
+// through the overlay, which is the only caller the probe has in the runtime, and the cost is counted in commands on
+// the wire. One test calls the probe directly, because it is a public contract.
 public sealed partial class EfActivityExecutionStoresTests
 {
     [Fact]
