@@ -353,6 +353,20 @@ Rules' `RunRules`; BPMN and child control before their commits.
 | a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
+   The record is written under the drain's ownership lease when the poison store can check that lease
+   in the same unit of work as the write (`IWorkflowSchedulerFencedPoisonStore`,
+   [#4032](https://github.com/elsa-workflows/elsa-foundation/issues/4032)). This matters for a drain
+   that lost its run to another node and whose handler threw before any commit of its own was refused.
+   Its record is refused: the store throws `RuntimeStaleFencingTokenException`, nothing is recorded, and
+   the drain ends with that exception, as it does for a refused commit. So the stale drain leaves no
+   poison record to become an incident on a run its new owner runs correctly. What came before the
+   record is not undone. A step re-enqueued for `RetryNow`, or released for an honored `RetryAfter`,
+   stays queued for the new owner. Any other step is acknowledged and has no record, which is also what
+   a process crash between step 3 and the record leaves. The record is written with no ownership check,
+   as before, when the drainer runs outside an ownership lease, and when the poison store cannot make
+   the check: a custom store or decorator without the capability, or a poison store in another backend
+   than the run's ownership state (EF poison with in-memory ownership, or the reverse).
+
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
    aggregate stop reason becomes `Faulted`.
 
@@ -361,7 +375,8 @@ decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the f
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
 
-There is no composition in which step 4 is skipped. The poison store is a **required constructor
+There is no composition in which step 4 is skipped; only a drain that lost its run has its record
+refused, as described above. The poison store is a **required constructor
 parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 3 has
 already ack-deleted the work item by the time poison handling runs, unless it released an honored
 `RetryAfter` instead, so a drainer that could be built without a store would drop the item with no

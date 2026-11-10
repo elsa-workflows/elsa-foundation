@@ -1,0 +1,360 @@
+using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
+using Xunit;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+
+/// <summary>
+/// #4032: a poison record written under the run's ownership fence. The fence check, the touch of the ownership row
+/// and the record are one transaction, so a node that lost the run writes nothing.
+/// </summary>
+public sealed partial class EfWorkflowSchedulerPoisonStoreTests
+{
+    private const string OwnedWorkflow = "workflow-1";
+
+    [Fact]
+    public async Task Fenced_record_with_the_current_fence_inserts_and_replaces()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var store = FencedStore(fixture, clock);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var before = await OwnershipRevisionAsync(database);
+
+        Assert.True(store.CanRecordFenced);
+        await store.RecordFencedAsync(Record(1), lease.ToFence());
+        await store.RecordFencedAsync(Record(1, "replaced", failureCount: 2), lease.ToFence());
+
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        var found = await read.Store.FindAsync(OwnedWorkflow, "work-1");
+        Assert.NotNull(found);
+        Assert.Equal("replaced", found!.Fault.Message);
+        Assert.Equal(2, found.FailureCount);
+        Assert.Equal(2, (await read.Context.WorkflowSchedulerPoisonRecords.AsNoTracking().SingleAsync()).Revision);
+        // Each fenced record touches the ownership row once.
+        Assert.Equal(before + 2, await OwnershipRevisionAsync(database));
+        // The lease itself is unchanged, so the owner's next heartbeat and commit still pass.
+        Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Applied, (await Node(fixture, "node-a", clock).HeartbeatAsync(lease)).Status);
+    }
+
+    [Theory]
+    [InlineData("taken-over", RuntimeFencingRejectionReason.StaleToken)]
+    [InlineData("expired", RuntimeFencingRejectionReason.ExpiredLease)]
+    [InlineData("released", RuntimeFencingRejectionReason.NoActiveLease)]
+    [InlineData("never-owned", RuntimeFencingRejectionReason.NoActiveLease)]
+    public async Task Fenced_record_with_a_stale_fence_writes_nothing_and_leaves_the_context_usable(
+        string staleBecause,
+        RuntimeFencingRejectionReason expectedReason)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var store = FencedStore(fixture, clock);
+        var fence = new RuntimeExecutionFence("lease-never", "node-a", 1);
+        if (staleBecause != "never-owned")
+        {
+            var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+            fence = lease.ToFence();
+            if (staleBecause == "taken-over")
+                await Node(fixture, "node-b", clock).AcquireAsync(OwnedWorkflow);
+            else if (staleBecause == "expired")
+                clock.Advance(TimeSpan.FromMinutes(2));
+            else
+                await Node(fixture, "node-a", clock).ReleaseAsync(lease);
+        }
+        var before = await OwnershipRevisionAsync(database);
+
+        var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => store.RecordFencedAsync(Record(1), fence).AsTask());
+
+        Assert.Equal(expectedReason, refusal.Reason);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        Assert.Null(fixture.Context.Database.CurrentTransaction);
+        // A later participant on the same context writes its own row and nothing of the refused record.
+        fixture.Context.SchedulerStates.Add(SiblingRow());
+        Assert.Equal(1, await fixture.Context.SaveChangesAsync());
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Equal(before, await OwnershipRevisionAsync(database));
+    }
+
+    [Fact]
+    public async Task Fenced_record_is_retried_when_the_owners_heartbeat_lands_between_the_fence_read_and_the_save()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var race = new OwnershipRowRace();
+        await using var fixture = database.Open("tenant-a", race);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var before = await OwnershipRevisionAsync(database);
+        race.Change = async () => Assert.Equal(
+            RuntimeExecutionOwnershipTransitionStatus.Applied,
+            (await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease)).Status);
+
+        await FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence());
+
+        Assert.Equal(1, race.Races);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.NotNull(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        // The heartbeat, then the fence touch of the attempt that succeeded.
+        Assert.Equal(before + 2, await OwnershipRevisionAsync(database));
+    }
+
+    [Fact]
+    public async Task Fenced_record_is_refused_when_another_node_takes_the_run_between_the_fence_read_and_the_save()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var race = new OwnershipRowRace();
+        await using var fixture = database.Open("tenant-a", race);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var before = await OwnershipRevisionAsync(database);
+        race.Change = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+
+        var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+
+        Assert.Equal(RuntimeFencingRejectionReason.StaleToken, refusal.Reason);
+        Assert.Equal(1, race.Races);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        // Only the takeover wrote the ownership row.
+        Assert.Equal(before + 1, await OwnershipRevisionAsync(database));
+    }
+
+    [Fact]
+    public async Task Fenced_record_with_caller_staged_changes_does_not_hide_a_fence_conflict_behind_a_retry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var race = new OwnershipRowRace();
+        await using var fixture = database.Open("tenant-a", race);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        fixture.Context.SchedulerStates.Add(SiblingRow());
+        race.Change = async () => await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+            () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+
+        Assert.Equal(1, race.Races);
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Empty(await read.Context.SchedulerStates.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Fenced_record_inside_a_caller_transaction_commits_or_rolls_back_with_it()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var store = FencedStore(fixture, clock);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var before = await OwnershipRevisionAsync(database);
+
+        await using (var rolledBack = await fixture.Context.Database.BeginTransactionAsync())
+        {
+            await store.RecordFencedAsync(Record(1), lease.ToFence());
+            await rolledBack.RollbackAsync();
+        }
+        Assert.Null(await fixture.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Equal(before, await OwnershipRevisionAsync(database));
+
+        await using (var committed = await fixture.Context.Database.BeginTransactionAsync())
+        {
+            await store.RecordFencedAsync(Record(1), lease.ToFence());
+            await committed.CommitAsync();
+        }
+        await using var read = database.Open("tenant-a");
+        Assert.NotNull(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Equal(before + 1, await OwnershipRevisionAsync(database));
+    }
+
+    [Fact]
+    public async Task Fenced_record_reads_the_fence_row_as_it_is_now_when_the_context_tracks_an_older_copy()
+    {
+        // A checkpoint commit leaves the ownership row tracked on the shared context. The owner's heartbeat then
+        // moves the row on from another scope. The record must check the row, not that copy. It runs in a caller's
+        // transaction here, where a conflict on the fence row is not retried: saving against the older copy's
+        // revision would fail the record instead of costing one more attempt.
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        _ = await fixture.Context.ExecutionLivenessStates.SingleAsync();
+        await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease);
+
+        await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
+        {
+            await FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence());
+            await transaction.CommitAsync();
+        }
+
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.NotNull(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Fact]
+    public async Task Can_record_fenced_only_when_ownership_is_the_ef_store_over_the_same_context_and_scope()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await using var other = database.Open("tenant-a");
+        var codec = new PassThroughCodec();
+        bool CanRecordFencedWith(IExecutionLivenessStateStore? ownership) =>
+            new EfWorkflowSchedulerPoisonStore(fixture.Context, fixture.Accessor, () => ownership).CanRecordFenced;
+
+        Assert.True(CanRecordFencedWith(new EfExecutionLivenessStateStore(fixture.Context, fixture.Accessor, codec)));
+        // The constructor that existed before the capability, and a composition with no ownership store.
+        Assert.False(fixture.Store.CanRecordFenced);
+        Assert.False(CanRecordFencedWith(null));
+        // Ownership kept in memory, in another context (another database or unit of work), or under another access scope.
+        Assert.False(CanRecordFencedWith(new InMemoryExecutionLivenessStateStore()));
+        Assert.False(CanRecordFencedWith(new EfExecutionLivenessStateStore(other.Context, fixture.Accessor, codec)));
+        Assert.False(CanRecordFencedWith(new EfExecutionLivenessStateStore(fixture.Context, new FixedAccessor("tenant-a"), codec)));
+    }
+
+    [Fact]
+    public async Task The_ownership_store_is_not_looked_up_until_a_fenced_record_is_asked_for()
+    {
+        // Reading and unfenced recording must keep working in a composition whose ownership store cannot be resolved
+        // where the poison store is used, as before the capability existed.
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var lookups = 0;
+        var store = new EfWorkflowSchedulerPoisonStore(fixture.Context, fixture.Accessor, () =>
+        {
+            lookups++;
+            throw new InvalidOperationException("The ownership store cannot be resolved here.");
+        });
+
+        await store.RecordAsync(Record(1));
+        Assert.NotNull(await store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Single(await store.ListAsync(OwnedWorkflow));
+
+        Assert.Equal(0, lookups);
+    }
+
+    [Fact]
+    public async Task Fenced_record_on_a_store_that_cannot_check_the_fence_is_not_supported_and_writes_nothing()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => fixture.Store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+
+        Assert.Null(await fixture.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Theory]
+    [InlineData("ef")]
+    [InlineData("in-memory")]
+    [InlineData("none")]
+    public async Task Registration_fences_poison_only_when_the_registered_ownership_store_is_the_ef_one(string ownership)
+    {
+        var connectionString = $"Data Source=file:ef-r23-fenced-registration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new FixedAccessor("tenant-a"));
+        services.AddRuntimeSchedulerPoisonEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connectionString });
+        if (ownership == "ef")
+            services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+            {
+                Provider = "Sqlite",
+                ConnectionString = connectionString,
+                RecoveryContinuationSigningKey = "fenced-poison-recovery-signing-key-32-bytes"
+            });
+        else if (ownership == "in-memory")
+            services.AddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var store = Assert.IsType<EfWorkflowSchedulerPoisonStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
+
+        Assert.Equal(ownership == "ef", store.CanRecordFenced);
+    }
+
+    private static EfWorkflowSchedulerPoisonStore FencedStore(Fixture fixture, TimeProvider clock) =>
+        new(fixture.Context, fixture.Accessor, () => new EfExecutionLivenessStateStore(fixture.Context, fixture.Accessor, new PassThroughCodec()), clock);
+
+    private static RuntimeExecutionOwnershipService Node(Fixture fixture, string ownerId, TimeProvider clock) =>
+        new(new EfExecutionLivenessStateStore(fixture.Context, fixture.Accessor, new PassThroughCodec()), clock,
+            new RuntimeExecutionOwnershipOptions { OwnerId = ownerId });
+
+    private static async Task<long?> OwnershipRevisionAsync(TestDatabase database)
+    {
+        await using var read = database.Open("tenant-a");
+        return (await read.Context.ExecutionLivenessStates.AsNoTracking().SingleOrDefaultAsync())?.Revision;
+    }
+
+    private static SchedulerStateEntity SiblingRow() => new()
+    {
+        Id = "sibling-row",
+        ScopeKey = EfRelationalIdentity.Encode("tenant-a"),
+        ScopeKeyHash = EfRelationalIdentity.Hash("tenant-a"),
+        WorkflowExecutionId = EfRelationalIdentity.Encode("workflow-sibling"),
+        WorkflowExecutionIdHash = EfRelationalIdentity.Hash("workflow-sibling"),
+        WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey("workflow-sibling", RuntimeOperationalStateEfModule.IdentityMaximumLength)),
+        Collection = "schedulerState",
+        ContentJson = "{}",
+        SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+        Revision = 1
+    };
+
+    private sealed class PassThroughCodec : IRuntimeRecoveryContinuationCodec
+    {
+        public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
+        public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
+    }
+
+    // Another node's write to the ownership row that commits after this record read its fence. SQLite cannot run two
+    // write transactions at once, so the first save is made to present a superseded revision and affects no row, and
+    // the other node's write runs once that attempt has rolled back, as its commit would have landed by then.
+    private sealed class OwnershipRowRace : ISaveChangesInterceptor, IDbTransactionInterceptor
+    {
+        private bool pending;
+        public Func<Task>? Change { get; set; }
+        public int Races { get; private set; }
+
+        public ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var fence = eventData.Context!.ChangeTracker.Entries<ExecutionLivenessStateEntity>().SingleOrDefault(entry => entry.State == EntityState.Modified);
+            if (Change is not null && Races == 0 && fence is not null)
+            {
+                Races++;
+                pending = true;
+                fence.Property(row => row.Revision).OriginalValue = fence.Property(row => row.Revision).OriginalValue - 1;
+            }
+            return ValueTask.FromResult(result);
+        }
+
+        public async Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!pending)
+                return;
+            pending = false;
+            await Change!();
+        }
+    }
+}

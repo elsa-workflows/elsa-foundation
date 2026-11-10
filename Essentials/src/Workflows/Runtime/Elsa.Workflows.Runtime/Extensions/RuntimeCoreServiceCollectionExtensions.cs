@@ -260,7 +260,19 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Scoped: one per scheduler work item's scope, holding only the values resolved for the executions it handles.
         // A replacement contract: the activities runtime fails shell activation on a second one.
         services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
-        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
+        // #4032: the in-memory poison store can check a run's ownership fence only against the in-memory ownership store,
+        // and only when that is the registered one. It looks when a fenced record is first asked for, not here: until
+        // then it needs nothing of the ownership store. That store is a singleton, but a provider's is scoped and this
+        // singleton must not resolve one from the root provider, so the lookup runs in a scope of its own. The
+        // in-memory singleton outlives that scope; any other store is dropped with it, and the poison store then
+        // records unfenced.
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore>(serviceProvider => new InMemoryWorkflowSchedulerPoisonStore(
+            () =>
+            {
+                using var scope = serviceProvider.CreateScope();
+                return scope.ServiceProvider.GetService<IExecutionLivenessStateStore>() as InMemoryExecutionLivenessStateStore;
+            },
+            serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
         services.TryAddScoped<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
         services.TryAddScoped<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
@@ -459,7 +471,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
-                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
                 DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
                 HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
