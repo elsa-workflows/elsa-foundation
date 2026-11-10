@@ -309,7 +309,7 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
         Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
 
-        fixture.Session.EndStartObservations();
+        fixture.Session.EndStoreObservations();
         fixture.Session.BeginEmptyBaselines();
 
         Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2"));
@@ -424,8 +424,8 @@ public sealed class CoalescingEmptyBaselineReadTests
         // The probe ran before the row became visible, and the session was ended before the probe returned.
         fixture.DurableActivities.ReportEmptyOnce = true;
         fixture.DurableInspections.ReportEmptyOnce = true;
-        fixture.DurableActivities.DuringProbe = fixture.Session.EndStartObservations;
-        fixture.DurableInspections.DuringProbe = fixture.Session.EndStartObservations;
+        fixture.DurableActivities.DuringProbe = fixture.Session.EndStoreObservations;
+        fixture.DurableInspections.DuringProbe = fixture.Session.EndStoreObservations;
 
         // The store that is read first is the one whose probe is in flight when the session ends. That read ends
         // both baselines, so the other store is not probed at all.
@@ -471,7 +471,7 @@ public sealed class CoalescingEmptyBaselineReadTests
     public async Task SessionEndedBeforeItWasBegun_IsNotBegun()
     {
         var session = NewSessionNoFactoryBegan(NoRecord);
-        session.EndStartObservations();
+        session.EndStoreObservations();
         session.BeginEmptyBaselines();
         var accessor = new FixedCoalescingSessionAccessor(session);
         var durableActivities = new ProbingActivityStore();

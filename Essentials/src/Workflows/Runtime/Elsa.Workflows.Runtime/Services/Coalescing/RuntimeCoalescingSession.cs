@@ -254,8 +254,9 @@ public sealed class RuntimeCoalescingSession
     internal void MarkDurableRecord() => HasDurableRecord = true;
 
     /// <summary>
-    /// Records the activity execution rows and inspection projections a commit is about to send to the durable store,
-    /// so neither empty baseline answers for them again. Call it before the write: a write that fails may still land.
+    /// Records what a commit is about to send to the durable store: its activity execution rows and inspection
+    /// projections, so neither empty baseline answers for them again, and whether it carries the workflow execution
+    /// state, which ends the run state snapshot. Call it before the write: a write that fails may still land.
     /// A change's id is the id its state carries: <see cref="RuntimeCheckpointStateChangeSet"/> refuses a change
     /// where the two differ, so recording the change's id records the row whichever of the two a store keys it by.
     /// </summary>
@@ -306,12 +307,12 @@ public sealed class RuntimeCoalescingSession
     }
 
     /// <summary>
-    /// Ends, for good, everything this session observed of the store when the drain began: both empty baselines and
-    /// the run state snapshot. A nested drain can write this run's rows while its own session is the ambient one,
+    /// Ends, for good, everything this session observed of the store: both empty baselines and the run state
+    /// snapshot. A nested drain can write this run's rows while its own session is the ambient one,
     /// which this session never sees. A session whose scope is gone, or whose drain was cancelled, no longer has the
     /// drain's lease behind what it knows. Safe to call from a cancellation callback.
     /// </summary>
-    internal void EndStartObservations()
+    internal void EndStoreObservations()
     {
         ActivityBaseline.End();
         InspectionBaseline.End();

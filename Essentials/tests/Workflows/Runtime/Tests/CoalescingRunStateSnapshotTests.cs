@@ -145,6 +145,22 @@ public sealed class CoalescingRunStateSnapshotTests
         Assert.Equal(1, fixture.Durable.FindCount);
     }
 
+    // A direct delete ends the snapshot before the write, as a save does. This delete lands and then reports failure.
+    [Fact]
+    public async Task StateDeletedPastTheWorkingSet_WhoseOutcomeIsUncertain_IsReadFromTheStore()
+    {
+        var read = NewRunState(WorkflowExecutionStatus.Running);
+        var fixture = new Fixture(HasRecord, new RuntimeRunStateObservation(read));
+        await fixture.Durable.Inner.SaveAsync(read);
+        Assert.Same(read, await fixture.RunStates.FindAsync(WorkflowExecutionId));
+        fixture.Durable.DeletesLandThenThrow = true;
+
+        await Assert.ThrowsAsync<IOException>(async () => await fixture.RunStates.DeleteAsync(WorkflowExecutionId));
+
+        Assert.Null(await fixture.RunStates.FindAsync(WorkflowExecutionId));
+        Assert.Equal(1, fixture.Durable.FindCount);
+    }
+
     // The ambient scope changes when a nested drain begins. From then on this run's state can be written without
     // passing through its session.
     [Theory]
@@ -190,6 +206,28 @@ public sealed class CoalescingRunStateSnapshotTests
 
         Assert.Same(parent.Session, accessor.Current);
         Assert.NotNull(await runStates.FindAsync(WorkflowExecutionId));
+        Assert.Equal(1, counter.FindCount);
+    }
+
+    // A drain that threw leaves its session active, with a state it buffered and never stored. A flow that captured
+    // that session can begin the run's next drain. The mode resolver's read then goes through the registered store,
+    // which answers from the left-behind session, so what it read says nothing about the durable store.
+    [Fact]
+    public async Task ObservationMadeUnderALeftBehindSessionOfTheSameRun_IsNotUsed()
+    {
+        var accessor = new StackOnlySessionAccessor();
+        var factory = NewFactory(accessor);
+        var (durable, counter) = CountingRunStateStore.Create();
+        var runStates = new CoalescingWorkflowExecutionStateStore(new CoalescingInner<IWorkflowExecutionStateStore>(durable), accessor);
+        var neverStored = NewRunState(WorkflowExecutionStatus.Running);
+        var leftBehind = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), innerOutboxStore: null, NoRecord);
+        leftBehind.BufferDeferred(NewCommit(1, RuntimeCheckpointNames.WorkflowStarted, neverStored));
+        using var captured = accessor.Push(leftBehind);
+        Assert.Same(neverStored, await runStates.FindAsync(WorkflowExecutionId));
+
+        await using var next = factory.Begin(WorkflowExecutionId, HasRecord, new RuntimeRunStateObservation(neverStored));
+
+        Assert.Null(await runStates.FindAsync(WorkflowExecutionId));
         Assert.Equal(1, counter.FindCount);
     }
 
@@ -266,7 +304,7 @@ public sealed class CoalescingRunStateSnapshotTests
     {
         var fixture = new Fixture(NoRecord, begunBeforeItEnded ? NoState : null);
 
-        fixture.Session.EndStartObservations();
+        fixture.Session.EndStoreObservations();
         fixture.Session.BeginRunStateSnapshot(NoState);
 
         Assert.Null(await fixture.RunStates.FindAsync(WorkflowExecutionId));
@@ -335,6 +373,22 @@ public sealed class CoalescingRunStateSnapshotTests
         await drain.RunAsync();
 
         Assert.Equal(3, drain.Drainer.ReadsDuringTheDrain);
+        Assert.Null(drain.Drainer.LastRead);
+        Assert.Equal(1, drain.Durable.FindCount);
+    }
+
+    // The same for a run that has a state: the drain is handed the state the resolver read.
+    [Fact]
+    public async Task DrainOfARunThatHasAState_ReadsItOnce()
+    {
+        var drain = new DrainFixture(defaultResolver: true);
+        var stored = NewRunState(WorkflowExecutionStatus.Running, recordedMode: PersistenceMode.Balanced);
+        await drain.Durable.Inner.SaveAsync(stored);
+
+        await drain.RunAsync();
+
+        Assert.Equal(3, drain.Drainer.ReadsDuringTheDrain);
+        Assert.Same(stored, drain.Drainer.LastRead);
         Assert.Equal(1, drain.Durable.FindCount);
     }
 
@@ -396,7 +450,7 @@ public sealed class CoalescingRunStateSnapshotTests
             TimeProvider.System);
     }
 
-    private static WorkflowExecutionState NewRunState(WorkflowExecutionStatus status, string workflowExecutionId = WorkflowExecutionId) =>
+    private static WorkflowExecutionState NewRunState(WorkflowExecutionStatus status, string workflowExecutionId = WorkflowExecutionId, PersistenceMode? recordedMode = null) =>
         new(
             workflowExecutionId,
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
@@ -409,7 +463,9 @@ public sealed class CoalescingRunStateSnapshotTests
             null,
             null,
             "tenant-1",
-            new Dictionary<string, string>());
+            recordedMode is { } mode
+                ? new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = mode.ToString() }
+                : new Dictionary<string, string>());
 
     private static RuntimeCheckpointCommit NewCommit(int checkpoint, string checkpointName, WorkflowExecutionState? runState) =>
         new(
@@ -515,6 +571,7 @@ public sealed class CoalescingRunStateSnapshotTests
     private sealed class ReadingDrainer(IWorkflowExecutionStateStore runStates, bool holdForCancellation) : IWorkflowSchedulerDrainer
     {
         public int ReadsDuringTheDrain { get; private set; }
+        public WorkflowExecutionState? LastRead { get; private set; }
         public TaskCompletionSource Answered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ContinueAfterCancellation { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public WorkflowExecutionState? StateAfterCancellation { get; private set; }
@@ -523,7 +580,7 @@ public sealed class CoalescingRunStateSnapshotTests
         {
             for (var read = 0; read < 3; read++)
             {
-                Assert.Null(await runStates.FindAsync(request.WorkflowExecutionId, CancellationToken.None));
+                LastRead = await runStates.FindAsync(request.WorkflowExecutionId, CancellationToken.None);
                 ReadsDuringTheDrain++;
             }
 
@@ -544,6 +601,7 @@ public sealed class CoalescingRunStateSnapshotTests
         public InMemoryWorkflowExecutionStateStore Inner { get; } = new();
         public int FindCount { get; private set; }
         public bool SavesLandThenThrow { get; set; }
+        public bool DeletesLandThenThrow { get; set; }
 
         public static (IWorkflowExecutionStateStore Store, CountingRunStateStore Counter) Create()
         {
@@ -558,9 +616,11 @@ public sealed class CoalescingRunStateSnapshotTests
                 FindCount++;
 
             var result = targetMethod.Invoke(Inner, args);
-            return targetMethod.Name == nameof(IWorkflowExecutionStateStore.SaveAsync) && SavesLandThenThrow
-                ? ValueTask.FromException<WorkflowExecutionState>(new IOException("The save's acknowledgement was lost."))
-                : result;
+            if (targetMethod.Name == nameof(IWorkflowExecutionStateStore.SaveAsync) && SavesLandThenThrow)
+                return ValueTask.FromException<WorkflowExecutionState>(new IOException("The save's acknowledgement was lost."));
+            if (targetMethod.Name == nameof(IWorkflowExecutionStateStore.DeleteAsync) && DeletesLandThenThrow)
+                return ValueTask.FromException<bool>(new IOException("The delete's acknowledgement was lost."));
+            return result;
         }
     }
 

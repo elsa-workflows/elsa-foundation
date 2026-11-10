@@ -241,7 +241,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // The mode is resolved per execution: the mode the run recorded at its first commit, or before that the mode its
         // start carries, whichever command starts this drain.
         // The default resolver reads the run's workflow execution state to find the mode. That read is made here,
-        // under the lease, so the drain's first segment starts from it and does not read the same row again. A
+        // under the lease, so the drain's first session starts from it and does not read the same row again. A
         // replacement resolver says nothing about what it read, so the drain reads the state itself, as before.
         ResolvedPersistenceMode resolved;
         RuntimeRunStateObservation? observedRunState = null;
@@ -297,7 +297,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var settledElsewhere = new HashSet<string>(StringComparer.Ordinal);
         var cycles = new DrainCycleBudget(_options, request.WorkflowExecutionId, _logger);
 
-        // Only the first segment starts from what was read when the drain began. A later segment starts after this
+        // Only the first session starts from what was read when the drain began. A later session starts after this
         // drain may have committed, so it reads the state from the store.
         var (coalescingScope, pageReuseCancellation) = BeginSegment(resolved, observedRunState);
         var claimDurably = false;
@@ -466,7 +466,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                     session.DisableDurableValuePageReuse();
                     // A failed lease heartbeat cancels the drain. From then on the lease no longer stands behind
                     // what the session knows, and a read without the drain's token would still be answered.
-                    session.EndStartObservations();
+                    session.EndStoreObservations();
                 },
                 scope.Session);
             return (scope, registration);

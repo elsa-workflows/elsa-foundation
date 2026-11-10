@@ -8,10 +8,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Coalescing-aware overlay for <see cref="IWorkflowExecutionStateStore"/>. When an active coalescing session owns the
-/// target workflow execution, reads and writes go to the session's in-memory overlay; otherwise it is a byte-for-byte
-/// pass-through to the durable inner store (the default path is completely unaffected). Before the session has a
-/// state of its own, <see cref="FindAsync"/> answers with the state the drain read when it began, if the session
-/// was given one, so a drain reads its run's state once.
+/// target workflow execution, <see cref="FindAsync"/> answers from the session: its own buffered or committed
+/// state, and before it has one, the state the drain read when it began, if the session was given one. Everything
+/// else, writes included, passes through to the durable inner store.
 /// </summary>
 public sealed class CoalescingWorkflowExecutionStateStore(
     CoalescingInner<IWorkflowExecutionStateStore> inner,
@@ -40,7 +39,8 @@ public sealed class CoalescingWorkflowExecutionStateStore(
                 return overlay;
 
             // The session has no state of its own yet. The drain read this row when it began, under the run's
-            // lease, and no write of it has been attempted since, so the store still holds what was read.
+            // lease, and no write of it has been attempted since. While the drain holds the lease, the store
+            // still holds what was read.
             if (session.RunStateSnapshot.TryGet(out var observed))
             {
                 cancellationToken.ThrowIfCancellationRequested();

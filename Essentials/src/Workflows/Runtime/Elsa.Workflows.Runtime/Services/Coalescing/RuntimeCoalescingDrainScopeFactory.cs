@@ -31,14 +31,20 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(mode);
 
+        // The caller read the run's state through the registered store, which answers from an ambient session of the
+        // same run when one has a state of its own. Such a session is one an earlier drain left behind in a flow that
+        // captured it, and its state may never have been stored. Then the read says nothing about the store.
+        if (sessionAccessor.Current is { } ambient && StringComparer.Ordinal.Equals(ambient.WorkflowExecutionId, workflowExecutionId))
+            observedRunState = null;
+
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
-        // The nested drain can write the parent run's rows past the parent's session. The default accessor ends the
-        // parent's start observations on push. This also covers a host that replaced the accessor.
-        sessionAccessor.Current?.EndStartObservations();
+        // The nested drain can write the parent run's rows past the parent's session. The default accessor ends what
+        // the parent observed of the store on push. This also covers a host that replaced the accessor.
+        sessionAccessor.Current?.EndStoreObservations();
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
-        // Only a session this factory created answers reads from what the drain observed when it began, because the
+        // Only a session this factory created answers reads from what the drain observed of the store, because the
         // guards around those answers are here and in the scope below. It also needs the coalescing commit store in
         // front of every commit: that store records what a commit sends, and without it the session would report a
         // row it just committed as absent, or a state it just replaced as current.
@@ -134,7 +140,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             session.DisableDurableValuePageReuse();
             // A drain that threw leaves its session active. A flow that still holds it must not get answers once
             // the drain, and soon its lease, are gone.
-            session.EndStartObservations();
+            session.EndStoreObservations();
             scopeHandle.Dispose();
             return ValueTask.CompletedTask;
         }
