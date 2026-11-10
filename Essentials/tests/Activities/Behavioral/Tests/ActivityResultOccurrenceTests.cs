@@ -29,15 +29,14 @@ namespace Elsa.Activities.Behavioral;
 /// <summary>
 /// Which occurrence of a producer a reader gets when it binds an input to an activity result, run through the real
 /// engine. A reader binds in one of three forms: directly with a declared producer scope (existing documents), directly
-/// without one (what the server returns since #4053), or through an expression parameter, which has no scope. Every
-/// producer here returns its own activity execution id, so each occurrence has a distinct result and the value a
-/// reader committed as its input names the occurrence it read.
+/// without one (what the server returns), or through an expression parameter, which has no scope. Every producer here
+/// returns its own activity execution id, so each occurrence has a distinct result and the value a reader committed as
+/// its input names the occurrence it read.
 /// </summary>
 /// <remarks>
-/// These tests pin the engine's behaviour; #4053 changed no resolver rule. The ones marked "known defect" describe a
-/// wrong or missing value that stays reachable for scoped bindings and expression parameters (#4056). Publication
-/// refuses the direct binding without a scope in each of those shapes, so the server never offers it there
-/// (spec 1215, <c>research-4053-activity-result-scope.md</c>).
+/// These tests pin the engine's behaviour, not a resolver rule. The ones marked "known defect" describe a wrong or
+/// missing value that stays reachable for scoped bindings and expression parameters (#4056). Publication refuses the
+/// direct binding without a scope in each of those shapes, so the server never offers it there.
 /// </remarks>
 public sealed class ActivityResultOccurrenceTests
 {

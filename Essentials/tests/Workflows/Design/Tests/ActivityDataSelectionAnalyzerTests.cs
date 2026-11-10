@@ -103,6 +103,37 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Contains(blank.Findings, finding => finding.Type == "ActivityData/InvalidSource");
     }
 
+    /// <summary>
+    /// A producer that runs on only some paths is browsed without a binding, because a required read of it is refused.
+    /// A client that wants an optional read asks for that source with <c>isOptional: true</c> and no scope, and gets a
+    /// binding back with the reason still attached; that binding publishes unchanged.
+    /// </summary>
+    [Fact]
+    public async Task A_focused_optional_query_returns_a_scope_free_binding_for_a_conditional_producer()
+    {
+        using var provider = Provider();
+        ActivityNode Chart(ActivityNode consumer) => Flowchart([Node("start"), Node("producer"), consumer],
+            [("start", "consumer"), ("producer", "consumer")], "start");
+
+        var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
+        var listed = Assert.Single(browsed.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(ActivityChildResultAvailability.Conditional, listed.Availability);
+        Assert.Equal("ConditionalOccurrence", listed.ReasonCode);
+        Assert.Null(listed.Binding);
+
+        var focused = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"),
+            new() { Source = ScopeFreeResult("producer", optional: true) });
+        Assert.Empty(focused.Findings);
+        var source = Assert.Single(focused.Sources);
+        Assert.Equal("ConditionalOccurrence", source.ReasonCode);
+        var binding = Assert.IsType<JsonElement>(source.Binding!.Value);
+        Assert.False(binding.TryGetProperty("producerScopeId", out _));
+        Assert.True(binding.GetProperty("isOptional").GetBoolean());
+
+        var stored = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer", Input(source.Binding)))));
+        Assert.Empty(stored.Findings);
+    }
+
     [Theory]
     [InlineData("activity.shape.no-typed-result", "NoTypedResult")]
     [InlineData("activity.shape.metadata-unavailable", null)]
