@@ -1028,7 +1028,7 @@
         "name": "ef-2",
         "suites": [
           "activities-design",
-          "agent-records",
+          "weaver-records",
           "command-cost",
           "identity",
           "secrets-ef-composition",
@@ -1205,7 +1205,7 @@
       "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
-      "suite": "agent-records",
+      "suite": "weaver-records",
       "project": "Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     },
