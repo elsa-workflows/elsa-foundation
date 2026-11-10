@@ -63,16 +63,23 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     /// <summary>
     /// A producer and its reader inside a Sequence on a Flowchart cycle: the Sequence runs each child once, but the
     /// Flowchart runs the Sequence again, and its earlier pass leads to the later one. Only the ancestor walk sees
-    /// that, through the Flowchart's fact for the Sequence with itself, so neither form is offered or admitted.
+    /// that, through the Flowchart's fact for the Sequence with itself, so neither form is offered or admitted. A loop
+    /// between the Sequence and the Flowchart, which rules out an earlier run of its own body, does not hide the cycle.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge(bool declaresScope)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge(bool declaresScope, bool insideLoop)
     {
         using var provider = Provider();
-        ActivityNode Chart(ActivityNode consumer) => Flowchart([Node("entry"), Sequence(Node("producer"), consumer) with { NodeId = "steps" }],
-            [("entry", "steps"), ("steps", "entry")], "entry");
+        ActivityNode Chart(ActivityNode consumer)
+        {
+            var steps = Sequence(Node("producer"), consumer) with { NodeId = "steps" };
+            var node = insideLoop ? Loop(Elsa.Activities.For.Activities.For.StructureKind, steps) : steps;
+            return Flowchart([Node("entry"), node], [("entry", node.NodeId), (node.NodeId, "entry")], "entry");
+        }
 
         var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
         Assert.DoesNotContain(browsed.Sources, source => source.Id == "activity:producer:$result");

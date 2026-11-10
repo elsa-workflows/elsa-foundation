@@ -82,6 +82,50 @@ public sealed class BpmnDataSelectionPublicationTests
             finding.Type == (scenario == "nested-scope" ? "ValueFlow/ScopeBoundary" : "ValueFlow/UnavailableProducer"));
     }
 
+    /// <summary>
+    /// A result binding without a scope names only the producer. A linear process proves that each task runs once, so
+    /// the binding is offered and publishes. A process with a gateway proves nothing about its order, so a linear
+    /// subprocess placed on its loop does not get the binding, and a stored one is refused, although the subprocess
+    /// itself runs its children once per run.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_scope_free_result_binding_is_offered_and_published_only_when_no_enclosing_process_can_run_it_again(bool gatewayLoop)
+    {
+        using var fixture = new Fixture();
+        ActivityNode Root(ActivityNode capture)
+        {
+            var linear = BpmnChildResultFactsTests.Process(children: [capture, Decision()]);
+            if (!gatewayLoop) return linear;
+            return new("outer", "process-version", [], [], new("elsa.bpmn.structure", "1.0.0", JsonSerializer.SerializeToElement(
+                new BpmnAuthoredStructure([linear, Decision("gate")],
+                    [new("start", "startEvent"), new("task", "task", childNodeId: "process"), new("gateway", "exclusiveGateway", childNodeId: "gate", defaultFlowId: "exit"), new("end", "endEvent")],
+                    [new("f1", "start", "task"), new("f2", "task", "gateway"), new("again", "gateway", "task", conditionOutcome: "again"), new("exit", "gateway", "end", isDefault: true)]), Web)));
+        }
+
+        var browsed = await fixture.Analyzer.AnalyzeAsync(new("WorkflowDefinition", "definition", "revision", Root(Capture(read: null)), [], [], []),
+            new("capture", "value"));
+        var source = Assert.Single(browsed.Sources, source => source.Id == "activity:decision:$result");
+        Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
+        Assert.Equal(gatewayLoop ? "EarlierProducerRun" : null, source.ReasonCode);
+        Assert.Equal(gatewayLoop, source.Binding is null);
+
+        var stored = Root(Capture(read: new { producerNodeId = "decision", projectionKey = "$result" }));
+        if (gatewayLoop)
+        {
+            var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => fixture.Compile(stored).AsTask());
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+            Assert.Equal(new[] { ("capture/inputs/value", "ValueFlow/EarlierProducerRun") }, refusal.Findings.Select(finding => (finding.Path, finding.Type)));
+            return;
+        }
+        var executable = await fixture.Compile(stored);
+        var read = Assert.Single(executable.RootActivity.ChildSlots).Activities
+            .Single(child => child.AuthoredActivityId == "capture").InputBindings["value"].ActivityResult!;
+        Assert.Equal("decision", read.ProducerExecutableNodeId);
+        Assert.Null(read.ProducerScopeId);
+    }
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 
@@ -91,6 +135,9 @@ public sealed class BpmnDataSelectionPublicationTests
     private static ActivityNode Capture(string producer = "decision") => new("capture", "elsa.intrinsic.set-output@1",
         [Input("name", "decisionResult"), Input("value", new { producerNodeId = producer, producerScopeId = "process", projectionKey = "$result" }, "ActivityResult")], [])
     { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+    private static ActivityNode Capture(object? read) => new("capture", "elsa.intrinsic.set-output@1",
+        read is null ? [Input("name", "decisionResult")] : [Input("name", "decisionResult"), Input("value", read, "ActivityResult")], [])
+    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
 
     private sealed class Fixture : IDisposable
     {
@@ -98,6 +145,7 @@ public sealed class BpmnDataSelectionPublicationTests
         private readonly IServiceScope _scope;
         private readonly WorkflowExecutableCompiler _compiler;
         internal Catalog Catalog { get; }
+        internal IActivityDataSelectionAnalyzer Analyzer { get; }
 
         internal Fixture()
         {
@@ -120,7 +168,7 @@ public sealed class BpmnDataSelectionPublicationTests
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
-            var authority = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
+            var authority = Analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
             var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision));
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
