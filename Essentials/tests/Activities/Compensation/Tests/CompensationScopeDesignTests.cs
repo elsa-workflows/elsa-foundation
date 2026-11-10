@@ -87,15 +87,22 @@ public sealed class CompensationScopeDesignTests : IDisposable
         Assert.Null(handlerResult.IsCyclicBackEdge);
     }
 
+    /// <summary>
+    /// A scope runs each forward step once. A handler can run more than once when it is retried, but every attempt is
+    /// scheduled from its own step's run, so one attempt never leads to another. No earlier run of a child is behind a
+    /// reader, a child with itself included, so a definite result always states the fact.
+    /// </summary>
     [Fact]
-    public void A_scope_runs_each_step_and_handler_at_most_once_so_no_earlier_run_leads_to_a_reader()
+    public void No_earlier_run_of_a_step_or_handler_leads_to_a_reader()
     {
         var node = ScopeNode("scope",
             ("Inventory", Leaf("reserve"), Leaf("release")),
             ("Delivery", Leaf("deliver"), Leaf("cancel")));
+        var children = new[] { "reserve", "release", "deliver", "cancel" };
 
-        Assert.All(new[] { ("deliver", "cancel"), ("reserve", "cancel"), ("reserve", "deliver"), ("cancel", "deliver") }, pair =>
-            Assert.False(_structureService.AssessChildResult(node, pair.Item1, pair.Item2).EarlierProducerRunCanReachConsumer));
+        foreach (var producer in children)
+        foreach (var consumer in children)
+            Assert.False(_structureService.AssessChildResult(node, producer, consumer).EarlierProducerRunCanReachConsumer);
     }
 
     [Fact]
