@@ -133,6 +133,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,
                 typeof(WorkflowsPublishingFeature).Assembly,
+                typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(PublishingEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
                 typeof(ActivitiesDesignEntityFrameworkCoreFeature).Assembly)

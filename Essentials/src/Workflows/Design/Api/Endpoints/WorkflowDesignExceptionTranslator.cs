@@ -28,6 +28,7 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
         // The credential-literal refusal is the caller's content, so it is a 400 with each finding
         // keyed by its input's path. It derives from ArgumentException, so it must match before that arm.
         CredentialLiteralRefusedException refusal => new(StatusCodes.Status400BadRequest, ErrorsByPath(refusal.Findings)),
+        ActivityDataSelectionRejectedException rejected => new(StatusCodes.Status400BadRequest, ErrorsByPath(rejected.Findings)),
         EntityNotFoundException => EndpointProblem.General(StatusCodes.Status404NotFound, exception.Message),
         WorkflowDefinitionVersionConflictException or
             WorkflowPromotionOperationConflictException or
