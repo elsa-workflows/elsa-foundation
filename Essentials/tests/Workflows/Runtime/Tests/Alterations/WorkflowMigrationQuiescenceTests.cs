@@ -42,9 +42,10 @@ public sealed class WorkflowMigrationQuiescenceTests
     }
 
     // #2667: an alteration borrows the run's lease. Its own lease is exempt like any caller's, unless it took the run
-    // from an owner: then the lease stands in for that owner, and the run is not quiescent.
+    // from an owner: then the lease stands in for that owner, and the run is not quiescent. The owner's heartbeat
+    // normally says so too. Here the owner's lease has none beside it, so only the lease's own mark is left to say it.
     [Fact]
-    public async Task ProbeAsync_ExemptsTheCallersLease_UnlessItWasBorrowedFromAnOwner()
+    public async Task ProbeAsync_ExemptsTheCallersLease_UnlessItStandsInForAnOwner()
     {
         var liveness = new InMemoryExecutionLivenessStateStore();
         var probe = NewProbe(liveness);
@@ -54,6 +55,10 @@ public sealed class WorkflowMigrationQuiescenceTests
         var withNoOwner = await probe.ProbeAsync("workflow", fromNoOwner.Lease.ToFence());
         await alteration.ReturnAsync(fromNoOwner);
         await new RuntimeExecutionOwnershipService(liveness).AcquireAsync("workflow");
+        var owned = Assert.Single(await liveness.ListAsync("workflow"));
+        await liveness.SaveAsync(new ExecutionLivenessState(
+            owned.ExecutionLivenessStateId, "workflow", owned.ExecutionLease, heartbeat: null, owned.Drain, owned.InterruptedExecution,
+            owned.PendingPostCommitIntentIds, owned.Metadata));
         var fromAnOwner = await alteration.BorrowAsync("workflow");
         var withAnOwner = await probe.ProbeAsync("workflow", fromAnOwner.Lease.ToFence());
 

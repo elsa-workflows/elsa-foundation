@@ -17,8 +17,9 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// acquires the run as a drain does, so a drain it takes the run from is refused at its next heartbeat or commit.</para>
 /// <para>The lease is borrowed (<see cref="RuntimeExecutionOwnershipService.BorrowAsync"/>), because an alteration
 /// is not a drain and the ownership record must not present it as one. When the run has an owner, the borrowed lease
-/// stands in for that owner: the run stays listed under the owner for recovery and host reclaim, a migration is
-/// refused, and the owner's lease is given back under a new fencing token when the alteration is done.</para>
+/// stands in for that owner: the owner's heartbeat stays on the record, so the run is still listed under the owner
+/// for host reclaim and a migration is refused, and when the alteration is done the lease is left to expire when the
+/// owner's would have, so recovery finds the run no later than it would have.</para>
 /// <para>Borrowing needs the runtime's own <see cref="RuntimeExecutionOwnershipService"/>. With a replacement
 /// <see cref="IRuntimeExecutionOwnershipService"/> the alteration runs without a lease.</para>
 /// </remarks>
@@ -30,6 +31,7 @@ internal sealed class AlterationLeaseRunner(
     ILogger<AlterationLeaseRunner>? logger = null)
 {
     private static readonly object Completed = new();
+    private static int _unfencedWarnings;
     private readonly RuntimeExecutionLeaseRunner _leaseRunner = new(ownershipService, ownershipContext, heartbeatScopes, timeProvider);
     private readonly ILogger _logger = logger ?? NullLogger<AlterationLeaseRunner>.Instance;
 
@@ -49,7 +51,9 @@ internal sealed class AlterationLeaseRunner(
 
         if (ownershipService is not RuntimeExecutionOwnershipService service)
         {
-            _logger.LogWarning(
+            // A warning once per process, then debug: a bulk plan runs one job per target.
+            _logger.Log(
+                Interlocked.Exchange(ref _unfencedWarnings, 1) == 0 ? LogLevel.Warning : LogLevel.Debug,
                 "The alteration of workflow execution {WorkflowExecutionId} runs without the run's ownership lease, because the registered ownership service {OwnershipService} cannot lend one. Its checkpoint is not fenced.",
                 envelope.WorkflowExecutionId,
                 ownershipService.GetType().Name);
@@ -57,13 +61,13 @@ internal sealed class AlterationLeaseRunner(
             return;
         }
 
-        var borrowed = await service.BorrowAsync(envelope.WorkflowExecutionId, cancellationToken);
+        var borrow = await service.BorrowAsync(envelope.WorkflowExecutionId, cancellationToken);
         var committed = false;
         try
         {
             await _leaseRunner.RunAsync(
-                borrowed.Lease,
-                () => service.ReturnAsync(borrowed, CancellationToken.None),
+                borrow.Lease,
+                () => service.ReturnAsync(borrow, CancellationToken.None),
                 envelope.Partition,
                 async leasedCancellation =>
                 {
@@ -76,7 +80,8 @@ internal sealed class AlterationLeaseRunner(
         catch (RuntimeExecutionOwnershipLostException exception) when (committed)
         {
             // The alteration committed under its fence, so the job is done. The exception says where the lease was
-            // lost: at a renewal, or when it was returned. A lease that was not returned is left to expire.
+            // lost: at a renewal, or at the return. Either the run has a new owner, or the return's write failed and
+            // the lease expires on its own.
             _logger.LogWarning(
                 exception,
                 "The alteration of workflow execution {WorkflowExecutionId} committed, but its ownership lease was lost before it was returned.",
