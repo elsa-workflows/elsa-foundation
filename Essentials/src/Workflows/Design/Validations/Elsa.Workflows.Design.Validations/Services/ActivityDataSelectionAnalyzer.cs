@@ -124,9 +124,9 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 if (version is null) continue;
                 foreach (var projection in new[] { "$result" }.Concat(version.Outputs.Select(output => output.ReferenceKey)).Distinct(StringComparer.Ordinal))
                 {
-                    // Static order facts do not establish a runtime execution-scope constraint, so no scope is
-                    // invented. The source carries a binding without one when publication would admit it, and
-                    // stays inspectable with a reason when it would not; portable identity is separate.
+                    // No scope is invented: static order facts do not establish one. The source carries a binding
+                    // without a scope when publication would admit it, and stays inspectable with a reason when it
+                    // would not; portable identity is separate.
                     var source = await Resolve(context, consumer,
                         new("ActivityResult", producer.Node.NodeId, Projection: projection) { IsDirect = true },
                         Path(consumer, target.InputKey), findings, cancellationToken, admitOccurrence: false);
@@ -274,12 +274,14 @@ internal sealed class ActivityDataSelectionAnalyzer(
         var notDefinite = !binding.IsOptional && availability != ActivityChildResultAvailability.Definite;
         if (admitOccurrence && notDefinite)
             findings.Add(new(path, "ValueFlow/UnavailableProducer", "The required result producer is not causally available on every path to this input."));
-        // A binding without a scope names only the producer. It is sound only where the owning structure says that
-        // no earlier run of the producer can also lead to this input; a structure that has not said is not trusted.
+        // A direct binding without a scope names only the producer. It is sound only where the owning structure says
+        // that no earlier run of the producer can also lead to this input; a structure that has not said is not
+        // trusted. Repetition of an enclosing structure is refused above as a cyclic back-edge. Bindings that declare
+        // a scope and expression parameters keep their existing rules (#4056).
         var declaresNoScope = binding.IsDirect && binding.Scope is null;
         var earlierRun = declaresNoScope && facts.EarlierProducerRunCanReachConsumer != false;
-        if (admitOccurrence && earlierRun)
-            findings.Add(new(path, "ValueFlow/EarlierProducerRun", "This producer can run more than once before this input, and a result binding cannot tell its runs apart. Carry the value in a variable instead."));
+        if (admitOccurrence && earlierRun && !notDefinite)
+            findings.Add(new(path, "ValueFlow/EarlierProducerRun", "The owning structure does not establish that only one run of this producer can lead to this input, so a result binding without a scope cannot tell its runs apart. Carry the value in a variable instead."));
         var version = await catalog.Find(producer.Node.ActivityVersionId, ct);
         if (version is null)
         {
@@ -292,7 +294,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, "ActivityData/UnknownProjection", "The referenced result projection is not declared unambiguously by the actual producer contract."));
             return null;
         }
-        var noTypedResult = (admitOccurrence || declaresNoScope) && binding.Projection == "$result" && await HasNoTypedResult(context, version, ct);
+        // Publication refuses a whole result the producer declares no type for, so a browsed one gets no binding either.
+        var noTypedResult = binding.Projection == "$result" && await HasNoTypedResult(context, version, ct);
         if (admitOccurrence && noTypedResult)
         {
             findings.Add(new(path, "ActivityData/UnknownProjection", "The admitted producer contract declares no typed whole result."));
