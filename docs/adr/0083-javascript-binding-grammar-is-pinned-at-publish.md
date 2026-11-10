@@ -54,7 +54,7 @@ as amended for D-1, D-5 and D-6, no longer requires bindings to be deterministic
 randomness and GUIDs by definition, so it is retired rather than redefined. A profile name must always mean the same
 behaviour.
 - **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
-- **It allows** the current time (UTC, invariant culture, from an injectable clock), random values and GUIDs. Date and
+- **It allows** the current time (UTC, invariant culture, from an injectable clock (`TimeProvider`)), random values and GUIDs. Date and
   time-zone rules are the ADR 0046 amendment's (*Dates*, [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)).
 - **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
   number.
@@ -66,7 +66,10 @@ behaviour.
   profile, for example `binding-readonly-interop-v1` (analysis A-1, ADR 0046 amendment V10). A host opt-in allows that
   profile, and the executable pins it like any profile, so one profile name never means different behaviour on
   different hosts. General .NET access is never available to a binding: a host may allow it only for script
-  activities, through a further, separately named profile (ADR 0046 amendment V10).
+  activities, through a further, separately named profile (ADR 0046 amendment V10). Any workflow node that uses
+  general .NET access, through that separately named profile or a per-script .NET object option however it is
+  finally spelled, gets a publish-time warning with a stable diagnostic code and a marker on the node in Studio, so
+  it is never switched on unnoticed (ADR 0046 amendment V12 gives the detail).
 - **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
 
 The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes

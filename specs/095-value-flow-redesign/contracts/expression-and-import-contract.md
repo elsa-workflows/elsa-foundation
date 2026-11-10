@@ -113,7 +113,7 @@ change engine-owned workflow state. They need not be deterministic.
 It permits:
 
 - the current time, random values and GUID generation. Evaluators run in UTC with the invariant culture, and
-  time comes from the host's `TimeProvider`;
+  time comes from an injectable clock (`TimeProvider`);
 - functions implemented in .NET that are registered for this profile and exchange only JSON values with
   the expression. A call is never refused or skipped because of what it does, and the workflow designer
   owns the idempotency of external effects (D-6). No function profile is required; a durability hint, if
@@ -128,7 +128,12 @@ It forbids:
 - live .NET objects crossing into the expression. Scripts that may use objects the host explicitly
   registers use a separate profile (for example `binding-readonly-interop-v1`; analysis A-1 and the
   ADR 0046 amendment, V10). A host opt-in allows that profile, and it is pinned in the executable like any
-  profile, so this profile always forbids live objects;
+  profile, so this profile always forbids live objects. General .NET access is never available to a
+  binding; a host may allow it only for script activities, through a further, separately named profile.
+  Any workflow node that uses general .NET access, through that separately named profile or a per-script
+  .NET object option however it is finally spelled, gets a publish-time warning with a stable diagnostic
+  code and a marker on the node in Studio, so it is never switched on unnoticed (ADR 0046 amendment, V12,
+  gives the detail);
 - any change to engine-owned workflow state: variable mutation, workflow output publication,
   correlation or instance-name changes, and outcome selection;
 - functions not registered for this profile, added through evaluation events, filters,
@@ -137,9 +142,9 @@ It forbids:
 
 The first two forbidden items stay until
 [ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
-(proposed, decision D-7), or its A-4 amendment
-([#3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420)), is accepted. It lets `variables.X` and `getVariable('X')` read through
-publish-resolved declarations.
+(proposed, decision D-7) is accepted. It lets `variables.X`, `variables['X']` and `getVariable('X')`
+read through publish-resolved declarations; a computed name (`variables[x]`, `getVariable(expr)`) is
+refused at publish.
 
 A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2
 amendment, D-11). Under that policy, an `undefined` result and every `undefined`-valued object property
