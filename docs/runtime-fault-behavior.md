@@ -270,9 +270,13 @@ checkpoint, which `WorkflowStartSchedulerWorkHandler` queues as a `Checkpoint` s
 `BpmnNativeWorkCheckpointEnricher` stamps with `ExpectedModelExecution`, so it does open a frame. When the authorizing model decision changed, EF
 refuses it with `runtime.model.native-admission-unavailable` ("cross-model admission remains owed"), and
 because a refusal is not an attempt the step is released and retried, as it was before #3683. EF raises
-the same code for a timeout, lease or provider failure of that admission. Some of those can surface after the
-write committed; the step is then still released, as before #3683, and its retry ends in a replay-conflict
-incident because the rebuilt commit differs from the landed one (#3698). Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
+the same code for a lease, I/O or provider failure before the native admission submits COMMIT. Once COMMIT
+has been submitted, EF reconciles an ambiguous acknowledgement against the immutable marker, including an
+unrequested cancellation. A proven result survives a later lease or cleanup failure and the step completes.
+If that result cannot be established, `NativeAdmissionCommitOutcomeUnknownException` retains the underlying
+commit/reconciliation causes and takes the ordinary handler-fault path; it is not an unavailable refusal.
+The default retry policy parks it for inspection instead of releasing it for an automatic rebuild. Explicit
+host retry policies still control the ordinary fault path described below. Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
 and the BPMN enricher's own checks, run before the committer records the attempt. Handlers throw it
 before any commit or after only a retaining claim: `ResumeBookmark` before its commit or after only its
 retaining trigger claim; `InvokeActivity`, parent completion and structural callback evaluation after
