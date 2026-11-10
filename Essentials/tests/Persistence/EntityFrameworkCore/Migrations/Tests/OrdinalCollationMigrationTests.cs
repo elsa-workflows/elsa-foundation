@@ -24,7 +24,7 @@ public sealed class OrdinalCollationMigrationTests
     private static readonly string[] CollatingModules =
     [
         "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "Specialists", "Weaver", "WorkflowsDesign"
+        "PublishingSnapshotReview", "Secrets", "Agent", "Weaver", "WorkflowsDesign"
     ];
 
     /// <summary>
@@ -78,14 +78,14 @@ public sealed class OrdinalCollationMigrationTests
         // Part of the key and of the projection audit's keyset cursor, beside the name.
         ("Secrets", "elsa_secrets", "Tombstone"),
         ("Secrets", "elsa_secrets", "ScopeLookupKey"),
-        ("Specialists", "elsa_specialist_turns", "ScopeKey"),
-        ("Specialists", "elsa_specialist_turns", "Handle"),
-        ("Specialists", "elsa_specialist_turns", "OperationKey"),
-        ("Specialists", "elsa_specialist_turns", "SchemaVersion"),
-        ("Specialists", "elsa_specialist_turns", "Fence"),
-        ("Specialists", "elsa_specialist_conversations", "ScopeKey"),
-        ("Specialists", "elsa_specialist_conversations", "Id"),
-        ("Specialists", "elsa_specialist_conversations", "SchemaVersion"),
+        ("Agent", "elsa_agent_turns", "ScopeKey"),
+        ("Agent", "elsa_agent_turns", "Handle"),
+        ("Agent", "elsa_agent_turns", "OperationKey"),
+        ("Agent", "elsa_agent_turns", "SchemaVersion"),
+        ("Agent", "elsa_agent_turns", "Fence"),
+        ("Agent", "elsa_agent_conversations", "ScopeKey"),
+        ("Agent", "elsa_agent_conversations", "Id"),
+        ("Agent", "elsa_agent_conversations", "SchemaVersion"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")
     ];
@@ -105,8 +105,8 @@ public sealed class OrdinalCollationMigrationTests
         ("Weaver", "elsa_weaver_disclosure_snapshots", "Canonical"),
         ("Weaver", "elsa_weaver_call_keys", "Key"),
         ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
-        ("Specialists", "elsa_specialist_turns", "Payload"),
-        ("Specialists", "elsa_specialist_conversations", "Payload"),
+        ("Agent", "elsa_agent_turns", "Payload"),
+        ("Agent", "elsa_agent_conversations", "Payload"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),

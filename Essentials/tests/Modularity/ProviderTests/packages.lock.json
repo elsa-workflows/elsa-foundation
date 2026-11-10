@@ -1177,13 +1177,13 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists": {
+      "elsa.agent": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.JsonSchema": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.JsonSchema": "[4.0.0-dev, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -1192,21 +1192,21 @@
           "Microsoft.Agents.AI": "[1.27.0, )"
         }
       },
-      "elsa.agent.specialists.anthropic": {
+      "elsa.agent.anthropic": {
         "type": "Project",
         "dependencies": {
           "Anthropic": "[12.32.0, )",
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Connections": "[4.0.0-dev, )"
+          "Elsa.Agent.Connections": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.api": {
+      "elsa.agent.api": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Connections": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Connections": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Connections.Core": "[4.0.0-dev, )",
@@ -1215,47 +1215,47 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
-      "elsa.agent.specialists.azureopenai": {
+      "elsa.agent.azureopenai": {
         "type": "Project",
         "dependencies": {
           "Azure.AI.OpenAI": "[2.1.0, )",
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Connections": "[4.0.0-dev, )",
+          "Elsa.Agent.Connections": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.OpenAI": "[10.10.1, )"
         }
       },
-      "elsa.agent.specialists.connections": {
+      "elsa.agent.connections": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Connections.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.core": {
+      "elsa.agent.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
-      "elsa.agent.specialists.design": {
+      "elsa.agent.design": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.JsonSchema": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.JsonSchema": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.inspection.api": {
+      "elsa.agent.inspection.api": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
@@ -1265,28 +1265,28 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
-      "elsa.agent.specialists.jsonschema": {
+      "elsa.agent.jsonschema": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "JsonSchema.Net": "[9.2.0, )"
         }
       },
-      "elsa.agent.specialists.openai": {
+      "elsa.agent.openai": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Connections": "[4.0.0-dev, )",
+          "Elsa.Agent.Connections": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.OpenAI": "[10.10.1, )",
           "OpenAI": "[2.14.0, )"
         }
       },
-      "elsa.agent.specialists.persistence.entityframeworkcore": {
+      "elsa.agent.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
@@ -1294,7 +1294,7 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
-      "elsa.agent.specialists.review": {
+      "elsa.agent.review": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
@@ -1308,12 +1308,12 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.review.api": {
+      "elsa.agent.review.api": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Review": "[4.0.0-dev, )",
+          "Elsa.Agent.Review": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
@@ -2348,16 +2348,16 @@
           "Elsa.Activities.Runtime": "[4.0.0-dev, )",
           "Elsa.Activities.Scheduling": "[4.0.0-dev, )",
           "Elsa.Activities.Sequence": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Anthropic": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Api": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.AzureOpenAI": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Design": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Inspection.Api": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.OpenAI": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Review": "[4.0.0-dev, )",
-          "Elsa.Agent.Specialists.Review.Api": "[4.0.0-dev, )",
+          "Elsa.Agent": "[4.0.0-dev, )",
+          "Elsa.Agent.Anthropic": "[4.0.0-dev, )",
+          "Elsa.Agent.Api": "[4.0.0-dev, )",
+          "Elsa.Agent.AzureOpenAI": "[4.0.0-dev, )",
+          "Elsa.Agent.Design": "[4.0.0-dev, )",
+          "Elsa.Agent.Inspection.Api": "[4.0.0-dev, )",
+          "Elsa.Agent.OpenAI": "[4.0.0-dev, )",
+          "Elsa.Agent.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Agent.Review": "[4.0.0-dev, )",
+          "Elsa.Agent.Review.Api": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Attention.Api": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",

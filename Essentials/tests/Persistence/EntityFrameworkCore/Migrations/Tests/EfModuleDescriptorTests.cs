@@ -1,5 +1,5 @@
 using Elsa.Weaver.Persistence.EntityFrameworkCore;
-using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
+using Elsa.Agent.Persistence.EntityFrameworkCore;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json;
@@ -47,7 +47,7 @@ public sealed class EfModuleDescriptorTests
     private static readonly (string Name, Type Context, string HistoryModule)[] Expected =
     [
         ("Weaver", typeof(WeaverDbContext), WeaverEfModule.HistoryModuleName),
-        ("Specialists", typeof(SpecialistsDbContext), SpecialistsEfModule.HistoryModuleName),
+        ("Agent", typeof(AgentDbContext), AgentEfModule.HistoryModuleName),
         ("Secrets", typeof(SecretsDbContext), SecretsEfModule.HistoryModuleName),
         ("Connections", typeof(ConnectionsDbContext), ConnectionsEfModule.HistoryModuleName),
         ("Workflows.Runtime", typeof(RuntimeDbContext), RuntimeEfModule.HistoryModuleName),
@@ -170,7 +170,7 @@ public sealed class EfModuleDescriptorTests
         (typeof(WeaverDbContext).Assembly, "Extensions/Weaver/src/Persistence/EntityFrameworkCore"),
         (typeof(ClusterMembershipDbContext).Assembly, "Essentials/src/Cluster/EntityFrameworkCore"),
         (typeof(ConnectionsDbContext).Assembly, "Essentials/src/Connections/Persistence/EntityFrameworkCore"),
-        (typeof(SpecialistsDbContext).Assembly, "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore"),
+        (typeof(AgentDbContext).Assembly, "Extensions/Agent/src/Persistence/EntityFrameworkCore"),
         (typeof(DataProtectionKeysDbContext).Assembly, "Essentials/src/Foundation/DataProtection/EntityFrameworkCore"),
         (typeof(EfOpenTelemetryDbContext).Assembly, "Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
         (typeof(StructuredLogsDbContext).Assembly, "Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),

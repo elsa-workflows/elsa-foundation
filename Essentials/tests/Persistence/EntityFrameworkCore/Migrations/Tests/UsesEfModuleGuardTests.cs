@@ -41,7 +41,8 @@ public sealed class UsesEfModuleGuardTests
     private static readonly (string Feature, string[] Modules, bool DeclaresProvider)[] Inventory =
     [
         ("ActivitiesDesignEntityFrameworkCore", ["Activities.Design"], true),
-        ("AgentSourcesEntityFrameworkCore", ["Specialists"], true),
+        ("AgentEntityFrameworkCore", ["Agent"], true),
+        ("AgentSourcesEntityFrameworkCore", ["Agent"], true),
         ("ConnectionsEntityFrameworkCore", ["Connections"], true),
         ("DiagnosticsOpenTelemetryEntityFrameworkCore", ["Diagnostics.OpenTelemetry"], true),
         ("DiagnosticsStructuredLogsEntityFrameworkCore", ["Diagnostics.StructuredLogs"], true),
@@ -50,7 +51,6 @@ public sealed class UsesEfModuleGuardTests
         ("IdentityIamEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityProviderConfigurationEntityFrameworkCore", ["Identity.ProviderConfiguration"], true),
         ("SecretsEntityFrameworkCore", ["Secrets"], true),
-        ("SpecialistsEntityFrameworkCore", ["Specialists"], true),
         ("StudioPreferencesEntityFrameworkCore", ["Studio.Preferences"], true),
         ("WeaverEntityFrameworkCore", ["Weaver"], true),
         ("WorkflowsDashboardEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
