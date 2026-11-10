@@ -11,7 +11,7 @@ Point-in-time measurement for execution-core slice S13 / goal §G3. Not a budget
 | Field | Value |
 |---|---|
 | Base `origin/main` | `87b8b41fc2650b18866e9c8da3fed3ba6a5a86d8` (CI push green) |
-| Measured tree | this report's commit on `exec-core/g3-overhead-counts` |
+| Measured tree | `7164f2518cb8f2a762e2388f0e02f45641081b83` (`exec-core/g3-overhead-counts`) |
 | OS | Ubuntu 24.04.5 LTS (`Linux cursor 6.12.113+ x86_64`) |
 | .NET | SDK 10.0.403, host 10.0.14 |
 | Provider | SQLite |
