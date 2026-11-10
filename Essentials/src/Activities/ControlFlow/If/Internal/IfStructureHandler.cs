@@ -43,7 +43,7 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
-        var then =SingleBranch(childProjections, IfActivity.ThenSlotName);
+        var then = SingleBranch(childProjections, IfActivity.ThenSlotName);
         var @else = SingleBranch(childProjections, IfActivity.ElseSlotName);
         var structure = new IfAuthoredStructure(then, @else);
 

@@ -255,8 +255,8 @@ Flowchart scope before writes; a real Flowchart run per row.
 - Wire: `producerScopeId` becomes optional on authored `ActivityResult`. The picker never writes it. A
   document that has one keeps it.
 - `PUB/Services/RuntimeInputBindingCompiler.cs:649`: read the scope as optional.
-- `RTC/Models/RuntimeInputBinding.cs:197-218`: `ProducerScopeId` becomes `string?`; keep the existing
-  constructor and add an overload without the scope. This is a tracked public API change
+- `RTC/Models/RuntimeInputBinding.cs:197-218`: `ProducerScopeId` becomes `string?`, and the existing
+  constructor accepts a null scope (no overload: a caller passes `producerScopeId: null`). This is a tracked public API change
   (`RTC/PublicAPI.Unshipped.txt:3486,3488`).
 - `RT/Services/Values/CausalActivityResultResolver.cs`: no change. A null declared scope already skips the
   comparison (`:150`), which is the path portable parameters and closed bodies use today.
@@ -348,7 +348,8 @@ Architectural fit:
 
 - The structure supplies a control-flow fact it already computes; no private engine id enters a contract.
 - One public API change, in `RuntimeActivityResultReference` of a package that already tracks it: the scope
-  becomes nullable and a two-argument constructor is added. No new package, wire discriminant, store or
+  becomes nullable on the existing property and constructor. No overload is added (ADR 0080: an unused public
+  constructor is footprint). No new package, wire discriminant, store or
   resolver rule. `CausalActivityResultResolutionException` needs no change: the resolver already passes a
   null declared scope to it as an empty string (`CausalActivityResultResolver.cs:193,211`).
 
@@ -379,8 +380,8 @@ One PR, in this order. Receipts are in [tasks.md](tasks.md) under #4053.
    finding (section 2). Each case now also runs the direct form without a scope. No known-defect test flips:
    #4053 changes no resolver rule, so scoped documents and parameters behave as before (#4056), and the
    direct form is refused at publication in every known-defect shape.
-2. **Runtime model.** Nullable `ProducerScopeId` with `[JsonIgnore(WhenWritingNull)]`, the two-argument
-   constructor, `[JsonConstructor]` on the full one, public API file, hash and stored-form controls for both
+2. **Runtime model.** Nullable `ProducerScopeId` with `[JsonIgnore(WhenWritingNull)]` on the single public
+   constructor, public API file, hash and stored-form controls for both
    shapes. No resolver change.
 3. **Publishing.** Optional scope in `RuntimeInputBindingCompiler`; null guard in `PlacedReferenceRemapper`;
    template and executable hash controls whose expected values were computed on `6cf153dc94`.
@@ -418,7 +419,8 @@ One PR, in this order. Receipts are in [tasks.md](tasks.md) under #4053.
   web defaults) and the inspection views, whose `WorkflowExecutableInputBindingView.ActivityResult` is the same
   `RuntimeActivityResultReference` (`Essentials/src/Workflows/Runtime/Api/Models/WorkflowExecutableInspectionViews.cs:133`).
   A scoped reference keeps its member and its bytes; a reference read back without the member has a null
-  scope (`[JsonConstructor]` on the full constructor; pinned by `ScopedActivityResultHashTests` with web
+  scope (System.Text.Json binds the single public constructor and passes null for the missing member; pinned
+  by `ScopedActivityResultHashTests` with web
   options, not through the EF store itself).
 - Resolved: a structure outside this repository that leaves the fact unset is treated as "an earlier run can
   reach the consumer", so its children's results are listed without a binding (fail closed). In-repo

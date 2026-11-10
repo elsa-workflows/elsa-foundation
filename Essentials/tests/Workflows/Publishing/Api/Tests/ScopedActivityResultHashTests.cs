@@ -48,7 +48,7 @@ public sealed class ScopedActivityResultHashTests
     [Fact]
     public void A_scope_free_reference_omits_the_scope_reads_back_without_one_and_hashes_apart()
     {
-        var scopeFree = new RuntimeActivityResultReference("node-fetch", "customer-id");
+        var scopeFree = new RuntimeActivityResultReference("node-fetch", "customer-id", producerScopeId: null);
         var web = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
         var json = JsonSerializer.Serialize(scopeFree, web);

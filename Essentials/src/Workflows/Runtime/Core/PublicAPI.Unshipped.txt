@@ -3485,7 +3485,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.IsOptional.get
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerExecutableNodeId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerScopeId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProjectionKey.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey, string? producerScopeId, bool isOptional = false) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions.PassivateOnTerminal.get -> bool

@@ -477,7 +477,7 @@ public sealed class ActivityResultOccurrenceTests
         Form.Direct => new(
             ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.ActivityResult,
-            activityResult: new RuntimeActivityResultReference(producerNodeId, ResultKey)),
+            activityResult: new RuntimeActivityResultReference(producerNodeId, ResultKey, producerScopeId: null)),
         Form.Parameter => ThroughParameter(producerNodeId),
         _ => throw new ArgumentOutOfRangeException(nameof(form), form, "A scoped read names its scope.")
     };

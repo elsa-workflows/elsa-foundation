@@ -196,17 +196,6 @@ public sealed class RuntimeVariableReference
 
 public sealed class RuntimeActivityResultReference
 {
-    /// <summary>
-    /// A required reference that names only the producer and projection and declares no scope: the shape of a binding
-    /// the server returned.
-    /// </summary>
-    /// <param name="producerExecutableNodeId">The producer node.</param>
-    /// <param name="projectionKey">The declared result projection, or <c>$result</c>.</param>
-    public RuntimeActivityResultReference(string producerExecutableNodeId, string projectionKey)
-        : this(producerExecutableNodeId, projectionKey, producerScopeId: null)
-    {
-    }
-
     /// <param name="producerExecutableNodeId">The producer node.</param>
     /// <param name="projectionKey">The declared result projection, or <c>$result</c>.</param>
     /// <param name="producerScopeId">
@@ -214,7 +203,6 @@ public sealed class RuntimeActivityResultReference
     /// that declares none. A declared scope must not be blank.
     /// </param>
     /// <param name="isOptional">Whether an unavailable producer resolves to no value instead of failing.</param>
-    [JsonConstructor]
     public RuntimeActivityResultReference(
         string producerExecutableNodeId,
         string projectionKey,

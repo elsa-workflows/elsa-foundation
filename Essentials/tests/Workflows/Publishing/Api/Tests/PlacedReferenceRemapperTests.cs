@@ -58,7 +58,7 @@ public sealed class PlacedReferenceRemapperTests
     {
         var node = NodeWith(Binding(
             RuntimeInputBindingSource.ActivityResult,
-            activityResult: new RuntimeActivityResultReference("compute", "result")));
+            activityResult: new RuntimeActivityResultReference("compute", "result", producerScopeId: null)));
 
         var result = PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope).InputBindings["value"].ActivityResult!;
 
