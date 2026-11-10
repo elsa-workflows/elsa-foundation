@@ -16,7 +16,8 @@ Errors (exit code 1):
     section is empty. The heading may be a hash heading (`## Alternatives considered`) or a bold run-in label
     (`**Alternatives considered.**`) with content after it. This is a presence check, like the status line; it never
     judges whether the alternatives are good, and it runs only on ADRs this branch adds, not on a pre-existing ADR it
-    merely amends. Specs do not carry their own section: they refer to the alternatives in the ADRs they apply.
+    merely amends. A heading or list quoted inside a fenced code block does not count. Specs do not carry their own
+    section: they refer to the alternatives in the ADRs they apply.
 Warnings (exit code 0): `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
 match no ADR in the tree. A reference can name a number the board has reserved but that is not drafted yet, so it is
 reported, not failed.
@@ -93,6 +94,23 @@ def spec_status_error(path: str, text: str) -> str | None:
     return None
 
 
+def strip_fenced_code(text: str) -> str:
+    """Drop fenced code blocks (``` or ~~~) so an example heading or list inside one is not read as an
+    Alternatives section or its content."""
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines(keepends=True):
+        opener = re.match(r"[ \t]*(`{3,}|~{3,})", line)
+        if fence is None:
+            if opener:
+                fence = opener[1][0]  # ` or ~
+            else:
+                kept.append(line)
+        elif re.match(rf"[ \t]*{fence}{{3,}}[ \t]*$", line):
+            fence = None  # a bare closing fence; drop it and read prose again
+    return "".join(kept)
+
+
 def bold_label_has_content(text: str, start: int) -> bool:
     """Whether a bold run-in alternatives label has content: on its own line after the label, or on a
     following line before the next heading. `start` is the end of the label match."""
@@ -110,6 +128,7 @@ def bold_label_has_content(text: str, start: int) -> bool:
 
 
 def adr_alternatives_error(path: str, text: str) -> str | None:
+    text = strip_fenced_code(text)  # a heading or list quoted in a fenced example is not a real section
     if any(bold_label_has_content(text, bold.end()) for bold in ADR_ALTERNATIVES_BOLD.finditer(text)):
         return None  # a bold run-in label (e.g. **Alternatives considered.**) that carries content
     match = ADR_ALTERNATIVES_HEADING.search(text)
@@ -244,6 +263,14 @@ def self_test() -> int:
         ("new adr without section still fails",
          {"docs/adr/0094-a.md": "# ADR\n\nStatus: accepted\n\nNo alternatives here.\n"},
          {"docs/adr/0094-a.md"}, [], 1, 0),
+        ("fenced example is not section content",
+         {"docs/adr/0092-a.md":
+          "# ADR\n\nStatus: accepted\n\n## Alternatives considered\n\n```\n- Example: X vs Y.\n```\n\n## Next steps\n\nx\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("heading inside a fence does not count",
+         {"docs/adr/0092-a.md":
+          "# ADR\n\nStatus: accepted\n\n```\n## Alternatives considered\n\n- A vs B.\n```\n\nText.\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
         ("bad spec status", {"specs/1208-x/spec.md": "**Status**: Pending\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("spec status prefix only", {"specs/1208-x/spec.md": "**Status**: Drafting\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("missing spec status", {"specs/1208-x/spec.md": "# Spec\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
