@@ -362,6 +362,51 @@ public sealed class ActivityResultOccurrenceTests
             Assert.Equal(reader.SchedulingActivityExecutionId, reader.InputSnapshot!.Values[ResultKey].InlineValue!.Value.GetString()));
     }
 
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_reader_beside_its_producer_in_a_sequence_on_a_bpmn_gateway_loop_cannot_tell_the_passes_apart_without_a_scope(Form form)
+    {
+        // Known defect, refused at publication for the direct form: BPMN cannot prove the order of a process with a
+        // gateway, so it says nothing about whether the Sequence runs again, and an enclosing structure that says
+        // nothing is not trusted (ValueFlow/EarlierProducerRun). Each BPMN task run is scheduled by the run that
+        // completed before it, so the first pass's producer is in the second pass's lineage, as on a Flowchart loop.
+        await using var harness = NewHarness(
+            services =>
+            {
+                new Bpmn.ActivitiesBpmnFeature().ConfigureServices(services);
+                new Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
+            },
+            "again", "done");
+        var process = Drives.BpmnProcessDrive.NewProcessNode(
+            [Sequence("node-s", Stamp("node-p"), Read("node-c", WithoutScope(form, "node-p"))), LoopingRead("node-g", Literal("loop gate"))],
+            [
+                new Bpmn.Models.BpmnElement("start", Bpmn.Models.BpmnElementTypes.StartEvent),
+                new Bpmn.Models.BpmnElement("task", Bpmn.Models.BpmnElementTypes.Task, childNodeId: "node-s"),
+                new Bpmn.Models.BpmnElement("gateway", Bpmn.Models.BpmnElementTypes.ExclusiveGateway, childNodeId: "node-g"),
+                new Bpmn.Models.BpmnElement("end", Bpmn.Models.BpmnElementTypes.EndEvent)
+            ],
+            [
+                new Bpmn.Models.BpmnSequenceFlow("flow-1", "start", "task"),
+                new Bpmn.Models.BpmnSequenceFlow("flow-2", "task", "gateway"),
+                new Bpmn.Models.BpmnSequenceFlow("again", "gateway", "task", conditionOutcome: "again"),
+                new Bpmn.Models.BpmnSequenceFlow("done", "gateway", "end", conditionOutcome: "done")
+            ]);
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(process),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var produced = Occurrences(run, "node-p");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0]], Reads(run, "node-c"));
+        var blocked = await AssertBlockedAsync(harness, run, "node-c");
+        var failure = Assert.Throws<CausalActivityResultResolutionException>(() => ResolveWithoutScope(run, "node-p", blocked));
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Ambiguous, failure.Reason);
+        Assert.Equal(produced, failure.CandidateInvocationIds);
+    }
+
     // A -> S -> G, G -(again)-> A, G -(done)-> Z, where S is a Sequence of P then C, and C reads P.
     private static ExecutableNode SequenceOnLoop(RuntimeInputBinding read) => Flowchart(
         "node-flowchart",
@@ -435,8 +480,11 @@ public sealed class ActivityResultOccurrenceTests
     private static IEnumerable<ActivityExecutionState> Completed(WorkflowExecutionRun run, string nodeId) =>
         run.States(nodeId).Where(state => state.Status == ActivityExecutionStatus.Completed).OrderBy(state => state.ExecutionSequence);
 
-    private static WorkflowExecutionHarness NewHarness(params string[] loopOutcomes) =>
+    private static WorkflowExecutionHarness NewHarness(params string[] loopOutcomes) => NewHarness(_ => { }, loopOutcomes);
+
+    private static WorkflowExecutionHarness NewHarness(Action<IServiceCollection> features, params string[] loopOutcomes) =>
         WorkflowExecutionHarness.Create()
+            .WithFeature(features)
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
