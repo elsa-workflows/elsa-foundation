@@ -2,8 +2,7 @@
 
 Status: proposed (output-capture slice accepted — see Decision status)
 
-Amendment proposed (2026-10-29, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) analysis
-A-1): one core value model, an adapter with a written contract at every boundary, and the agreed adapter rules. If
+Amendment proposed (analysis A-1): one core value model, an adapter with a written contract at every boundary, and the agreed adapter rules. If
 accepted, it settles the representation taxonomy that this ADR leaves proposed. See *Amendment* below.
 
 Product requirements are captured in [Typed Output Binding Coercion PRD](../plans/output-binding-coercion-prd.md).
@@ -30,13 +29,10 @@ Converters are Elsa-built-in or registered named profiles with stable identifier
 
 `Auto` recognizes only producer-declared or runtime-supplied formats; it never sniffs arbitrary bytes or text. A recognized conversion failure is terminal, while unknown ordinary content targeting `Any` remains text. `Any` accepts any canonical JSON shape and `JsonObject` is a distinct object-shaped target. Typed, durable values may project into `Any` as canonical JSON, but live services, streams, connections, and other transient resources cannot enter durable workflow state. Conversion policy is owned by each binding edge and applies uniformly to activity results, workflow requests, variable reads, literals, expression parameters, and output captures. Existing published executables retain their pinned behavior when activity representation contracts evolve.
 
-## Amendment (epic #3052, analysis A-1, 2026-10-29)
+## Amendment (analysis A-1)
 
-The analysis is @FransVanEk's: the
-[A-1 outcome](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466068155) and its
-[document](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466075108), with tests run on
-2026-10-28. @j03y-nxxbz drafted this text from it and from his review. Rules V1 to V10 follow the analysis's
-principles P1 to P10; V11 is @j03y-nxxbz's addition.
+This amendment follows analysis A-1 and the tests run for it. Rules V1 to V10 follow the analysis's principles P1 to
+P10; V11 is an addition to them.
 
 **Why.** Elsa 4 already runs on one value model in practice. Every value at rest is JSON with a type label
 (`DurableValueState`), every value in flight travels in a `ValueEnvelope`, and scripts only ever see JSON. What is
@@ -46,7 +42,7 @@ values change silently today:
 - a `DateTime` with an offset becomes server-local time;
 - integers beyond 2^53 and long decimals lose digits in scripts and in ForEach;
 - activity results are written with different serializer options than the next activity reads them with
-  ([ADR 0091](https://github.com/elsa-workflows/elsa-foundation/pull/3408), Context).
+  (ADR 0091, Context).
 
 ### The model
 
@@ -75,7 +71,7 @@ This ADR's representations (`TypedValue`, `StructuredValue`, `TextValue`, `Forma
 `DurableReference`, `TransientResource`) become the vocabulary of those contracts. Conversion plans are how adapters are
 implemented, and they stay pinned at publish. Every adapter serializes through ADR 0091's baseline.
 
-**An adapter rule never changes in place** (question 2, @FransVanEk's condition, adopted). Any change to an adapter
+**An adapter rule never changes in place.** Any change to an adapter
 rule ships as a new, pinned conversion-plan or profile version, never as an edit of an existing one, so one name keeps
 one behaviour (as with `binding-readonly-v1`, ADR 0083). A published executable keeps the versions it was published
 with; only republishing moves it to a newer one. That is why the model needs no separate model version. Before 4.0,
@@ -89,36 +85,34 @@ owns the consequences, as with any external effect (D-2).
 fails with a clear diagnostic. Nothing that cannot be expressed in the core model enters workflow state.
 
 **V6. Lossy conversion is declared, never silent.** Losing precision or detail is a documented property of an adapter.
-The designer can see it and chooses it, and the result is still a valid core value (in line with Sipke's R5 on explicit
+The designer can see it and chooses it, and the result is still a valid core value (in line with R5 on explicit
 selection). A silent loss is a defect.
 
 **V7. Live objects stay on their side.** A .NET instance lives only for the attempt that created it. After a pause,
 restart or retry it is rebuilt from the core value, never restored. Recovery runs forward from the core model (D-2).
 
 **V8. Null, missing and undefined.** Null and missing are two states of the core model (`ExplicitNull`, `Absent`).
-`undefined` exists only in JavaScript, so it is a rule of the JavaScript adapter: the visible policy of D-11
-([#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388),
-[#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)). An `undefined`-valued property that the default
-drops gives a diagnostic, and NaN and Infinity become null with a diagnostic, because a lossy conversion is declared,
+`undefined` exists only in JavaScript, so it is a rule of the JavaScript adapter: the visible policy of D-11. An
+`undefined`-valued property that the default drops gives a diagnostic, and NaN and Infinity become null with a diagnostic, because a lossy conversion is declared,
 never silent (V6).
 
 **V9. A script works on plain JavaScript values; Elsa finds its changes by comparing.** A script gets ordinary
 JavaScript objects and real arrays (today the objects are frozen). Changing them changes nothing outside the script by
-itself. Writing back is a general capability of script activities (A-3, ADR 0090 amendment,
-[#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)), so S-a works; input-binding expressions never
-write (D-3). A write commits with the step and a fault discards it. A write of a value the script read is a
-read-modify-write under [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411).
+itself. Writing back is a general capability of script activities (A-3, ADR 0090 amendment), so S-a
+works; input-binding expressions never write (D-3). A write commits with the step and a fault discards it. A write of a
+value the script read is a read-modify-write under ADR 0092.
 
-*Copy, compare, patch* (proposed 2026-11-03; replaces the JSON-backed view proposed on 29 October):
+*Copy, compare, patch* (replaces an earlier JSON-backed view, which needed a custom Jint object for every value and
+could not give real arrays; `BigInt` is no way out: `JSON.stringify` throws on it, and mixing it with numbers throws):
 - **Convert per variable, on first read.** A variable is converted into JavaScript values, as a whole, when the script
   first reads it (`variables.order`). A variable the script never reads is never converted.
 - **Compare JavaScript with JavaScript.** After the script, each converted variable is compared with a fresh
   conversion of its original JSON, walking both trees and skipping identical subtrees. Both sides went through the same
   conversion, so a number rounded on the way in is rounded on both sides and is not a change. No second copy is kept
   in memory: the conversion is deterministic, so the walk converts the original again as it goes.
-- **Patch only what changed.** Each changed path is written into the original JSON (#3425 C3), so everything else
-  keeps its exact text, large numbers included. Assigning a whole variable replaces it (#3425, replace or partial
-  update).
+- **Patch only what changed.** Each changed path is written into the original JSON (ADR 0090 amendment, C3), so
+  everything else keeps its exact text, large numbers included. Assigning a whole variable replaces it (ADR 0090
+  amendment, replace or partial update).
 - **Arrays are real JavaScript arrays.** A changed array is written as a whole for now. A later array compare that
   matches unchanged elements to their original positions, as a text diff does, can write those elements from their
   original text, without changing this rule.
@@ -145,9 +139,8 @@ which one it uses. General access to .NET types (Jint's `AllowClr`) is a further
 host may select deliberately, for script activities only: never the default, and never in input-binding expressions,
 which stay read-only (D-3). This follows the platform principle: guardrails, not restrictions.
 
-**V12. One seam for how values reach a script, with pinned profiles** (proposed 2026-11-03 by @j03y-nxxbz, for
-review with V10 at the next call; V10 is unchanged until then, as @sfmskywalker asked). How a value enters a script and
-how its changes come back is one seam with named, pinned implementations (V3's rule: one name keeps one behaviour):
+**V12. One seam for how values reach a script, with pinned profiles.** How a value enters a script and how its
+changes come back is one seam with named, pinned implementations (V3's rule: one name keeps one behaviour):
 
 | Profile | The script sees | Changes come back by |
 |---|---|---|
@@ -155,10 +148,9 @@ how its changes come back is one seam with named, pinned implementations (V3's r
 | .NET objects (opt-in) | Live .NET objects through Jint interop | Explicit write-back only (`variables.order = …`); changes to a live object are not observed |
 
 - The engine sets the default, JSON out of the box, and a script activity may choose another profile (reconciliation
-  row 17b, @sfmskywalker's per-script choice, adopted by @j03y-nxxbz).
-- Input-binding expressions always use JSON (row 17a: @j03y-nxxbz and @FransVanEk; still open with @sfmskywalker).
-- Publication and Studio show a clear warning when a script uses .NET objects (row 17, @FransVanEk, adopted by
-  @j03y-nxxbz).
+  row 17b).
+- Input-binding expressions always use JSON (row 17a).
+- Publication and Studio show a clear warning when a script uses .NET objects (row 17).
 - A faster implementation of the JSON profile, such as a view that converts each value only when it is read, may be
   added later if measurements ask for it, and only if it behaves identically. If it differs in any way, it is a new
   profile with its own name.
@@ -192,7 +184,7 @@ the opt-in.
 | `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched exactly: `customerName` is `CustomerName`'s name under the baseline's camelCase policy. Any other name is mapped with `[JsonPropertyName]`. A key that matches no member gives a recorded warning, not a refusal, so nothing is lost silently; the Elsa 3 converter rewrites a literal key that differs only in case and refuses only ambiguous ones (ADR 0091 decision 2, reconciliation row 9) |
 | A .NET-typed result read into the next activity's input | written camelCased, read case-sensitively, so properties can be lost (inferred) | Both directions use the same baseline copy (ADR 0091 decision 5) |
 | `"5"` into `Int32`, `"true"` into `Boolean`, `5.0` into `Int32` | refused with the defaults; `"5"` accepted where Web options are used | Refused everywhere: no text parsing or truthiness (R5) |
-| A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach turns every item number into a `double` (#3421, a bug that can be fixed now) | Exact; no adapter narrows a number unless the target type asks for it |
+| A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach turns every item number into a `double` (a defect found by A-1, a bug that can be fixed now) | Exact; no adapter narrows a number unless the target type asks for it |
 | Upper-case GUID | accepted, written lower case | Keep, stated |
 | Dates | see *Dates* | |
 | `"01:30:00"` and `"PT1H30M"` into `TimeSpan` | accepted, refused | ISO 8601 durations are the standard and are written out; `hh:mm:ss` is still read for Elsa 3; `P1M` and `P1Y` are refused (no fixed length) |
@@ -220,10 +212,8 @@ loses the difference between attributes and elements, and mixed content (V6).
 
 ### Dates
 
-This section owns every date and time-zone rule. ADR 0045 §5
-([#3384](https://github.com/elsa-workflows/elsa-foundation/pull/3384)) and ADR 0083
-([#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)) state only the engine's clock (UTC, from an
-injectable clock) and point here.
+This section owns every date and time-zone rule. The amendments of ADR 0045 §5
+and ADR 0083 state only the engine's clock (UTC, from an injectable clock) and point here.
 
 **The rule.** A date means the same instant on every server.
 - **`DateTime`** is normalized to UTC at every adapter. A value with `Z` or an offset is converted to UTC and written
@@ -300,18 +290,19 @@ today. Its date-heavy scripts are already refused.
 - **New kinds `DateOnly` and `TimeOnly`,** written as ISO 8601 (`"2026-10-28"`, `"09:15:00"`).
 - **Files and large content** are a reference the activity opens as a transient resource for one attempt (V7): storage
   profile, locator, name, content type and size. A script sees the reference, never the bytes. Small binary content may
-  be inline as base64. This is the model for #3194.
+  be inline as base64. This is the model for Elsa 3 resource variables
+  (`FormFile`, `Stream`, `byte[]`).
 - **Secrets and protection** stay as built: a secret is `Withheld`, resolved at every activation and never written back.
   A script result inherits the strongest protection policy of what the script actually read. That needs the reads to be
-  recorded, which the [ADR 0089 amendment](https://github.com/elsa-workflows/elsa-foundation/pull/3420) (A3) and
+  recorded, which the ADR 0089 amendment (A3) and
   ADR 0092 (decision 3) provide.
 
 ### What this settles
 
 - Matrix rows 10 (live .NET objects in scripts: V10), 19 (value model: V1, V3), 21 (exact JSON casing: ADR 0091),
   22 (binary content and secrets: *Kinds*) and 23 (XML and other formats: *Formats*), and R6 (V8).
-- The positions already on the board, joined: "complex objects are always JSON" (Joey) is V1, V2 and V11; "keep conversion
-  plans, loosened" (Sipke) is V3; "objects rebuilt on each attempt" (Sipke) is V7.
+- The positions already stated, joined: "complex objects are always JSON" is V1, V2 and V11; "keep conversion plans,
+  loosened" is V3; "objects rebuilt on each attempt" is V7.
 - All eight A-1 scenarios work:
   - S-a, an HTTP body changed in a script: V9;
   - S-b, an uploaded file: *Kinds*;
@@ -329,7 +320,7 @@ today. Its date-heavy scripts are already refused.
 - **ADR 0091:** the serializer every adapter uses. Exact member reads, the diagnostic for unmatched keys and the data
   rules are stated there.
 - **Spec 264:** superseded in part (*Kinds*).
-- **Defects found by A-1:** #3421, numbers that lose digits silently in ForEach, JavaScript and diagnostic snapshots
+- **Defects found by A-1:** numbers that lose digits silently in ForEach, JavaScript and diagnostic snapshots
   (V6). The ForEach and snapshot parts are plain bugs and are fixed without waiting for this amendment. The JavaScript
   part is fixed by copy, compare, patch (V9). Nothing recorded decides that numbers become doubles: ADR 0036
   chose `JsonNode` because it is lossless on numbers.
@@ -338,38 +329,9 @@ today. Its date-heavy scripts are already refused.
   comparing it with its base (§2, §6). Every adapter in this ADR may lose detail (V6), so that comparison turns a read
   into a spurious write and corrupts untouched fields on a real write. Today a read cannot write: there is no
   tracking, and a test with a large number left the stored text and revision unchanged. The ADR 0090 amendment
-  ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)) replaces the comparison of stored text with explicit writes. In a script, a change found by
-  comparing JavaScript with JavaScript is such a write (V9). That comparison differs from the rejected one: both sides
+  replaces the comparison of stored text with explicit writes. In a script, a change found by comparing JavaScript with JavaScript is such a write (V9). That comparison differs from the rejected one: both sides
   went through the same conversion, so a read never looks like a change.
 - **ADR 0036:** assumes Jint reads `JsonNode` through a `JsonElementConverter`; that converter is gone from main, and
   the closed engine converts values itself. Converting per variable and patching only changed paths (V9) brings the
   engine back in line with its intent.
-- **Specs and issues:** S-8 is defined against this amendment. It unblocks #3196, #3202 (model part), #3194,
-  #3287 (type part) and the custom-function part of #3026.
-
-### Questions for reviewers
-
-Answers so far: @FransVanEk answered all six on 2026-10-29 (review of this PR), and @j03y-nxxbz agrees:
-1 yes, with exact matching, the S-a note (now in V9) and the time zone sentence (*Dates*); 2 no separate model version,
-on his condition (now in V3); 3 refuse; 4 real JavaScript arrays and a diagnostic when a number loses digits, which
-V9's copy, compare, patch now gives (new on 3 November, so to review again); 5 agreed; 6 agreed. Questions 5 and 6, and
-V9 and V12 as changed on 3 November, wait for @sfmskywalker.
-
-1. @FransVanEk: does this text carry A-1 as you meant it? Two changes from your write-up: V9 no longer assumes scripts
-   may write (that is A-3), and retiring `Object` records the spec 264 supersession. V11 is new (question 6).
-2. **A model version.** The analysis says the model is versioned and a saved workflow records the version. Executables
-   already pin their conversion plans and expression profiles (ADR 0083), and the artifact hash covers both. This text
-   proposes no separate model version. Do you see a case that needs one?
-3. **Dates for converted Elsa 3 workflows.** Refuse a date without an offset unless the source time zone is set, and
-   convert it with that zone's offset when it is (*Dates*)? Or only warn?
-4. **Numbers in scripts** (changed on 3 November). Copy, compare, patch (V9): untouched values keep their exact text,
-   a number the script reads is a double, arrays are real JavaScript arrays, and a lost digit that reaches a write is
-   refused by default with a diagnostic naming the path (the designer explicitly accepts to allow it). This replaces the JSON-backed view, which needed a custom Jint object for every value and
-   could not give real arrays. `BigInt` is no way out: `JSON.stringify` throws on it, and mixing it with numbers
-   throws. Agreed?
-5. @sfmskywalker: `Object` retired in favour of one dynamic kind, alias `Any`, shown in Studio as JSON, with the spec
-   264 supersession. Agreed? @FransVanEk asked for one generic name; Joey proposes JSON as the name workflow engineers
-   see.
-6. **V11 and defaults first.** This is @j03y-nxxbz's position: kinds instead of .NET types for workflow engineers
-   everywhere, and only the default implementations built now. If you think V11 goes too far, he accepts limiting it to
-   scripts (V10) for now. Where do you stand?
+- **Specs:** S-8 is defined against this amendment.
