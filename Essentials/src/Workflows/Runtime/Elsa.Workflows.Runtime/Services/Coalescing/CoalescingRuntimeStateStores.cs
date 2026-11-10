@@ -10,7 +10,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing-aware overlay for <see cref="IWorkflowExecutionStateStore"/>. When an active coalescing session owns the
 /// target workflow execution, <see cref="FindAsync"/> answers from the session: its own buffered or committed
 /// state, and before it has one, the state the drain read when it began, if the session was given one. Everything
-/// else, writes included, passes through to the durable inner store.
+/// else, writes included, passes through to the durable inner store. A save or delete of that execution's state first
+/// ends the session's use of what the drain read.
 /// </summary>
 public sealed class CoalescingWorkflowExecutionStateStore(
     CoalescingInner<IWorkflowExecutionStateStore> inner,

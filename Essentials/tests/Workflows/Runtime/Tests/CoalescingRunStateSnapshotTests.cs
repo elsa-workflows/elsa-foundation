@@ -12,8 +12,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 // A drain reads its run's workflow execution state once, when it begins. Until the session has a state of its own,
-// a read of that state is answered with what the drain read, which may be "no state". Every way the stored state can
-// change without the session holding the new one sends the read back to the store.
+// a read of that state is answered with what the drain read, which may be "no state". Every way the drain itself can
+// change the stored state without the session holding the new one sends the read back to the store. What another
+// writer does to the store is not covered here: the drain's lease is what keeps other writers out.
 public sealed class CoalescingRunStateSnapshotTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 10, 12, 0, 0, TimeSpan.Zero);
@@ -301,7 +302,7 @@ public sealed class CoalescingRunStateSnapshotTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task EndedSnapshot_IsNotBegun(bool begunBeforeItEnded)
+    public async Task EndedSnapshot_NeverAnswers(bool begunBeforeItEnded)
     {
         var fixture = new Fixture(NoRecord, begunBeforeItEnded ? NoState : null);
 
