@@ -301,7 +301,7 @@ public sealed class CoalescingRunStateSnapshotTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task EndedSnapshot_IsNotBegunAgain(bool begunBeforeItEnded)
+    public async Task EndedSnapshot_IsNotBegun(bool begunBeforeItEnded)
     {
         var fixture = new Fixture(NoRecord, begunBeforeItEnded ? NoState : null);
 
