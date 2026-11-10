@@ -35,9 +35,8 @@ public sealed class AgentJournalProviderTests
                 var context = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
                 await context.Database.MigrateAsync();
                 var appliedMigrations = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
-                Assert.Equal(2, appliedMigrations.Length);
-                Assert.EndsWith("_Initial", appliedMigrations[0]);
-                Assert.EndsWith("_SharedSourceRevisions", appliedMigrations[1]);
+                // The stage 2 clean break (#4027) regenerated the module's history as one Initial migration per provider.
+                Assert.EndsWith("_Initial", Assert.Single(appliedMigrations));
                 var denied = await Assert.ThrowsAsync<AgentJournalException>(() => scope.ServiceProvider.GetRequiredService<IAgentTurnStore>()
                     .StageAsync(candidate, false, CancellationToken.None).AsTask());
                 Assert.Equal("agent.journal.admission-disabled", denied.Code);
