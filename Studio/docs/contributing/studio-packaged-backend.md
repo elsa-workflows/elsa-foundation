@@ -4,7 +4,7 @@ This optional path runs Studio from source and connects it to a published Elsa W
 
 The primary contributor path is now [Run Studio from source](studio-source-quickstart.md) in this repository's `Studio/` tree. The commands below remain the recorded packaged-image pair (Studio commit `7cb2f2c2` from the former `elsa-foundation-studio` repository). They were not re-run against current Foundation `main`.
 
-Follow the prerequisites in [Run Studio from source](studio-source-quickstart.md), using a disposable clone so existing work stays untouched. Switch that clone to the verified commit before installing or editing:
+Use only the prerequisites section of [Run Studio from source](studio-source-quickstart.md) (SDK, Node, pnpm and Corepack), not that guide's clone or run steps. Then use a disposable clone of the former repository so existing work stays untouched. Switch that clone to the verified commit before installing or editing:
 
 ```bash
 git clone https://github.com/elsa-workflows/elsa-foundation-studio.git elsa-foundation-studio-contributor
