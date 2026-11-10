@@ -28,13 +28,16 @@ namespace Elsa.Activities.Behavioral;
 
 /// <summary>
 /// Which occurrence of a producer a reader gets when it binds an input to an activity result, run through the real
-/// engine. A reader binds either directly, declaring the producer's scope, or through an expression parameter, which
-/// has no scope. Every producer here returns its own activity execution id, so each occurrence has a distinct
-/// result and the value a reader committed as its input names the occurrence it read.
+/// engine. A reader binds in one of three forms: directly with a declared producer scope (existing documents), directly
+/// without one (what the server returns since #4053), or through an expression parameter, which has no scope. Every
+/// producer here returns its own activity execution id, so each occurrence has a distinct result and the value a
+/// reader committed as its input names the occurrence it read.
 /// </summary>
 /// <remarks>
-/// These tests pin the engine's current behaviour. The ones marked "known defect" describe a wrong or missing
-/// value; change them together with the fix (spec 1215, <c>research-4053-activity-result-scope.md</c>).
+/// These tests pin the engine's behaviour; #4053 changed no resolver rule. The ones marked "known defect" describe a
+/// wrong or missing value that stays reachable for scoped bindings and expression parameters (#4056). Publication
+/// refuses the direct binding without a scope in each of those shapes, so the server never offers it there
+/// (spec 1215, <c>research-4053-activity-result-scope.md</c>).
 /// </remarks>
 public sealed class ActivityResultOccurrenceTests
 {
@@ -55,15 +58,18 @@ public sealed class ActivityResultOccurrenceTests
         Assert.Equal([produced[0], produced[0]], Reads(run, "node-c"));
     }
 
-    [Fact]
-    public async Task A_loop_reader_without_a_scope_cannot_tell_the_two_passes_apart_on_the_second_pass()
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_loop_reader_without_a_scope_cannot_tell_the_two_passes_apart_on_the_second_pass(Form form)
     {
         // Known defect: the second-pass read does not resolve. Both passes' producers are in the reader's lineage
-        // and the first pass has no iteration frame, so nothing separates them.
+        // and the first pass has no iteration frame, so nothing separates them. Publication refuses the direct form
+        // (ValueFlow/EarlierProducerRun); the parameter keeps today's rules (#4056).
         await using var harness = NewHarness("again", "done");
 
         var run = await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(Loop(ThroughParameter("node-b"))),
+            WorkflowExecutionHarness.NewExecutable(Loop(WithoutScope(form, "node-b"))),
             allowPendingWorkOnTerminalCompletion: true,
             allowAcceptedButFaulted: true);
 
@@ -79,7 +85,8 @@ public sealed class ActivityResultOccurrenceTests
     [Fact]
     public async Task A_result_produced_under_a_first_wins_fork_is_unavailable_to_a_reader_that_declares_the_root_scope()
     {
-        // Known defect: the producer ran once, before the reader, in a generated race scope no author can name.
+        // Known defect for existing documents: the producer ran once, before the reader, in a generated race scope no
+        // author can name. The binding the server returns declares no scope and resolves (next test).
         await using var harness = NewHarness();
 
         var run = await harness.RunAsync(
@@ -93,13 +100,15 @@ public sealed class ActivityResultOccurrenceTests
         Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, failure.Reason);
     }
 
-    [Fact]
-    public async Task A_result_produced_under_a_first_wins_fork_resolves_for_a_reader_without_a_scope()
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_result_produced_under_a_first_wins_fork_resolves_for_a_reader_without_a_scope(Form form)
     {
         await using var harness = NewHarness();
 
         var run = await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(Race(ThroughParameter("node-p"))),
+            WorkflowExecutionHarness.NewExecutable(Race(WithoutScope(form, "node-p"))),
             allowPendingWorkOnTerminalCompletion: true);
 
         run.AssertWorkflowCompleted();
@@ -111,8 +120,8 @@ public sealed class ActivityResultOccurrenceTests
     [InlineData("scope:root")]
     public async Task The_result_of_a_placed_reusable_activity_is_unavailable_to_a_sibling_that_declares_a_scope(string declaredScope)
     {
-        // Known defect: a placed reusable activity's scope is its own activity execution id, which no authored
-        // scope can equal.
+        // Known defect for existing documents: a placed reusable activity's scope is its own activity execution id,
+        // which no authored scope can equal. The binding the server returns declares no scope and resolves (next test).
         await using var harness = NewHarness();
         var root = Sequence("node-root", Stamp("node-p", PlacedReusableActivity), Read("node-r", Direct("node-p", declaredScope)));
 
@@ -128,11 +137,13 @@ public sealed class ActivityResultOccurrenceTests
         Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, failure.Reason);
     }
 
-    [Fact]
-    public async Task The_result_of_a_placed_reusable_activity_resolves_for_a_sibling_without_a_scope()
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task The_result_of_a_placed_reusable_activity_resolves_for_a_sibling_without_a_scope(Form form)
     {
         await using var harness = NewHarness();
-        var root = Sequence("node-root", Stamp("node-p", PlacedReusableActivity), Read("node-r", ThroughParameter("node-p")));
+        var root = Sequence("node-root", Stamp("node-p", PlacedReusableActivity), Read("node-r", WithoutScope(form, "node-p")));
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
 
@@ -158,13 +169,50 @@ public sealed class ActivityResultOccurrenceTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_loop_reader_resolves_a_producer_that_ran_once_before_the_flowchart_on_every_pass(bool declaresScope)
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_sequence_reader_resolves_its_prior_sibling_without_a_scope(Form form)
+    {
+        await using var harness = NewHarness();
+        var root = Sequence("node-root", Stamp("node-p"), Read("node-r", WithoutScope(form, "node-p")));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(Occurrences(run, "node-p"), Reads(run, "node-r"));
+    }
+
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_flowchart_reader_resolves_a_prior_node_without_a_scope(Form form)
+    {
+        // The producer runs in the Flowchart's root scope, which a scope-free reference never has to name.
+        await using var harness = NewHarness();
+        var root = Flowchart(
+            "node-flowchart",
+            [Probe("node-a"), Stamp("node-p"), Read("node-r", WithoutScope(form, "node-p"))],
+            [Connect("node-a", "node-p"), Connect("node-p", "node-r")],
+            startNodeId: "node-a");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        var producer = Assert.Single(Completed(run, "node-p"));
+        Assert.Equal("scope:root", producer.Provenance.ExecutionScopeId
+            ?? producer.Metadata.GetValueOrDefault(RuntimeMetadataKeys.FlowchartExecutionScopeId));
+        Assert.Equal(Occurrences(run, "node-p"), Reads(run, "node-r"));
+    }
+
+    [Theory]
+    [InlineData(Form.Scoped)]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_loop_reader_resolves_a_producer_that_ran_once_before_the_flowchart_on_every_pass(Form form)
     {
         // The producer runs once, outside the loop, so every pass has exactly one occurrence to read.
         await using var harness = NewHarness("again", "done");
-        var read = declaresScope ? Direct("node-p", "node-root") : ThroughParameter("node-p");
+        var read = form == Form.Scoped ? Direct("node-p", "node-root") : WithoutScope(form, "node-p");
         var loop = Flowchart(
             "node-flowchart",
             [Probe("node-a"), LoopingRead("node-c", read), Probe("node-z")],
@@ -179,16 +227,19 @@ public sealed class ActivityResultOccurrenceTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_reader_in_a_looping_flowchart_nested_in_a_loop_always_reads_the_outer_first_pass_result(bool declaresRootScope)
+    [InlineData(Form.Scoped)]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_reader_in_a_looping_flowchart_nested_in_a_loop_always_reads_the_outer_first_pass_result(Form form)
     {
-        // Known defect, with or without a declared scope: the outer producer runs once per outer pass, and the
-        // nested reader should get the current outer pass's result. The nested Flowchart's nodes carry only its own
-        // iteration key (none on its first pass), so the second-pass outer producer never matches their frame, and
-        // the first-pass one, which has no frame, always does.
+        // Known defect, in every form: the outer producer runs once per outer pass, and the nested reader should get
+        // the current outer pass's result. The nested Flowchart's nodes carry only its own iteration key (none on its
+        // first pass), so the second-pass outer producer never matches their frame, and the first-pass one, which has
+        // no frame, always does. Publication refuses the direct form without a scope, because the outer Flowchart
+        // states that the producer can reach itself (ValueFlow/EarlierProducerRun); the other forms keep today's
+        // rules (#4056).
         await using var harness = NewHarness("again", "done", "again", "again", "done", "done");
-        var read = declaresRootScope ? Direct("node-b", "scope:root") : ThroughParameter("node-b");
+        var read = form == Form.Scoped ? Direct("node-b", "scope:root") : WithoutScope(form, "node-b");
         var inner = Flowchart(
             "node-inner",
             [Probe("node-d"), LoopingRead("node-e", read)],
@@ -212,19 +263,24 @@ public sealed class ActivityResultOccurrenceTests
     }
 
     [Theory]
-    [InlineData("While", true)]
-    [InlineData("While", false)]
-    [InlineData("Do", true)]
-    [InlineData("Do", false)]
-    [InlineData("For", true)]
-    [InlineData("For", false)]
-    [InlineData("ForEach", true)]
-    [InlineData("ForEach", false)]
-    public async Task A_reader_in_a_loop_body_reads_the_producer_of_its_own_pass(string loop, bool declaresScope)
+    [InlineData("While", Form.Scoped)]
+    [InlineData("While", Form.Direct)]
+    [InlineData("While", Form.Parameter)]
+    [InlineData("Do", Form.Scoped)]
+    [InlineData("Do", Form.Direct)]
+    [InlineData("Do", Form.Parameter)]
+    [InlineData("For", Form.Scoped)]
+    [InlineData("For", Form.Direct)]
+    [InlineData("For", Form.Parameter)]
+    [InlineData("ForEach", Form.Scoped)]
+    [InlineData("ForEach", Form.Direct)]
+    [InlineData("ForEach", Form.Parameter)]
+    public async Task A_reader_in_a_loop_body_reads_the_producer_of_its_own_pass(string loop, Form form)
     {
-        // The loop schedules every pass itself, so an earlier pass's body is never in a later pass's lineage.
+        // The loop schedules every pass itself, so an earlier pass's body is never in a later pass's lineage. That is
+        // why the loops state that no earlier run of their body leads to a reader.
         await using var harness = NewHarness("Done", "Break");
-        var read = declaresScope ? Direct("node-p", "node-body") : ThroughParameter("node-p");
+        var read = form == Form.Scoped ? Direct("node-p", "node-body") : WithoutScope(form, "node-p");
         var endsItself = loop is "While" or "Do";
         var body = Sequence("node-body", Stamp("node-p"), endsItself ? LoopingRead("node-c", read) : Read("node-c", read));
 
@@ -239,9 +295,9 @@ public sealed class ActivityResultOccurrenceTests
     [Fact]
     public async Task A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_reads_the_first_pass_result_when_it_declares_the_root_scope()
     {
-        // Known defect, refused at publication as a cyclic back-edge. The Sequence completes on every pass, and a
-        // completed composite leads back to its last child, so the first pass's producer is in the second pass's
-        // lineage.
+        // Known defect, refused at publication as a cyclic back-edge in every form: the analyzer's ancestor walk asks
+        // the Flowchart about the Sequence with itself. The Sequence completes on every pass, and a completed
+        // composite leads back to its last child, so the first pass's producer is in the second pass's lineage.
         await using var harness = NewHarness("again", "done");
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(SequenceOnLoop(Direct("node-p", "scope:root"))));
@@ -252,14 +308,16 @@ public sealed class ActivityResultOccurrenceTests
         Assert.Equal([produced[0], produced[0]], Reads(run, "node-c"));
     }
 
-    [Fact]
-    public async Task A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_cannot_tell_the_passes_apart_without_a_scope()
+    [Theory]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_reader_beside_its_producer_in_a_sequence_on_a_flowchart_loop_cannot_tell_the_passes_apart_without_a_scope(Form form)
     {
         // Known defect, refused at publication as a cyclic back-edge.
         await using var harness = NewHarness("again", "done");
 
         var run = await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(SequenceOnLoop(ThroughParameter("node-p"))),
+            WorkflowExecutionHarness.NewExecutable(SequenceOnLoop(WithoutScope(form, "node-p"))),
             allowPendingWorkOnTerminalCompletion: true,
             allowAcceptedButFaulted: true);
 
@@ -273,14 +331,15 @@ public sealed class ActivityResultOccurrenceTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_reader_after_a_merge_node_reads_the_run_of_that_node_that_scheduled_it(bool declaresRootScope)
+    [InlineData(Form.Scoped)]
+    [InlineData(Form.Direct)]
+    [InlineData(Form.Parameter)]
+    public async Task A_reader_after_a_merge_node_reads_the_run_of_that_node_that_scheduled_it(Form form)
     {
         // A merge node runs once per arrival, without a loop. Each run schedules its own successor, so a reader's
-        // lineage holds only the run it follows.
+        // lineage holds only the run it follows, and reachability to itself is all the Flowchart needs to state.
         await using var harness = NewHarness();
-        var read = declaresRootScope ? Direct("node-m", "scope:root") : ThroughParameter("node-m");
+        var read = form == Form.Scoped ? Direct("node-m", "scope:root") : WithoutScope(form, "node-m");
         var root = Flowchart(
             "node-flowchart",
             [Probe("node-fork"), Probe("node-left"), Probe("node-right"), Stamp("node-m"), Read("node-r", read)],
@@ -399,6 +458,29 @@ public sealed class ActivityResultOccurrenceTests
         ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.ActivityResult,
         activityResult: new RuntimeActivityResultReference(producerNodeId, ResultKey, declaredScope));
+
+    /// <summary>How a reader binds to a producer's result.</summary>
+    public enum Form
+    {
+        /// <summary>Directly, declaring the producer's scope, as existing documents do.</summary>
+        Scoped,
+
+        /// <summary>Directly, without a scope, as the server returns it.</summary>
+        Direct,
+
+        /// <summary>Through an expression parameter, which has no scope.</summary>
+        Parameter
+    }
+
+    private static RuntimeInputBinding WithoutScope(Form form, string producerNodeId) => form switch
+    {
+        Form.Direct => new(
+            ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference(producerNodeId, ResultKey)),
+        Form.Parameter => ThroughParameter(producerNodeId),
+        _ => throw new ArgumentOutOfRangeException(nameof(form), form, "A scoped read names its scope.")
+    };
 
     private static RuntimeInputBinding ThroughParameter(string producerNodeId) => new(
         ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
