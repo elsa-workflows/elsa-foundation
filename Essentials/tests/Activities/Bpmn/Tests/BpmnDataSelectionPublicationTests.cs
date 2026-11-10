@@ -126,6 +126,32 @@ public sealed class BpmnDataSelectionPublicationTests
         Assert.Null(read.ProducerScopeId);
     }
 
+    /// <summary>
+    /// One workflow end to end: the binding the analyzer offers is stored unchanged, compiled by the publication
+    /// compiler and run by the engine, and the reader commits the value its producer returned.
+    /// </summary>
+    [Fact]
+    public async Task The_offered_scope_free_binding_publishes_unchanged_and_reads_the_producer_at_run_time()
+    {
+        using var fixture = new Fixture();
+        ActivityNode Process(ArgumentState[] readerInputs) => BpmnChildResultFactsTests.Process(children:
+            [new ActivityNode("capture", "read-version", readerInputs, []), Decision()]);
+        var browsed = await fixture.Analyzer.AnalyzeAsync(new("WorkflowDefinition", "definition", "revision", Process([]), [], [], []),
+            new("capture", "Value"));
+        var offered = Assert.Single(browsed.Sources, source => source.Id == "activity:decision:$result").Binding!;
+
+        var executable = await fixture.Compile(Process([new("Value", offered, null, null, null, null)]));
+        await using var runtime = await BpmnRuntimeFixture.CreateAsync(["process-exec", "decision-exec", "capture-exec"],
+            services => new Elsa.Serialization.SystemText.SerializationFeature().ConfigureServices(services));
+        var run = await runtime.RunAsync(executable);
+
+        run.AssertWorkflowCompleted();
+        var produced = run.AssertCompleted("decision").Completion!.Result.InlineValue!.Value;
+        var read = run.AssertCompleted("capture").InputSnapshot!.Values["Value"].InlineValue!.Value;
+        Assert.Equal("Done", read.GetProperty("outcome").GetString());
+        Assert.True(JsonElement.DeepEquals(produced, read));
+    }
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 
@@ -158,7 +184,9 @@ public sealed class BpmnDataSelectionPublicationTests
                 DescriptorPayload = ClrConstruction.Payload(serializer, type), Inputs = inputs
             };
             Catalog = new([Version(typeof(BpmnProcess), "process-version"), Version(typeof(BpmnDecision), "decision-version",
-                new InputDefinition("Outcome", "Outcome", new TypeReference("String"), null, "Outcome", null, IsNullable: true))]);
+                new InputDefinition("Outcome", "Outcome", new TypeReference("String"), null, "Outcome", null, IsNullable: true)),
+                Version(typeof(ReadBack), "read-version",
+                    new InputDefinition("Value", "Value", new TypeReference("Elsa.Any"), null, "Value", null, IsNullable: true))]);
             var services = new ServiceCollection();
             services.AddOptions();
             new Elsa.Events.EventsFeature().ConfigureServices(services);
@@ -169,7 +197,7 @@ public sealed class BpmnDataSelectionPublicationTests
             _scope = _provider.CreateScope();
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
             var authority = Analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
-            var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision));
+            var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision), typeof(ReadBack));
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
             var unused = new UnusedReaders();
@@ -224,3 +252,14 @@ public sealed class BpmnDataSelectionPublicationTests
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken ct = default) => throw new NotSupportedException();
     }
 }
+
+/// <summary>Completes with the value its input resolved to, so a test can see what a binding read.</summary>
+public sealed class ReadBack : Activity<ReadBackResult>
+{
+    [Elsa.Activities.Runtime.Core.Attributes.ActivityInput] public object? Value { get; set; }
+
+    protected override ValueTask<ActivityTransition<ReadBackResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new ReadBackResult(Value)));
+}
+
+public sealed record ReadBackResult(object? Value);
