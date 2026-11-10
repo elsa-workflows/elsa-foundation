@@ -2523,7 +2523,11 @@ describe("workflows module", () => {
     // Identity panel: workflow name as title, hash as a secondary address, node/resume-target counts.
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
-    expect(container.textContent).toContain("Executable Inspector");
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
+    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
+    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Hello World");
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).not.toContain("artifact-1");
     await waitForText(container, "Hello World");
     const inspector = container.querySelector(".wf-instance-inspector");
     expect(inspector?.querySelector("h3")?.textContent).toBe("Hello World");
@@ -2562,6 +2566,55 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
 
+    await unmount();
+  });
+
+  it("does not keep the previous workflow name while a different executable loads", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    let releaseNextExecutable: ((value: Response) => void) | undefined;
+    const nextExecutable = new Promise<Response>(resolve => {
+      releaseNextExecutable = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/executables/artifact-2")) return nextExecutable;
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) {
+        return response({ definition: definition({ latestVersionId: "version-2", latestVersion: "2.0.0" }), draft: null, versions: [] });
+      }
+      if (url.includes("/definitions/definition-2")) {
+        return response({ definition: definition({ id: "definition-2", name: "Invoice settlement" }), draft: null, versions: [] });
+      }
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
+
+    window.history.pushState({}, "", "/workflows/executables/artifact-2");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Executable artifact-2"));
+    expect(container.querySelector("h2")?.textContent).not.toContain("Hello World");
+
+    releaseNextExecutable?.(response(executableDetail({
+      artifactId: "artifact-2",
+      chosenReference: { sourceReferenceId: "ref-2", selection: "newest-live", layout: [] },
+      references: [executableReference({
+        sourceReferenceId: "ref-2",
+        artifactId: "artifact-2",
+        definitionId: "definition-2",
+        artifactVersion: "1.0.0",
+        sourceVersion: "1.0.0"
+      })]
+    })));
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Invoice settlement · 1.0.0"));
     await unmount();
   });
 
@@ -2788,7 +2841,7 @@ describe("workflows module", () => {
           await waitForText(container, "Review & publish");
           await click(buttonByText(container, "Artifacts"));
         }
-        await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
+        await waitForText(container, scenario.surface === "inspector" ? "Hello World · 2.0.0" : scenario.artifactId);
         await click(scenario.surface === "artifacts"
           ? await waitForButtonByLabel(container, `Run executable ${scenario.artifactId}`)
           : await waitForButtonByText(container, "Run"));
