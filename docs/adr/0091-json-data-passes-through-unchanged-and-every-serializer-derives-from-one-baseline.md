@@ -1,12 +1,8 @@
 # JSON Data Passes Through Unchanged And Every Serializer Derives From One Baseline
 
-Status: proposed (2026-10-27). Joey Barten (@j03y-nxxbz) proposed it from analysis A-5 on
-[epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052). The facts, with file and line references,
-are in the [A-5 analysis](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6451104603).
-Acceptance needs agreement from Sipke Schoorstra (@sfmskywalker) and Frans van Ek (@FransVanEk).
+Status: proposed (2026-10-27)
 
-Part of epic #3052. Answers decision-matrix row 21 ("JSON property names keep their exact casing everywhere") and
-A-1 scenario S-e.
+It answers whether JSON property names keep their exact casing everywhere.
 
 Related:
 
@@ -20,11 +16,11 @@ Related:
 Not decided here:
 
 - The value model and conversion, in
-  [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) and analysis A-1
-  ([outcome](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466068155), proposed as an
-  ADR 0046 amendment). A-1 defines the adapter at each boundary: what it accepts, produces and loses, including the
-  rules for dates, numbers in scripts and property matching at activity inputs. This ADR is the serializer those
-  adapters use, and it must agree with them (decisions 2 and 5).
+  [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) and its amendment for the value model.
+  That amendment defines the adapter at each boundary: what it accepts, produces and loses, including the rules for
+  dates, numbers in scripts and property matching at activity inputs. This ADR is the serializer those adapters use,
+  and it must agree with them (decisions 2 and 5). The two stay separate ADRs that refer to each other; rules that
+  appear in both (no key policy on data, exact member reads) are stated once, here.
 - The representation of null versus missing, in spec S-2 under decision D-10.
 
 This ADR only constrains how those serialize.
@@ -36,9 +32,9 @@ results, HTTP bodies and trigger payloads. Elsa does not own its meaning. Serial
 before, through renamed keys, changed escaping, and the type wrappers that ADR 0035 removed. Data integrity requires
 that Elsa write data exactly as it received it.
 
-A-5 found on `main`:
+An analysis of `main` found:
 
-- **No workflow value is renamed today.** Every value on the API paths A-5 traced is a `JsonElement` (or a string)
+- **No workflow value is renamed today.** Every value on the API paths it traced is a `JsonElement` (or a string)
   when written. System.Text.Json never applies naming policies inside a `JsonElement`. This holds by accident, not
   by rule.
 - **Names used as dictionary keys are renamed on write.** Keys are read verbatim and written camelCased.
@@ -72,7 +68,7 @@ A-5 found on `main`:
 
   Nothing states which settings may differ, or why.
 
-A-1 and a follow-up search over the value path (2026-10-29, `main` at `6432ed240`) found that A-5's list covered the
+A follow-up search over the value path (`main` at `6432ed240`) found that this list covered the
 configured option sets but not the calls that use none. Wherever data stays `JsonElement` or `JsonNode` (stimulus and
 event payloads, child workflow inputs, bookmark payloads, durable state, expression parameters), nothing is
 transformed. The risk sits where data becomes a .NET type and back:
@@ -93,7 +89,7 @@ transformed. The risk sits where data becomes a .NET type and back:
   `Int32`); the defaults refuse them.
 - **Numbers lose digits outside the script engine too.** ForEach turns every item number into a `double`
   (`ForEach.cs:261`: the conditional `long : double` has type `double`), so a large or precise number changes, `1.0`
-  becomes `1`, and `1e400` faults the loop (#3421).
+  becomes `1`, and `1e400` faults the loop.
 - **No `DateTime` converter exists.** Date handling is the System.Text.Json default, or `Convert.ChangeType` for
   publish-time literals, which pins the publishing server's offset into the executable.
 
@@ -150,11 +146,7 @@ fills.
 - This applies to data becoming a .NET type (decision 5) and to Elsa's own contracts, which keep the camelCase naming
   policy in both directions.
 
-This follows A-1 as corrected by @FransVanEk on 2026-10-29
-([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6496154563)), with his answers
-of 2026-10-30 on which name is exact, the warning and the conversion rule
-([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6524143894)). It replaces the
-case-insensitive reads this ADR first proposed.
+This replaces the case-insensitive reads this ADR first proposed.
 
 ### 3. Data passes through as the exact text received
 
@@ -169,13 +161,13 @@ a re-parse per value.
 - A value that a script or an activity changes is a new value and is written in the default format (decision 4).
 - A value that passes through a script unchanged can change today: the adapter converts the whole input into
   JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
-  loses digits (`IsolatedJintEngine.cs:168-169`, found by A-1). That loss is the JavaScript adapter's, not the
-  serializer's. The ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)) fixes
+  loses digits (`IsolatedJintEngine.cs:168-169`). That loss is the JavaScript adapter's, not the
+  serializer's. The ADR 0046 amendment fixes
   it there with copy, compare, patch (V9): only the paths the script changed are written, so everything else keeps
   its original text. Values the script changes or computes are new values and come back in the default format.
 - Because stored text keeps whatever notation arrived, two equal values can have different text. Nothing that decides
   whether a value changed compares stored text: equality of values uses the canonical form of decision 7. That is
-  the no-op test of the ADR 0090 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C4) and the value digest of ADR 0092.
+  the no-op test of the ADR 0090 amendment (C4) and the value digest of ADR 0092.
 
 ### 4. One default output format
 
@@ -197,7 +189,7 @@ different text than it leaves Publishing.
 ### 5. Data is JSON at every boundary
 
 At API, persistence and messaging boundaries, data is held as `JsonElement` or `JsonNode`. It is never a .NET
-dictionary, an `ExpandoObject` or a POCO. A-5 found no data held otherwise on the API paths it traced; this decision
+dictionary, an `ExpandoObject` or a POCO. The analysis in Context found no data held otherwise on the API paths it traced; this decision
 makes it a rule. Data is deserialized into .NET types only inside an activity or a function that asks for it
 (ADR 0046).
 
@@ -205,7 +197,7 @@ That deserialization is a boundary too, and it uses a copy of the baseline like 
 directions. Today it does not (see Context): activity inputs, expression-result coercion, publish-time literals and
 stateful activity state use System.Text.Json's defaults, while activity results are written with Web options. Every
 conversion between data and a .NET type, in or out, uses the same baseline copy, so a value written by one activity
-reads back the same in the next. A-1's adapter rules for these conversions (exact member matching with a diagnostic for
+reads back the same in the next. The ADR 0046 amendment's adapter rules for these conversions (exact member matching with a diagnostic for
 unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as special cases at each call site. A number is never narrowed to
 `long` or `double` on the way, unless the target type asks for it.
 
@@ -241,6 +233,9 @@ unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as 
 | Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through migrations and golden fixtures | Decision 3 applies there too. S-9 adopts it as a stamped format change made through that process, so suspended state keeps data byte-identical like every other store. Before 4.0 that means regenerated migrations and updated golden fixtures, not an upcaster |
 | Secrets `json`/`jsonb` columns | The database normalizes the text, not our serializer | Secret payloads are not workflow data |
 
+For runtime durable state, a reset and republish before 4.0 is enough: state saved before 4.0 needs no backward
+reads, as long as S-9 states the migration path from 4.0 on.
+
 ### 8. Explicit null is kept, and the value model must preserve it
 
 The baseline keeps nulls (decision 2). That alone does not let readers tell an explicit `null` from a missing member,
@@ -252,7 +247,7 @@ whatever S-2 chooses.
 
 ## Consequences
 
-- **Wire changes**, all of them fixes under matrix row 21:
+- **Wire changes**, all of them fixes:
   - Name keys that start with a capital keep their casing: instance outputs, expression parameters, input names, and
     any capitalized metadata or error key. Keys that start with a lowercase letter are unchanged.
   - Runtime and Design responses stop escaping non-ASCII characters, `<>&'` and `+`.
@@ -320,7 +315,7 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 - **Numbers.** A 20-digit integer and a 29-digit decimal pass through ForEach and an activity input unchanged.
 - **Content type.** Every response carrying raw or relaxed-encoded data has `Content-Type: application/json` and
   `X-Content-Type-Options: nosniff`.
-- **S-9 intake checks** on the epic board:
+- **S-9 intake checks:**
   - hash, digest and byte-comparison consumers;
   - producers of metadata and error keys;
   - Studio's use of validation-error keys;
@@ -328,31 +323,5 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   - whether NativeEndpoints binds and writes with the group context;
   - the encoder the composed host options actually use;
   - Studio preference and structured-log responses after the host options change;
-  - every data-to-.NET conversion on the value path found by the 2026-10-29 search (listed on this PR), each moved to
+  - every data-to-.NET conversion on the value path found by the follow-up search (see Context), each moved to
     the baseline copy or registered.
-
-## Open questions
-
-Answers so far: @FransVanEk answered all six on 2026-10-29 (review of this PR). Where his answer is what this ADR
-proposes, @j03y-nxxbz agrees, so questions 1 to 5 wait only for @sfmskywalker:
-1 bytes; 2 relaxed; 3 yes; 4 yes, with S-2 reusing `ValueEnvelope`'s `Absent` and `ExplicitNull` (now in decision 8);
-5 separate. Question 6 is answered too: both agree, see the question.
-
-1. **Byte-identical or value-identical.** Is decision 3 a promise of identical bytes for untouched values, including
-   the sender's whitespace inside a value, or only of the same JSON value? This ADR proposes bytes.
-2. **Encoder.** Relaxed (proposed) or the stricter default encoder for decision 4?
-3. **Strength.** Is "register entry, or an ADR when data is touched" the right bar for deviations?
-4. **Null representation.** Is it right to leave the representation to S-2, with this ADR only requiring that it be
-   kept?
-5. **Placement.** Keep this as a new ADR, or fold it into ADR 0035 or ADR 0046? A-1 now proposes an ADR 0046
-   amendment for the value model and the boundary adapters. This ADR proposes to stay separate: 0046 says what each
-   adapter accepts, produces and loses, and 0091 is the one serializer they all use. Each refers to the other, and
-   rules that appear in both (no key policy on data, exact member reads) are stated once, here.
-6. **Runtime durable state.** Should the frozen runtime durability format adopt decision 3 through a stamped
-   migration, or keep re-escaping as a recorded exception? **Answered (2026-10-29): a stamped migration, in S-9.**
-   @FransVanEk proposed it and @j03y-nxxbz agrees: suspended state is the most important store, identical bytes
-   (question 1) cannot exempt it, and before 4.0 the change costs regenerated migrations and fixtures, while after 4.0
-   it would need an upcaster for every old row. Decision 7's register row says so. @sfmskywalker answered on
-   2026-10-30 ([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6519741754)):
-   reset and republish before 4.0 is enough, with no backward reads for state saved before 4.0, as long as S-9 states
-   the migration path from 4.0 on.
