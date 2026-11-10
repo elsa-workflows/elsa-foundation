@@ -397,8 +397,10 @@ public sealed class CoalescingEmptyBaselineReadTests
     // The session can be ended from another thread while its probe is still running: a failed lease heartbeat
     // cancels the drain, and the cancellation callback ends the session. A probe that then comes back "empty" must
     // not make the session answer.
-    [Fact]
-    public async Task SessionEndedWhileItsProbeIsInFlight_ReadsTheRowFromTheStore()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SessionEndedWhileItsProbeIsInFlight_ReadsTheRowFromTheStore(bool activityStoreIsProbed)
     {
         var fixture = new Fixture(NoRecord);
         var late = NewActivityState("actexec-late");
@@ -410,14 +412,65 @@ public sealed class CoalescingEmptyBaselineReadTests
         fixture.DurableActivities.DuringProbe = fixture.Session.EndEmptyBaselines;
         fixture.DurableInspections.DuringProbe = fixture.Session.EndEmptyBaselines;
 
-        Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-late"));
-        Assert.NotNull(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-late"));
+        // The store that is read first is the one whose probe is in flight when the session ends. That read ends
+        // both baselines, so the other store is not probed at all.
+        if (activityStoreIsProbed)
+        {
+            Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-late"));
+            Assert.NotNull(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-late"));
+        }
+        else
+        {
+            Assert.NotNull(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-late"));
+            Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-late"));
+        }
 
-        Assert.Equal(1, fixture.DurableActivities.ProbeCount);
+        Assert.Equal(activityStoreIsProbed ? 1 : 0, fixture.DurableActivities.ProbeCount);
         Assert.Equal(1, fixture.DurableActivities.FindCount);
-        // The activity read ended both baselines, so the inspection store was not probed at all.
-        Assert.Equal(0, fixture.DurableInspections.ProbeCount);
+        Assert.Equal(activityStoreIsProbed ? 0 : 1, fixture.DurableInspections.ProbeCount);
         Assert.Equal(1, fixture.DurableInspections.FindCount);
+    }
+
+    // A session answers for its own run only. Another run's rows are read from the store, whatever this session
+    // found for its own.
+    [Fact]
+    public async Task RowOfAnotherRun_IsReadFromTheStore()
+    {
+        var fixture = new Fixture(NoRecord);
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        var other = NewActivityState("actexec-other", "wfexec-other");
+        await fixture.DurableActivities.Inner.SaveAsync(other);
+        await fixture.DurableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(other, "checkpoint-other", Now));
+
+        Assert.NotNull(await fixture.Activities.FindAsync("wfexec-other", "actexec-other"));
+        Assert.NotNull(await fixture.Inspections.FindAsync("wfexec-other", "actexec-other"));
+
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
+    }
+
+    // Ending comes first here, as it would if a scope were torn down before the factory finished. The session
+    // must still never answer.
+    [Fact]
+    public async Task SessionEndedBeforeItWasBegun_IsNotBegun()
+    {
+        var session = NewSessionNoFactoryBegan(NoRecord);
+        session.EndEmptyBaselines();
+        session.BeginEmptyBaselines();
+        var accessor = new FixedCoalescingSessionAccessor(session);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+
+        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+
+        Assert.Equal(0, durableActivities.ProbeCount);
+        Assert.Equal(1, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.ProbeCount);
+        Assert.Equal(1, durableInspections.FindCount);
     }
 
     // A probe that cannot tell must throw. The session then knows nothing: the read fails as a failed lookup would,
@@ -570,11 +623,11 @@ public sealed class CoalescingEmptyBaselineReadTests
         public CoalescingRuntimeCheckpointCommitStore Commits { get; }
     }
 
-    private static ActivityExecutionState NewActivityState(string activityExecutionId) =>
+    private static ActivityExecutionState NewActivityState(string activityExecutionId, string workflowExecutionId = WorkflowExecutionId) =>
         new(
             Execution: new ActivityExecution(
                 ActivityExecutionId: activityExecutionId,
-                WorkflowExecutionId: WorkflowExecutionId,
+                WorkflowExecutionId: workflowExecutionId,
                 ExecutableNodeId: $"node-{activityExecutionId}",
                 AuthoredActivityId: $"authored-{activityExecutionId}",
                 ActivityType: "test/activity",

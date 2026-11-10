@@ -15,6 +15,7 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// </remarks>
 internal sealed class RuntimeCoalescingEmptyBaseline
 {
+    private readonly object _gate = new();
     private readonly HashSet<string> _possiblyDurable = new(StringComparer.Ordinal);
     private bool _begun;
     private bool _ended = true;
@@ -26,7 +27,7 @@ internal sealed class RuntimeCoalescingEmptyBaseline
     /// </summary>
     public void Begin()
     {
-        lock (_possiblyDurable)
+        lock (_gate)
         {
             if (_begun)
                 return;
@@ -41,7 +42,7 @@ internal sealed class RuntimeCoalescingEmptyBaseline
     {
         get
         {
-            lock (_possiblyDurable)
+            lock (_gate)
                 return _ended;
         }
     }
@@ -51,7 +52,7 @@ internal sealed class RuntimeCoalescingEmptyBaseline
     {
         get
         {
-            lock (_possiblyDurable)
+            lock (_gate)
                 return !_ended && _emptyScope is null;
         }
     }
@@ -69,7 +70,7 @@ internal sealed class RuntimeCoalescingEmptyBaseline
             return;
         }
 
-        lock (_possiblyDurable)
+        lock (_gate)
             _emptyScope ??= scope;
     }
 
@@ -79,14 +80,14 @@ internal sealed class RuntimeCoalescingEmptyBaseline
     /// </summary>
     public bool IsKnownAbsent(string rowId, string scope)
     {
-        lock (_possiblyDurable)
+        lock (_gate)
             return !_ended && _emptyScope is not null && StringComparer.Ordinal.Equals(_emptyScope, scope) && !_possiblyDurable.Contains(rowId);
     }
 
     /// <summary>Records a row about to be written to the store, whether or not the write then lands.</summary>
     public void RecordPossibleWrite(string rowId)
     {
-        lock (_possiblyDurable)
+        lock (_gate)
         {
             if (!_ended)
                 _possiblyDurable.Add(rowId);
@@ -98,7 +99,7 @@ internal sealed class RuntimeCoalescingEmptyBaseline
     /// </summary>
     public void End()
     {
-        lock (_possiblyDurable)
+        lock (_gate)
         {
             _begun = true;
             _ended = true;
