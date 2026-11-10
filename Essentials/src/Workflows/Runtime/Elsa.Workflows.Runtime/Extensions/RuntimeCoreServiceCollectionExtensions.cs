@@ -114,7 +114,26 @@ public static class RuntimeCoreServiceCollectionExtensions
             typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
-        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
+        // Composed by factory because the lease is an internal collaborator: a job reads its run and commits under the
+        // run's ownership lease, so its checkpoint is fenced like a drain's (#2667).
+        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor>(serviceProvider =>
+        {
+            var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
+            return new WorkflowAlterationActorCommandExecutor(
+                serviceProvider.GetRequiredService<IWorkflowAlterationStore>(),
+                serviceProvider.GetRequiredService<IWorkflowAlterationPayloadProtector>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<WorkflowAlterationJobExecutor>(),
+                serviceProvider.GetService<IActivityExecutionStateStore>(),
+                serviceProvider.GetService<IWorkflowSchedulerWorkQueue>(),
+                timeProvider,
+                new AlterationLeaseRunner(
+                    serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
+                    serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                    serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
+                    timeProvider,
+                    serviceProvider.GetService<ILogger<AlterationLeaseRunner>>()));
+        });
         services.TryAddScoped<WorkflowAlterationPlanService>();
         services.TryAddScoped<IWorkflowAlterationJobDispatcher, WorkflowAlterationJobDispatcher>();
         services.TryAddScoped<WorkflowAlterationTargetCaptureTask>();

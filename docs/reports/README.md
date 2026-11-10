@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [G3 persistence/coordination overhead on a Root/SQLite G2 journey](exec-core-g3-overhead-counts.md) - command/intent counts and step latency for the #4028 child-to-parent cancel journey on SQLite Owned Workbench; no budget or throughput claim.
 - [Native and direct-BPMN: migration and rollback](native-bpmn-migration-and-rollback.md) - operator-facing note: separate native journal vs BPMN fenced-write publish, interrupted-publication GC classification on SQLite, and rollback without consolidating the two pipelines. Does not complete Program #2892.
 - [Activity Data Selection M1 customer proof](activity-data-selection-m1.md) - actual composed customer experiment, persisted runtime controls and precise UI/binding/source/publication seams for M2; no production contract adopted.
 

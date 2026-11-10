@@ -2133,15 +2133,26 @@ async function workflowRun() {
     "The Run journey needs the seeded Run, its selected activity execution and the canary.");
   const commands = {};
   await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
-  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
-  await expect(explain).toBeVisible({ timeout: 30000 });
-  // Wait on the page's settled state: the activity execution it discloses with the Run is the selected one.
-  await expect(explain).toHaveAttribute("data-run-selection", run.activityExecutionId, { timeout: 30000 });
+  // Verify the exact occurrence through the same copyable execution detail a person can inspect.
+  const panel = page.getByLabel("Run details panel", { exact: true });
+  await nativeEnter("inspect-run-activity", panel.getByRole("tab", { name: "Activity", exact: true }), "Activity");
+  const technical = panel.locator(".wf-activity-execution-details");
+  await expect(technical).toBeVisible({ timeout: 30000 });
+  if (await technical.getAttribute("open") === null)
+    await nativeEnter("inspect-run-execution-details", technical.locator("summary"), "Execution details");
+  const selectedExecutionId = technical.locator(".wf-activity-meta-item")
+    .filter({ has: page.locator("dt").filter({ hasText: /^Activity Execution ID$/ }) }).locator("dd code");
+  await expect(selectedExecutionId).toBeVisible({ timeout: 30000 });
+  await expect(selectedExecutionId).toHaveText(run.activityExecutionId, { timeout: 30000 });
   const before = await owner("owner-before", run.path);
   result.ownerBefore = before.receipt;
   need(before.value.instance?.workflowExecutionId === run.workflowExecutionId, "The seeded Run is not the run API's.");
   await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   await expect(dock()).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  await nativeEnter("open-run-actions", page.getByRole("button", { name: "More run actions", exact: true }), "More run actions");
+  const explain = page.getByRole("menu", { name: "More run actions", exact: true }).getByRole("menuitem", { name: "Explain", exact: true });
+  await expect(explain).toBeFocused();
   const admitted = await inspectionExplain("explain", explain, "workflow_read_run", {}, "workflows.run",
     { resourceType: "workflow-run", resourceId: run.workflowExecutionId, revision: run.activityExecutionId }, commands);
   need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,

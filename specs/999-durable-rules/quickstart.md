@@ -135,3 +135,11 @@ In-process host-rebuild witnesses for a native parent waiting on `RunRules` ([ev
 ```bash
 dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj --filter FullyQualifiedName~RulesPersistedNativeRestartTests
 ```
+
+Process-kill witnesses over the production Workbench under the opt-in source-build identity (same evidence). The project
+builds the Workbench, starts it as a child process per row and kills it; the three rows run serially in under a minute
+after the build:
+
+```bash
+dotnet test Extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj
+```
