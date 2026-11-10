@@ -3,7 +3,9 @@ using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Data.Sqlite;
@@ -69,8 +71,15 @@ public sealed partial class EfActivityExecutionStoresTests
     {
         await using var fixture = await EmptyBaselineFixture.CreateAsync("tenant-a");
         var overlay = fixture.Overlay("wf");
-        Assert.Null(await overlay.Activities.FindAsync("wf", "a"));
-        Assert.Null(await overlay.Inspections.FindAsync("wf", "a"));
+        fixture.Commands.Clear();
+        foreach (var id in new[] { "a", "b" })
+        {
+            Assert.Null(await overlay.Activities.FindAsync("wf", id));
+            Assert.Null(await overlay.Inspections.FindAsync("wf", id));
+        }
+
+        // Two probes and no read: from here on the overlay answers.
+        Assert.Equal(2, fixture.Commands.Count);
         fixture.Commands.Clear();
         var tooLong = new string('a', RuntimeActivityExecutionEfModule.IdentityMaximumLength + 1);
         using var cancelled = new CancellationTokenSource();
@@ -105,8 +114,15 @@ public sealed partial class EfActivityExecutionStoresTests
 
         await using var scoped = await fixture.ReopenAsync("tenant-a");
         var overlay = scoped.Overlay("wf");
-        Assert.Null(await overlay.Activities.FindAsync("wf", "a"));
-        Assert.Null(await overlay.Inspections.FindAsync("wf", "a"));
+        scoped.Commands.Clear();
+        foreach (var id in new[] { "a", "b" })
+        {
+            Assert.Null(await overlay.Activities.FindAsync("wf", id));
+            Assert.Null(await overlay.Inspections.FindAsync("wf", id));
+        }
+
+        // Two probes and no read: under tenant-a the overlay answers.
+        Assert.Equal(2, scoped.Commands.Count);
         scoped.Commands.Clear();
 
         scoped.Access.Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"));
@@ -155,16 +171,20 @@ public sealed partial class EfActivityExecutionStoresTests
 
         public Task<EmptyBaselineFixture> ReopenAsync(string scope) => Task.FromResult(Open(connection, scope, ownsConnection: false));
 
-        // A drain of a run that has no durable record: the session is the ambient one for both overlay stores.
+        // A drain of a run that has no durable record, begun through the drain scope factory as the orchestrator
+        // begins it. Its session is the ambient one for both overlay stores.
         public EmptyBaselineOverlay Overlay(string workflowExecutionId)
         {
-            var session = new RuntimeCoalescingSession(
-                workflowExecutionId,
-                new InMemoryWorkflowSchedulerWorkQueue(),
+            var sessions = new LastPushedSessionAccessor();
+            var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+            var factory = new RuntimeCoalescingDrainScopeFactory(
+                sessions,
+                new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+                new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
+                new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
                 new PersistenceModeOptions(),
-                innerOutboxStore: null,
-                new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false));
-            var sessions = new FixedSessionAccessor(session);
+                TimeProvider.System);
+            _ = factory.Begin(workflowExecutionId, new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false));
             return new EmptyBaselineOverlay(
                 new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(State), sessions),
                 new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(Inspection), sessions));
@@ -216,11 +236,21 @@ public sealed partial class EfActivityExecutionStoresTests
         public PersistenceAccessContext Current { get; set; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
     }
 
-    private sealed class FixedSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor
+    private sealed class LastPushedSessionAccessor : IRuntimeCoalescingSessionAccessor
     {
-        public RuntimeCoalescingSession? Current => session;
+        public RuntimeCoalescingSession? Current { get; private set; }
 
-        public IDisposable Push(RuntimeCoalescingSession? pushedSession) =>
-            throw new NotSupportedException("This test provides a fixed ambient session.");
+        public IDisposable Push(RuntimeCoalescingSession? pushedSession)
+        {
+            Current = pushedSession;
+            return new Kept();
+        }
+
+        private sealed class Kept : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
     }
 }

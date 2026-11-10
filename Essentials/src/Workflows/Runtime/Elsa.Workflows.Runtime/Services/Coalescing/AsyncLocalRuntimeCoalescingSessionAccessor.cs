@@ -42,6 +42,8 @@ public sealed class AsyncLocalRuntimeCoalescingSessionAccessor : IRuntimeCoalesc
                 return;
 
             pushedSession?.DisableDurableValuePageReuse();
+            // A flow that captured this frame keeps seeing the session after the pop.
+            pushedSession?.EndEmptyBaselines();
             accessor._current.Value = prior;
             _disposed = true;
         }

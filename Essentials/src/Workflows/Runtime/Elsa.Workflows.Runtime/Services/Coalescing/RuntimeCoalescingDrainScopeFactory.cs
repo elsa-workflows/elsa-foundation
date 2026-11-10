@@ -27,10 +27,13 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
         // The nested drain can write the parent run's rows past the parent's session. The default accessor ends the
-        // parent's empty baselines on push; this also covers a host that replaced the accessor.
+        // parent's empty baselines on push. This also covers a host that replaced the accessor.
         sessionAccessor.Current?.EndEmptyBaselines();
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
+        // Only a session this factory created answers point reads of a new run from memory, because the guards
+        // around those answers are here and in the scope below.
+        session.BeginEmptyBaselines();
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)
@@ -115,6 +118,9 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         public ValueTask DisposeAsync()
         {
             session.DisableDurableValuePageReuse();
+            // A drain that threw leaves its session active. A flow that still holds it must not get answers once
+            // the drain, and soon its lease, are gone.
+            session.EndEmptyBaselines();
             scopeHandle.Dispose();
             return ValueTask.CompletedTask;
         }

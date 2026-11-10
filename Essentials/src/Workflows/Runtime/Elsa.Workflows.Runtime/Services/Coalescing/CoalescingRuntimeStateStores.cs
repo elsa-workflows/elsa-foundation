@@ -62,13 +62,12 @@ public sealed class CoalescingActivityExecutionStateStore(
 
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(state);
+        // A direct save goes past the working set, so the session must stop answering for this row. Validating the
+        // state is left to the store, which refuses a bad one exactly as it did before.
+        if (state?.Execution is { } execution && sessionAccessor.Current is { } session && session.AppliesTo(execution.WorkflowExecutionId))
+            session.ActivityBaseline.RecordPossibleWrite(execution.ActivityExecutionId);
 
-        // A direct save goes past the working set, so the session must stop answering for this row.
-        if (sessionAccessor.Current is { } session && session.AppliesTo(state.Execution.WorkflowExecutionId))
-            session.ActivityBaseline.RecordPossibleWrite(state.Execution.ActivityExecutionId);
-
-        return _inner.SaveAsync(state, cancellationToken);
+        return _inner.SaveAsync(state!, cancellationToken);
     }
 
     public async ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
@@ -79,8 +78,8 @@ public sealed class CoalescingActivityExecutionStateStore(
                 return overlay;
 
             // A run with no durable record is probed once. If the store holds none of its rows, a row this session
-            // has not sent there cannot exist, so a newly scheduled activity costs no read. A store that cannot be
-            // probed has every row read from it.
+            // has not sent there cannot exist, so a newly scheduled activity costs no read. A store that does not
+            // implement the probe has every row read from it.
             var baseline = session.ActivityBaseline;
             if (_presenceProbe is { } probe && !baseline.HasEnded)
             {

@@ -124,14 +124,18 @@ public sealed class CoalescingEmptyBaselineReadTests
         var fixture = new Fixture(NoRecord, commitsLandThenThrow: true);
         var state = NewActivityState("actexec-1");
         await Assert.ThrowsAsync<IOException>(async () => await fixture.Commits.CommitAsync(
-            NewCommit(1, RuntimeCheckpointNames.ActivityAttemptClaimed, state, inspection: null),
+            NewCommit(1, RuntimeCheckpointNames.ActivityAttemptClaimed, state, ActivityExecutionInspectionProjection.FromState(state, "checkpoint-01", Now)),
             new(RuntimeCheckpointPersistenceMode.Immediate)));
 
         fixture.DurableActivities.ReportEmptyOnce = true;
+        fixture.DurableInspections.ReportEmptyOnce = true;
 
         Assert.NotNull(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.NotNull(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
         Assert.Equal(1, fixture.DurableActivities.ProbeCount);
         Assert.Equal(1, fixture.DurableActivities.FindCount);
+        Assert.Equal(1, fixture.DurableInspections.ProbeCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
     }
 
     // The ambient scope changes when a nested drain begins. From then on this run's rows can be written without
@@ -229,14 +233,7 @@ public sealed class CoalescingEmptyBaselineReadTests
     public async Task NestedDrainBegunThroughTheFactory_EndsWhatTheParentKnows_WhateverAccessorIsRegistered()
     {
         var accessor = new StackOnlySessionAccessor();
-        var commitStore = new InMemoryRuntimeCheckpointCommitStore();
-        var factory = new RuntimeCoalescingDrainScopeFactory(
-            accessor,
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
-            new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
-            new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
-            new PersistenceModeOptions(),
-            TimeProvider.System);
+        var factory = NewFactory(accessor);
         var durableActivities = new ProbingActivityStore();
         var durableInspections = new ProbingInspectionStore();
         var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
@@ -262,6 +259,113 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-2"));
         Assert.Equal(2, durableActivities.FindCount);
         Assert.Equal(2, durableInspections.FindCount);
+    }
+
+    // The session type is public and so is the factory contract. The guards around a session's answers live in the
+    // default factory, so a session nobody began through it answers nothing.
+    [Fact]
+    public async Task SessionTheFactoryDidNotBegin_ReadsEveryRowFromTheStore()
+    {
+        var session = NewSessionNoFactoryBegan(NoRecord);
+        var accessor = new FixedCoalescingSessionAccessor(session);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+
+        foreach (var id in new[] { "actexec-1", "actexec-2" })
+        {
+            Assert.Null(await activities.FindAsync(WorkflowExecutionId, id));
+            Assert.Null(await inspections.FindAsync(WorkflowExecutionId, id));
+        }
+
+        Assert.Equal(0, durableActivities.ProbeCount);
+        Assert.Equal(2, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.ProbeCount);
+        Assert.Equal(2, durableInspections.FindCount);
+    }
+
+    // An ended baseline never answers again, so beginning it a second time changes nothing.
+    [Fact]
+    public async Task EndedSession_IsNotBegunAgain()
+    {
+        var fixture = new Fixture(NoRecord);
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+
+        fixture.Session.EndEmptyBaselines();
+        fixture.Session.BeginEmptyBaselines();
+
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Equal(1, fixture.DurableActivities.ProbeCount);
+        Assert.Equal(1, fixture.DurableActivities.FindCount);
+        Assert.Equal(1, fixture.DurableInspections.ProbeCount);
+        Assert.Equal(1, fixture.DurableInspections.FindCount);
+    }
+
+    // A task started inside the drain captures the ambient session and still sees it after the drain popped it.
+    // By then the drain no longer vouches for what the session knows.
+    [Fact]
+    public async Task FlowThatOutlivesTheAmbientScope_ReadsEveryRowFromTheStore()
+    {
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var session = NewSession(NoRecord);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+        var scope = accessor.Push(session);
+        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        var popped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var late = Task.Run(async () =>
+        {
+            await popped.Task;
+            Assert.Same(session, accessor.Current);
+            return (
+                State: await activities.FindAsync(WorkflowExecutionId, "actexec-unseen"),
+                Projection: await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        });
+
+        scope.Dispose();
+        Assert.True(session.IsActive);
+        var unseen = NewActivityState("actexec-unseen");
+        await durableActivities.Inner.SaveAsync(unseen);
+        await durableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
+        popped.SetResult();
+
+        var read = await late;
+        Assert.NotNull(read.State);
+        Assert.NotNull(read.Projection);
+    }
+
+    // A drain that throws skips its flush, so its session is still active when the scope is disposed. The accessor
+    // here stands for any flow that still holds that session.
+    [Fact]
+    public async Task ScopeDisposedWhileItsSessionIsActive_EndsWhatTheSessionKnows()
+    {
+        var accessor = new StickySessionAccessor();
+        var factory = NewFactory(accessor);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+        var scope = factory.Begin(WorkflowExecutionId, NoRecord);
+        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Equal(0, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.FindCount);
+
+        await scope.DisposeAsync();
+        Assert.True(scope.Session.IsActive);
+        Assert.Same(scope.Session, accessor.Current);
+        var unseen = NewActivityState("actexec-unseen");
+        await durableActivities.Inner.SaveAsync(unseen);
+        await durableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
+
+        Assert.NotNull(await activities.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        Assert.NotNull(await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
     }
 
     [Fact]
@@ -292,8 +396,28 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.Equal(1, fixture.DurableInspections.FindCount);
     }
 
-    private static RuntimeCoalescingSession NewSession(ResolvedPersistenceMode mode) =>
+    // A session as the drain scope factory hands it out: allowed to answer for a run that has no record.
+    private static RuntimeCoalescingSession NewSession(ResolvedPersistenceMode mode)
+    {
+        var session = NewSessionNoFactoryBegan(mode);
+        session.BeginEmptyBaselines();
+        return session;
+    }
+
+    private static RuntimeCoalescingSession NewSessionNoFactoryBegan(ResolvedPersistenceMode mode) =>
         new(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), innerOutboxStore: null, mode);
+
+    private static RuntimeCoalescingDrainScopeFactory NewFactory(IRuntimeCoalescingSessionAccessor accessor)
+    {
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+        return new RuntimeCoalescingDrainScopeFactory(
+            accessor,
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+            new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
+            new PersistenceModeOptions(),
+            TimeProvider.System);
+    }
 
     private sealed class Fixture
     {
@@ -446,6 +570,9 @@ public sealed class CoalescingEmptyBaselineReadTests
         public string Scope { get; set; } = "scope-a";
         public Exception? Refusal { get; set; }
 
+        // Stands in for a probe that ran before an uncertain write became visible.
+        public bool ReportEmptyOnce { get; set; }
+
         public string ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken = default) =>
             StoreRefusals.ResolveReadScope(rowId, Refusal, Scope, cancellationToken);
 
@@ -461,6 +588,12 @@ public sealed class CoalescingEmptyBaselineReadTests
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
+            if (ReportEmptyOnce)
+            {
+                ReportEmptyOnce = false;
+                return false;
+            }
+
             return (await Inner.ListAllSummariesAsync(workflowExecutionId, cancellationToken)).Count > 0;
         }
     }
@@ -473,6 +606,25 @@ public sealed class CoalescingEmptyBaselineReadTests
             ArgumentException.ThrowIfNullOrWhiteSpace(rowId);
             cancellationToken.ThrowIfCancellationRequested();
             return refusal is null ? scope : throw refusal;
+        }
+    }
+
+    // Keeps showing the last pushed session, as a flow does that captured it before the scope was disposed.
+    private sealed class StickySessionAccessor : IRuntimeCoalescingSessionAccessor
+    {
+        public RuntimeCoalescingSession? Current { get; private set; }
+
+        public IDisposable Push(RuntimeCoalescingSession? session)
+        {
+            Current = session;
+            return new Kept();
+        }
+
+        private sealed class Kept : IDisposable
+        {
+            public void Dispose()
+            {
+            }
         }
     }
 

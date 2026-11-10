@@ -7,7 +7,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
-using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -94,8 +93,8 @@ public sealed partial class EfActivityExecutionInspectionStore(
         return ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
     }
 
-    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken) =>
-        RequireReadableRow(workflowExecutionId, rowId, cancellationToken);
+    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken) =>
+        RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
 
     // The predicate matches on the scope and workflow hashes, as the summary page does. A hash collision can only
     // make another run's projections count as this run's, which answers true and costs the saving, never correctness.

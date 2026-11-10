@@ -5,7 +5,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
-using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -89,8 +88,8 @@ public sealed class EfActivityExecutionStateStore(
         return ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
     }
 
-    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken) =>
-        RequireReadableRow(workflowExecutionId, rowId, cancellationToken);
+    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken) =>
+        RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
 
     public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {

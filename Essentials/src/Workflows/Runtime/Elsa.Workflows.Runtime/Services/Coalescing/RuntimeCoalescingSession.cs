@@ -105,8 +105,6 @@ public sealed class RuntimeCoalescingSession
         _innerOutboxStore = innerOutboxStore;
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
-        ActivityBaseline = new RuntimeCoalescingEmptyBaseline(runHadNoRecord: !mode.RunHasRecord);
-        InspectionBaseline = new RuntimeCoalescingEmptyBaseline(runHadNoRecord: !mode.RunHasRecord);
         RecordCompletion = options.RecordCompletion;
         // Durable commits once per activity whatever the host's Balanced cap is. Ephemeral has no cap: it commits only at
         // boundaries, however many activities it folds.
@@ -148,10 +146,10 @@ public sealed class RuntimeCoalescingSession
     public bool HasDurableRecord { get; private set; }
 
     /// <summary>What this session knows of the activity execution rows the durable store holds for the run.</summary>
-    internal RuntimeCoalescingEmptyBaseline ActivityBaseline { get; }
+    internal RuntimeCoalescingEmptyBaseline ActivityBaseline { get; } = new();
 
     /// <summary>What this session knows of the inspection projections the durable store holds for the run.</summary>
-    internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; }
+    internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; } = new();
 
     public bool CoalesceDurableValueReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
@@ -269,8 +267,24 @@ public sealed class RuntimeCoalescingSession
     }
 
     /// <summary>
+    /// Lets this session answer point reads of rows the durable stores cannot hold, unless the run already has a
+    /// durable record: its rows are there to be read. Only <see cref="RuntimeCoalescingDrainScopeFactory"/> calls
+    /// it, because the factory is also what ends the answers when a nested drain begins and when the scope is
+    /// disposed. A session created any other way reads every row from the store.
+    /// </summary>
+    internal void BeginEmptyBaselines()
+    {
+        if (HasDurableRecord)
+            return;
+
+        ActivityBaseline.Begin();
+        InspectionBaseline.Begin();
+    }
+
+    /// <summary>
     /// Ends both empty baselines for good. A nested drain can write this run's rows while its own session is the
-    /// ambient one, which this session never sees.
+    /// ambient one, which this session never sees. A session whose scope is gone no longer has the drain's lease
+    /// behind what it knows.
     /// </summary>
     internal void EndEmptyBaselines()
     {

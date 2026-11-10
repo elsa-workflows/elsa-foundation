@@ -292,8 +292,9 @@ The existing fused Schedule anchors and committed continuation retain recovery r
 - The question is asked under one persistence scope and answers only for that scope. A lookup under another scope goes to the store.
 - A lookup answered without a query is still refused as the store refuses it: an invalid id, a cancelled read or an access context the store does not admit throws what the store throws.
 - A row counts as possibly saved from the moment its save is attempted, so a save that fails after landing is still looked up. A direct save through the activity state store counts too. A direct save through `IActivityExecutionInspectionWriter` does not pass through the session and is not tracked. Nothing in the runtime calls it except a checkpoint commit store.
-- When another drain scope becomes the ambient one, such as a nested drain, the session stops answering and every lookup goes to the store.
-- A run that already has a saved record is not asked: its rows are read as before. Only the EF activity stores can be asked; with the in-memory stores a lookup is already a dictionary read.
+- When another drain scope becomes the ambient one, such as a nested drain, the session stops answering and every lookup goes to the store. It also stops when its own drain scope ends.
+- All of this rests on the drain being the run's only writer, which its ownership lease makes it. A drain that lost its lease can get "nothing" for a row its successor wrote. Its next durable commit is refused, and an activity that is not ReplaySafe stops at its attempt claim. ReplaySafe activities the successor already ran can run again until that commit: up to the activity cap under Balanced.
+- A run that already has a saved record is not asked: its rows are read as before. Only a store that implements `IRunRowPresenceProbe` can be asked. The EF activity stores do. The in-memory stores do not, because their lookups are already dictionary reads. A custom activity store opts in by implementing the same interface.
 
 **Reusing durable-value pages.** Within one eligible folding drain, unchanged provider pages of durable values are not read again. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to `false` to compare the same mode without reuse. This switch does not change any run's mode.
 
