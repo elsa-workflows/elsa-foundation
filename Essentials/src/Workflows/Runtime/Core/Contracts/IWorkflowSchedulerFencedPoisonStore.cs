@@ -10,9 +10,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A drain that lost its run to another node keeps running until one of its own writes is refused. If a work handler
-/// throws in that time, the drainer records a poison record for a run that another node now runs. With this
-/// capability the store refuses that record, so it cannot become an incident on the new owner's run.
+/// A drain that lost its run keeps running until one of its own writes is refused. If a work handler throws in that
+/// time, its poison record would land on a run that another node now runs. The drainer checks the lease before it
+/// touches the faulted step; this capability closes the time between that check and the record, so the record
+/// cannot become an incident on the new owner's run.
 /// </para>
 /// <para>
 /// Implement it on the store object itself. The check and the write must be atomic: reading the lease first and
@@ -39,7 +40,8 @@ public interface IWorkflowSchedulerFencedPoisonStore
     /// <summary>
     /// Inserts or replaces the poison record for its <c>(WorkflowExecutionId, WorkItemId)</c> key, only if
     /// <paramref name="fence"/> is the current, unexpired ownership lease of the record's workflow execution. The
-    /// check and the write are one atomic unit of work.
+    /// check and the write are one atomic unit of work. A store may also let its own failures through, such as a
+    /// write conflict it does not retry; it then has written nothing.
     /// </summary>
     /// <exception cref="RuntimeStaleFencingTokenException">
     /// The execution has no ownership lease, the lease has expired, or another lease holds it. Nothing was written.

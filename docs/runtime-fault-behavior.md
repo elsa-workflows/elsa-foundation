@@ -210,7 +210,8 @@ about this item:
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 - `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work
-  is the new owner's to run, so this node neither acks nor poisons it.
+  is the new owner's to run, so this node neither acks nor poisons it. The general arm throws the same exception
+  itself when its own ownership check or its fenced poison record refuses (see [What it does](#what-it-does)).
 
 A dispatch that breaches `RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` deliberately throws a
 `RuntimeSchedulerDispatchDeadlineExceededException`, which is neither of the above and therefore lands
@@ -280,6 +281,23 @@ only the retaining attempt claim, which covers an activity that throws it inside
 Rules' `RunRules`; BPMN and child control before their commits.
 
 ### What it does
+
+Before the numbered steps, the drainer asks whether it still owns the run
+([#4032](https://github.com/elsa-workflows/elsa-foundation/issues/4032)). It asks when an ownership lease for the
+work item's own execution is ambient, which the drain orchestrator arranges, and when it was given the ownership
+service, which `AddWorkflowRuntime` does. The question is `IRuntimeExecutionOwnershipService.EnsureCurrentAsync`
+with the lease's fencing token: one read of the run's ownership record. It refuses a lease that another owner
+took over, a lease that expired, and a lease that an alteration borrowed; it also refuses when the run's lease
+was released or revoked. It does not refuse a run that never had an owner. The refusal is a
+`RuntimeStaleFencingTokenException`, and it leaves the drain as a refused commit does. None of the steps below
+runs: the step is not acknowledged, released or re-enqueued, the retry policy is not asked, and no poison record
+is written. The step stays queued and runs again once its claim lapses (on a queue without claims, on the next
+drain).
+
+At the same point the drainer asks the poison store whether it can record under the lease
+(`IWorkflowSchedulerFencedPoisonStore.CanRecordFenced`). If that question throws, the exception leaves the drain
+here as well, with the step still queued. A drainer with no ambient lease for the execution asks neither question,
+and one without the ownership service does not ask the first. Both then run the steps as before.
 
 1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`. An exception an
    activity handler lets escape is not masked here; the masking step sits in the handler, between its
@@ -354,18 +372,23 @@ Rules' `RunRules`; BPMN and child control before their commits.
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
    The record is written under the drain's ownership lease when the poison store can check that lease
-   in the same unit of work as the write (`IWorkflowSchedulerFencedPoisonStore`,
-   [#4032](https://github.com/elsa-workflows/elsa-foundation/issues/4032)). This matters for a drain
-   that lost its run to another node and whose handler threw before any commit of its own was refused.
-   Its record is refused: the store throws `RuntimeStaleFencingTokenException`, nothing is recorded, and
-   the drain ends with that exception, as it does for a refused commit. So the stale drain leaves no
-   poison record to become an incident on a run its new owner runs correctly. What came before the
-   record is not undone. A step re-enqueued for `RetryNow`, or released for an honored `RetryAfter`,
-   stays queued for the new owner. Any other step is acknowledged and has no record, which is also what
-   a process crash between step 3 and the record leaves. The record is written with no ownership check,
-   as before, when the drainer runs outside an ownership lease, and when the poison store cannot make
-   the check: a custom store or decorator without the capability, or a poison store in another backend
-   than the run's ownership state (EF poison with in-memory ownership, or the reverse).
+   in the same unit of work as the write (`IWorkflowSchedulerFencedPoisonStore`). The ownership check above
+   already turned away a drain that had lost its run, so this covers only the time since that check: a lease
+   that was taken over, expired or was borrowed in between. The store then throws
+   `RuntimeStaleFencingTokenException`, nothing is recorded, and the drain ends with that exception. What step 3
+   and a `RetryNow` re-enqueue did is not undone:
+   - Outside an active coalescing segment those writes are durable. The step is acknowledged, re-enqueued for
+     `RetryNow`, or released for an honored `RetryAfter`, and it has no record. That is also what a process
+     crash at that point leaves.
+   - In an active coalescing segment the re-enqueue goes to the drain's overlay, and so does the acknowledgement
+     or the release of a step the drain claimed from that overlay. The orchestrator skips the flush when the
+     drain throws, and disposing the scope does not flush either, so nothing of the faulted step is durable.
+     Replay starts from the last durable segment.
+
+   The record is written with no ownership check, as before, when the drainer has no ambient lease for the
+   execution, and when the poison store cannot make the check: a custom store or decorator without the
+   capability, or a poison store in another backend than the run's ownership state (EF poison with in-memory
+   ownership, or the reverse).
 
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
    aggregate stop reason becomes `Faulted`.
@@ -375,8 +398,9 @@ decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the f
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
 
-There is no composition in which step 4 is skipped; only a drain that lost its run has its record
-refused, as described above. The poison store is a **required constructor
+There is no composition in which step 4 is skipped for a drain that still owns its run. A drain whose lease
+was taken over, expired or was borrowed by an alteration does not reach step 4 when the ownership check refuses
+it, and has its record refused when it loses the lease after that check, as described above. The poison store is a **required constructor
 parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 3 has
 already ack-deleted the work item by the time poison handling runs, unless it released an honored
 `RetryAfter` instead, so a drainer that could be built without a store would drop the item with no

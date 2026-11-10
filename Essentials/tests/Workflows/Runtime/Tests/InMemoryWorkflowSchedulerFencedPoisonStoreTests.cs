@@ -122,11 +122,30 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
     }
 
     [Fact]
-    public async Task AddWorkflowRuntime_WithInMemoryOwnership_FencesThePoisonRecordOfADrainThatLostItsRun()
+    public void CanRecordFenced_AfterALookupOfTheOwnershipStoreThatFailed_LooksAgain()
     {
-        // Through the container: the composition root has to give the poison store the registered in-memory ownership
-        // store, and the drainer the ownership accessor. Every drainer test passes both by hand, so dropping either
-        // from the registrations would leave the record unfenced on a real host while those tests stayed green.
+        // The composition root's lookup resolves the registered ownership store, which can fail for a while (a
+        // provider that is not ready yet, say). A failure must not be remembered as the answer.
+        var ownership = new InMemoryExecutionLivenessStateStore();
+        var lookups = 0;
+        var store = new InMemoryWorkflowSchedulerPoisonStore(
+            () => ++lookups == 1 ? throw new InvalidOperationException("The ownership store cannot be resolved yet.") : ownership,
+            timeProvider: null);
+
+        Assert.Throws<InvalidOperationException>(() => store.CanRecordFenced);
+        Assert.True(store.CanRecordFenced);
+        Assert.True(store.CanRecordFenced);
+
+        // Once found, the store is kept.
+        Assert.Equal(2, lookups);
+    }
+
+    [Fact]
+    public async Task AddWorkflowRuntime_ChecksOwnershipBeforeItAcknowledgesAFaultedStep()
+    {
+        // Through the container: the composition root has to give the drainer the ownership accessor and the
+        // ownership service. Every drainer test passes both by hand, so dropping either from the registration would
+        // let a drain that lost its run acknowledge and poison the step on a real host while those tests stayed green.
         var handler = new FaultingInvokeActivityHandler();
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerWorkHandler>(handler);
@@ -134,9 +153,8 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         services.AddLogging();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
-        Assert.True(Assert.IsAssignableFrom<IWorkflowSchedulerFencedPoisonStore>(poisonStore).CanRecordFenced);
-        await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new RuntimeSchedulerWorkItem(
-            "work-1", WorkflowExecutionId, "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem());
         using var scope = provider.CreateScope();
         var ownership = scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
         using var owned = provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>()
@@ -148,6 +166,40 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
             .GetRequiredService<IWorkflowSchedulerDrainer>()
             .DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
 
+        Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+        Assert.Empty(await poisonStore.ListAsync(WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task AddWorkflowRuntime_WithInMemoryOwnership_FencesThePoisonRecordOfARunLostAfterTheCheck()
+    {
+        // Through the container: the composition root has to give the poison store the registered in-memory ownership
+        // store, or the record of a run lost between the drainer's check and the record would be written unfenced.
+        // The retry policy is consulted after that check and before the acknowledgement, so it stands in for the
+        // other node here.
+        var retryPolicy = new TakeOverRetryPolicy();
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerWorkHandler>(new FaultingInvokeActivityHandler());
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(retryPolicy);
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+        Assert.True(Assert.IsAssignableFrom<IWorkflowSchedulerFencedPoisonStore>(poisonStore).CanRecordFenced);
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem());
+        using var scope = provider.CreateScope();
+        var ownership = scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
+        using var owned = provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>()
+            .Push(await ownership.AcquireAsync(WorkflowExecutionId));
+        retryPolicy.OnDecide = () => ownership.AcquireAsync(WorkflowExecutionId).AsTask().GetAwaiter().GetResult();
+
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => scope.ServiceProvider
+            .GetRequiredService<IWorkflowSchedulerDrainer>()
+            .DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+
+        // The step was acknowledged before the run was found lost; the record was refused.
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
         Assert.Empty(await poisonStore.ListAsync(WorkflowExecutionId));
     }
 
@@ -168,8 +220,7 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
         Assert.False(Assert.IsAssignableFrom<IWorkflowSchedulerFencedPoisonStore>(poisonStore).CanRecordFenced);
-        await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new RuntimeSchedulerWorkItem(
-            "work-1", WorkflowExecutionId, "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(NewInvokeActivityWorkItem());
         using var scope = provider.CreateScope();
         using var owned = provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>().Push(new RuntimeExecutionLease(
             "lease-1", WorkflowExecutionId, "node-a", Now, Now.AddMinutes(1), fencingToken: 1));
@@ -203,6 +254,9 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
 
         Assert.Equal(0, lookups);
     }
+
+    private static RuntimeSchedulerWorkItem NewInvokeActivityWorkItem() => new(
+        "work-1", WorkflowExecutionId, "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now);
 
     private static RuntimeSchedulerPoisonRecord Record(int failureCount = 1) => new(
         WorkflowExecutionId,
@@ -245,7 +299,19 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         }
     }
 
-    // Stands for a provider's ownership store: scoped, and not the in-memory one. The drainer's fault path never reads it.
+    private sealed class TakeOverRetryPolicy : IRuntimeDomainRetryPolicy
+    {
+        public Action? OnDecide { get; set; }
+
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request)
+        {
+            OnDecide?.Invoke();
+            return new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.DoNotRetry, null, "do-not-retry");
+        }
+    }
+
+    // Stands for a provider's ownership store: scoped, and not the in-memory one. It holds no ownership record, so the
+    // drainer's ownership check finds nothing to refuse.
     private sealed class ForeignOwnershipStore : IExecutionLivenessStateStore
     {
         public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default) =>
@@ -255,6 +321,6 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         public ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            ValueTask.FromResult<VersionedExecutionLivenessState?>(null);
     }
 }

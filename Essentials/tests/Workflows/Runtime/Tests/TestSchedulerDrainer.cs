@@ -39,7 +39,8 @@ internal static class TestSchedulerDrainer
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
         bool hasResumptionRedriver = false,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor = null) =>
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor = null,
+        IRuntimeExecutionOwnershipService? ownershipService = null) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -52,7 +53,8 @@ internal static class TestSchedulerDrainer
             retryPolicy,
             claimOptions: claimOptions,
             consumedWorkClaimAccessor: consumedWorkClaimAccessor,
-            ownershipContextAccessor: ownershipContextAccessor)
+            ownershipContextAccessor: ownershipContextAccessor,
+            ownershipService: ownershipService)
         { HasResumptionRedriver = hasResumptionRedriver };
 
     // A real gate over an empty hold store: holds nothing, so it answers CanAdvance: true for every boundary.

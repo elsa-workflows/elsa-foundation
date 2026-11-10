@@ -40,8 +40,9 @@ public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoi
 
     /// <summary>
     /// For the runtime composition root, which cannot name the registered ownership store while it builds this
-    /// singleton. <paramref name="ownershipStateStore"/> is called once, when a fenced record is first asked for, and
-    /// returns <see langword="null"/> when the registered store is not the in-memory one.
+    /// singleton. <paramref name="ownershipStateStore"/> is called the first time <see cref="CanRecordFenced"/> is
+    /// read or a fenced record is asked for, and its answer is kept. It returns <see langword="null"/> when the
+    /// registered store is not the in-memory one. A call that throws is not kept: the next read calls it again.
     /// </summary>
     internal InMemoryWorkflowSchedulerPoisonStore(Func<InMemoryExecutionLivenessStateStore?> ownershipStateStore, TimeProvider? timeProvider)
     {
