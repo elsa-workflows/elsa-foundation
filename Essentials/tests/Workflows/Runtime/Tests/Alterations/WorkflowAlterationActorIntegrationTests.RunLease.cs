@@ -330,14 +330,17 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
         Assert.Equal(0, harness.Handler.CallCount);
     }
 
-    // A plan this node cannot read will never run here. It must not take the run from its owner on every delivery.
-    [Fact]
-    public async Task ActorCommand_WhosePlanCannotBeRead_IsRefused_BeforeItTouchesTheRunsOwnership()
+    // A plan this node cannot read will never run here, whether it fails to decrypt or decrypts to something that is
+    // not a plan. It must not take the run from its owner on every delivery.
+    [Theory]
+    [InlineData(null, typeof(System.Security.Cryptography.CryptographicException))]
+    [InlineData("{}", typeof(InvalidOperationException))]
+    public async Task ActorCommand_WhosePlanCannotBeRead_IsRefused_BeforeItTouchesTheRunsOwnership(string? decryptsTo, Type refusal)
     {
-        var harness = await LeasedHarness.CreateAsync(unreadablePlan: true);
+        var harness = await LeasedHarness.CreateAsync(unreadablePlan: new UnreadablePlanProtector(decryptsTo));
         var drainLease = await harness.OwnershipOf("node-drain").AcquireAsync("workflow-1");
 
-        await Assert.ThrowsAsync<System.Security.Cryptography.CryptographicException>(async () =>
+        await Assert.ThrowsAsync(refusal, async () =>
             await harness.Executor.ExecuteAsync(NewEnvelope(harness.Claim)));
 
         var lease = (await harness.OwnershipRecordAsync()).ExecutionLease!;
@@ -563,7 +566,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
 
     private sealed class LeasedHarness
     {
-        private LeasedHarness(CompletingHandler handler, Func<ValueTask>? beforeCommit, Func<ValueTask>? afterCommit, bool replacementOwnership, bool unreadablePlan)
+        private LeasedHarness(CompletingHandler handler, Func<ValueTask>? beforeCommit, Func<ValueTask>? afterCommit, bool replacementOwnership, UnreadablePlanProtector? unreadablePlan)
         {
             Handler = handler;
             Checkpoints = new InMemoryRuntimeCheckpointCommitStore(
@@ -580,7 +583,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
                 ownership = new ReplacementOwnershipService(ownership);
             Executor = new WorkflowAlterationActorCommandExecutor(
                 Alterations,
-                unreadablePlan ? new UnreadablePlanProtector() : NewProtector(),
+                unreadablePlan is null ? NewProtector() : unreadablePlan,
                 Workflows,
                 new WorkflowAlterationJobExecutor(new SingleHandlerResolver(handler), writer, Time),
                 activityExecutionStateStore: null,
@@ -618,7 +621,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             Func<ValueTask>? beforeCommit = null,
             Func<ValueTask>? afterCommit = null,
             bool replacementOwnership = false,
-            bool unreadablePlan = false)
+            UnreadablePlanProtector? unreadablePlan = null)
         {
             var harness = new LeasedHarness(handler ?? new CompletingHandler(), beforeCommit, afterCommit, replacementOwnership, unreadablePlan);
             await harness.Workflows.SaveAsync(NewWorkflow());
@@ -672,14 +675,14 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
     }
 
-    // A node whose key ring cannot open the plan's payload.
-    private sealed class UnreadablePlanProtector : IWorkflowAlterationPayloadProtector
+    // A node that cannot read the plan's payload: its key ring cannot open it, or it opens to something else.
+    private sealed class UnreadablePlanProtector(string? decryptsTo) : IWorkflowAlterationPayloadProtector
     {
         public ProtectedWorkflowAlterationPayload Protect(string planId, string tenantPartition, string canonicalRequestHash, string plaintext) =>
             throw new NotSupportedException();
 
         public string Unprotect(string planId, string tenantPartition, string canonicalRequestHash, ProtectedWorkflowAlterationPayload payload) =>
-            throw new System.Security.Cryptography.CryptographicException("The payload key is not configured on this node.");
+            decryptsTo ?? throw new System.Security.Cryptography.CryptographicException("The payload key is not configured on this node.");
     }
 
     // Runs a callback the first time the clock is read, which is between the service's read and its write.
