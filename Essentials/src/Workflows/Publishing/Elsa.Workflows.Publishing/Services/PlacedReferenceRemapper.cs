@@ -86,7 +86,9 @@ internal static class PlacedReferenceRemapper
             case RuntimeInputBindingSource.ActivityResult when binding.ActivityResult is { } result:
             {
                 var producerId = placedNodeIds.GetValueOrDefault(result.ProducerExecutableNodeId, result.ProducerExecutableNodeId);
-                var producerScopeId = placedNodeIds.GetValueOrDefault(result.ProducerScopeId, result.ProducerScopeId);
+                var producerScopeId = result.ProducerScopeId is { } declaredScope
+                    ? placedNodeIds.GetValueOrDefault(declaredScope, declaredScope)
+                    : null;
                 if (StringComparer.Ordinal.Equals(producerId, result.ProducerExecutableNodeId) &&
                     StringComparer.Ordinal.Equals(producerScopeId, result.ProducerScopeId))
                     return binding;

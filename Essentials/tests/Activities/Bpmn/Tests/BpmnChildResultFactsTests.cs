@@ -21,6 +21,7 @@ public sealed class BpmnChildResultFactsTests
         Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
         Assert.False(facts.MayRunConcurrently);
         Assert.False(facts.IsCyclicBackEdge);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
         Assert.Equal(["decision"], structures.ChildrenCompletedBefore(process, "capture"));
         Assert.Empty(structures.ChildrenCompletedBefore(process, "decision")!);
         Assert.Equal(ActivityChildResultAvailability.Unavailable, structures.AssessChildResult(process, "capture", "decision").Availability);
@@ -64,6 +65,8 @@ public sealed class BpmnChildResultFactsTests
         var facts = structures.AssessChildResult(process, "decision", "capture");
         Assert.Equal(ActivityChildResultAvailability.Unknown, facts.Availability);
         Assert.Null(facts.MayRunConcurrently);
+        // Unproven occurrence semantics stay unstated, which refuses a result binding that names only the producer.
+        Assert.Null(facts.EarlierProducerRunCanReachConsumer);
         Assert.Null(structures.ChildrenCompletedBefore(process, "capture"));
     }
 

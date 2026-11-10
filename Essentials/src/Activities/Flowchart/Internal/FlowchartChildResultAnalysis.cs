@@ -32,7 +32,12 @@ internal sealed class FlowchartChildResultAnalysis(
                     : ActivityChildResultAvailability.Unavailable;
 
         // Preserve the existing concurrent-write relation; branch write/merge policy stays with its validator.
-        return new(availability, cyclicBackEdge, !forward && !backward && !exclusive, exclusive);
+        // Each node run is scheduled by exactly one run: the node that just completed. So a pass is linked to the pass
+        // before it, and a producer that can be reached again from itself has its earlier runs behind later consumers.
+        // A merge node that runs once per arrival without a cycle is no exception: each of its runs schedules its own
+        // successors, so no run of it lies behind another.
+        return new(availability, cyclicBackEdge, !forward && !backward && !exclusive, exclusive)
+        { EarlierProducerRunCanReachConsumer = IsReachable(producer, producer, requireEdge: true) };
     }
 
     private bool IsReachable(string source, string target, bool requireEdge = false)

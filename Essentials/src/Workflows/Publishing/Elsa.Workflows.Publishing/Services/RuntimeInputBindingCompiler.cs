@@ -646,7 +646,10 @@ public sealed class RuntimeInputBindingCompiler(
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
         var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
-        var producerScopeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId");
+        // A binding the server supplied declares no scope. One that an existing document declares must still be usable.
+        var producerScopeId = payload.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null
+            ? RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId")
+            : null;
         var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) &&
                          optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                          optionalElement.GetBoolean();

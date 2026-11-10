@@ -124,10 +124,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 if (version is null) continue;
                 foreach (var projection in new[] { "$result" }.Concat(version.Outputs.Select(output => output.ReferenceKey)).Distinct(StringComparer.Ordinal))
                 {
-                    // Static order facts do not establish a runtime execution-scope constraint. Keep the
-                    // source inspectable without inventing a direct binding; portable identity is separate.
+                    // No scope is invented: static order facts do not establish one. The source carries a binding
+                    // without a scope when publication would admit it, and stays inspectable with a reason when it
+                    // would not; portable identity is separate.
                     var source = await Resolve(context, consumer,
-                        new("ActivityResult", producer.Node.NodeId, Projection: projection),
+                        new("ActivityResult", producer.Node.NodeId, Projection: projection) { IsDirect = true },
                         Path(consumer, target.InputKey), findings, cancellationToken, admitOccurrence: false);
                     if (source is not null) candidates.Add(source);
                 }
@@ -268,9 +269,19 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, "ValueFlow/CyclicBackEdge", "This result lookup crosses a cyclic back-edge; transfer iteration state explicitly."));
             return null;
         }
-        var availability = context.Graph.Assess(producer, consumer).Availability;
-        if (admitOccurrence && !binding.IsOptional && availability != ActivityChildResultAvailability.Definite)
+        var facts = context.Graph.Assess(producer, consumer);
+        var availability = facts.Availability;
+        var notDefinite = !binding.IsOptional && availability != ActivityChildResultAvailability.Definite;
+        if (admitOccurrence && notDefinite)
             findings.Add(new(path, "ValueFlow/UnavailableProducer", "The required result producer is not causally available on every path to this input."));
+        // A direct binding without a scope names only the producer. It is sound only where the owning structure says
+        // that no earlier run of the producer can also lead to this input; a structure that has not said is not
+        // trusted. Repetition of an enclosing structure is refused above as a cyclic back-edge. Bindings that declare
+        // a scope and expression parameters keep their existing rules (#4056).
+        var declaresNoScope = binding.IsDirect && binding.Scope is null;
+        var earlierRun = declaresNoScope && facts.EarlierProducerRunCanReachConsumer != false;
+        if (admitOccurrence && earlierRun && !notDefinite)
+            findings.Add(new(path, "ValueFlow/EarlierProducerRun", "The owning structure does not establish that only one run of this producer can lead to this input, so a result binding without a scope cannot tell its runs apart. Carry the value in a variable instead."));
         var version = await catalog.Find(producer.Node.ActivityVersionId, ct);
         if (version is null)
         {
@@ -283,22 +294,33 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, "ActivityData/UnknownProjection", "The referenced result projection is not declared unambiguously by the actual producer contract."));
             return null;
         }
-        if (admitOccurrence && binding.Projection == "$result" && await HasNoTypedResult(context, version, ct))
+        // Publication refuses a whole result the producer declares no type for, so a browsed one gets no binding either.
+        var noTypedResult = binding.Projection == "$result" && await HasNoTypedResult(context, version, ct);
+        if (admitOccurrence && noTypedResult)
         {
             findings.Add(new(path, "ActivityData/UnknownProjection", "The admitted producer contract declares no typed whole result."));
             return null;
         }
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
+        // A declared scope is returned as supplied. Without one, the binding is returned only when the checks above
+        // admit it, so what a client stores unchanged is what publication accepts.
+        ArgumentValue? direct = binding.Scope is not null
+            ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult")
+            : declaresNoScope && !notDefinite && !earlierRun && !noTypedResult
+                ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                    isOptional = binding.IsOptional }), "ActivityResult")
+                : null;
         return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
             output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
-            binding.Scope is null ? null : new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
-                producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult"),
-            availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
-            binding.Scope is null ? "RuntimeScopeBindingUnavailable" : availability switch {
-                ActivityChildResultAvailability.Definite => null,
+            direct, availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
+            availability switch {
                 ActivityChildResultAvailability.Conditional => "ConditionalOccurrence",
                 ActivityChildResultAvailability.Unknown => "AvailabilityUnknown",
-                _ => "UnavailableProducer"
+                ActivityChildResultAvailability.Unavailable => "UnavailableProducer",
+                _ when earlierRun => "EarlierProducerRun",
+                _ when noTypedResult => "NoTypedResult",
+                _ => null
             }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
     }
 
