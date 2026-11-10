@@ -283,8 +283,8 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// Ends both empty baselines for good. A nested drain can write this run's rows while its own session is the
-    /// ambient one, which this session never sees. A session whose scope is gone no longer has the drain's lease
-    /// behind what it knows.
+    /// ambient one, which this session never sees. A session whose scope is gone, or whose drain was cancelled, no
+    /// longer has the drain's lease behind what it knows. Safe to call from a cancellation callback.
     /// </summary>
     internal void EndEmptyBaselines()
     {

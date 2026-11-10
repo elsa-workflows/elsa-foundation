@@ -25,6 +25,13 @@ public sealed class RuntimeCheckpointCommitter
     private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
     /// <summary>
+    /// Whether every commit goes to the coalescing commit store first. That store records the rows a commit sends
+    /// to the durable stores, which a session needs before it may answer a point read from memory. A host that
+    /// registered its own commit store over the decorator, or instead of it, gets <see langword="false"/>.
+    /// </summary>
+    internal bool CommitsThroughCoalescingStore => _checkpointCommitStore is Coalescing.CoalescingRuntimeCheckpointCommitStore;
+
+    /// <summary>
     /// Creates the committer. C1 (#1227): the four telescoping constructors collapsed into this single primary
     /// constructor: five required collaborators followed by optional collaborators that default to their no-op
     /// implementations. The ownership context accessor is <b>required by construction</b> so the fence

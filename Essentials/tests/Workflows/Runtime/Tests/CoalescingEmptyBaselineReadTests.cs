@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class CoalescingEmptyBaselineReadTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 9, 12, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan SignalTimeout = TimeSpan.FromSeconds(30);
     private const string WorkflowExecutionId = "wfexec-1";
     private static readonly ResolvedPersistenceMode NoRecord = new(PersistenceMode.Balanced, RunHasRecord: false);
     private static readonly ResolvedPersistenceMode HasRecord = new(PersistenceMode.Balanced, RunHasRecord: true);
@@ -368,17 +369,112 @@ public sealed class CoalescingEmptyBaselineReadTests
         Assert.NotNull(await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
     }
 
+    // The coalescing commit store is what records the rows a commit sends. A host that registered its own commit
+    // store over it, or instead of it, has commits the session never hears of, so the session must not answer.
+    [Fact]
+    public async Task SessionWhoseCommitsBypassTheCoalescingStore_ReadsEveryRowFromTheStore()
+    {
+        var accessor = new StackOnlySessionAccessor();
+        var factory = NewFactory(accessor, commitsThroughTheDecorator: false);
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor);
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
+
+        await using var scope = factory.Begin(WorkflowExecutionId, NoRecord);
+        foreach (var id in new[] { "actexec-1", "actexec-2" })
+        {
+            Assert.Null(await activities.FindAsync(WorkflowExecutionId, id));
+            Assert.Null(await inspections.FindAsync(WorkflowExecutionId, id));
+        }
+
+        Assert.Equal(0, durableActivities.ProbeCount);
+        Assert.Equal(2, durableActivities.FindCount);
+        Assert.Equal(0, durableInspections.ProbeCount);
+        Assert.Equal(2, durableInspections.FindCount);
+    }
+
+    // A probe that cannot tell must throw. The session then knows nothing: the read fails as a failed lookup would,
+    // and the next read asks again.
+    [Fact]
+    public async Task ProbeThatThrows_AnswersNothing_AndIsAskedAgain()
+    {
+        var fixture = new Fixture(NoRecord);
+        var failure = new IOException("The store could not be reached.");
+        fixture.DurableActivities.ProbeFailsOnce = failure;
+        fixture.DurableInspections.ProbeFailsOnce = failure;
+
+        Assert.Same(failure, await Assert.ThrowsAsync<IOException>(async () => await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1")));
+        Assert.Same(failure, await Assert.ThrowsAsync<IOException>(async () => await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1")));
+        Assert.Null(await fixture.Activities.FindAsync(WorkflowExecutionId, "actexec-1"));
+        Assert.Null(await fixture.Inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+
+        Assert.Equal(2, fixture.DurableActivities.ProbeCount);
+        Assert.Equal(0, fixture.DurableActivities.FindCount);
+        Assert.Equal(2, fixture.DurableInspections.ProbeCount);
+        Assert.Equal(0, fixture.DurableInspections.FindCount);
+    }
+
+    // A failed lease heartbeat cancels the drain, so a cancelled drain may no longer own the run. A read that does
+    // not carry the drain's token still reaches the overlay while the drain unwinds.
+    [Fact]
+    public async Task CancelledDrain_ReadsEveryRowFromTheStore()
+    {
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var durableActivities = new ProbingActivityStore();
+        var durableInspections = new ProbingInspectionStore();
+        var drainer = new CancellationHoldingDrainer(
+            new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durableActivities), accessor),
+            new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor));
+        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
+        var orchestrator = new WorkflowDrainOrchestrator(
+            drainer,
+            new NothingToDeliver(),
+            [],
+            TestCheckpointRuleViolationFaulter.Create(),
+            new HeldLeaseOwnershipService(),
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            checkpointStore,
+            checkpointStore,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            coalescingScopeFactory: NewFactory(accessor),
+            persistenceModeResolver: new FixedPersistenceModeResolver(PersistenceMode.Balanced, runHasRecord: false));
+        using var cancellation = new CancellationTokenSource();
+
+        var drain = orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
+        await drainer.Answered.Task.WaitAsync(SignalTimeout);
+        Assert.Equal(1, durableActivities.ProbeCount);
+        Assert.Equal(0, durableActivities.FindCount);
+        Assert.Equal(1, durableInspections.ProbeCount);
+        Assert.Equal(0, durableInspections.FindCount);
+        var unseen = NewActivityState("actexec-unseen");
+        await durableActivities.Inner.SaveAsync(unseen);
+        await durableInspections.Inner.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
+        await cancellation.CancelAsync();
+        drainer.ContinueAfterCancellation.TrySetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => drain.WaitAsync(SignalTimeout));
+        Assert.NotNull(drainer.StateAfterCancellation);
+        Assert.NotNull(drainer.ProjectionAfterCancellation);
+    }
+
     [Fact]
     public async Task StoreThatCannotBeProbed_HasEveryRowReadFromIt()
     {
         var session = NewSession(NoRecord);
         var accessor = new FixedCoalescingSessionAccessor(session);
         var durable = new CountingActivityStore(new InMemoryActivityExecutionStateStore());
+        var durableInspections = new InMemoryActivityExecutionInspectionStore();
         var activities = new CoalescingActivityExecutionStateStore(new CoalescingInner<IActivityExecutionStateStore>(durable), accessor);
-
+        var inspections = new CoalescingActivityExecutionInspectionStore(new CoalescingInner<IActivityExecutionInspectionStore>(durableInspections), accessor);
         Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-1"));
-        Assert.Null(await activities.FindAsync(WorkflowExecutionId, "actexec-2"));
+        Assert.Null(await inspections.FindAsync(WorkflowExecutionId, "actexec-1"));
+        var unseen = NewActivityState("actexec-unseen");
+        await durable.Inner.SaveAsync(unseen);
+        await durableInspections.SaveAsync(ActivityExecutionInspectionProjection.FromState(unseen, "checkpoint-unseen", Now));
 
+        Assert.NotNull(await activities.FindAsync(WorkflowExecutionId, "actexec-unseen"));
+        Assert.NotNull(await inspections.FindAsync(WorkflowExecutionId, "actexec-unseen"));
         Assert.Equal(2, durable.FindCount);
     }
 
@@ -407,12 +503,17 @@ public sealed class CoalescingEmptyBaselineReadTests
     private static RuntimeCoalescingSession NewSessionNoFactoryBegan(ResolvedPersistenceMode mode) =>
         new(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), innerOutboxStore: null, mode);
 
-    private static RuntimeCoalescingDrainScopeFactory NewFactory(IRuntimeCoalescingSessionAccessor accessor)
+    // As AddPersistenceModes composes it: the committer writes to the coalescing commit store, which wraps the
+    // durable one. commitsThroughTheDecorator: false stands for a host that registered its own commit store later.
+    private static RuntimeCoalescingDrainScopeFactory NewFactory(IRuntimeCoalescingSessionAccessor accessor, bool commitsThroughTheDecorator = true)
     {
         var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+        IRuntimeCheckpointCommitStore committed = commitsThroughTheDecorator
+            ? new CoalescingRuntimeCheckpointCommitStore(new CoalescingInner<IRuntimeCheckpointCommitStore>(commitStore), accessor)
+            : commitStore;
         return new RuntimeCoalescingDrainScopeFactory(
             accessor,
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), committed, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
             new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
             new PersistenceModeOptions(),
@@ -543,15 +644,22 @@ public sealed class CoalescingEmptyBaselineReadTests
         // Stands in for a probe that ran before an uncertain write became visible.
         public bool ReportEmptyOnce { get; set; }
 
+        public Exception? ProbeFailsOnce { get; set; }
         public string Scope { get; set; } = "scope-a";
         public Exception? Refusal { get; set; }
 
-        public string ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken = default) =>
-            StoreRefusals.ResolveReadScope(rowId, Refusal, Scope, cancellationToken);
+        public string ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            StoreRefusals.ResolveReadScope(activityExecutionId, Refusal, Scope, cancellationToken);
 
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
+            if (ProbeFailsOnce is { } failure)
+            {
+                ProbeFailsOnce = null;
+                throw failure;
+            }
+
             if (ReportEmptyOnce)
             {
                 ReportEmptyOnce = false;
@@ -573,8 +681,10 @@ public sealed class CoalescingEmptyBaselineReadTests
         // Stands in for a probe that ran before an uncertain write became visible.
         public bool ReportEmptyOnce { get; set; }
 
-        public string ResolveReadScope(string workflowExecutionId, string rowId, CancellationToken cancellationToken = default) =>
-            StoreRefusals.ResolveReadScope(rowId, Refusal, Scope, cancellationToken);
+        public Exception? ProbeFailsOnce { get; set; }
+
+        public string ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            StoreRefusals.ResolveReadScope(activityExecutionId, Refusal, Scope, cancellationToken);
 
         public ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
         {
@@ -588,6 +698,12 @@ public sealed class CoalescingEmptyBaselineReadTests
         public async ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             ProbeCount++;
+            if (ProbeFailsOnce is { } failure)
+            {
+                ProbeFailsOnce = null;
+                throw failure;
+            }
+
             if (ReportEmptyOnce)
             {
                 ReportEmptyOnce = false;
@@ -607,6 +723,70 @@ public sealed class CoalescingEmptyBaselineReadTests
             cancellationToken.ThrowIfCancellationRequested();
             return refusal is null ? scope : throw refusal;
         }
+    }
+
+    private static WorkflowExecutionCommandEnvelope NewEnvelope()
+    {
+        var command = new WorkflowExecutionCommand(
+            CommandId: "empty-baseline-command",
+            WorkflowExecutionId: WorkflowExecutionId,
+            Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            EnqueuedAt: Now,
+            Payload: null,
+            Metadata: new Dictionary<string, string>());
+        return new WorkflowExecutionCommandEnvelope(
+            envelopeId: "empty-baseline-envelope",
+            workflowExecutionId: WorkflowExecutionId,
+            command,
+            idempotencyKey: "empty-baseline-command",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now);
+    }
+
+    // Reads through the overlay, waits for the test to cancel the drain, and reads again without the drain's token.
+    private sealed class CancellationHoldingDrainer(
+        IActivityExecutionStateStore activities,
+        IActivityExecutionInspectionStore inspections) : IWorkflowSchedulerDrainer
+    {
+        public TaskCompletionSource Answered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ContinueAfterCancellation { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ActivityExecutionState? StateAfterCancellation { get; private set; }
+        public ActivityExecutionInspectionProjection? ProjectionAfterCancellation { get; private set; }
+
+        public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
+        {
+            foreach (var id in new[] { "actexec-1", "actexec-2" })
+            {
+                Assert.Null(await activities.FindAsync(request.WorkflowExecutionId, id, CancellationToken.None));
+                Assert.Null(await inspections.FindAsync(request.WorkflowExecutionId, id, CancellationToken.None));
+            }
+
+            Answered.TrySetResult();
+            await ContinueAfterCancellation.Task;
+            StateAfterCancellation = await activities.FindAsync(request.WorkflowExecutionId, "actexec-unseen", CancellationToken.None);
+            ProjectionAfterCancellation = await inspections.FindAsync(request.WorkflowExecutionId, "actexec-unseen", CancellationToken.None);
+            return new RuntimeSchedulerDrainResult(request.WorkflowExecutionId, Now, Now, []);
+        }
+    }
+
+    private sealed class NothingToDeliver : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
+    }
+
+    private sealed class HeldLeaseOwnershipService : IRuntimeExecutionOwnershipService
+    {
+        public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeExecutionLease("lease", workflowExecutionId, "owner", Now, DateTimeOffset.UtcNow.AddHours(1), 1));
+
+        public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Applied, lease.FencingToken));
+
+        public ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Applied, lease.FencingToken));
+
+        public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     // Keeps showing the last pushed session, as a flow does that captured it before the scope was disposed.

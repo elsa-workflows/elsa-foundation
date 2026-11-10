@@ -3,22 +3,30 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Optional capability of an <see cref="IActivityExecutionStateStore"/> or an
 /// <see cref="IActivityExecutionInspectionStore"/>: the store can tell in one cheap read whether it holds any of its
-/// rows for a workflow execution. The drain of a run that has no durable record asks once per store, and from then
-/// on does not read rows the store cannot hold.
+/// rows for a workflow execution. A drain of a run that has no durable record asks each store once per coalescing
+/// session, and from then on does not read rows the store cannot hold.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Implement it on the store object itself, and only when the probe costs less than the point reads it replaces. A
-/// store that does not implement it has every row read from it, as before, and loses nothing else. A decorator
-/// around a store that implements it must forward both members, or that composition loses the saving. The in-memory
+/// store that does not implement it has every row read from it, as before, and loses nothing else. The in-memory
 /// stores do not implement it: their reads are dictionary lookups, and a probe would scan every execution's rows.
+/// </para>
+/// <para>
+/// The probe must agree with the store's own <c>FindAsync</c>. Every row a <c>FindAsync</c> for the run could
+/// return in a scope, <see cref="HasAnyAsync"/> must count in that scope, including a write the store has
+/// accepted but a read might not see yet. A decorator forwards both members only if its own <c>FindAsync</c>
+/// returns nothing that its inner store's probe does not count. A decorator that also reads from somewhere else,
+/// such as an archive or a cache, must not forward them.
+/// </para>
 /// </remarks>
 public interface IRunRowPresenceProbe
 {
     /// <summary>
     /// Returns whether the store holds any of its rows for the workflow execution, in the persistence scope the
     /// call runs under. A wrong <see langword="true"/> only costs the saving. A wrong <see langword="false"/> makes
-    /// the runtime treat rows that exist as absent, so the read must see every committed row of the run, and it
-    /// must throw when it cannot tell.
+    /// the runtime treat rows that exist as absent, so the read must see every row of the run that a
+    /// <c>FindAsync</c> could return, and it must throw when it cannot tell.
     /// </summary>
     ValueTask<bool> HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 

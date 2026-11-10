@@ -85,19 +85,53 @@ public sealed partial class EfActivityExecutionStoresTests
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Activities.FindAsync("wf", tooLong));
-        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Inspections.FindAsync("wf", tooLong));
-        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Activities.FindAsync("wf", " "));
-        await Assert.ThrowsAsync<ArgumentException>(async () => await overlay.Inspections.FindAsync("wf", " "));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await overlay.Activities.FindAsync("wf", "b", cancelled.Token));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await overlay.Inspections.FindAsync("wf", "b", cancelled.Token));
+        // Each refusal is checked on the overlay and then on the store's own read, which must refuse the same way.
+        foreach (var activities in new IActivityExecutionStateStore[] { overlay.Activities, fixture.State })
+        {
+            await Assert.ThrowsAsync<ArgumentException>(async () => await activities.FindAsync("wf", tooLong));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await activities.FindAsync("wf", " "));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await activities.FindAsync("wf", "b", cancelled.Token));
+        }
+
+        foreach (var inspections in new IActivityExecutionInspectionStore[] { overlay.Inspections, fixture.Inspection })
+        {
+            await Assert.ThrowsAsync<ArgumentException>(async () => await inspections.FindAsync("wf", tooLong));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await inspections.FindAsync("wf", " "));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await inspections.FindAsync("wf", "b", cancelled.Token));
+        }
+
         fixture.Access.Current = PersistenceAccessContext.Global;
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await overlay.Activities.FindAsync("wf", "b"));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await overlay.Inspections.FindAsync("wf", "b"));
-
-        // The store's own reads refuse the same way, and none of it reached the database.
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.State.FindAsync("wf", "b"));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Inspection.FindAsync("wf", "b"));
+
+        // None of it reached the database.
+        Assert.Empty(fixture.Commands);
+    }
+
+    // The probe is a public contract, so it is also called directly here. It refuses a bad run id, a cancelled
+    // token and a context with no scope before it queries, as the stores' other reads do.
+    [Fact]
+    public async Task The_probe_refuses_a_bad_run_id_a_cancelled_token_and_a_context_with_no_scope()
+    {
+        await using var fixture = await EmptyBaselineFixture.CreateAsync("tenant-a");
+        fixture.Commands.Clear();
+        var tooLong = new string('w', RuntimeActivityExecutionEfModule.IdentityMaximumLength + 1);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        foreach (var probe in new IRunRowPresenceProbe[] { fixture.State, fixture.Inspection })
+        {
+            await Assert.ThrowsAsync<ArgumentException>(async () => await probe.HasAnyAsync(" "));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await probe.HasAnyAsync(tooLong));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await probe.HasAnyAsync("wf", cancelled.Token));
+        }
+
+        fixture.Access.Current = PersistenceAccessContext.Global;
+        foreach (var probe in new IRunRowPresenceProbe[] { fixture.State, fixture.Inspection })
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await probe.HasAnyAsync("wf"));
+
         Assert.Empty(fixture.Commands);
     }
 
@@ -177,9 +211,10 @@ public sealed partial class EfActivityExecutionStoresTests
         {
             var sessions = new LastPushedSessionAccessor();
             var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+            var coalescingCommitStore = new CoalescingRuntimeCheckpointCommitStore(new CoalescingInner<IRuntimeCheckpointCommitStore>(commitStore), sessions);
             var factory = new RuntimeCoalescingDrainScopeFactory(
                 sessions,
-                new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
+                new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), coalescingCommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
                 new CoalescingInner<IWorkflowSchedulerWorkQueue>(new InMemoryWorkflowSchedulerWorkQueue()),
                 new CoalescingInner<IRuntimePostCommitOutboxStore>(commitStore),
                 new PersistenceModeOptions(),

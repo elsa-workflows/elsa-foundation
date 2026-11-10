@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// session sent to it, and each of those is recorded before its write is attempted, so a write whose outcome is
 /// uncertain still counts as possibly durable. The probe saw one persistence scope, so the baseline answers only for
 /// a read under that scope. A baseline answers nothing until <see cref="Begin"/>, and nothing again after
-/// <see cref="End"/>. The session is confined to one drain and is not thread-safe. The lock here is uncontended in a
-/// drain; it only keeps a read consistent should it ever overlap a recorded write.
+/// <see cref="End"/>. The session is confined to one drain, but <see cref="End"/> can arrive from another thread: a
+/// cancellation callback, or a flow that captured the session. The lock keeps a read consistent with that.
 /// </remarks>
 internal sealed class RuntimeCoalescingEmptyBaseline
 {

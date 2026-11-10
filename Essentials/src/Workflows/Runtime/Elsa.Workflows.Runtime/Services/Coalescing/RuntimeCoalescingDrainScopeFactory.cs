@@ -32,8 +32,11 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
         // Only a session this factory created answers point reads of a new run from memory, because the guards
-        // around those answers are here and in the scope below.
-        session.BeginEmptyBaselines();
+        // around those answers are here and in the scope below. It also needs the coalescing commit store in front
+        // of every commit: that store records the rows a commit sends, and without it the session would report a
+        // row it just committed as absent.
+        if (checkpointCommitter.CommitsThroughCoalescingStore)
+            session.BeginEmptyBaselines();
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)
