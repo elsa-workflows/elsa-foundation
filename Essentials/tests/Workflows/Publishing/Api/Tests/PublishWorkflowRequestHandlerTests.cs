@@ -225,10 +225,15 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         ];
         if (cycle)
             connections.Add(new(new FlowchartEndpoint("consumer", "Done"), new FlowchartEndpoint("start", null)));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(DefaultResultProducer), TypeAliasConvention.CanonicalAlias(typeof(DefaultResultProducer)));
+        var producer = SecretBindingCompilerFixture.ClrActivityVersion(typeof(DefaultResultProducer));
         var version = WorkflowVersion(FlowchartNode("flowchart",
-            [Node("start", Text("start")), Node("producer", Text("produce")), Node("consumer", read)], connections, "start"));
+            [Node("start", Text("start")), new ActivityNode("producer", producer.Id, [], []), Node("consumer", read)], connections, "start"));
         var before = await CountPublishWritesAsync();
-        var handler = Handler(version, _writeLineActivity, _flowchartActivity);
+        var versionStore = new FakeVersionStore(version);
+        var handler = Handler(null, TestCompiler.Create(versionStore,
+            new FakeActivityVersionStore([_writeLineActivity, _flowchartActivity, producer]), _activityStructureService, registry), versionStore);
 
         if (cycle && !declaresScope)
         {
