@@ -1,8 +1,7 @@
 # JavaScript Bindings Accept Expressions and Statement Bodies
 
 Status: revised (2026-10-19), implementation [#3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009).
-Amended (2026-10-27, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) decisions D-1 and
-D-11): new capability profile `binding-readonly-v1`, and the undefined-as-null policy. See *Amendment* below.
+Amended: new capability profile `binding-readonly-v1`, and the undefined-as-null policy. See *Amendment* below.
 
 This replaces the unimplemented 5 August proposal for host-selected grammars in
 [spec 146](../../specs/146-javascript-binding-grammar/spec.md), following the owner's request to
@@ -46,24 +45,24 @@ share one capability profile, `binding-readonly-v1` (see the amendment below; or
 state. A result of `undefined` remains an error with guidance to produce or return a value, unless
 the workflow selects the undefined-as-null policy (amendment below).
 
-## Amendment (epic #3052, decisions D-1 and D-11, 2026-10-27)
+## Amendment: capability profile and undefined-as-null
 
 **Capability profile `binding-readonly-v1` replaces `binding-pure-v1`.**
 [ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure),
-as amended for D-1, D-5 and D-6, no longer requires bindings to be deterministic. `binding-pure-v1` forbids time,
+as amended, no longer requires bindings to be deterministic. `binding-pure-v1` forbids time,
 randomness and GUIDs by definition, so it is retired rather than redefined. A profile name must always mean the same
 behaviour.
 - **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
 - **It allows** the current time (UTC, invariant culture, from an injectable clock (`TimeProvider`)), random values and GUIDs. Date and
-  time-zone rules are the ADR 0046 amendment's (*Dates*, [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)).
+  time-zone rules are the ADR 0046 amendment's (*Dates*).
 - **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
   number.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
-  with the script (D-5). A call is never refused or skipped because of what it does (D-6). No function profile is
-  required; if the D-2 details amendment of ADR 0045 needs a classification for the durability boundary of input
-  evaluation, it is a durability hint defined there.
+  with the script. A call is never refused or skipped because of what it does. No function profile is required; if
+  ADR 0045 needs a classification for the durability boundary of input evaluation, it is a durability hint defined
+  there.
 - **It forbids live .NET objects,** always. Scripts that may use objects the host explicitly registers use a separate
-  profile, for example `binding-readonly-interop-v1` (analysis A-1, ADR 0046 amendment V10). A host opt-in allows that
+  profile, for example `binding-readonly-interop-v1` (ADR 0046 amendment V10). A host opt-in allows that
   profile, and the executable pins it like any profile, so one profile name never means different behaviour on
   different hosts. General .NET access is never available to a binding: a host may allow it only for script
   activities, through a further, separately named profile (ADR 0046 amendment V10). Any workflow node that uses
@@ -73,13 +72,12 @@ behaviour.
 - **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
 
 The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes
-([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)). Elsa 4 has no
-released executables yet, so there is no compatibility path for `binding-pure-v1`: executables published before the
-change are republished.
+([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)). There is no
+compatibility path for `binding-pure-v1`: an executable that pins it is republished.
 
-**Undefined-as-null (D-11).** The paragraph above keeps an `undefined` result an error by default.
+**Undefined-as-null.** The paragraph above keeps an `undefined` result an error by default.
 [ADR 0045 §2](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings),
-as amended for D-10 and D-11, adds a visible workflow policy, pinned in the executable.
+as amended, adds a visible workflow policy, pinned in the executable.
 - **Under it,** an `undefined` result materializes as `null`, and an `undefined`-valued object property is kept as
   `null` at every depth.
 - **The policy applies after the form is selected and the source has run,** at the JavaScript-to-workflow boundary.
@@ -91,7 +89,7 @@ as amended for D-10 and D-11, adds a visible workflow policy, pinned in the exec
   needs no diagnostic. This holds whether or not the policy is selected, because an array's positions can never shift
   ([ADR 0045 §2](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#2-compile-role-specific-input-bindings)).
 
-*Left to the implementing specs* (S-1 and S-2 on the epic):
+*Left to the implementing specs:*
 - **renaming the profile constant** and removing the replay justification that `Inline` derives from
   `binding-pure-v1`;
 - **the registration API** that marks a function as allowed in `binding-readonly-v1`;
