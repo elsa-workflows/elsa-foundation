@@ -51,7 +51,7 @@ Known host-owned Slot IDs:
 
 A result renderer may present another module's results: set `resourceModuleIds` to the resource modules it presents,
 and the host matches the result's resource module against them instead of the renderer's own `moduleId` (unset keeps the
-previous match). A result control (`api.agent.resultControls`) is the resource-owning module's interactive control for
+previous match). A result control (`api.weaver.resultControls`) is the resource-owning module's interactive control for
 a result type, such as a designer-history Undo of a change it applied; the host renders every matching control after
 the renderer, so a renderer from another package never needs the owning module's internals.
 
@@ -240,7 +240,7 @@ keeps retry IDs stable when a delivery response is uncertain.
 
 ## Weaver Contributions
 
-Studio modules can enrich Weaver through `api.agent` without calling an external
+Studio modules can enrich Weaver through `api.weaver` without calling an external
 agent provider from the browser. Weaver is the visible assistant name; `agent`
 is retained for provider-neutral profiles and contribution registries. Provider
 access, policy, redaction, approvals, execution, and audit stay in the
@@ -270,7 +270,7 @@ to every authenticated user. Mutating capabilities should use `review-required`,
 ## Weaver module participation (candidate)
 
 Register context, prompt actions, capabilities, tool contracts, result renderers and, where the host offers them,
-result controls through `api.agent`. A renderer contributed by one package for another module's results declares that
+result controls through `api.weaver`. A renderer contributed by one package for another module's results declares that
 module in `resourceModuleIds`; a control that only the resource-owning module can perform, such as a designer-history
 Undo of a change it applied, is that module's result control, so neither package needs the other's internals. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
 registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical

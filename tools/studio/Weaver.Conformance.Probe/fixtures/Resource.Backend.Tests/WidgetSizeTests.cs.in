@@ -14,8 +14,8 @@ public sealed class WidgetSizeTests
         var env = await WidgetTestEnvironment.CreateAsync();
         var descriptor = env.Size.Descriptor;
         Assert.Equal("acme_home_set_size", descriptor.Name);
-        Assert.Equal(AgentToolMutability.Mutating, descriptor.Mutability);
-        Assert.Equal(AgentRisk.ReviewRequired, descriptor.Risk);
+        Assert.Equal(WeaverToolMutability.Mutating, descriptor.Mutability);
+        Assert.Equal(WeaverRisk.ReviewRequired, descriptor.Risk);
         Assert.Equal(WidgetContract.Module, descriptor.ModuleId);
         Assert.Equal("acme.home.widget-context", descriptor.DisclosureSourceId);
         Assert.Equal("acme.home.widget-size", descriptor.ResultType);
@@ -46,7 +46,7 @@ public sealed class WidgetSizeTests
             new Dictionary<string, object?> { ["size"] = JsonSerializer.SerializeToElement("small") }, [await env.SnapshotAsync()]));
         Assert.True(result.Succeeded);
         Assert.False(result.Value!.RequiresApproval);
-        Assert.Equal(AgentRisk.ReviewRequired, result.Value.Risk);
+        Assert.Equal(WeaverRisk.ReviewRequired, result.Value.Risk);
         Assert.Equal("rev-1", result.Value.Target!.Revision);
         Assert.Equal("medium", result.Value.Preview.Data.GetProperty("beforeSize").GetString());
         Assert.Equal("small", result.Value.Preview.Data.GetProperty("size").GetString());
@@ -96,7 +96,7 @@ public sealed class WidgetSizeTests
         Assert.Equal(prepared.InvocationId, receipt.InvocationId);
         Assert.Equal(prepared.Target, receipt.Before);
         Assert.Equal("rev-2", receipt.After.Revision);
-        Assert.Equal(AgentEffectScope.ServerPersisted, receipt.Scope);
+        Assert.Equal(WeaverEffectScope.ServerPersisted, receipt.Scope);
         Assert.Equal(WidgetContract.SizeResult, receipt.Evidence.TypeId);
         Assert.Equal("1", receipt.Evidence.SchemaVersion);
         Assert.Equal(beforeSize, result.Value.Payload!.Data.GetProperty("beforeSize").GetString());
@@ -222,7 +222,7 @@ public sealed class WidgetSizeTests
             "arguments-duplicate" => prepared with { Arguments = JsonSerializer.Deserialize<JsonElement>("{\"size\":\"small\",\"size\":\"medium\"}") },
             "preview" => prepared with { Preview = prepared.Preview with { Data = JsonSerializer.Deserialize<JsonElement>("{}") } },
             "module" => prepared with { ModuleId = "Foreign" },
-            "risk" => prepared with { Risk = AgentRisk.ReadOnly },
+            "risk" => prepared with { Risk = WeaverRisk.ReadOnly },
             "version" => prepared with { ToolContractVersion = "2" },
             _ => prepared
         };
@@ -370,7 +370,7 @@ public sealed class WidgetSizeTests
         else
         {
             Assert.DoesNotContain(admission.Diagnostics, diagnostic => diagnostic.Required);
-            Assert.Single(admission.Attachments, attachment => attachment.Origin == AgentContextOrigin.InstalledGuidance);
+            Assert.Single(admission.Attachments, attachment => attachment.Origin == WeaverContextOrigin.InstalledGuidance);
             Assert.DoesNotContain(admission.Attachments, attachment => attachment.Target is not null);
         }
         Assert.Equal(receiptBefore, JsonSerializer.Serialize(applied.Receipt));

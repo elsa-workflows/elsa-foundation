@@ -1,16 +1,16 @@
 import type {
-  StudioAgentCapabilityContribution,
-  StudioAgentContextAttachment,
-  StudioAgentContributionDiagnostic,
-  StudioAgentMode,
-  StudioAgentRisk,
-  StudioAgentSurface,
-  StudioAgentClientAcknowledgement,
-  StudioAgentPreparedInvocation,
-  StudioAgentResourceTarget,
-  StudioAgentToolResult,
-  StudioAgentPromptRequest,
-  StudioAgentToolInvocationMode
+  StudioWeaverCapabilityContribution,
+  StudioWeaverContextAttachment,
+  StudioWeaverContributionDiagnostic,
+  StudioWeaverMode,
+  StudioWeaverRisk,
+  StudioWeaverSurface,
+  StudioWeaverClientAcknowledgement,
+  StudioWeaverPreparedInvocation,
+  StudioWeaverResourceTarget,
+  StudioWeaverToolResult,
+  StudioWeaverPromptRequest,
+  StudioWeaverToolInvocationMode
 } from "../../sdk";
 
 export type AgentProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
@@ -42,8 +42,8 @@ export interface AgentBootstrapResponse {
   /** Preview (#3441): absent from a server that does not report it. */
   recovery?: AgentRecoveryMode;
   providerStatus: AgentProviderStatus;
-  modes: StudioAgentMode[];
-  capabilities: StudioAgentCapabilityContribution[];
+  modes: StudioWeaverMode[];
+  capabilities: StudioWeaverCapabilityContribution[];
   provider?: AgentProviderDiagnostics;
   policy: {
     contextVisibility: boolean;
@@ -74,14 +74,14 @@ export interface AgentProviderDiagnostics {
 }
 
 export interface AgentCreateSessionRequest {
-  mode: StudioAgentMode;
+  mode: StudioWeaverMode;
   /** Preview (#3441): the Studio backend workspace; it only narrows the owner's session list. */
   workspace?: string;
   /** Preview (#3441): the session this one continues after a limit. Only the link is carried over. */
   continuedFrom?: string;
   /** The autonomy mode to request; the server clamps it to the deployment ceiling. Omit to take the default. */
   autonomyMode?: AgentAutonomyMode;
-  activeSurface: StudioAgentSurface;
+  activeSurface: StudioWeaverSurface;
   clientContext: {
     studioVersion: string;
     sdkVersion: string;
@@ -93,7 +93,7 @@ export interface AgentCreateSessionResponse {
   sessionId: string;
   status: AgentSessionStatus;
   title?: string;
-  contextAttachments: StudioAgentContextAttachment[];
+  contextAttachments: StudioWeaverContextAttachment[];
   /**
    * Preview (#3440): the server-acknowledged session policy. Absent only when the backend
    * composition cannot read it back; such a session cannot change its autonomy.
@@ -187,12 +187,12 @@ export interface AgentOwnerResolution {
 
 export interface AgentMessageRequest {
   requestId?: string;
-  source?: StudioAgentPromptRequest["source"];
-  promptMode?: StudioAgentPromptRequest["mode"];
+  source?: StudioWeaverPromptRequest["source"];
+  promptMode?: StudioWeaverPromptRequest["mode"];
   message: string;
-  mode: StudioAgentMode;
-  activeSurface?: StudioAgentSurface;
-  contextAttachments: StudioAgentContextAttachment[];
+  mode: StudioWeaverMode;
+  activeSurface?: StudioWeaverSurface;
+  contextAttachments: StudioWeaverContextAttachment[];
   capabilityId?: string;
 }
 
@@ -201,7 +201,7 @@ export interface AgentMessageResponse {
   status: AgentMessageStatus;
   streamUrl: string;
   /** Sanitized evidence admitted for this message; absent responses fail closed in presentation. */
-  contextAttachments?: StudioAgentContextAttachment[];
+  contextAttachments?: StudioWeaverContextAttachment[];
   warnings?: { code: string; message: string; target?: string }[];
   /** The policy the owning store stamped on the accepted message, when it owns policy revisions. */
   acceptedPolicy?: AgentAcceptedPolicy;
@@ -224,13 +224,13 @@ export interface AgentActionProposal {
   id: string;
   title: string;
   summary: string;
-  risk: Exclude<StudioAgentRisk, "read-only">;
+  risk: Exclude<StudioWeaverRisk, "read-only">;
   status: AgentProposalStatus;
   revision?: string;
   reviewReady?: boolean;
   toolId?: string;
   moduleId?: string;
-  invocationMode?: StudioAgentToolInvocationMode;
+  invocationMode?: StudioWeaverToolInvocationMode;
   requiredPermissions?: string[];
   policy?: AgentToolInvocationPolicy;
   resourceTarget?: AgentResourceTarget;
@@ -239,8 +239,8 @@ export interface AgentActionProposal {
   error?: string;
   confirmationPending?: boolean;
   audit?: AgentProposalAuditState;
-  preparedInvocation?: StudioAgentPreparedInvocation;
-  toolResult?: StudioAgentToolResult;
+  preparedInvocation?: StudioWeaverPreparedInvocation;
+  toolResult?: StudioWeaverToolResult;
   resultRendererId?: string;
   resultType?: string;
   result?: unknown;
@@ -253,7 +253,7 @@ export interface AgentActionProposal {
   expiresAt?: string;
 }
 
-export type AgentResourceTarget = StudioAgentResourceTarget;
+export type AgentResourceTarget = StudioWeaverResourceTarget;
 
 export interface AgentProposalAuditState {
   state: string;
@@ -262,8 +262,8 @@ export interface AgentProposalAuditState {
   sessionId?: string;
   toolId?: string;
   target?: AgentResourceTarget;
-  risk?: StudioAgentRisk;
-  invocationMode?: StudioAgentToolInvocationMode;
+  risk?: StudioWeaverRisk;
+  invocationMode?: StudioWeaverToolInvocationMode;
   policyResult?: AgentToolPolicyResult;
   recordedAt?: string;
 }
@@ -274,8 +274,8 @@ export type AgentToolInvocationOutcome = "allowed" | "denied" | "failed" | "prop
 export interface AgentToolInvocationPolicy {
   allowedToolIds?: string[];
   deniedToolIds?: string[];
-  allowedInvocationModes?: StudioAgentToolInvocationMode[];
-  deniedInvocationModes?: StudioAgentToolInvocationMode[];
+  allowedInvocationModes?: StudioWeaverToolInvocationMode[];
+  deniedInvocationModes?: StudioWeaverToolInvocationMode[];
 }
 export interface AgentProposalOperation {
   op: string;
@@ -298,12 +298,12 @@ export interface AgentClarificationRequest {
 
 export type AgentStreamEvent =
   | { type: "review-requested"; messageId: string }
-  | { type: "module-result"; messageId: string; result: StudioAgentToolResult }
+  | { type: "module-result"; messageId: string; result: StudioWeaverToolResult }
   | { type: "turn-started"; turnId: string; maxSteps: number }
   | { type: "message-started"; messageId: string; role: AgentMessageRole }
   | { type: "message-delta"; messageId: string; content: string }
   | { type: "context-used"; messageId: string; attachmentIds: string[] }
-  | { type: "context-admitted"; attachments: StudioAgentContextAttachment[]; diagnostics: StudioAgentContributionDiagnostic[] }
+  | { type: "context-admitted"; attachments: StudioWeaverContextAttachment[]; diagnostics: StudioWeaverContributionDiagnostic[] }
   | { type: "clarification-requested"; messageId: string; clarification: AgentClarificationRequest }
   | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
   | { type: "progress"; label: string; percent?: number }
@@ -333,9 +333,9 @@ export interface AgentProposalDecisionResponse {
   approvalStatus: AgentProposalStatus;
   approvedAt?: string;
   executed?: boolean;
-  clientInvocation?: StudioAgentPreparedInvocation;
-  toolResult?: StudioAgentToolResult;
+  clientInvocation?: StudioWeaverPreparedInvocation;
+  toolResult?: StudioWeaverToolResult;
   result?: { resourceType: string; resourceId: string; summary: string };
 }
 
-export type AgentClientAcknowledgement = StudioAgentClientAcknowledgement;
+export type AgentClientAcknowledgement = StudioWeaverClientAcknowledgement;

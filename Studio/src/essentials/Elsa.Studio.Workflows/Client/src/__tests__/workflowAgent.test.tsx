@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authSessionEndedEvent, authSessionStartedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, createAgentRegistry, type StudioWeaverPreparedInvocation, type StudioWeaverToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { WorkflowLayoutResult } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
@@ -20,7 +20,7 @@ const details = { definition: { id: "definition", name: "Test workflow" } } as W
 const noop = () => {};
 let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>, doc: WorkflowDocumentApi;
 let editingAllowed: boolean;
-let layoutResult: StudioAgentToolResult | undefined;
+let layoutResult: StudioWeaverToolResult | undefined;
 let persistence: ReturnType<typeof useWorkflowPersistence>, root: Root, container: HTMLDivElement;
 let operations: ReturnType<typeof useWorkflowOperations>;
 let probeLifetime: object;
@@ -35,7 +35,7 @@ function Probe() {
   useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId, selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion: new Map([[writeLine.activityVersionId, writeLine]]) });
   return <><output>{JSON.stringify(doc.state.draft?.layout)}</output>{layoutResult ? <WorkflowLayoutResult controller={controller} proposal={null} result={layoutResult.payload?.data} toolResult={layoutResult} /> : null}</>;
 }
-function request(): StudioAgentPreparedInvocation {
+function request(): StudioWeaverPreparedInvocation {
   return { invocationId: "invocation", sessionId: "session", turnId: "turn", toolCallId: "call", toolName: "workflow_set_designer_position", toolContractVersion: "1", moduleId: "Elsa.Studio.Workflows", actorId: "actor", tenantId: "tenant", target: controller.snapshot!.target!, arguments: { activityId: "write", x: 150, y: 250 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "workflows.layout-change", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: controller.snapshot!.client!, expiresAt: new Date(Date.now() + 60000).toISOString() };
 }
 beforeEach(() => {

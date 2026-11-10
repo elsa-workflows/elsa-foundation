@@ -1,4 +1,4 @@
-import type { StudioAgentClientBinding, StudioAgentContextAttachment } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientBinding, StudioWeaverContextAttachment } from "@elsa-workflows/studio-sdk";
 
 /**
  * The read-only page contexts of spec 1193 stories 8 and 9, as caller attachments the server admits strictly: one exact
@@ -14,7 +14,7 @@ export interface WorkflowExecutableIdentity { artifactId?: unknown; artifactHash
 export interface WorkflowVersionIdentity { definitionId?: unknown; versionId?: unknown; version?: unknown }
 export interface WorkflowRunIdentity { workflowExecutionId?: unknown; activityExecutionId?: unknown }
 
-export function workflowExecutableAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowExecutableAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const artifactId = boundedId(identity.artifactId);
   const artifactHash = boundedId(identity.artifactHash, 256);
@@ -30,7 +30,7 @@ export function workflowExecutableAttachment(identity: unknown, client?: StudioA
   };
 }
 
-export function workflowVersionAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowVersionAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const definitionId = boundedId(identity.definitionId);
   const versionId = boundedId(identity.versionId);
@@ -51,7 +51,7 @@ export function workflowVersionAttachment(identity: unknown, client?: StudioAgen
  * of a definition. Its revision identity is the selected activity execution's, or the instance's when none is selected
  * (spec 1193 FR-005).
  */
-export function workflowRunAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowRunAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const workflowExecutionId = boundedId(identity.workflowExecutionId, 256);
   if (!workflowExecutionId) return null;

@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { StudioWorkspaceTabProvider, type StudioAgentRegistry, type StudioEndpointContext, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
+import { StudioWorkspaceTabProvider, type StudioWeaverRegistry, type StudioEndpointContext, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
@@ -10,7 +10,7 @@ import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
-import type { StudioAgentClientExecutionResult, StudioAgentPreparedInvocation } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 let previousClipboard: PropertyDescriptor | undefined;
@@ -268,8 +268,8 @@ describe("workflow definition list", () => {
     const snapshot = dialog()!;
     const contract = agent.toolContracts.list().find(item => item.id === "workflow_create_dialog_prefill")!;
     const invocation = { invocationId: "i-1", client: snapshot.client, target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      arguments: { baseRevision: snapshot.target!.revision, change: { name: "Prefilled" } } } as unknown as StudioAgentPreparedInvocation;
-    let result: StudioAgentClientExecutionResult | undefined;
+      arguments: { baseRevision: snapshot.target!.revision, change: { name: "Prefilled" } } } as unknown as StudioWeaverPreparedInvocation;
+    let result: StudioWeaverClientExecutionResult | undefined;
     await new Promise<void>(resolve => flushSync(() => { void contract.executeClient!(invocation).then(value => { result = value; resolve(); }); }));
     expect(result!.outcome).toBe("applied");
     // The revert restores the draft before the prefill; with the dialog closed and the authority reset, it reopens it.
@@ -375,7 +375,7 @@ function renderInTab(contextValue: StudioEndpointContext, onOpen: (id: string) =
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { root, container };
-  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn(), onPromptResult: () => () => {} } as unknown as StudioAgentRegistry;
+  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn(), onPromptResult: () => () => {} } as unknown as StudioWeaverRegistry;
   let active = true;
   const handle = {
     id: "tab-1",
@@ -464,7 +464,7 @@ function renderWithContext(initial: StudioEndpointContext, weaver: WorkflowAgent
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { root, container };
-  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioAgentRegistry;
+  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioWeaverRegistry;
   function Harness({ contextValue }: { contextValue: StudioEndpointContext }) {
     const session = useWorkflowDefinitionBrowseSession(contextValue);
     return <WorkflowDefinitions context={contextValue} ai={ai} weaver={weaver} onOpen={vi.fn()} session={session} />;
@@ -478,7 +478,7 @@ function render(contextValue: StudioEndpointContext, onOpen: (id: string) => voi
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { root, container };
-  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioAgentRegistry;
+  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioWeaverRegistry;
   function Harness() {
     const session = useWorkflowDefinitionBrowseSession(contextValue);
     return <WorkflowDefinitions context={contextValue} ai={ai} weaver={weaver} onOpen={onOpen} session={session} />;

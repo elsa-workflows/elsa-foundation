@@ -138,7 +138,7 @@ export function testApi(): ElsaStudioModuleApi {
     workflowDesigner: {
       panels: registry()
     },
-    agent,
+    weaver: agent,
     ai: agent,
     dialogs: {
       confirm: vi.fn(async () => true),

@@ -13,25 +13,25 @@ namespace Elsa.Weaver.Workflows.Runtime.Services;
 /// reference it contributes nothing.
 /// </summary>
 internal sealed class WorkflowExecutableContextProvider(
-    IAgentSessionService sessions,
-    IAgentToolAuthorizer authorizer,
-    IServiceProvider services) : IAgentContextProvider
+    IWeaverSessionService sessions,
+    IWeaverToolAuthorizer authorizer,
+    IServiceProvider services) : IWeaverContextProvider
 {
     // The Runtime owner is resolved only when an Executable is referenced, so composing this source never builds the
     // Runtime read path a turn without an Executable does not use.
     private IEnumerable<IWorkflowExecutableInspection> inspections => services.GetServices<IWorkflowExecutableInspection>();
 
-    public AgentContextProviderDescriptor Descriptor { get; } = new(WorkflowExecutableContext.ContextSourceId, WorkflowExecutableContext.ModuleId,
+    public WeaverContextProviderDescriptor Descriptor { get; } = new(WorkflowExecutableContext.ContextSourceId, WorkflowExecutableContext.ModuleId,
         "workflow-executable", [WorkflowExecutableContext.ExecutableKind, WorkflowExecutableContext.GuidanceKind], ["1"], [WorkflowExecutableContext.ResourceType]);
 
-    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> CollectAsync(WeaverContextRequest request, CancellationToken cancellationToken = default)
     {
         var callers = request.CallerAttachments.Where(item => item.ContentType == WorkflowExecutableContext.ExecutableKind).ToArray();
         if (callers.Length == 0) return new([], []);
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return SessionDenied();
-        var attachments = new List<AgentContextAttachment>();
-        var diagnostics = new List<AgentContributionDiagnostic>();
+        var attachments = new List<WeaverContextAttachment>();
+        var diagnostics = new List<WeaverContributionDiagnostic>();
         foreach (var caller in callers)
         {
             if (!WorkflowExecutableContext.TryRead(caller, out var reference, out var error))
@@ -57,24 +57,24 @@ internal sealed class WorkflowExecutableContextProvider(
         return new(attachments, diagnostics);
     }
 
-    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> AdmitDisclosureAsync(WeaverContextDisclosureRequest request, CancellationToken cancellationToken = default)
     {
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return SessionDenied();
         var inspection = WorkflowExecutableContext.Inspection(inspections);
-        var projection = new List<AgentContextAttachment>();
+        var projection = new List<WeaverContextAttachment>();
         foreach (var item in request.Context)
         {
             if (item.ModuleId != Descriptor.ModuleId || item.SchemaVersion != "1" || !Descriptor.ContextKinds.Contains(item.ContentType, StringComparer.Ordinal))
                 return ContextDenied();
             if (item.ContentType == WorkflowExecutableContext.GuidanceKind)
             {
-                if (item.Origin != AgentContextOrigin.InstalledGuidance) return ContextDenied();
+                if (item.Origin != WeaverContextOrigin.InstalledGuidance) return ContextDenied();
                 projection.Add(WorkflowExecutableContext.Guidance());
                 continue;
             }
             // Only this module's own read is ever retained; it is read again under the bound hash, so a changed Executable stops being disclosed.
-            if (item.Origin != AgentContextOrigin.AuthoritativeRead || !WorkflowExecutableContext.TryRead(item, out var reference, out _)) return ContextDenied();
+            if (item.Origin != WeaverContextOrigin.AuthoritativeRead || !WorkflowExecutableContext.TryRead(item, out var reference, out _)) return ContextDenied();
             var read = await WorkflowExecutableContext.ReadAsync(authorizer, inspection, session.ActorId, session.TenantId, reference.ArtifactId, reference.ArtifactHash,
                 cancellationToken);
             if (Refusal(read.Outcome) is { } refusal) return new([], [refusal]);
@@ -92,7 +92,7 @@ internal sealed class WorkflowExecutableContextProvider(
         return new(projection, []);
     }
 
-    private AgentContributionDiagnostic? Refusal(WorkflowExecutableContext.Outcome outcome) => outcome switch
+    private WeaverContributionDiagnostic? Refusal(WorkflowExecutableContext.Outcome outcome) => outcome switch
     {
         WorkflowExecutableContext.Outcome.Read => null,
         WorkflowExecutableContext.Outcome.Denied => new(Descriptor.Id, "weaver.workflow.permission_denied", WorkflowExecutableContext.DeniedMessage, true),
@@ -102,20 +102,20 @@ internal sealed class WorkflowExecutableContextProvider(
     };
 
     // A caller classification can restrict module-owned data; it cannot certify prior redaction.
-    private static AgentContextSensitivity Admitted(AgentContextSensitivity caller) =>
-        caller == AgentContextSensitivity.SecretRedacted ? AgentContextSensitivity.Secret :
-        caller < AgentContextSensitivity.Internal ? AgentContextSensitivity.Internal : caller;
+    private static WeaverContextSensitivity Admitted(WeaverContextSensitivity caller) =>
+        caller == WeaverContextSensitivity.SecretRedacted ? WeaverContextSensitivity.Secret :
+        caller < WeaverContextSensitivity.Internal ? WeaverContextSensitivity.Internal : caller;
 
-    private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
+    private async Task<WeaverSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var session = await sessions.FindAsync(sessionId, cancellationToken);
-        return session is { Status: AgentSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
+        return session is { Status: WeaverSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
             && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
     }
 
-    private AgentContextContribution SessionDenied() => new([], [new(Descriptor.Id, "weaver.workflow.session_denied",
+    private WeaverContextContribution SessionDenied() => new([], [new(Descriptor.Id, "weaver.workflow.session_denied",
         "A current workflow session with an authenticated actor and tenant is required.", true)]);
-    private AgentContextContribution ContextDenied() => new([], [new(Descriptor.Id, "weaver.workflow.disclosure_invalid",
+    private WeaverContextContribution ContextDenied() => new([], [new(Descriptor.Id, "weaver.workflow.disclosure_invalid",
         "The retained workflow Executable evidence does not match this module's supported context kinds and tools.", true)]);
 }

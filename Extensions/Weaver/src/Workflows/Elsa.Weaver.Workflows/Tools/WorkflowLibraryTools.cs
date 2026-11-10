@@ -16,7 +16,7 @@ namespace Elsa.Weaver.Workflows.Tools;
 /// binds each target by its current organization revision where the library offers one, and reports one outcome per target.
 /// A result where only some targets changed is reported as partial, never as applied. Deletion is never offered.
 /// </summary>
-internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCommands>? commands) : IAgentTool, IAgentToolAuthorization
+internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCommands>? commands) : IWeaverTool, IWeaverToolAuthorization
 {
     internal const string ResultType = "workflows.library-result";
     internal const string RendererId = "weaver.workflows.library-result";
@@ -24,33 +24,33 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
     internal const string NotApplied = "not-applied";
     protected static readonly JsonSerializerOptions JsonOptions = WorkflowLibraryContext.JsonOptions;
 
-    public abstract AgentToolDescriptor Descriptor { get; }
+    public abstract WeaverToolDescriptor Descriptor { get; }
 
     /// <summary>A descriptor of this family: mutating, reviewed, server-executed, disclosed by the library context source.</summary>
-    protected static AgentToolDescriptor Describe(string name, string displayName, string description, string schema, string permission) =>
-        new(name, displayName, description, AgentToolMutability.Mutating, AgentRisk.ReviewRequired, schema, [permission], ["/workflows"])
+    protected static WeaverToolDescriptor Describe(string name, string displayName, string description, string schema, string permission) =>
+        new(name, displayName, description, WeaverToolMutability.Mutating, WeaverRisk.ReviewRequired, schema, [permission], ["/workflows"])
         {
-            ModuleId = WorkflowLibraryContext.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.Server,
+            ModuleId = WorkflowLibraryContext.ModuleId, ContractVersion = "1", ExecutionLocation = WeaverExecutionLocation.Server,
             ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = RendererId, DisclosureSourceId = WorkflowLibraryContext.ContextSourceId
         };
 
     // The host decides the route permission; the library commands make every granular decision at preparation and again
     // at execution. With no (or several) installed commands the tool is unavailable, never a guess.
-    public ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
+    public ValueTask<WeaverPolicyDecision> AuthorizeAsync(string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (WorkflowLibraryContext.Commands(commands, out var reason) is null)
-            return ValueTask.FromResult(new AgentPolicyDecision(false, [new("weaver.workflow.library_unavailable", reason!) { OwnerUnavailable = true }]));
+            return ValueTask.FromResult(new WeaverPolicyDecision(false, [new("weaver.workflow.library_unavailable", reason!) { OwnerUnavailable = true }]));
         if (target is not null && target is not { ModuleId: WorkflowLibraryContext.ModuleId, ResourceType: WorkflowLibraryContext.LibraryResourceType })
-            return ValueTask.FromResult(new AgentPolicyDecision(false, [new("weaver.workflow.resource_required", "The workflow library list is this tool's only target.")]));
-        return ValueTask.FromResult(new AgentPolicyDecision(true, []));
+            return ValueTask.FromResult(new WeaverPolicyDecision(false, [new("weaver.workflow.resource_required", "The workflow library list is this tool's only target.")]));
+        return ValueTask.FromResult(new WeaverPolicyDecision(true, []));
     }
 
-    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         if (WorkflowLibraryContext.Commands(commands, out var reason) is not { } library)
             return Failure("weaver.workflow.library_unavailable", reason!, 503);
-        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowLibraryContext.LibraryKind && item.Origin == AgentContextOrigin.ClientSnapshot).ToArray();
+        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowLibraryContext.LibraryKind && item.Origin == WeaverContextOrigin.ClientSnapshot).ToArray();
         if (contexts.Length != 1 || !WorkflowLibraryContext.TryRead(contexts[0], out var list, out _))
             return Failure("weaver.workflow.library_context_required", "One admitted workflow library list is required; nothing was changed.", 409);
         if (invocation.Client is not null && invocation.Client != list.Client)
@@ -66,22 +66,22 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
         return await PrepareCoreAsync(library, actor, permissions.Value, list, arguments, cancellationToken);
     }
 
-    public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         if (WorkflowLibraryContext.Commands(commands, out var reason) is not { } library)
-            return AgentResult<AgentToolResult>.Failure("weaver.workflow.library_unavailable", reason!, 503);
+            return WeaverResult<WeaverToolResult>.Failure("weaver.workflow.library_unavailable", reason!, 503);
         if (invocation.Target is not { ModuleId: WorkflowLibraryContext.ModuleId, ResourceType: WorkflowLibraryContext.LibraryResourceType } target)
-            return AgentResult<AgentToolResult>.Failure("weaver.workflow.prepared_invalid", "The prepared library change is invalid; nothing was changed.", 409);
+            return WeaverResult<WeaverToolResult>.Failure("weaver.workflow.prepared_invalid", "The prepared library change is invalid; nothing was changed.", 409);
         var (status, summary, data, targets) = await ExecuteCoreAsync(library, new(invocation.ActorId, invocation.TenantId), invocation.Arguments, cancellationToken);
         if (status == "refused")
-            return AgentResult<AgentToolResult>.Failure("weaver.workflow.library_refused", summary, 409);
-        var payload = new AgentPayload(ResultType, "1", data);
-        var after = new AgentResourceTarget(target.ModuleId, target.ResourceType, target.ResourceId, Digest(targets));
-        return AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, summary, payload)
-        { Receipt = new(invocation.InvocationId, target, after, AgentEffectScope.ServerPersisted, payload) });
+            return WeaverResult<WeaverToolResult>.Failure("weaver.workflow.library_refused", summary, 409);
+        var payload = new WeaverPayload(ResultType, "1", data);
+        var after = new WeaverResourceTarget(target.ModuleId, target.ResourceType, target.ResourceId, Digest(targets));
+        return WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, summary, payload)
+        { Receipt = new(invocation.InvocationId, target, after, WeaverEffectScope.ServerPersisted, payload) });
     }
 
-    protected abstract Task<AgentResult<AgentToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
+    protected abstract Task<WeaverResult<WeaverToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
         WorkflowLibraryPermissionFlags permissions, WorkflowLibraryContext.Admitted list, JsonElement arguments, CancellationToken cancellationToken);
 
     /// <summary>Runs the frozen change: <c>refused</c> when nothing changed, otherwise <c>applied</c> or <c>partial</c> with per-target outcomes.</summary>
@@ -89,10 +89,10 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
         IWorkflowLibraryCommands library, WorkflowLibraryActor actor, JsonElement arguments, CancellationToken cancellationToken);
 
     /// <summary>A reviewed preparation in every mode, bound to the library target whose revision digests the bound target revisions.</summary>
-    protected AgentResult<AgentToolPreparation> Prepared(WorkflowLibraryContext.Admitted list, IEnumerable<string> boundRevisions, object frozen, object preview) =>
-        AgentResult<AgentToolPreparation>.Success(new(
+    protected WeaverResult<WeaverToolPreparation> Prepared(WorkflowLibraryContext.Admitted list, IEnumerable<string> boundRevisions, object frozen, object preview) =>
+        WeaverResult<WeaverToolPreparation>.Success(new(
             new(WorkflowLibraryContext.ModuleId, WorkflowLibraryContext.LibraryResourceType, "library", Digest(boundRevisions)),
-            JsonSerializer.SerializeToElement(frozen, JsonOptions), AgentRisk.ReviewRequired,
+            JsonSerializer.SerializeToElement(frozen, JsonOptions), WeaverRisk.ReviewRequired,
             new(ResultType, "1", JsonSerializer.SerializeToElement(preview, JsonOptions)), RequiresApproval: true) { Client = list.Client });
 
     /// <summary>The definitions the change targets: explicit, distinct, and each a row the user sees in the admitted list.</summary>
@@ -100,8 +100,8 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
     {
         if (!arguments.TryGetProperty("definitionIds", out var ids) || ids.ValueKind != JsonValueKind.Array || ids.GetArrayLength() is < 1 || ids.GetArrayLength() > limit)
             return null;
-        var visible = list.Content.GetProperty("items").EnumerateArray().Select(item => WorkflowAgentSnapshot.Text(item, "id")).ToHashSet(StringComparer.Ordinal);
-        var result = ids.EnumerateArray().Select(WorkflowAgentSnapshot.String).ToArray();
+        var visible = list.Content.GetProperty("items").EnumerateArray().Select(item => WorkflowWeaverSnapshot.Text(item, "id")).ToHashSet(StringComparer.Ordinal);
+        var result = ids.EnumerateArray().Select(WorkflowWeaverSnapshot.String).ToArray();
         return result.Any(id => id is null || !visible.Contains(id)) || result.Distinct(StringComparer.Ordinal).Count() != result.Length ? null : result!;
     }
 
@@ -123,11 +123,11 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
         _ => $"The workflow library changed nothing: no workflow could be {action.Replace("applied the change", "changed")}."
     };
 
-    protected static AgentResult<AgentToolPreparation> Failure(string code, string message, int status) =>
-        AgentResult<AgentToolPreparation>.Failure(code, message, status);
+    protected static WeaverResult<WeaverToolPreparation> Failure(string code, string message, int status) =>
+        WeaverResult<WeaverToolPreparation>.Failure(code, message, status);
 
     /// <summary>A library refusal at preparation, with the library's own cause-free message and the matching status.</summary>
-    protected static AgentResult<AgentToolPreparation> Outcome(string status, string? message) => status switch
+    protected static WeaverResult<WeaverToolPreparation> Outcome(string status, string? message) => status switch
     {
         WorkflowLibraryCommandStatus.Unavailable => Failure("weaver.workflow.library_unavailable", message ?? "Workflow organization is unavailable.", 503),
         WorkflowLibraryCommandStatus.Unsupported => Failure("weaver.workflow.library_unsupported", message ?? "This library backend does not support the change.", 501),
@@ -149,15 +149,15 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
 internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibraryCommands>? commands = null) : WorkflowLibraryServerTool(commands)
 {
     public const string ToolName = "workflow_library_assign_tags";
-    internal static readonly AgentToolDescriptor Contract = Describe(ToolName, "Tag workflows",
+    internal static readonly WeaverToolDescriptor Contract = Describe(ToolName, "Tag workflows",
         "Proposes a reviewed tag change for visible workflows in the library: add or remove tags (by name; a controlled tag's value by name). " +
         "A tag that does not exist is created as a marker tag first, which needs tag-management permission and is shown in the review. Reports one outcome per workflow.",
         """{"type":"object","required":["definitionIds"],"properties":{"definitionIds":{"type":"array","minItems":1,"maxItems":50,"items":{"type":"string","maxLength":128}},"add":{"type":"array","maxItems":16,"items":{"type":"object","required":["tag"],"properties":{"tag":{"type":"string","maxLength":256},"value":{"type":"string","maxLength":256}},"additionalProperties":false}},"remove":{"type":"array","maxItems":16,"items":{"type":"object","required":["tag"],"properties":{"tag":{"type":"string","maxLength":256},"value":{"type":"string","maxLength":256}},"additionalProperties":false}}},"additionalProperties":false}""",
         "workflows/design/tag-assignments:manage");
 
-    public override AgentToolDescriptor Descriptor => Contract;
+    public override WeaverToolDescriptor Descriptor => Contract;
 
-    protected override async Task<AgentResult<AgentToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
+    protected override async Task<WeaverResult<WeaverToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
         WorkflowLibraryPermissionFlags permissions, WorkflowLibraryContext.Admitted list, JsonElement arguments, CancellationToken cancellationToken)
     {
         if (!Only(arguments, "definitionIds", "add", "remove") || Targets(arguments, list) is not { } ids)
@@ -288,8 +288,8 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
         if (items.ValueKind != JsonValueKind.Array || items.GetArrayLength() > 16) return null;
         foreach (var item in items.EnumerateArray())
         {
-            if (!Only(item, "tag", "value") || WorkflowAgentSnapshot.Text(item, "tag") is not { Length: > 0 and <= 256 } tag) return null;
-            var value = WorkflowAgentSnapshot.Text(item, "value");
+            if (!Only(item, "tag", "value") || WorkflowWeaverSnapshot.Text(item, "tag") is not { Length: > 0 and <= 256 } tag) return null;
+            var value = WorkflowWeaverSnapshot.Text(item, "value");
             if (item.TryGetProperty("value", out var raw) && raw.ValueKind != JsonValueKind.Null && value is not { Length: > 0 and <= 256 }) return null;
             result.Add((tag.Trim(), value?.Trim()));
         }
@@ -305,14 +305,14 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
 internal sealed class WorkflowLibrarySetFavoriteTool(IEnumerable<IWorkflowLibraryCommands>? commands = null) : WorkflowLibraryServerTool(commands)
 {
     public const string ToolName = "workflow_library_set_favorite";
-    internal static readonly AgentToolDescriptor Contract = Describe(ToolName, "Favorite workflows",
+    internal static readonly WeaverToolDescriptor Contract = Describe(ToolName, "Favorite workflows",
         "Proposes a reviewed favorite change (an idempotent set) for visible workflows in the library. Reports one outcome per workflow.",
         """{"type":"object","required":["definitionIds","favorite"],"properties":{"definitionIds":{"type":"array","minItems":1,"maxItems":50,"items":{"type":"string","maxLength":128}},"favorite":{"type":"boolean"}},"additionalProperties":false}""",
         "workflows/design:read");
 
-    public override AgentToolDescriptor Descriptor => Contract;
+    public override WeaverToolDescriptor Descriptor => Contract;
 
-    protected override Task<AgentResult<AgentToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
+    protected override Task<WeaverResult<WeaverToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
         WorkflowLibraryPermissionFlags permissions, WorkflowLibraryContext.Admitted list, JsonElement arguments, CancellationToken cancellationToken)
     {
         if (!Only(arguments, "definitionIds", "favorite") || Targets(arguments, list) is not { } ids
@@ -342,18 +342,18 @@ internal sealed class WorkflowLibrarySetFavoriteTool(IEnumerable<IWorkflowLibrar
 internal sealed class WorkflowLibraryMoveToFolderTool(IEnumerable<IWorkflowLibraryCommands>? commands = null) : WorkflowLibraryServerTool(commands)
 {
     public const string ToolName = "workflow_library_move_to_folder";
-    internal static readonly AgentToolDescriptor Contract = Describe(ToolName, "Move workflows to folder",
+    internal static readonly WeaverToolDescriptor Contract = Describe(ToolName, "Move workflows to folder",
         "Proposes a reviewed move of visible workflows into one folder (folderId null: unfiled), applied to all of them or none. Needs folder-management permission.",
         """{"type":"object","required":["definitionIds","folderId"],"properties":{"definitionIds":{"type":"array","minItems":1,"maxItems":50,"items":{"type":"string","maxLength":128}},"folderId":{"type":["string","null"],"maxLength":64}},"additionalProperties":false}""",
         "workflows/design:manage");
 
-    public override AgentToolDescriptor Descriptor => Contract;
+    public override WeaverToolDescriptor Descriptor => Contract;
 
-    protected override Task<AgentResult<AgentToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
+    protected override Task<WeaverResult<WeaverToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
         WorkflowLibraryPermissionFlags permissions, WorkflowLibraryContext.Admitted list, JsonElement arguments, CancellationToken cancellationToken)
     {
         if (!Only(arguments, "definitionIds", "folderId") || Targets(arguments, list) is not { } ids || !arguments.TryGetProperty("folderId", out var folder)
-            || folder.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || folder.ValueKind == JsonValueKind.String && WorkflowAgentSnapshot.String(folder) is not { Length: > 0 and <= 64 })
+            || folder.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || folder.ValueKind == JsonValueKind.String && WorkflowWeaverSnapshot.String(folder) is not { Length: > 0 and <= 64 })
             return Task.FromResult(Failure("weaver.workflow.library_arguments_invalid", "Name visible workflows and one folder id (or null for unfiled); nothing was changed.", 400));
         if (!permissions.CanManageFolders)
             return Task.FromResult(Failure("weaver.workflow.permission_denied", "Folder-management permission is required to move workflows; nothing was changed.", 403));
@@ -382,17 +382,17 @@ internal sealed class WorkflowLibraryMoveToFolderTool(IEnumerable<IWorkflowLibra
 internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCommands>? commands = null) : WorkflowLibraryServerTool(commands)
 {
     public const string ToolName = "workflow_library_save_view";
-    internal static readonly AgentToolDescriptor Contract = Describe(ToolName, "Save library view",
+    internal static readonly WeaverToolDescriptor Contract = Describe(ToolName, "Save library view",
         "Proposes saving the visible workflow list (its query and columns) as a library view: a new view by name, or the applied view (update: true), private or shared. Sharing needs view-sharing permission.",
         """{"type":"object","required":["name","shared"],"properties":{"name":{"type":"string","minLength":1,"maxLength":256},"shared":{"type":"boolean"},"update":{"type":"boolean"}},"additionalProperties":false}""",
         "workflows/design:read");
 
-    public override AgentToolDescriptor Descriptor => Contract;
+    public override WeaverToolDescriptor Descriptor => Contract;
 
-    protected override Task<AgentResult<AgentToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
+    protected override Task<WeaverResult<WeaverToolPreparation>> PrepareCoreAsync(IWorkflowLibraryCommands library, WorkflowLibraryActor actor,
         WorkflowLibraryPermissionFlags permissions, WorkflowLibraryContext.Admitted list, JsonElement arguments, CancellationToken cancellationToken)
     {
-        if (!Only(arguments, "name", "shared", "update") || WorkflowAgentSnapshot.Text(arguments, "name") is not { Length: > 0 and <= 256 } name
+        if (!Only(arguments, "name", "shared", "update") || WorkflowWeaverSnapshot.Text(arguments, "name") is not { Length: > 0 and <= 256 } name
             || !arguments.TryGetProperty("shared", out var sharedValue) || sharedValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
             || arguments.TryGetProperty("update", out var updateValue) && updateValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             return Task.FromResult(Failure("weaver.workflow.library_arguments_invalid", "Name the view and say whether it is shared; nothing was changed.", 400));
@@ -423,14 +423,14 @@ internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCo
     {
         var query = arguments.GetProperty("query");
         var input = new WorkflowLibraryViewSave(arguments.GetProperty("name").GetString()!, new(
-                WorkflowAgentSnapshot.Text(query, "search"), WorkflowAgentSnapshot.Text(query, "state") ?? "active", WorkflowAgentSnapshot.Text(query, "folderId"),
+                WorkflowWeaverSnapshot.Text(query, "search"), WorkflowWeaverSnapshot.Text(query, "state") ?? "active", WorkflowWeaverSnapshot.Text(query, "folderId"),
                 query.GetProperty("unfiled").GetBoolean(), query.GetProperty("includeDescendants").GetBoolean(),
                 query.GetProperty("tagFilters").EnumerateArray().Select(filter => new WorkflowLibraryTagFilterSnapshot(filter.GetProperty("tagId").GetString()!,
                     filter.GetProperty("operator").GetString()!, filter.GetProperty("valueIds").EnumerateArray().Select(value => value.GetString()!).ToArray())).ToArray(),
-                query.GetProperty("favoritesOnly").GetBoolean(), WorkflowAgentSnapshot.Text(query, "sort") ?? "name", 50, WorkflowAgentSnapshot.Text(query, "publicationState")),
+                query.GetProperty("favoritesOnly").GetBoolean(), WorkflowWeaverSnapshot.Text(query, "sort") ?? "name", 50, WorkflowWeaverSnapshot.Text(query, "publicationState")),
             arguments.GetProperty("shared").GetBoolean(), arguments.GetProperty("columns").EnumerateArray().Select(column => column.GetString()!).ToArray(),
-            WorkflowAgentSnapshot.Text(arguments, "revision"));
-        var viewId = WorkflowAgentSnapshot.Text(arguments, "viewId"); var key = WorkflowAgentSnapshot.Text(arguments, "operationKey");
+            WorkflowWeaverSnapshot.Text(arguments, "revision"));
+        var viewId = WorkflowWeaverSnapshot.Text(arguments, "viewId"); var key = WorkflowWeaverSnapshot.Text(arguments, "operationKey");
         // Weaver creates only under a key, so a lost response can be resolved by rereading it; an update names its view.
         if (viewId is null && key is null)
             return ("refused", "The view change names neither an existing view nor an operation key for a new one; nothing was saved.",

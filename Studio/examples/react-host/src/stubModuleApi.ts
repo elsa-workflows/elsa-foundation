@@ -27,7 +27,7 @@ import {
  * `@elsa-workflows/studio-workflows`'s `register(api)` touches exactly:
  *   - `api.dialogs`               (passed to its internal `setDialogs`)
  *   - `api.featureAreas.add(...)` (registers one "Workflows" feature area with nav + routes)
- * and each registered route component reads `api.backend` / `api.agent` / the various editor
+ * and each registered route component reads `api.backend` / `api.weaver` / the various editor
  * registries at RENDER time. So a working stub only needs those to be real and callable.
  */
 export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi {
@@ -61,7 +61,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent,
+    weaver: agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),

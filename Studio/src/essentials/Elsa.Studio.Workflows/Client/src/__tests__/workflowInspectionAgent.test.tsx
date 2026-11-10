@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioAgentContextAttachment, StudioAgentRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverContextAttachment, StudioWeaverRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
 import { useWorkflowInspectionContext } from "../workflow-editor/useWorkflowInspectionContext";
@@ -13,7 +13,7 @@ import { renderRegisteredRoute, response } from "./routeRenderingHelpers";
 // Spec 1193 slices F and G (stories 8 and 9): the Executable Inspector's, the version history's and the run page's read-only
 // page contexts.
 
-async function collect(agent: StudioAgentRegistry, id: string): Promise<StudioAgentContextAttachment[]> {
+async function collect(agent: StudioWeaverRegistry, id: string): Promise<StudioWeaverContextAttachment[]> {
   const provider = agent.contextProviders.list().find(item => item.id === id)!;
   const result = await provider.collect({ surface: { route: "/workflows" }, mode: "explain" } as never);
   return Array.isArray(result) ? result : result.attachments;
@@ -136,13 +136,13 @@ describe("Executable Inspector context (spec 1193 FR-028)", () => {
     const explain: StudioAiPromptActionContribution = { id: "weaver.workflows.explain-executable", label: "Explain executable", placement: "selection",
       contextKind: "workflow-executable", createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) };
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1", configured => {
-      configured.agent.promptActions.add(explain);
-      configured.agent.dispatchPrompt = dispatchPrompt;
+      configured.weaver.promptActions.add(explain);
+      configured.weaver.dispatchPrompt = dispatchPrompt;
     });
-    await vi.waitFor(async () => expect(await collect(api.agent, "workflows.executable-inspector")).toHaveLength(1));
-    const [attachment] = await collect(api.agent, "workflows.executable-inspector");
+    await vi.waitFor(async () => expect(await collect(api.weaver, "workflows.executable-inspector")).toHaveLength(1));
+    const [attachment] = await collect(api.weaver, "workflows.executable-inspector");
     expect(attachment).toMatchObject({ id: "workflows.executable:artifact-1", target: { resourceType: "workflow-executable", resourceId: "artifact-1", revision: "sha256:abc" },
-      content: { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1" }, client: { clientId: api.agent.clientId } });
+      content: { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1" }, client: { clientId: api.weaver.clientId } });
 
     const button = [...container.querySelectorAll("button")].find(item => item.textContent?.includes("Explain"))!;
     await click(button);
@@ -150,7 +150,7 @@ describe("Executable Inspector context (spec 1193 FR-028)", () => {
       context: { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1", attached: true }
     }));
     await unmount();
-    expect(await collect(api.agent, "workflows.executable-inspector")).toEqual([]);
+    expect(await collect(api.weaver, "workflows.executable-inspector")).toEqual([]);
   });
 });
 

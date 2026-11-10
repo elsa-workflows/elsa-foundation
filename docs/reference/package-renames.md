@@ -22,7 +22,25 @@ Decision: [ADR 0094 amendment](../adr/0094-agent-definitions-own-authored-conten
 | Endpoint names | `ElsaAgentApiEndpoints*` | `ElsaWeaverApiEndpoints*` |
 | Glossary | Agent run, Agent harness provider | Weaver run, Weaver harness provider, Weaver session |
 
-Unchanged in stage 1: C# type names inside the Weaver layer (`AgentSession`, `IAgentProvider`, ...), the Studio module SDK surface `api.agent`, the `AgentSource*` types, `agent/definitions` permissions, `AgentSourcesEntityFrameworkCore` and `elsa_agent_sources_*` tables (they belong to user-defined agents), and every `Elsa.Agent.Specialists.*` package.
+Unchanged in stage 1: C# type names inside the Weaver layer (`AgentSession`, `IAgentProvider`, ...) and the Studio module SDK surface `api.agent` (both renamed in stage 1b, below), the `AgentSource*` types, `agent/definitions` permissions, `AgentSourcesEntityFrameworkCore` and `elsa_agent_sources_*` tables (they belong to user-defined agents), and every `Elsa.Agent.Specialists.*` package.
+
+## 2026-11-10: Weaver types and the Studio SDK surface take the Weaver name (stage 1b of the agent rename)
+
+Decision: Sipke Schoorstra on 2026-11-10, recorded on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027): the Weaver layer's own types stop saying "agent", so `Agent*` in code always means a user-defined agent. Source and SDK names only; nothing persisted or on the wire changes. It landed after stage 2, so the `Agent*` names below are the Weaver layer's, not the user-defined agent layer's.
+
+| Kind | Was | Is |
+|---|---|---|
+| C# type names in `Elsa.Weaver.*` | `Agent*`, `IAgent*`, `*Agent*` (`AgentSession`, `IAgentProvider`, `AgentToolInvocation`, `AgentPolicy`, `AgentFeature`, `WorkflowAgentSnapshot`, `EfAgentSessionRecordStore`, `AgentDbContext`, ...; 361 types) | `Weaver*` in the same position (`WeaverSession`, `IWeaverProvider`, `WeaverToolInvocation`, `WeaverPolicy`, `WeaverFeature`, `WorkflowWeaverSnapshot`, `EfWeaverSessionRecordStore`, `WeaverDbContext`, ...) |
+| Registration and selection methods | `AddAgentStores`, `AddAgentModel`, `AddAgentEntityFrameworkCore`, `MapAgentApi`, `SelectAgentSessionRecordStore`, `SelectAgentAuditStore` | `AddWeaverStores`, `AddWeaverModel`, `AddWeaverEntityFrameworkCore`, `MapWeaverApi`, `SelectWeaverSessionRecordStore`, `SelectWeaverAuditStore` |
+| Studio module SDK surface | `api.agent` (`promptActions`, `resultRenderers`, ...) on `ElsaStudioModuleApi` | `api.weaver` |
+| Studio module SDK types (`@elsa-workflows/studio-sdk`) | `StudioAgent*` (`StudioAgentRegistry`, `StudioAgentPromptAction`, `StudioAgentRisk`, ...) | `StudioWeaver*` |
+| Source files | `Extensions/Weaver/**/*Agent*.cs` (143 files) | the same paths with `Weaver` in the file name |
+
+What follows the type names: OpenAPI schema ids derived from the CLR type names, logger categories (`Elsa.Weaver...Weaver*`), source-generated JSON context member names, the contributor type name the permission catalog reports for the Weaver permissions (`WeaverPermissionContributor`, computed at startup), and the CLR type names recorded in the EF migration designer and snapshot files. None of these is read back from stored data.
+
+Unchanged in stage 1b: every persisted or wire identifier. Table and column names, the `Weaver` EF module and `ElsaWeaver` history, JSON property names (`agentScopes`, ...), enum member names (`AgentHarnessProvider`, `SubAgents`) and their wire values, routes, capability ids, error codes, permission keys, codecs, shell feature keys, Studio module ids, local-storage keys, CSS classes and test ids stay as stage 1 left them. Studio-internal file and function names that still say "agent" (`app/agent/`, `workflowAgent*.ts`, `registerWorkflowAgent`, the `workflows.agent.*` contribution ids) are not part of the SDK surface and are tracked on #4027.
+
+Breaking for Studio module authors: a module that reads `api.agent` or imports a `StudioAgent*` type must switch to `api.weaver` and `StudioWeaver*` when it moves to this SDK version; there is no alias.
 
 ## 2026-11-10: user-defined agents take the `Elsa.Agent` root (stage 2 of the agent rename)
 

@@ -82,7 +82,7 @@ export function createStudioRegistry(
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),
-    agent,
+    weaver: agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers,hostPolicy }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems,hostPolicy }),

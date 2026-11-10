@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext, type StudioAgentPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "../../../sdk";
+import { createEndpointContext, type StudioWeaverPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "../../../sdk";
 import { AgentApiError, createAgentClient, type AgentClient } from "../../agent/agentClient";
 import { subscribeAgentSessionStream } from "../../agent/agentStream";
 import type { AgentRecordedMessage, AgentRecordedProposal, AgentSessionDetailResponse, AgentSessionPolicy, AgentStreamEvent } from "../../agent/agentTypes";
@@ -177,13 +177,13 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     let finishDelivery!: () => void;
     const tabA = readyApi("ada");
-    tabA.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
+    tabA.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
       executeClient: () => new Promise(resolve => { finishDelivery = () => resolve({ outcome: "applied", summary: "Moved." }); }) });
     const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
     remember(sessionId);
     const a = mount(server, "ada", tabA);
     await settle(() => expect(buttonIn(proposalByTitle(a.container, "Move activity"), "Apply")?.disabled).toBe(false));
-    server.prepareClientDelivery(sessionId, "prop_c", tabA.agent.clientId);
+    server.prepareClientDelivery(sessionId, "prop_c", tabA.weaver.clientId);
     click(buttonIn(proposalByTitle(a.container, "Move activity"), "Apply"));
     await settle(() => expect(server.proposal(sessionId, "prop_c").status).toBe("awaiting-client"));
 
@@ -198,7 +198,7 @@ describe("Weaver session recovery", () => {
     finishDelivery();
     await settle(() => expect(server.proposal(sessionId, "prop_c").status).toBe("executed"));
     expect(server.client.acknowledgeClient).toHaveBeenCalledTimes(1);
-    expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({ outcome: "applied", client: { clientId: tabA.agent.clientId, generationId: "generation" } }));
+    expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({ outcome: "applied", client: { clientId: tabA.weaver.clientId, generationId: "generation" } }));
     expect(server.client.resolveClientInvocation).not.toHaveBeenCalled();
     expect(server.proposal(sessionId, "prop_c").status).toBe("executed");
     a.unmount(); b.unmount();
@@ -208,11 +208,11 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     const api = readyApi("ada");
     const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Moved." }));
-    api.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
+    api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
       executeClient: execute, clientTargetAvailability: () => ({ status: "unavailable", reason: "The editor that held this unsaved draft was closed." }) });
     const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
     // A reload gives the page a new client identity; a closed editor keeps the identity but loses its unsaved target.
-    if (cause === "closed editor") server.prepareClientDelivery(sessionId, "prop_c", api.agent.clientId);
+    if (cause === "closed editor") server.prepareClientDelivery(sessionId, "prop_c", api.weaver.clientId);
     remember(sessionId);
     const view = mount(server, "ada", api);
     await settle(() => expect(buttonIn(proposalByTitle(view.container, "Move activity"), "Apply")?.disabled).toBe(false));
@@ -719,7 +719,7 @@ function reviewProposal(id: string, status: AgentRecordedProposal["status"]): Ag
 }
 
 function clientProposal(id: string, status: AgentRecordedProposal["status"]): AgentRecordedProposal {
-  const prepared: StudioAgentPreparedInvocation = { invocationId: `inv_${id}`, sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "ada", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: "original-tab", generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
+  const prepared: StudioWeaverPreparedInvocation = { invocationId: `inv_${id}`, sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "ada", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: "original-tab", generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
   return { id, status, title: "Move activity", summary: "Move the activity.", risk: "review-required", baseRevision: "r1", preparedInvocation: prepared, resourceTarget: prepared.target! };
 }
 
@@ -735,7 +735,7 @@ function readyApi(subject: string, profile = "primary") {
     refreshCapabilities: async () => { throw new Error("unused"); }
   } as unknown as StudioBackendSession;
   const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") }, { backendBaseUrl: `https://${profile}.example/`, backendSession });
-  api.agent.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
+  api.weaver.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
   return api;
 }
 

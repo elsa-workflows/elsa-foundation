@@ -1,4 +1,4 @@
-import { resolveBackendPath, withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
+import { resolveBackendPath, withDefaultHeaders, type StudioWeaverToolResult, type StudioEndpointContext } from "../../sdk";
 import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent } from "./agentTypes";
 import { mapAdmittedContextAttachment } from "./agentClient";
 
@@ -190,7 +190,7 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   const content = readString(event, "content") ?? readString(data, "content") ?? "";
 
   if (resultKind === "module-result" || type === "contributed-result") {
-    return payload ? { type: "module-result", messageId, result: payload as unknown as StudioAgentToolResult } : null;
+    return payload ? { type: "module-result", messageId, result: payload as unknown as StudioWeaverToolResult } : null;
   }
 
   if (resultKind === "clarification" || type === "clarification-requested" || type === "clarification") {

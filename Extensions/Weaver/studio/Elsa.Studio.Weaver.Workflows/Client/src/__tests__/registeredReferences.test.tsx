@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ElsaStudioModuleApi, StudioAgentRegistry } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 // The Workflows module's own registration, composed beside this package's as the Studio host composes both.
@@ -25,11 +25,11 @@ function compose() {
   const workflows = createAgentRegistry();
   registerWorkflowAgent(workflows);
   const weaver = createAgentRegistry();
-  register({ agent: weaver } as unknown as ElsaStudioModuleApi);
+  register({ weaver } as unknown as ElsaStudioModuleApi);
   return { workflows, weaver };
 }
 
-function contributions(agent: StudioAgentRegistry) {
+function contributions(agent: StudioWeaverRegistry) {
   return [
     ...agent.promptActions.list(), ...agent.promptStarters.list(), ...agent.capabilities.list(), ...agent.contextProviders.list(),
     ...agent.toolSlots.list(), ...agent.toolContracts.list(), ...agent.resultRenderers.list(), ...(agent.resultControls?.list() ?? [])
