@@ -197,7 +197,8 @@ public sealed class RuntimeResumptionService(
     }
 
     // A read, never an acquisition: acquiring ownership always issues a newer fencing token, which would fence the live
-    // drain out instead of waiting for it.
+    // drain out instead of waiting for it. Any unexpired lease counts, an alteration's borrowed one included: that one
+    // is released or expires within a lease duration, and the next sweep purges.
     private async ValueTask<bool> IsOwnedByLiveDrainAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         var ownership = await executionLivenessStateStore.FindAsync(
