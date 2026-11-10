@@ -45,8 +45,10 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         if (producer < 0 || consumer < 0)
             return new(ActivityChildResultAvailability.Unavailable);
 
+        // A Sequence runs each child once per run, in order.
         return new(producer < consumer ? ActivityChildResultAvailability.Definite : ActivityChildResultAvailability.Unavailable,
-            IsCyclicBackEdge: false, MayRunConcurrently: false, AreMutuallyExclusive: false);
+            IsCyclicBackEdge: false, MayRunConcurrently: false, AreMutuallyExclusive: false)
+        { EarlierProducerRunCanReachConsumer = false };
     }
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)

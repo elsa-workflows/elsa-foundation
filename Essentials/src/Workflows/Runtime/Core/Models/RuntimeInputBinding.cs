@@ -196,15 +196,23 @@ public sealed class RuntimeVariableReference
 
 public sealed class RuntimeActivityResultReference
 {
+    /// <param name="producerExecutableNodeId">The producer node.</param>
+    /// <param name="projectionKey">The declared result projection, or <c>$result</c>.</param>
+    /// <param name="producerScopeId">
+    /// The execution scope an existing document declares for the producer, or <see langword="null"/> for a reference
+    /// that declares none. A declared scope must not be blank.
+    /// </param>
+    /// <param name="isOptional">Whether an unavailable producer resolves to no value instead of failing.</param>
     public RuntimeActivityResultReference(
         string producerExecutableNodeId,
         string projectionKey,
-        string producerScopeId,
+        string? producerScopeId,
         bool isOptional = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(producerExecutableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(projectionKey);
-        ArgumentException.ThrowIfNullOrWhiteSpace(producerScopeId);
+        if (producerScopeId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(producerScopeId);
 
         ProducerExecutableNodeId = producerExecutableNodeId;
         ProjectionKey = projectionKey;
@@ -214,7 +222,15 @@ public sealed class RuntimeActivityResultReference
 
     public string ProducerExecutableNodeId { get; }
     public string ProjectionKey { get; }
-    public string ProducerScopeId { get; }
+
+    /// <summary>
+    /// The producer's declared execution scope. When set, a producer that ran in another scope is not a candidate.
+    /// <see langword="null"/> declares none: the producer is identified by causal lineage and frames alone, and the
+    /// member is left out of the stored reference.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducerScopeId { get; }
+
     public bool IsOptional { get; }
 }
 
