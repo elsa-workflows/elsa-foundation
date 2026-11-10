@@ -7,7 +7,7 @@
 **Status**: Implementation in progress — shared revision amendment accepted; source slice #3790 authorized
 
 **Input**: Program [#3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519):
-deliver user-defined specialist agents through native Elsa workflows and BPMN, with real models,
+deliver user-defined agents through native Elsa workflows and BPMN, with real models,
 explicit continuity and bounded collaboration. [M1 #3521](https://github.com/elsa-workflows/elsa-foundation/issues/3521)
 and [design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) own this design packet.
 The owner authorized end-to-end delivery and recommended defaults. This specification describes
@@ -15,17 +15,17 @@ the product to implement, not behavior established by M0 research or by merging 
 
 **Shared revision amendment (4 November 2026)**: Owner agreement is recorded by merged PR #3783 (`4043cbfb1`); the owner separately authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026. This delivery implements the source-storage slice of T065/T069. It does not ratify provisional constitution sections or infer additional human approvals. W1–W8 remain open until their complete witnesses pass. [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](contracts/revision-management.md) and [Agent ownership](contracts/agent-ownership.md) govern the delivery. Candidates reference shared snapshots; they do not own another source store. Pre-GA clean database recreation supersedes legacy adoption, but no current database is reset by this change. Historical receipts remain evidence of the earlier implementation only.
 
-**Terminology**: Agent is the canonical product/domain noun; specialist describes a role and historical naming. Clean implementation may rename Specialist identifiers without compatibility shims. Keep the pinned `Elsa.Agent` root and this spec directory; exact API/package changes belong to delivery review. See the [glossary](../../docs/glossary/elsa.md).
+**Terminology**: Agent is the canonical product/domain noun. Specialist was the earlier name for the same thing. The rename under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027) removed it from code, packages, schemas and this spec without compatibility shims, and moved this spec directory from `specs/1179-specialist-agents` to `specs/1179-agents`. The pinned root is `Elsa.Agent`. See the [glossary](../../docs/glossary/elsa.md) and the [old-to-new map](../../docs/reference/package-renames.md).
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — Create, test and publish a specialist (Priority: P1)
+### User Story 1 — Create, test and publish an agent (Priority: P1)
 
 An authorized author creates an Agent definition named Copywriter, chooses an available model connection, writes instructions
 and defines one Agent-owned typed brief/result contract from which JSON schemas and activity ports derive. They test a saved draft snapshot, inspect its result and
 usage, then review and publish a version that others can select as an activity.
 
-**Why this priority**: This delivers the smallest complete specialist workflow, beyond a saved prompt.
+**Why this priority**: This delivers the smallest complete agent workflow, beyond a saved prompt.
 
 **Independent Test**: Create → save → test → review → publish → select the named activity. Reloading
 retains the saved authoring state and exact published identity.
@@ -36,7 +36,7 @@ retains the saved authoring state and exact published identity.
    **then** its instructions, schemas and valid settings survive reload and an exact draft revision is shown.
 2. **Given** two authors at the same revision, **when** one saves first, **then** the other's save identifies
    the conflict and preserves their working content without overwriting the winner.
-3. **Given** a saved candidate, **when** it is tested, **then** the same specialist execution path used by
+3. **Given** a saved candidate, **when** it is tested, **then** the same agent execution path used by
    workflows runs that exact candidate and records input, output, model identity, usage and failures.
 4. **Given** an accepted publication review, **when** the author publishes, **then** a named immutable
    activity with usable inputs, result projections and outcomes becomes discoverable to authorized users.
@@ -51,18 +51,18 @@ article between them, branches on the structured review verdict, and routes acce
 **Why this priority**: Composition in Elsa is the product's central promise.
 
 **Independent Test**: Run equivalent editorial processes from saved native and BPMN definitions and
-compare accepted specialist identities, inputs, results, outcomes and parent continuation.
+compare accepted agent identities, inputs, results, outcomes and parent continuation.
 
 **Acceptance Scenarios**:
 
-1. **Given** published specialists, **when** a native Sequence/Flowchart runs the editorial example,
+1. **Given** published agents, **when** a native Sequence/Flowchart runs the editorial example,
    **then** Proofreader receives the committed Copywriter output and the process follows the validated verdict.
 2. **Given** the equivalent BPMN service tasks, **when** the process is saved/reloaded and executed,
-   **then** it retains the exact specialist versions and reaches the corresponding human approval.
+   **then** it retains the exact agent versions and reaches the corresponding human approval.
 3. **Given** supported BPMN interchange, **when** exported content is imported again, **then** the
    exact task bindings survive; unsupported content produces an actionable refusal and retains authoring data.
 4. **Given** a duplicate or late completion, **when** it reaches the process, **then** it cannot repeat
-   an accepted specialist result or logically continue the parent twice.
+   an accepted agent result or logically continue the parent twice.
 5. **Given** a changes_requested verdict, **when** another round is allowed, **then** Copywriter receives
    the previous article and review comments; at most three total rounds run before explicit exhaustion.
 6. **Given** an exact article awaiting human review, **when** the host restarts and an authorized person
@@ -71,7 +71,7 @@ compare accepted specialist identities, inputs, results, outcomes and parent con
 
 ### User Story 3 — Continue an explicit conversation (Priority: P1)
 
-A caller normally runs an isolated specialist call. A caller who wants continuity supplies an explicit
+A caller normally runs an isolated agent call. A caller who wants continuity supplies an explicit
 conversation reference and expected revision, and can inspect or stop the resulting turn.
 
 **Why this priority**: Continuity is a deliberate capability with visible ownership and concurrency rules.
@@ -82,18 +82,18 @@ history across a process restart, while foreign scope/version and overlapping st
 **Acceptance Scenarios**:
 
 1. **Given** no conversation reference, **when** two invocations run, **then** neither receives the other's history.
-2. **Given** a permitted conversation and exact specialist version, **when** a subsequent turn starts,
+2. **Given** a permitted conversation and exact agent version, **when** a subsequent turn starts,
    **then** it uses only the last accepted session/result revision and makes the continuity choice visible.
 3. **Given** competing callers at one revision, **when** both request a turn, **then** at most one is admitted;
    the other receives a conflict with an explicit safe next action.
 4. **Given** an accepted result followed by host failure, **when** execution recovers, **then** it returns that
    result without asking the model again. A response not durably accepted is visibly unresolved.
-5. **Given** a cancelled/superseded turn, foreign tenant/owner or different specialist version, **when**
+5. **Given** a cancelled/superseded turn, foreign tenant/owner or different agent version, **when**
    continuation/completion is attempted, **then** it cannot replace or disclose the accepted conversation state.
 
 ### User Story 4 — Use tools and knowledge with exact approval (Priority: P2)
 
-A specialist author attaches authorized knowledge and tools. A process owner requires human approval
+An agent author attaches authorized knowledge and tools. A process owner requires human approval
 for an effect. The person reviewing it sees the exact proposed action, arguments and scope.
 
 **Why this priority**: It adds useful capabilities while preserving process authority over effects.
@@ -103,7 +103,7 @@ approval restart, changed arguments and an effect whose acknowledgement is lost.
 
 **Acceptance Scenarios**:
 
-1. **Given** scoped resources, **when** a specialist requests them, **then** only permitted observations
+1. **Given** scoped resources, **when** an agent requests them, **then** only permitted observations
    and capabilities are available; the accepted decision records the resource versions it used.
 2. **Given** an approval-required proposal, **when** approval is pending, denied or revoked,
    **then** no protected effect occurs. Approval for different arguments authorizes no work.
@@ -112,10 +112,10 @@ approval restart, changed arguments and an effect whose acknowledgement is lost.
 
 ### User Story 5 — Bound work and configure teams (Priority: P2)
 
-An author configures a sequential team, concurrent specialist cohort or bounded refinement pattern.
+An author configures a sequential team, concurrent agent cohort or bounded refinement pattern.
 The team appears as a reusable activity with explicit inputs/results and execution limits.
 
-**Why this priority**: It extends the specialist model into collaboration without requiring another designer.
+**Why this priority**: It extends the agent model into collaboration without requiring another designer.
 
 **Independent Test**: Run Copywriter/Proofreader refinement and a concurrent review cohort inside a parent
 process, including exhausted budgets, cancellation, restart, duplicate messages and a delayed participant.
@@ -149,10 +149,10 @@ uses those results when deciding whether to publish.
 3. **Given** cancelled/skipped/failed cases, **when** a report is displayed, **then** those states retain
    their meaning and are not summarized as passed.
 
-### User Story 7 — Manage and inspect specialists in Studio (Priority: P1)
+### User Story 7 — Manage and inspect agents in Studio (Priority: P1)
 
-Authors discover specialists, manage drafts/history, test and publish, then navigate from a workflow run
-to the exact specialist invocation and permitted observable details.
+Authors discover agents, manage drafts/history, test and publish, then navigate from a workflow run
+to the exact agent invocation and permitted observable details.
 
 **Why this priority**: The module must be usable through ordinary Elsa Studio journeys.
 
@@ -163,21 +163,21 @@ at normal and narrow widths, with edit, read-only and denied permissions.
 
 1. **Given** an authoring page, **when** settings or schemas are invalid/unsupported, **then** fields explain
    the issue and offer valid choices; credentials are never displayed as prompt configuration.
-2. **Given** a published/historical or source-owned specialist, **when** opened, **then** content authority
+2. **Given** a published/historical or source-owned agent, **when** opened, **then** content authority
    and read-only state are clear, with explicit copy/fork/upgrade actions where permitted.
 3. **Given** an invocation, **when** inspected, **then** permitted inputs/results, calls, approvals, usage,
    incidents and links are visible without secrets or private model reasoning.
 4. **Given** unsaved edits, undo/redo, navigation and reload, **when** used on each editable surface,
    **then** the declared working-state/save boundary is consistent and no accepted server write is silently undone.
-5. **Given** a specialist defined in host configuration, **when** the host starts, **then** it is published as an
+5. **Given** an agent defined in host configuration, **when** the host starts, **then** it is published as an
    exact source-owned version that workflows bind like a Studio-authored one, and Studio shows it read-only. A definition
    with a bumped version publishes a new version without rewriting existing bindings. An invalid definition, or changed
-   content without a version bump, is refused with an actionable diagnostic, without blocking other specialists.
+   content without a version bump, is refused with an actionable diagnostic, without blocking other agents.
 
 ### User Story 8 — Operate supported deployments (Priority: P1)
 
 Operators install a supported authoring/runtime composition and provider, upgrade it, and recover work
-without changing already published specialist semantics.
+without changing already published agent semantics.
 
 **Why this priority**: Runtime-only and independently packaged deployments are required product shapes.
 
@@ -225,14 +225,14 @@ An author manages typed Agent source independently of its generated activity. Wo
 - **FR-001**: Authorized authors MUST create, edit, find and copy/fork Agents through Agent-owned source contracts and permissions, with conflict-safe revisions, explicit authority and exact-version lifecycle actions coordinated with shared publication.
 - **FR-002**: Agent authoring MUST retain instructions, one typed public input/result contract with compatible JSON refinements, outcomes, model selection, supported settings and policies by draft revision; activity contracts and model JSON schemas MUST derive from it.
 - **FR-003**: Model settings MUST be limited to verified capabilities/ranges of the selected connection/model; unknown support MUST not be presented as available.
-- **FR-004**: Playground execution MUST use the workflow specialist runtime and record the exact saved candidate or published version used.
+- **FR-004**: Playground execution MUST use the workflow agent runtime and record the exact saved candidate or published version used.
 - **FR-005**: Confirmed Agent publication MUST associate an immutable Agent version with a read-only activity publication, stable member keys, usable results and exact retained template/reference identities; the shared publication receipt is the successful-publication authority.
 - **FR-006**: Draft changes, retirement and recommended-version changes MUST not retarget existing published workflow bindings.
-- **FR-007**: Native Sequence/Flowchart and BPMN MUST bind, persist and execute the same specialist behavior and accepted result semantics.
+- **FR-007**: Native Sequence/Flowchart and BPMN MUST bind, persist and execute the same agent behavior and accepted result semantics.
 - **FR-008**: Supported BPMN import/export MUST retain exact task bindings; unsupported interchange MUST fail explicitly without inventing a binding.
 - **FR-009**: Model output MUST satisfy the exact published result contract before acceptance; invalid output MUST never become an accepted workflow result.
 - **FR-010**: Calls MUST start fresh unless an explicit authorized conversation and expected revision are supplied.
-- **FR-011**: Continuity MUST bind tenant, owner, exact specialist version and conversation identity, admit at most one turn at a revision and fence stale completion.
+- **FR-011**: Continuity MUST bind tenant, owner, exact agent version and conversation identity, admit at most one turn at a revision and fence stale completion.
 - **FR-012**: Accepted session/result state MUST recover together; replay MUST return accepted work without invoking the model again.
 - **FR-013**: Missing acceptance after a potentially dispatched operation MUST expose uncertainty and a deliberate recovery action, without automatic duplicate effects.
 - **FR-014**: Cancellation, supersession and retention MUST preserve authority fences, resource policy and truthful observable status.
@@ -248,7 +248,7 @@ An author manages typed Agent source independently of its generated activity. Wo
 - **FR-024**: Supported deployment/provider/store combinations MUST qualify clean installation, within-deployment restart/artifact interpretation/replay, independent package consumption and declared pre-GA reset/recreation/republish. Cross-break migration, old-format readers and old-data rollback are not required.
 - **FR-025**: Delivered editorial examples MUST run with an authorized real model through native and BPMN workflows, with evidence distinguished from fixtures.
 - **FR-026**: Users, module authors and operators MUST receive usable documentation, configuration examples, extension contracts and failure/recovery guidance.
-- **FR-027**: Operators MUST be able to define specialists in host configuration as well as in Studio (plan D10). A configuration-defined specialist:
+- **FR-027**: Operators MUST be able to define agents in host configuration as well as in Studio (plan D10). A configuration-defined agent:
   - uses the same Agent source contract as a Studio-authored one: instructions, input and result schemas, outcomes, a model connection *name* and model, and limits;
   - declares its own SemVer version;
   - is compiled through the same provider compiler and preflight as Studio publication, and published as an exact, immutable, source-owned version;
@@ -263,7 +263,7 @@ An author manages typed Agent source independently of its generated activity. Wo
 - **FR-031**: Workflow and Agent authoring MUST compose one reusable working-copy CAS, immutable snapshot, provenance/history and pin/retention implementation through typed adapters. Existing Workflow semantic diff commands, layout separation and domain validation/permissions MUST remain explicit. Assess reusable-activity authoring before shared contract freeze.
 - **FR-032**: Working-copy concurrency revisions, immutable source snapshots, public release SemVer, schema profiles and compiled hashes MUST retain distinct meanings. Saving or activating source MUST NOT create executable publication; reviewed snapshot identity cannot change during an operation. Failed-publication/recovery witnesses MUST cover both adapters.
 - **FR-033**: Interactive and configuration-defined Agents MUST share provider compilation/preflight. Native/BPMN and candidate execution MUST use exact admitted material without authoring-store reads. Within a supported deployment, source edits/unavailability MUST NOT retarget retained artifacts.
-- **FR-034**: Product/domain terminology MUST use Agent. Pre-GA delivery MAY cleanly rename Specialist API/package/schema identities and recreate affected stores; no legacy alias, import/backfill, mixed-schema upgrade or cross-break preservation is required. The declared reset procedure MUST qualify coordinated readiness, recreation and republish; this design performs none.
+- **FR-034**: Product/domain terminology MUST use Agent. Pre-GA delivery MAY cleanly rename API/package/schema identities, as the Specialist-to-Agent rename under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027) did, and recreate affected stores; no legacy alias, import/backfill, mixed-schema upgrade or cross-break preservation is required. The declared reset procedure MUST qualify coordinated readiness, recreation and republish; this design performs none.
 - **FR-035**: Within a supported deployment, active operations and accepted results MUST retain exact scope/revision/idempotency and accepted-versus-applied guarantees across retry/restart, without duplicate inference or history reset. Planned breaking-store recreation MUST NOT become an ordinary recovery path.
 
 ### Key Entities *(include if feature involves data)*
@@ -275,7 +275,7 @@ The [glossary](../../docs/glossary/elsa.md) owns meanings. Agent and Workflow ty
 ### Measurable Outcomes
 
 - **SC-001**: Every Program acceptance row A1–A15 has its own observed passing product evidence before Program completion; research receipts alone close none of them.
-- **SC-002**: The complete author journey and both editorial process journeys pass with exact specialist/result bindings and one logical parent continuation under duplicate/late delivery.
+- **SC-002**: The complete author journey and both editorial process journeys pass with exact agent/result bindings and one logical parent continuation under duplicate/late delivery.
 - **SC-003**: Fresh/continued, scope/version conflict, restart, cancellation and unknown-outcome cases preserve the declared session/result authority, with zero unauthorized accepted replacements.
 - **SC-004**: Protected-tool denial/revocation/changed-approval cases produce zero protected effects; supported effect-recovery cases report their actual outcome and idempotency limit.
 - **SC-005**: Every named supported provider/store/host cell has a retained qualification result; native and BPMN runtime-only package graphs contain zero Design/Publishing assemblies.
@@ -288,10 +288,10 @@ The [glossary](../../docs/glossary/elsa.md) owns meanings. Agent and Workflow ty
 
 ## Assumptions
 
-- Specialist-first, fresh-by-default continuity, explicit JSON I/O and native bounded team patterns are owner-approved direction.
+- Agent as the product noun, fresh-by-default continuity, explicit JSON I/O and native bounded team patterns are owner-approved direction.
 - Existing activity publishing, permission/connection systems and workflow composition remain the owning product surfaces.
 - Initial archive behavior means retiring a selected published version and explicitly updating its recommendation where needed; it is not deletion of history or a new definition-wide archive state. Existing bindings remain interpretable.
-- Weaver remains a separately configured assistant experience; user-defined specialists do not enable multiple assistant providers.
+- Weaver remains a separately configured assistant experience; user-defined agents do not enable multiple assistant providers.
 - Model credentials and external access require an authorized existing connection or separately completed provisioning; no purchase is implied.
 - Support is finite and named in the plan. Unsupported combinations are visible; the product scope and Program A1–A15 are not reduced by a research limitation.
 - The reviewed design is approved to implement; contract signatures remain proposed until their first implementing slice. Constitution §E2.8 versioning/Model X, §E2.9 and framework §2.24 retain their recorded provisional status; this work ratifies none of them.

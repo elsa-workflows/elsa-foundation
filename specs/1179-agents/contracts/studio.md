@@ -16,13 +16,13 @@ Playground/evaluation/inspection identify exact Agent candidates/versions plus d
 
 | Journey | Required flow and evidence |
 |---|---|
-| Discover/create | `/agents` → create specialist → name/purpose → supported model connection → public inputs/results → save. Provider jargon is not a required user choice |
+| Discover/create | `/agents` → create agent → name/purpose → supported model connection → public inputs/results → save. Provider jargon is not a required user choice |
 | Configure | Instructions, model/capability-aware supported options, public interface and permitted resources. Continuity is a separate explicit capability; memory/knowledge do not imply it |
 | Test | Save/identify exact candidate → enter typed/JSON business inputs → fresh default or explicit conversation/revision → run/stop → inspect permitted output, contract checks, usage and status |
 | Publish/history | Preflight exact saved candidate → impact/diagnostics/minimum version → review → publish/reconcile receipt → immutable version/history. Editing requires new draft/copy; existing bindings stay pinned |
 | Use | Normal activity catalog/native picker or BPMN bound-child inspector → select exact version → bind ports → save/reload → run. Generated ports and expected parent continuation are visible |
 | Evaluate | Save input/assertions/rubric case → version the set → choose exact baseline/candidate → run/reconcile/cancel → compare deterministic contract checks separately from model-quality assessment |
-| Inspect | Workflow run/activity occurrence → specialist invocation → exact definition/version/model/operation/conversation → permitted messages/calls/approvals/result/usage → parent occurrence/incident/history |
+| Inspect | Workflow run/activity occurrence → agent invocation → exact definition/version/model/operation/conversation → permitted messages/calls/approvals/result/usage → parent occurrence/incident/history |
 
 The playground uses production runtime, not a direct UI-to-model client. It reuses generic draft
 test-run dispatch/status/reconcile/cancel identity. A draft candidate is immutable for that run;
@@ -51,7 +51,7 @@ effort controls are absent or explained, not rendered as universal temperature k
 ## Invocation and uncertainty states
 
 Fresh test is default. Explicit continuation selects an authorized conversation with exact candidate/
-specialist version and expected revision; expose the relevant workspace/owner and history choice.
+agent version and expected revision; expose the relevant workspace/owner and history choice.
 Overlap conflicts offer refresh/new fresh conversation, not a hidden queue against different history.
 Show stage and cancellation availability without claiming that an already dispatched remote request
 was stopped. Separate observable streaming from accepted final result; partial tokens are not success.
@@ -74,14 +74,14 @@ existing Studio UI controls. Result access is reauthorized, even when a parent o
 
 Sets/cases and runs have independent immutable/revision identities. A run records exact candidate and
 case set, connection/model/capability profile, inputs, assertions/rubric, observed output, usage and
-execution links. Run the same production specialist path with declared budgets/resource policy.
+execution links. Run the same production agent path with declared budgets/resource policy.
 The initial assertion set covers JSON contract validity, required/member/value checks and explicit
 expected refusal; quality rubrics retain evaluator/model/version and observed assessment separately.
 
 Reports keep passed, failed, skipped, cancelled, unknown and pending distinct. Never color an incomplete
 case as green or aggregate a rubric score into contract correctness. Comparison does not silently choose
 latest versions. Saved cases redact/deny credential or disallowed protected data; content access and
-retention use the specialist state policy. Model-based assessment consumes a declared separate budget.
+retention use the agent state policy. Model-based assessment consumes a declared separate budget.
 
 ## Team configuration and human review
 
@@ -103,7 +103,7 @@ exact revision callbacks and respect readOnly/historyResetKey. Historical editor
 resource/revision only; it cannot replay across a conflict, selected version or backend connection.
 Accepted server writes/publication are not silently undone. The module's input editor and evaluation
 case editor declare the same local/save boundary. Native and BPMN workflow edits keep their existing
-undo/save behavior, including specialist binding/property edits and reload.
+undo/save behavior, including agent binding/property edits and reload.
 
 ## Accessibility and narrow layouts
 

@@ -114,7 +114,7 @@ Worked writer/reviewer mapping:
 
 This is a logical example, not a frozen JSON API. Both participants must declare the mapped optional/
 required fields; publication resolves their real immutable identities/hashes. Fresh member calls plus
-explicit prior outputs are sufficient; sharing a single SDK session between different specialist
+explicit prior outputs are sufficient; sharing a single SDK session between different agent
 versions is not permitted. Human editorial approval is separate from the model completion predicate.
 
 ## Recovery, visibility and editor
