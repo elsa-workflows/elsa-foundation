@@ -52,27 +52,27 @@ public sealed class WorkflowDesignOnlyHostTests : IAsyncDisposable
         await using var scope = shell.BeginScope();
         var services = scope.ServiceProvider;
         Assert.Equal("WorkflowVersionReader", Assert.Single(services.GetServices<IWorkflowVersionReader>()).GetType().Name);
-        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
-            null, AgentPolicy.Default, new Dictionary<string, string>()));
-        var collector = services.GetRequiredService<IAgentContextCollector>();
+        var session = await services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
+            null, WeaverPolicy.Default, new Dictionary<string, string>()));
+        var collector = services.GetRequiredService<IWeaverContextCollector>();
 
-        var version = await collector.CollectAsync(AgentPolicy.Default, new(session.Id, "unbound", new Dictionary<string, string>())
-            { CallerAttachments = [WorkflowVersionAgentTests.Reference("definition-design-only", "version-design-only")] });
+        var version = await collector.CollectAsync(WeaverPolicy.Default, new(session.Id, "unbound", new Dictionary<string, string>())
+            { CallerAttachments = [WorkflowVersionWeaverTests.Reference("definition-design-only", "version-design-only")] });
         Assert.True(version.Succeeded, version.Error?.Message);
         var admitted = Assert.Single(version.Value!.Attachments, item => item.ContentType == "workflows.version");
         Assert.Equal("Design only", ((JsonElement)admitted.Content!).GetProperty("definitionName").GetString());
 
-        var executable = await collector.CollectAsync(AgentPolicy.Default, new(session.Id, "unbound", new Dictionary<string, string>())
+        var executable = await collector.CollectAsync(WeaverPolicy.Default, new(session.Id, "unbound", new Dictionary<string, string>())
         {
             CallerAttachments = [new("workflows.executable:artifact-1", "workflow-executable", "artifact-1", "Executable", "workflows.executable",
-                AgentContextSensitivity.Internal, "screen", "Workflow Executable",
+                WeaverContextSensitivity.Internal, "screen", "Workflow Executable",
                 JsonSerializer.SerializeToElement(new { artifactId = "artifact-1", artifactHash = "sha256:artifact", sourceReferenceId = (string?)null }),
                 new Dictionary<string, string>())
-            { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-executable", "artifact-1", "sha256:artifact"), Origin = AgentContextOrigin.ClientSnapshot }]
+            { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-executable", "artifact-1", "sha256:artifact"), Origin = WeaverContextOrigin.ClientSnapshot }]
         });
         Assert.False(executable.Succeeded);
         Assert.Equal("weaver.context.kind_unsupported", Assert.Single(executable.Value!.Diagnostics, item => item.Required).Code);
-        var tools = (await services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
+        var tools = (await services.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
         Assert.Contains("workflow_read_version", tools);
         Assert.DoesNotContain("workflow_read_executable", tools);
     }
@@ -92,8 +92,8 @@ public sealed class DesignOnlyFixtureFeature : IShellFeature
     {
         services.AddSingleton<IWorkflowDefinitionVersionStore>(new VersionStore());
         services.AddSingleton<IWorkflowDefinitionVersionLayoutStore>(new NoLayouts());
-        services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionAuthorizer>(_ => new WorkflowVersionAgentTests.Owner("definition-design-only")));
-        services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer, AllowTestAgentToolAuthorizer>());
+        services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionAuthorizer>(_ => new WorkflowVersionWeaverTests.Owner("definition-design-only")));
+        services.Replace(ServiceDescriptor.Scoped<IWeaverToolAuthorizer, AllowTestWeaverToolAuthorizer>());
         services.TryAddScoped<IActivityStructureService>(_ => new Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService([]));
     }
 

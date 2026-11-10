@@ -1,4 +1,4 @@
-import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContextCollection, StudioAgentContextProviderContribution, StudioAgentMode, StudioAgentSurface } from "../../sdk";
+import type { ElsaStudioModuleApi, StudioWeaverContextAttachment, StudioWeaverContextCollection, StudioWeaverContextProviderContribution, StudioWeaverMode, StudioWeaverSurface } from "../../sdk";
 
 const DEFAULT_CONTRIBUTOR_TIMEOUT_MS = 10_000;
 const MAX_ATTACHMENTS = 32;
@@ -7,23 +7,23 @@ const MAX_CONTENT_LENGTH = 32768;
 
 export async function collectAgentContext(
   api: ElsaStudioModuleApi,
-  surface: StudioAgentSurface,
-  mode: StudioAgentMode,
+  surface: StudioWeaverSurface,
+  mode: StudioWeaverMode,
   sessionId?: string,
-  explicit: StudioAgentContextAttachment[] = [],
+  explicit: StudioWeaverContextAttachment[] = [],
   signal?: AbortSignal,
   options: { contributorTimeoutMs?: number } = {}
-): Promise<StudioAgentContextCollection> {
+): Promise<StudioWeaverContextCollection> {
   const timeoutMs = options.contributorTimeoutMs ?? DEFAULT_CONTRIBUTOR_TIMEOUT_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("Context contributor deadline must be positive and finite.");
   signal?.throwIfAborted();
-  const providers = api.agent.contextProviders.list()
+  const providers = api.weaver.contextProviders.list()
     .filter(provider => provider.surfaces.includes("*") || provider.surfaces.some(item => surface.route === item || surface.route.startsWith(`${item}/`)))
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500));
   const providerIds = new Set<string>();
   const candidateIds = new Set<string>();
-  const attachments: StudioAgentContextAttachment[] = [];
-  const diagnostics: StudioAgentContextCollection["diagnostics"] = [];
+  const attachments: StudioWeaverContextAttachment[] = [];
+  const diagnostics: StudioWeaverContextCollection["diagnostics"] = [];
   append(explicit, "request", true);
   for (const provider of providers) {
     signal?.throwIfAborted();
@@ -42,10 +42,10 @@ export async function collectAgentContext(
   }
   return { attachments, diagnostics };
 
-  function append(candidates: StudioAgentContextAttachment[], contributorId: string, required: boolean) {
+  function append(candidates: StudioWeaverContextAttachment[], contributorId: string, required: boolean) {
     // JSON is the transport boundary. Copy it now so module-owned late mutations cannot change
     // the accepted snapshot; structural/serialization faults still fail composition explicitly.
-    const snapshot: StudioAgentContextAttachment[] = JSON.parse(JSON.stringify(candidates));
+    const snapshot: StudioWeaverContextAttachment[] = JSON.parse(JSON.stringify(candidates));
     for (const item of snapshot) {
       if (!item || typeof item.id !== "string" || !item.id) throw new Error(`Malformed context attachment from '${contributorId}'.`);
       if (candidateIds.has(item.id)) throw new Error(`Duplicate context attachment '${item.id}'.`);
@@ -58,7 +58,7 @@ export async function collectAgentContext(
     attachments.push(...snapshot);
   }
 
-  async function collectBounded(provider: StudioAgentContextProviderContribution) {
+  async function collectBounded(provider: StudioWeaverContextProviderContribution) {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancel: (() => void) | undefined;

@@ -14,7 +14,7 @@ A persisted workflow version has its own context source and read-only tool: the 
 
 ## Cross-domain contributions
 
-See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) for their generic lifecycle.
+See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IWeaverContextProvider`, `IWeaverCapabilityProvider`, `IWeaverTool` and `IWeaverClientTool` contributions, and [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) for their generic lifecycle.
 
 
 Current context and retained results are re-admitted by `workflows.context` under the native
@@ -25,5 +25,5 @@ can withhold its disclosure and never authorize a repeat. See the [disclosure ru
 Concrete workflow authority also comes from Workflow Design Core's `IWorkflowDefinitionAuthorizer`.
 Its native API adapter checks definition existence in the current tenant and the same typed definition,
 folder and ancestor decisions as owning reads. The tools contribute their read/manage decision through
-`IAgentToolAuthorization`, including reviewed dispatch after approval. An unsaved editor revision
+`IWeaverToolAuthorization`, including reviewed dispatch after approval. An unsaved editor revision
 is preserved; reading persisted metadata never replaces the working-state graph.

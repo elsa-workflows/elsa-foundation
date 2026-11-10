@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { StudioAgentRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowVersionSummary } from "../workflowTypes";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { formatDate } from "../workflowFormatting";
@@ -8,7 +8,7 @@ import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 
 /** The Workflows module's agent state for the version history: where a selected version's context goes, and its prompt. */
 export interface WorkflowVersionHistoryAgent {
-  ai: StudioAgentRegistry;
+  ai: StudioWeaverRegistry;
   controller?: WorkflowAgentController;
   explainAction?: StudioAiPromptActionContribution | null;
 }

@@ -1,6 +1,6 @@
 // The transport uses the public SDK bundle; its error class must have the same runtime identity.
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
-import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
+import type { StudioWeaverPreparedInvocation, StudioWeaverToolResult, StudioEndpointContext } from "../../sdk";
 import type {
   AgentClientAcknowledgement,
   AgentAcceptedPolicy,
@@ -399,7 +399,7 @@ function mapOwnerResolution(resolution: Record<string, unknown> | undefined): Ag
 
 /** A recorded proposal as the stream's proposal payload shape, so the surface normalizes both the same way. */
 function mapRecordedProposal(proposal: Record<string, unknown>): AgentRecordedProposal {
-  const prepared = readRecord(proposal, "preparedInvocation") as StudioAgentPreparedInvocation | undefined;
+  const prepared = readRecord(proposal, "preparedInvocation") as StudioWeaverPreparedInvocation | undefined;
   const ownerResolution = mapOwnerResolution(readRecord(proposal, "ownerResolution"));
   const result = readField(proposal, "result");
   const target = readRecord(proposal, "resourceTarget");
@@ -492,8 +492,8 @@ interface BackendAgentActionProposal {
 }
 
 interface BackendAgentProposalExecutionResult {
-  clientInvocation?: StudioAgentPreparedInvocation;
-  toolResult?: StudioAgentToolResult;
+  clientInvocation?: StudioWeaverPreparedInvocation;
+  toolResult?: StudioWeaverToolResult;
   resourceType?: string;
   resourceId?: string;
   proposalId?: string;
@@ -680,8 +680,8 @@ function mapExecution(result: BackendAgentProposalExecutionResult, fallbackId: s
     proposalId: readString(result, "proposalId") ?? fallbackId,
     approvalStatus: getExecutionStatus(result),
     executed: readBoolean(result, "executed"),
-    clientInvocation: readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined,
-    toolResult: readField(result, "toolResult") as StudioAgentToolResult | undefined,
+    clientInvocation: readField(result, "clientInvocation") as StudioWeaverPreparedInvocation | undefined,
+    toolResult: readField(result, "toolResult") as StudioWeaverToolResult | undefined,
     result: {
       resourceType: readString(result, "resourceType") ?? "agent-proposal",
       resourceId: readString(result, "resourceId") ?? readString(result, "proposalId") ?? fallbackId,

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using static Elsa.Weaver.Core.Extensions.AgentConfigurationBinding;
+using static Elsa.Weaver.Core.Extensions.WeaverConfigurationBinding;
 
 namespace Elsa.Weaver.GitHubCopilot.Extensions;
 
@@ -19,7 +19,7 @@ public static class WeaverGitHubCopilotServiceCollectionExtensions
             services.Configure<WeaverGitHubCopilotOptions>(options => BindOptions(configuration.GetSection(WeaverGitHubCopilotOptions.SectionName), options));
 
         services.TryAddSingleton<IGitHubCopilotClientFactory, GitHubCopilotSdkClientFactory>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentProvider, WeaverGitHubCopilotProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverGitHubCopilotProvider>());
         return services;
     }
 

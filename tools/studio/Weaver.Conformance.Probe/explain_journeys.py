@@ -70,7 +70,7 @@ CONTROL = "credential-disclosed"
 CONTROL_ERROR = {"code": "weaver.context.incomplete", "statusCode": 400,
                  "message": "The selected activity's property context does not match the activity's declared inputs, so the snapshot was not admitted."}
 
-# Each actual adapter's own frame order for a read tool that completes. The engine's own loop (AgentTurnServices) emits it:
+# Each actual adapter's own frame order for a read tool that completes. The engine's own loop (WeaverTurnServices) emits it:
 # Copilot's SDK runs the function, and the engine admits context again before the contributed result; Anthropic leaves the
 # call to the engine, which admits context again before toolCallCompleted (a dispatch with a result, as the batch case
 # observed natively for its successful reads) and once more for the continuation step. The refused-preparation order of the

@@ -33,7 +33,7 @@ public sealed class WorkflowBatchConformanceTests
         var catalog = new FixtureActivityCatalog { Entries = CatalogEntries(fixture["catalog"]!.AsArray()) };
         var tool = new WorkflowApplyOperationBatchTool(new AllowAll(), [new ManageOwner()], [catalog]);
         var snapshot = Snapshot(fixture["snapshot"]!);
-        var invocation = new AgentToolInvocation("call-1", WorkflowApplyOperationBatchTool.ToolName, "session-1", "actor-1",
+        var invocation = new WeaverToolInvocation("call-1", WorkflowApplyOperationBatchTool.ToolName, "session-1", "actor-1",
             new Dictionary<string, object?> { ["operations"] = JsonSerializer.SerializeToElement(item["operations"]) }, [snapshot])
         { TenantId = "tenant-1", TurnId = "turn-1", Client = snapshot.Client };
 
@@ -66,17 +66,17 @@ public sealed class WorkflowBatchConformanceTests
         item["inputs"]!.AsArray().Select(input => new ActivityAuthoringCatalogInput(input!["referenceKey"]!.GetValue<string>(), input["name"]!.GetValue<string>(),
             input["typeName"]!.GetValue<string>(), null, false, input["isCredential"]?.GetValue<bool>() ?? false, input["isCredential"]?.GetValue<bool>() ?? false)).ToArray())).ToArray();
 
-    private static AgentContextAttachment Snapshot(JsonNode content) => new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition",
-        AgentContextSensitivity.Internal, "selection", "Workflow data", JsonSerializer.SerializeToElement(content), new Dictionary<string, string>())
+    private static WeaverContextAttachment Snapshot(JsonNode content) => new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition",
+        WeaverContextSensitivity.Internal, "selection", "Workflow data", JsonSerializer.SerializeToElement(content), new Dictionary<string, string>())
     {
-        ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.ClientSnapshot,
-        Target = new(WorkflowAgentSnapshot.ModuleId, "workflow-definition", "wf-1", content["revision"]!.GetValue<string>()), Client = new("client-1", "generation-1")
+        ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.ClientSnapshot,
+        Target = new(WorkflowWeaverSnapshot.ModuleId, "workflow-definition", "wf-1", content["revision"]!.GetValue<string>()), Client = new("client-1", "generation-1")
     };
 
-    private sealed class AllowAll : Elsa.Weaver.Core.Contracts.IAgentToolAuthorizer
+    private sealed class AllowAll : Elsa.Weaver.Core.Contracts.IWeaverToolAuthorizer
     {
-        public Task<AgentPolicyDecision> AuthorizeAsync(Elsa.Weaver.Core.Contracts.AgentToolDescriptor tool, string actorId, string tenantId, AgentResourceTarget? target,
-            CancellationToken cancellationToken = default) => Task.FromResult(new AgentPolicyDecision(true, []));
+        public Task<WeaverPolicyDecision> AuthorizeAsync(Elsa.Weaver.Core.Contracts.WeaverToolDescriptor tool, string actorId, string tenantId, WeaverResourceTarget? target,
+            CancellationToken cancellationToken = default) => Task.FromResult(new WeaverPolicyDecision(true, []));
     }
 
     private sealed class ManageOwner : Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionAuthorizer

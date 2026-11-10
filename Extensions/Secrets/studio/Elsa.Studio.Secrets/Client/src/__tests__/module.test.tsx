@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createAgentRegistry,
+  createWeaverRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -42,7 +42,7 @@ describe("secrets module", () => {
 
 function stubApi(): ElsaStudioModuleApi {
   const dashboardWidgets = createDashboardWidgetRegistry();
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
   return {
     host: {
       ...createEndpointContext("https://studio.example/"),
@@ -65,7 +65,7 @@ function stubApi(): ElsaStudioModuleApi {
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent,
+    weaver: agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
