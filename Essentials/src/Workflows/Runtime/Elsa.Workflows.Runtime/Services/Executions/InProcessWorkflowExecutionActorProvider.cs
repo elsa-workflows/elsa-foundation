@@ -52,6 +52,10 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     private readonly Meter _meter;
     private readonly bool _ownsMeter;
     private readonly CancellationTokenSource _disposed = new();
+    private readonly object _redriveGate = new();
+    private readonly HashSet<TaskCompletionSource> _redrives = [];
+    private Task? _stopTask;
+    private bool _stopping;
     private long _activationCounter;
 
     public InProcessWorkflowExecutionActorProvider()
@@ -180,11 +184,48 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
     public void Dispose()
     {
-        // Stops any background yield re-drive; the resumption sweep owns that work after shutdown.
-        if (!_disposed.IsCancellationRequested)
-            _disposed.Cancel();
+        // Synchronous/emergency disposal can request a stop; graceful hosting joins before services are disposed.
+        _ = StopAsync(CancellationToken.None);
         if (_ownsMeter)
             _meter.Dispose();
+    }
+
+    /// <summary>Cancels and joins detached re-drives. Standalone callers must await this before disposing their services.</summary>
+    /// <remarks>Cancellation ends the caller's wait; the shared cleanup continues. Disposal remains a non-joining emergency fallback.</remarks>
+    public Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        TaskCompletionSource? completion = null;
+        Task[] accepted = [];
+        Task stopped;
+        lock (_redriveGate)
+        {
+            if (_stopTask is null)
+            {
+                _stopping = true;
+                accepted = _redrives.Select(item => item.Task).ToArray();
+                completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                _stopTask = completion.Task;
+            }
+            stopped = _stopTask;
+        }
+        // Cancellation callbacks and continuations must run outside the admission lock.
+        if (completion is not null)
+            _ = StopRedrivesAsync(accepted, completion);
+        return stopped.WaitAsync(cancellationToken);
+    }
+
+    private async Task StopRedrivesAsync(Task[] accepted, TaskCompletionSource completion)
+    {
+        try
+        {
+            try { await _disposed.CancelAsync(); }
+            finally { await Task.WhenAll(accepted); }
+            completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
     }
 
     // Acquires the lifecycle lock for an execution id and returns it already held (WaitAsync completed).
@@ -237,14 +278,29 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             metadata: metadata,
             partition: partition);
 
-        if (_disposed.IsCancellationRequested)
-            return;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_redriveGate)
+        {
+            if (_stopping)
+                return;
+            _redrives.Add(completion);
+        }
         // UnsafeQueueUserWorkItem flows no ExecutionContext, whether or not the caller already suppressed flow.
-        ThreadPool.UnsafeQueueUserWorkItem(static state => _ = state.Provider.RunRedriveAsync(state.Handle, state.Envelope),
-            (Provider: this, Handle: handle, Envelope: envelope), preferLocal: false);
+        try
+        {
+            if (ThreadPool.UnsafeQueueUserWorkItem(static state => _ = state.Provider.RunRedriveAsync(state.Handle, state.Envelope, state.Completion),
+                    (Provider: this, Handle: handle, Envelope: envelope, Completion: completion), preferLocal: false))
+                return;
+        }
+        catch
+        {
+            CompleteRedrive(completion);
+            throw;
+        }
+        CompleteRedrive(completion);
     }
 
-    private async Task RunRedriveAsync(SelfPassivatingActorHandle handle, WorkflowExecutionCommandEnvelope envelope)
+    private async Task RunRedriveAsync(SelfPassivatingActorHandle handle, WorkflowExecutionCommandEnvelope envelope, TaskCompletionSource completion)
     {
         try
         {
@@ -261,6 +317,17 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // The resumption sweep remains the backstop for the yielded work.
             Logger?.LogWarning(exception, "Re-driving workflow execution '{WorkflowExecutionId}' after an unconsumed drain yield failed", envelope.WorkflowExecutionId);
         }
+        finally
+        {
+            CompleteRedrive(completion);
+        }
+    }
+
+    private void CompleteRedrive(TaskCompletionSource completion)
+    {
+        lock (_redriveGate)
+            _redrives.Remove(completion);
+        completion.TrySetResult();
     }
 
     // Wraps the inner mailbox and centralizes terminal-eviction policy so all six GetAgentAsync call sites stay

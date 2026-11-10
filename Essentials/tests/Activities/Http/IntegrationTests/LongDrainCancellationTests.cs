@@ -13,7 +13,7 @@ using WhileActivity = Elsa.Activities.While.Activities.While;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
-public sealed class LongDrainCancellationTests
+public sealed partial class LongDrainCancellationTests
 {
     [Theory]
     [InlineData(PersistenceMode.Durable, false, false)]
