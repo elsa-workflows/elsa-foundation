@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Users define reusable agents such as Copywriter and Proofreader ("agent" is the historical name; the packages are renamed under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027)), test them, publish immutable
+Users define reusable agents such as Copywriter and Proofreader ("specialist" was the historical name, renamed under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027)), test them, publish immutable
 versions and use them as discoverable activities in native Elsa workflows and Elsa-powered BPMN.
 Explicit input/output contracts make their results usable by the enclosing process. Fresh calls are
 the default; conversation continuity is an explicit optional capability, distinct from cross-run memory.
@@ -77,7 +77,7 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is complete through
    [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594), reviewed at `4f3a920836` and
    merged as `8dcbf2345`. Required reviewed-head CI and Studio passed; fresh resulting-main source
-   (780 Agents, 3 required provider cases, 607 Architecture), affected browser (22), normal package
+   (780 Agent tests, 3 required provider cases, 607 Architecture), affected browser (22), normal package
    recovery (49 packages/73 stages) and three host controls passed. Hosted main CI and Studio also completed
    successfully under their configured policies; a passing job does not turn REST quarantine #3261 or opt-in screenshot skips
    into passing tests. Connections prerequisite #3578 delivered T014–T015 through PR #3591.

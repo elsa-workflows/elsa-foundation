@@ -99,7 +99,7 @@ not automatic constitution violations.
 | OpenAI agent connections | [`Extensions/Agent/src/OpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/OpenAI/EXTENSION_POINTS.md) |
 | Agent authoring and immutable compilation | [`Extensions/Agent/src/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Design/EXTENSION_POINTS.md) |
 | Agent native execution | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
-| Agent human review of agent output | [`Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md) |
+| Human review of agent output | [`Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md) |
 | Agent human review API | [`Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md) |
 | Agent authoring API | [`Extensions/Agent/src/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Api/EXTENSION_POINTS.md) |
 | Agent inspection API | [`Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md) |
