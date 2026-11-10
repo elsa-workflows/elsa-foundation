@@ -38,6 +38,43 @@ public sealed class FlowchartChildResultFactsTests : IDisposable
         Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
         Assert.False(facts.IsCyclicBackEdge);
         Assert.False(facts.MayRunConcurrently);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// Each node run is scheduled by the run that just completed, so on a cycle every pass leads to the next one and a
+    /// producer that can reach itself has its earlier runs behind a later reader. That holds for a reader the producer
+    /// dominates, which is still a definite read and not a back-edge, and so needs this fact to be refused.
+    /// </summary>
+    [Fact]
+    public void A_producer_that_can_reach_itself_has_earlier_runs_behind_a_later_reader()
+    {
+        var flow = Flowchart(["start", "producer", "consumer", "end"],
+            [("start", "producer"), ("producer", "consumer"), ("consumer", "start"), ("consumer", "end")]);
+
+        var onCycle = _structures.AssessChildResult(flow, "producer", "consumer");
+        Assert.Equal(ActivityChildResultAvailability.Definite, onCycle.Availability);
+        Assert.False(onCycle.IsCyclicBackEdge);
+        Assert.True(onCycle.EarlierProducerRunCanReachConsumer);
+        var afterCycle = _structures.AssessChildResult(flow, "consumer", "end");
+        Assert.True(afterCycle.EarlierProducerRunCanReachConsumer);
+        Assert.False(_structures.AssessChildResult(flow, "end", "start").EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// A merge node runs once per arrival without a cycle. Each of its runs schedules its own successor, so no run of it
+    /// is behind another, and reachability to itself is still the whole question.
+    /// </summary>
+    [Fact]
+    public void A_merge_node_that_runs_once_per_arrival_has_no_earlier_run_behind_its_reader()
+    {
+        var flow = Flowchart(["start", "left", "right", "merge", "consumer"],
+            [("start", "left"), ("start", "right"), ("left", "merge"), ("right", "merge"), ("merge", "consumer")]);
+
+        var facts = _structures.AssessChildResult(flow, "merge", "consumer");
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
     }
 
     [Fact]
