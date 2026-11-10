@@ -1,0 +1,375 @@
+using System.Text.Json;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
+using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Sequence;
+using Elsa.Activities.Testing;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.SystemText;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+
+namespace Elsa.Activities.Behavioral;
+
+/// <summary>
+/// Which occurrence of a producer a reader gets when it binds an input to an activity result, run through the real
+/// engine. A reader binds either directly, declaring the producer's scope, or through an expression parameter, which
+/// has no scope. Every producer here returns its own activity execution id, so each occurrence has a distinct
+/// result and the value a reader committed as its input names the occurrence it read.
+/// </summary>
+/// <remarks>
+/// These tests pin the engine's current behaviour. The ones marked "known defect" describe a wrong or missing
+/// value; change them together with the fix (spec 1215, <c>research-4053-activity-result-scope.md</c>).
+/// </remarks>
+public sealed class ActivityResultOccurrenceTests
+{
+    private const string ResultKey = nameof(ReadResult.Value);
+
+    [Fact]
+    public async Task A_loop_reader_that_declares_the_root_scope_reads_the_first_pass_result_on_the_second_pass()
+    {
+        // Known defect: on the second pass the reader should get that pass's result. The declared root scope hides
+        // the second-pass producer, which runs in a generated loop scope, and leaves the first-pass one.
+        await using var harness = NewHarness("again", "done");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Loop(Direct("node-b", "scope:root"))));
+
+        run.AssertWorkflowCompleted();
+        var produced = Occurrences(run, "node-b");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0], produced[0]], Reads(run, "node-c"));
+    }
+
+    [Fact]
+    public async Task A_loop_reader_without_a_scope_cannot_tell_the_two_passes_apart_on_the_second_pass()
+    {
+        // Known defect: the second-pass read does not resolve. Both passes' producers are in the reader's lineage
+        // and the first pass has no iteration frame, so nothing separates them.
+        await using var harness = NewHarness("again", "done");
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(Loop(ThroughParameter("node-b"))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var produced = Occurrences(run, "node-b");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0]], Reads(run, "node-c"));
+        var blocked = await AssertBlockedAsync(harness, run, "node-c");
+        var failure = Assert.Throws<CausalActivityResultResolutionException>(() => ResolveWithoutScope(run, "node-b", blocked));
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Ambiguous, failure.Reason);
+        Assert.Equal(produced, failure.CandidateInvocationIds);
+    }
+
+    [Fact]
+    public async Task A_result_produced_under_a_first_wins_fork_is_unavailable_to_a_reader_that_declares_the_root_scope()
+    {
+        // Known defect: the producer ran once, before the reader, in a generated race scope no author can name.
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(Race(Direct("node-p", "scope:root"))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        run.AssertCompleted("node-p");
+        var blocked = await AssertBlockedAsync(harness, run, "node-r");
+        var failure = Assert.Throws<CausalActivityResultResolutionException>(() => ResolveDirect(run, "node-p", "scope:root", blocked));
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, failure.Reason);
+    }
+
+    [Fact]
+    public async Task A_result_produced_under_a_first_wins_fork_resolves_for_a_reader_without_a_scope()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(Race(ThroughParameter("node-p"))),
+            allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(Occurrences(run, "node-p"), Reads(run, "node-r"));
+    }
+
+    [Theory]
+    [InlineData("node-root")]
+    [InlineData("scope:root")]
+    public async Task The_result_of_a_placed_reusable_activity_is_unavailable_to_a_sibling_that_declares_a_scope(string declaredScope)
+    {
+        // Known defect: a placed reusable activity's scope is its own activity execution id, which no authored
+        // scope can equal.
+        await using var harness = NewHarness();
+        var root = Sequence("node-root", Stamp("node-p", PlacedReusableActivity), Read("node-r", Direct("node-p", declaredScope)));
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(root),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var producer = run.AssertCompleted("node-p");
+        Assert.Equal(producer.InvocationId, producer.Provenance.ExecutionScopeId);
+        var blocked = await AssertBlockedAsync(harness, run, "node-r");
+        var failure = Assert.Throws<CausalActivityResultResolutionException>(() => ResolveDirect(run, "node-p", declaredScope, blocked));
+        Assert.Equal(CausalActivityResultResolutionFailureReason.Unavailable, failure.Reason);
+    }
+
+    [Fact]
+    public async Task The_result_of_a_placed_reusable_activity_resolves_for_a_sibling_without_a_scope()
+    {
+        await using var harness = NewHarness();
+        var root = Sequence("node-root", Stamp("node-p", PlacedReusableActivity), Read("node-r", ThroughParameter("node-p")));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(Occurrences(run, "node-p"), Reads(run, "node-r"));
+    }
+
+    [Theory]
+    [InlineData("node-root")]
+    [InlineData("scope:root")]
+    [InlineData("not a scope of this workflow")]
+    public async Task A_sequence_reader_resolves_its_prior_sibling_whatever_scope_it_declares(string declaredScope)
+    {
+        // A Sequence child has no scope at run time, so the declared one is never compared.
+        await using var harness = NewHarness();
+        var root = Sequence("node-root", Stamp("node-p"), Read("node-r", Direct("node-p", declaredScope)));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        Assert.Null(run.State("node-p").Provenance.ExecutionScopeId);
+        Assert.Equal(Occurrences(run, "node-p"), Reads(run, "node-r"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_loop_reader_resolves_a_producer_that_ran_once_before_the_flowchart_on_every_pass(bool declaresScope)
+    {
+        // The producer runs once, outside the loop, so every pass has exactly one occurrence to read.
+        await using var harness = NewHarness("again", "done");
+        var read = declaresScope ? Direct("node-p", "node-root") : ThroughParameter("node-p");
+        var loop = Flowchart(
+            "node-flowchart",
+            [Probe("node-a"), LoopingRead("node-c", read), Probe("node-z")],
+            [Connect("node-a", "node-c"), Connect("node-c", "node-a", "again"), Connect("node-c", "node-z", "done")],
+            startNodeId: "node-a");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Sequence("node-root", Stamp("node-p"), loop)));
+
+        run.AssertWorkflowCompleted();
+        var produced = Assert.Single(Occurrences(run, "node-p"));
+        Assert.Equal([produced, produced], Reads(run, "node-c"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_reader_in_a_looping_flowchart_nested_in_a_loop_always_reads_the_outer_first_pass_result(bool declaresRootScope)
+    {
+        // Known defect, with or without a declared scope: the outer producer runs once per outer pass, and the
+        // nested reader should get the current outer pass's result. The nested Flowchart's nodes carry only its own
+        // iteration key (none on its first pass), so the second-pass outer producer never matches their frame, and
+        // the first-pass one, which has no frame, always does.
+        await using var harness = NewHarness("again", "done", "again", "again", "done", "done");
+        var read = declaresRootScope ? Direct("node-b", "scope:root") : ThroughParameter("node-b");
+        var inner = Flowchart(
+            "node-inner",
+            [Probe("node-d"), LoopingRead("node-e", read)],
+            [Connect("node-d", "node-e"), Connect("node-e", "node-d", "again")],
+            startNodeId: "node-d");
+        var outer = Flowchart(
+            "node-flowchart",
+            [Probe("node-a"), Stamp("node-b"), inner, LoopingRead("node-g", Literal("outer gate")), Probe("node-z")],
+            [
+                Connect("node-a", "node-b"), Connect("node-b", "node-inner"), Connect("node-inner", "node-g"),
+                Connect("node-g", "node-a", "again"), Connect("node-g", "node-z", "done")
+            ],
+            startNodeId: "node-a");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(outer));
+
+        run.AssertWorkflowCompleted();
+        var produced = Occurrences(run, "node-b");
+        Assert.Equal(2, produced.Count);
+        Assert.Equal([produced[0], produced[0], produced[0], produced[0]], Reads(run, "node-e"));
+    }
+
+    // A -> B -> C, C -(again)-> A, C -(done)-> Z. B produces, C reads B and decides whether to go round again.
+    private static ExecutableNode Loop(RuntimeInputBinding read) => Flowchart(
+        "node-flowchart",
+        [Probe("node-a"), Stamp("node-b"), LoopingRead("node-c", read), Probe("node-z")],
+        [Connect("node-a", "node-b"), Connect("node-b", "node-c"), Connect("node-c", "node-a", "again"), Connect("node-c", "node-z", "done")],
+        startNodeId: "node-a");
+
+    // Fork -> P and Fork -> Q under a first-wins race, then P -> R. P produces inside the race; R reads P after it.
+    private static ExecutableNode Race(RuntimeInputBinding read) => Flowchart(
+        "node-flowchart",
+        [Probe("node-fork"), Stamp("node-p"), Probe("node-q"), Read("node-r", read)],
+        [Connect("node-fork", "node-p"), Connect("node-fork", "node-q"), Connect("node-p", "node-r")],
+        startNodeId: "node-fork",
+        nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-fork"] = new("firstWins") });
+
+    /// <summary>Asserts the reader's latest occurrence never started and holds the run open with a blocking incident.</summary>
+    private static async Task<ActivityExecutionState> AssertBlockedAsync(WorkflowExecutionHarness harness, WorkflowExecutionRun run, string readerNodeId)
+    {
+        var blocked = run.States(readerNodeId).OrderBy(state => state.ExecutionSequence).Last();
+        Assert.Equal(ActivityExecutionStatus.Scheduled, blocked.Status);
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+        Assert.Equal(blocked.InvocationId, incident.ActivityExecutionId);
+        Assert.True(incident.IsBlocking);
+        return blocked;
+    }
+
+    // The incident carries the failure only as text, so the reason is read by resolving the same binding again over
+    // the states the run committed.
+    private static CausalActivityResultResolution? ResolveDirect(WorkflowExecutionRun run, string producerNodeId, string declaredScope, ActivityExecutionState reader) =>
+        new CausalActivityResultResolver().Resolve(new RuntimeActivityResultReference(producerNodeId, ResultKey, declaredScope), reader, run.ActivityStates);
+
+    private static CausalActivityResultResolution? ResolveWithoutScope(WorkflowExecutionRun run, string producerNodeId, ActivityExecutionState reader) =>
+        new CausalActivityResultResolver().Resolve(new ActivityResultExpressionParameterBinding(producerNodeId, ResultKey), reader, run.ActivityStates);
+
+    /// <summary>The activity execution ids of a node's completed occurrences, in execution order.</summary>
+    private static IReadOnlyList<string> Occurrences(WorkflowExecutionRun run, string nodeId) =>
+        Completed(run, nodeId).Select(state => state.InvocationId).ToArray();
+
+    /// <summary>What each completed occurrence of a reader committed as its input, in execution order.</summary>
+    private static IReadOnlyList<string?> Reads(WorkflowExecutionRun run, string nodeId) =>
+        Completed(run, nodeId).Select(state => state.InputSnapshot!.Values[ResultKey].InlineValue!.Value.GetString()).ToArray();
+
+    private static IEnumerable<ActivityExecutionState> Completed(WorkflowExecutionRun run, string nodeId) =>
+        run.States(nodeId).Where(state => state.Status == ActivityExecutionStatus.Completed).OrderBy(state => state.ExecutionSequence);
+
+    private static WorkflowExecutionHarness NewHarness(params string[] loopOutcomes) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.ExpressionsFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services))
+            .WithFeature(services => new Expressions.JavaScript.Jint.JintFeature().ConfigureServices(services))
+            .WithFeature(services => services.AddMemoryCache())
+            .WithFeature(services => services.AddSingleton(new LoopOutcomes(loopOutcomes)))
+            .WithProbeLeaf()
+            .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
+
+    // What placement stamps on a reusable activity's boundary node (ActivityTemplatePlacer); the key is what makes
+    // the node open its own execution scope.
+    private static readonly IReadOnlyDictionary<string, string> PlacedReusableActivity =
+        new Dictionary<string, string> { ["activity.definitionVersionId"] = "definition-stamp-version" };
+
+    private static RuntimeInputBinding Direct(string producerNodeId, string declaredScope) => new(
+        ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.ActivityResult,
+        activityResult: new RuntimeActivityResultReference(producerNodeId, ResultKey, declaredScope));
+
+    private static RuntimeInputBinding ThroughParameter(string producerNodeId) => new(
+        ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.Expression,
+        expression: new RuntimeExpressionBinding(
+            "JavaScript",
+            "args.produced",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["produced"] = new ActivityResultExpressionParameterBinding(producerNodeId, ResultKey)
+            }));
+
+    private static RuntimeInputBinding Literal(string value) => new(
+        ResultKey, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.Literal,
+        literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Object"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+
+    private static ExecutableNode Probe(string nodeId) => WorkflowExecutionHarness.NewProbeNode(nodeId);
+
+    private static ExecutableNode Stamp(string nodeId, IReadOnlyDictionary<string, string>? metadata = null) =>
+        Leaf(nodeId, typeof(StampActivity), read: null, metadata);
+
+    private static ExecutableNode Read(string nodeId, RuntimeInputBinding read) => Leaf(nodeId, typeof(ReadActivity), read);
+
+    private static ExecutableNode LoopingRead(string nodeId, RuntimeInputBinding read) => Leaf(nodeId, typeof(LoopingReadActivity), read);
+
+    private static ExecutableNode Leaf(string nodeId, Type activityType, RuntimeInputBinding? read, IReadOnlyDictionary<string, string>? metadata = null) => new(
+        executableNodeId: nodeId,
+        authoredActivityId: $"authored-{nodeId}",
+        activityType: activityType.FullName!,
+        activityTypeVersion: "1.0.0",
+        descriptorType: "test",
+        descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+        inputBindings: read is null
+            ? new Dictionary<string, RuntimeInputBinding>()
+            : new Dictionary<string, RuntimeInputBinding> { [read.InputName] = read },
+        metadata: metadata ?? new Dictionary<string, string>());
+
+    private static ExecutableNode Sequence(string nodeId, params ExecutableNode[] steps) =>
+        GraphBoundaryCompleteTests.Sequence(nodeId, steps);
+
+    private static FlowchartConnection Connect(string source, string target, string? outcome = null) =>
+        new(new FlowchartEndpoint(source, outcome), new FlowchartEndpoint(target));
+
+    private static ExecutableNode Flowchart(
+        string nodeId,
+        IReadOnlyCollection<ExecutableNode> children,
+        IReadOnlyCollection<FlowchartConnection> connections,
+        string startNodeId,
+        IReadOnlyDictionary<string, FlowchartNodeMetadata>? nodeMetadata = null) => new(
+        executableNodeId: nodeId,
+        authoredActivityId: $"authored-{nodeId}",
+        activityType: typeof(FlowchartActivity).FullName!,
+        activityTypeVersion: "1.0.0",
+        descriptorType: "test",
+        descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+        inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+        metadata: new Dictionary<string, string>(),
+        childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, children)],
+        structure: new ExecutableActivityStructure(
+            FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new FlowchartStructure(connections, startNodeId, nodeMetadata))));
+
+    public sealed record ReadResult([property: Output(Key = "Value", Path = "value")] object? Value);
+
+    /// <summary>The outcomes the looping readers of one run complete with, in execution order.</summary>
+    public sealed class LoopOutcomes(IEnumerable<string> outcomes)
+    {
+        private readonly Queue<string> _outcomes = new(outcomes);
+
+        public string Next() => _outcomes.Dequeue();
+    }
+
+    /// <summary>Returns its own activity execution id, so every occurrence produces a different result.</summary>
+    public sealed class StampActivity : Activity<ReadResult>
+    {
+        protected override ValueTask<ActivityTransition<ReadResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new ReadResult(context.InvocationId)));
+    }
+
+    /// <summary>Returns its input, so a test can read which occurrence the binding resolved.</summary>
+    public sealed class ReadActivity : Activity<ReadResult>
+    {
+        [ActivityInput] public object? Value { get; set; }
+
+        protected override ValueTask<ActivityTransition<ReadResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new ReadResult(Value)));
+    }
+
+    /// <summary>A reader that also closes a loop: it completes with the run's next scripted outcome.</summary>
+    [ActivityOutcome("again")]
+    [ActivityOutcome("done")]
+    public sealed class LoopingReadActivity(LoopOutcomes outcomes) : Activity<ReadResult>
+    {
+        [ActivityInput] public object? Value { get; set; }
+
+        protected override ValueTask<ActivityTransition<ReadResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new ReadResult(Value), outcomes.Next()));
+    }
+}
