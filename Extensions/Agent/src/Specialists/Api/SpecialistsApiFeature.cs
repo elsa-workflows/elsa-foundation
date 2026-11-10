@@ -29,8 +29,19 @@ public class SpecialistsApiFeature : IWebShellFeature
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-specialists", 1,
         [
             new("agent-specialist-model-providers", SpecialistsApi.ModelProvidersRoute, true),
-            new("agent-specialist-model-capabilities", SpecialistsApi.ModelCapabilitiesRoute, true),
-            new("agent-source-definitions", "agent/definitions", true)
+            new("agent-specialist-model-capabilities", SpecialistsApi.ModelCapabilitiesRoute, true)
+        ], "SpecialistsApi"));
+        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.agent-definitions", 1,
+        [
+            new("agent-source-revisions", "agent/definitions/revisions"),
+            new("agent-source-revision", "agent/definitions/revision"),
+            new("agent-source-draft", "agent/definitions/draft"),
+            new("agent-source-draft-revisions", "agent/definitions/draft-revisions"),
+            new("agent-source-draft-revision", "agent/definitions/draft-revision"),
+            new("agent-source-captures", "agent/definitions/captures"),
+            new("agent-source-discard", "agent/definitions/discard"),
+            new("agent-source-forks", "agent/definitions/forks"),
+            new("agent-source-definitions", "agent/definitions")
         ], "SpecialistsApi"));
     }
 

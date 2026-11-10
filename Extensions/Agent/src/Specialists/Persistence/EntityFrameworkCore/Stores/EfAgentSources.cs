@@ -24,7 +24,7 @@ public sealed class EfAgentSources<TContext>(TContext db, IPersistenceAccessCont
         return JsonSerializer.Deserialize<AgentSourceContent>(content, Json) ?? throw new SourceRevisionException("content-invalid");
     }
     private static AgentSourceDraft View(SourceWorkingCopy row) => new(row.SourceId, row.CopyId, row.Name, row.Revision, Read(row.Profile, row.Content));
-    private static AgentSourceRevision View(SourceSnapshot row) => new(row.Key, row.OperationId, row.Revision, row.Fingerprint, Read(row.Profile, row.Content));
+    private static AgentSourceRevision View(SourceSnapshot row, string copyId) => new(row.Key, row.OperationId, row.Revision, row.Fingerprint, Read(row.Profile, row.Content)) { SourceCopyId = copyId };
     private static string Write(AgentSourceContent content)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -54,14 +54,30 @@ public sealed class EfAgentSources<TContext>(TContext db, IPersistenceAccessCont
     }
     public async Task<AgentSourceRevision?> FindRevisionAsync(string agentId, string draftId, string snapshotId, CancellationToken cancellationToken = default)
     {
-        var row = await Store().FindSnapshotAsync(agentId, draftId, snapshotId, cancellationToken); return row is null ? null : View(row);
+        var row = await Store().FindSnapshotAsync(agentId, draftId, snapshotId, cancellationToken); return row is null ? null : View(row, draftId);
+    }
+    public async Task<AgentSourceRevision?> FindSourceRevisionAsync(string agentId, string snapshotId, CancellationToken cancellationToken = default)
+    {
+        var row = await Store().FindSourceSnapshotAsync(agentId, snapshotId, cancellationToken);
+        return row is null ? null : View(row.Snapshot, row.CopyId);
+    }
+    public async Task<AgentRevisionPage> SourceHistoryAsync(string agentId, int skip = 0, int take = 50, CancellationToken cancellationToken = default)
+    {
+        var page = await Store().HistorySourceAsync(agentId, skip, take, cancellationToken);
+        return new(page.Total, page.Items.Select(row => View(row.Snapshot, row.CopyId)).ToArray());
     }
     public async Task<AgentSourcePage> ListAsync(string? search, int skip, int take, CancellationToken cancellationToken = default)
     {
         var page = await Store().ListAsync(search, skip, take, cancellationToken); return new(page.Total, page.Items.Select(View).ToArray());
     }
+    public async Task<AgentDefinitionPage> ListDefinitionsAsync(string? search, int skip, int take, CancellationToken cancellationToken = default)
+    {
+        var page = await Store().ListSourcesAsync(search, skip, take, cancellationToken);
+        return new(page.Total, page.Items.Select(row => new AgentDefinitionView(row.SourceId, row.Name, row.CopyId,
+            row.Discarded ? null : row.CopyId, row.Discarded ? null : row.Revision)).ToArray());
+    }
     public async Task<IReadOnlyList<AgentSourceRevision>> HistoryAsync(string agentId, string draftId, int skip = 0, int take = 100, CancellationToken cancellationToken = default) =>
-        (await Store().HistoryAsync(agentId, draftId, skip, take, cancellationToken)).Select(View).ToArray();
+        (await Store().HistoryAsync(agentId, draftId, skip, take, cancellationToken)).Select(row => View(row, draftId)).ToArray();
     public async Task<AgentSourceDraft> CreateAsync(string agentId, string draftId, string name, AgentSourceContent content, CancellationToken cancellationToken = default) =>
         View(await Store().CreateAsync(agentId, draftId, name, Profile, Write(content), cancellationToken));
     public async Task<AgentSourceDraft> ForkAsync(string agentId, string draftId, string snapshotId, string newAgentId, string newDraftId, string name, CancellationToken cancellationToken = default) =>
@@ -69,7 +85,7 @@ public sealed class EfAgentSources<TContext>(TContext db, IPersistenceAccessCont
     public async Task<AgentSourceDraft> SaveAsync(string agentId, string draftId, long expectedRevision, string name, AgentSourceContent content, CancellationToken cancellationToken = default) =>
         View(await Store().SaveAsync(agentId, draftId, expectedRevision, name, Profile, Write(content), cancellationToken));
     public async Task<AgentSourceRevision> CaptureAsync(string agentId, string draftId, long expectedRevision, string operationId, CancellationToken cancellationToken = default) =>
-        View(await Store().CaptureAsync(agentId, draftId, expectedRevision, operationId, cancellationToken));
+        View(await Store().CaptureAsync(agentId, draftId, expectedRevision, operationId, cancellationToken), draftId);
     public Task DiscardAsync(string agentId, string draftId, long expectedRevision, CancellationToken cancellationToken = default) =>
         Store().DiscardAsync(agentId, draftId, expectedRevision, cancellationToken);
 }
