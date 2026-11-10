@@ -4,7 +4,7 @@ Point-in-time mapping table for execution-core slice 8 / goal §G2.4. Tests and 
 
 **Main SHA at inventory:** `1769c5b5a8dae4fc3706c587278f1ffb047073e7` (`origin/main` when this slice started; contains G1 #4047 `e962de590`). File:line citations below are on that SHA unless a later test in this slice is named.
 
-**This slice HEAD:** filled in after the mapping tests land; see the PR.
+**This slice HEAD:** `aa2dcb2739734412fc9d8e307a4f395392ef8b87` (mapping Facts and table). The PR head may add only this pin.
 
 **Method:** read existing G2 tests and reports first (`#4028`, `#3995`, `#3992`, `#3993`, `#4047`, G3 counts, BPMN/native hosting and e2e). A row is **PROVEN** only when a dedicated test body actually runs both sides of the named boundary (no probe/fake for the other model). **OPEN** means searched; no such current proof. **unknown** means the intended mapping is not pinned by a dual-path test or by a contract that applies to that child type. Equivalence is not inferred across planes.
 
