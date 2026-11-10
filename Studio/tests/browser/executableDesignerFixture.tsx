@@ -27,7 +27,7 @@ function Fixture() {
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const [selected, select] = useState<string | null>(null);
   return <ThemeProvider><output aria-label="Selected activity">{selected ?? "None"}</output><main style={{ height: "90vh", display: "flex" }}><WorkflowExecutableCanvas
-    detail={detail} activityCatalog={catalog} graph={graph} chosenReference={null} frames={frames} onNavigateToScope={setFrames}
+    detail={detail} activityCatalog={catalog} graph={graph} chosenReference={null} displayName="Pinned workflow" frames={frames} onNavigateToScope={setFrames}
     selectedNodeId={selected} onSelectNode={select} /></main></ThemeProvider>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);

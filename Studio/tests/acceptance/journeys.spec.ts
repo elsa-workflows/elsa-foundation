@@ -28,6 +28,7 @@ async function signIn(page: Page) {
 const browserErrors = new WeakMap<Page, string[]>();
 type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
+const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("user task authoring and workflow result", async ({ page }, info) => {
@@ -78,6 +79,11 @@ test.afterEach(async ({ page, playwright }, info) => {
       await info.attach("workflow-cleanup.json", { body: JSON.stringify({ requestTimeoutMs: 5_000, ownedIds: creations.map(item => item.id), primaryErrors: info.errors, outcomes }, null, 2), contentType: "application/json" });
     } catch (error) { failures.push(new Error("Could not retain the workflow cleanup results", { cause: error })); }
   }
+  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
+  for (const ownedCleanup of ownedCleanups.get(page) ?? []) {
+    try { await ownedCleanup(); }
+    catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
+  }
   try { expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]); }
   catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
   // Playwright retains the body failure separately; cleanup failures must also fail the case.
@@ -94,6 +100,7 @@ test.beforeEach(async ({ page }, info) => {
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
+  ownedCleanups.set(page, []);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
@@ -264,7 +271,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Proofread a supplied text.");
   await capture(page, info, "agent-create");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await expect(instructions).toBeVisible();
   await instructions.fill("Proofread the supplied text and return concise suggestions.");
@@ -272,7 +279,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
   await page.reload();
   await expect(instructions).toHaveValue("Proofread the supplied text and return concise suggestions.");
-  const advanced = editor.locator("details.agent-specialist-advanced");
+  const advanced = editor.locator("details.agent-advanced");
   await expect(advanced).not.toHaveAttribute("open");
   await page.getByRole("tab", { name: "Designer", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "agent-designer");
@@ -357,7 +364,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await instructions.fill("");
   await instructions.press("Tab");
@@ -400,7 +407,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
 });
 
 test("save template toast", async ({ page }, info) => {
-  await templateToastJourney(page, info, capture);
+  await templateToastJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("workflow template metadata defaults", async ({ page }, info) => {
@@ -466,6 +473,9 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
   const description = dialog.getByRole("textbox", { name: "Description", exact: true });
   await expect(startingPoint).toBeFocused();
+  // The host replaces the native arrow; module field surfaces must retain its visible chevron.
+  await expect(startingPoint).toHaveCSS("appearance", "none");
+  await expect(startingPoint).not.toHaveCSS("background-image", "none");
   await startingPoint.press("Tab");
   await expect(name).toBeFocused();
   await name.press("Tab");

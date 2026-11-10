@@ -376,10 +376,10 @@
   outline-offset: 2px;
 }
 
-.wf-actions button,
-.wf-toolbar button,
-.wf-editor-actions button,
-.wf-link-button {
+.wf-actions button:where(:not(.studio-button)),
+.wf-toolbar button:where(:not(.studio-button)),
+.wf-editor-actions button:where(:not(.studio-button)),
+.wf-link-button:where(:not(.studio-button)) {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
@@ -392,6 +392,17 @@
   font: inherit;
   font-size: 13px;
   padding: 0 10px;
+}
+
+.wf-toolbar button:focus-visible,
+.wf-panel-action-button:focus-visible,
+.wf-panel-tab-list button:focus-visible,
+.wf-instance-meta button:focus-visible,
+.wf-instance-inspector .studio-copyable-identifier__button:focus-visible,
+.wf-instance-canvas .react-flow__controls button:focus-visible,
+.wf-instance-canvas .react-flow__controls-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 /* Shared buttons own their hover recipe, including the primary foreground/background pair. */
@@ -3428,7 +3439,6 @@
   min-height: 38px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
   color: var(--wf-text);
   font: inherit;
   font-size: 14px;
@@ -3439,6 +3449,11 @@
   text-transform: none;
 }
 
+.wf-form-field input,
+.wf-form-field textarea {
+  background: var(--wf-panel-muted);
+}
+
 .wf-form-field textarea {
   min-height: 74px;
   padding: 9px 10px;
@@ -3446,6 +3461,8 @@
 }
 
 .wf-form-field select {
+  /* Preserve the shared host chevron while applying the field surface. */
+  background-color: var(--wf-panel-muted-tone);
   padding-right: 28px;
 }
 
@@ -4702,7 +4719,8 @@
   margin: 0;
 }
 
-.wf-inspector > .wf-muted {
+.wf-inspector > .wf-muted,
+.wf-workbench-panel-content > .wf-muted {
   margin: 0;
   padding: 12px;
 }

@@ -7,10 +7,10 @@ import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hos
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import { WorkflowExecutables } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutables";
 import { RuntimeDiagnosticsSettingsPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage";
-import { AgentsPage } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/AgentsPage";
+import { AgentsPage } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentsPage";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
-import "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/styles.css";
+import "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 writeAppearancePreferences({ themeId: "classic", mode: params.get("theme") === "dark" ? "dark" : "light", navigation: "left" });
@@ -30,7 +30,7 @@ const context = {
       ] };
       if (path.includes("instances/page")) return { items: [], hasNext: false, nextCursor: null, count: 0, totalCount: 0 };
       if (path.includes("diagnostics/settings")) return settings;
-      if (path.includes("authoring-capabilities")) return { contractSchemaVersions: ["1"], providers: [{ providerKey: "elsa.specialist", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true }], requiredOutcomes: [] }] };
+      if (path.includes("authoring-capabilities")) return { contractSchemaVersions: ["1"], providers: [{ providerKey: "elsa.agent", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true }], requiredOutcomes: [] }] };
       if (path.includes("design/activities/definitions")) return { items: [], totalCount: 0, hasMore: false };
       if (path.includes("design/workflows/definitions")) return { items: [{ id: "hello", name: "Hello World", createdAt: "2026-11-03T10:00:00Z", lastModifiedAt: "2026-11-03T10:00:00Z", versionCount: 1 }], page: 1, pageSize: 100, totalCount: 1 };
       if (path.includes("runtime/workflows/executables")) return { items: params.has("empty") ? [] : [{ artifactId: "hello-artifact", artifactVersion: "1.0.0", artifactHash: "sha256:example", definitionId: "hello", definitionVersionId: "hello-v1", sourceKind: "WorkflowDefinitionVersion", sourceId: "hello-v1", sourceVersion: "1.0.0", createdAt: "2026-11-03T10:00:00Z", rootActivityType: "Elsa.Flowchart", nodeCount: 1, resumeTargetCount: 0, references: [] }] };

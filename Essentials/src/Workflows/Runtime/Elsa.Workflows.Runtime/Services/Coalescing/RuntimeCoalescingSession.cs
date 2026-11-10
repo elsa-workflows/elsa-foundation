@@ -144,6 +144,16 @@ public sealed class RuntimeCoalescingSession
     /// session has landed since. Once true it stays true, so the run's completion is always committed.
     /// </summary>
     public bool HasDurableRecord { get; private set; }
+
+    /// <summary>What this session knows of the activity execution rows the durable store holds for the run.</summary>
+    internal RuntimeCoalescingEmptyBaseline ActivityBaseline { get; } = new();
+
+    /// <summary>What this session knows of the inspection projections the durable store holds for the run.</summary>
+    internal RuntimeCoalescingEmptyBaseline InspectionBaseline { get; } = new();
+
+    /// <summary>The workflow execution state the drain read when it began, until this session has one of its own.</summary>
+    internal RunStateSnapshot RunStateSnapshot { get; } = new();
+
     public bool CoalesceDurableValueReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
@@ -242,6 +252,74 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Records that a commit for this run reached the durable store.</summary>
     internal void MarkDurableRecord() => HasDurableRecord = true;
+
+    /// <summary>
+    /// Records what a commit is about to send to the durable store: its activity execution rows and inspection
+    /// projections, so neither empty baseline answers for them again, and whether it carries the workflow execution
+    /// state, which ends the run state snapshot. Call it before the write: a write that fails may still land.
+    /// A change's id is the id its state carries: <see cref="RuntimeCheckpointStateChangeSet"/> refuses a change
+    /// where the two differ, so recording the change's id records the row whichever of the two a store keys it by.
+    /// </summary>
+    internal void RecordPossibleDurableWrites(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+
+        foreach (var change in changes.ActivityExecutions)
+            ActivityBaseline.RecordPossibleWrite(change.StateId);
+        foreach (var change in changes.ActivityExecutionInspections)
+            InspectionBaseline.RecordPossibleWrite(change.StateId);
+        // From here the store may hold a newer workflow execution state than the one the drain read when it began.
+        if (changes.WorkflowExecution is not null)
+            RunStateSnapshot.End();
+    }
+
+    /// <summary>
+    /// Lets this session answer point reads of rows the durable stores cannot hold, unless the run already has a
+    /// durable record: its rows are there to be read. Only <see cref="RuntimeCoalescingDrainScopeFactory"/> calls
+    /// it, because the factory is also what ends the answers when a nested drain begins and when the scope is
+    /// disposed. A session created any other way reads every row from the store.
+    /// </summary>
+    internal void BeginEmptyBaselines()
+    {
+        if (HasDurableRecord)
+            return;
+
+        ActivityBaseline.Begin();
+        InspectionBaseline.Begin();
+    }
+
+    /// <summary>
+    /// Lets this session answer a read of its run's workflow execution state with what the drain read when it
+    /// began, until the session has a state of its own or a write of that state is attempted. Only
+    /// <see cref="RuntimeCoalescingDrainScopeFactory"/> calls it, for the reason given on
+    /// <see cref="BeginEmptyBaselines"/>. An observation that another session already started from, that
+    /// contradicts the mode this session was created under, or that belongs to another run, is not used.
+    /// </summary>
+    internal void BeginRunStateSnapshot(RunStateObservation observed)
+    {
+        ArgumentNullException.ThrowIfNull(observed);
+        if (!observed.TryTake())
+            return;
+        if (observed.State is null == HasDurableRecord)
+            return;
+        if (observed.State is { } state && !StringComparer.Ordinal.Equals(state.WorkflowExecutionId, WorkflowExecutionId))
+            return;
+
+        RunStateSnapshot.Begin(observed.State);
+    }
+
+    /// <summary>
+    /// Ends, for good, everything this session observed of the store: both empty baselines and the run state
+    /// snapshot. A nested drain can write this run's rows while its own session is the ambient one,
+    /// which this session never sees. A session whose scope is gone, or whose drain was cancelled, no longer has the
+    /// drain's lease behind what it knows. Safe to call from a cancellation callback.
+    /// </summary>
+    internal void EndStoreObservations()
+    {
+        ActivityBaseline.End();
+        InspectionBaseline.End();
+        RunStateSnapshot.End();
+    }
 
     /// <summary>
     /// Whether <paramref name="completion"/> may be dropped instead of committed: the one exception to committing a

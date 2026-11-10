@@ -31,7 +31,7 @@ The optional `Qualification:DiagnosticGateDirectory` pauses immediately before s
 
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
 
-The application also discovers `FoundationAgentEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
+The application also discovers `WeaverEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
 does not select them. For the #3441 restart inventory, `consumers.enable_durable_agent_store(run, database, key)` adds both to
 the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
 root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
@@ -75,8 +75,8 @@ delegates every call unchanged. Only Weaver's library writes reach it: the HTTP 
 decisions whatever `IWorkflowLibraryCommands` is installed, so the driver's own owner writes and reads never pass through
 the seam. The seam changes no product code.
 
-Spec 1193 slice F adds `Elsa.Agent.Workflows.Runtime` to the packaged references and selects its shell feature
-`FoundationWorkflowsRuntimeAgent` in the baseline shell, beside `FoundationWorkflowsAgent`; its assembly is listed with the
+Spec 1193 slice F adds `Elsa.Weaver.Workflows.Runtime` to the packaged references and selects its shell feature
+`WeaverWorkflowsRuntime` in the baseline shell, beside `WeaverWorkflows`; its assembly is listed with the
 other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
 native feature apply, for its deployment-shape control and selects it again.
 

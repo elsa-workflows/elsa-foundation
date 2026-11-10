@@ -77,6 +77,25 @@ public sealed class CompensationScopeDesignTests : IDisposable
         Assert.Equal(["deliver", "reserve"], _structureService.ChildrenCompletedBefore(node, "confirm"));
         Assert.Empty(_structureService.ChildrenCompletedBefore(node, "reserve")!);
         Assert.Null(_structureService.ChildrenCompletedBefore(node, "elsewhere"));
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "deliver", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "confirm").Availability);
+        var handlerResult = _structureService.AssessChildResult(node, "cancel", "confirm");
+        Assert.Equal(ActivityChildResultAvailability.Unknown, handlerResult.Availability);
+        Assert.Null(handlerResult.MayRunConcurrently);
+        Assert.Null(handlerResult.IsCyclicBackEdge);
+    }
+
+    [Fact]
+    public void A_scope_runs_each_step_and_handler_at_most_once_so_no_earlier_run_leads_to_a_reader()
+    {
+        var node = ScopeNode("scope",
+            ("Inventory", Leaf("reserve"), Leaf("release")),
+            ("Delivery", Leaf("deliver"), Leaf("cancel")));
+
+        Assert.All(new[] { ("deliver", "cancel"), ("reserve", "cancel"), ("reserve", "deliver"), ("cancel", "deliver") }, pair =>
+            Assert.False(_structureService.AssessChildResult(node, pair.Item1, pair.Item2).EarlierProducerRunCanReachConsumer));
     }
 
     [Fact]

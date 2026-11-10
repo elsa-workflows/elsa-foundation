@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -67,6 +67,12 @@ import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
+import { WorkflowExecutableCanvasHeader } from "./WorkflowExecutableCanvasHeader";
+import {
+  describeExecutableReferenceSelection,
+  resolveExecutableInspectorDisplayName,
+  type ExecutableInspectorIdentity
+} from "./executableInspectorIdentity";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -86,7 +92,7 @@ type SourceDefinitionState =
   | { status: "absent" }
   | { status: "failed"; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference, onIdentityChange }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
   /** The Workflows module's agent state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
@@ -95,6 +101,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   artifactId: string;
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
+  onIdentityChange?(identity: ExecutableInspectorIdentity): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
@@ -198,6 +205,15 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
     return () => { cancelled = true; };
   }, [chosenReference?.definitionId, context]);
 
+  useEffect(() => {
+    if (state !== "ready" || data?.detail.artifactId !== artifactId) return;
+    onIdentityChange?.({
+      definitionName: sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
+      artifactId,
+      version: chosenReference?.artifactVersion ?? null
+    });
+  }, [artifactId, chosenReference?.artifactVersion, data?.detail.artifactId, onIdentityChange, sourceDefinition, state]);
+
   const graph = useMemo(
     () => data ? buildExecutableActivityGraph(
       data.detail.rootActivity,
@@ -255,18 +271,19 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
         />
       ) : null}
       <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</button>
-        <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
+        <StudioButton type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</StudioButton>
+        <StudioButton type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>
         {data ? (
           <ExecutableRunButton
             target={publishedRunTarget}
             runningArtifactId={executableRun.runningArtifactId}
             iconSize={14}
+            variant="primary"
             onRequest={executableRun.request}
           />
         ) : null}
         {data && explainAction ? (
-          <button type="button" onClick={explain}><Sparkles size={13} /> Explain</button>
+          <StudioButton type="button" onClick={explain}><Sparkles size={13} /> Explain</StudioButton>
         ) : null}
         {data ? (
           <SourceDefinitionAction
@@ -287,6 +304,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
             activityCatalog={data.activityCatalog}
             graph={graph}
             chosenReference={chosenReference}
+            displayName={resolveExecutableInspectorDisplayName(
+              sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
+              data.detail.artifactId
+            )}
             frames={frames}
             onNavigateToScope={setFrames}
             selectedNodeId={selectedNodeId}
@@ -326,11 +347,12 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   );
 }
 
-export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
+export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, displayName, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
   chosenReference: WorkflowExecutableReference | null;
+  displayName: string;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
   selectedNodeId: string | null;
@@ -343,20 +365,18 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
   );
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
+  const selectionLabel = detail.chosenReference
+    ? describeExecutableReferenceSelection(detail.chosenReference.selection, detail.chosenReference.sourceReferenceId)
+    : "No source reference; automatic layout";
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Executable canvas">
-      <header>
-        <div>
-          <span>Executable</span>
-          <h3>{detail.artifactId} <small>{chosenReference ? `Version ${chosenReference.artifactVersion}` : detail.rootActivityType}</small></h3>
-        </div>
-        {detail.chosenReference ? (
-          <span className="wf-executable-selection">{describeReferenceSelection(detail.chosenReference.selection, detail.chosenReference.sourceReferenceId)}</span>
-        ) : (
-          <span className="wf-executable-selection">No source reference; automatic layout</span>
-        )}
-      </header>
+      <WorkflowExecutableCanvasHeader
+        displayName={displayName}
+        version={chosenReference?.artifactVersion ?? null}
+        artifactId={detail.artifactId}
+        selectionLabel={selectionLabel}
+      />
       <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
       <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
         const node = canvas.nodes.find(candidate => candidate.id === nodeId);
@@ -718,7 +738,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
   const disabledReason = getSourceDefinitionDisabledReason(reference, sourceDefinition);
 
   return (
-    <button
+    <StudioButton
       type="button"
       disabled={!!disabledReason}
       title={disabledReason ?? undefined}
@@ -726,7 +746,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
       onClick={onOpen}
     >
       <WorkflowIcon size={14} /> Open source definition
-    </button>
+    </StudioButton>
   );
 }
 
@@ -804,14 +824,6 @@ function findChosenReference(detail: WorkflowExecutableDetails | null): Workflow
   return detail.references.find(reference => reference.sourceReferenceId === chosenId)
     ?? detail.references[0]
     ?? null;
-}
-
-function describeReferenceSelection(selection: string, sourceReferenceId: string) {
-  const normalized = selection.trim().toLowerCase();
-  if (normalized === "requested") return `Showing requested reference ${sourceReferenceId}`;
-  if (normalized === "newest-live") return `Showing newest live reference ${sourceReferenceId}`;
-  if (normalized === "newest") return `Showing newest reference ${sourceReferenceId} (no live references remain)`;
-  return `Showing reference ${sourceReferenceId}`;
 }
 
 function formatExecutableLoadError(error: unknown, artifactId: string) {
