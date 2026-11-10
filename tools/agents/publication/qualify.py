@@ -1,4 +1,4 @@
-"""Build private candidate packages and independent specialist research consumers.
+"""Build private candidate packages and independent agent research consumers.
 
 Research only: nothing is pushed, published remotely, or connected to a model.
 The output directory must be new, absolute, and outside the repository.
@@ -83,7 +83,7 @@ def main():
     solution = ET.Element("Solution")
     for project in selected:
         ET.SubElement(solution, "Project", Path=project.relative_to(producer).as_posix())
-    slnx = producer / "Specialists.Candidates.slnx"
+    slnx = producer / "Agents.Candidates.slnx"
     ET.ElementTree(solution).write(slnx, encoding="unicode")
     props = ["-p:Version=" + args.version, "-p:SourceRevisionId=" + source]
     run("producer-build", ["dotnet", "build", str(slnx), "-c", "Release", *props], producer)
@@ -108,12 +108,12 @@ def main():
     def configure(directory):
         document = ET.parse(producer / "NuGet.config")
         sources = document.getroot().find("packageSources")
-        ET.SubElement(sources, "add", key="specialist-candidate", value=str(feed))
+        ET.SubElement(sources, "add", key="agent-candidate", value=str(feed))
         mapping = document.getroot().find("packageSourceMapping")
-        group = ET.SubElement(mapping, "packageSource", key="specialist-candidate")
+        group = ET.SubElement(mapping, "packageSource", key="agent-candidate")
         for package in sorted(packages):
             ET.SubElement(group, "package", pattern=package)
-        ET.SubElement(group, "package", pattern="Acme.Specialists.*")
+        ET.SubElement(group, "package", pattern="Acme.Agents.*")
         document.write(directory / "NuGet.Config", encoding="unicode")
 
     for name in ["Runtime", "Design", "Author", "Consumer", "BpmnConsumer", "Lifecycle"]:
@@ -134,7 +134,7 @@ def main():
         run(name + "-locked-restore", ["dotnet", "restore", str(project), "--locked-mode"], directory)
         if name in ["Runtime", "Design"]:
             run(name + "-pack", ["dotnet", "pack", str(project), "-c", "Release", "--no-restore", "-o", str(feed)], directory)
-            package = feed / ("Acme.Specialists." + name + "." + args.version + ".nupkg")
+            package = feed / ("Acme.Agents." + name + "." + args.version + ".nupkg")
             report.setdefault("fixturePackages", {})[package.name] = hashlib.sha256(package.read_bytes()).hexdigest()
         elif name == "Author":
             for control, marker in [("missing-consumer", "activity.runtime.consumer-missing"), ("missing-storage", "activity.runtime.storage-driver-missing")]:
@@ -147,7 +147,7 @@ def main():
         elif name in ["Consumer", "BpmnConsumer"]:
             for mode in (["native", "invalid-output"] if name == "Consumer" else ["bpmn"]):
                 run("Consumer-" + mode, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), mode], directory,
-                    "EXPECTED_CONTROL:specialist.output.invalid:no-accepted-result" if mode == "invalid-output" else None)
+                    "EXPECTED_CONTROL:agent.output.invalid:no-accepted-result" if mode == "invalid-output" else None)
         else:
             run("Lifecycle-run", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "lifecycle")], directory)
         assets = json.loads((directory / "obj/project.assets.json").read_text())
@@ -164,7 +164,7 @@ def main():
                                         "owner": "Program #3519 M1 architecture and M4 package separation"}
         for identity, library in assets["libraries"].items():
             package_id, version = identity.rsplit("/", 1)
-            if package_id not in packages and not package_id.startswith("Acme.Specialists."):
+            if package_id not in packages and not package_id.startswith("Acme.Agents."):
                 continue
             if version != args.version:
                 raise RuntimeError("Unexpected candidate version in " + name + ": " + identity)

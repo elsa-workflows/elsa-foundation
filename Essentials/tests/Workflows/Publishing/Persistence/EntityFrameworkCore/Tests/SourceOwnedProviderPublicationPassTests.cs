@@ -333,7 +333,7 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A provider compiler with its own gates, as the specialist provider has: content it cannot read fails to compile,
+    /// A provider compiler with its own gates, as the agent provider has: content it cannot read fails to compile,
     /// and a selected model the capability source says cannot serve the content is refused before any template exists.
     /// </summary>
     private sealed class AcmeProvider : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer

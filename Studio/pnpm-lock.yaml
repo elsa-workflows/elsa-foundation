@@ -73,7 +73,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client:
+  ../Extensions/Agent/studio/Elsa.Studio.Agent/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*

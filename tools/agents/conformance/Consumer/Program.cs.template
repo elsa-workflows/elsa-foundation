@@ -19,12 +19,12 @@ using CShells.Configuration;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Acme.Specialist.ModelFixture;
+using Acme.Agent.ModelFixture;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
-using Elsa.Agent.Specialists;
-using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent;
+using Elsa.Agent.Core.Models;
 using Elsa.Events;
 using Elsa.Locking.FileSystem;
 using Elsa.Tasks;
@@ -51,7 +51,7 @@ var node = source.GetProperty("Root").Deserialize<ExecutableNode>()!;
 var resume = source.GetProperty("ResumeTargets").Deserialize<Dictionary<string, WorkflowExecutableResumeTarget>>()!;
 var requirements = source.GetProperty("RuntimeRequirements").Deserialize<RuntimeRequirement[]>()!;
 var storage = JsonSerializer.Deserialize<RuntimeStorageDriverRequirement[]>(await File.ReadAllTextAsync(Path.Combine(args[0], "storage.json")))!;
-Check(node.DescriptorPayload.GetProperty("definitionVersionId").GetString() == "copywriter-v1", "exact reviewed specialist version imported");
+Check(node.DescriptorPayload.GetProperty("definitionVersionId").GetString() == "copywriter-v1", "exact reviewed agent version imported");
 Check(node.ChildSlots.Single().Activities.Single().ExecutableNodeId != "model-turn", "real placement remapped the worker node");
 var root = node;
 #if BPMN
@@ -63,7 +63,7 @@ services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 var locks = Path.Combine(args[0], "runtime-locks-" + mode);
 Directory.CreateDirectory(locks);
 services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature).Assembly,
-        typeof(SpecialistsRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
+        typeof(AgentRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
         typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(FileSystemLockingFeature).Assembly
@@ -74,7 +74,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
         , typeof(ActivitiesBpmnDesignFeature).Assembly
 #endif
         )
-    .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
+    .AddShell("agent-package", shell => shell.WithFeature<PackageHostFeature>()
         #if BPMN
         .WithFeature<ActivitiesBpmnFeature>()
         .WithFeature<ActivitiesPrimitivesFeature>()
@@ -86,11 +86,11 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
         .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)))
         .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
 await using var host = services.BuildServiceProvider();
-var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-package");
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("agent-package");
 await using var executionScope = activated.BeginScope();
 var provider = executionScope.ServiceProvider;
 var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
-Check(types.TryGetType(SpecialistRuntimeIds.FacadeCapability, out _), "CShells startup registered the specialist runtime alias");
+Check(types.TryGetType(AgentRuntimeIds.FacadeCapability, out _), "CShells startup registered the agent runtime alias");
 Check(types.TryGetType("String", out var stringType) && stringType == typeof(string) &&
     types.TryGetType("System.Text.Json.JsonElement", out var jsonType) && jsonType == typeof(JsonElement), "ordinary activity startup registered the native business types");
 Check(AppDomain.CurrentDomain.GetAssemblies().Count(x => x.GetName().Name == "Microsoft.Extensions.AI.Abstractions") == 1,
@@ -103,7 +103,7 @@ await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executab
 var now = DateTimeOffset.UtcNow;
 var executionId = "package-run-" + mode;
 var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(executionId, WorkflowExecutionActorActivationReason.Start, now,
-    "specialist-package-proof", WorkflowExecutionActorCapabilities.InProcessMailbox));
+    "agent-package-proof", WorkflowExecutionActorCapabilities.InProcessMailbox));
 var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = identity.ArtifactId };
 var payload = new WorkflowExecutionStartCommandPayload(identity, identity.ArtifactId, variables: null, inputs: null, stimulusInput: null, triggerNodeId: null,
     runKind: WorkflowRunKind.Unknown, pinnedSource: null, parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: null);
@@ -161,7 +161,7 @@ static ExecutableNode BpmnRoot(ExecutableNode child, string compiledStructure)
     var structure = JsonSerializer.Deserialize<BpmnStructure>(compiledStructure, new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("Missing separately authored BPMN graph.");
     if (structure.Elements.Single(element => element.ElementId == "write").ChildNodeId != child.ExecutableNodeId)
-        throw new InvalidOperationException("BPMN authoring did not pin the exact placed specialist.");
+        throw new InvalidOperationException("BPMN authoring did not pin the exact placed agent.");
     return new ExecutableNode("bpmn-process", "bpmn-process", alias, "1.0.0", new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1", descriptor),
         new Dictionary<string, RuntimeInputBinding> { [input.Key] = new(input.Key, boolean, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline)) },
@@ -172,7 +172,7 @@ static ExecutableNode BpmnRoot(ExecutableNode child, string compiledStructure)
 #endif
 
 
-[ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking" })]
+[ShellFeature("AgentPackageHost", DependsOn = new object[] { "AgentInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking" })]
 public sealed class PackageHostFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
