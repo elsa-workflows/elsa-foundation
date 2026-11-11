@@ -5,7 +5,7 @@
   "counts": {
     "source_projects": 206,
     "test_projects": 177,
-    "direct_project_references": 2228,
+    "direct_project_references": 2231,
     "direct_package_references": 1776,
     "feature_classes": 153,
     "specs": 346
