@@ -42,6 +42,12 @@ describe("reading sources page by page", () => {
     expect(result.hasMoreSources).toBe(true);
   });
 
+  it("rejects a read whose pages answer different documents", async () => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [`source:${skip}`], skip === 0), documentRevision: skip === 0 ? "rev-1" : "rev-2" }),
+      new AbortController().signal);
+    expect(result).toMatchObject({ state: "stale", code: "activity-data.revision-changed", sources: [], target: null });
+  });
+
   it("returns the first refusal and stops when cancelled", async () => {
     const refusal = await collectSourcePages(async skip => skip === 0 ? page("supported", ["a"], true) : page("stale", [], false),
       new AbortController().signal);

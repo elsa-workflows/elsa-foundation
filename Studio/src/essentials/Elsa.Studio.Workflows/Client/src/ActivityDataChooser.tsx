@@ -137,20 +137,34 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
     onSelect(binding);
     onClose("opener");
   }, [onClose, onSelect]);
+  // A listing is current only once it answers the document on screen: an edit committed but not yet asked about
+  // (the refresh effect has not run) makes the shown list an older document's, like an explicit refresh does.
+  const currentListing = view.status === "answered" && listsSources(view.result) && !view.refreshing &&
+    view.result.documentRevision === host.documentRevision ? view.result : null;
   const choose = (source: ActivityDataSourceFacts, label: string) => {
     setLostChoice(null);
-    if (view.status === "answered" && view.refreshing) setWaitingFor({ id: source.id, label });
+    if (!currentListing) setWaitingFor({ id: source.id, label });
     else if (source.binding) commit(source.binding);
   };
+  const seenListing = useRef<ActivityDataContextResult | null>(null);
   useEffect(() => {
-    if (!waitingFor || view.status === "loading" || view.status === "answered" && view.refreshing) return;
-    setWaitingFor(null);
-    const fresh = view.status === "answered" && listsSources(view.result)
-      ? view.result.sources.find(source => source.id === waitingFor.id)
-      : undefined;
-    if (fresh?.binding) commit(fresh.binding);
-    else setLostChoice(`${waitingFor.label} can no longer be used for this input after your latest changes. Choose another output.`);
-  }, [commit, view, waitingFor]);
+    if (currentListing) {
+      const isNew = currentListing !== seenListing.current;
+      seenListing.current = currentListing;
+      if (waitingFor) {
+        setWaitingFor(null);
+        const fresh = currentListing.sources.find(source => source.id === waitingFor.id);
+        if (fresh?.binding) commit(fresh.binding);
+        else setLostChoice(`${waitingFor.label} can no longer be used for this input after your latest changes. Choose another output.`);
+      } else if (isNew) {
+        setLostChoice(null);
+      }
+      return;
+    }
+    // A refresh that ends without a listing (failed, refused, or waiting out a save) drops the pending choice
+    // silently: there is no newer list to say anything about.
+    if (waitingFor && (view.status === "failed" || view.status === "answered" && !listsSources(view.result))) setWaitingFor(null);
+  }, [commit, currentListing, view, waitingFor]);
 
   useEffect(() => {
     if (!open) return;
@@ -242,7 +256,7 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
           onRetry={retry}
           onChoose={choose}
         />
-        {lostChoice ? <p className="wf-data-chooser-note" role="status">{lostChoice}</p> : null}
+        {lostChoice ? <p className="wf-data-chooser-note wf-data-chooser-lost" role="status">{lostChoice}</p> : null}
       </div>
     </AnchoredPopover>
   );
@@ -269,7 +283,7 @@ function ActivityDataBrowserContent({ view, awaitingSave, groups, current, input
     const refusal = describeRefusal(result);
     return <ChooserNotice tone={refusal.action ? "danger" : "info"} message={refusal.message}
       action={refusal.action === "retry" ? { label: "Retry", run: onRetry }
-        : refusal.action === "reload" ? { label: "Reload workflow", run: () => window.location.reload() } : undefined} />;
+        : refusal.action === "reload" ? { label: "Reload this workflow", run: () => window.location.reload() } : undefined} />;
   }
   const constraint = result.target?.constraint;
   if (constraint && !constraint.allowedExpressionTypes.some(type => type.toLowerCase() === activityResultSyntax.toLowerCase())) {
@@ -279,7 +293,7 @@ function ActivityDataBrowserContent({ view, awaitingSave, groups, current, input
   const sourceBound = (maximumSourcePages * sourcePageSize).toLocaleString("en-US");
   if (groups.length === 0) {
     return <ChooserNotice tone="info" message={bounded
-      ? `Studio looked at the first ${sourceBound} data sources and found no activity outputs among them. Use an expression for this input.`
+      ? `Studio checked the first ${sourceBound} inputs, variables and activity outputs available here and found no activity outputs among them. Use an expression for this input.`
       : `No earlier activity has an output for this input. Add one before ${consumerLabel}, or use an expression.`} />;
   }
   const refreshing = view.refreshing === true;
@@ -291,7 +305,7 @@ function ActivityDataBrowserContent({ view, awaitingSave, groups, current, input
         ))}
       </div>
       {refreshing ? <p className="wf-data-chooser-note" role="status">Updating for your latest changes…</p> : null}
-      {bounded ? <p className="wf-data-chooser-note">Showing outputs from the first {sourceBound} data sources. Use an expression for an activity not listed.</p> : null}
+      {bounded ? <p className="wf-data-chooser-note">Showing the activity outputs among the first {sourceBound} inputs, variables and activity outputs available here. Use an expression for an activity not listed.</p> : null}
     </>
   );
 }
@@ -307,6 +321,7 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
   onChoose(source: ActivityDataSourceFacts, label: string): void;
 }) {
   const labelId = useId();
+  const producerName = group.disambiguation ? `${group.label} · ${group.disambiguation}` : group.label;
   // When every output is unavailable for one reason, say it once for the producer; each option points at it. The
   // heading and reason are references for the group's name and descriptions, not listbox content of their own.
   const sharedReasonId = `${labelId}-reason`;
@@ -334,11 +349,11 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
             aria-busy={waitingFor === option.source.id || undefined}
             aria-describedby={option.unavailableReason ? reasonId : undefined}
             className={["wf-data-chooser-option", selected ? "selected" : ""].filter(Boolean).join(" ")}
-            onClick={() => { if (binding) onChoose(option.source, option.label); }}
+            onClick={() => { if (binding) onChoose(option.source, `${producerName} › ${option.label}`); }}
             onKeyDown={event => {
               if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              if (binding) onChoose(option.source, option.label);
+              if (binding) onChoose(option.source, `${producerName} › ${option.label}`);
             }}
           >
             <span className="wf-data-chooser-option-label">{option.label}</span>
@@ -366,8 +381,8 @@ function describeRefusal(result: ActivityDataContextResult): { message: string; 
   switch (result.state) {
     case "denied":
       return result.code === "activity-data.read-only"
-        ? { message: "This draft is read-only, so its outputs can't be browsed." }
-        : { message: "You don't have permission to browse this workflow's outputs." };
+        ? { message: "This draft is read-only, so the activity outputs in this workflow can't be browsed." }
+        : { message: "You don't have permission to browse activity outputs in this workflow." };
     case "stale":
       return result.code === "activity-data.base-changed" || result.code === "activity-data.base-stale"
         ? { message: "This workflow was changed somewhere else. Reload it to choose an output.", action: "reload" }
@@ -507,7 +522,7 @@ export function ActivityResultReferenceEditor({ descriptor, value, disabled, ini
         {reference && producer && host?.revealActivity ? (
           <button
             type="button"
-            aria-label={`Go to ${producerLabel}`}
+            aria-label={`Go to ${producerLabel}${disambiguation ? ` · ${disambiguation}` : ""}`}
             onClick={() => host.revealActivity?.(reference.producerNodeId)}
           >
             <LocateFixed size={13} aria-hidden="true" /> Go to

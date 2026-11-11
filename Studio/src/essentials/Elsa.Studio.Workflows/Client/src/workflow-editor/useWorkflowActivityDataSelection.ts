@@ -60,8 +60,9 @@ export function useWorkflowActivityDataSelection({
   const on = available && enabled && draft != null;
   const latest = useRef({ draft, persistedDraft });
   latest.current = { draft, persistedDraft };
-  // The content revision is cached by signature, so the editor's other uses of it share the work.
-  const documentRevision = on ? getDraftContentRevision(draft!) : "";
+  // The document reducer replaces the draft object on every edit, so identity is enough to recompute; other
+  // editor renders reuse the revision instead of serializing the draft again.
+  const documentRevision = useMemo(() => on && draft ? getDraftContentRevision(draft) : "", [draft, on]);
   const baseRevision = on ? acknowledgedRevision(draft, persistedDraft) : "";
 
   const requestSources = useCallback((target: ActivityDataTarget, signal: AbortSignal, skip: number) => {
@@ -109,8 +110,8 @@ export function useWorkflowActivityDataSelection({
   }, [catalogByVersion, labels]);
 
   // Findings describe the document the server last validated: shown only while the live draft is that document.
-  const findingsCurrent = on && !!persistedDraft && persistedDraft.id === draft!.id &&
-    getDraftSignature(persistedDraft) === getDraftSignature(draft!);
+  const findingsCurrent = useMemo(() => on && !!draft && !!persistedDraft && persistedDraft.id === draft.id &&
+    getDraftSignature(persistedDraft) === getDraftSignature(draft), [draft, on, persistedDraft]);
   const findingsFor = useCallback((target: ActivityDataTarget): ActivityDataInputFinding[] => {
     if (!findingsCurrent) return [];
     return validationErrors.flatMap(error => {

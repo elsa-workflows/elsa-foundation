@@ -219,13 +219,13 @@ describe("Choose data for an activity input", () => {
       activityResultSource: { producerNodeId: "get-order", projectionKey }
     });
     const container = render({ dataHost: host({ requestSources: vi.fn(async () => answer("supported", { sources: [
-      loop("$result", "EarlierProducerRun"), loop("Line", "EarlierProducerRun"),
+      loop("Line", "EarlierProducerRun"), loop("Count", "EarlierProducerRun"),
       mixed("$result", "NoTypedResult"), mixed("Total", "ConditionalOccurrence")
     ] })) }) });
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Whole output", "Loop step")).toBeDefined());
+    await vi.waitFor(() => expect(option("Line", "Loop step")).toBeDefined());
 
-    const loopGroup = option("Whole output", "Loop step")!.closest("[role='group']")!;
+    const loopGroup = option("Line", "Loop step")!.closest("[role='group']")!;
     const shared = loopGroup.querySelector<HTMLElement>(".wf-data-chooser-group-reason")!;
     expect(shared.textContent).toContain("more than once");
     expect(loopGroup.querySelectorAll("[role='option'] small")).toHaveLength(0);
@@ -663,7 +663,7 @@ describe("Choose data after review round 1", () => {
     const container = render({ dataHost: host({ requestSources: vi.fn(async () => answer("stale", { code: "activity-data.base-changed" })) }) });
     await openChooser(container);
     await vi.waitFor(() => expect(chooser()?.textContent).toContain("changed somewhere else"));
-    expect([...chooser()!.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reload workflow"]);
+    expect([...chooser()!.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reload this workflow"]);
   });
 
   it("says so when a choice made while updating can no longer be used", async () => {
@@ -678,7 +678,7 @@ describe("Choose data after review round 1", () => {
     await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
     flushSync(() => option("Whole output", "Get order")!.click());
     pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: null, reasonCode: "ConditionalOccurrence" }] }));
-    await vi.waitFor(() => expect(chooser()?.querySelector(".wf-data-chooser-panel > [role='status']")?.textContent).toContain("can no longer be used"));
+    await vi.waitFor(() => expect(chooser()?.querySelector(".wf-data-chooser-lost")?.textContent).toContain("can no longer be used"));
     expect(changes).toHaveLength(0);
   });
 
@@ -698,7 +698,7 @@ describe("Choose data after review round 1", () => {
     const endless = render({ dataHost: host({ requestSources: vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, skip: number) =>
       answer("supported", { sources: skip === 0 ? [sources[0]!, ...inputsOnly.slice(1)] : inputsOnly, hasMoreSources: true })) }) });
     await openChooser(endless);
-    await vi.waitFor(() => expect(chooser()?.textContent).toContain("Showing outputs from the first 1,000 data sources"));
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("Showing the activity outputs among the first 1,000"));
     expect(option("Whole output", "Get customer")).toBeDefined();
   });
 
@@ -730,5 +730,93 @@ describe("Choose data after review round 1", () => {
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
     expect(container.contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe("Choose data after review round 2", () => {
+  const lostNote = () => document.querySelector(".wf-data-chooser-lost");
+
+  // Opens the chooser on a first listing, starts a refresh for rev-2 and chooses Get order while it runs.
+  async function chooseWhileRefreshing(changes: ActivityNode[], hostOverrides: Partial<ActivityDataSelectionHost> = {}) {
+    const pending: Array<(result: ActivityDataContextResult) => void> = [];
+    const failures: Array<(error: Error) => void> = [];
+    const first = host({ requestSources: vi.fn(() => new Promise<ActivityDataContextResult>((resolve, reject) => {
+      pending.push(resolve);
+      failures.push(reject);
+    })), ...hostOverrides });
+    const container = render({ dataHost: first, onChange: next => changes.push(next) });
+    await openChooser(container);
+    pending[0]!(answer("supported", { sources }));
+    await vi.waitFor(() => expect(option("Whole output", "Get order")).toBeDefined());
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2" }));
+    await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
+    flushSync(() => option("Whole output", "Get order")!.click());
+    return { pending, failures, first };
+  }
+
+  it("names the producer when a choice made while updating can no longer be used, and clears that on the next listing", async () => {
+    const changes: ActivityNode[] = [];
+    const { pending, first } = await chooseWhileRefreshing(changes);
+    pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: null, reasonCode: "ConditionalOccurrence" }] }));
+    await vi.waitFor(() => expect(lostNote()?.textContent).toBe(
+      "Get order › Whole output can no longer be used for this input after your latest changes. Choose another output."));
+    expect(changes).toHaveLength(0);
+
+    flushSync(() => setHost({ ...first, documentRevision: "rev-3" }));
+    pending[2]!(answer("supported", { documentRevision: "rev-3", sources }));
+    await vi.waitFor(() => expect(lostNote()).toBeNull());
+    expect(changes).toHaveLength(0);
+  });
+
+  it.each([
+    ["fails", null],
+    ["ends stale while saving", answer("stale", { documentRevision: "rev-2", code: "activity-data.base-changed" })],
+    ["is refused", answer("denied", { documentRevision: "rev-2", code: "activity-data.denied" })]
+  ])("drops a pending choice silently when the refresh %s", async (_name, outcome) => {
+    const changes: ActivityNode[] = [];
+    const { pending, failures } = await chooseWhileRefreshing(changes, { saving: true });
+    if (outcome) pending[1]!(outcome);
+    else failures[1]!(new Error("offline"));
+    await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")).toBeNull());
+    expect(lostNote()).toBeNull();
+    expect(changes).toHaveLength(0);
+  });
+
+  it("never stores from a list shown for an older revision than the one on screen", async () => {
+    const changes: ActivityNode[] = [];
+    // The list answers rev-1 while the document on screen is already rev-2 and its refresh has not answered yet.
+    const container = render({
+      onChange: next => changes.push(next),
+      dataHost: host({ documentRevision: "rev-2", requestSources: vi.fn(async () => answer("supported", { documentRevision: "rev-1", sources })) })
+    });
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    flushSync(() => option("Whole output", "Get customer")!.click());
+    await settle();
+    expect(changes).toHaveLength(0);
+  });
+
+  it("advises a variable only for declared outputs of a looping producer", async () => {
+    const looped = (projectionKey: string): ActivityDataSourceFacts => ({
+      ...source(`activity:loop-step:${projectionKey}`, null, "EarlierProducerRun", null),
+      activityResultSource: { producerNodeId: "loop-step", projectionKey }
+    });
+    const container = render({ dataHost: host({ requestSources: vi.fn(async () => answer("supported", { sources: [looped("$result"), looped("Line")] })) }) });
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Loop step")).toBeDefined());
+    const reasonOf = (row: Element) => document.getElementById(row.getAttribute("aria-describedby")!)?.textContent ?? "";
+    expect(reasonOf(option("Whole output", "Loop step")!)).toContain("Use an expression for this input instead.");
+    expect(reasonOf(option("Whole output", "Loop step")!)).not.toContain("Outputs tab");
+    expect(reasonOf(option("Line", "Loop step")!)).toContain("Outputs tab");
+  });
+
+  it("includes the node id in Go to when the activity's name is shared", async () => {
+    const container = render({
+      activity: { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+        customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: customerBinding.value } } },
+      dataHost: host({ describeActivity: nodeId => labels[nodeId] ? { label: "Timer", outputLabels: {}, sharesLabel: true } : null })
+    });
+    await settle();
+    expect(container.querySelector(".wf-data-reference-actions button")?.getAttribute("aria-label")).toBe("Go to Timer · get-customer");
   });
 });

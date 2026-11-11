@@ -142,6 +142,11 @@ export async function collectSourcePages(
     const result = await requestPage(page * sourcePageSize);
     if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
     if (result.state !== "supported" && result.state !== "empty") return result;
+    // Every page must answer the document the first page answered; a later page for an edited document would mix
+    // two documents' facts, so the read reports itself stale and is asked again for the current one.
+    if (combined && result.documentRevision !== combined.documentRevision) {
+      return { ...result, state: "stale", code: "activity-data.revision-changed", target: null, sources: [], hasMoreSources: false };
+    }
     combined = combined
       ? { ...result, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
       : result;
@@ -201,7 +206,7 @@ export function groupActivityOutputSources(
       projectionKey: identity.projectionKey,
       label: describeOutput(identity.projectionKey, producer),
       typeLabel: source.type?.alias ? formatArgumentType(readArgumentType({ type: source.type })) : null,
-      unavailableReason: source.binding ? null : describeUnavailableSource(source.reasonCode)
+      unavailableReason: source.binding ? null : describeUnavailableSource(source.reasonCode, identity.projectionKey)
     });
   }
   const result = [...groups.values()];
@@ -232,7 +237,7 @@ export function describeOutput(projectionKey: string, producer: ActivityDataProd
 const variableAdvice = "To use its latest output, capture that output into a variable on the activity's Outputs tab.";
 
 /** Plain explanations for the authoring contract's reason codes, in its order. */
-export function describeUnavailableSource(reasonCode: string | null): string {
+export function describeUnavailableSource(reasonCode: string | null, projectionKey?: string): string {
   switch (reasonCode) {
     case "ConditionalOccurrence":
       return "This activity runs on only some paths to this input, so its output might be missing.";
@@ -241,7 +246,8 @@ export function describeUnavailableSource(reasonCode: string | null): string {
     case "UnavailableProducer":
       return "This activity doesn't always run before this input.";
     case "EarlierProducerRun":
-      return `This activity can run more than once before this input (for example in a loop), so Studio can't tell which run to use. ${variableAdvice}`;
+      // Only declared outputs can be captured on the Outputs tab; the whole output cannot.
+      return `This activity can run more than once before this input (for example in a loop), so Studio can't tell which run to use. ${projectionKey === "$result" ? "Use an expression for this input instead." : variableAdvice}`;
     case "NoTypedResult":
       return "This activity doesn't produce a whole output.";
     default:
