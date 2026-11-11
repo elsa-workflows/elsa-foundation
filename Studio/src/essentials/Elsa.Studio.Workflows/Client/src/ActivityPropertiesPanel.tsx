@@ -611,10 +611,11 @@ function PropertyRow({
   // picker show the current mode and keep the way back to a fixed value or an expression. Where Choose data is
   // offered, the picker also lists "Activity output…", which opens the chooser without switching anything yet.
   const listsActivityOutput = expressionDescriptors.some(descriptor => descriptor.type === activityResultSyntax);
+  // Listed first (it sorts first by name too), so the entry is visible without scrolling the picker.
   const rowDescriptors = syntax === activityResultSyntax && !listsActivityOutput
-    ? [...expressionDescriptors, activityResultExpressionDescriptor]
+    ? [activityResultExpressionDescriptor, ...expressionDescriptors]
     : offersChooseData && !listsActivityOutput
-      ? [...expressionDescriptors, chooseActivityOutputDescriptor]
+      ? [chooseActivityOutputDescriptor, ...expressionDescriptors]
       : expressionDescriptors;
   const syntaxDescriptors = secretOnly
     ? rowDescriptors.filter(descriptor => descriptor.type === secretSyntax)
