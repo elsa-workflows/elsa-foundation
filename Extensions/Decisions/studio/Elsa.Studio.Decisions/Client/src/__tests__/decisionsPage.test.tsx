@@ -137,7 +137,7 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={onChange} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
     click(button(host, "New decision"));
-    expect(requests).toEqual([{ path: "/decisions?new=1", activate: true }]);
+    expect(requests).toEqual([{ path: expect.stringMatching(/^\/decisions\?new=1&handoff=[^&]+$/), activate: true }]);
     expect(opened).not.toHaveBeenCalled(); expect(onChange).not.toHaveBeenCalled();
   });
   it("falls back to a browser tab for a new decision on hosts without workspace tabs", async () => {
