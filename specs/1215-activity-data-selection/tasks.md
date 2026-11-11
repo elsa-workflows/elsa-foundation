@@ -59,21 +59,18 @@ automatic producer still `binding: null` / `RuntimeScopeBindingUnavailable`). Ta
 until owned proof-host qualification and resulting-main. This leaf does not add runtime member
 binding (T011–T017) or Studio chooser/inspector work (T018–T026).
 
-#4053 receipt (branch `agent/claude/4053-activity-result-binding`; not task completion): the analyzer
-now returns the complete direct `ActivityResult` binding for a browsed producer, without a
-`producerScopeId`, wherever publication admits it unchanged; `RuntimeScopeBindingUnavailable` is
-retired in favour of `EarlierProducerRun` and `NoTypedResult` beside the availability reasons. Every
-first-party structure handler states `ActivityChildResultFacts.EarlierProducerRunCanReachConsumer`
-(architecture guard over compiled code); publication refuses a stored scope-free binding to a producer
-whose structure does not say `false`, before any write. `RuntimeActivityResultReference.ProducerScopeId`
-is nullable and omitted when null; scoped references keep their stored form, executable hash and
-template hash, pinned against values computed on the commit before the change. No resolver rule
-changed. Evidence: real-engine runs in `ActivityResultOccurrenceTests` (direct scope-free form in
-Sequence, top-level Flowchart, loop consumer of a producer before the Flowchart, first-wins fork,
-placed reusable sibling, loop bodies and a merge node; scoped and portable loop cases unchanged,
-#4056), analyzer, handler, endpoint (workflow and activity definition), compiler, remapper, hash and
-publisher no-write tests. Design and review record: `research-4053-activity-result-scope.md`
-section 9. Code-first builder and portable parameters stay on today's rules (#4056).
+#4053 receipt (not task completion): the analyzer returns the complete scope-free `ActivityResult` binding
+wherever publication admits it unchanged, and every first-party structure handler states
+`EarlierProducerRunCanReachConsumer`. Rule: [binding contract](contracts/binding-contract.md#1-authored-wire);
+reason codes: [authoring contract](contracts/authoring-contract.md#source-identity-members-and-compatibility);
+design and evidence: [research](research.md#activity-result-bindings-without-a-scope); delivered in PR #4055.
+
+#4059 receipt (not task completion): admission of a scope-free binding now also requires every structure above
+the one holding producer and consumer to state the fact `false` for its child holding both, so a Sequence on a
+BPMN gateway loop, in an unbuildable Flowchart or in a third-party structure is no longer offered or admitted.
+Evidence: analyzer, BPMN compiler and publish-handler no-write rows; a real BPMN loop run showing the Ambiguous
+read; per-handler answers for a child with itself; one offer → publication compiler → run round trip. Scoped
+bindings and portable parameters are unchanged (#4056).
 
 ## Phase 3: User Story 1 — Choose earlier data at an input (P1)
 

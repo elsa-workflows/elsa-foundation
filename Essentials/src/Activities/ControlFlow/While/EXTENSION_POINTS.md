@@ -14,4 +14,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   authored structure, compiles the executable structure (the body node id), and round-trips both through
   publishing so the runtime resolves the body without re-reading the design document. `While` is a condition-only loop with no per-iteration item or index and
   is not a container scope, so it declares no container-scoped variables (`SupportsScopedVariables`
-  defaults to `false`).
+  defaults to `false`). Its `AssessChildResult` keeps availability `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: the loop schedules every pass of its body itself, so an earlier pass is never behind a later one.

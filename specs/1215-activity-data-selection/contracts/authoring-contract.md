@@ -54,13 +54,23 @@ The source browser has activity results, workflow inputs, scoped variables and a
 explicitly exposed by the owning structure. Identity is independent of the display label:
 
 - Activity results retain producer node, declared output/projection and structural/causal identity. The
-  server returns the complete binding for each activity result the author can browse; the client stores it
-  unchanged and never derives a producer scope (#4053). A result the server lists without a binding carries
-  exactly one reason code, availability first: `ConditionalOccurrence`, `AvailabilityUnknown`,
-  `UnavailableProducer`, `EarlierProducerRun` (the owning structure does not state that no earlier run of the
-  producer can lead to this input, as on a Flowchart cycle) or `NoTypedResult` (the producer declares no typed
-  whole result). Its identity stays inspectable, and expression authoring may still bind it as a portable
-  parameter.
+  server returns the complete binding for each activity result the author can select; the client stores it
+  unchanged and never derives a producer scope. Which bindings the server returns is the admission rule in
+  the [binding contract](binding-contract.md#1-authored-wire).
+- A source is selectable when its `binding` is non-null. The reason code is information, not the selection
+  test: an optional read of a conditional producer comes with a binding and still carries
+  `ConditionalOccurrence`.
+- A source listed without a binding carries one reason code, the first that applies, availability first:
+  `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
+  structure holding producer and consumer, or one around it, does not state that no earlier run of the
+  producer can lead to this input, as on a Flowchart cycle or in a Sequence on a BPMN gateway loop), then
+  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable, and
+  expression authoring may still bind it as a portable parameter.
+- To read a conditional producer optionally, the client sends a focused query whose source is the
+  scope-free binding with `isOptional: true`, for example
+  `{"expressionType":"ActivityResult","value":{"producerNodeId":"fetch","projectionKey":"$result","isOptional":true}}`.
+  Where the rule admits it, the single returned source carries that binding, which the client stores
+  unchanged. On a path where the producer did not run, the read resolves to no value instead of failing.
 - Workflow inputs retain their stable input identity; display-name edits do not rebind them.
 - Variables retain declaration identity and lexical scope; same-name/shadowed variables remain distinct.
 - Current item is a structure-owned projection of an existing value role with iteration scope. The

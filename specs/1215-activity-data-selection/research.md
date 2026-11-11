@@ -27,6 +27,69 @@ comparisons/references remain in the [program plan](../../docs/plans/activity-da
 | Graph edits | Identity-aware traversal/remap and repairable invalid references. | Labels cannot identify same-name producers. Pair copy remaps internal IDs; consumer-only copy preserves/diagnoses scope. Serialized member names stay unchanged. |
 | Verification | Real host author/save/code/reopen/publish/run, causal, restart, minimal/restricted and inspected UX matrix. | Research semantic controls do not prove product acceptance. A restart reporting zero resumed work cannot prove durable continuation. |
 
+## Activity-result bindings without a scope
+
+**Decision.** A direct `ActivityResult` binding the server returns declares no `producerScopeId`, and the
+owning structures supply one fact that decides where such a binding is sound. Existing documents keep their
+scope, bytes and hashes. The rule is in the [binding contract](contracts/binding-contract.md#1-authored-wire);
+the reason codes are in the [authoring contract](contracts/authoring-contract.md#source-identity-members-and-compatibility).
+
+**Why the scope goes.** The resolver compares a declared scope only when the producer has one at run time,
+and only Flowchart nodes (`scope:root`, or a generated id per loop pass or first-wins race) and placed
+reusable boundaries (their own execution id) get one. Inside a closed reusable body the comparison is already
+skipped. So the only value an author can know is Flowchart's private root constant, and no workflow was
+found where declaring a scope selects the right occurrence and omitting it selects a wrong one. On a
+Flowchart loop the declared `scope:root` silently reads the first pass; without a scope the second pass fails
+as Ambiguous. Under a first-wins fork and beside a placed reusable activity a declared scope makes a valid
+read Unavailable, which the scope-free form resolves. The resolver needed no change: a null declared scope
+already skips the comparison, as portable parameters do.
+
+**The fact.** `ActivityChildResultFacts.EarlierProducerRunCanReachConsumer`: within one run of the structure,
+can an earlier run of the producer child be among the runs that led to the consumer child? It is defined by
+lineage, not by "can run again", because a run's lineage follows the run that scheduled it:
+
+- Sequence, If, Switch and Parallel schedule each child themselves, once per run: `false`.
+- While, Do, For and ForEach schedule every pass of the body themselves, so an earlier pass is never in a
+  later pass's lineage: `false`.
+- Compensation runs each forward step once. Handler retries are each scheduled from their own step's run, and
+  the producers a handler reads are forward steps: `false`.
+- In a Flowchart each node run is scheduled by the run that completed before it, so on a cycle every pass
+  leads to the next: `true` exactly when the producer can reach itself. A merge node that runs once per arrival
+  is no exception, because each of its runs schedules its own successor. A Flowchart whose analysis cannot be
+  built says nothing.
+- BPMN proves order only for one unconditional linear chain of tasks, which runs each task once: `false`.
+  Any other shape (gateways, loops, events, listeners, multi-instance) says nothing. A BPMN task run is
+  scheduled by the token's previous run, like a Flowchart node.
+
+Unset counts as "it can", so out-of-repo structures fail closed.
+
+**Where the fact is asked.** At the lowest structure that holds producer and consumer, for that pair; and at
+every structure above it, for its child that holds both, asked as producer and consumer at once. The second
+part is needed because the lowest structure answers truthfully for its own run: a Sequence on a Flowchart or
+BPMN loop runs its children once per run, but the loop runs the Sequence again and a completed composite leads
+back to its children, so the first pass's producer is in the second pass's lineage. Before #4059 the analyzer
+relied on the cyclic back-edge walk for that, which refuses only when an enclosing structure says
+`IsCyclicBackEdge = true`; a BPMN process with a gateway leaves it unset, so a Sequence on its loop was offered
+a binding that blocks as Ambiguous on the second pass. The walk stays for every read; the fact is now also
+required of every enclosing structure for a scope-free read. A reusable activity's body is judged on its own
+graph: the walk ends at the definition's root, and at run time the body's reads require the producer to share
+the boundary's execution.
+
+**Evidence.** Run through the real engine (`Essentials/tests/Activities/Behavioral/Tests/ActivityResultOccurrenceTests.cs`):
+the Flowchart loop (scoped stale read, scope-free Ambiguous), first-wins fork, placed reusable sibling,
+Sequence, top-level Flowchart, a producer before a looping Flowchart, a looping Flowchart nested in a loop
+(silently stale in every form), every loop body, a Sequence on a Flowchart loop, a Sequence on a BPMN gateway
+loop (Ambiguous with both producer runs) and a merge node. One workflow is taken from the analyzer's offer
+through the publication compiler to a real run (`BpmnDataSelectionPublicationTests`). Publication refusal before
+any write runs through the real publish handler for a Flowchart cycle and the BPMN gateway loop
+(`PublishWorkflowRequestHandlerTests`). Established by reading only: that each handler's `false` holds for
+retries and operator alterations (compensation) and for third-party scheduling, how an older runtime refuses a
+scope-free executable (it reports a corrupt payload and runs nothing), and that Elsa 3 imports with a scoped
+read in a Flowchart fail at run time.
+
+**Not changed (#4056).** Bindings that declare a scope and portable expression parameters keep their existing
+rules, including the loop weaknesses above. The code-first builder still writes a scope.
+
 ## Evidence and source seams
 
 These are source observations, not new acceptance runs. Refresh exact source locations as main advances.
