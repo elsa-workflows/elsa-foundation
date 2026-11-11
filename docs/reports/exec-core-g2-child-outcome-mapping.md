@@ -4,7 +4,7 @@ Point-in-time mapping table for execution-core slice 8 / goal §G2.4. Tests and 
 
 **Main SHA at inventory:** `1769c5b5a8dae4fc3706c587278f1ffb047073e7` (`origin/main` when this slice started; contains G1 #4047 `e962de590`). File:line citations below are on that SHA unless a later test in this slice is named.
 
-**B4 slice HEAD:** `aa2dcb2739734412fc9d8e307a4f395392ef8b87` (hosted native-child cancel Facts). **D4 / A2 HEAD:** `6bf5c963912db41e3d40dcf8febef308b7e0c64f` (hosted `RunBpmnNativeBusinessErrorTests`). The PR head may add only this pin.
+**B4 slice HEAD:** `aa2dcb2739734412fc9d8e307a4f395392ef8b87` (hosted native-child cancel Facts). **D4 / A2 HEAD:** `6bf5c963912db41e3d40dcf8febef308b7e0c64f` (hosted `RunBpmnNativeBusinessErrorTests`). **G-b HEAD:** (this PR; hosted `CallActivityNativeChildHeldRetryTests`). The PR head may add only this pin.
 
 **Method:** read existing G2 tests and reports first (`#4028`, `#3995`, `#3992`, `#3993`, `#4047`, G3 counts, BPMN/native hosting and e2e). A row is **PROVEN** only when a dedicated test body actually runs both sides of the named boundary (no probe/fake for the other model). **OPEN** means searched; no such current proof. **unknown** means the intended mapping is not pinned by a dual-path test or by a contract that applies to that child type. Equivalence is not inferred across planes.
 
@@ -53,6 +53,20 @@ Two Owned-Workbench Facts for **A2**. Tests and this report only. No production 
 | `A_native_worker_Completed_BusinessError_under_RunBpmn_without_a_matching_boundary_faults_the_model` | Same worker, no boundary: model `Faulted` / parent `bpmn.model-faulted` once. Worker inspection stays `Completed` / `BusinessError` with no `faultCode` (not A3). Spec 1017 FR-013 / US4: unmatched business error is not success. |
 
 **Follow-up (not this PR):** name `"BusinessError"` as a shared constant and document it. The driver and `RunEtl` still share the bare string.
+
+## G-b (callActivity → native child held / retried mapping)
+
+Inverse of `#3993` / A3: a **NATIVE** child under a BPMN composite `callActivity` is retried, and its terminal outcome maps back through `DispatchWorkflow` to the BPMN parent. `#3993` remains the native-parent + BPMN-child plane (`RunBpmn` → `HoldForRetry` → `RetryServiceAsync`) and is **not** owner decision D3 (narrowly validated alteration). Native and BPMN retry admission stay deliberately different (G1): this Fact is CompensationScope bounded handler retry (spec 261), not `RetryServiceAsync`, not `RetryFaultedActivity/1`.
+
+SQLite Owned Workbench, **one in-process host**, Root. Not dual-model retry admission. Direct-plane `CallActivity` is refused at publish.
+
+| Case | Status | Test |
+|---|---|---|
+| CompensationScope handler retry (fail-then-succeed HTTP; first handler fault survives; second attempt Completes) → dispatch `Completed` / parent `Completed` via normal outbound, no parent incident | **PROVEN** | `CallActivityNativeChildHeldRetryTests.A_retried_native_CompensationScope_handler_under_callActivity_maps_Completed_to_the_BPMN_parent` in `Essentials/tests/Activities/Bpmn/Hosting/Tests/CallActivityNativeChildHeldRetryTests.cs` |
+| Operator `RetryFaultedActivity/1` of a native child under callActivity | **OPEN** | Not this proof. Native operator retry is a different admission from BPMN `RetryServiceAsync`. First-party `Fault` always faults; `SendHttpRequest` never faults on HTTP 500. Fail-then-succeed here re-schedules the Flowchart handler from the start (new invocation), like `#3993`'s new worker. |
+| BPMN `HoldForRetry` / `RetryServiceAsync` on the composite callActivity plane | **OPEN** | No product path on this plane (G1: outbox sweep only). Do not merge with A3. |
+
+Immediate native `Fault` under callActivity (no hold) remains **B3** (`Test-BpmnCallActivity.ps1` Scenario B). This section does not re-prove B3.
 
 ## OPEN rows (remain visible)
 
