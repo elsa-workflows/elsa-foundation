@@ -165,7 +165,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
             Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
                 () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).Reason);
         else
-            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<EfPoisonStoreException>(
                 () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).InnerException);
 
         Assert.Equal(1, race.Races);
@@ -208,42 +208,94 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     [InlineData("taken-over")]
     [InlineData("still-owned")]
     [InlineData("second-look-fails")]
+    [InlineData("second-look-cancelled")]
+    [InlineData("timeout-reported-as-cancellation")]
     public async Task Fenced_record_looks_at_the_ownership_row_again_before_any_provider_failure_leaves(string then)
     {
         // Not every takeover shows as a conflict on the ownership row. Under a stricter isolation level it is a
         // serialization failure, and a lock timeout on that row has the same shape: a plain provider failure of the
         // save. Left as a write failure, it would be recorded without the fence by the drainer. So the row is read
         // once more before the failure leaves. A lease that is still this one leaves as the failure. When that read
-        // fails too, the first failure is the one that leaves.
+        // fails too, the first failure is the one that leaves. Only a cancellation of this call's own token leaves
+        // as a cancellation; a provider that reports a timeout as an OperationCanceledException has failed.
         await using var database = await TestDatabase.CreateAsync();
+        using var cancellation = new CancellationTokenSource();
         var failure = new ProviderSaveFailure();
         await using var fixture = database.Open("tenant-a", failure);
         await using var otherConnection = database.Open("tenant-a");
         var clock = new FakeTimeProvider(Now);
         var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
-        if (then == "taken-over")
-            failure.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
-        failure.FailSecondLook = then == "second-look-fails";
+        switch (then)
+        {
+            case "taken-over":
+                failure.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+                break;
+            case "second-look-fails":
+                failure.SecondLookFailure = () => new SimulatedProviderFailure("Simulated failure of the ownership read.");
+                break;
+            case "second-look-cancelled":
+                failure.SecondLookFailure = () =>
+                {
+                    cancellation.Cancel();
+                    return new OperationCanceledException(cancellation.Token);
+                };
+                break;
+            case "timeout-reported-as-cancellation":
+                failure.SaveFailure = () => new TaskCanceledException(ProviderSaveFailure.Message);
+                break;
+        }
         failure.Armed = true;
         var store = FencedStore(fixture, clock);
+        Func<Task> record = () => store.RecordFencedAsync(Record(1), lease.ToFence(), cancellation.Token).AsTask();
 
         if (then == "taken-over")
         {
-            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
-                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).Reason);
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(record)).Reason);
+        }
+        else if (then == "second-look-cancelled")
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(record);
         }
         else
         {
-            var wrapped = await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
-                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
-            Assert.IsType<DbUpdateException>(wrapped.InnerException);
-            Assert.Contains(ProviderSaveFailure.Message, wrapped.InnerException!.ToString());
+            var wrapped = await Assert.ThrowsAsync<EfPoisonStoreException>(record);
+            Assert.Equal(
+                then == "timeout-reported-as-cancellation" ? typeof(TaskCanceledException) : typeof(DbUpdateException),
+                wrapped.InnerException!.GetType());
+            Assert.Contains(ProviderSaveFailure.Message, wrapped.InnerException.ToString());
         }
 
-        Assert.Equal(then == "second-look-fails" ? 1 : 0, failure.FailedSecondLooks);
+        Assert.Equal(then is "second-look-fails" or "second-look-cancelled" ? 1 : 0, failure.FailedSecondLooks);
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
         await using var read = database.Open("tenant-a");
         Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Fact]
+    public async Task Fenced_record_whose_commit_fails_leaves_the_callers_other_changes_pending()
+    {
+        // The save inside the record's transaction would mark everything the caller had pending as saved. A commit
+        // that then fails rolls all of it back, so those changes must still be pending: the unfenced record that the
+        // drainer falls back to saves them, as it did before there was a fenced record.
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = new CommitFailure();
+        await using var fixture = database.Open("tenant-a", commit);
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var sibling = SiblingRow();
+        fixture.Context.SchedulerStates.Add(sibling);
+        commit.Armed = true;
+
+        var wrapped = await Assert.ThrowsAsync<EfPoisonStoreException>(
+            () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+
+        Assert.IsType<SimulatedProviderFailure>(wrapped.InnerException);
+        Assert.Equal(EntityState.Added, fixture.Context.Entry(sibling).State);
+        Assert.Same(sibling, Assert.Single(fixture.Context.ChangeTracker.Entries()).Entity);
+        await fixture.Store.RecordAsync(Record(1));
+        await using var read = database.Open("tenant-a");
+        Assert.NotNull(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Single(await read.Context.SchedulerStates.ToArrayAsync());
     }
 
     [Theory]
@@ -265,7 +317,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         var before = await OwnershipRevisionAsync(database);
         race.Armed = true;
 
-        var failure = await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+        var failure = await Assert.ThrowsAsync<EfPoisonStoreException>(
             () => store.RecordFencedAsync(Record(1, "second", failureCount: 2), lease.ToFence()).AsTask());
 
         Assert.Equal(rowExists ? typeof(DbUpdateConcurrencyException) : typeof(DbUpdateException), failure.InnerException!.GetType());
@@ -295,7 +347,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         if (recorded)
             await store.RecordFencedAsync(Record(1), lease.ToFence());
         else
-            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<EfPoisonStoreException>(
                 () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).InnerException);
 
         Assert.Equal(Math.Min(heartbeats, EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts), race.Races);
@@ -318,7 +370,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
 
         await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
         {
-            await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            await Assert.ThrowsAsync<EfPoisonStoreException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
             // Nothing is staged for the caller's commit to write.
             Assert.False(fixture.Context.ChangeTracker.HasChanges());
             await transaction.CommitAsync();
@@ -532,7 +584,8 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         private bool failed;
         private bool rolledBack;
         public bool Armed { get; set; }
-        public bool FailSecondLook { get; set; }
+        public Func<Exception> SaveFailure { get; set; } = () => new DbUpdateException(Message);
+        public Func<Exception>? SecondLookFailure { get; set; }
         public Func<Task>? AfterRollback { get; set; }
         public int FailedSecondLooks { get; private set; }
 
@@ -545,11 +598,11 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
             ThrowOnPoisonInsert(command);
-            if (rolledBack && FailSecondLook && command.Transaction is null &&
+            if (rolledBack && SecondLookFailure is not null && command.Transaction is null &&
                 command.CommandText.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase))
             {
                 FailedSecondLooks++;
-                throw new SimulatedReadFailure();
+                throw SecondLookFailure();
             }
             return ValueTask.FromResult(result);
         }
@@ -570,11 +623,25 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
                 !command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase))
                 return;
             failed = true;
-            throw new DbUpdateException(Message);
+            throw SaveFailure();
         }
-
-        private sealed class SimulatedReadFailure() : DbException("Simulated failure of the ownership read.");
     }
+
+    // Fails the commit of the record's transaction, after its save went through.
+    private sealed class CommitFailure : IDbTransactionInterceptor
+    {
+        public bool Armed { get; set; }
+
+        public ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction, TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            if (!Armed)
+                return ValueTask.FromResult(result);
+            Armed = false;
+            throw new SimulatedProviderFailure("Simulated failure of the commit.");
+        }
+    }
+
+    private sealed class SimulatedProviderFailure(string message) : DbException(message);
 
     private sealed class SaveCounter : ISaveChangesInterceptor
     {

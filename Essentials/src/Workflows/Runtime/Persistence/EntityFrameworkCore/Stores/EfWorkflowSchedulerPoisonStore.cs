@@ -64,11 +64,15 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// attempts in all, and each attempt checks the fence again. Before any provider failure leaves, the ownership
     /// row is read once more, so a takeover leaves as <see cref="RuntimeStaleFencingTokenException"/> and not as a
     /// write failure, whatever shape the provider gave it. When that read fails too, the first failure leaves. The
-    /// drainer records without the fence when this call fails for a reason other than ownership.
+    /// drainer records without the fence when this call fails for a reason other than ownership. The save is
+    /// accepted by the change tracker only after the commit succeeded, so after a failed commit whatever else the
+    /// caller had pending on the context is still pending.
     /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">The fence is not the run's current, unexpired lease. Nothing was written.</exception>
-    /// <exception cref="WorkflowSchedulerPoisonEntityFrameworkPersistenceException">
-    /// A provider failure, with the provider's exception as its inner exception. Nothing was written, unless the
+    /// <exception cref="EfPoisonStoreException">
+    /// A provider failure, with the provider's exception as its inner exception. That includes an
+    /// <see cref="OperationCanceledException"/> raised while <paramref name="cancellationToken"/> is not cancelled,
+    /// which is how some providers report a timeout. Nothing was written, unless the
     /// failure came from the commit itself: a commit that reports a failure may still have been applied. The inner
     /// exception is a <see cref="DbUpdateConcurrencyException"/> when the ownership row changed under every attempt
     /// while the lease stayed this one, when it changed that way once while the context held other pending changes
@@ -124,26 +128,33 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 }
             }
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception) ||
+            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            // A provider failure is about to leave. It does not say whether the run was taken: a conflict on the
-            // ownership row that was not retried, a serialization failure under a stricter isolation level and a
-            // lock timeout on that row all look like any other write failure. A caller that takes a takeover for a
-            // failure that is not about ownership would record without the fence. So look once more: a lease that
-            // is no longer this one leaves as stale. If that look fails as well, the failure that got here leaves.
+            // A provider failure is about to leave. An OperationCanceledException raised while this call's token is
+            // not cancelled is one too: a provider timeout reported that way, not a cancellation of this call.
+            //
+            // The failure does not say whether the run was taken: a conflict on the ownership row that was not
+            // retried, a serialization failure under a stricter isolation level and a lock timeout on that row all
+            // look like any other write failure. A caller that takes a takeover for a failure that is not about
+            // ownership would record without the fence. So look once more: a lease that is no longer this one
+            // leaves as stale. If that look fails as well, the failure that got here leaves. If this call is
+            // cancelled during the look, the cancellation leaves.
             try
             {
                 await EnsureFenceIsCurrentAsync();
             }
-            catch (Exception secondLookFailure) when (secondLookFailure is not RuntimeStaleFencingTokenException and not OperationCanceledException)
+            catch (Exception secondLookFailure) when (secondLookFailure is not RuntimeStaleFencingTokenException &&
+                !(secondLookFailure is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
             }
 
             // Provider exception types do not cross this boundary. What this method throws on purpose is not a
-            // provider failure and is not caught here: the stale fence, cancellation, and the refusals above.
+            // provider failure and is not caught here: the stale fence, this call's cancellation, and the refusals
+            // above.
             const string operation = "recording under the execution fence";
             var identity = $"{record.WorkflowExecutionId}/{record.WorkItemId}";
-            throw new WorkflowSchedulerPoisonEntityFrameworkPersistenceException(
+            throw new EfPoisonStoreException(
                 operation,
                 identity,
                 $"The EF scheduler-poison store failed while {operation} '{identity}'.",
@@ -189,9 +200,12 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                     AttachForUpdate(staged, row.Revision);
                 }
 
-                // One save writes the fence touch and the record, so they commit together or not at all.
-                await context.SaveChangesAsync(cancellationToken);
+                // One save writes the fence touch and the record, so they commit together or not at all. The
+                // tracker accepts the save only once the commit has succeeded: a commit that fails rolls the save
+                // back, and whatever else the caller had pending on this context must then still be pending.
+                await context.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                context.ChangeTracker.AcceptAllChanges();
                 return record;
             }
             catch

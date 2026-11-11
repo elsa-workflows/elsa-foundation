@@ -270,39 +270,94 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
     }
 
-    [Fact]
-    public async Task DrainAsync_WhenOwnershipCannotBeRead_HandlesTheFaultUnfencedAndTagsTheSpan()
+    [Theory]
+    [InlineData("still-owned", true)]
+    [InlineData("lost", true)]
+    [InlineData("still-owned", false)]
+    public async Task DrainAsync_WhenOwnershipCannotBeRead_GoesOnAndStillRecordsUnderTheFenceWhereTheStoreCanCheck(string run, bool storeCanCheck)
     {
         // The ownership read is a provider read and can fail. A failed read does not say the run was lost, and
-        // stopping on it would throw out of a drain that owns its run. So only a confirmed lost lease stops the fault
-        // path: here the step is acknowledged and re-enqueued as the retry policy asks, the record is written with no
-        // ownership check, and the dispatch span says the fence could not be applied.
+        // stopping on it would throw out of a drain that owns its run. So the fault path goes on: the step is
+        // acknowledged and re-enqueued as the retry policy asks, and the dispatch span says the check could not be
+        // made. The failed read does not switch the fence off. Where the store can check the lease, the record is
+        // written under it, which still turns a lost lease away there. Where it cannot, the record is unfenced.
         using var spans = new SpanRecorder();
         var fixture = NewFixture();
-        var store = new CountingFencedPoisonStore(fixture.FencedPoisonStore);
+        var store = new CountingFencedPoisonStore(storeCanCheck ? fixture.FencedPoisonStore : new InMemoryWorkflowSchedulerPoisonStore());
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
         fixture.Ownership.EnsureCurrentFailure = () => new IOException("The ownership store is unavailable.");
         var drainer = fixture.NewDrainer(
             store,
             new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")),
+            beforeFault: run == "lost" ? () => fixture.LoseRunAsync("taken-over") : null,
             tracer: spans.Tracer);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
         fixture.Queue.ResetCounts();
 
-        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+        if (run == "lost")
+        {
+            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+            Assert.Equal((1, 0), (store.FencedRecords, store.UnfencedRecords));
+            Assert.Empty(await store.ListAsync(WorkflowExecutionId));
+        }
+        else
+        {
+            var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+            Assert.Equal(storeCanCheck ? (1, 0) : (0, 1), (store.FencedRecords, store.UnfencedRecords));
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, Assert.Single(await store.ListAsync(WorkflowExecutionId)).Disposition);
+        }
 
-        Assert.True(result.StoppedOnFault);
-        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
         Assert.Equal((1, 1, 0), (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases));
-        Assert.Equal((0, 1), (store.FencedRecords, store.UnfencedRecords));
-        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, Assert.Single(await store.ListAsync(WorkflowExecutionId)).Disposition);
         Assert.Equal(typeof(IOException).FullName, spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task DrainAsync_HandlerFaultAfterTheDrainLostItsRun_LeavesNothingForTheOwnersObserverToProjectAsAnIncident(bool lostRun)
+    public async Task DrainAsync_WhenTheOwnershipReadIsCancelled_StopsOnlyWhenTheDrainsOwnTokenIsCancelled(bool drainCancelled)
+    {
+        // Only a cancellation of the drain's own token is the drain's cancellation: it leaves the drain before
+        // anything of the fault is written. An ownership store whose client reports a timeout as an
+        // OperationCanceledException has failed like any other, and the fault path goes on.
+        using var spans = new SpanRecorder();
+        using var cancellation = new CancellationTokenSource();
+        var fixture = NewFixture();
+        var store = new CountingFencedPoisonStore(fixture.FencedPoisonStore);
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        fixture.Ownership.EnsureCurrentFailure = () =>
+        {
+            if (!drainCancelled)
+                return new TaskCanceledException("The ownership read timed out.");
+            cancellation.Cancel();
+            return new OperationCanceledException(cancellation.Token);
+        };
+        var drainer = fixture.NewDrainer(store, tracer: spans.Tracer);
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+        fixture.Queue.ResetCounts();
+        var drain = () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
+
+        if (drainCancelled)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(drain);
+            Assert.Equal(0, fixture.Queue.Completions);
+            Assert.Equal((0, 0, 0), (store.FencedRecords, store.UnfencedRecords, store.Finds));
+            Assert.Single(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        }
+        else
+        {
+            Assert.True((await drain()).StoppedOnFault);
+            Assert.Equal(1, fixture.Queue.Completions);
+            Assert.Equal((1, 0), (store.FencedRecords, store.UnfencedRecords));
+            Assert.Equal(typeof(TaskCanceledException).FullName, spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_HandlerFault_LeavesAnIncidentForTheOwnersObserverOnlyWhenTheDrainStillOwnedTheRun(bool lostRun)
     {
         // What #4032 is about. A poison record becomes a blocking incident when the run's owner next drains to a
         // fault and its observer lists the run's poison records. A drain that lost its run leaves no record, so that
@@ -347,22 +402,42 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             Assert.Equal(PoisonedSchedulerWorkIncidentObserver.IncidentId("work-1"), Assert.Single(projected).IncidentId);
     }
 
-    [Fact]
-    public async Task DrainAsync_WhenTheFencedRecordIsCancelled_LetsTheCancellationThroughWithoutAnUnfencedRecord()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_WhenTheFencedRecordIsCancelled_FallsBackOnlyWhenTheDrainsOwnTokenIsNotCancelled(bool drainCancelled)
     {
-        // An OperationCanceledException, whatever cancelled the write, is not a failed write to work around: writing
-        // the record another way would ignore it.
+        // A cancellation of the drain's own token is not a failed write to work around: writing the record another
+        // way would ignore it. A poison store whose client reports a timeout as an OperationCanceledException has
+        // failed like any other, and the record goes the unfenced way.
+        using var spans = new SpanRecorder();
+        using var cancellation = new CancellationTokenSource();
         var fixture = NewFixture();
-        var store = new FailingFencedPoisonStore(() => new OperationCanceledException("The fenced write was cancelled."));
+        var store = new FailingFencedPoisonStore(() =>
+        {
+            if (!drainCancelled)
+                return new TaskCanceledException("The fenced write timed out.");
+            cancellation.Cancel();
+            return new OperationCanceledException(cancellation.Token);
+        });
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
-        var drainer = fixture.NewDrainer(store);
+        var drainer = fixture.NewDrainer(store, tracer: spans.Tracer);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
+        var drain = () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
-
-        Assert.Equal((1, 0), (store.FencedAttempts, store.UnfencedRecords));
-        Assert.Empty(await store.ListAsync(WorkflowExecutionId));
+        if (drainCancelled)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(drain);
+            Assert.Equal((1, 0), (store.FencedAttempts, store.UnfencedRecords));
+            Assert.Empty(await store.ListAsync(WorkflowExecutionId));
+        }
+        else
+        {
+            Assert.True((await drain()).StoppedOnFault);
+            Assert.Equal((1, 1), (store.FencedAttempts, store.UnfencedRecords));
+            Assert.Single(await store.ListAsync(WorkflowExecutionId));
+            Assert.Equal(typeof(TaskCanceledException).FullName, spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
+        }
     }
 
     [Fact]
